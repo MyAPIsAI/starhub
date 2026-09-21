@@ -89,6 +89,16 @@ func Relay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Billing multipliers (n, max_tokens) are validated before any quota is
+	// reserved: an out-of-bounds multiplier must be rejected here, not
+	// priced.
+	if err := relay.ValidateChatRequest(body); err != nil {
+		common.RelayError(w, http.StatusBadRequest,
+			"invalid_request_error", "invalid_request_body",
+			err.Error())
+		return
+	}
+
 	preQuota, err := relay.PreConsumeQuota(userID, tokenID, tokenUnlimited, modelName, group, body)
 	if err != nil {
 		if errors.Is(err, relay.ErrInsufficientTokenQuota) || errors.Is(err, relay.ErrInsufficientUserQuota) {

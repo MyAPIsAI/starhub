@@ -12,8 +12,15 @@ import (
 
 var DB *gorm.DB
 
+// dsn applies the per-connection pragmas every pooled connection needs:
+// busy_timeout makes concurrent billing writers queue instead of failing
+// with SQLITE_BUSY, WAL keeps readers flowing while a writer commits.
+func dsn(path string) string {
+	return path + "?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"
+}
+
 func InitDB(path string) error {
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(dsn(path)), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {

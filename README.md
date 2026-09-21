@@ -150,22 +150,47 @@ curl http://localhost:3000/v1/models \
 
 ## 计费说明
 
-费用计算逻辑位于 `relay/quota.go`:
+计费采用三段式资金安全模型(「预扣 → 结算 → 退款」):
 
 ```
-消耗配额 = (prompt_tokens × model_ratio + completion_tokens × model_ratio × completion_ratio)
-          / 1,000,000 × 500,000 × group_ratio
+请求前  PreConsumeQuota    按 tokenizer 估算的 prompt + max_tokens×n 的补全预算预扣
+响应后  PostConsumeQuota   按上游真实 usage(含 cache / audio 细分)结算,多退少补
+失败时  RefundPreConsumedQuota  全额退还预扣
 ```
 
-即每 100 万 tokens 在 `ratio = 1` 时计费 $1(500000 配额)。
+- **预扣防并发透支**:预扣在单一写事务内完成「校验 + 扣减」(SQLite 串行化写入,等效 `lockForUpdate` 行锁),用户余额 1 元同时发 10 个请求不可能全部放行
+- **结算原子落账**:差额调整、token / user / channel 的 used_quota 累计与消费日志在同一事务内提交,账目始终对得上
+- **计价优先级**:表达式计价(`model_price_expr`) > 按次计价(`model_price`) > token 计价(倍率公式)
+- 所有 float→int 换算走 `common/quota_math.go` 饱和截断(防溢出回绕成负数=送钱),被截断/钳制的请求在日志中留下 `quota_saturation` 审计标记
 
-- 三项倍率均可在 `PUT /api/option` 中以 JSON 形式热更新,选项键分别为:
-  - `group_ratio` — 分组倍率(默认 `{"default": 1}`)
-  - `model_ratio` — 模型倍率(如 `gpt-4o: 2.5`、`deepseek-chat: 0.27`)
-  - `completion_ratio` — 补全倍率(默认未命中时取 `4.0`)
-- 模型倍率未命中时回退为 `1.0`
-- 上游未返回 usage 时,按请求/响应内容估算(见 `relay/estimate.go`)
-- 请求失败、上游错误时退还预扣配额
+token 计价公式位于 `relay/pricing.go`:
+
+```
+有效输入  = 文本 + cached × cache_ratio + 输入音频 × audio_ratio
+有效输出  = 文本 × completion_ratio + 输出音频 × audio_ratio
+消耗配额  = (有效输入 + 有效输出) × model_ratio / 1,000,000 × 500,000 × group_ratio × other_ratio
+```
+
+即每 100 万 tokens 在 `ratio = 1` 时计费 $1(500000 配额)。`other_ratio` 由特殊乘数(音频/图片分辨率/视频秒数,`relay.PriceData.AddOtherRatio`)累乘,供后续图片/视频中继接入。
+
+可在 `PUT /api/option` 中热更新的选项:
+
+| 选项键 | 形态 | 说明 |
+| --- | --- | --- |
+| `group_ratio` | `{"default":1}` | 分组倍率 |
+| `model_ratio` | `{"gpt-4o":2.5}` | 模型 token 倍率(未命中回退 `1.0`) |
+| `completion_ratio` | `{"gpt-4o":4}` | 补全倍率(未命中回退 `4.0`) |
+| `model_price` | `{"model":0.01}` | 按次计价(USD/次,命中后忽略 token 数) |
+| `model_price_expr` | `{"model":"<expr>"}` | 表达式计价(USD/次),支持阶梯价/动态价,语法与安全约束见 `pkg/billingexpr/expr.md` |
+| `cache_ratio` | `0.5` | cached prompt token 折扣(OpenAI 口径 0.5) |
+| `audio_ratio` | `40` | audio token 乘数 |
+
+### 请求侧校验与计量
+
+- `n`(`1..10`)与 `max_tokens` / `max_completion_tokens`(`0..100000`)在**请求验证阶段**拒绝越界(400),乘数上界决定了预扣额度不可能被恶意放大
+- 流式请求自动注入 `stream_options.include_usage`;上游不返回 usage 时按本地累计的 SSE 内容估算,不漏计
+- 上游 usage 的 `prompt_tokens_details.cached_tokens`、`completion_tokens_details.audio_tokens` 等细分参与结算,且细分值被钳制在总量之内(谎报的 usage 无法放大折扣)
+- 请求失败、上游 4xx/5xx 错误时退还预扣配额
 
 ## 项目结构
 
@@ -173,17 +198,14 @@ curl http://localhost:3000/v1/models \
 starhub/
 ├── main.go              # 入口:加载配置、初始化数据库、注册路由
 ├── e2e_test.go          # 端到端集成测试(含 mock 上游)
-├── common/              # 常量、上下文键、加解密、统一响应
-│   ├── config.go        # 角色/状态/配额常量、默认值、版本号
-│   ├── context.go       # 请求上下文键定义
-│   ├── crypto.go        # 密码哈希/校验
-│   └── key.go           # 令牌/会话密钥生成
+├── common/              # 常量、上下文键、加解密、统一响应、配额饱和换算(quota_math.go)
 ├── controller/          # HTTP 处理器(user/channel/token/option/log/relay)
 ├── middleware/          # 鉴权(UserAuth/AdminAuth/TokenAuth)、会话、渠道路由(Distribute)
-├── model/                # GORM 数据模型与数据访问层(SQLite)
-├── relay/                # 上游适配器(openai)、配额结算、用量估算
-├── setting/              # 倍率等运行时配置(内存 + 数据库持久化)
-└── doc/                  # 架构分析等参考文档
+├── model/               # GORM 数据模型与数据访问层(SQLite,含事务化配额操作 quota.go)
+├── relay/               # 上游适配器(openai)、计价引擎(pricing.go)、配额三段式(quota.go)
+├── pkg/billingexpr/     # 计费表达式引擎(阶梯价/动态价,设计约束见 expr.md)
+├── setting/             # 倍率与价格运行时配置(内存 + 数据库持久化)
+└── doc/                 # 架构分析等参考文档
 ```
 
 ### 中继链路

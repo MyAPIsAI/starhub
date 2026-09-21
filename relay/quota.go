@@ -2,130 +2,105 @@ package relay
 
 import (
 	"errors"
-	"math"
+	"log"
 
 	"starhub/common"
 	"starhub/model"
-	"starhub/setting"
+	"starhub/pkg/billingexpr"
 )
 
 var (
 	ErrInsufficientTokenQuota = errors.New("token quota is not enough to process this request")
 	ErrInsufficientUserQuota  = errors.New("user quota is not enough to process this request")
-	ErrUserMissing            = errors.New("relay user not found")
-	ErrTokenMissing           = errors.New("relay token not found")
 )
 
+// estimateReserveTokens pads the prompt estimate: the char-based tokenizer
+// under-counts (special tokens, JSON overhead), and the pre-charge must err
+// on the safe side.
 const estimateReserveTokens = 100
 
+// ComputeQuota prices a plain prompt / completion token pair (kept for
+// callers that only need the per-token formula; settlement goes through
+// ComputeUsageQuota with the full usage details).
 func ComputeQuota(modelName, group string, promptTokens, completionTokens int64) int64 {
-	inputPrice := setting.ModelRatioValue(modelName)
-	completionRatio := setting.CompletionRatioValue(modelName)
-	groupRatio, ok := setting.GroupRatioValue(group)
-	if !ok || groupRatio <= 0 {
-		groupRatio = 1
-	}
-	cost := (float64(promptTokens)*inputPrice +
-		float64(completionTokens)*inputPrice*completionRatio) /
-		1e6 * float64(common.QuotaPerUSD) * groupRatio
-	quota := int64(math.Round(cost))
-	if quota < 0 {
-		quota = 0
-	}
-	if quota == 0 && (promptTokens > 0 || completionTokens > 0) {
-		quota = 1
-	}
-	return quota
+	return ComputeUsageQuota(NewPriceData(modelName, group),
+		&Usage{PromptTokens: promptTokens, CompletionTokens: completionTokens})
 }
 
+// EstimatePreConsumeQuota is the pre-charge for a request: it prices the
+// tokenizer-estimated prompt plus the completion budget (max_tokens x n
+// choices, or a conservative default). Over-reserving is intentional — the
+// settle step refunds the surplus with the real usage.
+func EstimatePreConsumeQuota(modelName, group string, body []byte) int64 {
+	pd := NewPriceData(modelName, group)
+	promptEstimate := EstimateTokens(ExtractPromptText(body)) + estimateReserveTokens
+	completionBudget := CompletionBudgetTokens(body)
+
+	if pd.IsExpression() {
+		vars := map[string]float64{
+			"prompt_tokens":     float64(promptEstimate),
+			"completion_tokens": float64(completionBudget),
+			"total_tokens":      float64(promptEstimate + completionBudget),
+		}
+		usd, err := billingexpr.Eval(pd.PriceExpr, vars)
+		if err != nil {
+			log.Printf("[%s] model %s expression %q failed at pre-charge (%v), falling back to token estimate",
+				common.QuotaSaturation, modelName, pd.PriceExpr, err)
+			return tokenUsageQuota(pd, &Usage{
+				PromptTokens:     promptEstimate,
+				CompletionTokens: completionBudget,
+			})
+		}
+		return priceUSDToQuota(pd, usd)
+	}
+	if pd.IsPerCall() {
+		return priceUSDToQuota(pd, pd.ModelPriceUSD)
+	}
+	return tokenUsageQuota(pd, &Usage{
+		PromptTokens:     promptEstimate,
+		CompletionTokens: completionBudget,
+	})
+}
+
+// PreConsumeQuota reserves the estimated cost before the request leaves the
+// gateway. The reservation is what stops concurrent overdraft: ten parallel
+// requests against a one-dollar balance cannot all pass, because each has
+// to hold its estimate up front.
 func PreConsumeQuota(userID, tokenID int64, tokenUnlimited bool, modelName, group string, body []byte) (int64, error) {
-	estimated := EstimateTokens(ExtractPromptText(body)) + estimateReserveTokens
-	pre := ComputeQuota(modelName, group, estimated, 0)
+	pre := EstimatePreConsumeQuota(modelName, group, body)
 	if pre < 1 {
 		pre = 1
 	}
-	user, err := model.GetUserByID(userID)
-	if err != nil {
-		return 0, ErrUserMissing
-	}
-	if user.Quota < pre {
-		return 0, ErrInsufficientUserQuota
-	}
-	if !tokenUnlimited {
-		token, err := model.GetTokenByID(tokenID)
-		if err != nil {
-			return 0, ErrTokenMissing
-		}
-		if token.RemainQuota < pre {
+	if err := model.ReserveQuota(userID, tokenID, tokenUnlimited, pre); err != nil {
+		switch {
+		case errors.Is(err, model.ErrUserQuotaShort):
+			return 0, ErrInsufficientUserQuota
+		case errors.Is(err, model.ErrTokenQuotaShort):
 			return 0, ErrInsufficientTokenQuota
 		}
-		ok, err := model.DecreaseTokenQuota(tokenID, pre)
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
-			return 0, ErrInsufficientTokenQuota
-		}
-	}
-	ok, err := model.DecreaseUserQuota(userID, pre)
-	if err != nil {
 		return 0, err
-	}
-	if !ok {
-		if !tokenUnlimited {
-			_ = model.IncreaseTokenQuota(tokenID, pre)
-		}
-		return 0, ErrInsufficientUserQuota
 	}
 	return pre, nil
 }
 
+// RefundPreConsumedQuota returns the full pre-payment when every attempt of
+// a relay failed.
 func RefundPreConsumedQuota(tokenID, userID int64, tokenUnlimited bool, amount int64) error {
-	if amount <= 0 {
-		return nil
-	}
-	if !tokenUnlimited {
-		if err := model.IncreaseTokenQuota(tokenID, amount); err != nil {
-			return err
-		}
-	}
-	return model.IncreaseUserQuota(userID, amount)
+	return model.ReleaseQuota(userID, tokenID, tokenUnlimited, amount)
 }
 
-// PostConsumeQuota balances the pre-payment against the actual usage and
-// records the consumption log. usedChannels is the retry trail
-// ("channelID->channelID") of the request for troubleshooting.
+// PostConsumeQuota settles the pre-payment against the real usage (with
+// cache / audio detail) and records the consumption log. usedChannels is
+// the retry trail ("channelID->channelID") of the request for
+// troubleshooting.
 func PostConsumeQuota(userID, tokenID int64, tokenName string, tokenUnlimited bool,
 	channelID int64, modelName, group string, usage *Usage, preQuota int64, usedChannels string) error {
 	if usage == nil {
 		usage = &Usage{}
 	}
-	actual := ComputeQuota(modelName, group, usage.PromptTokens, usage.CompletionTokens)
+	actual := ComputeUsageQuota(NewPriceData(modelName, group), usage)
 	delta := actual - preQuota
-	if delta > 0 {
-		if !tokenUnlimited {
-			if err := model.DecreaseTokenQuotaUnconditional(tokenID, delta); err != nil {
-				return err
-			}
-		}
-		if err := model.DecreaseUserQuotaUnconditional(userID, delta); err != nil {
-			return err
-		}
-	} else if delta < 0 {
-		if err := RefundPreConsumedQuota(tokenID, userID, tokenUnlimited, -delta); err != nil {
-			return err
-		}
-	}
-	if err := model.IncreaseChannelUsedQuota(channelID, actual); err != nil {
-		return err
-	}
-	if err := model.IncreaseTokenUsedQuota(tokenID, actual); err != nil {
-		return err
-	}
-	if err := model.IncreaseUserUsedQuota(userID, actual); err != nil {
-		return err
-	}
-	return model.InsertLog(&model.Log{
+	entry := &model.Log{
 		UserID:           userID,
 		TokenID:          tokenID,
 		TokenName:        tokenName,
@@ -135,5 +110,6 @@ func PostConsumeQuota(userID, tokenID int64, tokenName string, tokenUnlimited bo
 		CompletionTokens: usage.CompletionTokens,
 		Quota:            actual,
 		UsedChannels:     usedChannels,
-	})
+	}
+	return model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }

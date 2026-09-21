@@ -27,11 +27,11 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	if !setting.IsRatioOptionKey(req.Key) {
+	if !setting.IsOptionKey(req.Key) {
 		common.ApiError(w, http.StatusBadRequest, "unknown option key")
 		return
 	}
-	if err := setting.UpdateRatio(req.Key, req.Value); err != nil {
+	if err := setting.UpdateOption(req.Key, req.Value); err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
 	}

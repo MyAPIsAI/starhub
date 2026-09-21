@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -956,5 +957,347 @@ func TestP1MultiKeyChannelKeyIsolation(t *testing.T) {
 	}
 	if strings.Contains(res.Body, "sk-good-1") || strings.Contains(res.Body, "sk-bad-key-000001") {
 		t.Fatalf("channel API must never reveal raw keys: %s", res.Body)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// P2: billing integrity
+// ---------------------------------------------------------------------------
+
+// newP2Upstream returns a mock upstream with configurable usage payload and
+// response delay. usageJSON is spliced into the standard 100/50 usage field;
+// an empty streamUsageJSON makes the stream response omit the usage chunk.
+func newP2Upstream(t *testing.T, usageJSON, streamUsageJSON string, delay time.Duration) *httptest.Server {
+	t.Helper()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+upstreamKey {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Model  string `json:"model"`
+			Stream bool   `json:"stream"`
+		}
+		_ = json.Unmarshal(body, &req)
+		if req.Stream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			flusher := w.(http.Flusher)
+			chunks := []string{
+				`data: {"id":"mock","choices":[{"index":0,"delta":{"role":"assistant"}}]}`,
+				`data: {"id":"mock","choices":[{"index":0,"delta":{"content":"hello "}}]}`,
+				`data: {"id":"mock","choices":[{"index":0,"delta":{"content":"world"}}]}`,
+			}
+			if streamUsageJSON != "" {
+				chunks = append(chunks, `data: {"id":"mock","choices":[{"index":0,"delta":{}}],"usage":`+streamUsageJSON+`}`)
+			}
+			chunks = append(chunks, `data: [DONE]`)
+			for _, c := range chunks {
+				fmt.Fprintf(w, "%s\n\n", c)
+				flusher.Flush()
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"id":"mock","object":"chat.completion","model":%q,"choices":[{"index":0,"message":{"role":"assistant","content":"hello world"}}],"usage":%s}`,
+			req.Model, usageJSON)
+	}))
+	t.Cleanup(upstream.Close)
+	return upstream
+}
+
+func setOption(t *testing.T, env p1Env, key, value string) {
+	t.Helper()
+	res := doRequest(env.base, "PUT", "/api/option/", env.session, map[string]string{"key": key, "value": value})
+	if res.Status != 200 {
+		t.Fatalf("set option %s failed: %d %s", key, res.Status, res.Body)
+	}
+}
+
+func TestP2MultiplierValidationRejectsBeforeBilling(t *testing.T) {
+	upstream := newP2Upstream(t, `{"prompt_tokens":100,"completion_tokens":50}`, `{"prompt_tokens":100,"completion_tokens":50}`, 0)
+	env := setupRelayApp(t)
+	createChannelID(t, env, map[string]any{
+		"name": "mock", "key": upstreamKey, "base_url": upstream.URL, "models": "gpt-4o-mini",
+	})
+
+	invalid := []map[string]any{
+		{"model": "gpt-4o-mini", "messages": []map[string]string{{"role": "user", "content": "hi"}}, "max_tokens": common.MaxChatMaxTokens + 1},
+		{"model": "gpt-4o-mini", "messages": []map[string]string{{"role": "user", "content": "hi"}}, "max_tokens": -1},
+		{"model": "gpt-4o-mini", "messages": []map[string]string{{"role": "user", "content": "hi"}}, "n": common.MaxChatChoices + 1},
+		{"model": "gpt-4o-mini", "messages": []map[string]string{{"role": "user", "content": "hi"}}, "n": -2},
+		{"model": "gpt-4o-mini", "messages": []map[string]string{{"role": "user", "content": "hi"}}, "max_completion_tokens": 1 << 40},
+	}
+	for _, payload := range invalid {
+		res := doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey, payload)
+		if res.Status != 400 || !strings.Contains(res.Body, "invalid_request_body") {
+			t.Fatalf("out-of-range multiplier should 400 before billing: %d %s (payload n=%v max=%v)",
+				res.Status, res.Body, payload["n"], payload["max_tokens"])
+		}
+	}
+	token, _ := model.GetTokenByID(env.tokenID)
+	if token.RemainQuota != common.DefaultTokenQuota {
+		t.Fatalf("rejected requests must not touch quota, got %d", token.RemainQuota)
+	}
+
+	// in-bounds multipliers pass the gate and bill normally
+	res := doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey, map[string]any{
+		"model": "gpt-4o-mini", "max_tokens": 500, "n": 2,
+		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+	})
+	if res.Status != 200 {
+		t.Fatalf("valid multipliers should relay fine: %d %s", res.Status, res.Body)
+	}
+	expected := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	token, _ = model.GetTokenByID(env.tokenID)
+	if token.RemainQuota != common.DefaultTokenQuota-expected {
+		t.Fatalf("token quota after valid call = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-expected)
+	}
+}
+
+func TestP2PerCallAndExpressionPricing(t *testing.T) {
+	upstream := newP2Upstream(t, `{"prompt_tokens":100,"completion_tokens":50}`, `{"prompt_tokens":100,"completion_tokens":50}`, 0)
+	env := setupRelayApp(t)
+	createChannelID(t, env, map[string]any{
+		"name": "mock", "key": upstreamKey, "base_url": upstream.URL, "models": "gpt-4o-mini",
+	})
+	chat := func() apiResult {
+		return doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey,
+			map[string]any{"model": "gpt-4o-mini", "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+	}
+	remain := func() int64 {
+		token, _ := model.GetTokenByID(env.tokenID)
+		return token.RemainQuota
+	}
+
+	// per-call fixed price: 0.01 USD = 5000 quota regardless of usage
+	setOption(t, env, "model_price", `{"gpt-4o-mini":0.01}`)
+	if res := chat(); res.Status != 200 {
+		t.Fatalf("per-call relay failed: %d %s", res.Status, res.Body)
+	}
+	if got := remain(); got != common.DefaultTokenQuota-5000 {
+		t.Fatalf("per-call billing = %d, want %d", got, common.DefaultTokenQuota-5000)
+	}
+
+	// tiered expression wins over the fixed price: prompt 100 hits tier 1
+	// (0.001 USD = 500 quota)
+	setOption(t, env, "model_price_expr", `{"gpt-4o-mini":"prompt_tokens <= 100 ? 0.001 : 0.01"}`)
+	if res := chat(); res.Status != 200 {
+		t.Fatalf("expression relay failed: %d %s", res.Status, res.Body)
+	}
+	if got := remain(); got != common.DefaultTokenQuota-5000-500 {
+		t.Fatalf("expression billing = %d, want %d", got, common.DefaultTokenQuota-5500)
+	}
+
+	// removing both restores token billing
+	setOption(t, env, "model_price", `{}`)
+	setOption(t, env, "model_price_expr", `{}`)
+	if res := chat(); res.Status != 200 {
+		t.Fatalf("token-billing relay failed: %d %s", res.Status, res.Body)
+	}
+	expected := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	if got := remain(); got != common.DefaultTokenQuota-5500-expected {
+		t.Fatalf("token billing = %d, want %d", got, common.DefaultTokenQuota-5500-expected)
+	}
+
+	// invalid pricing options are rejected by the option API
+	res := doRequest(env.base, "PUT", "/api/option/", env.session,
+		map[string]string{"key": "model_price_expr", "value": `{"gpt-4o-mini":"hack(1)"}`})
+	if res.Status != 400 {
+		t.Fatalf("non-whitelisted expression must be rejected: %d %s", res.Status, res.Body)
+	}
+}
+
+func TestP2SettlementUsesCacheTokenDetail(t *testing.T) {
+	upstream := newP2Upstream(t,
+		`{"prompt_tokens":100,"completion_tokens":50,"prompt_tokens_details":{"cached_tokens":80}}`,
+		`{"prompt_tokens":100,"completion_tokens":50,"prompt_tokens_details":{"cached_tokens":80}}`, 0)
+	env := setupRelayApp(t)
+	createChannelID(t, env, map[string]any{
+		"name": "mock", "key": upstreamKey, "base_url": upstream.URL, "models": "gpt-4o-mini",
+	})
+
+	chat := func() apiResult {
+		return doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey,
+			map[string]any{"model": "gpt-4o-mini", "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+	}
+	expected := relay.ComputeUsageQuota(relay.NewPriceData("gpt-4o-mini", "default"),
+		&relay.Usage{PromptTokens: 100, CompletionTokens: 50,
+			PromptTokensDetails: &relay.PromptTokensDetails{CachedTokens: 80}})
+	if expected != 20 {
+		t.Fatalf("cached-detail settlement math changed: %d, want 20", expected)
+	}
+	plain := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+
+	if res := chat(); res.Status != 200 {
+		t.Fatalf("cached-token relay failed: %d %s", res.Status, res.Body)
+	}
+	token, _ := model.GetTokenByID(env.tokenID)
+	if token.RemainQuota != common.DefaultTokenQuota-expected {
+		t.Fatalf("cached-token billing = %d, want %d (plain %d)", token.RemainQuota,
+			common.DefaultTokenQuota-expected, plain)
+	}
+
+	// the same detail applies to streaming usage chunks
+	streamRes := doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey,
+		map[string]any{"model": "gpt-4o-mini", "stream": true,
+			"messages": []map[string]string{{"role": "user", "content": "hi"}}})
+	if streamRes.Status != 200 {
+		t.Fatalf("cached-token stream relay failed: %d %s", streamRes.Status, streamRes.Body)
+	}
+	token, _ = model.GetTokenByID(env.tokenID)
+	if token.RemainQuota != common.DefaultTokenQuota-2*expected {
+		t.Fatalf("cached-token stream billing = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-2*expected)
+	}
+}
+
+func TestP2StreamWithoutUsageStillBills(t *testing.T) {
+	// upstream ignores stream_options.include_usage: no usage chunk, no
+	// usage field — the relay must fall back to local estimates
+	upstream := newP2Upstream(t, `null`, ``, 0)
+	env := setupRelayApp(t)
+	createChannelID(t, env, map[string]any{
+		"name": "mock", "key": upstreamKey, "base_url": upstream.URL, "models": "gpt-4o-mini",
+	})
+
+	chatBody := map[string]any{"model": "gpt-4o-mini",
+		"messages": []map[string]string{{"role": "user", "content": "hi"}}}
+	bodyBytes, _ := json.Marshal(chatBody)
+	est := relay.EstimateUsage(bodyBytes, "hello world")
+	expected := relay.ComputeQuota("gpt-4o-mini", "default", est.PromptTokens, est.CompletionTokens)
+	if expected <= 0 {
+		t.Fatalf("estimated billing should be positive, got %d (usage %+v)", expected, est)
+	}
+
+	res := doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey, chatBody)
+	if res.Status != 200 || !strings.Contains(res.Body, "hello world") {
+		t.Fatalf("usage-less non-stream relay failed: %d %s", res.Status, res.Body)
+	}
+	streamRes := doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey,
+		map[string]any{"model": "gpt-4o-mini", "stream": true,
+			"messages": []map[string]string{{"role": "user", "content": "hi"}}})
+	if streamRes.Status != 200 || !strings.Contains(streamRes.Body, "[DONE]") {
+		t.Fatalf("usage-less stream relay failed: %d %s", streamRes.Status, streamRes.Body)
+	}
+
+	token, _ := model.GetTokenByID(env.tokenID)
+	if token.RemainQuota != common.DefaultTokenQuota-2*expected {
+		t.Fatalf("usage-less relay must still bill the estimate: %d, want %d",
+			token.RemainQuota, common.DefaultTokenQuota-2*expected)
+	}
+	logs, total, err := model.ListLogs(env.rootID, 1, 10, "gpt-4o-mini")
+	if err != nil || total != 2 {
+		t.Fatalf("usage-less relay must leave audit logs: total=%d err=%v", total, err)
+	}
+	for _, l := range logs {
+		if l.Quota != expected || l.PromptTokens != est.PromptTokens || l.CompletionTokens != est.CompletionTokens {
+			t.Fatalf("estimated log row wrong: %+v (want quota %d tokens %d/%d)",
+				l, expected, est.PromptTokens, est.CompletionTokens)
+		}
+	}
+}
+
+func TestP2ConcurrentPreConsumeNoOverdraft(t *testing.T) {
+	// slow upstream so every concurrent request holds its pre-payment while
+	// the others try to reserve theirs
+	upstream := newP2Upstream(t, `{"prompt_tokens":100,"completion_tokens":50}`,
+		`{"prompt_tokens":100,"completion_tokens":50}`, 600*time.Millisecond)
+	env := setupRelayApp(t)
+	createChannelID(t, env, map[string]any{
+		"name": "slow-mock", "key": upstreamKey, "base_url": upstream.URL, "models": "gpt-4o-mini",
+	})
+
+	chatBody := map[string]any{"model": "gpt-4o-mini", "max_tokens": 1000,
+		"messages": []map[string]string{{"role": "user", "content": "hi"}}}
+	bodyBytes, _ := json.Marshal(chatBody)
+	pre := relay.EstimatePreConsumeQuota("gpt-4o-mini", "default", bodyBytes)
+	if pre <= 0 {
+		t.Fatalf("pre-charge estimate should be positive, got %d", pre)
+	}
+	// budget covers 2 full pre-charges plus half of a third: exactly two of
+	// the four concurrent requests may pass
+	budget := 2*pre + pre/2
+
+	res := doRequest(env.base, "PUT", "/api/user/", env.session,
+		map[string]any{"id": env.rootID, "quota": budget})
+	if res.Status != 200 {
+		t.Fatalf("tighten user quota failed: %d %s", res.Status, res.Body)
+	}
+	res = doRequest(env.base, "POST", "/api/token/", env.session,
+		map[string]any{"name": "concurrent", "remain_quota": budget})
+	if res.Status != 200 {
+		t.Fatalf("create concurrent token failed: %d %s", res.Status, res.Body)
+	}
+	var tokenResp struct {
+		Data struct {
+			ID  int64  `json:"id"`
+			Key string `json:"key"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &tokenResp); err != nil || tokenResp.Data.Key == "" {
+		t.Fatalf("bad token response: %s", res.Body)
+	}
+	limitedKey := tokenResp.Data.Key
+
+	const workers = 4
+	results := make([]apiResult, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			results[i] = doRequest(env.base, "POST", "/v1/chat/completions", limitedKey, chatBody)
+		}(i)
+	}
+	wg.Wait()
+
+	var ok, rejected, other int
+	for _, r := range results {
+		switch {
+		case r.Status == 200:
+			ok++
+		case r.Status == 403 && strings.Contains(r.Body, "insufficient_quota"):
+			rejected++
+		default:
+			other++
+			t.Logf("unexpected concurrent result: %d %s", r.Status, r.Body)
+		}
+	}
+	if other > 0 {
+		t.Fatalf("%d concurrent requests produced unexpected statuses", other)
+	}
+	if ok != 2 || rejected != 2 {
+		t.Fatalf("concurrent overdraft: %d passed, %d rejected (pre=%d budget=%d), want 2/2",
+			ok, rejected, pre, budget)
+	}
+
+	// after settlement the books balance: each success cost the real usage
+	actual := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	token, _ := model.GetTokenByID(tokenResp.Data.ID)
+	if token.RemainQuota != budget-2*actual {
+		t.Fatalf("token balance after concurrency = %d, want %d", token.RemainQuota, budget-2*actual)
+	}
+	user, _ := model.GetUserByID(env.rootID)
+	if user.Quota != budget-2*actual {
+		t.Fatalf("user balance after concurrency = %d, want %d", user.Quota, budget-2*actual)
+	}
+	if user.Quota < 0 || token.RemainQuota < 0 {
+		t.Fatal("balances must never go negative")
+	}
+	if user.UsedQuota != 2*actual || token.UsedQuota != 2*actual {
+		t.Fatalf("used quota after concurrency: user %d token %d, want %d",
+			user.UsedQuota, token.UsedQuota, 2*actual)
+	}
+	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-4o-mini"); total != 2 {
+		t.Fatalf("both successes must be logged, got %d rows", total)
 	}
 }

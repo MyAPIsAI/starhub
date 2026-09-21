@@ -38,7 +38,7 @@ func AllOptions() ([]Option, error) {
 }
 
 func SeedOptions() error {
-	for _, key := range setting.RatioOptionKeys() {
+	for _, key := range setting.OptionKeys() {
 		_, found, err := GetOption(key)
 		if err != nil {
 			return err
@@ -46,7 +46,7 @@ func SeedOptions() error {
 		if found {
 			continue
 		}
-		snapshot, err := setting.SnapshotRatio(key)
+		snapshot, err := setting.SnapshotOption(key)
 		if err != nil {
 			return err
 		}
@@ -63,10 +63,10 @@ func LoadOptionsToSettings() error {
 		return err
 	}
 	for _, o := range opts {
-		if !setting.IsRatioOptionKey(o.Key) {
+		if !setting.IsOptionKey(o.Key) {
 			continue
 		}
-		if err := setting.UpdateRatio(o.Key, o.Value); err != nil {
+		if err := setting.UpdateOption(o.Key, o.Value); err != nil {
 			return fmt.Errorf("load option %s: %w", o.Key, err)
 		}
 	}
