@@ -179,7 +179,8 @@ func TestGetSatisfiedChannelPriorityAndWeight(t *testing.T) {
 		t.Fatalf("disable high failed: %v", err)
 	}
 	lowHits := 0
-	for i := 0; i < 200; i++ {
+	const pickAttempts = 1500
+	for i := 0; i < pickAttempts; i++ {
 		got, err := GetSatisfiedChannel("default", "m1")
 		if err != nil {
 			t.Fatalf("GetSatisfiedChannel failed: %v", err)
@@ -188,8 +189,8 @@ func TestGetSatisfiedChannelPriorityAndWeight(t *testing.T) {
 			lowHits++
 		}
 	}
-	if lowHits == 0 || lowHits > 20 {
-		t.Fatalf("weighted random seems broken, low-weight channel hit %d/200", lowHits)
+	if lowHits == 0 || lowHits > 60 {
+		t.Fatalf("weighted random seems broken, low-weight channel hit %d/%d", lowHits, pickAttempts)
 	}
 
 	if _, err := GetSatisfiedChannel("default", "no-such-model"); err != ErrNoChannel {
