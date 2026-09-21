@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>new-api 架构与功能点分析</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg: #FFFFFF;
+  --surface: #F8F7F4;
+  --border: #E5E3DC;
+  --border-strong: #C9C7BD;
+  --text: #1A1A18;
+  --text-2: #5F5E5A;
+  --text-3: #888780;
+  --blue: #185FA5;
+  --blue-bg: #E6F1FB;
+  --teal: #0F6E56;
+  --teal-bg: #E1F5EE;
+  --amber: #BA7517;
+  --amber-bg: #FAEEDA;
+  --coral: #993C1D;
+  --coral-bg: #FAECE7;
+  --purple: #534AB7;
+  --purple-bg: #EEEDFE;
+  --green: #3B6D11;
+  --green-bg: #EAF3DE;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+}
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 28px 80px;
+}
+header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+h1 {
+  font-size: 28px;
+  font-weight: 500;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+.subtitle {
+  color: var(--text-2);
+  font-size: 15px;
+  margin: 0;
+}
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.meta-row span b { color: var(--text); font-weight: 500; }
+section { margin-bottom: 48px; }
+h2 {
+  font-size: 19px;
+  font-weight: 500;
+  margin: 0 0 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+h2 .idx {
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 400;
+}
+h3 {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 24px 0 12px;
+}
+p { margin: 0 0 12px; color: var(--text); }
+.note { color: var(--text-2); font-size: 13px; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.card .label { font-size: 12px; color: var(--text-3); margin-bottom: 6px; }
+.card .num { font-size: 22px; font-weight: 500; color: var(--text); }
+.card .desc { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+.chart {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px 0;
+}
+.row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+.row .name { width: 180px; font-size: 13px; }
+.row .bar { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.row .bar > div { height: 100%; background: var(--blue); border-radius: 4px; }
+.row .v { width: 56px; text-align: right; font-size: 12px; color: var(--text-2); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 12px 0;
+  table-layout: fixed;
+}
+th, td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 0.5px solid var(--border);
+  word-break: break-word;
+}
+th { color: var(--text-2); font-weight: 500; background: var(--surface); }
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+.tag.t-teal { background: var(--teal-bg); color: var(--teal); }
+.tag.t-amber { background: var(--amber-bg); color: var(--amber); }
+.tag.t-coral { background: var(--coral-bg); color: var(--coral); }
+.tag.t-purple { background: var(--purple-bg); color: var(--purple); }
+.tag.t-green { background: var(--green-bg); color: var(--green); }
+.kv {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+.kv .k { color: var(--text-2); }
+.pillrow { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.pill {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text);
+}
+.divider { height: 1px; background: var(--border); margin: 32px 0; }
+.callout {
+  background: var(--blue-bg);
+  border-left: 3px solid var(--blue);
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  margin: 16px 0;
+  font-size: 13px;
+}
+.mermaid {
+  background: var(--bg);
+  text-align: center;
+  margin: 8px 0;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Project Architecture Analysis</div>
+  <h1>new-api · 架构与功能点全景</h1>
+  <p class="subtitle">基于 Go 1.25.1 源码静态分析 · github.com/QuantumNous/new-api</p>
+  <div class="meta-row">
+    <span><b>模块路径</b> <code>github.com/QuantumNous/new-api</code></span>
+    <span><b>Go 版本</b> 1.25.1</span>
+    <span><b>框架</b> Gin 1.9.1</span>
+    <span><b>ORM</b> GORM + glebarez/sqlite</span>
+    <span><b>分析时间</b> 2026-09-16</span>
+  </div>
+</header>
+
+<section>
+  <h2>一句话定位 <span class="idx">/ 01</span></h2>
+  <p>一个多 AI 提供商统一接入网关。把 OpenAI / Claude / Gemini / AWS Bedrock / DeepSeek / 智谱 / 火山 / 腾讯等 <b>41 个上游渠道</b>的协议、计费、限流、配额做一层抽象，对外暴露 OpenAI 兼容接口 + 自有控制台。</p>
+  <div class="callout">架构核心矛盾：上游协议差异巨大（OpenAI Chat / Claude Messages / Gemini GenerateContent / AWS Bedrock Converse / 私有协议），网关需要在一个进程里同时跑 41 套适配器 + 计费/限流/鉴权/订阅/中间件。代码层面通过 <code>relay/channel/&lt;provider&gt;/</code> 隔离适配器、通过 <code>relaykit/dto</code> 和 <code>relaykit/relayconvert</code> 统一内外协议转换。</div>
+</section>
+
+<section>
+  <h2>代码规模快照 <span class="idx">/ 02</span></h2>
+  <div class="grid">
+    <div class="card"><div class="label">Go 源文件</div><div class="num">709</div><div class="desc">不含 web/ 前端与 _test</div></div>
+    <div class="card"><div class="label">总代码行</div><div class="num">20,956</div><div class="desc">纯后端 Go 代码</div></div>
+    <div class="card"><div class="label">已注册路由</div><div class="num">312</div><div class="desc">GET 140 · POST 132 · DEL 25 · PUT 14 · PATCH 1</div></div>
+    <div class="card"><div class="label">上游通道适配器</div><div class="num">41</div><div class="desc">relay/channel 子目录</div></div>
+    <div class="card"><div class="label">视频/任务适配器</div><div class="num">11</div><div class="desc">relay/channel/task/ 专做 async 任务</div></div>
+    <div class="card"><div class="label">内部包数</div><div class="num">83</div><div class="desc">go list ./... 全量</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>整体请求链路 <span class="idx">/ 03</span></h2>
+  <p>从客户端请求到上游 AI API 返回的完整链路。所有外部入口都挂在 Gin 上，按职责分到 5 个子路由器。</p>
+  <div class="chart">
+    <div class="mermaid">
+flowchart LR
+  Client[客户端<br/>Web / SDK / 上游回调]
+  Main[main.go<br/>启动 / 配置加载 / pprof]
+  Gin[Gin Engine<br/>全局中间件链]
+  AP[api-router<br/>账户 / OAuth / 支付 / 通知]
+  DB[dashboard.go<br/>统计 / 订阅概览]
+  RL[relay-router<br/>AI 转发 / 文件 / 微调]
+  VD[video-router<br/>视频生成异步任务]
+  WB[web-router<br/>前端静态资源]
+  MW1[middleware<br/>限流 / 鉴权 / Turnstile / Body 清洗]
+  Ctrl[controller<br/>90 个文件按业务切分]
+  Svc[service<br/>业务编排]
+  Mod[model<br/>GORM 实体]
+  Rly[relay 调度<br/>渠道选择 · 计费扣减 · 重试]
+  Adapt[relay/channel<br/>41 个适配器]
+  Up[上游 AI API<br/>OpenAI / Claude / Gemini / ...]
+
+  Client --> Gin
+  Main --> Gin
+  Gin --> AP & DB & RL & VD & WB
+  AP --> MW1
+  MW1 --> Ctrl
+  Ctrl --> Svc
+  Svc --> Mod
+  RL --> Rly
+  Rly --> Adapt
+  Adapt --> Up
+  Up -.响应/事件.-> Rly
+  Rly -.扣费/扣配额.-> Mod
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>模块依赖热度榜 <span class="idx">/ 04</span></h2>
+  <p>通过 <code>grep "github.com/QuantumNous/new-api/..."</code> 在所有 Go 文件中统计被引用次数。被引越多 = 该包是"基础设施型"核心，修改时冲击面越大。</p>
+  <div class="chart">
+    <div class="row"><div class="name">common</div><div class="bar"><div style="width:100%"></div></div><div class="v">354</div></div>
+    <div class="row"><div class="name">relaykit/dto</div><div class="bar"><div style="width:63%"></div></div><div class="v">223</div></div>
+    <div class="row"><div class="name">relaykit/types</div><div class="bar"><div style="width:47%"></div></div><div class="v">167</div></div>
+    <div class="row"><div class="name">relay/common</div><div class="bar"><div style="width:46%"></div></div><div class="v">163</div></div>
+    <div class="row"><div class="name">model</div><div class="bar"><div style="width:39%"></div></div><div class="v">139</div></div>
+    <div class="row"><div class="name">constant</div><div class="bar"><div style="width:38%"></div></div><div class="v">136</div></div>
+    <div class="row"><div class="name">service</div><div class="bar"><div style="width:31%"></div></div><div class="v">111</div></div>
+    <div class="row"><div class="name">logger</div><div class="bar"><div style="width:27%"></div></div><div class="v">95</div></div>
+    <div class="row"><div class="name">relay/constant</div><div class="bar"><div style="width:15%"></div></div><div class="v">53</div></div>
+    <div class="row"><div class="name">relay/channel</div><div class="bar"><div style="width:14%"></div></div><div class="v">50</div></div>
+    <div class="row"><div class="name">setting/operation_setting</div><div class="bar"><div style="width:14%"></div></div><div class="v">48</div></div>
+    <div class="row"><div class="name">relay/helper</div><div class="bar"><div style="width:12%"></div></div><div class="v">41</div></div>
+    <div class="row"><div class="name">setting/ratio_setting</div><div class="bar"><div style="width:9%"></div></div><div class="v">32</div></div>
+    <div class="row"><div class="name">setting/system_setting</div><div class="bar"><div style="width:8%"></div></div><div class="v">28</div></div>
+    <div class="row"><div class="name">relay/channel/openai</div><div class="bar"><div style="width:7%"></div></div><div class="v">26</div></div>
+    <div class="row"><div class="name">middleware</div><div class="bar"><div style="width:6%"></div></div><div class="v">20</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>模块文件分布 <span class="idx">/ 05</span></h2>
+  <p>按目录统计源文件数量，<code>relay/</code> 占总体的 33.5%，是绝对的代码重灾区——这是 41 套上游适配器的物理位置。</p>
+  <div class="chart">
+    <table>
+      <thead>
+        <tr><th style="width:22%">模块</th><th style="width:14%">文件数</th><th style="width:18%">占比</th><th style="width:46%">职责</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>relay/</code></td><td>238</td><td>33.5%</td><td>AI 网关核心 · 41 个上游通道适配器 · 计费/重试/调度</td></tr>
+        <tr><td><code>service/</code></td><td>94</td><td>13.3%</td><td>业务逻辑层 · 编排 controller 与 model</td></tr>
+        <tr><td><code>controller/</code></td><td>90</td><td>12.7%</td><td>HTTP handler · 鉴权前/后业务接收</td></tr>
+        <tr><td><code>model/</code></td><td>79</td><td>11.1%</td><td>GORM 数据模型 · 数据库访问</td></tr>
+        <tr><td><code>common/</code></td><td>57</td><td>8.0%</td><td>通用工具 · JWT · Crypto · Env · Limiter</td></tr>
+        <tr><td><code>setting/</code></td><td>55</td><td>7.8%</td><td>运行配置 · 比例/计费/系统/性能/模型设置</td></tr>
+        <tr><td><code>middleware/</code></td><td>34</td><td>4.8%</td><td>限流 · 鉴权 · Turnstile · Body 存储清洗</td></tr>
+        <tr><td><code>pkg/</code></td><td>19</td><td>2.7%</td><td>独立工具包 · billingexpr · cachex · ionet · perf_metrics</td></tr>
+        <tr><td><code>router/</code></td><td>11</td><td>1.6%</td><td>路由注册 · 5 个子路由器</td></tr>
+        <tr><td><code>metric/</code></td><td>9</td><td>1.3%</td><td>Prometheus 指标埋点</td></tr>
+        <tr><td><code>dto/</code></td><td>4</td><td>0.6%</td><td>通用数据传输对象</td></tr>
+        <tr><td><code>logger/</code></td><td>1</td><td>0.1%</td><td>结构化日志入口</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>路由拓扑 <span class="idx">/ 06</span></h2>
+  <p><code>router/main.go</code> 的 <code>SetRouter()</code> 是唯一入口，按职责分到 5 个子路由器。</p>
+  <h3>子路由器分工</h3>
+  <table>
+    <thead>
+      <tr><th style="width:22%">子路由器</th><th style="width:14%">文件</th><th style="width:18%">路由数</th><th style="width:46%">承担职能</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>apiRouter</code></td><td>api-router.go</td><td>约 150+</td><td>账户/会话/OAuth/支付/通知/邮件/Turnstile/Setup/About 等公开与管理类 API</td></tr>
+      <tr><td><code>dashboard</code></td><td>dashboard.go</td><td>约 12</td><td>Dashboard 概览数据 · 计费/订阅/使用统计</td></tr>
+      <tr><td><code>relayRouter</code></td><td>relay-router.go</td><td>56</td><td>AI 转发核心 · 兼容 OpenAI/Anthropic 协议 + 文件/微调/Images/Embeddings</td></tr>
+      <tr><td><code>videoRouter</code></td><td>video-router.go</td><td>约 8</td><td>异步视频/图像任务 · text2video · image2video · task fetch</td></tr>
+      <tr><td><code>webRouter</code></td><td>web-router.go</td><td>—</td><td>静态前端 · <code>embed.FS</code> 打入 <code>web/dist</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Relay 核心路由（AI 网关入口）</h3>
+  <table>
+    <thead><tr><th style="width:36%">路径</th><th style="width:20%">归属</th><th style="width:44%">功能</th></tr></thead>
+    <tbody>
+      <tr><td><code>/v1/chat/completions</code></td><td>OpenAI 兼容</td><td>对话补全 · 主流量入口</td></tr>
+      <tr><td><code>/v1/messages</code></td><td>Anthropic 兼容</td><td>Claude Messages 协议</td></tr>
+      <tr><td><code>/v1/completions</code></td><td>OpenAI legacy</td><td>旧版 completions</td></tr>
+      <tr><td><code>/v1/embeddings</code></td><td>OpenAI 兼容</td><td>向量嵌入</td></tr>
+      <tr><td><code>/v1/edits</code></td><td>OpenAI legacy</td><td>旧版编辑</td></tr>
+      <tr><td><code>/v1/images/generations</code></td><td>OpenAI 兼容</td><td>文生图</td></tr>
+      <tr><td><code>/v1/images/edits · /v1/images/variations</code></td><td>OpenAI 兼容</td><td>图像编辑与变体</td></tr>
+      <tr><td><code>/v1/audio/speech · /v1/audio/transcriptions · /v1/audio/translations</code></td><td>OpenAI 兼容</td><td>TTS · STT · 翻译</td></tr>
+      <tr><td><code>/v1/files</code> + 子路径</td><td>OpenAI 兼容</td><td>Files 上传/下载/检索</td></tr>
+      <tr><td><code>/v1/fine-tunes</code> + 子路径</td><td>OpenAI 兼容</td><td>微调任务管理</td></tr>
+      <tr><td><code>/v1/moderations</code></td><td>OpenAI 兼容</td><td>内容审核</td></tr>
+      <tr><td><code>/v1/assistants</code> · <code>/threads</code> · <code>/runs</code></td><td>OpenAI 兼容</td><td>Assistants API</td></tr>
+      <tr><td><code>/v1/batches</code></td><td>OpenAI 兼容</td><td>批处理</td></tr>
+      <tr><td><code>/v1/realtime</code></td><td>OpenAI 兼容</td><td>实时语音 WebSocket</td></tr>
+      <tr><td><code>/v1/responses</code></td><td>OpenAI 兼容</td><td>新版 Responses API</td></tr>
+      <tr><td><code>/v1/rerank</code></td><td>Jina 等</td><td>重排序 · common_handler 统一实现</td></tr>
+      <tr><td><code>/v1/insight-face/swap</code></td><td>InsightFace</td><td>换脸专项</td></tr>
+      <tr><td><code>/v1/alpha/search</code></td><td>Alpha</td><td>搜索引擎适配</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>上游通道适配器清单 <span class="idx">/ 07</span></h2>
+  <p><code>relay/channel/</code> 下 41 个目录，每个目录对应一个独立的上游协议适配器，是本项目最容易扩展的部分。</p>
+  <div class="chart">
+    <h3>对话/补全类（27 个）</h3>
+    <div class="pillrow">
+      <span class="pill">openai</span><span class="pill">claude</span><span class="pill">gemini</span>
+      <span class="pill">aws · bedrock</span><span class="pill">azure</span><span class="pill">vertex</span>
+      <span class="pill">deepseek</span><span class="pill">moonshot</span><span class="pill">mistral</span>
+      <span class="pill">cohere</span><span class="pill">xai · grok</span><span class="pill">perplexity</span>
+      <span class="pill">ollama</span><span class="pill">openrouter</span><span class="pill">siliconflow</span>
+      <span class="pill">zhipu</span><span class="pill">zhipu_4v</span><span class="pill">ali · 通义</span>
+      <span class="pill">baidu · 文心</span><span class="pill">baidu_v2</span><span class="pill">tencent · 混元</span>
+      <span class="pill">volcengine · 豆包</span><span class="pill">lingyiwanwu · 零一</span>
+      <span class="pill">xunfei · 讯飞</span><span class="pill">ai360 · 360 智脑</span>
+      <span class="pill">minimax</span><span class="pill">mokaai</span><span class="pill">submodel</span>
+      <span class="pill">sub2api</span><span class="pill">newapi · 自家</span>
+    </div>
+
+    <h3>图像/语音/特殊（10 个）</h3>
+    <div class="pillrow">
+      <span class="pill">replicate</span><span class="pill">palm</span><span class="pill">cloudflare · workers-ai</span>
+      <span class="pill">xinference · 自部署</span><span class="pill">dify</span><span class="pill">coze · 扣子</span>
+      <span class="pill">jina · rerank</span><span class="pill">advancedcustom · 自定义</span>
+      <span class="pill">jimeng · 即梦</span><span class="pill">codex · OpenAI 协议代理</span>
+    </div>
+
+    <h3>异步任务型（relay/channel/task/ · 11 个）</h3>
+    <div class="pillrow">
+      <span class="pill">sora · 视频</span><span class="pill">kling · 可灵</span><span class="pill">vidu</span>
+      <span class="pill">doubao · 豆包视频</span><span class="pill">hailuo · 海螺</span><span class="pill">sunu · suno</span>
+      <span class="pill">gemini · 异步</span><span class="pill">vertex · 异步</span><span class="pill">ali · 异步</span>
+      <span class="pill">jimeng · 异步</span><span class="pill">taskcommon · 公共异步框架</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>功能点全景 <span class="idx">/ 08</span></h2>
+  <p>基于源码目录与 controller/ 命名归纳的功能点全集（不含 web 前端 UI 交互）。</p>
+
+  <h3><span class="tag">账户与认证</span> 9 项</h3>
+  <ul>
+    <li>邮箱注册 / 登录 / 注销 · 密码重置 · Turnstile 人机验证</li>
+    <li>邮箱验证 · 双因子 2FA（TOTP）· 2FA 状态查询与统计</li>
+    <li>Passkey · WebAuthn 注册/登录/解绑（<code>service/passkey</code>）</li>
+    <li>Session 会话管理 · 短链 refresh token · 会话枚举与注销</li>
+    <li>OAuth 登录：Linux DO / Google / GitHub / 微信 / Telegram / 自定义 OIDC</li>
+    <li>JWT token 签发与校验（<code>common/jwt</code>）</li>
+    <li>权限分级 Casbin 模型 · 管理员鉴权中间件</li>
+  </ul>
+
+  <h3><span class="tag t-teal">计费与订阅</span> 8 项</h3>
+  <ul>
+    <li>多档充值 Top-up · 支付宝 epay · Stripe · Creem · Waffo · Waffo Pancake</li>
+    <li>订阅套餐 Plans · 订阅生效 / 续费 / 退订</li>
+    <li>余额/配额/订阅使用统计 · 实时余额查询 · Dashboard 用量</li>
+    <li>分层倍率配置 ratio_setting · 模型级 multiplier · 按渠道动态计费</li>
+    <li>按 token 计费 · prompt/completion cache token 区分 · 推理 reasoning 计费</li>
+    <li>计费表达式引擎 pkg/billingexpr · 自定义按量计费规则</li>
+    <li>每日签到 check-in · 用户权益体系</li>
+    <li>Webhook 通知 · 支付回调签名校验 · 合规风控</li>
+  </ul>
+
+  <h3><span class="tag t-amber">模型与通道</span> 10 项</h3>
+  <ul>
+    <li>多渠道 Channel 管理 · 多 Key 池 · 渠道优先级/权重 · 渠道分组 Group</li>
+    <li>模型清单 Model · 模型元数据 · 缺失模型自动补齐</li>
+    <li>上游同步 sync_upstream · 渠道模型拉取 · 预览预览</li>
+    <li>模型归属模型所属 vendor · 模型可见性分组</li>
+    <li>渠道类型常量枚举 · 渠道类型 ↔ 适配器映射</li>
+    <li>渠道鉴权 channel_authz · 渠道订阅 · 自动测试</li>
+    <li>渠道亲和性缓存 channel_affinity_cache · 实例级缓存</li>
+    <li>渠道计费 channel-billing · 渠道能力矩阵</li>
+    <li>渠道健康检测 channel_test · 内部 healthcheck</li>
+    <li>渠道更新 channel_upstream_update · 远程刷新配置</li>
+  </ul>
+
+  <h3><span class="tag t-coral">Relay 转发核心</span> 8 项</h3>
+  <ul>
+    <li>OpenAI 全协议兼容：Chat / Completions / Edits / Embeddings / Images / Audio / Files / Fine-tunes / Moderations / Assistants / Batches / Realtime / Responses</li>
+    <li>Anthropic Messages 协议兼容 · Claude 适配</li>
+    <li>多模态：vision 图像理解 · function calling 工具调用 · structured output</li>
+    <li>重排序 Rerank · 搜索引擎 Alpha · 换脸 InsightFace</li>
+    <li>请求级协议转换 relaykit/relayconvert · 41 套外部协议 ↔ 1 套内部 dto</li>
+    <li>流式响应 SSE · 失败重试 · 渠道切换 · 上下文压缩</li>
+    <li>缓存命中率 · 渠道亲和性 · 实例分组选择策略</li>
+    <li>动态路由 · 智能分发 · 用户级 model mapping</li>
+  </ul>
+
+  <h3><span class="tag t-purple">异步任务与媒体</span> 6 项</h3>
+  <ul>
+    <li>视频生成 text2video · image2video · 异步 task fetch · task 取消</li>
+    <li>图像生成 images/generations · images/edits · images/variations · seed 获取</li>
+    <li>语音合成 TTS · 语音转写 transcriptions · 翻译 translations</li>
+    <li>Files 文件上传 · 下载 · 内容回放 · 元数据查询</li>
+    <li>Fine-tunes 微调任务 · 任务列表 · 取消 · 事件流</li>
+    <li>异步任务调度 taskcommon · 任务状态轮询 · 回调处理</li>
+  </ul>
+
+  <h3><span class="tag t-green">监控与可观测性</span> 5 项</h3>
+  <ul>
+    <li>Prometheus 指标 metric · counter/gauge/histogram 埋点</li>
+    <li>Pyroscope 性能剖析（<code>grafana/pyroscope-go</code>）</li>
+    <li>pprof 接入（<code>net/http/pprof</code>）</li>
+    <li>结构化日志 logger · 按请求 ID 追踪 · debug/info/warn/error</li>
+    <li>性能指标 perf_metrics · TTFT · 推理时长 · 渠道时延分布</li>
+  </ul>
+
+  <h3><span class="tag">系统与设置</span> 7 项</h3>
+  <ul>
+    <li>系统设置 system_setting · 运行配置 · 默认配额</li>
+    <li>操作日志 operation_setting · 用户行为审计 · admin 日志查询</li>
+    <li>控制台设置 console_setting · 顶部导航模块权限</li>
+    <li>模型设置 model_setting · 推理参数 · 模型开关</li>
+    <li>性能设置 performance_setting · 缓存策略 · 限流阈值</li>
+    <li>初始化配置 Setup · 首次部署自动引导 · 数据库迁移</li>
+    <li>多节点部署 · Master/Worker 选举 · 实例心跳 · 失效实例清理</li>
+  </ul>
+
+  <h3><span class="tag t-teal">中间件能力栈</span> 6 项</h3>
+  <ul>
+    <li>多档限流 CriticalRateLimit · GlobalAPIRateLimit · EmailVerificationRateLimit</li>
+    <li>CORS / Gzip 压缩 / 静态资源</li>
+    <li>Turnstile 反爬 · 关键路径 Body 大小限制</li>
+    <li>Body 存储清理 BodyStorageCleanup · DisableCache</li>
+    <li>SessionCookieOriginGuard · 跨域 refresh 防泄漏</li>
+    <li>HeaderNavModuleAuth · 前端模块可见性按角色控制</li>
+  </ul>
+
+  <h3><span class="tag t-amber">安全与合规</span> 5 项</h3>
+  <ul>
+    <li>Casbin RBAC · 服务端策略鉴权 service/authz</li>
+    <li>支付合规 payment_compliance · 订阅可用性</li>
+    <li>审计日志 audit · 操作追溯</li>
+    <li>Passkey 抗钓鱼 · WebAuthn 生物凭据</li>
+    <li>Turnstile + RateLimit 双层反爬 · 邮箱验证防滥用</li>
+  </ul>
+</section>
+
+<section>
+  <h2>关键架构观察 <span class="idx">/ 09</span></h2>
+
+  <h3>1. 双层"协议转换"是项目最值钱的部分</h3>
+  <p>外层 <code>relay/</code> 处理把 OpenAI/Anthropic 等公开协议转换为内部统一 DTO；内层 <code>relay/channel/&lt;provider&gt;/</code> 处理内部 DTO → 上游 41 套私有协议。<code>relaykit/dto</code>（223 引用）和 <code>relaykit/relayconvert</code> 之间的边界是整个项目的"设计断层线"——改一个字段会牵动全网。</p>
+
+  <h3>2. <code>relay/</code> 是单点热点</h3>
+  <p>238 个文件 / 33.5% 占比。新增渠道 = 新增一个子目录；修改计费 = 触动 `relay/common`（163 引用）。任何大改动都得兼顾"已有 41 套适配器不破"。</p>
+
+  <h3>3. relaykit 是较新的"协议层"独立包</h3>
+  <p><code>relaykit/dto</code> + <code>relaykit/types</code> + <code>relaykit/relayconvert</code> + <code>relaykit/reasonmap</code> 共同构成对外协议抽象层。这是从早期 monolith 中抽出独立包的趋势——意味着正在做模块化拆分（参见历史 <code>.codex-relaykit-function-architecture-analysis.md</code>）。</p>
+
+  <h3>4. controller 与 service 是平铺结构，不是按业务域</h3>
+  <p>90 个 controller 文件、94 个 service 文件，平铺在同一个目录下，无子包。优点是简单直接，缺点是规模继续增长后领域边界会模糊。这是后续架构演进的潜在优化点。</p>
+
+  <h3>5. Web 前端通过 <code>embed.FS</code> 打入二进制</h3>
+  <p><code>//go:embed web/dist</code> 把构建产物编进 Go 二进制，单文件部署。意味着前端构建产物 <code>web/dist</code> 是 new-api Docker 镜像的实际载体。</p>
+
+  <h3>6. 41 通道 + 11 异步任务 = 项目"易扩展"特性</h3>
+  <p>新增一个 AI 厂商的成本 = 新增 <code>relay/channel/&lt;name&gt;/</code> 子目录 + 在 <code>relay/constant</code> 登记 + 在路由注册。这是项目作为"AI 网关聚合"的护城河。</p>
+</section>
+
+<section>
+  <h2>分析工具栈说明 <span class="idx">/ 10</span></h2>
+  <p>本报告由以下"开源工具"在不引入外部依赖的前提下协作产出。</p>
+  <table>
+    <thead><tr><th style="width:24%">工具</th><th style="width:14%">类型</th><th style="width:62%">在本报告中的作用</th></tr></thead>
+    <tbody>
+      <tr><td><code>go list ./...</code></td><td>Go 标准工具链</td><td>枚举全部 83 个内部包，识别模块拓扑</td></tr>
+      <tr><td><code>grep -E "github.com/QuantumNous/new-api/..."</code></td><td>类 Unix 标准工具</td><td>统计每个内部包的被引用次数，构建依赖热度榜</td></tr>
+      <tr><td><code>grep -E "\b(GET|POST|...)\(\"/api\""</code></td><td>类 Unix 标准工具</td><td>从 <code>router/</code> 全量提取已注册路由及 HTTP 方法</td></tr>
+      <tr><td><code>find ... | wc -l</code></td><td>类 Unix 标准工具</td><td>按目录统计源文件数量，绘制模块分布</td></tr>
+      <tr><td><code>ls / find</code></td><td>类 Unix 标准工具</td><td>扫描 <code>relay/channel/</code> 全量子目录得到通道适配器清单</td></tr>
+      <tr><td><code>Mermaid.js v10.9.1</code></td><td>开源图表渲染（jsdelivr CDN）</td><td>浏览器端渲染请求链路流程图</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">没有依赖任何商业/闭源工具，也没有引入 graphviz / go-callvis / swag 等需要安装的外部依赖。如果后续需要更深的调用图，可以补充安装 <code>go install github.com/ofabry/go-callvis@latest</code>（需先装 graphviz），产出 SVG 形态的调用关系图；或者用 Go 自带 <code>go tool pprof</code> 对 <code>controller.test.exe</code> 做运行时剖析。</div>
+</section>
+
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'neutral',
+  themeVariables: {
+    background: '#FFFFFF',
+    primaryColor: '#E6F1FB',
+    primaryTextColor: '#0C447C',
+    primaryBorderColor: '#185FA5',
+    lineColor: '#5F5E5A',
+    secondaryColor: '#E1F5EE',
+    tertiaryColor: '#FAEEDA',
+    fontSize: '13px',
+    fontFamily: '-apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif'
+  },
+  flowchart: { curve: 'basis', padding: 12 },
+  securityLevel: 'loose'
+});
+</script>
+</body>
+</html>
