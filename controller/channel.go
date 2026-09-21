@@ -1,11 +1,17 @@
 package controller
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/relay"
 )
 
 type channelPayload struct {
@@ -194,6 +200,107 @@ func DeleteChannel(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, nil)
 }
 
+var channelTestHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
+type channelTestResult struct {
+	OK        bool   `json:"ok"`
+	Model     string `json:"model"`
+	ElapsedMs int64  `json:"elapsed_ms"`
+	Message   string `json:"message"`
+	Status    int    `json:"status"`
+}
+
+func TestChannel(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	ch, err := model.GetChannelByID(id)
+	if err != nil {
+		common.ApiError(w, http.StatusNotFound, "channel not found")
+		return
+	}
+	adaptor, err := relay.GetAdaptor(ch.Type)
+	if err != nil {
+		common.ApiError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	available := model.SplitList(ch.Models)
+	if len(available) == 0 {
+		common.ApiError(w, http.StatusBadRequest, "channel has no models")
+		return
+	}
+	modelName := r.URL.Query().Get("model")
+	if modelName == "" {
+		modelName = available[0]
+	} else if !modelInList(modelName, available) {
+		common.ApiError(w, http.StatusBadRequest, "model does not belong to this channel")
+		return
+	}
+	probe, err := json.Marshal(map[string]any{
+		"model":      modelName,
+		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
+		"max_tokens": 1,
+	})
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost,
+		adaptor.RequestURL(ch.BaseURL), bytes.NewReader(probe))
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	adaptor.SetupRequestHeader(req, ch.Key)
+
+	result := channelTestResult{Model: modelName, Status: ch.Status}
+	start := time.Now()
+	resp, err := channelTestHTTPClient.Do(req)
+	result.ElapsedMs = time.Since(start).Milliseconds()
+	if err != nil {
+		result.Message = "request failed: " + err.Error()
+		common.ApiSuccess(w, result)
+		return
+	}
+	defer resp.Body.Close()
+	if err := model.UpdateChannelResponseTime(ch.ID, result.ElapsedMs); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		result.Message = fmt.Sprintf("upstream returned %d: %s",
+			resp.StatusCode, strings.TrimSpace(string(body)))
+		if (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) &&
+			ch.Status == common.ChannelStatusEnabled {
+			if err := model.UpdateChannelStatus(ch.ID, common.ChannelStatusAutoDisabled); err == nil {
+				result.Status = common.ChannelStatusAutoDisabled
+			}
+		}
+		common.ApiSuccess(w, result)
+		return
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	result.OK = true
+	result.Message = "ok"
+	if ch.Status == common.ChannelStatusAutoDisabled {
+		if err := model.UpdateChannelStatus(ch.ID, common.ChannelStatusEnabled); err == nil {
+			result.Status = common.ChannelStatusEnabled
+		}
+	}
+	common.ApiSuccess(w, result)
+}
+
+func modelInList(name string, models []string) bool {
+	for _, m := range models {
+		if m == name {
+			return true
+		}
+	}
+	return false
+}
+
 func normalizeBaseURL(w http.ResponseWriter, raw string) (string, bool) {
 	base := strings.TrimRight(strings.TrimSpace(raw), "/")
 	if base != "" && !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
@@ -205,17 +312,18 @@ func normalizeBaseURL(w http.ResponseWriter, raw string) (string, bool) {
 
 func maskedChannel(c *model.Channel) map[string]any {
 	return map[string]any{
-		"id":         c.ID,
-		"name":       c.Name,
-		"type":       c.Type,
-		"key":        common.MaskKey(c.Key),
-		"base_url":   c.BaseURL,
-		"models":     c.Models,
-		"group":      c.Group,
-		"status":     c.Status,
-		"priority":   c.Priority,
-		"weight":     c.Weight,
-		"used_quota": c.UsedQuota,
-		"created_at": c.CreatedAt,
+		"id":            c.ID,
+		"name":          c.Name,
+		"type":          c.Type,
+		"key":           common.MaskKey(c.Key),
+		"base_url":      c.BaseURL,
+		"models":        c.Models,
+		"group":         c.Group,
+		"status":        c.Status,
+		"priority":      c.Priority,
+		"weight":        c.Weight,
+		"response_time": c.ResponseTime,
+		"used_quota":    c.UsedQuota,
+		"created_at":    c.CreatedAt,
 	}
 }

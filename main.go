@@ -35,20 +35,22 @@ func main() {
 		log.Fatalf("failed to seed database: %v", err)
 	}
 	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, port, dbPath)
-	if err := http.ListenAndServe(":"+port, NewRouter()); err != nil {
+	if err := http.ListenAndServe(":"+port, middleware.IPRateLimit(NewRouter())); err != nil {
 		log.Fatal(err)
 	}
 }
 
 // NewRouter wires the management API and the relay endpoints.
 // Relay chain contract: TokenAuth (writes CtxUsingGroup) ->
-// Distribute (writes CtxSelectedChannel) -> Relay (consumes both).
+// UserRateLimit -> Distribute (writes CtxSelectedChannel) -> Relay (consumes both).
 func NewRouter() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /api/user/login", controller.Login)
+	mux.HandleFunc("POST /api/user/register", controller.Register)
 	mux.Handle("POST /api/user/logout", middleware.UserAuth(http.HandlerFunc(controller.Logout)))
 	mux.Handle("GET /api/user/self", middleware.UserAuth(http.HandlerFunc(controller.GetSelf)))
+	mux.Handle("GET /api/user/usage", middleware.UserAuth(http.HandlerFunc(controller.UserUsage)))
 	mux.Handle("GET /api/user", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
 	mux.Handle("GET /api/user/", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
 	mux.Handle("PUT /api/user", middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser)))
@@ -56,6 +58,7 @@ func NewRouter() *http.ServeMux {
 
 	mux.Handle("POST /api/channel", middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel)))
 	mux.Handle("POST /api/channel/", middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel)))
+	mux.Handle("POST /api/channel/test/{id}", middleware.AdminAuth(http.HandlerFunc(controller.TestChannel)))
 	mux.Handle("GET /api/channel", middleware.AdminAuth(http.HandlerFunc(controller.ListChannels)))
 	mux.Handle("GET /api/channel/", middleware.AdminAuth(http.HandlerFunc(controller.ListChannels)))
 	mux.Handle("GET /api/channel/{id}", middleware.AdminAuth(http.HandlerFunc(controller.GetChannel)))
@@ -80,7 +83,7 @@ func NewRouter() *http.ServeMux {
 	mux.Handle("GET /api/log/", middleware.UserAuth(http.HandlerFunc(controller.ListLogs)))
 
 	mux.Handle("POST /v1/chat/completions",
-		middleware.TokenAuth(middleware.Distribute(http.HandlerFunc(controller.Relay))))
+		middleware.TokenAuth(middleware.UserRateLimit(middleware.Distribute(http.HandlerFunc(controller.Relay)))))
 	mux.Handle("GET /v1/models", middleware.TokenAuth(http.HandlerFunc(controller.ListModels)))
 
 	return mux

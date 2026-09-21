@@ -2,6 +2,8 @@ package controller
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"starhub/common"
@@ -13,6 +15,90 @@ import (
 type loginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type registerRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
+
+func validUsername(name string) bool {
+	if len(name) < 3 || len(name) > 64 {
+		return false
+	}
+	for _, c := range name {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9',
+			c == '_', c == '-', c == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validEmail(email string) bool {
+	if email == "" {
+		return true
+	}
+	if len(email) < 5 || len(email) > 64 {
+		return false
+	}
+	at := strings.Index(email, "@")
+	return at > 0 && at < len(email)-1
+}
+
+func Register(w http.ResponseWriter, r *http.Request) {
+	var req registerRequest
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	req.Username = strings.TrimSpace(req.Username)
+	if !validUsername(req.Username) {
+		common.ApiError(w, http.StatusBadRequest,
+			"username must be 3-64 characters of letters, digits, '_', '-', '.'")
+		return
+	}
+	if len(req.Password) < 6 || len(req.Password) > 64 {
+		common.ApiError(w, http.StatusBadRequest, "password must be 6-64 characters")
+		return
+	}
+	req.Email = strings.TrimSpace(req.Email)
+	if !validEmail(req.Email) {
+		common.ApiError(w, http.StatusBadRequest, "invalid email")
+		return
+	}
+	if _, err := model.GetUserByUsername(req.Username); err == nil {
+		common.ApiError(w, http.StatusConflict, "username already exists")
+		return
+	} else if err != model.ErrUserNotFound {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	hashed, err := common.HashPassword(req.Password)
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	user := &model.User{
+		Username: req.Username,
+		Email:    req.Email,
+		Password: hashed,
+		Role:     common.RoleUser,
+		Status:   common.StatusEnabled,
+		Quota:    common.DefaultRegisterQuota,
+		Group:    common.DefaultGroup,
+	}
+	if err := model.CreateUser(user); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			common.ApiError(w, http.StatusConflict, "username already exists")
+			return
+		}
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	common.ApiSuccess(w, publicUser(user))
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +142,41 @@ func GetSelf(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusNotFound, "user not found")
 		return
 	}
-	common.ApiSuccess(w, publicUser(user))
+	requestCount, err := model.CountLogs(user.ID)
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	data := publicUser(user)
+	data["request_count"] = requestCount
+	common.ApiSuccess(w, data)
+}
+
+func UserUsage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	days, _ := strconv.ParseInt(q.Get("days"), 10, 64)
+	if days < 1 {
+		days = 7
+	}
+	if days > 90 {
+		days = 90
+	}
+	userID := requestUserID(r)
+	if raw := q.Get("user_id"); raw != "" && requestRole(r) >= common.RoleAdmin {
+		if v, err := strconv.ParseInt(raw, 10, 64); err == nil && v >= 0 {
+			userID = v
+		}
+	}
+	since := time.Now().UTC().AddDate(0, 0, -int(days)+1).Truncate(24 * time.Hour).Unix()
+	items, err := model.SummarizeLogsByDay(userID, since)
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	common.ApiSuccess(w, map[string]any{
+		"days":  days,
+		"items": items,
+	})
 }
 
 func ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +262,7 @@ func publicUser(u *model.User) map[string]any {
 	return map[string]any{
 		"id":         u.ID,
 		"username":   u.Username,
+		"email":      u.Email,
 		"role":       u.Role,
 		"status":     u.Status,
 		"quota":      u.Quota,

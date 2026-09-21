@@ -20,11 +20,12 @@ const (
 const QuotaPerUSD = 500000
 
 const (
-	DefaultGroup       = "default"
-	DefaultTokenQuota  = 500000
-	DefaultRootUser    = "root"
-	DefaultRootPasswd  = "123456"
-	DefaultChannelType = 1
+	DefaultGroup         = "default"
+	DefaultTokenQuota    = 500000
+	DefaultRootUser      = "root"
+	DefaultRootPasswd    = "123456"
+	DefaultChannelType   = 1
+	DefaultRegisterQuota = 0
 )
 
 const Version = "0.1.0"

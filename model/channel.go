@@ -12,18 +12,19 @@ import (
 var ErrChannelNotFound = errors.New("channel not found")
 
 type Channel struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name      string `gorm:"size:128;not null;default:''" json:"name"`
-	Type      int    `gorm:"not null;default:1" json:"type"`
-	Key       string `gorm:"size:512;not null;default:''" json:"key"`
-	BaseURL   string `gorm:"size:256;not null;default:''" json:"base_url"`
-	Models    string `gorm:"type:text;not null;default:''" json:"models"`
-	Group     string `gorm:"column:group;size:256;not null;default:'default'" json:"group"`
-	Status    int    `gorm:"not null;default:1" json:"status"`
-	Priority  int64  `gorm:"not null;default:0" json:"priority"`
-	Weight    int64  `gorm:"not null;default:1" json:"weight"`
-	UsedQuota int64  `gorm:"not null;default:0" json:"used_quota"`
-	CreatedAt int64  `gorm:"autoCreateTime" json:"created_at"`
+	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name         string `gorm:"size:128;not null;default:''" json:"name"`
+	Type         int    `gorm:"not null;default:1" json:"type"`
+	Key          string `gorm:"size:512;not null;default:''" json:"key"`
+	BaseURL      string `gorm:"size:256;not null;default:''" json:"base_url"`
+	Models       string `gorm:"type:text;not null;default:''" json:"models"`
+	Group        string `gorm:"column:group;size:256;not null;default:'default'" json:"group"`
+	Status       int    `gorm:"not null;default:1" json:"status"`
+	Priority     int64  `gorm:"not null;default:0" json:"priority"`
+	Weight       int64  `gorm:"not null;default:1" json:"weight"`
+	ResponseTime int64  `gorm:"not null;default:0" json:"response_time"`
+	UsedQuota    int64  `gorm:"not null;default:0" json:"used_quota"`
+	CreatedAt    int64  `gorm:"autoCreateTime" json:"created_at"`
 }
 
 func InsertChannel(c *Channel) error {
@@ -81,6 +82,18 @@ func UpdateChannelStatus(id int64, status int) error {
 		return ErrChannelNotFound
 	}
 	return SetAbilitiesEnabledByChannel(id, status == common.ChannelStatusEnabled)
+}
+
+func UpdateChannelResponseTime(id int64, milliseconds int64) error {
+	res := DB.Model(&Channel{}).Where("id = ?", id).
+		Updates(map[string]any{"response_time": milliseconds})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrChannelNotFound
+	}
+	return nil
 }
 
 func IncreaseChannelUsedQuota(id int64, amount int64) error {

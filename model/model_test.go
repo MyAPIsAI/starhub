@@ -3,6 +3,7 @@ package model
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"starhub/common"
 )
@@ -246,6 +247,64 @@ func TestLogInsertAndQuery(t *testing.T) {
 	logs, total, _ = ListLogs(7, 1, 2, "")
 	if total != 3 || len(logs) != 2 {
 		t.Fatalf("pagination wrong: %d rows of %d", len(logs), total)
+	}
+}
+
+func TestSummarizeLogsByDay(t *testing.T) {
+	newTestDB(t)
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	at := func(dayOffset, hour int) int64 {
+		return today.AddDate(0, 0, dayOffset).Add(time.Duration(hour) * time.Hour).Unix()
+	}
+	rows := []Log{
+		{UserID: 1, Model: "m", PromptTokens: 10, CompletionTokens: 5, Quota: 3, CreatedAt: at(0, 1)},
+		{UserID: 1, Model: "m", PromptTokens: 20, CompletionTokens: 5, Quota: 4, CreatedAt: at(0, 2)},
+		{UserID: 1, Model: "m", PromptTokens: 7, CompletionTokens: 1, Quota: 2, CreatedAt: at(-1, 23)},
+		{UserID: 2, Model: "m", PromptTokens: 1, CompletionTokens: 1, Quota: 9, CreatedAt: at(0, 3)},
+	}
+	for i := range rows {
+		if err := InsertLog(&rows[i]); err != nil {
+			t.Fatalf("InsertLog failed: %v", err)
+		}
+	}
+
+	if total, err := CountLogs(1); err != nil || total != 3 {
+		t.Fatalf("CountLogs(1) = %d, %v; want 3", total, err)
+	}
+	if total, err := CountLogs(0); err != nil || total != 4 {
+		t.Fatalf("CountLogs(0) = %d, %v; want 4", total, err)
+	}
+
+	since := today.AddDate(0, 0, -6).Unix()
+	usage, err := SummarizeLogsByDay(1, since)
+	if err != nil {
+		t.Fatalf("SummarizeLogsByDay failed: %v", err)
+	}
+	if len(usage) != 2 {
+		t.Fatalf("user 1 should have 2 daily rows, got %d", len(usage))
+	}
+	yesterday := today.AddDate(0, 0, -1).Format("2006-01-02")
+	if usage[0].Date != yesterday || usage[0].Requests != 1 || usage[0].Quota != 2 ||
+		usage[0].PromptTokens != 7 || usage[0].CompletionTokens != 1 {
+		t.Fatalf("yesterday aggregate wrong: %+v", usage[0])
+	}
+	if usage[1].Date != today.Format("2006-01-02") || usage[1].Requests != 2 || usage[1].Quota != 7 ||
+		usage[1].PromptTokens != 30 || usage[1].CompletionTokens != 10 {
+		t.Fatalf("today aggregate wrong: %+v", usage[1])
+	}
+
+	all, err := SummarizeLogsByDay(0, since)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("all-users aggregate rows = %d, %v; want 2", len(all), err)
+	}
+	if all[1].Requests != 3 || all[1].Quota != 16 {
+		t.Fatalf("all-users today aggregate wrong: %+v", all[1])
+	}
+
+	recent, err := SummarizeLogsByDay(0, at(0, 2))
+	if err != nil || len(recent) != 1 || recent[0].Requests != 2 {
+		t.Fatalf("since-filter aggregate wrong: %+v, %v", recent, err)
 	}
 }
 

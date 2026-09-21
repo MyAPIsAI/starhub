@@ -66,7 +66,27 @@ func ListTokens(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	common.ApiSuccess(w, tokens)
+	data := make([]map[string]any, 0, len(tokens))
+	for i := range tokens {
+		data = append(data, maskedToken(&tokens[i]))
+	}
+	common.ApiSuccess(w, data)
+}
+
+func maskedToken(t *model.Token) map[string]any {
+	return map[string]any{
+		"id":              t.ID,
+		"user_id":         t.UserID,
+		"name":            t.Name,
+		"key":             common.MaskKey(t.Key),
+		"status":          t.Status,
+		"group":           t.Group,
+		"expired_time":    t.ExpiredTime,
+		"remain_quota":    t.RemainQuota,
+		"unlimited_quota": t.UnlimitedQuota,
+		"used_quota":      t.UsedQuota,
+		"created_at":      t.CreatedAt,
+	}
 }
 
 type tokenUpdateRequest struct {

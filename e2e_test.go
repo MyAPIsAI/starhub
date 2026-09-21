@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"starhub/common"
+	"starhub/middleware"
 	"starhub/model"
 	"starhub/relay"
 )
@@ -107,7 +109,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("Seed failed: %v", err)
 	}
 
-	app := httptest.NewServer(NewRouter())
+	app := httptest.NewServer(middleware.IPRateLimit(NewRouter()))
 	t.Cleanup(app.Close)
 	base := app.URL
 
@@ -369,5 +371,212 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	res = doRequest(base, "GET", "/api/channel/", "", nil)
 	if res.Status != 401 {
 		t.Fatalf("unauthenticated management call should 401, got %d", res.Status)
+	}
+
+	// 16. token list must never reveal full keys (B10)
+	res = doRequest(base, "GET", "/api/token/", session, nil)
+	if res.Status != 200 {
+		t.Fatalf("token list failed: %d %s", res.Status, res.Body)
+	}
+	if strings.Contains(res.Body, apiKey) {
+		t.Fatalf("token list must not reveal full keys: %s", res.Body)
+	}
+	if !strings.Contains(res.Body, "******") {
+		t.Fatalf("token list should contain masked keys: %s", res.Body)
+	}
+
+	// 17. register / login closed loop (A2)
+	res = doRequest(base, "POST", "/api/user/register", "", map[string]string{
+		"username": "alice",
+		"password": "alice-pass",
+		"email":    "alice@example.com",
+	})
+	if res.Status != 200 {
+		t.Fatalf("register failed: %d %s", res.Status, res.Body)
+	}
+	var registerResp struct {
+		Data struct {
+			ID    int64  `json:"id"`
+			Role  int    `json:"role"`
+			Email string `json:"email"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &registerResp); err != nil {
+		t.Fatalf("bad register response: %s", res.Body)
+	}
+	aliceID := registerResp.Data.ID
+	if registerResp.Data.Role != common.RoleUser || registerResp.Data.Email != "alice@example.com" {
+		t.Fatalf("registered user should be a plain user with the given email: %s", res.Body)
+	}
+	res = doRequest(base, "POST", "/api/user/register", "", map[string]string{"username": "alice", "password": "alice-pass"})
+	if res.Status != 409 {
+		t.Fatalf("duplicate username should be 409, got %d", res.Status)
+	}
+	res = doRequest(base, "POST", "/api/user/register", "", map[string]string{"username": "x", "password": "alice-pass"})
+	if res.Status != 400 {
+		t.Fatalf("short username should be 400, got %d", res.Status)
+	}
+	res = doRequest(base, "POST", "/api/user/login", "", map[string]string{"username": "alice", "password": "alice-pass"})
+	if res.Status != 200 {
+		t.Fatalf("alice login failed: %d %s", res.Status, res.Body)
+	}
+	var aliceLogin struct {
+		Data struct {
+			Session string `json:"session"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &aliceLogin); err != nil || aliceLogin.Data.Session == "" {
+		t.Fatalf("bad alice login response: %s", res.Body)
+	}
+	aliceSession := aliceLogin.Data.Session
+
+	// 18. self endpoint reflects the fresh account (A4)
+	res = doRequest(base, "GET", "/api/user/self", aliceSession, nil)
+	if res.Status != 200 || !strings.Contains(res.Body, `"request_count":0`) || !strings.Contains(res.Body, `"quota":0`) {
+		t.Fatalf("alice self should show a fresh account: %d %s", res.Status, res.Body)
+	}
+
+	// 19. admin tops up the new user (A3 user quota management)
+	res = doRequest(base, "PUT", "/api/user/", session, map[string]any{"id": aliceID, "quota": 1000000})
+	if res.Status != 200 {
+		t.Fatalf("topup alice failed: %d %s", res.Status, res.Body)
+	}
+
+	// 20. the registered user relays through an own token
+	res = doRequest(base, "POST", "/api/token/", aliceSession, map[string]any{"name": "alice-key"})
+	if res.Status != 200 {
+		t.Fatalf("alice create token failed: %d %s", res.Status, res.Body)
+	}
+	var aliceTokenResp struct {
+		Data struct {
+			Key string `json:"key"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &aliceTokenResp); err != nil || aliceTokenResp.Data.Key == "" {
+		t.Fatalf("bad alice token response: %s", res.Body)
+	}
+	aliceKey := aliceTokenResp.Data.Key
+	res = doRequest(base, "POST", "/v1/chat/completions", aliceKey, chatBody)
+	if res.Status != 200 || !strings.Contains(res.Body, "hello world") {
+		t.Fatalf("alice relay failed: %d %s", res.Status, res.Body)
+	}
+	res = doRequest(base, "GET", "/api/user/self", aliceSession, nil)
+	if res.Status != 200 || !strings.Contains(res.Body, `"request_count":1`) {
+		t.Fatalf("alice self should count one request: %d %s", res.Status, res.Body)
+	}
+
+	// 21. daily usage aggregation (A4)
+	type usageItem struct {
+		Date             string `json:"date"`
+		Requests         int64  `json:"requests"`
+		Quota            int64  `json:"quota"`
+		PromptTokens     int64  `json:"prompt_tokens"`
+		CompletionTokens int64  `json:"completion_tokens"`
+	}
+	parseUsage := func(body string) []usageItem {
+		var resp struct {
+			Data struct {
+				Items []usageItem `json:"items"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("bad usage response: %s", body)
+		}
+		return resp.Data.Items
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+
+	res = doRequest(base, "GET", "/api/user/usage?days=7", aliceSession, nil)
+	if res.Status != 200 {
+		t.Fatalf("alice usage failed: %d %s", res.Status, res.Body)
+	}
+	aliceItems := parseUsage(res.Body)
+	if len(aliceItems) != 1 || aliceItems[0].Date != today ||
+		aliceItems[0].Requests != 1 || aliceItems[0].Quota != expected {
+		t.Fatalf("alice usage wrong: %+v (want 1 request, quota %d)", aliceItems, expected)
+	}
+	res = doRequest(base, "GET", "/api/user/usage?days=7&user_id=0", aliceSession, nil)
+	if res.Status != 200 || len(parseUsage(res.Body)) != 1 {
+		t.Fatalf("non-admin must always see only own usage: %s", res.Body)
+	}
+	res = doRequest(base, "GET", "/api/user/usage?days=7", session, nil)
+	if res.Status != 200 {
+		t.Fatalf("root usage failed: %d %s", res.Status, res.Body)
+	}
+	rootItems := parseUsage(res.Body)
+	if len(rootItems) != 1 || rootItems[0].Requests != 3 || rootItems[0].Quota != 3*expected {
+		t.Fatalf("root usage wrong (want 3 requests, quota %d): %+v", 3*expected, rootItems)
+	}
+	res = doRequest(base, "GET", "/api/user/usage?days=7&user_id=0", session, nil)
+	if res.Status != 200 {
+		t.Fatalf("global usage failed: %d %s", res.Status, res.Body)
+	}
+	globalItems := parseUsage(res.Body)
+	if len(globalItems) != 1 || globalItems[0].Requests != 4 || globalItems[0].Quota != 4*expected {
+		t.Fatalf("global usage wrong (want 4 requests, quota %d): %+v", 4*expected, globalItems)
+	}
+
+	// 22. channel test button writes response_time (B7)
+	res = doRequest(base, "POST", "/api/channel/test/"+fmt.Sprint(channelID), session, nil)
+	if res.Status != 200 {
+		t.Fatalf("channel test failed: %d %s", res.Status, res.Body)
+	}
+	var channelTestResp struct {
+		Data struct {
+			OK        bool   `json:"ok"`
+			Model     string `json:"model"`
+			ElapsedMs int64  `json:"elapsed_ms"`
+			Status    int    `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &channelTestResp); err != nil {
+		t.Fatalf("bad channel test response: %s", res.Body)
+	}
+	if !channelTestResp.Data.OK || channelTestResp.Data.Model != "gpt-4o-mini" || channelTestResp.Data.ElapsedMs < 0 {
+		t.Fatalf("channel test result wrong: %s", res.Body)
+	}
+	channel, _ = model.GetChannelByID(channelID)
+	if channel.ResponseTime != channelTestResp.Data.ElapsedMs {
+		t.Fatalf("channel response_time = %d, want %d", channel.ResponseTime, channelTestResp.Data.ElapsedMs)
+	}
+	res = doRequest(base, "POST", "/api/channel/test/"+fmt.Sprint(channelID)+"?model=gpt-4o", session, nil)
+	if res.Status != 400 {
+		t.Fatalf("testing a model outside the channel should be 400, got %d", res.Status)
+	}
+
+	// 23. fixing the key and re-testing re-enables the channel (B7)
+	res = doRequest(base, "PUT", "/api/channel/", session, map[string]any{"id": brokenResp.Data.ID, "key": upstreamKey})
+	if res.Status != 200 {
+		t.Fatalf("fix broken channel failed: %d %s", res.Status, res.Body)
+	}
+	broken, _ = model.GetChannelByID(brokenResp.Data.ID)
+	if broken.Status != common.ChannelStatusAutoDisabled {
+		t.Fatalf("channel should stay disabled until a test passes, got status %d", broken.Status)
+	}
+	res = doRequest(base, "POST", "/api/channel/test/"+fmt.Sprint(brokenResp.Data.ID), session, nil)
+	if res.Status != 200 || !strings.Contains(res.Body, `"ok":true`) {
+		t.Fatalf("re-test after fix should succeed: %d %s", res.Status, res.Body)
+	}
+	broken, _ = model.GetChannelByID(brokenResp.Data.ID)
+	if broken.Status != common.ChannelStatusEnabled {
+		t.Fatalf("a passing test should re-enable an auto-disabled channel, got status %d", broken.Status)
+	}
+
+	// 24. per-user relay rate limiting (B8)
+	middleware.ConfigureRateLimits(middleware.DefaultIPLimitPerMinute, 2)
+	middleware.ResetRateLimits()
+	t.Cleanup(func() {
+		middleware.ConfigureRateLimits(middleware.DefaultIPLimitPerMinute, middleware.DefaultUserLimitPerMinute)
+		middleware.ResetRateLimits()
+	})
+	for i := 0; i < 2; i++ {
+		res = doRequest(base, "POST", "/v1/chat/completions", aliceKey, chatBody)
+		if res.Status != 200 {
+			t.Fatalf("relay call %d under the limit failed: %d %s", i, res.Status, res.Body)
+		}
+	}
+	res = doRequest(base, "POST", "/v1/chat/completions", aliceKey, chatBody)
+	if res.Status != 429 || !strings.Contains(res.Body, "rate_limit_error") {
+		t.Fatalf("third call should hit the user rate limit: %d %s", res.Status, res.Body)
 	}
 }
