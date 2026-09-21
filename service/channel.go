@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +13,7 @@ import (
 	"starhub/common"
 	"starhub/model"
 	"starhub/relay"
+	"starhub/relay/dto"
 )
 
 var probeHTTPClient = &http.Client{Timeout: 30 * time.Second}
@@ -85,25 +85,30 @@ type ProbeResult struct {
 // the outcome. It performs no database writes; pair it with ApplyProbeResult
 // to persist status transitions.
 func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) ProbeResult {
-	probe, err := json.Marshal(map[string]any{
-		"model":      modelName,
-		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
-		"max_tokens": 1,
-	})
-	if err != nil {
-		return ProbeResult{Message: "build probe failed: " + err.Error()}
+	probe := &dto.ChatRequest{
+		Model:     modelName,
+		Messages:  []dto.ChatMessage{{Role: "user", Text: "ping"}},
+		MaxTokens: 1,
 	}
-	adaptor, err := relay.GetAdaptor(ch.Type)
+	adaptor, err := relay.GetChatAdaptor(ch.Type)
 	if err != nil {
 		return ProbeResult{Message: err.Error()}
 	}
+	body, err := adaptor.ConvertChatRequest(probe)
+	if err != nil {
+		return ProbeResult{Message: "build probe failed: " + err.Error()}
+	}
+	upstreamKey, keyIdx := ch.SelectKey()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		adaptor.RequestURL(ch.BaseURL), bytes.NewReader(probe))
+		adaptor.ChatURL(ch.BaseURL, upstreamKey, modelName, false), bytes.NewReader(body))
 	if err != nil {
 		return ProbeResult{Message: "build request failed: " + err.Error()}
 	}
-	upstreamKey, keyIdx := ch.SelectKey()
-	adaptor.SetupRequestHeader(req, upstreamKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = int64(len(body))
+	if err := adaptor.PrepareRequest(req, upstreamKey, body); err != nil {
+		return ProbeResult{Message: "prepare request failed: " + err.Error()}
+	}
 
 	start := time.Now()
 	resp, err := probeHTTPClient.Do(req)

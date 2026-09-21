@@ -3,22 +3,29 @@ package relay
 import (
 	"encoding/json"
 	"strings"
-	"unicode/utf8"
 
 	"starhub/common"
+	"starhub/relay/dto"
 )
 
+// EstimateTokens is the char-based tokenizer approximation (see
+// dto.EstimateTokens).
 func EstimateTokens(text string) int64 {
-	n := utf8.RuneCountInString(text)
-	if n == 0 {
-		return 0
-	}
-	return int64((n + 3) / 4)
+	return dto.EstimateTokens(text)
 }
 
 func EstimateUsage(requestBody []byte, streamedContent string) *Usage {
 	return &Usage{
 		PromptTokens:     EstimateTokens(ExtractPromptText(requestBody)),
+		CompletionTokens: EstimateTokens(streamedContent),
+	}
+}
+
+// EstimateIRUsage builds the fallback usage of a converted chat request
+// when the upstream report is missing (IR-based, protocol independent).
+func EstimateIRUsage(ir *dto.ChatRequest, streamedContent string) *Usage {
+	return &Usage{
+		PromptTokens:     EstimateTokens(ir.PromptText()),
 		CompletionTokens: EstimateTokens(streamedContent),
 	}
 }
@@ -89,26 +96,5 @@ func ExtractPromptText(body []byte) string {
 }
 
 func contentText(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		return s
-	}
-	var parts []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal(raw, &parts); err == nil {
-		var sb strings.Builder
-		for _, p := range parts {
-			if p.Text != "" {
-				sb.WriteString(p.Text)
-				sb.WriteByte(' ')
-			}
-		}
-		return strings.TrimSpace(sb.String())
-	}
-	return ""
+	return dto.ContentText(raw)
 }

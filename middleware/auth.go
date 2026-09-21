@@ -43,18 +43,20 @@ func AdminAuth(next http.Handler) http.Handler {
 
 func TokenAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The gateway accepts both header styles: OpenAI SDK clients send
+		// "Authorization: Bearer sk-..." while Claude SDK clients send
+		// "x-api-key: sk-..." (both route to the same token table).
 		authHeader := r.Header.Get("Authorization")
-		if !strings.HasPrefix(authHeader, "Bearer ") {
+		key := ""
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			key = strings.TrimSpace(authHeader[len("Bearer "):])
+		} else {
+			key = strings.TrimSpace(r.Header.Get("x-api-key"))
+		}
+		if key == "" {
 			common.RelayError(w, http.StatusUnauthorized,
 				"authentication_error", "missing_bearer_key",
 				"missing Authorization: Bearer header")
-			return
-		}
-		key := strings.TrimSpace(authHeader[len("Bearer "):])
-		if key == "" {
-			common.RelayError(w, http.StatusUnauthorized,
-				"authentication_error", "invalid_api_key",
-				"empty API key")
 			return
 		}
 		token, err := model.GetTokenByKey(key)
