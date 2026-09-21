@@ -26,7 +26,7 @@ func InitDB(path string) error {
 	if err != nil {
 		return fmt.Errorf("open sqlite database %s: %w", path, err)
 	}
-	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &Task{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 	DB = db

@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"starhub/common"
@@ -45,8 +47,10 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 	if req.Type != nil && *req.Type != 0 {
 		channelType = *req.Type
 	}
-	if channelType != common.DefaultChannelType {
-		common.ApiError(w, http.StatusBadRequest, "only channel type 1 (OpenAI-compatible) is supported in P0")
+	if _, ok := relay.SupportedChannelTypes()[channelType]; !ok {
+		common.ApiError(w, http.StatusBadRequest,
+			fmt.Sprintf("unsupported channel type %d; supported: %s",
+				channelType, formatChannelTypes()))
 		return
 	}
 	models := model.SplitList(req.Models)
@@ -242,7 +246,7 @@ func TestChannel(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusNotFound, "channel not found")
 		return
 	}
-	if _, err := relay.GetAdaptor(ch.Type); err != nil {
+	if _, err := relay.GetChatAdaptor(ch.Type); err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -276,6 +280,22 @@ func modelInList(name string, models []string) bool {
 		}
 	}
 	return false
+}
+
+// formatChannelTypes renders the supported channel types for API messages
+// (sorted by type id for a stable surface).
+func formatChannelTypes() string {
+	types := relay.SupportedChannelTypes()
+	ids := make([]int, 0, len(types))
+	for id := range types {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		parts = append(parts, fmt.Sprintf("%d (%s)", id, types[id]))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func normalizeBaseURL(w http.ResponseWriter, raw string) (string, bool) {

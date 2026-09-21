@@ -4,60 +4,101 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
+	"strings"
 
 	"starhub/common"
+	"starhub/relay/dto"
 )
 
 const maxRequestBodySize = 32 << 20
 
-func Distribute(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodySize+1))
-		if err != nil {
-			common.RelayError(w, http.StatusBadRequest,
-				"invalid_request_error", "read_body_failed",
-				"failed to read request body: "+err.Error())
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewReader(body))
-		if len(body) > maxRequestBodySize {
-			common.RelayError(w, http.StatusRequestEntityTooLarge,
-				"invalid_request_error", "body_too_large",
-				"request body exceeds the size limit")
-			return
-		}
-		var lite struct {
-			Model  string `json:"model"`
-			Stream bool   `json:"stream"`
-		}
-		if err := json.Unmarshal(body, &lite); err != nil {
-			common.RelayError(w, http.StatusBadRequest,
-				"invalid_request_error", "invalid_json",
-				"request body is not valid JSON: "+err.Error())
-			return
-		}
-		if lite.Model == "" {
-			common.RelayError(w, http.StatusBadRequest,
-				"invalid_request_error", "model_required",
-				"the \"model\" field is required")
-			return
-		}
-		group, _ := r.Context().Value(common.CtxUsingGroup).(string)
-		if group == "" {
-			common.RelayError(w, http.StatusInternalServerError,
-				"server_error", "internal_error",
-				"using group is missing from request context")
-			return
-		}
-		// Channel selection is left to the relay controller: it retries the
-		// request on alternative channels, and every attempt needs a fresh
-		// pick. The body stays cached in the context so each attempt can
-		// replay it.
-		ctx := common.WithValues(r.Context(),
-			common.CtxRequestModel, lite.Model,
-			common.CtxRequestBody, body,
-			common.CtxRequestStream, lite.Stream)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// Distribute parses and caches the relay request body so the controller
+// can replay it on every retry attempt. JSON bodies are probed for the
+// model/stream fields; multipart bodies (audio transcriptions, image
+// edits) keep their raw bytes + content-type and expose the model from the
+// form. inbound selects the error envelope format of the endpoint.
+func Distribute(inbound dto.InboundFormat) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fail := func(status int, code, message string) {
+				dto.WriteRelayError(w, status, inbound, "invalid_request_error", code, message)
+			}
+			if inbound == "" {
+				inbound = dto.InboundOpenAI
+			}
+
+			body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodySize+1))
+			if err != nil {
+				fail(http.StatusBadRequest, "read_body_failed",
+					"failed to read request body: "+err.Error())
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			if len(body) > maxRequestBodySize {
+				fail(http.StatusRequestEntityTooLarge, "body_too_large",
+					"request body exceeds the size limit")
+				return
+			}
+
+			contentType := r.Header.Get("Content-Type")
+			group, _ := r.Context().Value(common.CtxUsingGroup).(string)
+			if group == "" {
+				dto.WriteRelayError(w, http.StatusInternalServerError, inbound,
+					"server_error", "internal_error", "using group is missing from request context")
+				return
+			}
+
+			var modelName string
+			var stream bool
+			if isMultipart(contentType) {
+				form, err := common.ParseMultipartForm(contentType, body)
+				if err != nil {
+					fail(http.StatusBadRequest, "invalid_multipart", err.Error())
+					return
+				}
+				modelName = form.Value("model")
+				if raw := form.Value("stream"); raw != "" {
+					stream = raw == "true" || raw == "1"
+				}
+			} else {
+				var lite struct {
+					Model  string `json:"model"`
+					Stream bool   `json:"stream"`
+				}
+				if err := json.Unmarshal(body, &lite); err != nil {
+					fail(http.StatusBadRequest, "invalid_json",
+						"request body is not valid JSON: "+err.Error())
+					return
+				}
+				modelName = lite.Model
+				stream = lite.Stream
+			}
+			if modelName == "" {
+				fail(http.StatusBadRequest, "model_required",
+					"the \"model\" field is required")
+				return
+			}
+
+			// Channel selection is left to the relay controller: it retries the
+			// request on alternative channels, and every attempt needs a fresh
+			// pick. The body stays cached in the context so each attempt can
+			// replay it.
+			ctx := common.WithValues(r.Context(),
+				common.CtxRequestModel, modelName,
+				common.CtxRequestBody, body,
+				common.CtxRequestContentType, contentType,
+				common.CtxRequestStream, stream)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func isMultipart(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return strings.HasPrefix(strings.ToLower(contentType), "multipart/")
+	}
+	return strings.HasPrefix(strings.ToLower(mediaType), "multipart/")
 }
