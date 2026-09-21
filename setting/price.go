@@ -11,8 +11,8 @@ import (
 
 // Pricing option keys (stored in the option table, hot-updatable):
 //
-//	model_price       {"model": usd}    per-call price (按次计费)
-//	model_price_expr  {"model": "expr"} dynamic/tiered price (表达式计价)
+//	model_price       {"model": usd}    per-call flat price
+//	model_price_expr  {"model": "expr"} dynamic/tiered pricing expression
 //	cache_ratio       0.5               discount on cached prompt tokens
 //	audio_ratio       40                multiplier on audio tokens
 const (
