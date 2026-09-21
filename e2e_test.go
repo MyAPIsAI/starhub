@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +19,7 @@ import (
 	"starhub/middleware"
 	"starhub/model"
 	"starhub/relay"
+	"starhub/service"
 )
 
 const upstreamKey = "sk-upstream-key-000000000"
@@ -578,5 +582,379 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	res = doRequest(base, "POST", "/v1/chat/completions", aliceKey, chatBody)
 	if res.Status != 429 || !strings.Contains(res.Body, "rate_limit_error") {
 		t.Fatalf("third call should hit the user rate limit: %d %s", res.Status, res.Body)
+	}
+}
+
+// p1Env bundles the handles a relay-focused e2e test needs.
+type p1Env struct {
+	base    string
+	session string
+	rootID  int64
+	tokenID int64
+	apiKey  string
+}
+
+// setupRelayApp boots a fresh app on a fresh DB with a root session and one
+// relay token.
+func setupRelayApp(t *testing.T) p1Env {
+	t.Helper()
+	if err := model.InitDB(filepath.Join(t.TempDir(), "e2e.db")); err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	t.Cleanup(func() { _ = model.CloseDB() })
+	if err := model.LoadOptionsToSettings(); err != nil {
+		t.Fatalf("LoadOptionsToSettings failed: %v", err)
+	}
+	if err := model.Seed("123456"); err != nil {
+		t.Fatalf("Seed failed: %v", err)
+	}
+	app := httptest.NewServer(middleware.IPRateLimit(NewRouter()))
+	t.Cleanup(app.Close)
+
+	res := doRequest(app.URL, "POST", "/api/user/login", "",
+		map[string]string{"username": "root", "password": "123456"})
+	if res.Status != 200 {
+		t.Fatalf("login failed: %d %s", res.Status, res.Body)
+	}
+	var loginResp struct {
+		Data struct {
+			Session string `json:"session"`
+			User    struct {
+				ID int64 `json:"id"`
+			} `json:"user"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &loginResp); err != nil || loginResp.Data.Session == "" {
+		t.Fatalf("bad login response: %s", res.Body)
+	}
+	res = doRequest(app.URL, "POST", "/api/token/", loginResp.Data.Session, map[string]any{"name": "p1-key"})
+	if res.Status != 200 {
+		t.Fatalf("create token failed: %d %s", res.Status, res.Body)
+	}
+	var tokenResp struct {
+		Data struct {
+			ID  int64  `json:"id"`
+			Key string `json:"key"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &tokenResp); err != nil || tokenResp.Data.Key == "" {
+		t.Fatalf("bad token response: %s", res.Body)
+	}
+	return p1Env{
+		base:    app.URL,
+		session: loginResp.Data.Session,
+		rootID:  loginResp.Data.User.ID,
+		tokenID: tokenResp.Data.ID,
+		apiKey:  tokenResp.Data.Key,
+	}
+}
+
+func createChannelID(t *testing.T, env p1Env, payload map[string]any) int64 {
+	t.Helper()
+	res := doRequest(env.base, "POST", "/api/channel/", env.session, payload)
+	if res.Status != 200 {
+		t.Fatalf("create channel %v failed: %d %s", payload["name"], res.Status, res.Body)
+	}
+	var resp struct {
+		Data struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &resp); err != nil || resp.Data.ID == 0 {
+		t.Fatalf("bad create channel response: %s", res.Body)
+	}
+	return resp.Data.ID
+}
+
+func TestP1RelayFailoverRefundAndTrace(t *testing.T) {
+	fiveHundred := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"error":{"message":"upstream exploded","type":"server_error","code":"internal"}}`)
+	}))
+	t.Cleanup(fiveHundred.Close)
+
+	badRequest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"error":{"message":"max_tokens is too large","type":"invalid_request_error","code":"max_tokens"}}`)
+	}))
+	t.Cleanup(badRequest.Close)
+
+	var healthyHits int32
+	healthy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+upstreamKey {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		atomic.AddInt32(&healthyHits, 1)
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Model string `json:"model"`
+		}
+		_ = json.Unmarshal(body, &req)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"id":"mock","object":"chat.completion","model":%q,"choices":[{"index":0,"message":{"role":"assistant","content":"hello world"}}],"usage":{"prompt_tokens":100,"completion_tokens":50}}`, req.Model)
+	}))
+	t.Cleanup(healthy.Close)
+
+	// a listener that is closed right away: dialing it fails immediately
+	deadListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("dead listener failed: %v", err)
+	}
+	deadURL := "http://" + deadListener.Addr().String()
+	_ = deadListener.Close()
+
+	env := setupRelayApp(t)
+	chat := func(model string) apiResult {
+		return doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey,
+			map[string]any{"model": model, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+	}
+
+	ch500 := createChannelID(t, env, map[string]any{
+		"name": "always-500", "key": upstreamKey, "base_url": fiveHundred.URL,
+		"models": "gpt-fail,gpt-4o-mini", "priority": 30,
+	})
+	chBad := createChannelID(t, env, map[string]any{
+		"name": "bad-request", "key": upstreamKey, "base_url": badRequest.URL,
+		"models": "gpt-bad", "priority": 20,
+	})
+	chOK := createChannelID(t, env, map[string]any{
+		"name": "healthy", "key": upstreamKey, "base_url": healthy.URL,
+		"models": "gpt-4o-mini,gpt-bad,gpt-net", "priority": 10,
+	})
+	chDead := createChannelID(t, env, map[string]any{
+		"name": "dead-port", "key": upstreamKey, "base_url": deadURL,
+		"models": "gpt-net", "priority": 40,
+	})
+
+	// 1. a 5xx upstream transparently fails over to the next priority tier
+	res := chat("gpt-4o-mini")
+	if res.Status != 200 || !strings.Contains(res.Body, "hello world") {
+		t.Fatalf("5xx failover should reach the healthy channel: %d %s", res.Status, res.Body)
+	}
+	logs, total, err := model.ListLogs(env.rootID, 1, 10, "gpt-4o-mini")
+	if err != nil || total != 1 || len(logs) != 1 {
+		t.Fatalf("failover log missing: total=%d err=%v", total, err)
+	}
+	if want := fmt.Sprintf("%d->%d", ch500, chOK); logs[0].UsedChannels != want {
+		t.Fatalf("retry trace = %q, want %q", logs[0].UsedChannels, want)
+	}
+	c500, _ := model.GetChannelByID(ch500)
+	if c500.Status != common.ChannelStatusEnabled {
+		t.Fatalf("a transient 5xx must not auto-disable the channel, got status %d", c500.Status)
+	}
+	expected1 := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	token, _ := model.GetTokenByID(env.tokenID)
+	if token.RemainQuota != common.DefaultTokenQuota-expected1 {
+		t.Fatalf("token quota after failover = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-expected1)
+	}
+
+	// 2. a dead upstream (network error) also fails over
+	res = chat("gpt-net")
+	if res.Status != 200 || !strings.Contains(res.Body, "hello world") {
+		t.Fatalf("network failure should fail over: %d %s", res.Status, res.Body)
+	}
+	logs, _, _ = model.ListLogs(env.rootID, 1, 10, "gpt-net")
+	if len(logs) != 1 || logs[0].UsedChannels != fmt.Sprintf("%d->%d", chDead, chOK) {
+		t.Fatalf("dead-port retry trace wrong: %+v", logs)
+	}
+	deadCh, _ := model.GetChannelByID(chDead)
+	if deadCh.Status != common.ChannelStatusEnabled {
+		t.Fatalf("network failure must not auto-disable the channel, got status %d", deadCh.Status)
+	}
+	expected2 := relay.ComputeQuota("gpt-net", "default", 100, 50)
+
+	// 3. every attempt fails: the request 502s and the pre-payment is refunded
+	quotaAfterSuccesses := common.DefaultTokenQuota - expected1 - expected2
+	userBefore, _ := model.GetUserByID(env.rootID)
+	res = chat("gpt-fail")
+	if res.Status != 502 || !strings.Contains(res.Body, "upstream_unavailable") ||
+		!strings.Contains(res.Body, "returned 500") {
+		t.Fatalf("exhausted channels should 502 with the last error, got %d %s", res.Status, res.Body)
+	}
+	tokenAfter, _ := model.GetTokenByID(env.tokenID)
+	if tokenAfter.RemainQuota != quotaAfterSuccesses {
+		t.Fatalf("all-failed request must be refunded: %d, want %d", tokenAfter.RemainQuota, quotaAfterSuccesses)
+	}
+	userAfter, _ := model.GetUserByID(env.rootID)
+	if userAfter.Quota != userBefore.Quota {
+		t.Fatalf("all-failed request must refund user quota: %d vs %d", userAfter.Quota, userBefore.Quota)
+	}
+	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-fail"); total != 0 {
+		t.Fatalf("failed relay must not write usage logs, got %d rows", total)
+	}
+	c500, _ = model.GetChannelByID(ch500)
+	if c500.Status != common.ChannelStatusEnabled {
+		t.Fatalf("5xx-only channel must stay enabled for probes to decide, got status %d", c500.Status)
+	}
+
+	// 4. a 4xx upstream is passed through and never retried on other channels
+	hitsBefore := atomic.LoadInt32(&healthyHits)
+	res = chat("gpt-bad")
+	if res.Status != 400 || !strings.Contains(res.Body, "max_tokens is too large") {
+		t.Fatalf("upstream 400 should pass through unchanged: %d %s", res.Status, res.Body)
+	}
+	if atomic.LoadInt32(&healthyHits) != hitsBefore {
+		t.Fatalf("4xx must not be retried on another channel (hits %d -> %d)",
+			hitsBefore, atomic.LoadInt32(&healthyHits))
+	}
+	tokenAfter, _ = model.GetTokenByID(env.tokenID)
+	if tokenAfter.RemainQuota != quotaAfterSuccesses {
+		t.Fatalf("4xx request must be refunded: %d, want %d", tokenAfter.RemainQuota, quotaAfterSuccesses)
+	}
+	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-bad"); total != 0 {
+		t.Fatalf("4xx relay must not write usage logs, got %d rows", total)
+	}
+	cBad, _ := model.GetChannelByID(chBad)
+	if cBad.Status != common.ChannelStatusEnabled {
+		t.Fatalf("a plain 400 must not auto-disable the channel, got status %d", cBad.Status)
+	}
+}
+
+func TestP1BackgroundChannelTestRecovers(t *testing.T) {
+	upstream := newMockUpstream(t)
+	env := setupRelayApp(t)
+	chat := func(model string) apiResult {
+		return doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey,
+			map[string]any{"model": model, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+	}
+
+	// the relay auto-disables a channel whose upstream key is broken
+	chFix := createChannelID(t, env, map[string]any{
+		"name": "to-recover", "key": "sk-wrong-key", "base_url": upstream.URL,
+		"models": "gpt-4o-mini", "priority": 10,
+	})
+	res := chat("gpt-4o-mini")
+	if res.Status != 401 || !strings.Contains(res.Body, "Incorrect API key provided") {
+		t.Fatalf("broken upstream key should pass 401 through: %d %s", res.Status, res.Body)
+	}
+	token, _ := model.GetTokenByID(env.tokenID)
+	if token.RemainQuota != common.DefaultTokenQuota {
+		t.Fatalf("401 request must be refunded, got %d", token.RemainQuota)
+	}
+
+	// the admin repairs the key; the channel stays disabled until probed
+	res = doRequest(env.base, "PUT", "/api/channel/", env.session,
+		map[string]any{"id": chFix, "key": upstreamKey})
+	if res.Status != 200 {
+		t.Fatalf("fix channel key failed: %d %s", res.Status, res.Body)
+	}
+	cFix, _ := model.GetChannelByID(chFix)
+	if cFix.Status != common.ChannelStatusAutoDisabled {
+		t.Fatalf("channel should stay auto-disabled until a probe passes, got %d", cFix.Status)
+	}
+
+	// a still-broken channel plus a manually disabled one
+	chBad := createChannelID(t, env, map[string]any{
+		"name": "still-bad", "key": "sk-still-wrong", "base_url": upstream.URL,
+		"models": "gpt-4o-mini", "priority": 5,
+	})
+	chManual := createChannelID(t, env, map[string]any{
+		"name": "admin-off", "key": upstreamKey, "base_url": upstream.URL,
+		"models": "gpt-4o-mini", "priority": 0, "status": common.ChannelStatusManuallyDisabled,
+	})
+
+	// the background health checker reconciles everything in one sweep
+	service.RunChannelTestOnce(context.Background())
+
+	cFix, _ = model.GetChannelByID(chFix)
+	if cFix.Status != common.ChannelStatusEnabled {
+		t.Fatalf("a passing probe should re-enable the channel, got %d", cFix.Status)
+	}
+	cBad, _ := model.GetChannelByID(chBad)
+	if cBad.Status != common.ChannelStatusAutoDisabled {
+		t.Fatalf("a failing probe should auto-disable the channel, got %d", cBad.Status)
+	}
+	cManual, _ := model.GetChannelByID(chManual)
+	if cManual.Status != common.ChannelStatusManuallyDisabled {
+		t.Fatalf("manually disabled channels must be left alone, got %d", cManual.Status)
+	}
+
+	// traffic flows again without any manual action
+	res = chat("gpt-4o-mini")
+	if res.Status != 200 || !strings.Contains(res.Body, "hello world") {
+		t.Fatalf("recovered channel should serve traffic: %d %s", res.Status, res.Body)
+	}
+}
+
+func TestP1MultiKeyChannelKeyIsolation(t *testing.T) {
+	goodKeys := map[string]bool{"sk-good-1": true, "sk-good-2": true}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !goodKeys[auth] {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprintf(w, `{"error":{"message":"Incorrect API key provided","type":"invalid_request_error","code":"invalid_api_key"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"id":"mock","object":"chat.completion","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"hello world"}}],"usage":{"prompt_tokens":100,"completion_tokens":50}}`)
+	}))
+	t.Cleanup(upstream.Close)
+
+	env := setupRelayApp(t)
+	model.ResetMultiKeyCounters()
+	chat := func(model string) apiResult {
+		return doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey,
+			map[string]any{"model": model, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+	}
+
+	ch := createChannelID(t, env, map[string]any{
+		"name": "multi-key", "key": "sk-bad-key-000001\nsk-good-1\nsk-good-2",
+		"key_mode": "round_robin", "base_url": upstream.URL, "models": "gpt-4o-mini",
+	})
+
+	// round robin starts at the first (broken) key: the request 401s and only
+	// that key is disabled, the channel keeps serving
+	res := chat("gpt-4o-mini")
+	if res.Status != 401 || !strings.Contains(res.Body, "Incorrect API key provided") {
+		t.Fatalf("broken key should pass 401 through: %d %s", res.Status, res.Body)
+	}
+	got, _ := model.GetChannelByID(ch)
+	if got.Status != common.ChannelStatusEnabled {
+		t.Fatalf("one broken key must not disable the whole channel, got status %d", got.Status)
+	}
+	if st := got.KeyStatuses(); len(st) != 3 || st[0] != common.StatusDisabled ||
+		st[1] != common.StatusEnabled || st[2] != common.StatusEnabled {
+		t.Fatalf("per-key statuses = %v, want only key 0 disabled", st)
+	}
+
+	// the next requests skip the dead key and succeed through the good ones
+	res = chat("gpt-4o-mini")
+	if res.Status != 200 || !strings.Contains(res.Body, "hello world") {
+		t.Fatalf("remaining keys should serve traffic: %d %s", res.Status, res.Body)
+	}
+	res = chat("gpt-4o-mini")
+	if res.Status != 200 || !strings.Contains(res.Body, "hello world") {
+		t.Fatalf("round robin should alternate the good keys: %d %s", res.Status, res.Body)
+	}
+	expected := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	token, _ := model.GetTokenByID(env.tokenID)
+	if token.RemainQuota != common.DefaultTokenQuota-2*expected {
+		t.Fatalf("token quota = %d, want %d (401 refunded, 2 successes charged)",
+			token.RemainQuota, common.DefaultTokenQuota-2*expected)
+	}
+
+	// the channel API exposes the multi-key state but never the raw keys
+	res = doRequest(env.base, "GET", "/api/channel/"+fmt.Sprint(ch), env.session, nil)
+	if res.Status != 200 || !strings.Contains(res.Body, `"key_mode":"round_robin"`) ||
+		!strings.Contains(res.Body, `"key_count":3`) ||
+		!strings.Contains(res.Body, `"multi_key_status":[2,1,1]`) {
+		t.Fatalf("channel API should expose multi-key state: %s", res.Body)
+	}
+	if strings.Contains(res.Body, "sk-good-1") || strings.Contains(res.Body, "sk-bad-key-000001") {
+		t.Fatalf("channel API must never reveal raw keys: %s", res.Body)
 	}
 }

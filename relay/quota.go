@@ -92,8 +92,11 @@ func RefundPreConsumedQuota(tokenID, userID int64, tokenUnlimited bool, amount i
 	return model.IncreaseUserQuota(userID, amount)
 }
 
+// PostConsumeQuota balances the pre-payment against the actual usage and
+// records the consumption log. usedChannels is the retry trail
+// ("channelID->channelID") of the request for troubleshooting.
 func PostConsumeQuota(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName, group string, usage *Usage, preQuota int64) error {
+	channelID int64, modelName, group string, usage *Usage, preQuota int64, usedChannels string) error {
 	if usage == nil {
 		usage = &Usage{}
 	}
@@ -131,5 +134,6 @@ func PostConsumeQuota(userID, tokenID int64, tokenName string, tokenUnlimited bo
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
 		Quota:            actual,
+		UsedChannels:     usedChannels,
 	})
 }

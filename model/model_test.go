@@ -202,6 +202,136 @@ func TestGetSatisfiedChannelPriorityAndWeight(t *testing.T) {
 	}
 }
 
+func TestGetSatisfiedChannelExcluding(t *testing.T) {
+	newTestDB(t)
+
+	high := &Channel{Name: "high", Type: 1, Key: "k1", Models: "m1", Group: "default", Status: 1, Priority: 10, Weight: 1}
+	mid := &Channel{Name: "mid", Type: 1, Key: "k2", Models: "m1", Group: "default", Status: 1, Priority: 5, Weight: 1}
+	low := &Channel{Name: "low", Type: 1, Key: "k3", Models: "m1", Group: "default", Status: 1, Priority: 0, Weight: 1}
+	for _, c := range []*Channel{high, mid, low} {
+		if err := InsertChannel(c); err != nil {
+			t.Fatalf("InsertChannel(%s) failed: %v", c.Name, err)
+		}
+	}
+
+	// excluding the top tier degrades to the next priority layer
+	got, err := GetSatisfiedChannelExcluding("default", "m1", map[int64]bool{high.ID: true})
+	if err != nil || got.ID != mid.ID {
+		t.Fatalf("exclude high: got %+v, %v; want mid", got, err)
+	}
+	// excluding the whole top tier still works via the bottom layer
+	got, err = GetSatisfiedChannelExcluding("default", "m1", map[int64]bool{high.ID: true, mid.ID: true})
+	if err != nil || got.ID != low.ID {
+		t.Fatalf("exclude high+mid: got %+v, %v; want low", got, err)
+	}
+	// excluding everything leaves nothing
+	if _, err := GetSatisfiedChannelExcluding("default", "m1",
+		map[int64]bool{high.ID: true, mid.ID: true, low.ID: true}); err != ErrNoChannel {
+		t.Fatalf("expected ErrNoChannel after excluding all, got %v", err)
+	}
+	// a disabled channel is never offered, even when not excluded
+	if err := UpdateChannelStatus(mid.ID, common.ChannelStatusAutoDisabled); err != nil {
+		t.Fatalf("disable mid failed: %v", err)
+	}
+	got, err = GetSatisfiedChannelExcluding("default", "m1", map[int64]bool{high.ID: true})
+	if err != nil || got.ID != low.ID {
+		t.Fatalf("exclude high with mid disabled: got %+v, %v; want low", got, err)
+	}
+	// nil exclude behaves like the plain selector
+	got, err = GetSatisfiedChannelExcluding("default", "m1", nil)
+	if err != nil || got.ID != high.ID {
+		t.Fatalf("nil exclude should pick the highest tier, got %+v, %v", got, err)
+	}
+}
+
+func TestMultiKeySelectAndKeyDisable(t *testing.T) {
+	newTestDB(t)
+	ResetMultiKeyCounters()
+
+	single := &Channel{Name: "single", Type: 1, Key: "k-only", Models: "m1",
+		Group: "default", Status: 1, Weight: 1}
+	if err := InsertChannel(single); err != nil {
+		t.Fatalf("InsertChannel(single) failed: %v", err)
+	}
+	if single.IsMultiKey() {
+		t.Fatal("one key is not a multi-key channel")
+	}
+	key, idx := single.SelectKey()
+	if key != "k-only" || idx != 0 {
+		t.Fatalf("single key selection = %q,%d; want k-only,0", key, idx)
+	}
+
+	multi := &Channel{Name: "multi", Type: 1, Key: "k-bad\nk-good-1\nk-good-2",
+		KeyMode: KeyModeRoundRobin, Models: "m1", Group: "default", Status: 1, Weight: 1}
+	if err := InsertChannel(multi); err != nil {
+		t.Fatalf("InsertChannel(multi) failed: %v", err)
+	}
+	if !multi.IsMultiKey() {
+		t.Fatal("three keys should be multi-key")
+	}
+	statuses := multi.KeyStatuses()
+	if len(statuses) != 3 || statuses[0] != common.StatusEnabled {
+		t.Fatalf("default key statuses wrong: %v", statuses)
+	}
+
+	// round robin starts at the first key and walks the list
+	for i, want := range []string{"k-bad", "k-good-1", "k-good-2"} {
+		key, idx := multi.SelectKey()
+		if key != want || idx != i {
+			t.Fatalf("round robin pick %d = %q,%d; want %q,%d", i, key, idx, want, i)
+		}
+	}
+
+	// disabling key 0 removes it from rotation without touching the channel
+	allDisabled, err := DisableChannelKey(multi.ID, 0)
+	if err != nil || allDisabled {
+		t.Fatalf("DisableChannelKey(0) = %v, %v; want false, nil", allDisabled, err)
+	}
+	got, _ := GetChannelByID(multi.ID)
+	if got.Status != common.ChannelStatusEnabled {
+		t.Fatalf("channel must stay enabled after one key dies, got %d", got.Status)
+	}
+	statuses = got.KeyStatuses()
+	if len(statuses) != 3 || statuses[0] != common.StatusDisabled ||
+		statuses[1] != common.StatusEnabled || statuses[2] != common.StatusEnabled {
+		t.Fatalf("per-key statuses after disable: %v", statuses)
+	}
+	// a fresh rotation cursor skips the disabled key
+	ResetMultiKeyCounters()
+	for i, want := range []string{"k-good-1", "k-good-2", "k-good-1"} {
+		key, _ := got.SelectKey()
+		if key != want {
+			t.Fatalf("rotation after disable, pick %d = %q; want %q", i, key, want)
+		}
+	}
+
+	// random mode only ever returns enabled keys
+	got, _ = GetChannelByID(multi.ID)
+	got.KeyMode = KeyModeRandom
+	for i := 0; i < 50; i++ {
+		key, _ := got.SelectKey()
+		if key != "k-good-1" && key != "k-good-2" {
+			t.Fatalf("random mode returned a disabled key: %q", key)
+		}
+	}
+
+	// when the last key dies the caller is told to disable the channel
+	for _, idx := range []int{1, 2} {
+		allDisabled, err = DisableChannelKey(multi.ID, idx)
+		if err != nil {
+			t.Fatalf("DisableChannelKey(%d) failed: %v", idx, err)
+		}
+	}
+	if !allDisabled {
+		t.Fatal("disabling the last key should report allDisabled")
+	}
+	fresh, _ := GetChannelByID(multi.ID)
+	key, idx = fresh.SelectKey()
+	if key != "" || idx != -1 {
+		t.Fatalf("all keys disabled should yield empty key, got %q,%d", key, idx)
+	}
+}
+
 func TestListModelsByGroup(t *testing.T) {
 	newTestDB(t)
 

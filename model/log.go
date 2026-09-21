@@ -10,6 +10,7 @@ type Log struct {
 	PromptTokens     int64  `gorm:"not null;default:0" json:"prompt_tokens"`
 	CompletionTokens int64  `gorm:"not null;default:0" json:"completion_tokens"`
 	Quota            int64  `gorm:"not null;default:0" json:"quota"`
+	UsedChannels     string `gorm:"size:256;not null;default:''" json:"used_channels"`
 	CreatedAt        int64  `gorm:"index;autoCreateTime" json:"created_at"`
 }
 

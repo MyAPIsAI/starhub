@@ -189,11 +189,12 @@ starhub/
 ### 中继链路
 
 ```
-Client ──TokenAuth(校验令牌/配额/分组)──▶ Distribute(按 分组+模型 选渠道)
-      ──▶ Relay(适配器转发 → 预扣费 → 上游请求 → 响应处理 → 结算/退款)
+Client ──TokenAuth(校验令牌/配额/分组)──▶ Distribute(解析并缓存 请求体/模型/stream)
+      ──▶ Relay(选渠道 → 预扣费 → 重试循环:5xx/超时/网络错误按优先级阶梯切换渠道,
+              4xx 直接透传终止;成功结算,全失败退款)──▶ 后台测活(自动禁用/恢复渠道)
 ```
 
-各中间件通过 request context 传递状态(`CtxUsingGroup` → `CtxSelectedChannel`),见 `main.go` 中 `NewRouter` 的注释约定。
+各中间件通过 request context 传递状态(`CtxUsingGroup` → `CtxRequestBody`/`CtxRequestModel`),渠道选择与重试由 `controller/relay.go` 的重试循环完成(轨迹 `used_channels` 记录 `1->2->3`),见 `main.go` 中 `NewRouter` 的注释约定。
 
 ## 测试
 
@@ -202,7 +203,7 @@ go test ./...        # 全部测试(单元 + e2e)
 go test -v ./...     # 详细输出
 ```
 
-测试覆盖:加密与密钥校验(`common`)、配额结算(`relay`)、倍率解析(`setting`)、数据层(`model`)以及完整中继链路(`e2e_test.go`,内置 mock 上游服务器)。
+测试覆盖:加密与密钥校验(`common`)、配额结算(`relay`)、倍率解析(`setting`)、数据层(`model`)、渠道健康规则(`service`)以及完整中继链路(`e2e_test.go`,内置 mock 上游服务器)。
 
 ## License
 

@@ -60,6 +60,16 @@ func SetAbilitiesEnabledByChannel(channelID int64, enabled bool) error {
 }
 
 func GetSatisfiedChannel(group, model string) (*Channel, error) {
+	return GetSatisfiedChannelExcluding(group, model, nil)
+}
+
+// GetSatisfiedChannelExcluding picks an enabled channel serving group/model,
+// skipping every channel whose ID is in exclude (channels already attempted by
+// the caller). Candidates are walked tier by tier from the highest priority
+// downwards, so retries degrade to the next priority layer once the current
+// one is exhausted; within a tier the pick is weighted random. It returns
+// ErrNoChannel when no candidate is left.
+func GetSatisfiedChannelExcluding(group, model string, exclude map[int64]bool) (*Channel, error) {
 	var rows []Ability
 	err := DB.Where("\"group\" = ? AND model = ? AND enabled = ?", group, model, true).
 		Order("priority DESC").Limit(64).Find(&rows).Error
@@ -69,36 +79,55 @@ func GetSatisfiedChannel(group, model string) (*Channel, error) {
 	if len(rows) == 0 {
 		return nil, ErrNoChannel
 	}
-	topPriority := rows[0].Priority
-	top := rows[:1]
-	for _, a := range rows[1:] {
-		if a.Priority != topPriority {
-			break
+	ids := make([]int64, 0, len(rows))
+	seen := make(map[int64]bool, len(rows))
+	for _, a := range rows {
+		if !seen[a.ChannelID] {
+			seen[a.ChannelID] = true
+			ids = append(ids, a.ChannelID)
 		}
-		top = append(top, a)
 	}
-	total := int64(0)
-	for _, a := range top {
-		total += effectiveWeight(a.Weight)
+	var channels []Channel
+	if err := DB.Where("id IN ? AND status = ?", ids, common.ChannelStatusEnabled).
+		Find(&channels).Error; err != nil {
+		return nil, err
 	}
-	pick := rand.Int64N(total)
-	var channelID int64
-	for _, a := range top {
-		w := effectiveWeight(a.Weight)
-		if pick < w {
-			channelID = a.ChannelID
-			break
+	enabled := make(map[int64]*Channel, len(channels))
+	for i := range channels {
+		if exclude == nil || !exclude[channels[i].ID] {
+			enabled[channels[i].ID] = &channels[i]
 		}
-		pick -= w
 	}
-	ch, err := GetChannelByID(channelID)
-	if err != nil {
-		return nil, ErrNoChannel
+	// rows are ordered by priority DESC; walk contiguous priority tiers.
+	for i := 0; i < len(rows); {
+		j := i
+		for j < len(rows) && rows[j].Priority == rows[i].Priority {
+			j++
+		}
+		tier := rows[i:j]
+		total := int64(0)
+		for _, a := range tier {
+			if _, ok := enabled[a.ChannelID]; ok {
+				total += effectiveWeight(a.Weight)
+			}
+		}
+		if total > 0 {
+			pick := rand.Int64N(total)
+			for _, a := range tier {
+				ch, ok := enabled[a.ChannelID]
+				if !ok {
+					continue
+				}
+				w := effectiveWeight(a.Weight)
+				if pick < w {
+					return ch, nil
+				}
+				pick -= w
+			}
+		}
+		i = j
 	}
-	if ch.Status != common.ChannelStatusEnabled {
-		return nil, ErrNoChannel
-	}
-	return ch, nil
+	return nil, ErrNoChannel
 }
 
 func ListModelsByGroup(group string) ([]string, error) {

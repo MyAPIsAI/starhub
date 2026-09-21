@@ -2,7 +2,11 @@ package model
 
 import (
 	"errors"
+	"math/rand/v2"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"gorm.io/gorm"
 
@@ -11,20 +15,29 @@ import (
 
 var ErrChannelNotFound = errors.New("channel not found")
 
+// Multi-key channels store several upstream keys in Key (newline separated)
+// and pick one per request according to KeyMode.
+const (
+	KeyModeRandom     = "random"
+	KeyModeRoundRobin = "round_robin"
+)
+
 type Channel struct {
-	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name         string `gorm:"size:128;not null;default:''" json:"name"`
-	Type         int    `gorm:"not null;default:1" json:"type"`
-	Key          string `gorm:"size:512;not null;default:''" json:"key"`
-	BaseURL      string `gorm:"size:256;not null;default:''" json:"base_url"`
-	Models       string `gorm:"type:text;not null;default:''" json:"models"`
-	Group        string `gorm:"column:group;size:256;not null;default:'default'" json:"group"`
-	Status       int    `gorm:"not null;default:1" json:"status"`
-	Priority     int64  `gorm:"not null;default:0" json:"priority"`
-	Weight       int64  `gorm:"not null;default:1" json:"weight"`
-	ResponseTime int64  `gorm:"not null;default:0" json:"response_time"`
-	UsedQuota    int64  `gorm:"not null;default:0" json:"used_quota"`
-	CreatedAt    int64  `gorm:"autoCreateTime" json:"created_at"`
+	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name           string `gorm:"size:128;not null;default:''" json:"name"`
+	Type           int    `gorm:"not null;default:1" json:"type"`
+	Key            string `gorm:"type:text;not null;default:''" json:"key"`
+	KeyMode        string `gorm:"size:16;not null;default:''" json:"key_mode"`
+	MultiKeyStatus string `gorm:"size:512;not null;default:''" json:"multi_key_status"`
+	BaseURL        string `gorm:"size:256;not null;default:''" json:"base_url"`
+	Models         string `gorm:"type:text;not null;default:''" json:"models"`
+	Group          string `gorm:"column:group;size:256;not null;default:'default'" json:"group"`
+	Status         int    `gorm:"not null;default:1" json:"status"`
+	Priority       int64  `gorm:"not null;default:0" json:"priority"`
+	Weight         int64  `gorm:"not null;default:1" json:"weight"`
+	ResponseTime   int64  `gorm:"not null;default:0" json:"response_time"`
+	UsedQuota      int64  `gorm:"not null;default:0" json:"used_quota"`
+	CreatedAt      int64  `gorm:"autoCreateTime" json:"created_at"`
 }
 
 func InsertChannel(c *Channel) error {
@@ -114,6 +127,122 @@ func SplitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// Keys returns the upstream keys of the channel; multi-key channels separate
+// them with newlines.
+func (c *Channel) Keys() []string {
+	parts := strings.Split(strings.ReplaceAll(c.Key, "\r\n", "\n"), "\n")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// IsMultiKey reports whether the channel holds more than one upstream key.
+func (c *Channel) IsMultiKey() bool {
+	return len(c.Keys()) > 1
+}
+
+// KeyStatuses returns the per-key status list aligned with Keys(); missing or
+// malformed entries default to enabled.
+func (c *Channel) KeyStatuses() []int {
+	keys := c.Keys()
+	statuses := make([]int, len(keys))
+	for i := range statuses {
+		statuses[i] = common.StatusEnabled
+	}
+	parts := SplitList(c.MultiKeyStatus)
+	for i := range parts {
+		if i >= len(statuses) {
+			break
+		}
+		if v, err := strconv.Atoi(parts[i]); err == nil {
+			statuses[i] = v
+		}
+	}
+	return statuses
+}
+
+// multiKeyCounters drives round-robin selection; it is in-memory state, reset
+// per process (and per test run via ResetMultiKeyCounters).
+var multiKeyCounters sync.Map // channel ID -> *atomic.Int64
+
+// ResetMultiKeyCounters clears the round-robin cursors (used by tests).
+func ResetMultiKeyCounters() {
+	multiKeyCounters = sync.Map{}
+}
+
+// SelectKey returns an enabled upstream key for the channel and its index.
+// Multi-key channels pick per KeyMode (weighted random by default, round
+// robin when configured) among the enabled keys; single-key channels always
+// return their only key. An empty key with index -1 means every key is
+// disabled.
+func (c *Channel) SelectKey() (string, int) {
+	keys := c.Keys()
+	if len(keys) <= 1 {
+		if len(keys) == 1 {
+			return keys[0], 0
+		}
+		return "", -1
+	}
+	statuses := c.KeyStatuses()
+	enabled := make([]int, 0, len(keys))
+	for i, s := range statuses {
+		if s == common.StatusEnabled {
+			enabled = append(enabled, i)
+		}
+	}
+	if len(enabled) == 0 {
+		return "", -1
+	}
+	if c.KeyMode == KeyModeRoundRobin {
+		raw, _ := multiKeyCounters.LoadOrStore(c.ID, new(atomic.Int64))
+		counter := raw.(*atomic.Int64)
+		for {
+			n := counter.Load()
+			idx := enabled[int(n)%len(enabled)]
+			if counter.CompareAndSwap(n, n+1) {
+				return keys[idx], idx
+			}
+		}
+	}
+	pick := enabled[rand.IntN(len(enabled))]
+	return keys[pick], pick
+}
+
+// DisableChannelKey disables a single upstream key of a multi-key channel. It
+// reports whether every key is now disabled, in which case the caller should
+// disable the whole channel.
+func DisableChannelKey(channelID int64, keyIdx int) (allDisabled bool, err error) {
+	ch, err := GetChannelByID(channelID)
+	if err != nil {
+		return false, err
+	}
+	statuses := ch.KeyStatuses()
+	if keyIdx < 0 || keyIdx >= len(statuses) {
+		return false, nil
+	}
+	statuses[keyIdx] = common.StatusDisabled
+	allDisabled = true
+	for _, s := range statuses {
+		if s == common.StatusEnabled {
+			allDisabled = false
+			break
+		}
+	}
+	statusList := make([]string, len(statuses))
+	for i, s := range statuses {
+		statusList[i] = strconv.Itoa(s)
+	}
+	if err := DB.Model(&Channel{}).Where("id = ?", channelID).
+		Update("multi_key_status", strings.Join(statusList, ",")).Error; err != nil {
+		return false, err
+	}
+	return allDisabled, nil
 }
 
 func ChannelGroups(c *Channel) []string {

@@ -17,6 +17,11 @@ const (
 	ChannelStatusAutoDisabled     = 3
 )
 
+// RetryTimes is the number of extra attempts (on top of the first one) Relay
+// makes when an upstream channel fails with a retryable error (5xx, timeout,
+// network). 4xx client errors terminate immediately.
+const RetryTimes = 3
+
 const QuotaPerUSD = 500000
 
 const (

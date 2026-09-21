@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"starhub/common"
 	"starhub/controller"
 	"starhub/middleware"
 	"starhub/model"
+	"starhub/service"
 )
 
 func main() {
@@ -34,15 +38,40 @@ func main() {
 	if err := model.Seed(rootPassword); err != nil {
 		log.Fatalf("failed to seed database: %v", err)
 	}
+	startChannelTestTask()
 	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, port, dbPath)
 	if err := http.ListenAndServe(":"+port, middleware.IPRateLimit(NewRouter())); err != nil {
 		log.Fatal(err)
 	}
 }
 
+// startChannelTestTask launches the background channel health checker. The
+// interval defaults to service.DefaultChannelTestInterval and can be tuned or
+// disabled (0) via STARHUB_CHANNEL_TEST_INTERVAL (seconds).
+func startChannelTestTask() {
+	interval := service.DefaultChannelTestInterval
+	if raw := os.Getenv("STARHUB_CHANNEL_TEST_INTERVAL"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			log.Printf("WARNING: invalid STARHUB_CHANNEL_TEST_INTERVAL %q, using default", raw)
+		} else if v == 0 {
+			interval = 0
+		} else {
+			interval = time.Duration(v) * time.Second
+		}
+	}
+	if interval <= 0 {
+		log.Printf("channel health checker disabled")
+		return
+	}
+	go service.RunChannelTestLoop(context.Background(), interval)
+	log.Printf("channel health checker started (interval %s)", interval)
+}
+
 // NewRouter wires the management API and the relay endpoints.
 // Relay chain contract: TokenAuth (writes CtxUsingGroup) ->
-// UserRateLimit -> Distribute (writes CtxSelectedChannel) -> Relay (consumes both).
+// UserRateLimit -> Distribute (parses model/stream and caches the body) ->
+// Relay (selects a channel and retries with failover).
 func NewRouter() *http.ServeMux {
 	mux := http.NewServeMux()
 
