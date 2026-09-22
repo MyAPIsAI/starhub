@@ -85,14 +85,6 @@ func DecreaseUserQuota(id int64, amount int64) (bool, error) {
 	return res.RowsAffected > 0, res.Error
 }
 
-func DecreaseUserQuotaUnconditional(id int64, amount int64) error {
-	if amount <= 0 {
-		return nil
-	}
-	return DB.Model(&User{}).Where("id = ?", id).
-		Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount)}).Error
-}
-
 func IncreaseUserQuota(id int64, amount int64) error {
 	if amount <= 0 {
 		return nil
