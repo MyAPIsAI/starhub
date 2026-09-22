@@ -20,6 +20,18 @@ const maxRequestBodySize = 32 << 20
 // edits) keep their raw bytes + content-type and expose the model from the
 // form. inbound selects the error envelope format of the endpoint.
 func Distribute(inbound dto.InboundFormat) func(http.Handler) http.Handler {
+	return distribute(inbound, "")
+}
+
+// DistributeWithDefaultModel is Distribute with a model fallback for
+// endpoints whose protocol tolerates a missing model (P3.1: image
+// generations defaults to the legacy "dall-e"; image edits extract the
+// model from the multipart form and need no fallback).
+func DistributeWithDefaultModel(inbound dto.InboundFormat, defaultModel string) func(http.Handler) http.Handler {
+	return distribute(inbound, defaultModel)
+}
+
+func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fail := func(status int, code, message string) {
@@ -74,6 +86,9 @@ func Distribute(inbound dto.InboundFormat) func(http.Handler) http.Handler {
 				}
 				modelName = lite.Model
 				stream = lite.Stream
+			}
+			if modelName == "" && defaultModel != "" {
+				modelName = defaultModel
 			}
 			if modelName == "" {
 				fail(http.StatusBadRequest, "model_required",

@@ -25,6 +25,7 @@ type ImageRequest struct {
 	Style          string                     `json:"style,omitempty"`
 	ResponseFormat string                     `json:"response_format,omitempty"`
 	Stream         *bool                      `json:"stream,omitempty"`
+	Watermark      *bool                      `json:"watermark,omitempty"`
 	User           string                     `json:"user,omitempty"`
 	Extra          map[string]json.RawMessage `json:"-"`
 }
@@ -50,15 +51,36 @@ func (r *ImageRequest) ValidateN() error {
 	return nil
 }
 
+// imageModelSizes is the per-model size whitelist of the legacy DALL-E
+// models: dall-e-2 (and the bare "dall-e" alias) only generates squares,
+// dall-e-3 adds the tall/wide variants. Other models (gpt-image-1, provider
+// specifics) accept any <width>x<height> shape and "auto".
+var imageModelSizes = map[string][]string{
+	"dall-e-2": {"256x256", "512x512", "1024x1024"},
+	"dall-e":   {"256x256", "512x512", "1024x1024"},
+	"dall-e-3": {"1024x1024", "1024x1792", "1792x1024"},
+}
+
 // ValidateSize rejects sizes the gateway cannot price. The full-width
 // multiplication sign is a classic copy-paste artifact and gets its own
 // error hint (P3.1).
 func (r *ImageRequest) ValidateSize() error {
-	if r.Size == "" || r.Size == "auto" {
-		return nil
-	}
 	if strings.Contains(r.Size, "×") {
 		return errors.New("size contains the full-width character \"×\"; use \"x\" (e.g. 1024x1024)")
+	}
+	if allowed, ok := imageModelSizes[r.Model]; ok {
+		if r.Size == "" {
+			return nil
+		}
+		for _, s := range allowed {
+			if s == r.Size {
+				return nil
+			}
+		}
+		return fmt.Errorf("size must be one of %s for %s", strings.Join(allowed, ", "), r.Model)
+	}
+	if r.Size == "" || r.Size == "auto" {
+		return nil
 	}
 	if !sizePattern.MatchString(r.Size) {
 		return fmt.Errorf("invalid size %q: expected <width>x<height>", r.Size)
@@ -66,8 +88,29 @@ func (r *ImageRequest) ValidateSize() error {
 	return nil
 }
 
+// ApplyModelDefaults fills the model-specific defaults of the parsed
+// request: the quality defaults (dall-e-3=standard, gpt-image-1=auto) so
+// the price ratio of a defaulted request is explicit (P3.1 validation
+// rules). Call it after the model is resolved (including the distributor
+// "dall-e" fallback).
+func (r *ImageRequest) ApplyModelDefaults() {
+	switch r.Model {
+	case "dall-e-3":
+		if r.Quality == "" {
+			r.Quality = "standard"
+		}
+	case "gpt-image-1":
+		if r.Quality == "" {
+			r.Quality = "auto"
+		}
+	}
+}
+
 // ParseImageRequest parses a JSON image generation body. Unknown fields are
-// preserved in Extra for upstream passthrough.
+// preserved in Extra for upstream passthrough. A missing model is not an
+// error here: the generations endpoint applies the distributor default
+// (P3.1 "dall-e" fallback); edits extracts the model from the multipart
+// form and enforces it itself.
 func ParseImageRequest(body []byte) (*ImageRequest, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -98,14 +141,13 @@ func ParseImageRequest(body []byte) (*ImageRequest, error) {
 			_ = json.Unmarshal(v, &req.ResponseFormat)
 		case "stream":
 			_ = json.Unmarshal(v, &req.Stream)
+		case "watermark":
+			_ = json.Unmarshal(v, &req.Watermark)
 		case "user":
 			_ = json.Unmarshal(v, &req.User)
 		default:
 			req.Extra[k] = v
 		}
-	}
-	if req.Model == "" {
-		return nil, errors.New("the \"model\" field is required")
 	}
 	if req.Prompt == "" {
 		return nil, errors.New("the \"prompt\" field is required")
@@ -130,8 +172,9 @@ func (r *ImageRequest) MarshalBody() ([]byte, error) {
 		Style          string `json:"style,omitempty"`
 		ResponseFormat string `json:"response_format,omitempty"`
 		Stream         *bool  `json:"stream,omitempty"`
+		Watermark      *bool  `json:"watermark,omitempty"`
 		User           string `json:"user,omitempty"`
-	}{r.Model, r.Prompt, r.N, r.Size, r.Quality, r.Style, r.ResponseFormat, r.Stream, r.User})
+	}{r.Model, r.Prompt, r.N, r.Size, r.Quality, r.Style, r.ResponseFormat, r.Stream, r.Watermark, r.User})
 	if err != nil {
 		return nil, err
 	}
@@ -171,12 +214,31 @@ type ImageResponse struct {
 	Usage   *ImageUsage         `json:"usage,omitempty"`
 }
 
-// Count returns the number of images actually delivered.
+// Count returns the number of images actually delivered: it is the larger
+// of the url-bearing and the b64_json-bearing entry counts. A standard
+// response uses one response_format so this equals len(Data); an upstream
+// that splits one image into a url entry and a b64_json entry bills once,
+// and payload-less entries bill nothing. A zero count leaves the requested
+// quantity in place at settlement (the [1, MaxImageN] guard).
 func (r *ImageResponse) Count() int {
 	if r == nil {
 		return 0
 	}
-	return len(r.Data)
+	urls, b64s := 0, 0
+	for _, img := range r.Data {
+		if img.URL != "" {
+			urls++
+		}
+		if img.B64JSON != "" {
+			b64s++
+		}
+	}
+	return max(urls, b64s)
+}
+
+// HasPayload reports whether one data entry carries an image.
+func (d ImageResponseData) HasPayload() bool {
+	return d.URL != "" || d.B64JSON != ""
 }
 
 // ParseImageResponse parses an upstream image response (best effort: the

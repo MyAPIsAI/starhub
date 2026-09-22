@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
@@ -122,6 +124,19 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 	flow.preQuota = pre
 	defer flow.refundUnlessSettled()
 
+	// Image streaming detaches the upstream from the client's request
+	// context: the gateway must drain the upstream SSE to EOF even after
+	// the client is gone, so the completed-event count (and thus the bill)
+	// reflects what the upstream actually delivered. This enforces the two
+	// P3.1 billing invariants: a client disconnect must not lower the
+	// billed count, and upstream over-delivery must raise it.
+	var streamCtx context.Context = flow.ctx
+	var streamCancel context.CancelFunc
+	if stream {
+		streamCtx, streamCancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		defer streamCancel()
+	}
+
 	flow.runChannels(func(ch *model.Channel) attemptResult {
 		adaptor, err := relay.GetChatAdaptor(ch.Type)
 		if err != nil {
@@ -133,14 +148,18 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 			return attemptResult{outcome: attemptUnsupported, cause: err}
 		}
 		key, keyIdx := ch.SelectKey()
-		resp, fail := flow.callUpstream(ch, adaptor, upstreamCall{
+		call := upstreamCall{
 			method:      http.MethodPost,
 			url:         url,
 			contentType: contentType,
 			body:        outBody,
 			key:         key,
 			keyIdx:      keyIdx,
-		})
+		}
+		if stream {
+			call.ctx = streamCtx
+		}
+		resp, fail := flow.callUpstream(ch, adaptor, call)
 		if fail != nil {
 			return *fail
 		}
