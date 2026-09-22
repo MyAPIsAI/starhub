@@ -3,6 +3,7 @@ package setting
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -36,10 +37,14 @@ func defaultModelRatio() map[string]float64 {
 		"gpt-4-turbo":                10,
 		"gpt-4.1":                    2,
 		"gpt-4.1-mini":               0.4,
+		"gpt-5":                      1.25,
 		"gpt-3.5-turbo":              0.5,
 		"deepseek-chat":              0.27,
 		"deepseek-reasoner":          0.55,
 		"claude-3-5-sonnet-20241022": 3,
+		"claude-sonnet-4-6":          3,
+		"claude-haiku-4-5":           1,
+		"claude-haiku-4-5-20251001":  1,
 		"gemini-1.5-flash":           0.075,
 		"gemini-1.5-pro":             1.25,
 	}
@@ -53,10 +58,14 @@ func defaultCompletionRatio() map[string]float64 {
 		"gpt-4-turbo":                2,
 		"gpt-4.1":                    4,
 		"gpt-4.1-mini":               4,
+		"gpt-5":                      8,
 		"gpt-3.5-turbo":              3,
 		"deepseek-chat":              4,
 		"deepseek-reasoner":          2,
 		"claude-3-5-sonnet-20241022": 5,
+		"claude-sonnet-4-6":          5,
+		"claude-haiku-4-5":           5,
+		"claude-haiku-4-5-20251001":  5,
 		"gemini-1.5-flash":           8,
 		"gemini-1.5-pro":             4,
 	}
@@ -87,21 +96,40 @@ func ContainsGroupRatio(group string) bool {
 }
 
 func ModelRatioValue(model string) float64 {
+	v, ok := LookupModelRatio(model)
+	if !ok {
+		log.Printf("[billing_ratio_fallback] model=%q option=%s fallback=%g", model, OptionKeyModelRatio, v)
+	}
+	return v
+}
+
+// LookupModelRatio returns a ratio and whether it is explicitly priced.
+// Callers that choose another pricing mode can defer fallback warnings.
+func LookupModelRatio(model string) (float64, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if v, ok := modelRatio[model]; ok {
-		return v
+		return v, true
 	}
-	return FallbackModelRatio
+	return FallbackModelRatio, false
 }
 
 func CompletionRatioValue(model string) float64 {
+	v, ok := LookupCompletionRatio(model)
+	if !ok {
+		log.Printf("[billing_ratio_fallback] model=%q option=%s fallback=%g", model, OptionKeyCompletionRatio, v)
+	}
+	return v
+}
+
+// LookupCompletionRatio is the output-ratio equivalent of LookupModelRatio.
+func LookupCompletionRatio(model string) (float64, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if v, ok := completionRatio[model]; ok {
-		return v
+		return v, true
 	}
-	return FallbackCompletionRatio
+	return FallbackCompletionRatio, false
 }
 
 func UpdateRatio(key, value string) error {
@@ -115,13 +143,22 @@ func UpdateRatio(key, value string) error {
 	case OptionKeyGroupRatio:
 		groupRatio = ratios
 	case OptionKeyModelRatio:
-		modelRatio = ratios
+		modelRatio = mergeRatioDefaults(defaultModelRatio(), ratios)
 	case OptionKeyCompletionRatio:
-		completionRatio = ratios
+		completionRatio = mergeRatioDefaults(defaultCompletionRatio(), ratios)
 	default:
 		return fmt.Errorf("unknown ratio option key: %s", key)
 	}
 	return nil
+}
+
+// Ratio options override built-in prices. Filling missing entries upgrades
+// older configurations without overwriting operator prices, including zero.
+func mergeRatioDefaults(defaults, overrides map[string]float64) map[string]float64 {
+	for key, value := range overrides {
+		defaults[key] = value
+	}
+	return defaults
 }
 
 func SnapshotRatio(key string) (string, error) {

@@ -2,6 +2,36 @@ package setting
 
 import "testing"
 
+func TestRatioOverridesRetainNewModelDefaults(t *testing.T) {
+	ResetRatiosToDefaults()
+	t.Cleanup(ResetRatiosToDefaults)
+	if err := UpdateRatio(OptionKeyModelRatio, `{"gpt-4o":7,"custom":2,"claude-sonnet-4-6":0}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpdateRatio(OptionKeyCompletionRatio, `{"gpt-4o":6}`); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name          string
+		input, output float64
+	}{
+		{"gpt-4o", 7, 6},
+		{"gpt-5", 1.25, 8},
+		{"claude-sonnet-4-6", 0, 5},
+		{"claude-haiku-4-5", 1, 5},
+		{"claude-haiku-4-5-20251001", 1, 5},
+	} {
+		input, foundInput := LookupModelRatio(tc.name)
+		output, foundOutput := LookupCompletionRatio(tc.name)
+		if !foundInput || !foundOutput || input != tc.input || output != tc.output {
+			t.Errorf("%s ratios=%g/%g configured=%t/%t", tc.name, input, output, foundInput, foundOutput)
+		}
+	}
+	if got := ModelRatioValue("custom"); got != 2 {
+		t.Fatalf("custom override lost: %g", got)
+	}
+}
+
 func TestDefaultRatios(t *testing.T) {
 	if !ContainsGroupRatio("default") {
 		t.Fatal("default group should have a ratio")

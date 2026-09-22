@@ -219,10 +219,10 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
 		return err
 	}
-	// Affiliate rebate: the inviter gets a percentage of the actual spend.
+	// Affiliate rebate: the inviter gets a percentage of the collected spend.
 	// The rebate is best-effort (a failure is logged, not propagated) so a
 	// rebate glitch never fails the relay settlement.
-	applyAffiliateRebate(userID, actual)
+	applyAffiliateRebate(userID, entry.Quota)
 	return nil
 }
 
@@ -268,6 +268,6 @@ func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimi
 	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
 		return err
 	}
-	applyAffiliateRebate(userID, actual)
+	applyAffiliateRebate(userID, entry.Quota)
 	return nil
 }

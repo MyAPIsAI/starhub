@@ -10,8 +10,11 @@ type Log struct {
 	PromptTokens     int64  `gorm:"not null;default:0" json:"prompt_tokens"`
 	CompletionTokens int64  `gorm:"not null;default:0" json:"completion_tokens"`
 	Quota            int64  `gorm:"not null;default:0" json:"quota"`
-	UsedChannels     string `gorm:"size:256;not null;default:''" json:"used_channels"`
-	CreatedAt        int64  `gorm:"index;autoCreateTime" json:"created_at"`
+	// UnfundedQuota is the priced usage that could not be collected. Quota
+	// records the actual charge; their sum is the full priced usage.
+	UnfundedQuota int64  `gorm:"not null;default:0" json:"unfunded_quota"`
+	UsedChannels  string `gorm:"size:256;not null;default:''" json:"used_channels"`
+	CreatedAt     int64  `gorm:"index;autoCreateTime" json:"created_at"`
 }
 
 func InsertLog(l *Log) error {
@@ -22,6 +25,7 @@ type DailyUsage struct {
 	Date             string `json:"date"`
 	Requests         int64  `json:"requests"`
 	Quota            int64  `json:"quota"`
+	UnfundedQuota    int64  `json:"unfunded_quota"`
 	PromptTokens     int64  `json:"prompt_tokens"`
 	CompletionTokens int64  `json:"completion_tokens"`
 }
@@ -39,7 +43,7 @@ func CountLogs(userID int64) (int64, error) {
 func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
 	q := DB.Model(&Log{}).
 		Select("date(created_at, 'unixepoch') AS date, COUNT(*) AS requests, "+
-			"SUM(quota) AS quota, SUM(prompt_tokens) AS prompt_tokens, "+
+			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, "+
 			"SUM(completion_tokens) AS completion_tokens").
 		Where("created_at >= ?", since)
 	if userID > 0 {

@@ -69,6 +69,19 @@ func LoadOptionsToSettings() error {
 		if err := setting.UpdateOption(o.Key, o.Value); err != nil {
 			return fmt.Errorf("load option %s: %w", o.Key, err)
 		}
+		// Persist the effective ratio map so older databases and the options
+		// API include newly introduced built-in models as well.
+		if o.Key == setting.OptionKeyModelRatio || o.Key == setting.OptionKeyCompletionRatio {
+			value, err := setting.SnapshotRatio(o.Key)
+			if err != nil {
+				return err
+			}
+			if value != o.Value {
+				if err := UpsertOption(o.Key, value); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	return nil
 }

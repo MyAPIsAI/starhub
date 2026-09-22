@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"log"
 
 	"gorm.io/gorm"
 )
@@ -69,30 +70,54 @@ func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) erro
 	})
 }
 
-// SettleQuota balances a reservation against the actual cost in ONE
-// transaction: the difference (actual - pre) is taken from or returned to
-// the token and user, the used-quota counters advance by the actual cost,
-// and the consumption log row is written. All-or-nothing, so the books
-// always balance.
-//
-// When the actual cost exceeds the pre-charge (delta > 0), the extra is
-// deducted with a floor at zero — the balance never goes negative. With
-// max_tokens-aware pre-charging (see EstimatePreConsumeQuota), delta is
-// usually a refund; a positive delta only happens when the upstream returns
-// more tokens than the budget, and clamping that small overage at zero is
-// preferable to driving the account into debt (which would defeat the
-// overdraft protection that the pre-charge provides).
+// SettleQuota settles both balances, usage counters and the log atomically.
+// A shortfall caps the extra charge at the smaller available balance. Both
+// balances and all counters use the same collected amount; the log retains
+// the uncollected cost separately. The caller's log is updated only after
+// commit so downstream rebates can use the amount actually collected.
 func SettleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64, entry *Log) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	if actual < 0 || delta > actual {
+		return errors.New("invalid quota settlement amounts")
+	}
+	var settled Log
+	if entry != nil {
+		settled = *entry
+	}
+	settled.UserID, settled.TokenID = userID, tokenID
+	settled.Quota, settled.UnfundedQuota = actual, 0
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// Acquire SQLite's write lock before reading balances. A deferred
+		// read-then-write transaction can otherwise fail with SQLITE_BUSY.
+		res := tx.Model(&User{}).Where("id = ?", userID).UpdateColumn("quota", gorm.Expr("quota"))
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrUserNotFound
+		}
+		var token Token
+		if err := tx.Where("id = ? AND user_id = ?", tokenID, userID).First(&token).Error; err != nil {
+			return err
+		}
 		if delta > 0 {
+			var user User
+			if err := tx.First(&user, userID).Error; err != nil {
+				return err
+			}
+			collectedDelta := min(delta, max(user.Quota, 0))
+			if !tokenUnlimited {
+				collectedDelta = min(collectedDelta, max(token.RemainQuota, 0))
+			}
+			settled.UnfundedQuota = delta - collectedDelta
+			settled.Quota = actual - settled.UnfundedQuota
 			if !tokenUnlimited {
 				if err := tx.Model(&Token{}).Where("id = ?", tokenID).
-					Updates(map[string]any{"remain_quota": gorm.Expr("MAX(remain_quota - ?, 0)", delta)}).Error; err != nil {
+					Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota - ?", collectedDelta)}).Error; err != nil {
 					return err
 				}
 			}
 			if err := tx.Model(&User{}).Where("id = ?", userID).
-				Updates(map[string]any{"quota": gorm.Expr("MAX(quota - ?, 0)", delta)}).Error; err != nil {
+				Updates(map[string]any{"quota": gorm.Expr("quota - ?", collectedDelta)}).Error; err != nil {
 				return err
 			}
 		} else if delta < 0 {
@@ -107,27 +132,38 @@ func SettleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 				return err
 			}
 		}
-		if actual > 0 {
+		if settled.Quota > 0 {
 			if !tokenUnlimited {
 				if err := tx.Model(&Token{}).Where("id = ?", tokenID).
-					Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", actual)}).Error; err != nil {
+					Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", settled.Quota)}).Error; err != nil {
 					return err
 				}
 			}
 			if err := tx.Model(&User{}).Where("id = ?", userID).
-				Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", actual)}).Error; err != nil {
+				Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", settled.Quota)}).Error; err != nil {
 				return err
 			}
 			if entry != nil && entry.ChannelID > 0 {
 				if err := tx.Model(&Channel{}).Where("id = ?", entry.ChannelID).
-					Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", actual)}).Error; err != nil {
+					Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", settled.Quota)}).Error; err != nil {
 					return err
 				}
 			}
 		}
-		if entry != nil {
-			return tx.Create(entry).Error
+		if entry != nil || settled.UnfundedQuota > 0 {
+			return tx.Create(&settled).Error
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	if entry != nil {
+		*entry = settled
+	}
+	if settled.UnfundedQuota > 0 {
+		log.Printf("[quota_shortfall] user_id=%d token_id=%d log_id=%d actual=%d charged=%d unfunded=%d",
+			userID, tokenID, settled.ID, actual, settled.Quota, settled.UnfundedQuota)
+	}
+	return nil
 }

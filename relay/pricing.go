@@ -18,9 +18,11 @@ import (
 // resolution, video seconds, ...) via AddOtherRatio — the image / video
 // relays (P3) plug in here without touching the settlement core.
 type PriceData struct {
-	ModelName       string
-	ModelRatio      float64
-	CompletionRatio float64
+	ModelName              string
+	ModelRatio             float64
+	CompletionRatio        float64
+	missingModelRatio      bool
+	missingCompletionRatio bool
 	// ModelPriceUSD > 0 switches the model to per-call billing.
 	ModelPriceUSD float64
 	// PriceExpr, when configured, wins over per-call and token billing.
@@ -42,19 +44,23 @@ type PriceData struct {
 // current settings. The user group (for the group x group matrix) defaults
 // to empty; use NewPriceDataWithUserGroup when the matrix should apply.
 func NewPriceData(modelName, group string) *PriceData {
+	modelRatio, hasModelRatio := setting.LookupModelRatio(modelName)
+	completionRatio, hasCompletionRatio := setting.LookupCompletionRatio(modelName)
 	groupRatio, ok := setting.GroupRatioValue(group)
 	if !ok || groupRatio <= 0 {
 		groupRatio = 1
 	}
 	pd := &PriceData{
-		ModelName:       modelName,
-		ModelRatio:      setting.ModelRatioValue(modelName),
-		CompletionRatio: setting.CompletionRatioValue(modelName),
-		GroupRatio:      groupRatio,
-		CacheRatio:      setting.CacheRatioValue(),
-		AudioRatio:      setting.AudioRatioValue(),
-		OtherRatio:      1,
-		UsingGroup:      group,
+		ModelName:              modelName,
+		ModelRatio:             modelRatio,
+		CompletionRatio:        completionRatio,
+		missingModelRatio:      !hasModelRatio,
+		missingCompletionRatio: !hasCompletionRatio,
+		GroupRatio:             groupRatio,
+		CacheRatio:             setting.CacheRatioValue(),
+		AudioRatio:             setting.AudioRatioValue(),
+		OtherRatio:             1,
+		UsingGroup:             group,
 	}
 	if price, ok := setting.ModelPriceValue(modelName); ok && price > 0 {
 		pd.ModelPriceUSD = price
@@ -156,6 +162,12 @@ func priceUSDToQuota(p *PriceData, usd float64) int64 {
 // Cached / audio tokens are subsets of the usage totals, so a lying upstream
 // cannot inflate the discount beyond the totals (clamped in Usage helpers).
 func tokenUsageQuota(p *PriceData, usage *Usage) int64 {
+	if p.missingModelRatio {
+		log.Printf("[billing_ratio_fallback] model=%q option=%s fallback=%g", p.ModelName, setting.OptionKeyModelRatio, p.ModelRatio)
+	}
+	if p.missingCompletionRatio {
+		log.Printf("[billing_ratio_fallback] model=%q option=%s fallback=%g", p.ModelName, setting.OptionKeyCompletionRatio, p.CompletionRatio)
+	}
 	promptTokens := max64(usage.PromptTokens, 0)
 	completionTokens := max64(usage.CompletionTokens, 0)
 

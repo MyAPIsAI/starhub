@@ -35,6 +35,14 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if req.Key == setting.OptionKeyModelRatio || req.Key == setting.OptionKeyCompletionRatio {
+		value, err := setting.SnapshotRatio(req.Key)
+		if err != nil {
+			common.ApiError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		req.Value = value
+	}
 	if err := model.UpsertOption(req.Key, req.Value); err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
