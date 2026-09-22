@@ -160,3 +160,14 @@ func parseRatioMap(value string) (map[string]float64, error) {
 	}
 	return m, nil
 }
+
+// ResetRatiosToDefaults restores the compiled-in default ratios. Tests
+// call this to clean up dirty in-memory state from a previous test that
+// set custom ratios and failed before it could clean up.
+func ResetRatiosToDefaults() {
+	mu.Lock()
+	defer mu.Unlock()
+	groupRatio = defaultGroupRatio()
+	modelRatio = defaultModelRatio()
+	completionRatio = defaultCompletionRatio()
+}

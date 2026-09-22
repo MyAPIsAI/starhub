@@ -106,12 +106,13 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 
 	stream := imgReq.Stream != nil && *imgReq.Stream
 	bill := &relay.ImageBill{
-		Model:   imgReq.Model,
-		Group:   req.group,
-		Size:    imgReq.Size,
-		Quality: imgReq.Quality,
-		Prompt:  imgReq.Prompt,
-		Count:   int(imgReq.Count()),
+		Model:    imgReq.Model,
+		Group:    req.billingGroup(),
+		UserGroup: req.userGroup,
+		Size:     imgReq.Size,
+		Quality:  imgReq.Quality,
+		Prompt:   imgReq.Prompt,
+		Count:    int(imgReq.Count()),
 	}
 
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, bill.PreQuota())
@@ -183,6 +184,7 @@ func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, b
 		count = parsed.Count()
 		usage = parsed.Usage
 	}
+	bill.Group = flow.settleGroup()
 	actual := bill.SettleQuota(count, usage)
 	settleImageAttempt(flow, ch, actual)
 	return attemptResult{outcome: attemptSuccess}
@@ -256,6 +258,7 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 	if completed == 0 && streamErr != "" {
 		return attemptResult{outcome: attemptSuccess}
 	}
+	bill.Group = flow.settleGroup()
 	actual := bill.SettleQuota(completed, streamUsage)
 	settleImageAttempt(flow, ch, actual)
 	return attemptResult{outcome: attemptSuccess}
@@ -276,6 +279,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 		// Unparseable / empty: forward the raw JSON unchanged (not SSE) —
 		// better a working answer in the wrong shape than data loss.
 		writePassthroughBody(flow.w, resp, body)
+		bill.Group = flow.settleGroup()
 		actual := bill.SettleQuota(0, nil)
 		settleImageAttempt(flow, ch, actual)
 		return attemptResult{outcome: attemptSuccess}
@@ -308,6 +312,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 	if flusher != nil {
 		flusher.Flush()
 	}
+	bill.Group = flow.settleGroup()
 	actual := bill.SettleQuota(parsed.Count(), parsed.Usage)
 	settleImageAttempt(flow, ch, actual)
 	return attemptResult{outcome: attemptSuccess}

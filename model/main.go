@@ -26,7 +26,7 @@ func InitDB(path string) error {
 	if err != nil {
 		return fmt.Errorf("open sqlite database %s: %w", path, err)
 	}
-	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &Task{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &Task{}, &AuditLog{}, &Redemption{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 	DB = db
@@ -62,6 +62,7 @@ func Seed(rootPassword string) error {
 			Status:   common.StatusEnabled,
 			Quota:    100000000,
 			Group:    common.DefaultGroup,
+			AffCode:  common.GenerateAffCode(),
 		}
 		if err := DB.Create(root).Error; err != nil {
 			return err

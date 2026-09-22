@@ -15,6 +15,9 @@ type tokenPayload struct {
 	UnlimitedQuota *bool  `json:"unlimited_quota"`
 	ExpiredTime    *int64 `json:"expired_time"`
 	Group          string `json:"group"`
+	ModelLimits    string `json:"model_limits"`
+	AllowIps       string `json:"allow_ips"`
+	AutoGroups     string `json:"auto_groups"`
 }
 
 func CreateToken(w http.ResponseWriter, r *http.Request) {
@@ -36,9 +39,22 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		expiredTime = *req.ExpiredTime
 	}
 	group := strings.TrimSpace(req.Group)
-	if group != "" && !setting.ContainsGroupRatio(group) {
+	if group != "" && group != common.AutoGroup && !setting.ContainsGroupRatio(group) {
 		common.ApiError(w, http.StatusBadRequest, "group has no ratio configured")
 		return
+	}
+	autoGroups := strings.TrimSpace(req.AutoGroups)
+	if group == common.AutoGroup {
+		if autoGroups == "" {
+			common.ApiError(w, http.StatusBadRequest, "auto group requires auto_groups to be set")
+			return
+		}
+		for _, g := range model.SplitList(autoGroups) {
+			if !setting.ContainsGroupRatio(g) {
+				common.ApiError(w, http.StatusBadRequest, "auto_groups entry "+g+" has no ratio configured")
+				return
+			}
+		}
 	}
 	token := &model.Token{
 		UserID:         requestUserID(r),
@@ -48,6 +64,9 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		ExpiredTime:    expiredTime,
 		RemainQuota:    remainQuota,
 		UnlimitedQuota: unlimited,
+		ModelLimits:    strings.TrimSpace(req.ModelLimits),
+		AllowIps:       strings.TrimSpace(req.AllowIps),
+		AutoGroups:     autoGroups,
 	}
 	if err := model.InsertToken(token); err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
@@ -85,6 +104,9 @@ func maskedToken(t *model.Token) map[string]any {
 		"remain_quota":    t.RemainQuota,
 		"unlimited_quota": t.UnlimitedQuota,
 		"used_quota":      t.UsedQuota,
+		"model_limits":    t.ModelLimits,
+		"allow_ips":       t.AllowIps,
+		"auto_groups":     t.AutoGroups,
 		"created_at":      t.CreatedAt,
 	}
 }
@@ -142,11 +164,27 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Group != "" {
 		group := strings.TrimSpace(req.Group)
-		if !setting.ContainsGroupRatio(group) {
+		if group != common.AutoGroup && !setting.ContainsGroupRatio(group) {
 			common.ApiError(w, http.StatusBadRequest, "group has no ratio configured")
 			return
 		}
 		fields["group"] = group
+	}
+	if req.ModelLimits != "" {
+		fields["model_limits"] = strings.TrimSpace(req.ModelLimits)
+	}
+	if req.AllowIps != "" {
+		fields["allow_ips"] = strings.TrimSpace(req.AllowIps)
+	}
+	if req.AutoGroups != "" {
+		autoGroups := strings.TrimSpace(req.AutoGroups)
+		for _, g := range model.SplitList(autoGroups) {
+			if !setting.ContainsGroupRatio(g) {
+				common.ApiError(w, http.StatusBadRequest, "auto_groups entry "+g+" has no ratio configured")
+				return
+			}
+		}
+		fields["auto_groups"] = autoGroups
 	}
 	if len(fields) == 0 {
 		common.ApiError(w, http.StatusBadRequest, "nothing to update")

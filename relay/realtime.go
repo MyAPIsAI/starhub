@@ -31,6 +31,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	tokenName, _ := ctx.Value(common.CtxTokenName).(string)
 	tokenUnlimited, _ := ctx.Value(common.CtxTokenUnlimited).(bool)
 	group, _ := ctx.Value(common.CtxUsingGroup).(string)
+	userGroup, _ := ctx.Value(common.CtxUserGroup).(string)
 
 	modelName := r.URL.Query().Get("model")
 	if modelName == "" {
@@ -41,7 +42,13 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-charge: per-call price when configured, otherwise the
 	// conservative token budget (the session's actual usage settles it).
-	pd := NewPriceData(modelName, group)
+	// Use the first auto group (cheapest) when the using group is "auto".
+	billingGroup := group
+	autoGroups, _ := ctx.Value(common.CtxAutoGroups).([]string)
+	if group == common.AutoGroup && len(autoGroups) > 0 {
+		billingGroup = autoGroups[0]
+	}
+	pd := NewPriceDataWithUserGroup(modelName, billingGroup, userGroup)
 	preUsage := &Usage{}
 	if !pd.IsPerCall() && !pd.IsExpression() {
 		preUsage.PromptTokens = 1
@@ -125,8 +132,8 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			CompletionTokens: EstimateTokens(outputText),
 		}
 	}
-	if err := PostConsumeQuota(userID, tokenID, tokenName, tokenUnlimited,
-		upstreamChannel.ID, modelName, group, actualUsage, pre,
+	if err := PostConsumeQuotaWithUserGroup(userID, tokenID, tokenName, tokenUnlimited,
+		upstreamChannel.ID, modelName, group, userGroup, actualUsage, pre,
 		fmt.Sprintf("%d", upstreamChannel.ID)); err != nil {
 		log.Printf("post consume realtime quota failed: %v", err)
 	}

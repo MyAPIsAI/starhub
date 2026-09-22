@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"starhub/common"
+	"starhub/model"
 	"starhub/relay/dto"
 )
 
@@ -87,16 +88,26 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				modelName = lite.Model
 				stream = lite.Stream
 			}
-			if modelName == "" && defaultModel != "" {
-				modelName = defaultModel
-			}
-			if modelName == "" {
-				fail(http.StatusBadRequest, "model_required",
-					"the \"model\" field is required")
+		if modelName == "" && defaultModel != "" {
+			modelName = defaultModel
+		}
+		if modelName == "" {
+			fail(http.StatusBadRequest, "model_required",
+				"the \"model\" field is required")
+			return
+		}
+
+		// Token model whitelist: a sub-key can be restricted to a subset of
+		// models. The limits string is set by TokenAuth; empty means no limit.
+		if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
+			if !modelInList(modelName, model.SplitList(limits)) {
+				fail(http.StatusForbidden, "model_not_allowed",
+					"the model is not in the token's model whitelist")
 				return
 			}
+		}
 
-			// Channel selection is left to the relay controller: it retries the
+		// Channel selection is left to the relay controller: it retries the
 			// request on alternative channels, and every attempt needs a fresh
 			// pick. The body stays cached in the context so each attempt can
 			// replay it.
@@ -116,4 +127,15 @@ func isMultipart(contentType string) bool {
 		return strings.HasPrefix(strings.ToLower(contentType), "multipart/")
 	}
 	return strings.HasPrefix(strings.ToLower(mediaType), "multipart/")
+}
+
+// modelInList reports whether the model name is in the whitelist. The check
+// is exact (no wildcard / prefix matching) to keep the semantics predictable.
+func modelInList(model string, list []string) bool {
+	for _, m := range list {
+		if m == model {
+			return true
+		}
+	}
+	return false
 }

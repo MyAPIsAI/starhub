@@ -20,7 +20,12 @@ type User struct {
 	Quota     int64  `gorm:"not null;default:0" json:"quota"`
 	UsedQuota int64  `gorm:"not null;default:0" json:"used_quota"`
 	Group     string `gorm:"column:group;size:64;not null;default:'default'" json:"group"`
-	CreatedAt int64  `gorm:"autoCreateTime" json:"created_at"`
+	// AffCode is the user's invite code (others register with it to become
+	// their invitees). Auto-generated on first read when empty.
+	AffCode string `gorm:"uniqueIndex;size:32;not null;default:''" json:"aff_code"`
+	// InviterID is the user who invited this user (0 = no inviter).
+	InviterID int64 `gorm:"index;not null;default:0" json:"inviter_id"`
+	CreatedAt int64 `gorm:"autoCreateTime" json:"created_at"`
 }
 
 func (u *User) IsAdmin() bool {
@@ -102,4 +107,21 @@ func IncreaseUserUsedQuota(id int64, amount int64) error {
 	}
 	return DB.Model(&User{}).Where("id = ?", id).
 		Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", amount)}).Error
+}
+
+// GetUserByAffCode returns the user who owns the invite code, or
+// ErrUserNotFound when the code does not match any user.
+func GetUserByAffCode(code string) (*User, error) {
+	if code == "" {
+		return nil, ErrUserNotFound
+	}
+	var u User
+	err := DB.Where("aff_code = ?", code).First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }

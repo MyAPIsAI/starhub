@@ -54,6 +54,8 @@ type relayRequest struct {
 	tokenName      string
 	tokenUnlimited bool
 	group          string
+	userGroup      string
+	autoGroups     []string
 	modelName      string
 	body           []byte
 	contentType    string
@@ -68,12 +70,24 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 		tokenName:      ctxValueString(ctx, common.CtxTokenName),
 		tokenUnlimited: ctxValueBool(ctx, common.CtxTokenUnlimited),
 		group:          ctxValueString(ctx, common.CtxUsingGroup),
+		userGroup:      ctxValueString(ctx, common.CtxUserGroup),
 		modelName:      ctxValueString(ctx, common.CtxRequestModel),
 		contentType:    ctxValueString(ctx, common.CtxRequestContentType),
 		stream:         ctxValueBool(ctx, common.CtxRequestStream),
 	}
+	req.autoGroups, _ = ctx.Value(common.CtxAutoGroups).([]string)
 	req.body, _ = ctx.Value(common.CtxRequestBody).([]byte)
 	return req
+}
+
+// billingGroup returns the group used for the pre-charge: the first auto
+// group when the using group is "auto" (cheapest-first), otherwise the
+// using group itself.
+func (req relayRequest) billingGroup() string {
+	if req.group == common.AutoGroup && len(req.autoGroups) > 0 {
+		return req.autoGroups[0]
+	}
+	return req.group
 }
 
 // relayFlow drives channel selection and the failover retry loop shared by
@@ -81,23 +95,35 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 // flow owns the trail bookkeeping, the terminal error surface and the
 // pre-payment state (refund / settle).
 type relayFlow struct {
-	ctx         context.Context
-	w           http.ResponseWriter
-	req         relayRequest
-	inbound     dto.InboundFormat // error envelope format; "" defaults to openai
-	preQuota    int64
-	settled     bool
-	tried       map[int64]bool
-	trail       []string
-	lastErr     error
-	unsupported int
+	ctx          context.Context
+	w            http.ResponseWriter
+	req          relayRequest
+	inbound      dto.InboundFormat // error envelope format; "" defaults to openai
+	preQuota     int64
+	settled      bool
+	tried        map[int64]bool
+	trail        []string
+	lastErr      error
+	unsupported  int
+	currentGroup string // group of the current attempt (for auto-group walk)
+	groupIdx     int    // cursor into req.autoGroups (auto-group mode)
 }
 
 func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat) *relayFlow {
 	if inbound == "" {
 		inbound = dto.InboundOpenAI
 	}
-	return &relayFlow{ctx: ctx, w: w, req: req, inbound: inbound, tried: map[int64]bool{}}
+	flow := &relayFlow{ctx: ctx, w: w, req: req, inbound: inbound, tried: map[int64]bool{}}
+	// Auto-group mode: start walking from the first group. The pre-charge
+	// used billingGroup() (the first / cheapest group); the settlement uses
+	// currentGroup, which advances when a group is exhausted.
+	if req.group == common.AutoGroup && len(req.autoGroups) > 0 {
+		flow.currentGroup = req.autoGroups[0]
+		flow.groupIdx = 0
+	} else {
+		flow.currentGroup = req.group
+	}
+	return flow
 }
 
 // errorOut writes a gateway error in the inbound format.
@@ -105,9 +131,32 @@ func (f *relayFlow) errorOut(status int, errType, code, message string) {
 	dto.WriteRelayError(f.w, status, f.inbound, errType, code, message)
 }
 
-// pick returns the next untried channel for the request model.
+// pick returns the next untried channel for the request model. In auto-group
+// mode, when the current group is exhausted the walk advances to the next
+// group in the token's auto-group sequence (cheapest-first, degrade to
+// pricier on failure).
 func (f *relayFlow) pick() (*model.Channel, error) {
-	return model.GetSatisfiedChannelExcluding(f.req.group, f.req.modelName, f.tried)
+	for {
+		ch, err := model.GetSatisfiedChannelExcluding(f.currentGroup, f.req.modelName, f.tried)
+		if err == nil {
+			return ch, nil
+		}
+		if !errors.Is(err, model.ErrNoChannel) {
+			return nil, err
+		}
+		// Current group exhausted: advance to the next auto group, if any.
+		if f.req.group != common.AutoGroup || f.groupIdx >= len(f.req.autoGroups)-1 {
+			return nil, model.ErrNoChannel
+		}
+		f.groupIdx++
+		f.currentGroup = f.req.autoGroups[f.groupIdx]
+	}
+}
+
+// settleGroup returns the group the settlement should bill through: the
+// current group of the successful attempt (auto-group aware).
+func (f *relayFlow) settleGroup() string {
+	return f.currentGroup
 }
 
 // begin marks a channel as attempted BEFORE the attempt runs: the settle
@@ -134,8 +183,12 @@ func (f *relayFlow) applyOutcome(res attemptResult) {
 // the model's channels (400 rather than 502).
 func (f *relayFlow) exhausted() {
 	if len(f.trail) == 0 {
+		groups := f.req.group
+		if f.req.group == common.AutoGroup {
+			groups = strings.Join(f.req.autoGroups, ",")
+		}
 		f.errorOut(http.StatusServiceUnavailable, "server_error", "no_available_channel",
-			"no available channel for model "+f.req.modelName+" in group "+f.req.group)
+			"no available channel for model "+f.req.modelName+" in group "+groups)
 		return
 	}
 	if f.unsupported == len(f.trail) {
@@ -316,11 +369,12 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 
 	// The first selection doubles as the availability check: fail with 503
 	// before any quota is touched.
-	if _, err := model.GetSatisfiedChannel(req.group, req.modelName); err != nil {
+	billingGroup := req.billingGroup()
+	if _, err := model.GetSatisfiedChannel(billingGroup, req.modelName); err != nil {
 		if errors.Is(err, model.ErrNoChannel) {
 			dto.WriteRelayError(w, http.StatusServiceUnavailable, inbound,
 				"server_error", "no_available_channel",
-				"no available channel for model "+req.modelName+" in group "+req.group)
+				"no available channel for model "+req.modelName+" in group "+billingGroup)
 			return
 		}
 		dto.WriteRelayError(w, http.StatusInternalServerError, inbound,
@@ -330,14 +384,16 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 
 	// Pre-charge: the prompt estimate comes from the IR (protocol
 	// independent), the completion budget from the native multiplier fields.
+	// The pre-charge uses the first auto group (cheapest); the settlement
+	// uses the actual serving group.
 	var preQuota int64
 	var preErr error
 	if inbound == dto.InboundClaude {
-		preQuota, preErr = relay.PreConsumeIRQuota(req.userID, req.tokenID, req.tokenUnlimited,
-			req.modelName, req.group, ir)
+		preQuota, preErr = relay.PreConsumeIRQuotaWithUserGroup(req.userID, req.tokenID, req.tokenUnlimited,
+			req.modelName, billingGroup, req.userGroup, ir)
 	} else {
-		preQuota, preErr = relay.PreConsumeQuota(req.userID, req.tokenID, req.tokenUnlimited,
-			req.modelName, req.group, req.body)
+		preQuota, preErr = relay.PreConsumeQuotaWithUserGroup(req.userID, req.tokenID, req.tokenUnlimited,
+			req.modelName, billingGroup, req.userGroup, req.body)
 	}
 	if preErr != nil {
 		writePreConsumeError(w, inbound, preErr)
@@ -513,8 +569,8 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	if usage == nil || usage.TotalTokens() == 0 {
 		usage = relay.EstimateIRUsage(ir, content)
 	}
-	if err := relay.PostConsumeQuota(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
-		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.req.group, usage,
+	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
+		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
 		flow.preQuota, flow.trailString()); err != nil {
 		log.Printf("post consume quota failed: %v", err)
 	}

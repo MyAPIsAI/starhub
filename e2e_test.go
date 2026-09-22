@@ -21,6 +21,7 @@ import (
 	"starhub/model"
 	"starhub/relay"
 	"starhub/service"
+	"starhub/setting"
 )
 
 const upstreamKey = "sk-upstream-key-000000000"
@@ -102,6 +103,13 @@ func doRequest(base, method, path, token string, payload any) apiResult {
 
 func TestP0EndToEndRelayFlow(t *testing.T) {
 	upstream := newMockUpstream(t)
+
+	// Reset rate limiters and settings to defaults (see setupRelayApp for
+	// the rationale).
+	middleware.ResetRateLimits()
+	middleware.ResetTokenRateLimits()
+	middleware.ResetModelRateLimits()
+	setting.ResetAllToDefaults()
 
 	if err := model.InitDB(filepath.Join(t.TempDir(), "e2e.db")); err != nil {
 		t.Fatalf("InitDB failed: %v", err)
@@ -599,6 +607,16 @@ type p1Env struct {
 // relay token.
 func setupRelayApp(t *testing.T) p1Env {
 	t.Helper()
+	// Reset all rate limiters so token IDs from previous tests don't
+	// poison the new test (token IDs are auto-increment from 1, so
+	// different tests would share the same rate-limit key otherwise).
+	middleware.ResetRateLimits()
+	middleware.ResetTokenRateLimits()
+	middleware.ResetModelRateLimits()
+	// Reset all settings to compiled defaults so dirty state from a
+	// previous test (that may have failed before cleanup) doesn't get
+	// seeded into the fresh DB.
+	setting.ResetAllToDefaults()
 	if err := model.InitDB(filepath.Join(t.TempDir(), "e2e.db")); err != nil {
 		t.Fatalf("InitDB failed: %v", err)
 	}

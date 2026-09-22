@@ -22,7 +22,16 @@ type Token struct {
 	RemainQuota    int64  `gorm:"not null;default:0" json:"remain_quota"`
 	UnlimitedQuota bool   `gorm:"not null;default:false" json:"unlimited_quota"`
 	UsedQuota      int64  `gorm:"not null;default:0" json:"used_quota"`
-	CreatedAt      int64  `gorm:"autoCreateTime" json:"created_at"`
+	// ModelLimits is a comma-separated model whitelist; empty means no limit.
+	// A sub-key can be restricted to cheaper models only.
+	ModelLimits string `gorm:"size:1024;not null;default:''" json:"model_limits"`
+	// AllowIps is a comma-separated IP whitelist; empty means no limit.
+	// Enterprise customers use it to prevent key leakage.
+	AllowIps string `gorm:"size:1024;not null;default:''" json:"allow_ips"`
+	// AutoGroups is a comma-separated group sequence tried in order when the
+	// token's group is "auto" (cheapest-first, degrade to pricier on failure).
+	AutoGroups string `gorm:"size:512;not null;default:''" json:"auto_groups"`
+	CreatedAt  int64  `gorm:"autoCreateTime" json:"created_at"`
 }
 
 func InsertToken(t *Token) error {
@@ -122,4 +131,49 @@ func IncreaseTokenUsedQuota(id int64, amount int64) error {
 	}
 	return DB.Model(&Token{}).Where("id = ?", id).
 		Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", amount)}).Error
+}
+
+// ModelLimitList returns the model whitelist as a slice; empty means no limit.
+func (t *Token) ModelLimitList() []string {
+	return SplitList(t.ModelLimits)
+}
+
+// AllowIPList returns the IP whitelist as a slice; empty means no limit.
+func (t *Token) AllowIPList() []string {
+	return SplitList(t.AllowIps)
+}
+
+// AutoGroupList returns the auto-group sequence; empty means no auto groups.
+func (t *Token) AutoGroupList() []string {
+	return SplitList(t.AutoGroups)
+}
+
+// AllowsModel reports whether the token may use the model (ModelLimits empty
+// means everything is allowed).
+func (t *Token) AllowsModel(model string) bool {
+	limits := t.ModelLimitList()
+	if len(limits) == 0 {
+		return true
+	}
+	for _, m := range limits {
+		if m == model {
+			return true
+		}
+	}
+	return false
+}
+
+// AllowsIP reports whether the token may be used from the IP (AllowIps empty
+// means every IP is allowed).
+func (t *Token) AllowsIP(ip string) bool {
+	ips := t.AllowIPList()
+	if len(ips) == 0 {
+		return true
+	}
+	for _, allowed := range ips {
+		if allowed == ip {
+			return true
+		}
+	}
+	return false
 }

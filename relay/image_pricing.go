@@ -70,14 +70,24 @@ func sizeRatio(model, size string) float64 {
 // ImageBill carries the billing inputs of one image request.
 type ImageBill struct {
 	Model, Group  string
+	UserGroup     string // user's own group (for the group x group matrix)
 	Size, Quality string
 	Prompt        string
 	Count         int // requested n (already validated [1, MaxImageN])
 }
 
+// priceData builds the PriceData with the user group so the group x group
+// matrix multiplier applies.
+func (b *ImageBill) priceData() *PriceData {
+	if b.UserGroup != "" {
+		return NewPriceDataWithUserGroup(b.Model, b.Group, b.UserGroup)
+	}
+	return NewPriceData(b.Model, b.Group)
+}
+
 // PreQuota prices the pre-charge of the request.
 func (b *ImageBill) PreQuota() int64 {
-	pd := NewPriceData(b.Model, b.Group)
+	pd := b.priceData()
 	if !pd.IsPerCall() && !pd.IsExpression() {
 		// Token-billed image models: the prompt drives the estimate.
 		return estimatePreConsume(pd, dto.EstimateTokens(b.Prompt)+estimateReserveTokens, 0)
@@ -90,7 +100,7 @@ func (b *ImageBill) PreQuota() int64 {
 // a broken upstream payload cannot poison the books (the requested count
 // stays the bill of record, P3.1 guardrail).
 func (b *ImageBill) SettleQuota(actualCount int, usage *dto.ImageUsage) int64 {
-	pd := NewPriceData(b.Model, b.Group)
+	pd := b.priceData()
 	if !pd.IsPerCall() && !pd.IsExpression() {
 		if usage != nil && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
 			// Image APIs report usage as input_tokens/output_tokens; the
@@ -113,7 +123,7 @@ func (b *ImageBill) SettleQuota(actualCount int, usage *dto.ImageUsage) int64 {
 }
 
 func (b *ImageBill) quotaForCount(count int) int64 {
-	pd := NewPriceData(b.Model, b.Group)
+	pd := b.priceData()
 	// Fold size x quality x count into the special-multiplier chain: the
 	// per-call price is multiplied by the full chain (group ratio included).
 	pd.AddOtherRatio(ImagePriceRatio(b.Model, b.Size, b.Quality))
