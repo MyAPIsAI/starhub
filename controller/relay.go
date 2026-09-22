@@ -170,7 +170,11 @@ func (f *relayFlow) refundUnlessSettled() {
 // selected once per attempt by the caller (round-robin channels advance
 // their cursor on every selection); contentType is set before the adaptor
 // signs/prepares headers so signatures cover it (AWS SigV4 canonical
-// headers).
+// headers). ctx, when non-nil, overrides the flow context so a streaming
+// mode can detach the upstream from the client's request lifetime (P3.1
+// image stream: the gateway must drain the upstream to EOF even after the
+// client is gone, so the completed-event count — and thus the bill —
+// reflects what the upstream actually delivered).
 type upstreamCall struct {
 	method      string
 	url         string
@@ -178,6 +182,7 @@ type upstreamCall struct {
 	body        []byte
 	key         string
 	keyIdx      int
+	ctx         context.Context
 }
 
 // callUpstream executes the request and applies the shared error policy:
@@ -187,7 +192,11 @@ type upstreamCall struct {
 // the response); a nil result hands the open response to the caller, who
 // owns closing it.
 func (f *relayFlow) callUpstream(ch *model.Channel, adaptor channel.ChatAdaptor, call upstreamCall) (*http.Response, *attemptResult) {
-	req, err := http.NewRequestWithContext(f.ctx, call.method, call.url, bytes.NewReader(call.body))
+	ctx := f.ctx
+	if call.ctx != nil {
+		ctx = call.ctx
+	}
+	req, err := http.NewRequestWithContext(ctx, call.method, call.url, bytes.NewReader(call.body))
 	if err != nil {
 		return nil, &attemptResult{outcome: attemptUpstreamError,
 			cause: fmt.Errorf("channel %d: build request: %v", ch.ID, err)}

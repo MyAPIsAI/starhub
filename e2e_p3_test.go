@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -903,6 +904,91 @@ func TestP3ImageJSONasSSE(t *testing.T) {
 	if token.RemainQuota != common.DefaultTokenQuota-int64(0.04*2*500000) {
 		t.Fatalf("json-as-sse billing = %d", token.RemainQuota)
 	}
+}
+
+// TestP3ImageStreamOverDelivery: P3.1 invariant 2 — upstream
+// over-delivery in stream mode must bill the actual count. The client
+// requests n=2 but the upstream sends 3 completed events; the bill must
+// be 3 (upstream over-delivery is never free).
+func TestP3ImageStreamOverDelivery(t *testing.T) {
+	upstream, _ := newImageUpstream(t, 3) // delivers 3 regardless of n
+	env := setupRelayApp(t)
+	createChannelID(t, env, map[string]any{
+		"name": "stream-over", "key": upstreamKey, "base_url": upstream.URL, "models": "gpt-image-1",
+	})
+	setOption(t, env, "model_price", `{"gpt-image-1":0.04}`)
+	res := doRequest(env.base, "POST", "/v1/images/generations", env.apiKey, map[string]any{
+		"model": "gpt-image-1", "prompt": "a cat", "n": 2, "stream": true,
+	})
+	if res.Status != 200 {
+		t.Fatalf("stream over-delivery relay failed: %d %s", res.Status, res.Body)
+	}
+	token, _ := model.GetTokenByID(env.tokenID)
+	want := common.DefaultTokenQuota - int64(0.04*3*500000)
+	if token.RemainQuota != want {
+		t.Fatalf("stream over-delivery billing = %d, want %d (3 images, not 2)", token.RemainQuota, want)
+	}
+}
+
+// TestP3ImageStreamClientDisconnect: P3.1 invariant 1 — a client
+// disconnect must not lower the billed count. The gateway detaches the
+// upstream from the client's request context and drains the SSE stream to
+// EOF even after the client is gone, so the completed-event count (and
+// thus the bill) reflects what the upstream actually delivered, not what
+// the client received before bailing (the "peek and run" anti-pattern).
+func TestP3ImageStreamClientDisconnect(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/images/generations" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		for i := 0; i < 3; i++ {
+			fmt.Fprintf(w, "event: image_generation.completed\ndata: {\"type\":\"image_generation.completed\",\"output_index\":%d,\"b64_json\":\"QUJD\"}\n\n", i)
+			flusher.Flush()
+			time.Sleep(80 * time.Millisecond) // let the client disconnect after event 1
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	t.Cleanup(upstream.Close)
+
+	env := setupRelayApp(t)
+	createChannelID(t, env, map[string]any{
+		"name": "disconnect", "key": upstreamKey, "base_url": upstream.URL, "models": "gpt-image-1",
+	})
+	setOption(t, env, "model_price", `{"gpt-image-1":0.04}`)
+
+	// The client cancels after reading part of the stream.
+	ctx, cancel := context.WithCancel(context.Background())
+	body := strings.NewReader(`{"model":"gpt-image-1","prompt":"a cat","n":3,"stream":true}`)
+	req, _ := http.NewRequestWithContext(ctx, "POST", env.base+"/v1/images/generations", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+env.apiKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	buf := make([]byte, 512)
+	_, _ = resp.Body.Read(buf) // read one event
+	cancel()
+	resp.Body.Close()
+
+	// The gateway must drain the upstream and bill for 3 (the actual
+	// delivered count), not 1 (what the client received).
+	want := common.DefaultTokenQuota - int64(0.04*3*500000)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		token, _ := model.GetTokenByID(env.tokenID)
+		if token.RemainQuota == want {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	token, _ := model.GetTokenByID(env.tokenID)
+	t.Fatalf("disconnect billing = %d, want %d (gateway must drain upstream after client disconnect)", token.RemainQuota, want)
 }
 
 // TestP3CrossProtocolFailover: one request, two channels speaking
