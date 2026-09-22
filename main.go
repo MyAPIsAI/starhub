@@ -15,9 +15,18 @@ import (
 	"starhub/relay"
 	"starhub/relay/dto"
 	"starhub/service"
+	"starhub/web"
 )
 
 func main() {
+	if executable, err := os.Executable(); err == nil {
+		log.Printf("executable: %s", executable)
+	}
+	if web.ConsoleEmbedded {
+		log.Print("web console: embedded (open / in your browser)")
+	} else {
+		log.Print("web console: not embedded; this is an API-only build and / returns 404. Build with node scripts/build-release.mjs and run the binary from release/")
+	}
 	dbPath := os.Getenv("STARHUB_DB")
 	if dbPath == "" {
 		dbPath = "starhub.db"
@@ -43,7 +52,7 @@ func main() {
 	startChannelTestTask()
 	startTaskPollTask()
 	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, port, dbPath)
-	if err := http.ListenAndServe(":"+port, middleware.IPRateLimit(NewRouter())); err != nil {
+	if err := http.ListenAndServe(":"+port, NewRouter()); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -100,7 +109,7 @@ func startChannelTestTask() {
 // UserRateLimit -> TokenRateLimit -> Distribute (parses model/stream and
 // caches the body) -> ModelRateLimit -> Relay (selects a channel and
 // retries with failover).
-func NewRouter() *http.ServeMux {
+func NewRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /api/user/login", controller.Login)
@@ -194,5 +203,5 @@ func NewRouter() *http.ServeMux {
 
 	mux.Handle("GET /v1/models", middleware.TokenAuth(http.HandlerFunc(controller.ListModels)))
 
-	return mux
+	return web.Handler(middleware.ManagementSecurity(middleware.IPRateLimit(mux)))
 }

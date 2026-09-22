@@ -144,6 +144,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   middleware.SecureSessionCookie(r),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(sessionTTL.Seconds()),
 	})
@@ -155,6 +156,8 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 func Logout(w http.ResponseWriter, r *http.Request) {
 	middleware.Sessions.Remove(middleware.SessionToken(r))
+	http.SetCookie(w, &http.Cookie{Name: "session", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: middleware.SecureSessionCookie(r), SameSite: http.SameSiteLaxMode})
 	common.ApiSuccess(w, nil)
 }
 
@@ -215,11 +218,12 @@ func ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type userUpdateRequest struct {
-	ID       int64   `json:"id"`
-	Quota    *int64  `json:"quota"`
-	Status   *int    `json:"status"`
-	Group    *string `json:"group"`
-	Password *string `json:"password"`
+	ID            int64   `json:"id"`
+	Quota         *int64  `json:"quota"`
+	Status        *int    `json:"status"`
+	Group         *string `json:"group"`
+	Password      *string `json:"password"`
+	ExpectedQuota *int64  `json:"expected_quota"`
 }
 
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -237,6 +241,10 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	fields := map[string]any{}
 	if req.Quota != nil {
+		if req.ExpectedQuota == nil {
+			common.ApiError(w, http.StatusBadRequest, "expected_quota is required when setting a balance")
+			return
+		}
 		if *req.Quota < 0 {
 			common.ApiError(w, http.StatusBadRequest, "quota must be >= 0")
 			return
@@ -244,6 +252,10 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		fields["quota"] = *req.Quota
 	}
 	if req.Status != nil {
+		if req.ID == requestUserID(r) && *req.Status != common.StatusEnabled {
+			common.ApiError(w, http.StatusBadRequest, "cannot disable the current account")
+			return
+		}
 		if *req.Status != common.StatusEnabled && *req.Status != common.StatusDisabled {
 			common.ApiError(w, http.StatusBadRequest, "invalid status")
 			return
@@ -273,7 +285,11 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "nothing to update")
 		return
 	}
-	if err := model.UpdateUserFields(req.ID, fields); err != nil {
+	if err := model.UpdateUserFieldsWithQuota(req.ID, fields, req.ExpectedQuota); err != nil {
+		if err == model.ErrQuotaConflict {
+			common.ApiError(w, http.StatusConflict, "balance changed; reload and confirm again")
+			return
+		}
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -138,6 +138,7 @@ func GetChannel(w http.ResponseWriter, r *http.Request) {
 type channelUpdateRequest struct {
 	ID int64 `json:"id"`
 	channelPayload
+	BaseURL *string `json:"base_url"`
 }
 
 func UpdateChannel(w http.ResponseWriter, r *http.Request) {
@@ -169,8 +170,8 @@ func UpdateChannel(w http.ResponseWriter, r *http.Request) {
 		}
 		ch.KeyMode = keyMode
 	}
-	if req.BaseURL != "" {
-		baseURL, ok := normalizeBaseURL(w, req.BaseURL)
+	if req.BaseURL != nil {
+		baseURL, ok := normalizeBaseURL(w, *req.BaseURL)
 		if !ok {
 			return
 		}

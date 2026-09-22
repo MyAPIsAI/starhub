@@ -129,7 +129,7 @@ func TestP4GroupGroupRatio(t *testing.T) {
 	}
 	var tokenResp struct {
 		Data struct {
-			ID int64 `json:"id"`
+			ID  int64  `json:"id"`
 			Key string `json:"key"`
 		} `json:"data"`
 	}
@@ -137,7 +137,7 @@ func TestP4GroupGroupRatio(t *testing.T) {
 
 	// The root user's group is "default". The using group is "vip".
 	// Effective ratio = group_ratio("vip") * group_group_ratio("default","vip")
-//                  = 0.8 * 0.5 = 0.4
+	//                  = 0.8 * 0.5 = 0.4
 	expected := relay.ComputeQuotaWithUserGroup("gpt-4o-mini", "vip", "default", 100, 50)
 	if expected <= 0 {
 		t.Fatalf("expected quota should be positive, got %d", expected)
@@ -288,7 +288,7 @@ func TestP4RedemptionAndAffCode(t *testing.T) {
 	invitee2ID := selfResp.Data.ID
 
 	_ = doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id": invitee2ID, "quota": 10000000,
+		"id": invitee2ID, "quota": 10000000, "expected_quota": 0,
 	})
 
 	res = doRequest(env.base, "POST", "/api/token/", invitee2Session, map[string]any{

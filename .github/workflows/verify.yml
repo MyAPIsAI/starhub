@@ -1,0 +1,59 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: true
+      - name: Verify backend without frontend assets
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+      - name: Verify and build console
+        working-directory: web
+        run: |
+          npm run lint
+          npm run format:check
+          npm run typecheck
+          npm run test:unit
+          npm run build
+      - name: Verify embedded console
+        run: |
+          go build -tags frontend ./...
+          go vet -tags frontend ./...
+          go test -tags frontend ./...
+      - name: Install test browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests against isolated Go server
+        working-directory: web
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: |
+            web/playwright-report/
+            web/test-results/

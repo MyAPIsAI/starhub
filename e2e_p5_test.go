@@ -37,6 +37,9 @@ func TestP5Observability(t *testing.T) {
 		_ = json.Unmarshal(body, &req)
 		atomic.AddInt32(&streamHits, 1)
 		if req.Stream {
+			// Keep the header fallback above the snapshot's millisecond precision.
+			// An immediate loopback response can legitimately round TTFT to zero.
+			time.Sleep(5 * time.Millisecond)
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 			flusher := w.(http.Flusher)
@@ -74,9 +77,10 @@ func TestP5Observability(t *testing.T) {
 		Message   string `json:"message"`
 	}
 	webhook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&webhookHits, 1)
 		raw, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(raw, &lastAlert)
+		// Publish the hit only after the payload is available to the test.
+		atomic.AddInt32(&webhookHits, 1)
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(webhook.Close)
@@ -142,7 +146,7 @@ func TestP5Observability(t *testing.T) {
 		t.Fatalf("success count = %d, want >= 2", successCount)
 	}
 	// Channel A must have at least 2 samples with 100% success and a
-	// positive TTFT (streaming refines it).
+	// positive TTFT, including the response-header fallback.
 	var foundA bool
 	for _, cs := range metricsResp.Data.ChannelStats {
 		if cs.ChannelID == channelA {

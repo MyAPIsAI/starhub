@@ -3,7 +3,6 @@ package middleware
 import (
 	"net/http"
 
-	"starhub/common"
 	"starhub/model"
 )
 
@@ -13,16 +12,25 @@ import (
 // requests and relay traffic are not audited (read-only).
 func Audit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Resolve the actor before the inner authentication handler replaces
+		// the request context or the operation changes the actor's account.
+		var actorID int64
+		var actorName string
+		if uid, ok := Sessions.Get(SessionToken(r)); ok {
+			if actor, err := model.GetUserByID(uid); err == nil {
+				actorID, actorName = actor.ID, actor.Username
+			}
+		}
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
 		if shouldAudit(r) {
-			uid, _ := r.Context().Value(common.CtxUserID).(int64)
 			entry := &model.AuditLog{
-				UserID: uid,
-				Method: r.Method,
-				Path:   r.URL.Path,
-				Status: rec.status,
-				IP:     clientIP(r),
+				UserID:   actorID,
+				Username: actorName,
+				Method:   r.Method,
+				Path:     r.URL.Path,
+				Status:   rec.status,
+				IP:       clientIP(r),
 			}
 			// Best-effort: an audit failure must not change the response.
 			_ = model.InsertAuditLog(entry)
