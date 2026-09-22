@@ -121,9 +121,10 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 		return
 	}
 
-	flow := newRelayFlow(r.Context(), w, req, "")
+	flow := newRelayFlow(r.Context(), w, req, "", "image")
 	flow.preQuota = pre
 	defer flow.refundUnlessSettled()
+	defer flow.finish()
 
 	// Image streaming detaches the upstream from the client's request
 	// context: the gateway must drain the upstream SSE to EOF even after
@@ -187,7 +188,7 @@ func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, b
 	bill.Group = flow.settleGroup()
 	actual := bill.SettleQuota(count, usage)
 	settleImageAttempt(flow, ch, actual)
-	return attemptResult{outcome: attemptSuccess}
+	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
 // imageStreamAttempt relays a streamed image response (partial_image
@@ -217,6 +218,15 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 	completed := 0
 	var streamErr string
 	var streamUsage *dto.ImageUsage
+	clientGone := false
+	writeFrame := func(format string, args ...any) {
+		if clientGone {
+			return
+		}
+		if _, werr := fmt.Fprintf(flow.w, format, args...); werr != nil {
+			clientGone = true
+		}
+	}
 	for {
 		line, err := reader.Next()
 		if err != nil {
@@ -226,12 +236,15 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 			break
 		}
 		if line.Event != "" {
-			fmt.Fprintf(flow.w, "event: %s\n", line.Event)
+			writeFrame("event: %s\n", line.Event)
 		}
 		if line.Data != "" {
-			fmt.Fprintf(flow.w, "data: %s\n", line.Data)
+			if flow.attempt != nil {
+				flow.attempt.RecordFirstToken()
+			}
+			writeFrame("data: %s\n", line.Data)
 		}
-		fmt.Fprint(flow.w, "\n")
+		writeFrame("\n")
 		if flusher != nil {
 			flusher.Flush()
 		}
@@ -253,15 +266,18 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 		}
 	}
 
+	if clientGone {
+		flow.span.MarkStreamInterrupted()
+	}
 	// Nothing delivered and the stream errored: nothing settles, the
 	// deferred refund returns the whole pre-payment.
 	if completed == 0 && streamErr != "" {
-		return attemptResult{outcome: attemptSuccess}
+		return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 	}
 	bill.Group = flow.settleGroup()
 	actual := bill.SettleQuota(completed, streamUsage)
 	settleImageAttempt(flow, ch, actual)
-	return attemptResult{outcome: attemptSuccess}
+	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
 // imageJSONasSSEAttempt wraps a JSON image response into SSE completed
@@ -282,7 +298,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 		bill.Group = flow.settleGroup()
 		actual := bill.SettleQuota(0, nil)
 		settleImageAttempt(flow, ch, actual)
-		return attemptResult{outcome: attemptSuccess}
+		return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 	}
 
 	flow.w.Header().Set("Content-Type", "text/event-stream")
@@ -315,7 +331,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 	bill.Group = flow.settleGroup()
 	actual := bill.SettleQuota(parsed.Count(), parsed.Usage)
 	settleImageAttempt(flow, ch, actual)
-	return attemptResult{outcome: attemptSuccess}
+	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
 // settleImageAttempt balances the image bill (unit-based: the amount was

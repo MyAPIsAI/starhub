@@ -43,16 +43,17 @@ var (
 // OptionKeys lists every option key the setting package owns, for seeding
 // and persistence.
 func OptionKeys() []string {
-	return append(append(append(RatioOptionKeys(),
+	return append(append(append(append(RatioOptionKeys(),
 		OptionKeyModelPrice, OptionKeyModelPriceExpr,
 		OptionKeyCacheRatio, OptionKeyAudioRatio),
 		GroupGroupRatioKeys()...),
-		AffiliateOptionKeys()...)
+		AffiliateOptionKeys()...),
+		AlertOptionKeys()...)
 }
 
 // IsOptionKey reports whether the key is a known ratio / pricing option.
 func IsOptionKey(key string) bool {
-	if IsGroupGroupRatioKey(key) || IsAffiliateOptionKey(key) {
+	if IsGroupGroupRatioKey(key) || IsAffiliateOptionKey(key) || IsAlertOptionKey(key) {
 		return true
 	}
 	switch key {
@@ -71,6 +72,9 @@ func UpdateOption(key, value string) error {
 	if IsAffiliateOptionKey(key) {
 		return UpdateAffiliate(key, value)
 	}
+	if IsAlertOptionKey(key) {
+		return UpdateAlert(key, value)
+	}
 	if IsRatioOptionKey(key) {
 		return UpdateRatio(key, value)
 	}
@@ -84,6 +88,9 @@ func SnapshotOption(key string) (string, error) {
 	}
 	if IsAffiliateOptionKey(key) {
 		return SnapshotAffiliate(key)
+	}
+	if IsAlertOptionKey(key) {
+		return SnapshotAlert(key)
 	}
 	if IsRatioOptionKey(key) {
 		return SnapshotRatio(key)
@@ -255,4 +262,5 @@ func ResetAllToDefaults() {
 	ResetPricingToDefaults()
 	ResetGroupGroupRatioToDefaults()
 	ResetAffiliateToDefaults()
+	ResetAlertToDefaults()
 }
