@@ -142,6 +142,9 @@ func NewRouter() *http.ServeMux {
 	mux.Handle("GET /api/audit", middleware.AdminAuth(http.HandlerFunc(controller.ListAuditLogs)))
 	mux.Handle("GET /api/audit/", middleware.AdminAuth(http.HandlerFunc(controller.ListAuditLogs)))
 
+	mux.Handle("GET /api/metrics", middleware.AdminAuth(http.HandlerFunc(controller.GetMetrics)))
+	mux.Handle("GET /api/metrics/", middleware.AdminAuth(http.HandlerFunc(controller.GetMetrics)))
+
 	mux.Handle("POST /api/redemption", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateRedemption))))
 	mux.Handle("POST /api/redemption/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateRedemption))))
 	mux.Handle("GET /api/redemption", middleware.AdminAuth(http.HandlerFunc(controller.ListRedemptions)))

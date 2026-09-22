@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/metric"
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
@@ -21,6 +22,55 @@ import (
 )
 
 var upstreamHTTPClient = &http.Client{Timeout: 10 * time.Minute}
+
+// statusWriter wraps http.ResponseWriter to capture the response status
+// code so the metric layer can classify the request outcome without
+// poking at the writer from every error path.
+type statusWriter struct {
+	http.ResponseWriter
+	status   int
+	wrote    bool
+}
+
+func newStatusWriter(w http.ResponseWriter) *statusWriter {
+	return &statusWriter{ResponseWriter: w, status: http.StatusOK}
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	if !w.wrote {
+		w.status = code
+		w.wrote = true
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	if !w.wrote {
+		w.status = http.StatusOK
+		w.wrote = true
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+// Flush delegates to the underlying writer so SSE streaming keeps its
+// real-time push behavior through the wrapper.
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// upstreamRequestID extracts the provider's request-id from the response
+// headers so an operator can correlate a slow attempt with the upstream's
+// own logs. Different providers use different header names.
+func upstreamRequestID(resp *http.Response) string {
+	for _, h := range []string{"X-Request-Id", "Request-Id", "X-Amzn-Requestid", "CF-RAY"} {
+		if v := resp.Header.Get(h); v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // attemptOutcome classifies how one upstream attempt ended.
 type attemptOutcome int
@@ -40,10 +90,11 @@ const (
 )
 
 type attemptResult struct {
-	outcome attemptOutcome
-	usage   *relay.Usage
-	content string
-	cause   error
+	outcome    attemptOutcome
+	usage      *relay.Usage
+	content    string
+	cause      error
+	statusCode int // upstream status code (for 4xx/5xx classification); 0 when none
 }
 
 // relayRequest is the per-request state every relay mode shares (extracted
@@ -107,13 +158,32 @@ type relayFlow struct {
 	unsupported  int
 	currentGroup string // group of the current attempt (for auto-group walk)
 	groupIdx     int    // cursor into req.autoGroups (auto-group mode)
+	// Observability (P5): the request-level span and the current attempt
+	// span. The attempt span is set by runChannels before each attempt
+	// and read by callUpstream / the streaming loops to record TTFT.
+	span    *metric.RequestSpan
+	attempt *metric.AttemptSpan
+	sw      *statusWriter
+	mode    string // relay mode for the metric label (chat, embeddings, ...)
 }
 
-func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat) *relayFlow {
+func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat, mode string) *relayFlow {
 	if inbound == "" {
 		inbound = dto.InboundOpenAI
 	}
-	flow := &relayFlow{ctx: ctx, w: w, req: req, inbound: inbound, tried: map[int64]bool{}}
+	sw := newStatusWriter(w)
+	flow := &relayFlow{
+		ctx: ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
+		tried: map[int64]bool{},
+		span:  metric.BeginRequest(metric.RequestMeta{
+			UserID:  req.userID,
+			TokenID: req.tokenID,
+			Model:   req.modelName,
+			Group:   req.group,
+			Stream:  req.stream,
+			Mode:    mode,
+		}),
+	}
 	// Auto-group mode: start walking from the first group. The pre-charge
 	// used billingGroup() (the first / cheapest group); the settlement uses
 	// currentGroup, which advances when a group is exhausted.
@@ -124,6 +194,19 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 		flow.currentGroup = req.group
 	}
 	return flow
+}
+
+// finish closes the request-level metric span. Install it with defer
+// right after newRelayFlow.
+func (f *relayFlow) finish() {
+	if f.span == nil {
+		return
+	}
+	status := f.sw.status
+	if !f.sw.wrote {
+		status = 0 // nothing written — internal error / panic path
+	}
+	f.span.EndRequest(status)
 }
 
 // errorOut writes a gateway error in the inbound format.
@@ -270,6 +353,11 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor channel.ChatAdaptor,
 		return nil, &attemptResult{outcome: attemptUpstreamError,
 			cause: fmt.Errorf("channel %d unreachable: %v", ch.ID, err)}
 	}
+	// Record TTFT (time from attempt start to response headers) and the
+	// upstream request-id so a slow channel is identifiable end-to-end.
+	if f.attempt != nil {
+		f.attempt.RecordHeaders(upstreamRequestID(resp))
+	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		resp.Body.Close()
@@ -285,9 +373,9 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor channel.ChatAdaptor,
 				disableBrokenKey(ch, call.keyIdx, resp.StatusCode)
 			}
 			dto.WriteUpstreamError(f.w, resp.StatusCode, f.inbound, body, resp.Header.Get("Content-Type"))
-			return nil, &attemptResult{outcome: attemptClientError}
+			return nil, &attemptResult{outcome: attemptClientError, statusCode: resp.StatusCode}
 		}
-		return nil, &attemptResult{outcome: attemptUpstreamError,
+		return nil, &attemptResult{outcome: attemptUpstreamError, statusCode: resp.StatusCode,
 			cause: fmt.Errorf("channel %d returned %d", ch.ID, resp.StatusCode)}
 	}
 	return resp, nil
@@ -302,7 +390,12 @@ func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
 			break
 		}
 		f.begin(ch)
+		// Open an attempt-level metric span so callUpstream / the
+		// streaming loops can record TTFT against it.
+		f.attempt = f.span.BeginAttempt(ch.ID)
 		res := attempt(ch)
+		f.span.EndAttempt(f.attempt, attemptOutcomeToMetric(res.outcome), res.statusCode)
+		f.attempt = nil
 		f.applyOutcome(res)
 		switch res.outcome {
 		case attemptSuccess, attemptClientError:
@@ -310,6 +403,21 @@ func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
 		}
 	}
 	f.exhausted()
+}
+
+// attemptOutcomeToMetric maps the internal attempt outcome to the metric
+// package's classification.
+func attemptOutcomeToMetric(o attemptOutcome) metric.AttemptClass {
+	switch o {
+	case attemptSuccess:
+		return metric.AttemptSuccess
+	case attemptClientError:
+		return metric.AttemptClientError
+	case attemptUnsupported:
+		return metric.AttemptUnsupported
+	default:
+		return metric.AttemptUpstreamError
+	}
 }
 
 func ctxValueInt64(ctx context.Context, key any) int64 {
@@ -400,9 +508,10 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 		return
 	}
 
-	flow := newRelayFlow(r.Context(), w, req, inbound)
+	flow := newRelayFlow(r.Context(), w, req, inbound, "chat")
 	flow.preQuota = preQuota
 	defer flow.refundUnlessSettled()
+	defer flow.finish()
 
 	flow.runChannels(func(ch *model.Channel) attemptResult {
 		return chatAttempt(flow, ch, ir, inbound)
@@ -518,6 +627,9 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 		}
 		emitter := relay.NewChatStreamEmitter(flow.w, inbound, flow.req.modelName)
 		if chatResp.Text != "" {
+			if flow.attempt != nil {
+				flow.attempt.RecordFirstToken()
+			}
 			_ = emitter.Emit(&dto.ChatStreamEvent{TextDelta: chatResp.Text})
 		}
 		_ = emitter.Finish(chatResp.Usage, chatResp.FinishReason)
@@ -535,6 +647,7 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 	var lastUsage *relay.Usage
 	var content strings.Builder
 	var finishReason string
+	clientGone := false
 	for {
 		ev, err := reader.Next()
 		if err != nil {
@@ -550,15 +663,22 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 			finishReason = ev.FinishReason
 		}
 		if ev.TextDelta != "" {
+			if flow.attempt != nil {
+				flow.attempt.RecordFirstToken()
+			}
 			if eerr := emitter.Emit(ev); eerr != nil {
 				// The client is gone; keep draining the upstream so the
 				// usage report still settles the bill.
+				clientGone = true
 				continue
 			}
 			content.WriteString(ev.TextDelta)
 		}
 	}
 	_ = emitter.Finish(lastUsage, finishReason)
+	if clientGone {
+		flow.span.MarkStreamInterrupted()
+	}
 	return settleChatAttempt(flow, ch, ir, lastUsage, content.String())
 }
 
@@ -575,7 +695,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 		log.Printf("post consume quota failed: %v", err)
 	}
 	flow.settled = true
-	return attemptResult{outcome: attemptSuccess, usage: usage, content: content}
+	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK, usage: usage, content: content}
 }
 
 // disableBrokenKey isolates a failing upstream credential. Single-key

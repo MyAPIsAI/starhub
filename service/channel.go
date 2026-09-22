@@ -53,13 +53,14 @@ func ShouldEnableChannel(status int) bool {
 }
 
 // DisableChannel marks a channel as auto-disabled and leaves a log trail for
-// the administrator (there is no notification backend yet, so stdout log is
-// the operator surface).
+// the administrator. An alert is fired so the operator is notified in real
+// time (webhook when configured, log otherwise).
 func DisableChannel(channelID int64, reason string) error {
 	if err := model.UpdateChannelStatus(channelID, common.ChannelStatusAutoDisabled); err != nil {
 		return err
 	}
 	log.Printf("channel %d auto-disabled: %s", channelID, reason)
+	NotifyChannelDisabled(channelID, reason)
 	return nil
 }
 
@@ -69,6 +70,7 @@ func enableChannel(channelID int64, reason string) error {
 		return err
 	}
 	log.Printf("channel %d auto-enabled: %s", channelID, reason)
+	NotifyChannelEnabled(channelID, reason)
 	return nil
 }
 

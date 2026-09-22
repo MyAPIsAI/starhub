@@ -26,7 +26,8 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 		writeModeError(w, http.StatusInternalServerError, "server_error", "internal_error", "request model is missing")
 		return
 	}
-	flow := newRelayFlow(r.Context(), w, req, "")
+	flow := newRelayFlow(r.Context(), w, req, "", "task")
+	defer flow.finish()
 
 	// 1. Locate a task platform for the model and run
 	//    ValidateRequestAndSetAction (billing multipliers are bounded
@@ -162,7 +163,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 	// balances it (failed tasks refund fully).
 	flow.settled = true
 	writeTaskSubmitResponse(flow.w, task)
-	return attemptResult{outcome: attemptSuccess}
+	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
 func writeTaskSubmitResponse(w http.ResponseWriter, task *model.Task) {

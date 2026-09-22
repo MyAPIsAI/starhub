@@ -196,6 +196,24 @@ func estimateAudioTokens(fileBytes int64) int64 {
 	return tokens
 }
 
+// modeLabel maps a RelayMode to the short metric label embedded in the
+// request span.
+func modeLabel(mode channel.RelayMode) string {
+	switch mode {
+	case channel.RelayModeEmbeddings:
+		return "embeddings"
+	case channel.RelayModeRerank:
+		return "rerank"
+	case channel.RelayModeTTS:
+		return "tts"
+	case channel.RelayModeSTT, channel.RelayModeSTTTranslation:
+		return "stt"
+	case channel.RelayModeImageGeneration, channel.RelayModeImageEdit:
+		return "image"
+	}
+	return "passthrough"
+}
+
 // runPassthroughMode wraps the shared flow for the passthrough modes:
 // validation happened above, the pre-charge is explicit, and every attempt
 // replays the original body (multipart bodies keep their content-type).
@@ -213,9 +231,10 @@ func runPassthroughMode(w http.ResponseWriter, r *http.Request, req relayRequest
 		return
 	}
 
-	flow := newRelayFlow(r.Context(), w, req, "")
+	flow := newRelayFlow(r.Context(), w, req, "", modeLabel(mode))
 	flow.preQuota = pre
 	defer flow.refundUnlessSettled()
+	defer flow.finish()
 
 	flow.runChannels(func(ch *model.Channel) attemptResult {
 		adaptor, err := relay.GetChatAdaptor(ch.Type)
@@ -254,7 +273,7 @@ func settleModeAttempt(flow *relayFlow, ch *model.Channel, usage *relay.Usage) a
 		log.Printf("post consume quota failed: %v", err)
 	}
 	flow.settled = true
-	return attemptResult{outcome: attemptSuccess, usage: usage}
+	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK, usage: usage}
 }
 
 func writePassthroughBody(w http.ResponseWriter, resp *http.Response, body []byte) {

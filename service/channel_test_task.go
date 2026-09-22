@@ -54,4 +54,7 @@ func RunChannelTestOnce(ctx context.Context) {
 		log.Printf("channel test: channel %d (%s) ok=%t status=%d: %s",
 			ch.ID, ch.Name, res.OK, status, res.Message)
 	}
+	// After every probe cycle, scan the rolling error-rate windows and
+	// fire threshold alerts for channels that crossed the limit.
+	CheckErrorRateThresholds()
 }
