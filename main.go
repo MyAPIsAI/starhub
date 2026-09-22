@@ -152,7 +152,11 @@ func NewRouter() *http.ServeMux {
 	mux.Handle("POST /v1/audio/speech", relayChain(dto.InboundOpenAI, controller.RelayTTS))
 	mux.Handle("POST /v1/audio/transcriptions", relayChain(dto.InboundOpenAI, controller.RelaySTT))
 	mux.Handle("POST /v1/audio/translations", relayChain(dto.InboundOpenAI, controller.RelaySTTTranslations))
-	mux.Handle("POST /v1/images/generations", relayChain(dto.InboundOpenAI, controller.RelayImageGenerations))
+	// Image generations tolerates a missing model: the distributor falls
+	// back to the legacy default "dall-e" (P3.1); edits reads the model
+	// from the multipart form.
+	mux.Handle("POST /v1/images/generations", middleware.TokenAuth(middleware.UserRateLimit(
+		middleware.DistributeWithDefaultModel(dto.InboundOpenAI, "dall-e")(http.HandlerFunc(controller.RelayImageGenerations)))))
 	mux.Handle("POST /v1/images/edits", relayChain(dto.InboundOpenAI, controller.RelayImageEdits))
 	mux.Handle("POST /v1/video/generations", relayChain(dto.InboundOpenAI, controller.RelayTaskSubmitVideo))
 	mux.Handle("GET /v1/video/generations/{id}", middleware.TokenAuth(http.HandlerFunc(controller.RelayTaskGetVideo)))
