@@ -43,13 +43,18 @@ var (
 // OptionKeys lists every option key the setting package owns, for seeding
 // and persistence.
 func OptionKeys() []string {
-	return append(RatioOptionKeys(),
+	return append(append(append(RatioOptionKeys(),
 		OptionKeyModelPrice, OptionKeyModelPriceExpr,
-		OptionKeyCacheRatio, OptionKeyAudioRatio)
+		OptionKeyCacheRatio, OptionKeyAudioRatio),
+		GroupGroupRatioKeys()...),
+		AffiliateOptionKeys()...)
 }
 
 // IsOptionKey reports whether the key is a known ratio / pricing option.
 func IsOptionKey(key string) bool {
+	if IsGroupGroupRatioKey(key) || IsAffiliateOptionKey(key) {
+		return true
+	}
 	switch key {
 	case OptionKeyModelPrice, OptionKeyModelPriceExpr,
 		OptionKeyCacheRatio, OptionKeyAudioRatio:
@@ -60,6 +65,12 @@ func IsOptionKey(key string) bool {
 
 // UpdateOption validates and applies any known option key.
 func UpdateOption(key, value string) error {
+	if IsGroupGroupRatioKey(key) {
+		return UpdateGroupGroupRatio(value)
+	}
+	if IsAffiliateOptionKey(key) {
+		return UpdateAffiliate(key, value)
+	}
 	if IsRatioOptionKey(key) {
 		return UpdateRatio(key, value)
 	}
@@ -68,6 +79,12 @@ func UpdateOption(key, value string) error {
 
 // SnapshotOption returns the current persisted representation of a key.
 func SnapshotOption(key string) (string, error) {
+	if IsGroupGroupRatioKey(key) {
+		return SnapshotGroupGroupRatio()
+	}
+	if IsAffiliateOptionKey(key) {
+		return SnapshotAffiliate(key)
+	}
 	if IsRatioOptionKey(key) {
 		return SnapshotRatio(key)
 	}
@@ -75,8 +92,7 @@ func SnapshotOption(key string) (string, error) {
 }
 
 // UpdatePricing validates and applies one pricing option key.
-func UpdatePricing(key, value string) error {
-	switch key {
+func UpdatePricing(key, value string) error {	switch key {
 	case OptionKeyModelPrice:
 		prices, err := parseModelPrice(value)
 		if err != nil {
@@ -217,4 +233,26 @@ func marshalStable[V any](m map[string]V) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// ResetPricingToDefaults restores the compiled-in default pricing. Tests
+// call this to clean up dirty in-memory state from a previous test.
+func ResetPricingToDefaults() {
+	priceMu.Lock()
+	defer priceMu.Unlock()
+	modelPrice = map[string]float64{}
+	modelPriceExpr = map[string]string{}
+	cacheRatio = FallbackCacheRatio
+	audioRatio = FallbackAudioRatio
+}
+
+// ResetAllToDefaults restores every setting to its compiled-in defaults.
+// Tests call this before a fresh DB to prevent dirty state from a previous
+// test (that may have failed before cleanup) from being seeded into the
+// new DB.
+func ResetAllToDefaults() {
+	ResetRatiosToDefaults()
+	ResetPricingToDefaults()
+	ResetGroupGroupRatioToDefaults()
+	ResetAffiliateToDefaults()
 }

@@ -89,6 +89,14 @@ func TokenAuth(next http.Handler) http.Handler {
 				"API key quota is exhausted")
 			return
 		}
+		// IP whitelist: enterprise customers restrict a key to known IPs to
+		// prevent leakage.
+		if !token.AllowsIP(clientIP(r)) {
+			common.RelayError(w, http.StatusForbidden,
+				"authentication_error", "ip_not_allowed",
+				"client IP is not in the token allow-list")
+			return
+		}
 		user, err := model.GetUserByID(token.UserID)
 		if err != nil || user.Status != common.StatusEnabled {
 			common.RelayError(w, http.StatusUnauthorized,
@@ -96,6 +104,13 @@ func TokenAuth(next http.Handler) http.Handler {
 				"API key owner is unavailable")
 			return
 		}
+		// Model whitelist is enforced after the body is parsed (the model
+		// name lives in the request body); the distributor stashes the
+		// token pointer via context so it can run the check once the model
+		// is known. For non-relay (management) paths the token never reaches
+		// here, so we only need to wire the model whitelist into the relay
+		// chain. We store the token's model limits on the context and let
+		// the distributor enforce it.
 		group := token.Group
 		if group == "" {
 			group = user.Group
@@ -103,7 +118,16 @@ func TokenAuth(next http.Handler) http.Handler {
 				group = common.DefaultGroup
 			}
 		}
-		if !setting.ContainsGroupRatio(group) {
+		var autoGroups []string
+		if group == common.AutoGroup {
+			autoGroups = token.AutoGroupList()
+			if len(autoGroups) == 0 {
+				common.RelayError(w, http.StatusForbidden,
+					"invalid_request_error", "auto_group_empty",
+					"token uses the auto group but has no auto_groups configured")
+				return
+			}
+		} else if !setting.ContainsGroupRatio(group) {
 			common.RelayError(w, http.StatusForbidden,
 				"invalid_request_error", "group_not_available",
 				fmt.Sprintf("group %q has no ratio configured", group))
@@ -115,7 +139,10 @@ func TokenAuth(next http.Handler) http.Handler {
 			common.CtxTokenID, token.ID,
 			common.CtxTokenName, token.Name,
 			common.CtxTokenUnlimited, token.UnlimitedQuota,
-			common.CtxUsingGroup, group)
+			common.CtxUsingGroup, group,
+			common.CtxUserGroup, user.Group,
+			common.CtxAutoGroups, autoGroups,
+			common.CtxTokenModelLimits, token.ModelLimits)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

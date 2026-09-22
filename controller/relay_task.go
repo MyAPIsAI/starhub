@@ -61,9 +61,10 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 
 	// 2. EstimateBilling → pre-charge. The deferred refund returns the
 	//    reservation when no channel accepts the submit.
-	pricing := taskPlatformAdaptor(platform).EstimateBilling(req.modelName, req.group, taskReq)
+	billingGroup := req.billingGroup()
+	pricing := taskPlatformAdaptor(platform).EstimateBilling(req.modelName, billingGroup, taskReq)
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited,
-		relay.TaskPricingQuota(req.modelName, req.group, pricing))
+		relay.TaskPricingQuotaWithUserGroup(req.modelName, billingGroup, req.userGroup, pricing))
 	if err != nil {
 		writePreConsumeError(w, "", err)
 		return
@@ -147,7 +148,8 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		TokenName:      flow.req.tokenName,
 		TokenUnlimited: flow.req.tokenUnlimited,
 		ChannelID:      ch.ID,
-		Group:          flow.req.group,
+		Group:          flow.settleGroup(),
+		UserGroup:      flow.req.userGroup,
 		Quota:          flow.preQuota,
 		RequestMeta:    string(requestMeta),
 	}

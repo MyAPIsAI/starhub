@@ -21,6 +21,7 @@ type registerRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Email    string `json:"email"`
+	AffCode  string `json:"aff_code"`
 }
 
 func validUsername(name string) bool {
@@ -89,6 +90,17 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		Status:   common.StatusEnabled,
 		Quota:    common.DefaultRegisterQuota,
 		Group:    common.DefaultGroup,
+		AffCode:  common.GenerateAffCode(),
+	}
+	// Resolve the inviter from the aff code (if provided). The inviter's
+	// register bonus is credited atomically after the user is created.
+	var inviterID int64
+	if code := strings.TrimSpace(req.AffCode); code != "" {
+		inviter, err := model.GetUserByAffCode(code)
+		if err == nil && inviter.Status == common.StatusEnabled {
+			inviterID = inviter.ID
+			user.InviterID = inviterID
+		}
 	}
 	if err := model.CreateUser(user); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -97,6 +109,16 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		}
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// Credit the inviter's register bonus (best-effort: a failure must not
+	// roll back the registration).
+	if inviterID > 0 {
+		if bonus := setting.AffRegisterBonusValue(); bonus > 0 {
+			if err := model.IncreaseUserQuota(inviterID, bonus); err != nil {
+				// Log only; the registration itself succeeded.
+				_ = err
+			}
+		}
 	}
 	common.ApiSuccess(w, publicUser(user))
 }
@@ -268,6 +290,8 @@ func publicUser(u *model.User) map[string]any {
 		"quota":      u.Quota,
 		"used_quota": u.UsedQuota,
 		"group":      u.Group,
+		"aff_code":   u.AffCode,
+		"inviter_id": u.InviterID,
 		"created_at": u.CreatedAt,
 	}
 }

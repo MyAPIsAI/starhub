@@ -15,6 +15,14 @@ const (
 	CtxTokenID            ctxKey = "token_id"
 	CtxTokenName          ctxKey = "token_name"
 	CtxTokenUnlimited     ctxKey = "token_unlimited"
+	// CtxAutoGroups carries the token's auto-group sequence when the using
+	// group is "auto"; the relay flow walks it group by group.
+	CtxAutoGroups ctxKey = "auto_groups"
+	// CtxUserGroup is the user's own group (for group_group_ratio lookup).
+	CtxUserGroup ctxKey = "user_group"
+	// CtxTokenModelLimits carries the token's model whitelist (comma-separated)
+	// so the distributor can enforce it once the model name is parsed.
+	CtxTokenModelLimits ctxKey = "token_model_limits"
 )
 
 func WithValues(ctx context.Context, kv ...any) context.Context {

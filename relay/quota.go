@@ -8,6 +8,7 @@ import (
 	"starhub/model"
 	"starhub/pkg/billingexpr"
 	"starhub/relay/dto"
+	"starhub/setting"
 )
 
 var (
@@ -28,6 +29,13 @@ func ComputeQuota(modelName, group string, promptTokens, completionTokens int64)
 		&Usage{PromptTokens: promptTokens, CompletionTokens: completionTokens})
 }
 
+// ComputeQuotaWithUserGroup is ComputeQuota with the user's own group, so the
+// group x group matrix multiplier can apply.
+func ComputeQuotaWithUserGroup(modelName, group, userGroup string, promptTokens, completionTokens int64) int64 {
+	return ComputeUsageQuota(NewPriceDataWithUserGroup(modelName, group, userGroup),
+		&Usage{PromptTokens: promptTokens, CompletionTokens: completionTokens})
+}
+
 // EstimatePreConsumeQuota is the pre-charge for a request: it prices the
 // tokenizer-estimated prompt plus the completion budget (max_tokens x n
 // choices, or a conservative default). Over-reserving is intentional — the
@@ -39,11 +47,32 @@ func EstimatePreConsumeQuota(modelName, group string, body []byte) int64 {
 	return estimatePreConsume(pd, promptEstimate, completionBudget)
 }
 
+// EstimatePreConsumeQuotaWithUserGroup is EstimatePreConsumeQuota with the
+// user's own group for the group x group matrix multiplier.
+func EstimatePreConsumeQuotaWithUserGroup(modelName, group, userGroup string, body []byte) int64 {
+	pd := NewPriceDataWithUserGroup(modelName, group, userGroup)
+	promptEstimate := dto.EstimateTokens(ExtractPromptText(body)) + estimateReserveTokens
+	completionBudget := CompletionBudgetTokens(body)
+	return estimatePreConsume(pd, promptEstimate, completionBudget)
+}
+
 // EstimateIRPreConsumeQuota is the IR-based pre-charge used by inbound
 // protocols other than OpenAI (the completion budget is the IR max_tokens
 // or the conservative default).
 func EstimateIRPreConsumeQuota(modelName, group string, ir *dto.ChatRequest) int64 {
 	pd := NewPriceData(modelName, group)
+	promptEstimate := dto.EstimateTokens(ir.PromptText()) + estimateReserveTokens
+	completionBudget := ir.MaxTokens
+	if completionBudget <= 0 {
+		completionBudget = common.DefaultCompletionBudgetTokens
+	}
+	return estimatePreConsume(pd, promptEstimate, completionBudget)
+}
+
+// EstimateIRPreConsumeQuotaWithUserGroup is EstimateIRPreConsumeQuota with
+// the user's own group for the group x group matrix multiplier.
+func EstimateIRPreConsumeQuotaWithUserGroup(modelName, group, userGroup string, ir *dto.ChatRequest) int64 {
+	pd := NewPriceDataWithUserGroup(modelName, group, userGroup)
 	promptEstimate := dto.EstimateTokens(ir.PromptText()) + estimateReserveTokens
 	completionBudget := ir.MaxTokens
 	if completionBudget <= 0 {
@@ -97,10 +126,24 @@ func PreConsumeQuota(userID, tokenID int64, tokenUnlimited bool, modelName, grou
 	return reservePreConsumed(userID, tokenID, tokenUnlimited, pre)
 }
 
+// PreConsumeQuotaWithUserGroup is PreConsumeQuota with the user's own group
+// for the group x group matrix multiplier.
+func PreConsumeQuotaWithUserGroup(userID, tokenID int64, tokenUnlimited bool, modelName, group, userGroup string, body []byte) (int64, error) {
+	pre := EstimatePreConsumeQuotaWithUserGroup(modelName, group, userGroup, body)
+	return reservePreConsumed(userID, tokenID, tokenUnlimited, pre)
+}
+
 // PreConsumeIRQuota reserves the IR-based chat estimate (non-OpenAI inbound
 // protocols).
 func PreConsumeIRQuota(userID, tokenID int64, tokenUnlimited bool, modelName, group string, ir *dto.ChatRequest) (int64, error) {
 	pre := EstimateIRPreConsumeQuota(modelName, group, ir)
+	return reservePreConsumed(userID, tokenID, tokenUnlimited, pre)
+}
+
+// PreConsumeIRQuotaWithUserGroup is PreConsumeIRQuota with the user's own
+// group for the group x group matrix multiplier.
+func PreConsumeIRQuotaWithUserGroup(userID, tokenID int64, tokenUnlimited bool, modelName, group, userGroup string, ir *dto.ChatRequest) (int64, error) {
+	pre := EstimateIRPreConsumeQuotaWithUserGroup(modelName, group, userGroup, ir)
 	return reservePreConsumed(userID, tokenID, tokenUnlimited, pre)
 }
 
@@ -143,6 +186,14 @@ func PostConsumeQuota(userID, tokenID int64, tokenName string, tokenUnlimited bo
 		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels)
 }
 
+// PostConsumeQuotaWithUserGroup is PostConsumeQuota with the user's own group
+// for the group x group matrix multiplier.
+func PostConsumeQuotaWithUserGroup(userID, tokenID int64, tokenName string, tokenUnlimited bool,
+	channelID int64, modelName, group, userGroup string, usage *Usage, preQuota int64, usedChannels string) error {
+	return PostConsumeQuotaWithPrice(NewPriceDataWithUserGroup(modelName, group, userGroup), userID, tokenID, tokenName,
+		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels)
+}
+
 // PostConsumeQuotaWithPrice is the settlement entry for relay modes that
 // carry special multipliers (image resolution x count, video seconds x n):
 // the caller resolves its own PriceData and this function only balances
@@ -165,7 +216,38 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		Quota:            actual,
 		UsedChannels:     usedChannels,
 	}
-	return model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
+	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
+		return err
+	}
+	// Affiliate rebate: the inviter gets a percentage of the actual spend.
+	// The rebate is best-effort (a failure is logged, not propagated) so a
+	// rebate glitch never fails the relay settlement.
+	applyAffiliateRebate(userID, actual)
+	return nil
+}
+
+// applyAffiliateRebate credits the inviter's quota with the rebate ratio of
+// the invitee's actual spend. It is a no-op when the user has no inviter or
+// the rebate ratio is 0.
+func applyAffiliateRebate(userID, actual int64) {
+	if actual <= 0 {
+		return
+	}
+	ratio := setting.AffRebateRatioValue()
+	if ratio <= 0 {
+		return
+	}
+	user, err := model.GetUserByID(userID)
+	if err != nil || user.InviterID <= 0 {
+		return
+	}
+	rebate := common.QuotaFromFloat64(float64(actual) * ratio)
+	if rebate <= 0 {
+		return
+	}
+	if err := model.IncreaseUserQuota(user.InviterID, rebate); err != nil {
+		log.Printf("affiliate rebate to user %d failed: %v", user.InviterID, err)
+	}
 }
 
 // PostConsumeQuotaAmount settles an explicit actual amount (unit-based
@@ -183,5 +265,9 @@ func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimi
 		Quota:        actual,
 		UsedChannels: usedChannels,
 	}
-	return model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
+	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
+		return err
+	}
+	applyAffiliateRebate(userID, actual)
+	return nil
 }

@@ -31,8 +31,12 @@ type Task struct {
 	TokenUnlimited bool   `gorm:"not null;default:false" json:"token_unlimited"`
 	ChannelID      int64  `gorm:"not null;default:0" json:"channel_id"`
 	Group          string `gorm:"size:64;not null;default:'default'" json:"group"`
-	Quota          int64  `gorm:"not null;default:0" json:"quota"`
-	RequestMeta    string `gorm:"type:text;not null;default:''" json:"request_meta"`
+	// UserGroup snapshots the user's own group at submit so the terminal
+	// settlement (which may happen days later) still applies the group x
+	// group matrix multiplier correctly.
+	UserGroup   string `gorm:"size:64;not null;default:''" json:"user_group"`
+	Quota       int64  `gorm:"not null;default:0" json:"quota"`
+	RequestMeta string `gorm:"type:text;not null;default:''" json:"request_meta"`
 	ResultMeta     string `gorm:"type:text;not null;default:''" json:"result_meta"`
 	FailReason     string `gorm:"size:512;not null;default:''" json:"fail_reason"`
 	SubmitTime     int64  `gorm:"autoCreateTime" json:"submit_time"`

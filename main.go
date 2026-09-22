@@ -97,8 +97,9 @@ func startChannelTestTask() {
 
 // NewRouter wires the management API and the relay endpoints.
 // Relay chain contract: TokenAuth (writes CtxUsingGroup) ->
-// UserRateLimit -> Distribute (parses model/stream and caches the body) ->
-// Relay (selects a channel and retries with failover).
+// UserRateLimit -> TokenRateLimit -> Distribute (parses model/stream and
+// caches the body) -> ModelRateLimit -> Relay (selects a channel and
+// retries with failover).
 func NewRouter() *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -109,18 +110,18 @@ func NewRouter() *http.ServeMux {
 	mux.Handle("GET /api/user/usage", middleware.UserAuth(http.HandlerFunc(controller.UserUsage)))
 	mux.Handle("GET /api/user", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
 	mux.Handle("GET /api/user/", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
-	mux.Handle("PUT /api/user", middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser)))
-	mux.Handle("PUT /api/user/", middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser)))
+	mux.Handle("PUT /api/user", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser))))
+	mux.Handle("PUT /api/user/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser))))
 
-	mux.Handle("POST /api/channel", middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel)))
-	mux.Handle("POST /api/channel/", middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel)))
-	mux.Handle("POST /api/channel/test/{id}", middleware.AdminAuth(http.HandlerFunc(controller.TestChannel)))
+	mux.Handle("POST /api/channel", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))
+	mux.Handle("POST /api/channel/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))
+	mux.Handle("POST /api/channel/test/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.TestChannel))))
 	mux.Handle("GET /api/channel", middleware.AdminAuth(http.HandlerFunc(controller.ListChannels)))
 	mux.Handle("GET /api/channel/", middleware.AdminAuth(http.HandlerFunc(controller.ListChannels)))
 	mux.Handle("GET /api/channel/{id}", middleware.AdminAuth(http.HandlerFunc(controller.GetChannel)))
-	mux.Handle("PUT /api/channel", middleware.AdminAuth(http.HandlerFunc(controller.UpdateChannel)))
-	mux.Handle("PUT /api/channel/", middleware.AdminAuth(http.HandlerFunc(controller.UpdateChannel)))
-	mux.Handle("DELETE /api/channel/{id}", middleware.AdminAuth(http.HandlerFunc(controller.DeleteChannel)))
+	mux.Handle("PUT /api/channel", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateChannel))))
+	mux.Handle("PUT /api/channel/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateChannel))))
+	mux.Handle("DELETE /api/channel/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteChannel))))
 
 	mux.Handle("POST /api/token", middleware.UserAuth(http.HandlerFunc(controller.CreateToken)))
 	mux.Handle("POST /api/token/", middleware.UserAuth(http.HandlerFunc(controller.CreateToken)))
@@ -132,18 +133,35 @@ func NewRouter() *http.ServeMux {
 
 	mux.Handle("GET /api/option", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
-	mux.Handle("PUT /api/option", middleware.AdminAuth(http.HandlerFunc(controller.UpdateOption)))
-	mux.Handle("PUT /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.UpdateOption)))
+	mux.Handle("PUT /api/option", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateOption))))
+	mux.Handle("PUT /api/option/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateOption))))
 
 	mux.Handle("GET /api/log", middleware.UserAuth(http.HandlerFunc(controller.ListLogs)))
 	mux.Handle("GET /api/log/", middleware.UserAuth(http.HandlerFunc(controller.ListLogs)))
 
+	mux.Handle("GET /api/audit", middleware.AdminAuth(http.HandlerFunc(controller.ListAuditLogs)))
+	mux.Handle("GET /api/audit/", middleware.AdminAuth(http.HandlerFunc(controller.ListAuditLogs)))
+
+	mux.Handle("POST /api/redemption", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateRedemption))))
+	mux.Handle("POST /api/redemption/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateRedemption))))
+	mux.Handle("GET /api/redemption", middleware.AdminAuth(http.HandlerFunc(controller.ListRedemptions)))
+	mux.Handle("GET /api/redemption/", middleware.AdminAuth(http.HandlerFunc(controller.ListRedemptions)))
+	mux.Handle("DELETE /api/redemption/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteRedemption))))
+
+	// User self-service: redeem a prepaid code.
+	mux.Handle("POST /api/user/redeem", middleware.UserAuth(http.HandlerFunc(controller.RedeemCode)))
+
 	// Relay endpoints (P3 multi-protocol family). All of them share the
-	// TokenAuth -> UserRateLimit -> Distribute -> Relay chain; the chat
-	// endpoints differ only in the inbound protocol they parse.
+	// TokenAuth -> UserRateLimit -> TokenRateLimit -> Distribute ->
+	// ModelRateLimit -> Relay chain; the chat endpoints differ only in
+	// the inbound protocol they parse.
 	relayChain := func(inbound dto.InboundFormat, handler http.HandlerFunc) http.Handler {
-		return middleware.TokenAuth(middleware.UserRateLimit(
-			middleware.Distribute(inbound)(http.HandlerFunc(handler))))
+		return middleware.TokenAuth(
+			middleware.UserRateLimit(
+				middleware.TokenRateLimit(
+					middleware.Distribute(inbound)(
+						middleware.ModelRateLimitWithOverrides(
+							http.HandlerFunc(handler))))))
 	}
 	mux.Handle("POST /v1/chat/completions", relayChain(dto.InboundOpenAI, controller.RelayChat))
 	mux.Handle("POST /v1/messages", relayChain(dto.InboundClaude, controller.RelayClaudeChat))
@@ -155,8 +173,12 @@ func NewRouter() *http.ServeMux {
 	// Image generations tolerates a missing model: the distributor falls
 	// back to the legacy default "dall-e" (P3.1); edits reads the model
 	// from the multipart form.
-	mux.Handle("POST /v1/images/generations", middleware.TokenAuth(middleware.UserRateLimit(
-		middleware.DistributeWithDefaultModel(dto.InboundOpenAI, "dall-e")(http.HandlerFunc(controller.RelayImageGenerations)))))
+	mux.Handle("POST /v1/images/generations", middleware.TokenAuth(
+		middleware.UserRateLimit(
+			middleware.TokenRateLimit(
+				middleware.DistributeWithDefaultModel(dto.InboundOpenAI, "dall-e")(
+					middleware.ModelRateLimitWithOverrides(
+						http.HandlerFunc(controller.RelayImageGenerations)))))))
 	mux.Handle("POST /v1/images/edits", relayChain(dto.InboundOpenAI, controller.RelayImageEdits))
 	mux.Handle("POST /v1/video/generations", relayChain(dto.InboundOpenAI, controller.RelayTaskSubmitVideo))
 	mux.Handle("GET /v1/video/generations/{id}", middleware.TokenAuth(http.HandlerFunc(controller.RelayTaskGetVideo)))
@@ -164,7 +186,8 @@ func NewRouter() *http.ServeMux {
 	// Realtime websocket: the model rides the query string, no body to
 	// distribute.
 	mux.Handle("GET /v1/realtime", middleware.TokenAuth(
-		middleware.UserRateLimit(http.HandlerFunc(relay.RelayRealtime))))
+		middleware.UserRateLimit(
+			middleware.TokenRateLimit(http.HandlerFunc(relay.RelayRealtime)))))
 
 	mux.Handle("GET /v1/models", middleware.TokenAuth(http.HandlerFunc(controller.ListModels)))
 

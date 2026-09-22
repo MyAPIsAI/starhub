@@ -121,7 +121,7 @@ func settleTask(ch *model.Channel, task *model.Task, adaptor channel.TaskAdaptor
 		req = dto.TaskRequest{}
 	}
 	pricing := adaptor.AdjustBillingOnComplete(task.Model, task.Group, &req, result)
-	actual := relay.TaskPricingQuota(task.Model, task.Group, pricing)
+	actual := relay.TaskPricingQuotaWithUserGroup(task.Model, task.Group, task.UserGroup, pricing)
 	if err := relay.PostConsumeQuotaAmount(task.UserID, task.TokenID, task.TokenName,
 		task.TokenUnlimited, ch.ID, task.Model, actual, task.Quota,
 		strconv.FormatInt(ch.ID, 10)); err != nil {

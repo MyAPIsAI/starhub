@@ -47,4 +47,8 @@ const (
 	DefaultRegisterQuota = 0
 )
 
+// AutoGroup is the reserved group name that triggers cross-group retry: the
+// relay walks the token's AutoGroups sequence instead of a single group.
+const AutoGroup = "auto"
+
 const Version = "0.1.0"

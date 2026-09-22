@@ -30,10 +30,17 @@ type PriceData struct {
 	CacheRatio float64
 	AudioRatio float64
 	OtherRatio float64
+	// UserGroup is the user's own group (for the group x group matrix).
+	// Empty means no extra matrix multiplier.
+	UserGroup string
+	// UsingGroup is the group the request is billed through (the token /
+	// channel group). Empty means no extra matrix multiplier.
+	UsingGroup string
 }
 
 // NewPriceData resolves all billing inputs for a model / group from the
-// current settings.
+// current settings. The user group (for the group x group matrix) defaults
+// to empty; use NewPriceDataWithUserGroup when the matrix should apply.
 func NewPriceData(modelName, group string) *PriceData {
 	groupRatio, ok := setting.GroupRatioValue(group)
 	if !ok || groupRatio <= 0 {
@@ -47,6 +54,7 @@ func NewPriceData(modelName, group string) *PriceData {
 		CacheRatio:      setting.CacheRatioValue(),
 		AudioRatio:      setting.AudioRatioValue(),
 		OtherRatio:      1,
+		UsingGroup:      group,
 	}
 	if price, ok := setting.ModelPriceValue(modelName); ok && price > 0 {
 		pd.ModelPriceUSD = price
@@ -54,6 +62,16 @@ func NewPriceData(modelName, group string) *PriceData {
 	if expr, ok := setting.ModelPriceExpr(modelName); ok && expr != "" {
 		pd.PriceExpr = expr
 	}
+	return pd
+}
+
+// NewPriceDataWithUserGroup is NewPriceData plus the user's own group, so the
+// group x group matrix multiplier can apply. The matrix entry for
+// (userGroup, usingGroup) multiplies the effective ratio; a missing entry is
+// 1.0 (no extra multiplier).
+func NewPriceDataWithUserGroup(modelName, group, userGroup string) *PriceData {
+	pd := NewPriceData(modelName, group)
+	pd.UserGroup = userGroup
 	return pd
 }
 
@@ -66,8 +84,14 @@ func (p *PriceData) AddOtherRatio(ratio float64) {
 }
 
 // EffectiveRatio is the full multiplier applied on top of the base price.
+// The group x group matrix multiplier applies when both UserGroup and
+// UsingGroup are set; a missing matrix entry is 1.0 (no extra multiplier).
 func (p *PriceData) EffectiveRatio() float64 {
-	return common.ClampRatio(p.GroupRatio*p.OtherRatio, "effective")
+	r := p.GroupRatio * p.OtherRatio
+	if p.UserGroup != "" && p.UsingGroup != "" {
+		r *= setting.GroupGroupRatioValue(p.UserGroup, p.UsingGroup)
+	}
+	return common.ClampRatio(r, "effective")
 }
 
 // IsExpression reports whether the model is billed by pricing expression.
