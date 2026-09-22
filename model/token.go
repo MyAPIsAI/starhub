@@ -109,14 +109,6 @@ func DecreaseTokenQuota(id int64, amount int64) (bool, error) {
 	return res.RowsAffected > 0, res.Error
 }
 
-func DecreaseTokenQuotaUnconditional(id int64, amount int64) error {
-	if amount <= 0 {
-		return nil
-	}
-	return DB.Model(&Token{}).Where("id = ?", id).
-		Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota - ?", amount)}).Error
-}
-
 func IncreaseTokenQuota(id int64, amount int64) error {
 	if amount <= 0 {
 		return nil

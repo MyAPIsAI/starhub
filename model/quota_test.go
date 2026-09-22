@@ -143,7 +143,9 @@ func TestReserveReleaseSettleRoundTrip(t *testing.T) {
 		t.Fatalf("settle log missing: total=%d %+v", total, logs)
 	}
 
-	// a settle that overdraws (actual > pre) is unconditional (post-pay)
+	// a settle that overdraws (actual > pre) deducts the delta from the
+	// remaining balance — the balance is sufficient here so the full delta
+	// is taken
 	if err := SettleQuota(user.ID, token.ID, false, 500, 1300, &Log{
 		UserID: user.ID, TokenID: token.ID, ChannelID: 0,
 		Model: "m", Quota: 1300}); err != nil {
@@ -163,6 +165,43 @@ func TestReserveReleaseSettleRoundTrip(t *testing.T) {
 	gotToken, _ = GetTokenByID(token.ID)
 	if gotUser.Quota != 600 || gotToken.RemainQuota != 600 {
 		t.Fatalf("after release: user %d token %d, want 600/600", gotUser.Quota, gotToken.RemainQuota)
+	}
+}
+
+// TestSettleQuotaFloorAtZero verifies that a settlement whose delta exceeds
+// the available balance clamps at zero instead of driving the account
+// negative. With max_tokens-aware pre-charging, a positive delta should be
+// rare and small; when it does exceed the balance, the gateway eats the
+// overage rather than allowing debt (which would defeat the overdraft
+// protection that the pre-charge provides).
+func TestSettleQuotaFloorAtZero(t *testing.T) {
+	newTestDB(t)
+
+	user, token := newBillingUser(t, 100)
+
+	// reserve 80: user=20, token=20
+	if err := ReserveQuota(user.ID, token.ID, false, 80); err != nil {
+		t.Fatalf("ReserveQuota failed: %v", err)
+	}
+
+	// settle actual=130, pre=80, delta=+50 — but balance is only 20.
+	// The deduction must clamp at zero, not drive the balance to -30.
+	entry := &Log{UserID: user.ID, TokenID: token.ID, ChannelID: 0,
+		Model: "m", Quota: 130}
+	if err := SettleQuota(user.ID, token.ID, false, 50, 130, entry); err != nil {
+		t.Fatalf("SettleQuota failed: %v", err)
+	}
+	gotUser, _ := GetUserByID(user.ID)
+	gotToken, _ := GetTokenByID(token.ID)
+	if gotUser.Quota != 0 {
+		t.Fatalf("user quota = %d, want 0 (clamped, not negative)", gotUser.Quota)
+	}
+	if gotToken.RemainQuota != 0 {
+		t.Fatalf("token remain_quota = %d, want 0 (clamped, not negative)", gotToken.RemainQuota)
+	}
+	// used_quota still advances by the full actual cost
+	if gotUser.UsedQuota != 130 || gotToken.UsedQuota != 130 {
+		t.Fatalf("used quota: user %d token %d, want 130/130", gotUser.UsedQuota, gotToken.UsedQuota)
 	}
 }
 

@@ -71,20 +71,28 @@ func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) erro
 
 // SettleQuota balances a reservation against the actual cost in ONE
 // transaction: the difference (actual - pre) is taken from or returned to
-// the token and user (unconditionally — post-pay may go slightly negative),
-// the used-quota counters advance by the actual cost, and the consumption
-// log row is written. All-or-nothing, so the books always balance.
+// the token and user, the used-quota counters advance by the actual cost,
+// and the consumption log row is written. All-or-nothing, so the books
+// always balance.
+//
+// When the actual cost exceeds the pre-charge (delta > 0), the extra is
+// deducted with a floor at zero — the balance never goes negative. With
+// max_tokens-aware pre-charging (see EstimatePreConsumeQuota), delta is
+// usually a refund; a positive delta only happens when the upstream returns
+// more tokens than the budget, and clamping that small overage at zero is
+// preferable to driving the account into debt (which would defeat the
+// overdraft protection that the pre-charge provides).
 func SettleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64, entry *Log) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if delta > 0 {
 			if !tokenUnlimited {
 				if err := tx.Model(&Token{}).Where("id = ?", tokenID).
-					Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota - ?", delta)}).Error; err != nil {
+					Updates(map[string]any{"remain_quota": gorm.Expr("MAX(remain_quota - ?, 0)", delta)}).Error; err != nil {
 					return err
 				}
 			}
 			if err := tx.Model(&User{}).Where("id = ?", userID).
-				Updates(map[string]any{"quota": gorm.Expr("quota - ?", delta)}).Error; err != nil {
+				Updates(map[string]any{"quota": gorm.Expr("MAX(quota - ?, 0)", delta)}).Error; err != nil {
 				return err
 			}
 		} else if delta < 0 {
