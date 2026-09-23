@@ -42,12 +42,12 @@ func RelayImageGenerations(w http.ResponseWriter, r *http.Request) {
 // billing only.
 func RelayImageEdits(w http.ResponseWriter, r *http.Request) {
 	req := relayRequestFromContext(r)
-	form, err := common.ParseMultipartForm(req.contentType, req.body)
+	form, err := common.ParseMultipartFormMeta(req.contentType, req.body)
 	if err != nil {
 		writeModeError(w, http.StatusBadRequest, "invalid_request_error", "invalid_request_body", err.Error())
 		return
 	}
-	if form.File("image") == nil {
+	if !form.HasFile("image") {
 		writeModeError(w, http.StatusBadRequest, "invalid_request_error", "missing_image",
 			"the \"image\" multipart field is required")
 		return
@@ -173,17 +173,18 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 }
 
 // imageJSONAttempt relays a non-stream image response verbatim and settles
-// on the delivered count.
+// on the delivered count. The body buffer is the only full copy retained;
+// billing counts entries without materializing payload strings (P7.1).
 func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, bill *relay.ImageBill) attemptResult {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxModeResponseBytes))
+	body := readBoundedBody(resp, maxModeResponseBytes)
 	resp.Body.Close()
 	writePassthroughBody(flow.w, resp, body)
 
 	count := 0
 	var usage *dto.ImageUsage
-	if parsed, err := dto.ParseImageResponse(body); err == nil {
-		count = parsed.Count()
-		usage = parsed.Usage
+	if urls, b64s, u, err := dto.WalkImageResponse(body, nil); err == nil {
+		count = max(urls, b64s)
+		usage = u
 	}
 	bill.Group = flow.settleGroup()
 	actual := bill.SettleQuota(count, usage)
@@ -199,6 +200,10 @@ func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, b
 //     stream is drained to EOF even after writes fail;
 //  2. a completed image arriving after the disconnect must raise it.
 //
+// Frames are forwarded from the reader's reused byte buffer, so the
+// image payload exists exactly once in memory while in flight (P7.1:
+// no per-event string or interface conversions).
+//
 // Upstreams that answer a stream request with plain JSON are wrapped into
 // the SSE format (the gateway's protocol promise outranks the upstream's).
 func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, bill *relay.ImageBill) attemptResult {
@@ -212,19 +217,25 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 	flow.w.WriteHeader(http.StatusOK)
 	flusher, _ := flow.w.(http.Flusher)
 
-	reader := channel.NewSSEReader(resp.Body)
+	reader := channel.NewSSEByteReader(resp.Body)
 	defer resp.Body.Close()
 
 	completed := 0
 	var streamErr string
 	var streamUsage *dto.ImageUsage
 	clientGone := false
-	writeFrame := func(format string, args ...any) {
+	writeRaw := func(chunks ...[]byte) {
 		if clientGone {
 			return
 		}
-		if _, werr := fmt.Fprintf(flow.w, format, args...); werr != nil {
-			clientGone = true
+		for _, c := range chunks {
+			if len(c) == 0 {
+				continue
+			}
+			if _, werr := flow.w.Write(c); werr != nil {
+				clientGone = true
+				return
+			}
 		}
 	}
 	for {
@@ -235,23 +246,23 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 			}
 			break
 		}
-		if line.Event != "" {
-			writeFrame("event: %s\n", line.Event)
+		if len(line.Event) > 0 {
+			writeRaw(sseEventPrefix, line.Event, sseNewline)
 		}
-		if line.Data != "" {
+		if len(line.Data) > 0 {
 			if flow.attempt != nil {
 				flow.attempt.RecordFirstToken()
 			}
-			writeFrame("data: %s\n", line.Data)
+			writeRaw(sseDataPrefix, line.Data, sseNewline)
 		}
-		writeFrame("\n")
+		writeRaw(sseNewline)
 		if flusher != nil {
 			flusher.Flush()
 		}
-		if line.Data == "" {
+		if len(line.Data) == 0 {
 			continue
 		}
-		ev, perr := dto.ParseImageStreamEvent([]byte(line.Event), []byte(line.Data))
+		ev, perr := dto.ParseImageStreamEventMeta(line.Event, line.Data)
 		if perr != nil {
 			continue
 		}
@@ -280,18 +291,27 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
+// SSE write segments for imageStreamAttempt (byte-level framing identical
+// to the previous fmt.Fprintf output).
+var (
+	sseEventPrefix = []byte("event: ")
+	sseDataPrefix  = []byte("data: ")
+	sseNewline     = []byte("\n")
+)
+
 // imageJSONasSSEAttempt wraps a JSON image response into SSE completed
 // events (one per image) when the client asked for a stream but the
-// upstream does not stream.
+// upstream does not stream. Frames are written straight from the raw JSON
+// values, so beyond the body itself at most one entry's payload is alive
+// at a time (P7.1).
 func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, bill *relay.ImageBill) attemptResult {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxModeResponseBytes))
+	body := readBoundedBody(resp, maxModeResponseBytes)
 	resp.Body.Close()
 
-	var parsed *dto.ImageResponse
-	if p, err := dto.ParseImageResponse(body); err == nil {
-		parsed = p
-	}
-	if parsed == nil || parsed.Count() == 0 {
+	// Count first: an unparseable or payload-less response passes
+	// through unchanged.
+	urls, b64s, usage, err := dto.WalkImageResponse(body, nil)
+	if err != nil || max(urls, b64s) == 0 {
 		// Unparseable / empty: forward the raw JSON unchanged (not SSE) —
 		// better a working answer in the wrong shape than data loss.
 		writePassthroughBody(flow.w, resp, body)
@@ -300,25 +320,25 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 		settleImageAttempt(flow, ch, actual)
 		return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 	}
+	count := max(urls, b64s)
 
 	flow.w.Header().Set("Content-Type", "text/event-stream")
 	flow.w.Header().Set("Cache-Control", "no-cache")
 	flow.w.WriteHeader(http.StatusOK)
 	flusher, _ := flow.w.(http.Flusher)
-	for _, img := range parsed.Data {
-		payload, _ := json.Marshal(map[string]any{
-			"type":         "image_generation.completed",
-			"output_index": 0,
-			"b64_json":     img.B64JSON,
-			"url":          img.URL,
-		})
-		fmt.Fprintf(flow.w, "event: image_generation.completed\ndata: %s\n\n", payload)
+	_, _, _, _ = dto.WalkImageResponse(body, func(e dto.ImageEntryRaw) error {
+		_, _ = flow.w.Write(imageCompletedHead)
+		_, _ = flow.w.Write(dto.RawStringLiteral(e.B64))
+		_, _ = flow.w.Write(imageCompletedMid)
+		_, _ = flow.w.Write(dto.RawStringLiteral(e.URL))
+		_, _ = flow.w.Write(imageCompletedTail)
 		if flusher != nil {
 			flusher.Flush()
 		}
-	}
-	if parsed.Usage != nil {
-		payload, _ := json.Marshal(map[string]any{"usage": parsed.Usage})
+		return nil
+	})
+	if usage != nil {
+		payload, _ := json.Marshal(map[string]any{"usage": usage})
 		fmt.Fprintf(flow.w, "data: %s\n\n", payload)
 		if flusher != nil {
 			flusher.Flush()
@@ -329,10 +349,17 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 		flusher.Flush()
 	}
 	bill.Group = flow.settleGroup()
-	actual := bill.SettleQuota(parsed.Count(), parsed.Usage)
+	actual := bill.SettleQuota(count, usage)
 	settleImageAttempt(flow, ch, actual)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
+
+// Frame segments of the synthesized image_generation.completed events.
+var (
+	imageCompletedHead = []byte("event: image_generation.completed\ndata: {\"type\":\"image_generation.completed\",\"output_index\":0,\"b64_json\":")
+	imageCompletedMid  = []byte(",\"url\":")
+	imageCompletedTail = []byte("}\n\n")
+)
 
 // settleImageAttempt balances the image bill (unit-based: the amount was
 // computed by ImageBill with the count/usage guards).
