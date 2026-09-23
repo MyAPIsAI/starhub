@@ -10,3 +10,6 @@ web/playwright-report/
 starhub
 starhub.exe
 release/
+doc/
+web/
+scripts/
