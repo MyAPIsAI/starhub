@@ -66,7 +66,9 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			var modelName string
 			var stream bool
 			if isMultipart(contentType) {
-				form, err := common.ParseMultipartForm(contentType, body)
+				// Metadata-only parse: the cached raw body stays the only
+				// in-memory copy of uploaded files (P7.1).
+				form, err := common.ParseMultipartFormMeta(contentType, body)
 				if err != nil {
 					fail(http.StatusBadRequest, "invalid_multipart", err.Error())
 					return

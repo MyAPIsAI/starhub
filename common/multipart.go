@@ -114,6 +114,109 @@ func ParseMultipartForm(contentType string, body []byte) (*MultipartForm, error)
 	return form, nil
 }
 
+// MultipartFileMeta describes one uploaded file part without its bytes.
+type MultipartFileMeta struct {
+	FieldName   string
+	FileName    string
+	ContentType string
+	Bytes       int64
+}
+
+// MultipartFormMeta is a metadata-only parse of a multipart body: file
+// parts are counted, never buffered, so the distributor's cached raw
+// body stays the only in-memory copy of an uploaded payload (P7.1
+// single-copy discipline).
+type MultipartFormMeta struct {
+	Values         map[string]string
+	Files          []MultipartFileMeta
+	TotalFileBytes int64
+}
+
+// Value returns a form field ("" when absent).
+func (f *MultipartFormMeta) Value(name string) string {
+	if f == nil {
+		return ""
+	}
+	return f.Values[name]
+}
+
+// HasFile reports whether the named field carries at least one file.
+func (f *MultipartFormMeta) HasFile(name string) bool {
+	if f == nil {
+		return false
+	}
+	for i := range f.Files {
+		if f.Files[i].FieldName == name {
+			return true
+		}
+	}
+	return false
+}
+
+// FileBytes returns the total uploaded bytes (the STT billing heuristic
+// input).
+func (f *MultipartFormMeta) FileBytes() int64 {
+	if f == nil {
+		return 0
+	}
+	return f.TotalFileBytes
+}
+
+// ParseMultipartFormMeta parses field values and file metadata from a
+// cached multipart body. File contents are streamed through io.Discard
+// with a byte counter: no file payload is ever materialized.
+func ParseMultipartFormMeta(contentType string, body []byte) (*MultipartFormMeta, error) {
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return nil, errors.New("invalid multipart Content-Type: " + err.Error())
+	}
+	if !strings.HasPrefix(mediaType, "multipart/") {
+		return nil, errors.New("Content-Type is not multipart")
+	}
+	reader := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+	form := &MultipartFormMeta{Values: map[string]string{}}
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, errors.New("malformed multipart body: " + err.Error())
+		}
+		fieldName := part.FormName()
+		if fieldName == "" {
+			continue
+		}
+		if part.FileName() == "" {
+			value, err := io.ReadAll(io.LimitReader(part, maxMultipartFieldBytes))
+			part.Close()
+			if err != nil {
+				return nil, errors.New("malformed multipart body: " + err.Error())
+			}
+			if _, exists := form.Values[fieldName]; !exists {
+				form.Values[fieldName] = strings.TrimSpace(string(value))
+			}
+			continue
+		}
+		// File part: count the bytes, never buffer them.
+		fileName := part.FileName()
+		fileContentType := part.Header.Get("Content-Type")
+		n, err := io.Copy(io.Discard, part)
+		part.Close()
+		if err != nil {
+			return nil, errors.New("malformed multipart body: " + err.Error())
+		}
+		form.Files = append(form.Files, MultipartFileMeta{
+			FieldName:   fieldName,
+			FileName:    fileName,
+			ContentType: fileContentType,
+			Bytes:       n,
+		})
+		form.TotalFileBytes += n
+	}
+	return form, nil
+}
+
 // BuildMultipartForm re-encodes a parsed form into a sendable body (used
 // when an adaptor must reassemble a multipart request after edits). The
 // returned Content-Type carries the generated boundary.

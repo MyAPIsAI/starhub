@@ -1,0 +1,14 @@
+.git
+.github
+.p6-work
+release
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+starhub
+starhub.exe

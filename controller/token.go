@@ -28,7 +28,11 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 	unlimited := req.UnlimitedQuota != nil && *req.UnlimitedQuota
 	remainQuota := int64(0)
 	if !unlimited {
-		if req.RemainQuota != nil && *req.RemainQuota > 0 {
+		if req.RemainQuota != nil {
+			if *req.RemainQuota < 0 {
+				common.ApiError(w, http.StatusBadRequest, "remain_quota must be >= 0")
+				return
+			}
 			remainQuota = *req.RemainQuota
 		} else {
 			remainQuota = common.DefaultTokenQuota
@@ -112,8 +116,16 @@ func maskedToken(t *model.Token) map[string]any {
 }
 
 type tokenUpdateRequest struct {
-	ID int64 `json:"id"`
-	tokenPayload
+	ID             int64   `json:"id"`
+	Name           *string `json:"name"`
+	RemainQuota    *int64  `json:"remain_quota"`
+	ExpectedQuota  *int64  `json:"expected_quota"`
+	UnlimitedQuota *bool   `json:"unlimited_quota"`
+	ExpiredTime    *int64  `json:"expired_time"`
+	Group          *string `json:"group"`
+	ModelLimits    *string `json:"model_limits"`
+	AllowIps       *string `json:"allow_ips"`
+	AutoGroups     *string `json:"auto_groups"`
 }
 
 func UpdateToken(w http.ResponseWriter, r *http.Request) {
@@ -135,8 +147,8 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fields := map[string]any{}
-	if req.Name != "" {
-		fields["name"] = strings.TrimSpace(req.Name)
+	if req.Name != nil {
+		fields["name"] = strings.TrimSpace(*req.Name)
 	}
 	if req.RemainQuota != nil {
 		if *req.RemainQuota < 0 {
@@ -162,22 +174,22 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		}
 		fields["expired_time"] = expired
 	}
-	if req.Group != "" {
-		group := strings.TrimSpace(req.Group)
-		if group != common.AutoGroup && !setting.ContainsGroupRatio(group) {
+	if req.Group != nil {
+		group := strings.TrimSpace(*req.Group)
+		if group != "" && group != common.AutoGroup && !setting.ContainsGroupRatio(group) {
 			common.ApiError(w, http.StatusBadRequest, "group has no ratio configured")
 			return
 		}
 		fields["group"] = group
 	}
-	if req.ModelLimits != "" {
-		fields["model_limits"] = strings.TrimSpace(req.ModelLimits)
+	if req.ModelLimits != nil {
+		fields["model_limits"] = strings.TrimSpace(*req.ModelLimits)
 	}
-	if req.AllowIps != "" {
-		fields["allow_ips"] = strings.TrimSpace(req.AllowIps)
+	if req.AllowIps != nil {
+		fields["allow_ips"] = strings.TrimSpace(*req.AllowIps)
 	}
-	if req.AutoGroups != "" {
-		autoGroups := strings.TrimSpace(req.AutoGroups)
+	if req.AutoGroups != nil {
+		autoGroups := strings.TrimSpace(*req.AutoGroups)
 		for _, g := range model.SplitList(autoGroups) {
 			if !setting.ContainsGroupRatio(g) {
 				common.ApiError(w, http.StatusBadRequest, "auto_groups entry "+g+" has no ratio configured")
@@ -186,11 +198,30 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		}
 		fields["auto_groups"] = autoGroups
 	}
+	group, autoGroups := token.Group, token.AutoGroups
+	if value, ok := fields["group"]; ok {
+		group = value.(string)
+	}
+	if value, ok := fields["auto_groups"]; ok {
+		autoGroups = value.(string)
+	}
+	if group == common.AutoGroup && len(model.SplitList(autoGroups)) == 0 {
+		common.ApiError(w, http.StatusBadRequest, "auto group requires auto_groups to be set")
+		return
+	}
+	if _, changed := fields["remain_quota"]; changed && req.ExpectedQuota == nil {
+		common.ApiError(w, http.StatusBadRequest, "expected_quota is required when setting a balance")
+		return
+	}
 	if len(fields) == 0 {
 		common.ApiError(w, http.StatusBadRequest, "nothing to update")
 		return
 	}
-	if err := model.UpdateTokenFields(req.ID, fields); err != nil {
+	if err := model.UpdateTokenFieldsWithQuota(req.ID, fields, req.ExpectedQuota); err != nil {
+		if err == model.ErrQuotaConflict {
+			common.ApiError(w, http.StatusConflict, "balance changed; reload and confirm again")
+			return
+		}
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

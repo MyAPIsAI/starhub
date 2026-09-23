@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -251,6 +252,250 @@ func ParseImageResponse(body []byte) (*ImageResponse, error) {
 	return &resp, nil
 }
 
+// ImageEntryRaw carries the raw (still JSON-encoded, quotes included)
+// url and b64_json values of one data entry.
+//
+// The slices alias the walk's single transient copy of the data array:
+// they stay valid for the duration of the WalkImageResponse call (and
+// the emit callback inside it) and must not be retained (P7.1: image
+// bytes are counted and forwarded, never duplicated).
+type ImageEntryRaw struct {
+	URL json.RawMessage `json:"url"`
+	B64 json.RawMessage `json:"b64_json"`
+}
+
+// rawStringClass classifies a raw JSON value the way a string-field
+// unmarshal would: absent and null are "empty", "" is empty, any other
+// string is non-empty, and a non-string value is a type error (the
+// legacy whole-response parse failed on those).
+func rawStringClass(raw json.RawMessage) (nonEmpty, typeOK bool) {
+	t := bytes.TrimSpace(raw)
+	if len(t) == 0 || string(t) == "null" {
+		return false, true
+	}
+	if len(t) >= 2 && t[0] == '"' && t[len(t)-1] == '"' {
+		return len(t) > 2, true
+	}
+	return false, false
+}
+
+// RawStringLiteral returns the raw value as a JSON string literal:
+// absent / null / empty fall back to "" (matching what the legacy
+// re-marshal emitted for a missing payload), anything else passes
+// through verbatim with its quotes.
+func RawStringLiteral(raw json.RawMessage) []byte {
+	t := bytes.TrimSpace(raw)
+	if len(t) == 0 || string(t) == "null" {
+		return []byte(`""`)
+	}
+	return t
+}
+
+// WalkImageResponse streams the data entries of an upstream image
+// response without materializing the payload strings. Counting
+// semantics mirror ImageResponse.Count exactly: an entry counts once
+// per non-empty url / b64_json value and the response count is
+// max(url-entries, b64-entries); payload-less entries bill nothing.
+//
+// Memory layout (P7.1): the body plus ONE transient copy of the data
+// array are the only payload-scale buffers alive during the walk —
+// entry url/b64 values are subslices of that copy, so emit receives
+// them without further duplication.
+//
+// Accepted divergence from the legacy whole-struct parse: entry members
+// other than url/b64_json (e.g. a malformed revised_prompt) are not
+// type-checked; such a response settles on the delivered payload count
+// instead of 0 — the revenue-safe direction.
+func WalkImageResponse(body []byte, emit func(entry ImageEntryRaw) error) (urls, b64s int, usage *ImageUsage, err error) {
+	var head struct {
+		Created int64           `json:"created"`
+		Data    json.RawMessage `json:"data"`
+		Usage   *ImageUsage     `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &head); err != nil {
+		return 0, 0, nil, err
+	}
+	err = walkImageEntries(head.Data, func(entry []byte) error {
+		url, b64, err := extractImageEntryFields(entry)
+		if err != nil {
+			return err
+		}
+		urlNonEmpty, ok := rawStringClass(url)
+		if !ok {
+			return errors.New("\"url\" is not a string")
+		}
+		b64NonEmpty, ok := rawStringClass(b64)
+		if !ok {
+			return errors.New("\"b64_json\" is not a string")
+		}
+		if urlNonEmpty {
+			urls++
+		}
+		if b64NonEmpty {
+			b64s++
+		}
+		if emit != nil {
+			return emit(ImageEntryRaw{URL: url, B64: b64})
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	return urls, b64s, head.Usage, nil
+}
+
+// walkImageEntries iterates the entries of the data array. The array is
+// a validated JSON token (captured by the top-level Unmarshal), so the
+// navigation below is structural only. "data": null means no entries
+// (legacy parity: a null array unmarshals to an empty slice).
+func walkImageEntries(data []byte, onEntry func(entry []byte) error) error {
+	i := skipJSONWhitespace(data, 0)
+	if i >= len(data) || data[i] == 'n' { // missing or null
+		return nil
+	}
+	if data[i] != '[' {
+		return errors.New("\"data\" is not an array")
+	}
+	i = skipJSONWhitespace(data, i+1)
+	if i < len(data) && data[i] == ']' {
+		return nil
+	}
+	for {
+		if i >= len(data) || data[i] != '{' {
+			return errors.New("image data entry is not an object")
+		}
+		end, err := scanJSONValueEnd(data, i)
+		if err != nil {
+			return err
+		}
+		if err := onEntry(data[i:end]); err != nil {
+			return err
+		}
+		i = skipJSONWhitespace(data, end)
+		if i < len(data) && data[i] == ',' {
+			i = skipJSONWhitespace(data, i+1)
+			continue
+		}
+		if i < len(data) && data[i] == ']' {
+			return nil
+		}
+		return errors.New("malformed image data array")
+	}
+}
+
+// extractImageEntryFields returns the raw value spans of the url and
+// b64_json members of one entry object. Spans alias entry; a duplicate
+// key keeps the last occurrence (json.Unmarshal semantics).
+func extractImageEntryFields(entry []byte) (url, b64 json.RawMessage, err error) {
+	i := skipJSONWhitespace(entry, 1) // entry[0] == '{'
+	if i < len(entry) && entry[i] == '}' {
+		return nil, nil, nil
+	}
+	for {
+		if i >= len(entry) || entry[i] != '"' {
+			return nil, nil, errors.New("malformed image data entry")
+		}
+		keyEnd := scanJSONStringEnd(entry, i)
+		key := string(entry[i+1 : keyEnd-1])
+		i = skipJSONWhitespace(entry, keyEnd)
+		if i >= len(entry) || entry[i] != ':' {
+			return nil, nil, errors.New("malformed image data entry")
+		}
+		valStart := skipJSONWhitespace(entry, i+1)
+		valEnd, err := scanJSONValueEnd(entry, valStart)
+		if err != nil {
+			return nil, nil, err
+		}
+		switch key {
+		case "url":
+			url = entry[valStart:valEnd]
+		case "b64_json":
+			b64 = entry[valStart:valEnd]
+		}
+		i = skipJSONWhitespace(entry, valEnd)
+		if i < len(entry) && entry[i] == ',' {
+			i = skipJSONWhitespace(entry, i+1)
+			continue
+		}
+		if i < len(entry) && entry[i] == '}' {
+			return url, b64, nil
+		}
+		return nil, nil, errors.New("malformed image data entry")
+	}
+}
+
+// skipJSONWhitespace advances past JSON whitespace.
+func skipJSONWhitespace(b []byte, i int) int {
+	for i < len(b) {
+		switch b[i] {
+		case ' ', '\t', '\r', '\n':
+			i++
+		default:
+			return i
+		}
+	}
+	return i
+}
+
+// scanJSONValueEnd returns the index just past the JSON value starting
+// at i (strings honor escapes, containers nest).
+func scanJSONValueEnd(b []byte, i int) (int, error) {
+	if i >= len(b) {
+		return 0, errors.New("unexpected end of JSON value")
+	}
+	switch b[i] {
+	case '"':
+		return scanJSONStringEnd(b, i), nil
+	case '{', '[':
+		depth := 0
+		j := i
+		for j < len(b) {
+			switch b[j] {
+			case '"':
+				j = scanJSONStringEnd(b, j)
+				continue
+			case '{', '[':
+				depth++
+			case '}', ']':
+				depth--
+				if depth == 0 {
+					return j + 1, nil
+				}
+			}
+			j++
+		}
+		return 0, errors.New("unterminated JSON container")
+	}
+	// number / true / false / null
+	j := i
+	for j < len(b) {
+		switch b[j] {
+		case ',', '}', ']', ' ', '\t', '\r', '\n':
+			return j, nil
+		}
+		j++
+	}
+	return j, nil
+}
+
+// scanJSONStringEnd returns the index just past the string starting at
+// b[i] (b[i] must be the opening quote).
+func scanJSONStringEnd(b []byte, i int) int {
+	j := i + 1
+	for j < len(b) {
+		switch b[j] {
+		case '\\':
+			j += 2
+		case '"':
+			return j + 1
+		default:
+			j++
+		}
+	}
+	return j
+}
+
 // ImageStreamEvent is one parsed image SSE event.
 type ImageStreamEvent struct {
 	Type         string // image_generation.partial_image | image_generation.completed | error
@@ -279,6 +524,48 @@ func ParseImageStreamEvent(eventName, payload []byte) (*ImageStreamEvent, error)
 		Type:        ev.Type,
 		OutputIndex: ev.OutputIndex,
 		B64JSON:     ev.B64JSON,
+		Usage:       ev.Usage,
+	}
+	if out.Type == "" {
+		out.Type = string(eventName)
+	}
+	if ev.Error != nil {
+		out.Type = "error"
+		out.ErrorMessage = ev.Error.Message
+	}
+	return out, nil
+}
+
+// ImageStreamEventMeta is the billing-relevant subset of an image stream
+// event. The megabyte-scale b64_json payload is deliberately absent:
+// meta parsing scans it but never materializes it (P7.1 memory
+// discipline — the forwarding path already holds the payload bytes).
+type ImageStreamEventMeta struct {
+	Type         string // image_generation.partial_image | image_generation.completed | error
+	OutputIndex  int
+	Usage        *ImageUsage
+	ErrorMessage string
+}
+
+// ParseImageStreamEventMeta parses the billing fields of one image
+// stream event. Semantics match ParseImageStreamEvent for every field
+// except the omitted B64JSON.
+func ParseImageStreamEventMeta(eventName, payload []byte) (*ImageStreamEventMeta, error) {
+	var ev struct {
+		Type        string      `json:"type"`
+		OutputIndex int         `json:"output_index"`
+		Usage       *ImageUsage `json:"usage"`
+		Error       *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(payload, &ev); err != nil {
+		return nil, err
+	}
+	out := &ImageStreamEventMeta{
+		Type:        ev.Type,
+		OutputIndex: ev.OutputIndex,
 		Usage:       ev.Usage,
 	}
 	if out.Type == "" {

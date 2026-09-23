@@ -8,6 +8,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/service/authz"
 	"starhub/setting"
 )
 
@@ -35,6 +36,10 @@ func AdminAuth(next http.Handler) http.Handler {
 		role, _ := r.Context().Value(common.CtxRole).(int)
 		if role < common.RoleAdmin {
 			common.ApiError(w, http.StatusForbidden, "admin privilege required")
+			return
+		}
+		if !authz.CheckRequest(role, r) {
+			common.ApiError(w, http.StatusForbidden, "operation is not permitted for this role")
 			return
 		}
 		next.ServeHTTP(w, r)

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -129,12 +130,12 @@ func RelaySTTTranslations(w http.ResponseWriter, r *http.Request) {
 
 func relayAudioTranscription(w http.ResponseWriter, r *http.Request, mode channel.RelayMode) {
 	req := relayRequestFromContext(r)
-	form, err := common.ParseMultipartForm(req.contentType, req.body)
+	form, err := common.ParseMultipartFormMeta(req.contentType, req.body)
 	if err != nil {
 		writeModeError(w, http.StatusBadRequest, "invalid_request_error", "invalid_request_body", err.Error())
 		return
 	}
-	if form.File("file") == nil {
+	if !form.HasFile("file") {
 		writeModeError(w, http.StatusBadRequest, "invalid_request_error", "missing_file",
 			"the \"file\" multipart field is required")
 		return
@@ -180,6 +181,20 @@ func relayAudioTranscription(w http.ResponseWriter, r *http.Request, mode channe
 }
 
 const maxModeResponseBytes = 64 << 20
+
+// readBoundedBody reads up to limit bytes of an upstream response into a
+// single right-sized buffer. With a trustworthy Content-Length the read
+// is one exact allocation; otherwise it degrades to io.ReadAll growth
+// (P7.1: the result is always the only full copy kept).
+func readBoundedBody(resp *http.Response, limit int64) []byte {
+	if resp.ContentLength > 0 && resp.ContentLength <= limit {
+		buf := bytes.NewBuffer(make([]byte, 0, resp.ContentLength))
+		_, _ = io.Copy(buf, io.LimitReader(resp.Body, limit))
+		return buf.Bytes()
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
+	return body
+}
 
 // estimateAudioTokens approximates the audio token count from the uploaded
 // bytes. Audio tokens run at ~25/second; assuming a 128kbps stream (~16

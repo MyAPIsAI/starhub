@@ -2,3 +2,11 @@
 *.db-journal
 *.db-wal
 *.db-shm
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+.p6-work/
+starhub
+starhub.exe
+release/

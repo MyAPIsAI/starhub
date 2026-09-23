@@ -195,7 +195,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	}
 
 	// 4. top up user quota
-	res = doRequest(base, "PUT", "/api/user/", session, map[string]any{"id": rootID, "quota": 10000000})
+	res = doRequest(base, "PUT", "/api/user/", session, map[string]any{"id": rootID, "quota": 10000000, "expected_quota": 100000000})
 	if res.Status != 200 {
 		t.Fatalf("topup failed: %d %s", res.Status, res.Body)
 	}
@@ -450,7 +450,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	}
 
 	// 19. admin tops up the new user (A3 user quota management)
-	res = doRequest(base, "PUT", "/api/user/", session, map[string]any{"id": aliceID, "quota": 1000000})
+	res = doRequest(base, "PUT", "/api/user/", session, map[string]any{"id": aliceID, "quota": 1000000, "expected_quota": 0})
 	if res.Status != 200 {
 		t.Fatalf("topup alice failed: %d %s", res.Status, res.Body)
 	}
@@ -1245,8 +1245,12 @@ func TestP2ConcurrentPreConsumeNoOverdraft(t *testing.T) {
 	// the four concurrent requests may pass
 	budget := 2*pre + pre/2
 
+	currentUser, err := model.GetUserByID(env.rootID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	res := doRequest(env.base, "PUT", "/api/user/", env.session,
-		map[string]any{"id": env.rootID, "quota": budget})
+		map[string]any{"id": env.rootID, "quota": budget, "expected_quota": currentUser.Quota})
 	if res.Status != 200 {
 		t.Fatalf("tighten user quota failed: %d %s", res.Status, res.Body)
 	}
