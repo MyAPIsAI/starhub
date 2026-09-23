@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/internal/router"
 	"starhub/middleware"
 	"starhub/model"
 )
@@ -37,7 +38,7 @@ func TestP6BrowserServer(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	app := httptest.NewUnstartedServer(NewRouter())
+	app := httptest.NewUnstartedServer(router.New())
 	app.Listener.Close()
 	address := os.Getenv("STARHUB_P6_E2E_ADDR")
 	if address == "" {

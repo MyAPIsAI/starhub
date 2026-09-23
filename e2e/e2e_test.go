@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/internal/router"
 	"starhub/middleware"
 	"starhub/model"
 	"starhub/relay"
@@ -122,7 +123,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("Seed failed: %v", err)
 	}
 
-	app := httptest.NewServer(middleware.IPRateLimit(NewRouter()))
+	app := httptest.NewServer(middleware.IPRateLimit(router.New()))
 	t.Cleanup(app.Close)
 	base := app.URL
 
@@ -627,7 +628,7 @@ func setupRelayApp(t *testing.T) p1Env {
 	if err := model.Seed("123456"); err != nil {
 		t.Fatalf("Seed failed: %v", err)
 	}
-	app := httptest.NewServer(middleware.IPRateLimit(NewRouter()))
+	app := httptest.NewServer(middleware.IPRateLimit(router.New()))
 	t.Cleanup(app.Close)
 
 	res := doRequest(app.URL, "POST", "/api/user/login", "",

@@ -374,9 +374,13 @@ Options hot-updatable through `PUT /api/option`:
 
 ```
 starhub/
-├── main.go                        # Entry point: load config, init database, register routes, start the task reaper
-├── e2e_test.go                    # P0-P2 end-to-end integration tests (with a mock upstream)
-├── e2e_p3_test.go                 # P3 end-to-end tests: protocol matrix / full endpoints / tasks / Realtime
+├── main.go                        # Entry point: load config, init database, start background tasks, serve
+├── internal/router/               # Route table + middleware chain (console -> management security -> rate limit)
+├── e2e/                           # P0-P7 end-to-end integration tests (mock upstreams, one file per phase)
+│   ├── e2e_test.go                # P0-P2 relay chain, failover/refund, pricing and settlement
+│   ├── e2e_p3_test.go             # P3 protocol matrix / full endpoints / tasks / Realtime
+│   ├── p3_performance_test.go     # P3 opt-in local latency profile (STARHUB_P3_PROFILE=1)
+│   └── e2e_p6_browser_test.go     # Isolated server fixture for the Playwright suite
 ├── common/                        # Constants, context keys, crypto, unified responses, saturating quota math, multipart parsing
 ├── controller/                    # HTTP handlers; the relay.go family carries the shared retry loop and per-mode flows
 ├── middleware/                    # Auth (UserAuth/AdminAuth/TokenAuth), sessions, channel routing (Distribute, multipart-aware)
@@ -418,7 +422,7 @@ go test ./...        # Everything (unit + e2e)
 go test -v ./...     # Verbose output
 ```
 
-Coverage includes crypto and key validation (`common`), quota settlement and image-pricing invariants (`relay`), protocol conversion (`relay/dto`), the SigV4 documented vectors and event-stream parsing (`relay/channel/aws`), WebSocket frame codec (`relay/ws`), ratio parsing (`setting`), the data layer (`model`), channel health rules (`service`), and the full relay chain (`e2e_test.go` / `e2e_p3_test.go`, with built-in mock upstreams for every protocol: OpenAI / Claude / Gemini / Bedrock / images / tasks / Realtime).
+Coverage includes crypto and key validation (`common`), quota settlement and image-pricing invariants (`relay`), protocol conversion (`relay/dto`), the SigV4 documented vectors and event-stream parsing (`relay/channel/aws`), WebSocket frame codec (`relay/ws`), ratio parsing (`setting`), the data layer (`model`), channel health rules (`service`), and the full relay chain (`e2e/`, with built-in mock upstreams for every protocol: OpenAI / Claude / Gemini / Bedrock / images / tasks / Realtime).
 
 ## License
 

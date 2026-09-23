@@ -372,9 +372,13 @@ token 计价公式位于 `relay/pricing.go`:
 
 ```
 starhub/
-├── main.go                        # 入口:加载配置、初始化数据库、注册路由、启动任务 reaper
-├── e2e_test.go                    # P0-P2 端到端集成测试(含 mock 上游)
-├── e2e_p3_test.go                 # P3 端到端测试:协议矩阵 / 全端点 / 任务 / Realtime
+├── main.go                        # 入口:加载配置、初始化数据库、启动后台任务、监听服务
+├── internal/router/               # 路由表与中间件链(控制台 → 管理安全 → 限流)
+├── e2e/                           # P0-P7 端到端集成测试(mock 上游,按阶段分文件)
+│   ├── e2e_test.go                # P0-P2 中继链路、故障切换/退款、计价与结算
+│   ├── e2e_p3_test.go             # P3 协议矩阵 / 全端点 / 任务 / Realtime
+│   ├── p3_performance_test.go     # P3 本地性能探针(需 STARHUB_P3_PROFILE=1)
+│   └── e2e_p6_browser_test.go     # 供 Playwright 使用的隔离服务器 fixture
 ├── common/                        # 常量、上下文键、加解密、统一响应、配额饱和换算、multipart 解析
 ├── controller/                    # HTTP 处理器;relay.go 系列承载共享重试循环与各模式流程
 ├── middleware/                    # 鉴权(UserAuth/AdminAuth/TokenAuth)、会话、渠道路由(Distribute,支持 multipart)
@@ -414,7 +418,7 @@ go test ./...        # 全部测试(单元 + e2e)
 go test -v ./...     # 详细输出
 ```
 
-测试覆盖:加密与密钥校验(`common`)、配额结算与图片计价不变量(`relay`)、协议互转(`relay/dto`)、SigV4 官方文档向量与事件流解析(`relay/channel/aws`)、WebSocket 帧编解码(`relay/ws`)、倍率解析(`setting`)、数据层(`model`)、渠道健康规则(`service`)以及完整中继链路(`e2e_test.go` / `e2e_p3_test.go`,内置各协议 mock 上游:OpenAI / Claude / Gemini / Bedrock / 图片 / 任务 / Realtime)。
+测试覆盖:加密与密钥校验(`common`)、配额结算与图片计价不变量(`relay`)、协议互转(`relay/dto`)、SigV4 官方文档向量与事件流解析(`relay/channel/aws`)、WebSocket 帧编解码(`relay/ws`)、倍率解析(`setting`)、数据层(`model`)、渠道健康规则(`service`)以及完整中继链路(`e2e/`,内置各协议 mock 上游:OpenAI / Claude / Gemini / Bedrock / 图片 / 任务 / Realtime)。
 
 ## License
 
