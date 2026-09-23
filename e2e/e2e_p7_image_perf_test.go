@@ -332,13 +332,26 @@ func TestP7ImagePerfMemory(t *testing.T) {
 	upstream := p7ImageUpstream(t, 0)
 	base, apiKey := p7PerfEnv(t, upstream.URL)
 	for _, stream := range []bool{false, true} {
-		payload := map[string]any{
-			"model": "gpt-image-1", "prompt": "a cat", "n": 1, "size": "1024x1024", "stream": stream,
+		name := "JSON"
+		if stream {
+			name = "SSE"
 		}
-		direct := p7MeasureMemory(t, "direct", stream, upstream.URL, apiKey, payload)
-		relay := p7MeasureMemory(t, "relay", stream, base, apiKey, payload)
-		t.Logf("MEMORY-PAIR stream=%t approximateRelayAlloc=%.1fKiB/request (same-process delta, not peak memory)",
-			stream, float64(int64(relay)-int64(direct))/30/1024)
+		t.Run(name, func(t *testing.T) {
+			payload := map[string]any{
+				"model": "gpt-image-1", "prompt": "a cat", "n": 1, "size": "1024x1024", "stream": stream,
+			}
+			var direct, relay uint64
+			t.Run("direct", func(t *testing.T) {
+				direct = p7MeasureMemory(t, "direct", stream, upstream.URL, apiKey, payload)
+			})
+			t.Run("relay", func(t *testing.T) {
+				relay = p7MeasureMemory(t, "relay", stream, base, apiKey, payload)
+			})
+			if direct > 0 && relay > 0 {
+				t.Logf("MEMORY-PAIR stream=%t approximateRelayAlloc=%.1fKiB/request (same-process delta, not peak memory)",
+					stream, float64(int64(relay)-int64(direct))/30/1024)
+			}
+		})
 	}
 }
 

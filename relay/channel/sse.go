@@ -105,20 +105,41 @@ func NewSSEByteReader(r io.Reader) *SSEByteReader {
 // stream ended. Framing quirks are tolerated like SSEReader: CRLF, blank
 // lines, multi-line data, comment/keepalive lines. data: lines are
 // detected by peek and accumulate their payload directly into the reused
-// data buffer — the megabyte hot case never round-trips through the
-// line buffer.
+// frame buffer. Oversized frames collect overflow chunks and consolidate
+// once, rather than repeatedly reallocating and copying the whole frame.
 func (s *SSEByteReader) Next() (SSEByte, error) {
-	s.data = s.data[:0]
+	frame := sseFrameBuffer{tail: s.data[:0]}
+	var lineSpans [8][2]int
+	spans := lineSpans[:0]
 	haveData := false
+	finish := func() SSEByte {
+		s.data = frame.bytes()
+		out := s.data[:0]
+		// Trim after consolidation so whitespace and UTF-8 sequences that
+		// cross chunk boundaries retain the original framing semantics.
+		for i, span := range spans {
+			part := bytes.TrimSpace(s.data[span[0]:span[1]])
+			if i > 0 {
+				out = append(out, '\n')
+			}
+			out = append(out, part...)
+		}
+		s.data = out
+		result := SSEByte{Event: s.event, Data: s.data}
+		s.event = s.event[:0]
+		return result
+	}
 	for {
 		if b, _ := s.r.Peek(len(ssePrefixData)); len(b) >= len(ssePrefixData) && bytes.Equal(b, ssePrefixData) {
 			if haveData {
-				s.data = append(s.data, '\n')
+				frame.append([]byte{'\n'})
 			}
+			start := frame.size
 			_, _ = s.r.Discard(len(ssePrefixData))
-			if err := s.appendDataPayload(); err != nil {
+			if err := s.appendDataPayload(&frame); err != nil {
 				return SSEByte{}, err
 			}
+			spans = append(spans, [2]int{start, frame.size})
 			haveData = true
 			continue
 		}
@@ -129,9 +150,7 @@ func (s *SSEByteReader) Next() (SSEByte, error) {
 			case len(trimmed) == 0:
 				// blank line terminates the current event
 				if haveData {
-					out := SSEByte{Event: s.event, Data: s.data}
-					s.event = s.event[:0]
-					return out, nil
+					return finish(), nil
 				}
 			case bytes.HasPrefix(trimmed, ssePrefixColon):
 				// comment / keepalive
@@ -141,17 +160,17 @@ func (s *SSEByteReader) Next() (SSEByte, error) {
 				// Peek could not classify it (end of stream mid-prefix):
 				// take the slow path through the line buffer.
 				if haveData {
-					s.data = append(s.data, '\n')
+					frame.append([]byte{'\n'})
 				}
-				s.data = append(s.data, bytes.TrimSpace(trimmed[len(ssePrefixData):])...)
+				start := frame.size
+				frame.append(trimmed[len(ssePrefixData):])
+				spans = append(spans, [2]int{start, frame.size})
 				haveData = true
 			}
 		}
 		if lineErr != nil {
 			if lineErr == io.EOF && haveData {
-				out := SSEByte{Event: s.event, Data: s.data}
-				s.event = s.event[:0]
-				return out, nil
+				return finish(), nil
 			}
 			return SSEByte{}, lineErr
 		}
@@ -159,22 +178,12 @@ func (s *SSEByteReader) Next() (SSEByte, error) {
 }
 
 // appendDataPayload reads the remainder of a "data:"-prefixed line (the
-// prefix itself is already discarded) and appends its trimmed payload
-// to the reused data buffer. EOF is not an error here: it surfaces on
-// the caller's next read.
-func (s *SSEByteReader) appendDataPayload() error {
-	start := len(s.data)
+// prefix itself is already discarded). Trimming happens once the frame
+// is complete. EOF surfaces on the caller's next read.
+func (s *SSEByteReader) appendDataPayload(frame *sseFrameBuffer) error {
 	for {
 		chunk, err := s.r.ReadSlice('\n')
-		// Geometric growth keeps cumulative allocations bounded for large
-		// image frames. The default append growth becomes much smaller at
-		// megabyte sizes, repeatedly copying the entire payload.
-		if len(chunk) > cap(s.data)-len(s.data) {
-			grown := make([]byte, len(s.data), max(2*cap(s.data), len(s.data)+len(chunk)))
-			copy(grown, s.data)
-			s.data = grown
-		}
-		s.data = append(s.data, chunk...)
+		frame.append(chunk)
 		if err == bufio.ErrBufferFull {
 			continue
 		}
@@ -183,11 +192,42 @@ func (s *SSEByteReader) appendDataPayload() error {
 		}
 		break
 	}
-	// Trim this line's edges (newline bytes + surrounding whitespace),
-	// matching strings.TrimSpace on the payload.
-	seg := bytes.TrimSpace(s.data[start:])
-	s.data = append(s.data[:start], seg...)
 	return nil
+}
+
+// sseFrameBuffer first fills the previous frame's reusable backing array.
+// Overflow uses fixed-size chunks, then one exact-sized consolidation at
+// delivery. Cumulative payload allocation is roughly twice the new frame
+// size, without rounding the retained buffer up to the next power of two.
+// Scratch chunks belong to one Next call and are not retained or pooled.
+type sseFrameBuffer struct {
+	tail   []byte
+	chunks [][]byte
+	size   int
+}
+
+func (b *sseFrameBuffer) append(p []byte) {
+	b.size += len(p)
+	for len(p) > 0 {
+		if len(b.tail) == cap(b.tail) {
+			b.chunks = append(b.chunks, b.tail)
+			b.tail = make([]byte, 0, 64*1024)
+		}
+		n := min(len(p), cap(b.tail)-len(b.tail))
+		b.tail = append(b.tail, p[:n]...)
+		p = p[n:]
+	}
+}
+
+func (b *sseFrameBuffer) bytes() []byte {
+	if len(b.chunks) == 0 {
+		return b.tail
+	}
+	data := make([]byte, 0, b.size)
+	for _, chunk := range b.chunks {
+		data = append(data, chunk...)
+	}
+	return append(data, b.tail...)
 }
 
 // readLine reads one \n-terminated line into the reused line buffer. A

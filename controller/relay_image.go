@@ -200,9 +200,9 @@ func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, b
 //     stream is drained to EOF even after writes fail;
 //  2. a completed image arriving after the disconnect must raise it.
 //
-// Frames are forwarded from the reader's reused byte buffer, so the
-// image payload exists exactly once in memory while in flight (P7.1:
-// no per-event string or interface conversions).
+// Frames are forwarded from the reader's reused contiguous byte buffer.
+// Larger frames temporarily use overflow chunks during consolidation;
+// forwarding does not add a per-event string or interface conversion.
 //
 // Upstreams that answer a stream request with plain JSON are wrapped into
 // the SSE format (the gateway's protocol promise outranks the upstream's).
