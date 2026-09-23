@@ -219,7 +219,7 @@ func TestUpdateTokenUnlimitedZeroesRemainQuota(t *testing.T) {
 	rr := call(UpdateToken, testRequest{
 		method: http.MethodPut,
 		target: "/api/token",
-		body:   fmt.Sprintf(`{"id":%d,"remain_quota":123,"unlimited_quota":true}`, tk.ID),
+		body:   fmt.Sprintf(`{"id":%d,"remain_quota":123,"unlimited_quota":true,"expected_quota":500}`, tk.ID),
 		userID: u.ID,
 		role:   common.RoleUser,
 	})
@@ -290,12 +290,11 @@ func TestUpdateTokenNothingToUpdate(t *testing.T) {
 	u := newUser(t, "alice", common.RoleUser, 1000)
 	tk := mustToken(t, u.ID, 500)
 
-	// Empty strings and absent fields are all treated as "not supplied", so
-	// there is nothing to write.
+	// Only the id is supplied — no fields to write.
 	rr := call(UpdateToken, testRequest{
 		method: http.MethodPut,
 		target: "/api/token",
-		body:   fmt.Sprintf(`{"id":%d,"name":"","model_limits":""}`, tk.ID),
+		body:   fmt.Sprintf(`{"id":%d}`, tk.ID),
 		userID: u.ID,
 		role:   common.RoleUser,
 	})

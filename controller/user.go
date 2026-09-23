@@ -241,12 +241,12 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	fields := map[string]any{}
 	if req.Quota != nil {
-		if req.ExpectedQuota == nil {
-			common.ApiError(w, http.StatusBadRequest, "expected_quota is required when setting a balance")
-			return
-		}
 		if *req.Quota < 0 {
 			common.ApiError(w, http.StatusBadRequest, "quota must be >= 0")
+			return
+		}
+		if req.ExpectedQuota == nil {
+			common.ApiError(w, http.StatusBadRequest, "expected_quota is required when setting a balance")
 			return
 		}
 		fields["quota"] = *req.Quota

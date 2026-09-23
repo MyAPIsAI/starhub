@@ -437,7 +437,7 @@ func TestUpdateUserAppliesFields(t *testing.T) {
 	rr := call(UpdateUser, testRequest{
 		method: http.MethodPut,
 		target: "/api/user",
-		body: fmt.Sprintf(`{"id":%s,"quota":500,"status":%d,"group":%q,"password":"newpassword"}`,
+		body: fmt.Sprintf(`{"id":%s,"quota":500,"expected_quota":100,"status":%d,"group":%q,"password":"newpassword"}`,
 			itoa(u.ID), common.StatusDisabled, common.DefaultGroup),
 		userID: 1,
 		role:   common.RoleAdmin,
