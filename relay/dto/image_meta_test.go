@@ -1,10 +1,41 @@
 package dto
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 )
+
+func BenchmarkWalkImageResponse(b *testing.B) {
+	body := []byte(`{"data":[{"b64_json":"` + strings.Repeat("A", 1<<20) + `"}],"usage":{"output_tokens":1}}`)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(body)))
+	b.ResetTimer()
+	for b.Loop() {
+		urls, b64s, usage, err := WalkImageResponse(body, nil)
+		if err != nil || urls != 0 || b64s != 1 || usage == nil || usage.OutputTokens != 1 {
+			b.Fatalf("count/usage changed: %d %d %+v %v", urls, b64s, usage, err)
+		}
+	}
+}
+
+func TestWalkImageResponsePayloadAliasesBody(t *testing.T) {
+	body := []byte(`{"data":[{"b64_json":"QUJD","url":"https://x"}]}`)
+	_, _, _, err := WalkImageResponse(body, func(entry ImageEntryRaw) error {
+		for _, raw := range [][]byte{entry.B64, entry.URL} {
+			offset := bytes.Index(body, raw)
+			if offset < 0 || &raw[0] != &body[offset] {
+				t.Fatal("image payload was copied instead of referencing the response body")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 // walkCount is the WalkImageResponse equivalent of ImageResponse.Count.
 func walkCount(body []byte) (int, *ImageUsage, error) {

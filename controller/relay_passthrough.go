@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -183,14 +182,22 @@ func relayAudioTranscription(w http.ResponseWriter, r *http.Request, mode channe
 const maxModeResponseBytes = 64 << 20
 
 // readBoundedBody reads up to limit bytes of an upstream response into a
-// single right-sized buffer. With a trustworthy Content-Length the read
-// is one exact allocation; otherwise it degrades to io.ReadAll growth
-// (P7.1: the result is always the only full copy kept).
+// buffer. Content-Length is only a hint; short or longer bodies are still
+// read up to the limit. Reading any tail separately avoids doubling a full
+// body buffer just to discover EOF. Unknown lengths use Go's chunked ReadAll.
 func readBoundedBody(resp *http.Response, limit int64) []byte {
+	if limit <= 0 {
+		return nil
+	}
 	if resp.ContentLength > 0 && resp.ContentLength <= limit {
-		buf := bytes.NewBuffer(make([]byte, 0, resp.ContentLength))
-		_, _ = io.Copy(buf, io.LimitReader(resp.Body, limit))
-		return buf.Bytes()
+		body := make([]byte, resp.ContentLength)
+		n, err := io.ReadFull(resp.Body, body)
+		body = body[:n]
+		if err != nil || int64(n) == limit {
+			return body
+		}
+		tail, _ := io.ReadAll(io.LimitReader(resp.Body, limit-int64(n)))
+		return append(body, tail...)
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
 	return body

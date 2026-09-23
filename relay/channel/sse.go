@@ -166,6 +166,14 @@ func (s *SSEByteReader) appendDataPayload() error {
 	start := len(s.data)
 	for {
 		chunk, err := s.r.ReadSlice('\n')
+		// Geometric growth keeps cumulative allocations bounded for large
+		// image frames. The default append growth becomes much smaller at
+		// megabyte sizes, repeatedly copying the entire payload.
+		if len(chunk) > cap(s.data)-len(s.data) {
+			grown := make([]byte, len(s.data), max(2*cap(s.data), len(s.data)+len(chunk)))
+			copy(grown, s.data)
+			s.data = grown
+		}
 		s.data = append(s.data, chunk...)
 		if err == bufio.ErrBufferFull {
 			continue

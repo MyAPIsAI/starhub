@@ -7,6 +7,20 @@ import (
 	"testing"
 )
 
+func BenchmarkSSEByteReaderImage(b *testing.B) {
+	input := []byte("data: " + strings.Repeat("A", 1<<20) + "\n\n")
+	b.ReportAllocs()
+	b.SetBytes(int64(len(input)))
+	b.ResetTimer()
+	for b.Loop() {
+		reader := NewSSEByteReader(bytes.NewReader(input))
+		frame, err := reader.Next()
+		if err != nil || len(frame.Data) != 1<<20 {
+			b.Fatalf("frame size=%d err=%v", len(frame.Data), err)
+		}
+	}
+}
+
 func readAllSSEBytes(t *testing.T, input string) []SSEByte {
 	t.Helper()
 	reader := NewSSEByteReader(strings.NewReader(input))
@@ -88,7 +102,7 @@ func TestSSEByteReaderBufferReuse(t *testing.T) {
 	big1 := strings.Repeat("a", 200*1024)
 	big2 := strings.Repeat("b", 200*1024)
 	reader := NewSSEByteReader(strings.NewReader(
-		"data: "+big1+"\n\ndata: "+big2+"\n\n"))
+		"data: " + big1 + "\n\ndata: " + big2 + "\n\n"))
 
 	first, err := reader.Next()
 	if err != nil || string(first.Data) != big1 {

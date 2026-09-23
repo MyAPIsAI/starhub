@@ -1,11 +1,10 @@
 package main
 
-// P7 image relay performance measurement (results recorded in
-// doc/require/p7图片测试.md). Measures: generation capability (JSON +
+// P7 image relay performance measurement. Measures: capability (JSON +
 // SSE), gateway latency percentiles by payload size, SSE round-trip with
-// upstream think time, memory footprint, and concurrent throughput. The
-// upstream is a deterministic mock so the numbers isolate gateway
-// overhead rather than any real model inference time.
+// upstream think time, memory footprint, and concurrent throughput.
+// Upstream payloads are prepared before measurements. Paired direct and
+// relay requests help distinguish fixture costs from gateway overhead.
 
 import (
 	"bytes"
@@ -41,9 +40,13 @@ func p7Payload(n int) []byte {
 func p7ImageUpstream(t *testing.T, delay time.Duration) *httptest.Server {
 	t.Helper()
 	sizes := map[string]int{
-		"512x512":  200 * 1024,
+		"512x512":   200 * 1024,
 		"1024x1024": 800 * 1024,
 		"1536x1024": 1500 * 1024,
+	}
+	payloads := make(map[string][]byte, len(sizes))
+	for size, n := range sizes {
+		payloads[size] = []byte(base64.StdEncoding.EncodeToString(p7Payload(n)))
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/images/generations" {
@@ -62,30 +65,38 @@ func p7ImageUpstream(t *testing.T, delay time.Duration) *httptest.Server {
 		if req.N == 0 {
 			req.N = 1
 		}
-		n := sizes[req.Size]
-		if n == 0 {
-			n = 800 * 1024
+		b64 := payloads[req.Size]
+		if b64 == nil {
+			b64 = payloads["1024x1024"]
 		}
 		if delay > 0 {
 			time.Sleep(delay)
 		}
-		b64 := base64.StdEncoding.EncodeToString(p7Payload(n))
 		if !req.Stream {
 			w.Header().Set("Content-Type", "application/json")
-			var items []map[string]string
+			_, _ = io.WriteString(w, `{"data":[`)
 			for i := 0; i < req.N; i++ {
-				items = append(items, map[string]string{"b64_json": b64})
+				if i > 0 {
+					_, _ = io.WriteString(w, ",")
+				}
+				_, _ = io.WriteString(w, `{"b64_json":"`)
+				_, _ = w.Write(b64)
+				_, _ = io.WriteString(w, `"}`)
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"data": items})
+			_, _ = io.WriteString(w, "]}\n")
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		flusher := w.(http.Flusher)
 		for i := 0; i < req.N; i++ {
-			fmt.Fprintf(w, "event: image_generation.partial_image\ndata: {\"type\":\"image_generation.partial_image\",\"output_index\":%d,\"b64_json\":\"%s\"}\n\n", i, b64[:4096])
+			fmt.Fprintf(w, "event: image_generation.partial_image\ndata: {\"type\":\"image_generation.partial_image\",\"output_index\":%d,\"b64_json\":\"", i)
+			_, _ = w.Write(b64[:4096])
+			_, _ = io.WriteString(w, "\"}\n\n")
 			flusher.Flush()
-			fmt.Fprintf(w, "event: image_generation.completed\ndata: {\"type\":\"image_generation.completed\",\"output_index\":%d,\"b64_json\":\"%s\"}\n\n", i, b64)
+			fmt.Fprintf(w, "event: image_generation.completed\ndata: {\"type\":\"image_generation.completed\",\"output_index\":%d,\"b64_json\":\"", i)
+			_, _ = w.Write(b64)
+			_, _ = io.WriteString(w, "\"}\n\n")
 			flusher.Flush()
 		}
 		fmt.Fprint(w, "data: [DONE]\n\n")
@@ -144,8 +155,11 @@ func p7TimedPost(base, apiKey string, payload any) (int, time.Duration, int) {
 		return -1, time.Since(start), 0
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
-	return resp.StatusCode, time.Since(start), len(raw)
+	n, err := io.Copy(io.Discard, resp.Body)
+	if err != nil {
+		return -1, time.Since(start), int(n)
+	}
+	return resp.StatusCode, time.Since(start), int(n)
 }
 
 func p7Percentiles(durs []time.Duration) (p50, p95, p99, maxD time.Duration) {
@@ -157,12 +171,47 @@ func p7Percentiles(durs []time.Duration) (p50, p95, p99, maxD time.Duration) {
 
 // --- 1. Capability smoke: can the gateway relay generated images? ---
 
+// p7CheckedPost verifies complete wire content outside the allocation probe.
+func p7CheckedPost(t *testing.T, upstream, base, apiKey string, payload any) (int, time.Duration, int) {
+	t.Helper()
+	b, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(target string) (int, []byte) {
+		req, err := http.NewRequest(http.MethodPost, target+"/v1/images/generations", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode, raw
+	}
+	wantStatus, want := read(upstream)
+	start := time.Now()
+	status, got := read(base)
+	duration := time.Since(start)
+	if status != wantStatus || !bytes.Equal(got, want) {
+		t.Fatalf("image response differs: direct status=%d bytes=%d, relay status=%d bytes=%d", wantStatus, len(want), status, len(got))
+	}
+	return status, duration, len(got)
+}
+
 func TestP7ImagePerfSmoke(t *testing.T) {
 	upstream := p7ImageUpstream(t, 0)
 	base, apiKey := p7PerfEnv(t, upstream.URL)
 
 	// JSON path: n=1 at 1024x1024 (~800KB raw per image, ~1.07MB b64).
-	st, dur, bodyLen := p7TimedPost(base, apiKey, map[string]any{
+	st, dur, bodyLen := p7CheckedPost(t, upstream.URL, base, apiKey, map[string]any{
 		"model": "gpt-image-1", "prompt": "a cat", "n": 1, "size": "1024x1024",
 	})
 	if st != 200 {
@@ -171,7 +220,7 @@ func TestP7ImagePerfSmoke(t *testing.T) {
 	t.Logf("SMOKE json n=1: status=%d dur=%v bodyBytes=%d", st, dur, bodyLen)
 
 	// JSON path: n=2 (two images in one response).
-	st, dur, bodyLen = p7TimedPost(base, apiKey, map[string]any{
+	st, dur, bodyLen = p7CheckedPost(t, upstream.URL, base, apiKey, map[string]any{
 		"model": "gpt-image-1", "prompt": "a cat", "n": 2, "size": "1024x1024",
 	})
 	if st != 200 {
@@ -180,7 +229,7 @@ func TestP7ImagePerfSmoke(t *testing.T) {
 	t.Logf("SMOKE json n=2: status=%d dur=%v bodyBytes=%d", st, dur, bodyLen)
 
 	// SSE path: stream=true.
-	st, dur, bodyLen = p7TimedPost(base, apiKey, map[string]any{
+	st, dur, bodyLen = p7CheckedPost(t, upstream.URL, base, apiKey, map[string]any{
 		"model": "gpt-image-1", "prompt": "a cat", "n": 1, "size": "1024x1024", "stream": true,
 	})
 	if st != 200 {
@@ -199,8 +248,17 @@ func TestP7ImagePerfSmoke(t *testing.T) {
 		return -1, -1
 	}
 	remain, used := perfQuota()
+	want := 4 * int64(0.001*float64(common.QuotaPerUSD))
+	deadline := time.Now().Add(2 * time.Second)
+	for used != want && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+		remain, used = perfQuota()
+	}
 	spent := 100_000_000 - remain
-	t.Logf("SMOKE billing: spent=%d usedQuota=%d (expect spent=%d)", spent, used, 4*int64(0.001*float64(common.QuotaPerUSD)))
+	if spent != want || used != want {
+		t.Fatalf("billing: spent=%d used=%d want=%d", spent, used, want)
+	}
+	t.Logf("SMOKE billing: spent=%d usedQuota=%d", spent, used)
 }
 
 // --- 2. Latency by payload size (gateway overhead; upstream instant) ---
@@ -273,30 +331,67 @@ func TestP7ImagePerfMemory(t *testing.T) {
 	}
 	upstream := p7ImageUpstream(t, 0)
 	base, apiKey := p7PerfEnv(t, upstream.URL)
+	for _, stream := range []bool{false, true} {
+		payload := map[string]any{
+			"model": "gpt-image-1", "prompt": "a cat", "n": 1, "size": "1024x1024", "stream": stream,
+		}
+		direct := p7MeasureMemory(t, "direct", stream, upstream.URL, apiKey, payload)
+		relay := p7MeasureMemory(t, "relay", stream, base, apiKey, payload)
+		t.Logf("MEMORY-PAIR stream=%t approximateRelayAlloc=%.1fKiB/request (same-process delta, not peak memory)",
+			stream, float64(int64(relay)-int64(direct))/30/1024)
+	}
+}
 
+func p7MeasureMemory(t *testing.T, route string, stream bool, base, apiKey string, payload any) uint64 {
+	t.Helper()
+	for range 2 {
+		if st, _, _ := p7TimedPost(base, apiKey, payload); st != http.StatusOK {
+			t.Fatalf("%s warmup failed: %d", route, st)
+		}
+	}
+	// Sample throughout requests. This is a sampled process heap, not an
+	// exact peak or the gateway's private working set.
+	stop := make(chan struct{})
+	peak := make(chan uint64, 1)
+	go func() {
+		ticker := time.NewTicker(2 * time.Millisecond)
+		defer ticker.Stop()
+		var high uint64
+		for {
+			select {
+			case <-ticker.C:
+				var ms runtime.MemStats
+				runtime.ReadMemStats(&ms)
+				high = max(high, ms.HeapAlloc)
+			case <-stop:
+				peak <- high
+				return
+			}
+		}
+	}()
+	defer close(stop)
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
 
-	var peakHeap uint64
 	const iters = 30
+	bodyLen := 0
 	for i := 0; i < iters; i++ {
-		st, _, _ := p7TimedPost(base, apiKey, map[string]any{
-			"model": "gpt-image-1", "prompt": "a cat", "n": 1, "size": "1024x1024",
-		})
+		st, _, n := p7TimedPost(base, apiKey, payload)
 		if st != 200 {
 			t.Fatalf("mem iter %d failed: %d", i, st)
 		}
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
-		if ms.HeapAlloc > peakHeap {
-			peakHeap = ms.HeapAlloc
+		if n == 0 || (i > 0 && n != bodyLen) {
+			t.Fatalf("response size changed: got=%d previous=%d", n, bodyLen)
 		}
+		bodyLen = n
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&after)
-	t.Logf("MEMORY iters=%d heapAllocBefore=%.1fMB heapAllocAfter=%.1fMB heapInuseDelta=%+.1fMB totalAllocDelta=%+.1fMB sysDelta=%+.1fMB peakHeap=%.1fMB numGC=%d mallocsDelta=%d",
-		iters,
+	stop <- struct{}{}
+	peakHeap := max(<-peak, before.HeapAlloc, after.HeapAlloc)
+	t.Logf("MEMORY route=%s stream=%t iters=%d bodyBytes=%d heapAllocBefore=%.1fMB heapAllocAfter=%.1fMB heapInuseDelta=%+.1fMB totalAllocDelta=%+.1fMB sysDelta=%+.1fMB sampledPeakHeap=%.1fMB numGC=%d mallocsDelta=%d",
+		route, stream, iters, bodyLen,
 		float64(before.HeapAlloc)/1e6, float64(after.HeapAlloc)/1e6,
 		float64(int64(after.HeapInuse)-int64(before.HeapInuse))/1e6,
 		float64(after.TotalAlloc-before.TotalAlloc)/1e6,
@@ -304,6 +399,7 @@ func TestP7ImagePerfMemory(t *testing.T) {
 		float64(peakHeap)/1e6,
 		after.NumGC-before.NumGC,
 		after.Mallocs-before.Mallocs)
+	return after.TotalAlloc - before.TotalAlloc
 }
 
 // --- 5. Concurrent throughput ---
@@ -341,6 +437,9 @@ func TestP7ImagePerfConcurrency(t *testing.T) {
 		}
 	}
 	total := workers * perWorker
+	if ok != total {
+		t.Fatalf("concurrent requests: %d/%d succeeded", ok, total)
+	}
 	t.Logf("CONCURRENCY workers=%d perWorker=%d total=%d ok=%d wall=%v throughput=%.1f req/s",
 		workers, perWorker, total, ok, wall, float64(total)/wall.Seconds())
 }

@@ -255,7 +255,7 @@ func ParseImageResponse(body []byte) (*ImageResponse, error) {
 // ImageEntryRaw carries the raw (still JSON-encoded, quotes included)
 // url and b64_json values of one data entry.
 //
-// The slices alias the walk's single transient copy of the data array:
+// The slices alias the caller's response body:
 // they stay valid for the duration of the WalkImageResponse call (and
 // the emit callback inside it) and must not be retained (P7.1: image
 // bytes are counted and forwarded, never duplicated).
@@ -297,10 +297,8 @@ func RawStringLiteral(raw json.RawMessage) []byte {
 // per non-empty url / b64_json value and the response count is
 // max(url-entries, b64-entries); payload-less entries bill nothing.
 //
-// Memory layout (P7.1): the body plus ONE transient copy of the data
-// array are the only payload-scale buffers alive during the walk —
-// entry url/b64 values are subslices of that copy, so emit receives
-// them without further duplication.
+// The body is the only payload-scale buffer alive during the walk;
+// entry url/b64 values are subslices, so emit receives them without copying.
 //
 // Accepted divergence from the legacy whole-struct parse: entry members
 // other than url/b64_json (e.g. a malformed revised_prompt) are not
@@ -308,9 +306,9 @@ func RawStringLiteral(raw json.RawMessage) []byte {
 // instead of 0 — the revenue-safe direction.
 func WalkImageResponse(body []byte, emit func(entry ImageEntryRaw) error) (urls, b64s int, usage *ImageUsage, err error) {
 	var head struct {
-		Created int64           `json:"created"`
-		Data    json.RawMessage `json:"data"`
-		Usage   *ImageUsage     `json:"usage"`
+		Created int64         `json:"created"`
+		Data    imageJSONView `json:"data"`
+		Usage   *ImageUsage   `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &head); err != nil {
 		return 0, 0, nil, err
@@ -343,6 +341,17 @@ func WalkImageResponse(body []byte, emit func(entry ImageEntryRaw) error) (urls,
 		return 0, 0, nil, err
 	}
 	return urls, b64s, head.Usage, nil
+}
+
+// imageJSONView borrows a validated token from json.Unmarshal's input.
+// It is private to the synchronous response walk: unlike RawMessage it
+// must never escape the input body's lifetime or be used with a decoder
+// that reuses its input buffer.
+type imageJSONView []byte
+
+func (v *imageJSONView) UnmarshalJSON(data []byte) error {
+	*v = data
+	return nil
 }
 
 // walkImageEntries iterates the entries of the data array. The array is
