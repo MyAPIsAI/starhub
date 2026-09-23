@@ -1,5 +1,7 @@
 # StarHub
 
+[English](README.md) | [简体中文](README_CN.md)
+
 StarHub 是一个使用 Go 编写的 LLM API 网关服务,可将多个上游渠道聚合为统一的 OpenAI / Claude 风格 API,并提供用户、令牌、渠道、配额与计费比率的管理能力。
 
 > 当前版本:`v0.1.0`(纯 Go 实现,无 CGO 依赖,单二进制部署)
@@ -17,6 +19,7 @@ StarHub 是一个使用 Go 编写的 LLM API 网关服务,可将多个上游渠�
   - 分组倍率(group ratio)、模型倍率(model ratio)、补全倍率(completion ratio)可动态配置
   - 换算关系:`1 USD = 500000` 配额
 - **管理 API**:用户 / 渠道 / 令牌 / 选项 / 日志的完整增删改查
+- **Web 控制台(P6)**:九个业务页面、中文/英文、明暗主题、移动端导航；用户自助令牌与兑换，管理员渠道、计价、审计及运行指标管理；可编译进单二进制。
 - **权限体系**:普通用户(1)、管理员(10)、超级管理员(100)三级角色,会话鉴权 + Bearer Token 鉴权双通道
 - **零依赖部署**:内置纯 Go SQLite(基于 glebarez/sqlite),无需外部数据库
 
@@ -25,23 +28,123 @@ StarHub 是一个使用 Go 编写的 LLM API 网关服务,可将多个上游渠�
 ### 环境要求
 
 - Go 1.26+
+- 构建控制台另需 Node 24（具体版本见 `web/.node-version`）；运行发行版不需要 Node。
 
 ### 构建与运行
 
 ```bash
-# 克隆项目
+# Clone the repository
 git clone <repo-url> starhub
 cd starhub
 
-# 直接运行
-go run .
-
-# 或构建单二进制
-go build -o starhub .
-./starhub
+# Build the server with the embedded web console
+node scripts/build-release.mjs
 ```
 
+Windows PowerShell 启动：
+
+```powershell
+.\release\starhub.exe
+```
+
+Linux / macOS 启动：
+
+```bash
+./release/starhub
+```
+
+访问 `http://localhost:3000/`。如已有旧服务占用端口，先停止旧服务，再启动上面的发行文件；保持原工作目录可继续使用原有 `starhub.db`。
+
+直接执行 `go run .` 或 `go build -o starhub .` 是纯后端模式，不包含网页，访问 `/` 返回 404。需要控制台时请使用上述发行脚本，并运行 **`release/` 下的文件**；仓库根目录的旧 `starhub.exe` 不会被发行脚本覆盖。
+
 启动后默认监听 `:3000`,数据库文件为工作目录下的 `starhub.db`(首次启动自动建表并写入种子数据)。
+
+### 带控制台的发行版
+
+```bash
+node scripts/build-release.mjs
+```
+
+Windows 11 的 PowerShell/CMD、Linux 和 macOS 的终端都使用同一条命令，无需 Bash 或 PowerShell 作为额外依赖。先安装 Node.js 24+（含 npm）和 Go 1.26+ 并加入 PATH；脚本可从任意工作目录通过完整路径调用。
+
+默认安装锁定依赖、验证前端、执行本机 Go build/vet/test，再生成 `release/starhub`（Windows 为 `release/starhub.exe`），包含控制台。运行后访问 `http://localhost:3000/`，自动进入控制台；首次使用 root 账号登录。任何步骤失败都会返回非零退出码。
+
+指定目标或一次编译所有支持的平台：
+
+```bash
+node scripts/build-release.mjs --os windows --arch amd64
+node scripts/build-release.mjs --os linux --arch amd64
+node scripts/build-release.mjs --os darwin --arch arm64
+node scripts/build-release.mjs --all
+```
+
+`darwin` 表示 macOS；`amd64` 用于 Intel/AMD，`arm64` 用于 ARM/Apple Silicon。`--all` 生成 Windows、Linux、macOS 的 amd64/arm64 六种产物，前端只构建一次，例如 `release/starhub-linux-amd64`、`release/starhub-darwin-arm64` 和 `release/starhub-windows-amd64.exe`。交叉编译不需要目标系统的编译器，统一使用 `CGO_ENABLED=0`；测试始终在本机执行，不尝试运行其他系统的程序。
+
+其他选项：
+
+```bash
+node scripts/build-release.mjs --backend-only
+node scripts/build-release.mjs --all --skip-checks
+node scripts/build-release.mjs --output "./build output"
+node scripts/build-release.mjs --help
+```
+
+`--backend-only` 跳过 npm 与前端构建，产物名增加 `-backend`，与带控制台的版本分开保存。`--skip-checks` 仅跳过检查和测试，仍安装并编译前端；默认建议保留检查。`--output` 的相对路径以当前终端目录为基准，默认输出目录则始终位于仓库下。
+
+也支持已有 `GOOS`/`GOARCH` 环境变量，命令行参数优先；指定目标时文件名包含系统和架构。`--all` 忽略这两个环境变量，不能与 `--os`/`--arch` 混用。脚本只生成二进制，不进行 macOS Developer ID 签名或公证。
+
+也可手动构建：
+
+```bash
+cd web
+npm ci
+npm run build
+cd ..
+go build -tags frontend -o starhub .
+```
+
+默认 `go build ./...` 和 `go test ./...` 保持纯后端模式，不依赖 Node 或 `web/dist`。带 `frontend` 标签前必须先构建前端。发行包仅嵌入 `dist`，浏览器深链接可刷新；`/api`、`/v1` 的错误和方法检查仍由 Go API 处理。
+
+### 前端开发与验证
+
+先运行 `go run .`，另一个终端执行：
+
+```bash
+cd web
+npm ci
+npm run dev
+```
+
+访问 Vite 打印的地址；`/api` 代理到 `http://127.0.0.1:3000`，可通过 `STARHUB_API_URL` 更改目标。代理保留浏览器 Host，因此兼容同源写请求保护。开发时不设置 `STARHUB_COOKIE_SECURE=true`。
+
+```bash
+npm run lint
+npm run format:check
+npm run typecheck
+npm run test:unit
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+浏览器测试启动独立 Go 路由、临时 SQLite 和本地模拟上游，占用 `127.0.0.1:39781`；不访问生产数据库或真实提供商。Windows 检测到本机 Chrome 时优先使用它，否则使用 Playwright Chromium。CI 还验证默认和 `frontend` 两种 Go 构建。
+
+### 容器与 HTTPS
+
+```bash
+docker build -t starhub .
+docker run --rm -p 3000:3000 -v starhub-data:/data -e STARHUB_ROOT_PASSWORD=change-this-password starhub
+```
+
+容器构建默认使用 Go 官方模块代理。若网络无法访问，可通过 `--build-arg GOPROXY=https://goproxy.cn,direct` 指定与本机 Go 环境一致的模块代理。
+
+镜像通过多阶段构建包含控制台，以非 root 用户运行，SQLite 持久化到 `/data`。由反向代理终止 HTTPS 时，设置 `STARHUB_COOKIE_SECURE=true` 并保留原始 Host。管理写请求拒绝跨站来源，管理响应设置 `Cache-Control: no-store`；`/v1` 流式转发不应用管理端保护。会话只使用 HttpOnly Cookie，前端不将登录凭据写入浏览器存储。
+
+### 管理接口兼容性说明
+
+普通管理员可以查询用户，只有 root 可以修改用户。设置用户 `quota` 或令牌 `remain_quota`（包括开启不限额）时，提交读取时的 `expected_quota`：遗漏返回 400，余额已变化返回 409，整次修改不生效。更新令牌的 `group`、`model_limits`、`allow_ips`、`auto_groups` 或渠道的 `base_url` 时，省略表示不修改，空字符串表示清空。令牌创建的显式零额度会被保留。
+
+控制台将 `quota` 展示为实扣、`unfunded_quota` 单独展示为未收费用，最小 1 quota 显示为 $0.000002；运行指标是进程快照，日趋势来自 UTC 消费聚合。
 
 ### 环境变量
 
@@ -52,6 +155,7 @@ go build -o starhub .
 | `STARHUB_ROOT_PASSWORD` | `123456` | root 用户初始密码(**生产环境务必修改**) |
 | `STARHUB_CHANNEL_TEST_INTERVAL` | `1800` | 渠道后台测活间隔(秒,`0` 关闭) |
 | `STARHUB_TASK_POLL_INTERVAL` | `60` | 任务后台轮询间隔(秒,`0` 关闭) |
+| `STARHUB_COOKIE_SECURE` | `false` | HTTPS 反向代理后设为 `true`；直接 TLS 请求自动设置 Secure Cookie |
 
 ### 首次登录
 
