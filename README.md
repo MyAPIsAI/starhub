@@ -1,68 +1,70 @@
 # StarHub
 
-StarHub 是一个使用 Go 编写的 LLM API 网关服务,可将多个上游渠道聚合为统一的 OpenAI / Claude 风格 API,并提供用户、令牌、渠道、配额与计费比率的管理能力。
+[English](README.md) | [简体中文](README_CN.md)
 
-> 当前版本:`v0.1.0`(纯 Go 实现,无 CGO 依赖,单二进制部署)
+StarHub is an LLM API gateway written in Go. It aggregates multiple upstream channels behind a unified OpenAI / Claude-style API, and provides management for users, tokens, channels, quota and billing ratios.
 
-## 功能特性
+> Current version: `v0.1.0` (pure Go, no CGO, single-binary deployment)
 
-- **多协议中继(P3)**
-  - **任意入站协议 × 任意出站渠道**:`/v1/chat/completions`(OpenAI 格式)与 `/v1/messages`(Claude 格式)请求可路由到任意类型的渠道,`relay/dto` 层的统一中间表示(IR)负责双向协议转换;渠道与客户端协议相同时走字节级透传
-  - **多渠道类型**:OpenAI 兼容(1)、Claude(14)、Gemini(25)、AWS Bedrock(15,请求由 SigV4 签名,流式响应解析 AWS 二进制事件流)——覆盖「鉴权头不同 / 路径风格不同 / 签名 V4」三类典型差异,新渠道只需实现 `relay/channel.ChatAdaptor` 并在 `relay/relay_adaptor.go` 注册
-  - **全端点家族**:`/v1/embeddings`、`/v1/rerank`、`/v1/audio/speech`(TTS)、`/v1/audio/transcriptions|translations`(STT,multipart 可重放)、`/v1/images/generations|edits`(按张计价、流式图片 SSE)、`/v1/video/generations`(Sora 风格任务 API)、`/v1/realtime`(WebSocket,零第三方依赖的 RFC 6455 实现)
-  - **任务型 API(提交-轮询)**:`TaskAdaptor` 接口内建计费钩子(`ValidateRequestAndSetAction → EstimateBilling(预扣) → 提交 → 轮询 ParseTaskResult → AdjustBillingOnComplete(终态差额结算)`),后台 reaper 兜底完成无人轮询的任务,失败任务全额退款
-- **多渠道路由**:按「分组 + 模型」选择可用渠道,跨协议故障切换(首个渠道 5xx 时自动切换到其它协议的渠道),上游返回 `401/403` 时自动禁用渠道
-- **配额与计费**
-  - 预扣费 + 失败退款 + 事后按实际 usage 结算,三段式对文本 / 图片 / 任务 / Realtime 全部生效
-  - 分组倍率(group ratio)、模型倍率(model ratio)、补全倍率(completion ratio)可动态配置
-  - 换算关系:`1 USD = 500000` 配额
-- **管理 API**:用户 / 渠道 / 令牌 / 选项 / 日志的完整增删改查
-- **权限体系**:普通用户(1)、管理员(10)、超级管理员(100)三级角色,会话鉴权 + Bearer Token 鉴权双通道
-- **零依赖部署**:内置纯 Go SQLite(基于 glebarez/sqlite),无需外部数据库
+## Features
 
-## 快速开始
+- **Multi-protocol relay (P3)**
+  - **Any inbound protocol × any outbound channel**: requests to `/v1/chat/completions` (OpenAI format) and `/v1/messages` (Claude format) can be routed to any channel type. The unified intermediate representation (IR) in `relay/dto` handles bidirectional protocol conversion; when the channel speaks the same protocol as the client, the body passes through byte-faithfully
+  - **Multiple channel types**: OpenAI-compatible (1), Claude (14), Gemini (25), AWS Bedrock (15 — requests signed with SigV4, streaming responses parsed from the AWS binary event stream). These cover the three typical differences between providers (different auth headers / different path styles / SigV4 signing). A new channel only needs to implement `relay/channel.ChatAdaptor` and register itself in `relay/relay_adaptor.go`
+  - **Full endpoint family**: `/v1/embeddings`, `/v1/rerank`, `/v1/audio/speech` (TTS), `/v1/audio/transcriptions|translations` (STT, replayable multipart), `/v1/images/generations|edits` (per-image billing, streaming image SSE), `/v1/video/generations` (Sora-style task API), `/v1/realtime` (WebSocket, an RFC 6455 implementation with zero third-party dependencies)
+  - **Task-style API (submit-and-poll)**: the `TaskAdaptor` interface has billing hooks built in (`ValidateRequestAndSetAction → EstimateBilling (pre-charge) → submit → poll ParseTaskResult → AdjustBillingOnComplete (terminal reconciliation)`). A background reaper finishes tasks nobody polled, and failed tasks are refunded in full
+- **Multi-channel routing**: picks an available channel by group + model, with cross-protocol failover (when the first channel returns 5xx it switches to a channel speaking another protocol), and auto-disables a channel when upstream returns `401/403`
+- **Quota and billing**
+  - Pre-charge + refund on failure + settle against actual usage afterwards; this three-stage model applies to text / images / tasks / Realtime alike
+  - Group ratio, model ratio and completion ratio are all dynamically configurable
+  - Conversion: `1 USD = 500000` quota units
+- **Management API**: full CRUD for users / channels / tokens / options / logs
+- **Permission model**: three roles — regular user (1), admin (10), root (100) — with both session auth and Bearer token auth
+- **Zero-dependency deployment**: embedded pure-Go SQLite (via glebarez/sqlite), no external database required
 
-### 环境要求
+## Getting Started
+
+### Requirements
 
 - Go 1.26+
 
-### 构建与运行
+### Build and Run
 
 ```bash
-# 克隆项目
+# Clone the project
 git clone <repo-url> starhub
 cd starhub
 
-# 直接运行
+# Run directly
 go run .
 
-# 或构建单二进制
+# Or build a single binary
 go build -o starhub .
 ./starhub
 ```
 
-启动后默认监听 `:3000`,数据库文件为工作目录下的 `starhub.db`(首次启动自动建表并写入种子数据)。
+On startup the server listens on `:3000` by default, with the database file `starhub.db` in the working directory (tables are created and seed data written on first launch).
 
-### 环境变量
+### Environment Variables
 
-| 变量 | 默认值 | 说明 |
+| Variable | Default | Description |
 | --- | --- | --- |
-| `STARHUB_PORT` | `3000` | HTTP 监听端口 |
-| `STARHUB_DB` | `starhub.db` | SQLite 数据库文件路径 |
-| `STARHUB_ROOT_PASSWORD` | `123456` | root 用户初始密码(**生产环境务必修改**) |
-| `STARHUB_CHANNEL_TEST_INTERVAL` | `1800` | 渠道后台测活间隔(秒,`0` 关闭) |
-| `STARHUB_TASK_POLL_INTERVAL` | `60` | 任务后台轮询间隔(秒,`0` 关闭) |
+| `STARHUB_PORT` | `3000` | HTTP listen port |
+| `STARHUB_DB` | `starhub.db` | SQLite database file path |
+| `STARHUB_ROOT_PASSWORD` | `123456` | Initial password for the root user (**change this in production**) |
+| `STARHUB_CHANNEL_TEST_INTERVAL` | `1800` | Background channel health-check interval, in seconds (`0` disables) |
+| `STARHUB_TASK_POLL_INTERVAL` | `60` | Background task poll interval, in seconds (`0` disables) |
 
-### 首次登录
+### First Login
 
-默认内置超级管理员账号:
+A root account is created by default:
 
-- 用户名:`root`
-- 密码:`123456`(或 `STARHUB_ROOT_PASSWORD` 设置的值)
+- Username: `root`
+- Password: `123456` (or whatever `STARHUB_ROOT_PASSWORD` is set to)
 
-## 使用指南
+## Usage Guide
 
-### 1. 登录管理后台 API
+### 1. Log In to the Management API
 
 ```bash
 curl -X POST http://localhost:3000/api/user/login \
@@ -70,14 +72,14 @@ curl -X POST http://localhost:3000/api/user/login \
   -d '{"username":"root","password":"123456"}'
 ```
 
-登录成功后:
+On success:
 
-- 响应体中返回 `session` 字段(有效期 7 天)
-- 同时设置名为 `session` 的 HttpOnly Cookie
+- The response body carries a `session` field (valid for 7 days)
+- An HttpOnly cookie named `session` is set
 
-后续管理接口可通过 Cookie 携带会话,也可使用 `Authorization: Bearer <session>` 头(见 `middleware/session.go`)。
+Subsequent management calls can carry the session via that cookie or via an `Authorization: Bearer <session>` header (see `middleware/session.go`).
 
-### 2. 创建上游渠道(管理员)
+### 2. Create an Upstream Channel (admin)
 
 ```bash
 curl -X POST http://localhost:3000/api/channel \
@@ -93,21 +95,21 @@ curl -X POST http://localhost:3000/api/channel \
   }'
 ```
 
-- `models` 为逗号分隔的模型列表
-- `base_url` 不含 `/v1` 路径(由适配器拼接),留空使用各协议官方默认地址
+- `models` is a comma-separated model list
+- `base_url` does not include the `/v1` path (the adaptor appends it); leave it empty to use each protocol's official default address
 
-支持的渠道类型:
+Supported channel types:
 
-| type | 协议 | 鉴权 / 路径风格 | key 形态 |
+| type | Protocol | Auth / path style | Key format |
 | --- | --- | --- | --- |
-| `1` | OpenAI 兼容 | `Authorization: Bearer`,`/v1/chat/completions` 等标准路径 | API key(多 key 用换行分隔) |
-| `14` | Anthropic Claude | `x-api-key` + `anthropic-version`,`/v1/messages` | API key |
-| `15` | AWS Bedrock | SigV4 签名,`/model/{modelId}/invoke[-with-response-stream]` | `accessKeyId\|secretAccessKey\|region` |
-| `25` | Google Gemini | `x-goog-api-key`,`/v1beta/models/{model}:generateContent` | API key |
+| `1` | OpenAI-compatible | `Authorization: Bearer`, standard paths such as `/v1/chat/completions` | API key (separate multiple keys with newlines) |
+| `14` | Anthropic Claude | `x-api-key` + `anthropic-version`, `/v1/messages` | API key |
+| `15` | AWS Bedrock | SigV4 signing, `/model/{modelId}/invoke[-with-response-stream]` | `accessKeyId\|secretAccessKey\|region` |
+| `25` | Google Gemini | `x-goog-api-key`, `/v1beta/models/{model}:generateContent` | API key |
 
-任何入站协议可以路由到任何渠道类型:例如客户端用 Claude 格式(`/v1/messages`)请求 `gpt-4o-mini`,网关会做 DTO 互转后发给 OpenAI 渠道,再把响应转回 Claude 格式(含流式事件与错误封套的互转)。协议相同时(如 Claude 入站 → Claude 渠道)走字节级透传。
+Any inbound protocol can route to any channel type: for example, a client sending Claude format (`/v1/messages`) asking for `gpt-4o-mini` gets the DTOs converted on the way out to an OpenAI channel, and the response converted back to Claude format (including streaming events and error envelopes). When the protocols match (Claude inbound → Claude channel) the body passes through byte-faithfully.
 
-### 3. 创建 API 令牌
+### 3. Create an API Token
 
 ```bash
 curl -X POST http://localhost:3000/api/token \
@@ -116,9 +118,9 @@ curl -X POST http://localhost:3000/api/token \
   -d '{"name": "my-token"}'
 ```
 
-响应中的 `key` 字段即为可用密钥(`sk-` 前缀,48 位随机字符)。默认配额 `500000`($1),可选字段:`remain_quota`、`unlimited_quota`、`expired_time`(Unix 时间戳)、`group`。
+The `key` field in the response is the usable secret (`sk-` prefix, 48 random characters). The default quota is `500000` ($1). Optional fields: `remain_quota`, `unlimited_quota`, `expired_time` (Unix timestamp), `group`.
 
-### 4. 调用中继接口
+### 4. Call the Relay API
 
 ```bash
 curl http://localhost:3000/v1/chat/completions \
@@ -131,7 +133,7 @@ curl http://localhost:3000/v1/chat/completions \
   }'
 ```
 
-流式调用示例:
+Streaming example:
 
 ```bash
 curl -N http://localhost:3000/v1/chat/completions \
@@ -140,7 +142,7 @@ curl -N http://localhost:3000/v1/chat/completions \
   -d '{"model":"gpt-4o-mini","stream":true,"messages":[{"role":"user","content":"hello"}]}'
 ```
 
-Claude 格式入站示例(`/v1/messages` 可路由到任意类型渠道,响应保持 Claude 格式):
+Claude-format inbound example (`/v1/messages` can route to any channel type; the response stays in Claude format):
 
 ```bash
 curl http://localhost:3000/v1/messages \
@@ -153,7 +155,7 @@ curl http://localhost:3000/v1/messages \
   }'
 ```
 
-视频任务示例(提交-轮询,终态自动结算):
+Video task example (submit-and-poll, settled automatically at a terminal state):
 
 ```bash
 curl -X POST http://localhost:3000/v1/video/generations \
@@ -165,153 +167,157 @@ curl http://localhost:3000/v1/video/generations/<id> \
   -H "Authorization: Bearer sk-xxxx"
 ```
 
-### 5. 查询可用模型
+### 5. List Available Models
 
 ```bash
 curl http://localhost:3000/v1/models \
   -H "Authorization: Bearer sk-xxxx"
 ```
 
-## 管理 API 一览
+## Management API Reference
 
-| 方法 | 路径 | 权限 | 说明 |
+| Method | Path | Privilege | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/user/login` | 公开 | 登录 |
-| `POST` | `/api/user/logout` | 登录用户 | 登出 |
-| `GET` | `/api/user/self` | 登录用户 | 当前用户信息 |
-| `GET` / `PUT` | `/api/user` | 管理员 | 用户列表 / 更新用户 |
-| `POST` / `GET` / `PUT` / `DELETE` | `/api/channel`(`/{id}`) | 管理员 | 渠道管理(支持 1/14/15/25 四类) |
-| `POST` | `/api/channel/test/{id}` | 管理员 | 渠道测活(探针按渠道协议自动转换) |
-| `POST` / `GET` / `PUT` / `DELETE` | `/api/token`(`/{id}`) | 登录用户 | 令牌管理 |
-| `GET` / `PUT` | `/api/option` | 管理员 | 系统选项(含倍率配置) |
-| `GET` | `/api/log` | 登录用户 | 消费日志 |
+| `POST` | `/api/user/login` | Public | Log in |
+| `POST` | `/api/user/logout` | Logged-in user | Log out |
+| `GET` | `/api/user/self` | Logged-in user | Current user info |
+| `GET` / `PUT` | `/api/user` | Admin | List users / update a user |
+| `POST` / `GET` / `PUT` / `DELETE` | `/api/channel` (`/{id}`) | Admin | Channel management (supports all four types: 1/14/15/25) |
+| `POST` | `/api/channel/test/{id}` | Admin | Channel health check (the probe converts according to the channel's protocol) |
+| `POST` / `GET` / `PUT` / `DELETE` | `/api/token` (`/{id}`) | Logged-in user | Token management |
+| `GET` / `PUT` | `/api/option` | Admin | System options (including ratio configuration) |
+| `GET` | `/api/log` | Logged-in user | Usage logs |
 
-## 中继 API 一览
+## Relay API Reference
 
-| 方法 | 路径 | 入站格式 | 说明 |
+| Method | Path | Inbound format | Description |
 | --- | --- | --- | --- |
-| `POST` | `/v1/chat/completions` | OpenAI | 聊天补全(流式 / 非流式) |
-| `POST` | `/v1/messages` | Claude | 聊天补全(流式 / 非流式),Claude SDK 可直接对接 |
-| `POST` | `/v1/embeddings` | OpenAI | 向量嵌入 |
-| `POST` | `/v1/rerank` | OpenAI | 重排(Cohere 兼容格式) |
-| `POST` | `/v1/audio/speech` | OpenAI | 语音合成(音频透传) |
-| `POST` | `/v1/audio/transcriptions` | multipart | 语音转文字(表单 + 文件,重试可重放) |
-| `POST` | `/v1/audio/translations` | multipart | 语音翻译 |
-| `POST` | `/v1/images/generations` | OpenAI | 文生图(按张计价,`stream` 支持 SSE) |
-| `POST` | `/v1/images/edits` | multipart | 图生图(multipart 重放,`n` 与 JSON 路径同界) |
-| `POST` | `/v1/video/generations` | OpenAI | 视频任务提交(Sora 风格) |
-| `GET` | `/v1/video/generations/{id}` | - | 视频任务轮询(终态触发结算) |
-| `GET` | `/v1/realtime?model=...` | WebSocket | Realtime 会话双向透传,`response.done` 的 usage 结算 |
-| `GET` | `/v1/models` | - | 模型列表 |
+| `POST` | `/v1/chat/completions` | OpenAI | Chat completion (streaming / non-streaming) |
+| `POST` | `/v1/messages` | Claude | Chat completion (streaming / non-streaming); the Claude SDK can talk to it directly |
+| `POST` | `/v1/embeddings` | OpenAI | Vector embeddings |
+| `POST` | `/v1/rerank` | OpenAI | Reranking (Cohere-compatible format) |
+| `POST` | `/v1/audio/speech` | OpenAI | Text to speech (audio passed through) |
+| `POST` | `/v1/audio/transcriptions` | multipart | Speech to text (form + file, replayable on retry) |
+| `POST` | `/v1/audio/translations` | multipart | Speech translation |
+| `POST` | `/v1/images/generations` | OpenAI | Text to image (billed per image, `stream` supports SSE) |
+| `POST` | `/v1/images/edits` | multipart | Image to image (multipart replayed, `n` bounded the same as the JSON path) |
+| `POST` | `/v1/video/generations` | OpenAI | Video task submission (Sora-style) |
+| `GET` | `/v1/video/generations/{id}` | - | Video task polling (settles at a terminal state) |
+| `GET` | `/v1/realtime?model=...` | WebSocket | Bidirectional Realtime session passthrough, settled from the `response.done` usage |
+| `GET` | `/v1/models` | - | Model list |
 
-中继鉴权支持 `Authorization: Bearer sk-...` 与 `x-api-key: sk-...` 两种头(Claude SDK 默认使用后者)。所有中继端点共享 `TokenAuth → UserRateLimit → Distribute → Relay` 链路与三段式计费。
+Relay authentication accepts both `Authorization: Bearer sk-...` and `x-api-key: sk-...` (the Claude SDK uses the latter by default). Every relay endpoint shares the `TokenAuth → UserRateLimit → Distribute → Relay` chain and the three-stage billing model.
 
-## 计费说明
+## Billing
 
-计费采用三段式资金安全模型(「预扣 → 结算 → 退款」):
-
-```
-请求前  PreConsumeQuota    按 tokenizer 估算的 prompt + max_tokens×n 的补全预算预扣
-响应后  PostConsumeQuota   按上游真实 usage(含 cache / audio 细分)结算,多退少补
-失败时  RefundPreConsumedQuota  全额退还预扣
-```
-
-- **预扣防并发透支**:预扣在单一写事务内完成「校验 + 扣减」(SQLite 串行化写入,等效 `lockForUpdate` 行锁),用户余额 1 元同时发 10 个请求不可能全部放行
-- **结算原子落账**:差额调整、token / user / channel 的 used_quota 累计与消费日志在同一事务内提交,账目始终对得上
-- **计价优先级**:表达式计价(`model_price_expr`) > 按次计价(`model_price`) > token 计价(倍率公式)
-- 所有 float→int 换算走 `common/quota_math.go` 饱和截断(防溢出回绕成负数=送钱),被截断/钳制的请求在日志中留下 `quota_saturation` 审计标记
-
-token 计价公式位于 `relay/pricing.go`:
+Billing uses a three-stage fund-safety model (pre-charge → settle → refund):
 
 ```
-有效输入  = 文本 + cached × cache_ratio + 输入音频 × audio_ratio
-有效输出  = 文本 × completion_ratio + 输出音频 × audio_ratio
-消耗配额  = (有效输入 + 有效输出) × model_ratio / 1,000,000 × 500,000 × group_ratio × other_ratio
+Before   PreConsumeQuota          pre-charged from the tokenizer estimate of prompt
+                                  + a completion budget of max_tokens×n
+After    PostConsumeQuota         settled against the upstream's real usage (including
+                                  cache / audio detail); over-charge refunded, shortfall collected
+Failure  RefundPreConsumedQuota   the full pre-charge is returned
 ```
 
-即每 100 万 tokens 在 `ratio = 1` 时计费 $1(500000 配额)。`other_ratio` 由特殊乘数累乘(`relay.PriceData.AddOtherRatio`):图片的「尺寸 × 品质 × 张数」、视频任务的「秒数 × 张数」都挂在同一条链上,复用同一套钳制与审计。
+- **Pre-charge prevents concurrent overdraft**: the check-and-deduct happens inside a single write transaction (SQLite serializes writers, equivalent to a `lockForUpdate` row lock). A user with $1 of balance sending 10 requests at once cannot get all of them admitted
+- **Settlement is atomic**: the difference adjustment, the `used_quota` accumulation on token / user / channel, and the usage log all commit in one transaction, so the books always reconcile
+- **Pricing precedence**: expression pricing (`model_price_expr`) > per-call pricing (`model_price`) > token pricing (the ratio formula)
+- Every float→int conversion goes through the saturating truncation in `common/quota_math.go` (guarding against an overflow wrapping into a negative number, i.e. giving money away); requests that were truncated or clamped leave a `quota_saturation` audit marker in the log
 
-可在 `PUT /api/option` 中热更新的选项:
+The token pricing formula lives in `relay/pricing.go`:
 
-| 选项键 | 形态 | 说明 |
+```
+effective input  = text + cached × cache_ratio + input audio × audio_ratio
+effective output = text × completion_ratio + output audio × audio_ratio
+quota consumed   = (effective input + effective output) × model_ratio / 1,000,000 × 500,000 × group_ratio × other_ratio
+```
+
+That is, one million tokens at `ratio = 1` costs $1 (500000 quota units). `other_ratio` is the product of special multipliers (`relay.PriceData.AddOtherRatio`): the "size × quality × count" of an image and the "seconds × count" of a video task hang off the same chain, reusing the same clamping and auditing.
+
+Options hot-updatable through `PUT /api/option`:
+
+| Option key | Shape | Description |
 | --- | --- | --- |
-| `group_ratio` | `{"default":1}` | 分组倍率 |
-| `model_ratio` | `{"gpt-4o":2.5}` | 模型 token 倍率(未命中回退 `1.0`) |
-| `completion_ratio` | `{"gpt-4o":4}` | 补全倍率(未命中回退 `4.0`) |
-| `model_price` | `{"model":0.01}` | 按次计价(USD/次,命中后忽略 token 数) |
-| `model_price_expr` | `{"model":"<expr>"}` | 表达式计价(USD/次),支持阶梯价/动态价,语法与安全约束见 `pkg/billingexpr/expr.md` |
-| `cache_ratio` | `0.5` | cached prompt token 折扣(OpenAI 口径 0.5) |
-| `audio_ratio` | `40` | audio token 乘数 |
+| `group_ratio` | `{"default":1}` | Group ratio |
+| `model_ratio` | `{"gpt-4o":2.5}` | Model token ratio (falls back to `1.0` on a miss) |
+| `completion_ratio` | `{"gpt-4o":4}` | Completion ratio (falls back to `4.0` on a miss) |
+| `model_price` | `{"model":0.01}` | Per-call pricing (USD per call; once matched, token counts are ignored) |
+| `model_price_expr` | `{"model":"<expr>"}` | Expression pricing (USD per call), supporting tiered / dynamic prices; syntax and safety constraints in `pkg/billingexpr/expr.md` |
+| `cache_ratio` | `0.5` | Cached prompt token discount (OpenAI's convention is 0.5) |
+| `audio_ratio` | `40` | Audio token multiplier |
 
-### 请求侧校验与计量
+### Request-Side Validation and Metering
 
-- 聊天:`n`(`1..10`)与 `max_tokens` / `max_completion_tokens` / Claude `max_tokens`(`0..100000`)在**请求验证阶段**拒绝越界(400),乘数上界决定了预扣额度不可能被恶意放大
-- 图片:`n`(`1..128`)在 JSON 路径与 multipart 路径共享同一计费闸门(含 uint 回绕负值);全角 `×` 尺寸直接拒绝并提示用 `x`
-- 任务:`seconds`(`1..60`)与 `n`(`1..10`)同上
-- 流式请求自动注入 `stream_options.include_usage`;上游不返回 usage 时按本地累计的 SSE 内容估算,不漏计
-- 上游 usage 的 `prompt_tokens_details.cached_tokens`、`completion_tokens_details.audio_tokens` 等细分参与结算,且细分值被钳制在总量之内(谎报的 usage 无法放大折扣)
-- 请求失败、上游 4xx/5xx 错误时退还预扣配额
+- Chat: `n` (`1..10`) and `max_tokens` / `max_completion_tokens` / Claude `max_tokens` (`0..100000`) are rejected out of range (400) during **request validation**. The multiplier ceilings mean the pre-charge can never be inflated maliciously
+- Images: `n` (`1..128`) shares one billing gate across the JSON and multipart paths (including uint wrap-around to negative values); a full-width `×` in a size is rejected outright with a hint to use `x`
+- Tasks: `seconds` (`1..60`) and `n` (`1..10`) as above
+- Streaming requests automatically inject `stream_options.include_usage`; when the upstream returns no usage, the gateway estimates from the SSE content it accumulated locally, so nothing goes unbilled
+- The upstream usage sub-fields — `prompt_tokens_details.cached_tokens`, `completion_tokens_details.audio_tokens` and so on — take part in settlement, and each sub-field is clamped within the total (a lying usage cannot inflate the discount)
+- When a request fails or the upstream returns 4xx/5xx, the pre-charged quota is refunded
 
-### 各端点的计费口径
+### Billing Basis per Endpoint
 
-| 端点 | 预扣 | 结算 |
+| Endpoint | Pre-charge | Settlement |
 | --- | --- | --- |
-| chat / messages | prompt 估算 + max_tokens×n 预算 | 上游 usage(含 cache / audio 细分),缺省回退本地估算 |
-| embeddings / rerank | 输入 token 估算 | 上游 usage 的输入 token |
-| TTS | 按次价或输入 token 估算 | 音频响应无 usage,按输入计 |
-| STT | 按次价或音频时长估算(文件字节数启发式) | verbose_json 的 duration(≈25 token/秒),否则维持估算 |
-| images | 按次价 × 尺寸倍率 × 品质倍率 × n | 上游实际返回张数([1,128] 之外的恶意值回退请求值;流式按 completed 事件计数) |
-| video 任务 | 按秒价 × seconds × n | 终态差额结算:成功按请求参数,取消半价,失败全额退款 |
-| realtime | 按次价或保守 token 预算 | `response.done` 的 usage(含 audio 细分),缺省按会话文本估算 |
+| chat / messages | prompt estimate + a max_tokens×n budget | upstream usage (including cache / audio detail), falling back to the local estimate |
+| embeddings / rerank | input token estimate | the input tokens of the upstream usage |
+| TTS | per-call price, or an input token estimate | audio responses carry no usage, so it is billed on input |
+| STT | per-call price, or an audio duration estimate (heuristic on file size) | the `duration` from verbose_json (≈25 tokens/second); otherwise the estimate stands |
+| images | per-call price × size multiplier × quality multiplier × n | the count the upstream actually returned (a malicious value outside [1,128] falls back to the requested one; streaming counts `completed` events) |
+| video task | per-second price × seconds × n | terminal reconciliation: on success by the request parameters, half price on cancellation, full refund on failure |
+| realtime | per-call price, or a conservative token budget | the `response.done` usage (including audio detail); otherwise estimated from the session text |
 
-## 项目结构
+## Project Layout
 
 ```
 starhub/
-├── main.go                        # 入口:加载配置、初始化数据库、注册路由、启动任务 reaper
-├── e2e_test.go                    # P0-P2 端到端集成测试(含 mock 上游)
-├── e2e_p3_test.go                 # P3 端到端测试:协议矩阵 / 全端点 / 任务 / Realtime
-├── common/                        # 常量、上下文键、加解密、统一响应、配额饱和换算、multipart 解析
-├── controller/                    # HTTP 处理器;relay.go 系列承载共享重试循环与各模式流程
-├── middleware/                    # 鉴权(UserAuth/AdminAuth/TokenAuth)、会话、渠道路由(Distribute,支持 multipart)
-├── model/                         # GORM 数据模型(user/token/channel/ability/log/option/task)与事务化配额操作
+├── main.go                        # Entry point: load config, init database, register routes, start the task reaper
+├── e2e_test.go                    # P0-P2 end-to-end integration tests (with a mock upstream)
+├── e2e_p3_test.go                 # P3 end-to-end tests: protocol matrix / full endpoints / tasks / Realtime
+├── common/                        # Constants, context keys, crypto, unified responses, saturating quota math, multipart parsing
+├── controller/                    # HTTP handlers; the relay.go family carries the shared retry loop and per-mode flows
+├── middleware/                    # Auth (UserAuth/AdminAuth/TokenAuth), sessions, channel routing (Distribute, multipart-aware)
+├── model/                         # GORM data models (user/token/channel/ability/log/option/task) and transactional quota operations
 ├── relay/
-│   ├── dto/                       # 统一中间表示(IR)+ 各协议 wire DTO 与互转(openai/claude/gemini/bedrock/image/audio/task)
-│   ├── channel/                   # ChatAdaptor / TaskAdaptor 接口与四个供应商包(openai/claude/gemini/aws)
-│   ├── relay_adaptor.go           # 适配器注册 switch(新渠道在此接线)
-│   ├── chat_writer.go             # IR → 客户端协议的响应/流式序列化(P3.2 矩阵的出站侧)
-│   ├── pricing.go / quota.go      # 计价引擎与三段式配额(所有模式共用)
-│   ├── image_pricing.go           # 按张计价(尺寸×品质×张数,含护栏)
-│   ├── task_billing.go            # TaskPricing → 配额换算
-│   ├── ws.go / realtime.go        # RFC 6455 帧编解码与 Realtime 会话中继
-│   └── validate.go / estimate.go  # 请求侧校验与 token 估算
-├── pkg/billingexpr/               # 计费表达式引擎(阶梯价/动态价,设计约束见 expr.md)
-├── service/                       # 渠道测活、任务轮询(reaper)、禁用策略
-├── setting/                       # 倍率与价格运行时配置(内存 + 数据库持久化)
-└── doc/                           # 需求与架构参考文档
+│   ├── dto/                       # Unified intermediate representation (IR) + per-protocol wire DTOs and conversions (openai/claude/gemini/bedrock/image/audio/task)
+│   ├── channel/                   # ChatAdaptor / TaskAdaptor interfaces and the four provider packages (openai/claude/gemini/aws)
+│   ├── relay_adaptor.go           # Adaptor registration switch (wire new channels in here)
+│   ├── chat_writer.go             # IR → client protocol response / stream serialization (outbound side of the P3.2 matrix)
+│   ├── pricing.go / quota.go      # Pricing engine and three-stage quota (shared by every mode)
+│   ├── image_pricing.go           # Per-image pricing (size×quality×count, with guardrails)
+│   ├── task_billing.go            # TaskPricing → quota conversion
+│   ├── ws.go / realtime.go        # RFC 6455 frame codec and Realtime session relay
+│   └── validate.go / estimate.go  # Request-side validation and token estimation
+├── pkg/billingexpr/               # Billing expression engine (tiered / dynamic prices; design constraints in expr.md)
+├── service/                       # Channel health checks, task polling (reaper), disable policy
+├── setting/                       # Ratio and price runtime configuration (in-memory + persisted to the database)
+└── doc/                           # Requirements and architecture reference documents
 ```
 
-### 中继链路
+### Relay Chain
 
 ```
-Client ──TokenAuth(校验令牌/配额/分组)──▶ UserRateLimit ──▶ Distribute(解析并缓存
-      请求体/模型/stream;multipart 缓存原始字节与 Content-Type)
-      ──▶ Relay(选渠道 → 预扣费 → 重试循环:5xx/超时/网络错误按优先级阶梯切换渠道,
-              不支持该模式的渠道跳过;4xx 错误封套按入站协议转换后透传终止;
-              成功结算,全失败退款)──▶ 后台测活(自动禁用/恢复渠道)+ 任务 reaper(终态结算)
+Client ──TokenAuth(validate token/quota/group)──▶ UserRateLimit ──▶ Distribute(parse and cache the
+      request body/model/stream; for multipart, cache the raw bytes and Content-Type)
+      ──▶ Relay(pick a channel → pre-charge → retry loop: on 5xx/timeout/network error step down
+              the priority ladder to another channel, skipping channels that don't support the mode;
+              4xx error envelopes are converted per the inbound protocol and passed through to stop;
+              settle on success, refund when everything failed)──▶ background health checks (auto-disable /
+              re-enable channels) + task reaper (terminal settlement)
 ```
 
-各中间件通过 request context 传递状态(`CtxUsingGroup` → `CtxRequestBody`/`CtxRequestModel`/`CtxRequestContentType`),渠道选择与重试由 `controller/relay.go` 的 `relayFlow` 完成(轨迹 `used_channels` 记录 `1->2->3`),见 `main.go` 中 `NewRouter` 的注释约定。
+Middleware passes state through the request context (`CtxUsingGroup` → `CtxRequestBody`/`CtxRequestModel`/`CtxRequestContentType`). Channel selection and retries are done by the `relayFlow` in `controller/relay.go` (the trail `used_channels` records `1->2->3`); see the convention documented on `NewRouter` in `main.go`.
 
-## 测试
+## Tests
 
 ```bash
-go test ./...        # 全部测试(单元 + e2e)
-go test -v ./...     # 详细输出
+go test ./...        # Everything (unit + e2e)
+go test -v ./...     # Verbose output
 ```
 
-测试覆盖:加密与密钥校验(`common`)、配额结算与图片计价不变量(`relay`)、协议互转(`relay/dto`)、SigV4 官方文档向量与事件流解析(`relay/channel/aws`)、WebSocket 帧编解码(`relay/ws`)、倍率解析(`setting`)、数据层(`model`)、渠道健康规则(`service`)以及完整中继链路(`e2e_test.go` / `e2e_p3_test.go`,内置各协议 mock 上游:OpenAI / Claude / Gemini / Bedrock / 图片 / 任务 / Realtime)。
+Coverage includes crypto and key validation (`common`), quota settlement and image-pricing invariants (`relay`), protocol conversion (`relay/dto`), the SigV4 documented vectors and event-stream parsing (`relay/channel/aws`), WebSocket frame codec (`relay/ws`), ratio parsing (`setting`), the data layer (`model`), channel health rules (`service`), and the full relay chain (`e2e_test.go` / `e2e_p3_test.go`, with built-in mock upstreams for every protocol: OpenAI / Claude / Gemini / Bedrock / images / tasks / Realtime).
 
 ## License
 
-本项目暂未声明开源协议,默认保留所有权利。
+No open-source license has been declared for this project; all rights are reserved by default.
