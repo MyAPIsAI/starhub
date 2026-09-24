@@ -1126,6 +1126,9 @@ func TestP3TaskLifecycle(t *testing.T) {
 	if got := remain(); got != common.DefaultTokenQuota-taskCost {
 		t.Fatalf("task pre-charge = %d, want %d", got, common.DefaultTokenQuota-taskCost)
 	}
+	// A price change after acceptance must not reprice this pending task.
+	setOption(t, env, "group_ratio", `{"default":2}`)
+	setOption(t, env, "model_price", `{"sora-2":0.02}`)
 
 	// poll 1: in progress, progress field flows through, money stays held
 	res = doRequest(env.base, "GET", "/v1/video/generations/"+submit.ID, env.apiKey, nil)

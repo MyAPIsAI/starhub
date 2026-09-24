@@ -75,6 +75,85 @@ func TestUpdateOptionRejectsInvalidValue(t *testing.T) {
 	}
 }
 
+func TestUpdateOptionDatabaseFailureLeavesMemoryUnchanged(t *testing.T) {
+	newTestDB(t)
+	uid, role := admin()
+	before, _, err := model.GetOption(setting.OptionKeyCacheRatio)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := model.DB.Create(&model.OptionChange{Version: 1, Key: "reserved"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	rr := call(UpdateOption, testRequest{method: http.MethodPut, target: "/api/option",
+		body: fmt.Sprintf(`{"key":%q,"value":"2.5"}`, setting.OptionKeyCacheRatio), userID: uid, role: role})
+	expectStatus(t, rr, http.StatusInternalServerError)
+	after, _, err := model.GetOption(setting.OptionKeyCacheRatio)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after != before || setting.CacheRatioValue() != setting.FallbackCacheRatio {
+		t.Fatalf("failed transaction changed option: db=%q memory=%v", after, setting.CacheRatioValue())
+	}
+}
+
+func TestOptionVersionHistoryAndRollback(t *testing.T) {
+	newTestDB(t)
+	uid, role := admin()
+	rr := call(UpdateOption, testRequest{method: http.MethodPut, target: "/api/option",
+		body:   fmt.Sprintf(`{"key":%q,"value":"2.5","expected_version":0}`, setting.OptionKeyCacheRatio),
+		userID: uid, role: role})
+	expectStatus(t, rr, http.StatusOK)
+	rr = call(OptionStatus, testRequest{target: "/api/option/status", userID: uid, role: role})
+	var status struct {
+		DatabaseVersion int64 `json:"database_version"`
+		LoadedVersion   int64 `json:"loaded_version"`
+		InSync          bool  `json:"in_sync"`
+	}
+	decodeData(t, rr, &status)
+	if status.DatabaseVersion != 1 || status.LoadedVersion != 1 || !status.InSync {
+		t.Fatalf("option status = %+v", status)
+	}
+	rr = call(UpdateOption, testRequest{method: http.MethodPut, target: "/api/option",
+		body:   fmt.Sprintf(`{"key":%q,"value":"3","expected_version":0}`, setting.OptionKeyCacheRatio),
+		userID: uid, role: role})
+	expectError(t, rr, http.StatusConflict, "option version changed")
+	rr = call(OptionHistory, testRequest{target: "/api/option/history", userID: uid, role: role})
+	var history []model.OptionChange
+	decodeData(t, rr, &history)
+	if len(history) != 1 || history[0].OldValue != "0.5" || history[0].NewValue != "2.5" {
+		t.Fatalf("option history = %+v", history)
+	}
+	rr = call(RollbackOption, testRequest{method: http.MethodPost, target: "/api/option/rollback",
+		body: `{"version":1,"expected_version":1}`, userID: uid, role: role})
+	expectStatus(t, rr, http.StatusOK)
+	if got := setting.CacheRatioValue(); got != setting.FallbackCacheRatio {
+		t.Fatalf("cache ratio after rollback = %v", got)
+	}
+}
+
+func TestWebhookOptionIsRedacted(t *testing.T) {
+	newTestDB(t)
+	uid, role := admin()
+	rr := call(UpdateOption, testRequest{method: http.MethodPut, target: "/api/option",
+		body: `{"key":"alert_webhook_url","value":"https://example.test/secret"}`, userID: uid, role: role})
+	expectStatus(t, rr, http.StatusOK)
+	rr = call(ListOptions, testRequest{target: "/api/option", userID: uid, role: role})
+	var options []model.Option
+	decodeData(t, rr, &options)
+	for _, option := range options {
+		if option.Key == setting.OptionKeyAlertWebhookURL && option.Value != "[redacted]" {
+			t.Fatalf("webhook URL was exposed: %q", option.Value)
+		}
+	}
+	rr = call(OptionHistory, testRequest{target: "/api/option/history", userID: uid, role: role})
+	var history []model.OptionChange
+	decodeData(t, rr, &history)
+	if len(history) != 1 || history[0].OldValue != "[redacted]" || history[0].NewValue != "[redacted]" {
+		t.Fatalf("webhook history was exposed: %+v", history)
+	}
+}
+
 func TestUpdateOptionPersistsAndReloads(t *testing.T) {
 	newTestDB(t)
 	uid, role := admin()

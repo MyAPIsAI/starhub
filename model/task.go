@@ -34,14 +34,15 @@ type Task struct {
 	// UserGroup snapshots the user's own group at submit so the terminal
 	// settlement (which may happen days later) still applies the group x
 	// group matrix multiplier correctly.
-	UserGroup   string `gorm:"size:64;not null;default:''" json:"user_group"`
-	Quota       int64  `gorm:"not null;default:0" json:"quota"`
-	RequestMeta string `gorm:"type:text;not null;default:''" json:"request_meta"`
-	ResultMeta     string `gorm:"type:text;not null;default:''" json:"result_meta"`
-	FailReason     string `gorm:"size:512;not null;default:''" json:"fail_reason"`
-	SubmitTime     int64  `gorm:"autoCreateTime" json:"submit_time"`
-	UpdateTime     int64  `gorm:"autoUpdateTime" json:"update_time"`
-	CompleteTime   int64  `gorm:"not null;default:0" json:"complete_time"`
+	UserGroup    string `gorm:"size:64;not null;default:''" json:"user_group"`
+	Quota        int64  `gorm:"not null;default:0" json:"quota"`
+	RequestMeta  string `gorm:"type:text;not null;default:''" json:"request_meta"`
+	PricingMeta  string `gorm:"type:text;not null;default:''" json:"pricing_meta"`
+	ResultMeta   string `gorm:"type:text;not null;default:''" json:"result_meta"`
+	FailReason   string `gorm:"size:512;not null;default:''" json:"fail_reason"`
+	SubmitTime   int64  `gorm:"autoCreateTime" json:"submit_time"`
+	UpdateTime   int64  `gorm:"autoUpdateTime" json:"update_time"`
+	CompleteTime int64  `gorm:"not null;default:0" json:"complete_time"`
 }
 
 func InsertTask(t *Task) error {

@@ -311,18 +311,21 @@ func (VideoTaskAdaptor) EstimateBilling(modelName, group string, req *dto.TaskRe
 	}
 }
 
-func (VideoTaskAdaptor) AdjustBillingOnComplete(modelName, group string, req *dto.TaskRequest, res *dto.TaskResult) channel.TaskPricing {
+func (VideoTaskAdaptor) AdjustBillingOnComplete(modelName, group string, req *dto.TaskRequest, res *dto.TaskResult, accepted channel.TaskPricing) channel.TaskPricing {
 	switch res.Status {
 	case dto.TaskStatusSucceeded:
 		// The platform does not report delivered seconds; the request
 		// parameters remain the bill of record.
-		return VideoTaskAdaptor{}.EstimateBilling(modelName, group, req)
+		return accepted
 	case dto.TaskStatusCancelled:
 		// Cancellations are refunded at half rate (work already spent).
-		if price, ok := taskModelPrice(modelName); ok && price > 0 {
-			return channel.TaskPricing{PerCallUSD: price, Units: 0.5 * float64(req.Seconds) * float64(req.N)}
+		if accepted.PerCallUSD > 0 {
+			accepted.Units *= 0.5
+			return accepted
 		}
-		return channel.TaskPricing{PromptTokens: (dto.EstimateTokens(req.Prompt) + 100) / 2}
+		accepted.PromptTokens /= 2
+		accepted.CompletionTokens /= 2
+		return accepted
 	default:
 		// Failed tasks are fully refunded.
 		return channel.TaskPricing{}

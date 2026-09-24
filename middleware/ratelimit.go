@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/config"
 )
 
 const (
@@ -37,6 +38,9 @@ func (l *fixedWindowLimiter) allow(key string, now time.Time) bool {
 	window := now.Unix() / int64(rateWindow/time.Second)
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.limit == 0 {
+		return true
+	}
 	b, ok := l.buckets[key]
 	if !ok || b.window != window {
 		if len(l.buckets) >= maxTrackedRateKeys {
@@ -67,6 +71,14 @@ var (
 	ipLimiter   = newFixedWindowLimiter(DefaultIPLimitPerMinute)
 	userLimiter = newFixedWindowLimiter(DefaultUserLimitPerMinute)
 )
+
+func init() {
+	config.Subscribe(func(c config.Runtime) {
+		ConfigureRateLimits(c.IPLimitPerMinute, c.UserLimitPerMinute)
+		ConfigureTokenRateLimit(c.TokenLimitPerMinute)
+		ConfigureModelRateLimit(c.ModelLimitPerMinute)
+	})
+}
 
 func ConfigureRateLimits(ipPerMinute, userPerMinute int64) {
 	if ipPerMinute <= 0 {

@@ -176,6 +176,23 @@ func TestPriceDataAddOtherRatioClamp(t *testing.T) {
 	}
 }
 
+func TestPriceDataKeepsGroupMatrixAtAcceptance(t *testing.T) {
+	if err := setting.UpdateOption(setting.OptionKeyGroupGroupRatio, `{"vip":{"default":0.5}}`); err != nil {
+		t.Fatal(err)
+	}
+	defer setting.UpdateOption(setting.OptionKeyGroupGroupRatio, `{}`)
+	accepted := NewPriceDataWithUserGroup("gpt-4o", "default", "vip")
+	if err := setting.UpdateOption(setting.OptionKeyGroupGroupRatio, `{"vip":{"default":0.25}}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := accepted.EffectiveRatio(); got != 0.5 {
+		t.Fatalf("accepted request ratio = %v, want 0.5", got)
+	}
+	if got := NewPriceDataWithUserGroup("gpt-4o", "default", "vip").EffectiveRatio(); got != 0.25 {
+		t.Fatalf("new request ratio = %v, want 0.25", got)
+	}
+}
+
 func TestEstimatePreConsumeQuotaUsesMaxTokens(t *testing.T) {
 	resetPricingForTests()
 	defer resetPricingForTests()

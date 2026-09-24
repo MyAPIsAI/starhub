@@ -21,13 +21,21 @@ type Ability struct {
 }
 
 func RebuildAbilities(c *Channel) error {
-	if err := DeleteAbilitiesByChannel(c.ID); err != nil {
+	return DB.Transaction(func(tx *gorm.DB) error { return rebuildAbilities(tx, c) })
+}
+
+func rebuildAbilities(tx *gorm.DB, c *Channel) error {
+	if err := tx.Where("channel_id = ?", c.ID).Delete(&Ability{}).Error; err != nil {
 		return err
 	}
-	return AddAbilities(c)
+	return addAbilities(tx, c)
 }
 
 func AddAbilities(c *Channel) error {
+	return addAbilities(DB, c)
+}
+
+func addAbilities(tx *gorm.DB, c *Channel) error {
 	models := SplitList(c.Models)
 	groups := ChannelGroups(c)
 	if len(models) == 0 {
@@ -47,7 +55,7 @@ func AddAbilities(c *Channel) error {
 			})
 		}
 	}
-	return DB.Create(&abilities).Error
+	return tx.Create(&abilities).Error
 }
 
 func DeleteAbilitiesByChannel(channelID int64) error {

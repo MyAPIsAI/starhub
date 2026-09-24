@@ -41,28 +41,34 @@ type Channel struct {
 }
 
 func InsertChannel(c *Channel) error {
-	if err := DB.Create(c).Error; err != nil {
-		return err
-	}
-	return RebuildAbilities(c)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(c).Error; err != nil {
+			return err
+		}
+		return rebuildAbilities(tx, c)
+	})
 }
 
 func UpdateChannel(c *Channel) error {
-	if err := DB.Save(c).Error; err != nil {
-		return err
-	}
-	return RebuildAbilities(c)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(c).Error; err != nil {
+			return err
+		}
+		return rebuildAbilities(tx, c)
+	})
 }
 
 func DeleteChannel(id int64) error {
-	res := DB.Delete(&Channel{}, "id = ?", id)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return ErrChannelNotFound
-	}
-	return DeleteAbilitiesByChannel(id)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		res := tx.Delete(&Channel{}, "id = ?", id)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrChannelNotFound
+		}
+		return tx.Where("channel_id = ?", id).Delete(&Ability{}).Error
+	})
 }
 
 func GetChannelByID(id int64) (*Channel, error) {
@@ -87,14 +93,17 @@ func ListChannels() ([]Channel, error) {
 }
 
 func UpdateChannelStatus(id int64, status int) error {
-	res := DB.Model(&Channel{}).Where("id = ?", id).Updates(map[string]any{"status": status})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return ErrChannelNotFound
-	}
-	return SetAbilitiesEnabledByChannel(id, status == common.ChannelStatusEnabled)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&Channel{}).Where("id = ?", id).Updates(map[string]any{"status": status})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrChannelNotFound
+		}
+		return tx.Model(&Ability{}).Where("channel_id = ?", id).
+			Updates(map[string]any{"enabled": status == common.ChannelStatusEnabled}).Error
+	})
 }
 
 func UpdateChannelResponseTime(id int64, milliseconds int64) error {

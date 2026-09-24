@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"starhub/common"
+	"starhub/config"
 	"starhub/internal/router"
 	"starhub/model"
 	"starhub/service"
@@ -24,21 +24,14 @@ func main() {
 	} else {
 		log.Print("web console: not embedded; this is an API-only build and / returns 404. Build with node scripts/build-release.mjs and run the binary from release/")
 	}
-	dbPath := os.Getenv("STARHUB_DB")
-	if dbPath == "" {
-		dbPath = "starhub.db"
+	bootstrap := config.BootstrapFromEnv()
+	if err := config.InitFromEnv(); err != nil {
+		log.Fatalf("invalid runtime configuration: %v", err)
 	}
-	port := os.Getenv("STARHUB_PORT")
-	if port == "" {
-		port = "3000"
-	}
-	if err := model.InitDB(dbPath); err != nil {
+	if err := model.InitDB(bootstrap.DBPath); err != nil {
 		log.Fatalf("failed to init database: %v", err)
 	}
-	if err := model.LoadOptionsToSettings(); err != nil {
-		log.Fatalf("failed to load options: %v", err)
-	}
-	rootPassword := os.Getenv("STARHUB_ROOT_PASSWORD")
+	rootPassword := bootstrap.RootPassword
 	if rootPassword == "" {
 		rootPassword = common.DefaultRootPasswd
 		log.Printf("WARNING: using default root password %q, set STARHUB_ROOT_PASSWORD to override", rootPassword)
@@ -46,59 +39,28 @@ func main() {
 	if err := model.Seed(rootPassword); err != nil {
 		log.Fatalf("failed to seed database: %v", err)
 	}
+	if err := model.LoadOptionsToSettings(); err != nil {
+		log.Fatalf("failed to load options: %v", err)
+	}
+	go model.WatchOptions(context.Background(), time.Second)
 	startChannelTestTask()
 	startTaskPollTask()
-	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, port, dbPath)
+	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, bootstrap.Port, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
 	// security, and IP rate limiting around the route table.
-	if err := http.ListenAndServe(":"+port, router.New()); err != nil {
+	if err := http.ListenAndServe(":"+bootstrap.Port, router.New()); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// startTaskPollTask launches the background task reaper: clients that
-// never poll their submissions still get finished and billed. The
-// interval defaults to 60s and can be tuned or disabled (0) via
-// STARHUB_TASK_POLL_INTERVAL (seconds).
+// startTaskPollTask starts the reloadable background task reaper.
 func startTaskPollTask() {
-	interval := 60 * time.Second
-	if raw := os.Getenv("STARHUB_TASK_POLL_INTERVAL"); raw != "" {
-		v, err := strconv.Atoi(raw)
-		if err != nil || v < 0 {
-			log.Printf("WARNING: invalid STARHUB_TASK_POLL_INTERVAL %q, using default", raw)
-		} else if v == 0 {
-			interval = 0
-		} else {
-			interval = time.Duration(v) * time.Second
-		}
-	}
-	if interval <= 0 {
-		log.Printf("task poller disabled")
-		return
-	}
-	go service.RunTaskPollLoop(context.Background(), interval)
-	log.Printf("task poller started (interval %s)", interval)
+	go config.RunLoop(context.Background(), func(c config.Runtime) time.Duration { return c.TaskPollInterval }, service.PollPendingTasksOnce)
+	log.Printf("task poller configured (interval %s)", config.Current().TaskPollInterval)
 }
 
-// startChannelTestTask launches the background channel health checker. The
-// interval defaults to service.DefaultChannelTestInterval and can be tuned or
-// disabled (0) via STARHUB_CHANNEL_TEST_INTERVAL (seconds).
+// startChannelTestTask starts the reloadable channel health checker.
 func startChannelTestTask() {
-	interval := service.DefaultChannelTestInterval
-	if raw := os.Getenv("STARHUB_CHANNEL_TEST_INTERVAL"); raw != "" {
-		v, err := strconv.Atoi(raw)
-		if err != nil || v < 0 {
-			log.Printf("WARNING: invalid STARHUB_CHANNEL_TEST_INTERVAL %q, using default", raw)
-		} else if v == 0 {
-			interval = 0
-		} else {
-			interval = time.Duration(v) * time.Second
-		}
-	}
-	if interval <= 0 {
-		log.Printf("channel health checker disabled")
-		return
-	}
-	go service.RunChannelTestLoop(context.Background(), interval)
-	log.Printf("channel health checker started (interval %s)", interval)
+	go config.RunLoop(context.Background(), func(c config.Runtime) time.Duration { return c.ChannelTestInterval }, service.RunChannelTestOnce)
+	log.Printf("channel health checker configured (interval %s)", config.Current().ChannelTestInterval)
 }

@@ -28,10 +28,11 @@ type PriceData struct {
 	// PriceExpr, when configured, wins over per-call and token billing.
 	PriceExpr string
 
-	GroupRatio float64
-	CacheRatio float64
-	AudioRatio float64
-	OtherRatio float64
+	GroupRatio      float64
+	GroupGroupRatio float64
+	CacheRatio      float64
+	AudioRatio      float64
+	OtherRatio      float64
 	// UserGroup is the user's own group (for the group x group matrix).
 	// Empty means no extra matrix multiplier.
 	UserGroup string
@@ -44,29 +45,30 @@ type PriceData struct {
 // current settings. The user group (for the group x group matrix) defaults
 // to empty; use NewPriceDataWithUserGroup when the matrix should apply.
 func NewPriceData(modelName, group string) *PriceData {
-	modelRatio, hasModelRatio := setting.LookupModelRatio(modelName)
-	completionRatio, hasCompletionRatio := setting.LookupCompletionRatio(modelName)
-	groupRatio, ok := setting.GroupRatioValue(group)
-	if !ok || groupRatio <= 0 {
-		groupRatio = 1
-	}
+	return newPriceData(modelName, group, "")
+}
+
+func newPriceData(modelName, group, userGroup string) *PriceData {
+	inputs := setting.ResolvePricing(modelName, group, userGroup)
 	pd := &PriceData{
 		ModelName:              modelName,
-		ModelRatio:             modelRatio,
-		CompletionRatio:        completionRatio,
-		missingModelRatio:      !hasModelRatio,
-		missingCompletionRatio: !hasCompletionRatio,
-		GroupRatio:             groupRatio,
-		CacheRatio:             setting.CacheRatioValue(),
-		AudioRatio:             setting.AudioRatioValue(),
+		ModelRatio:             inputs.ModelRatio,
+		CompletionRatio:        inputs.CompletionRatio,
+		missingModelRatio:      !inputs.HasModelRatio,
+		missingCompletionRatio: !inputs.HasCompletion,
+		GroupRatio:             inputs.GroupRatio,
+		GroupGroupRatio:        inputs.GroupGroupRatio,
+		CacheRatio:             inputs.CacheRatio,
+		AudioRatio:             inputs.AudioRatio,
 		OtherRatio:             1,
 		UsingGroup:             group,
+		UserGroup:              userGroup,
 	}
-	if price, ok := setting.ModelPriceValue(modelName); ok && price > 0 {
-		pd.ModelPriceUSD = price
+	if inputs.ModelPriceUSD > 0 {
+		pd.ModelPriceUSD = inputs.ModelPriceUSD
 	}
-	if expr, ok := setting.ModelPriceExpr(modelName); ok && expr != "" {
-		pd.PriceExpr = expr
+	if inputs.PriceExpr != "" {
+		pd.PriceExpr = inputs.PriceExpr
 	}
 	return pd
 }
@@ -76,9 +78,7 @@ func NewPriceData(modelName, group string) *PriceData {
 // (userGroup, usingGroup) multiplies the effective ratio; a missing entry is
 // 1.0 (no extra multiplier).
 func NewPriceDataWithUserGroup(modelName, group, userGroup string) *PriceData {
-	pd := NewPriceData(modelName, group)
-	pd.UserGroup = userGroup
-	return pd
+	return newPriceData(modelName, group, userGroup)
 }
 
 // AddOtherRatio multiplies a special billing multiplier (audio / image
@@ -95,7 +95,7 @@ func (p *PriceData) AddOtherRatio(ratio float64) {
 func (p *PriceData) EffectiveRatio() float64 {
 	r := p.GroupRatio * p.OtherRatio
 	if p.UserGroup != "" && p.UsingGroup != "" {
-		r *= setting.GroupGroupRatioValue(p.UserGroup, p.UsingGroup)
+		r *= p.GroupGroupRatio
 	}
 	return common.ClampRatio(r, "effective")
 }

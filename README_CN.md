@@ -157,6 +157,24 @@ docker run --rm -p 3000:3000 -v starhub-data:/data -e STARHUB_ROOT_PASSWORD=chan
 | `STARHUB_TASK_POLL_INTERVAL` | `60` | 任务后台轮询间隔(秒,`0` 关闭) |
 | `STARHUB_COOKIE_SECURE` | `false` | HTTPS 反向代理后设为 `true`；直接 TLS 请求自动设置 Secure Cookie |
 
+`STARHUB_PORT`、`STARHUB_DB`、`STARHUB_ROOT_PASSWORD` 属于启动配置。修改端口或数据库路径需要重启；root 密码变量只在新数据库初始化时使用。测活、轮询和 Cookie 变量是新数据库首次初始化时的默认值；初始化后以数据库选项为准。若部署环境设置 `STARHUB_COOKIE_SECURE=true`，后台不能将其降低为不安全的 Cookie。
+
+### 运行配置与热重载
+
+下列选项可以通过 `PUT /api/option` 更新，无需重启。间隔单位为秒，`0` 表示关闭任务；IP 和用户限流必须大于 `0`，Token 和模型限流的 `0` 表示不限流。
+
+| 选项键 | 默认值 | 用途 |
+| --- | ---: | --- |
+| `channel_test_interval` | `1800` | 渠道测活间隔 |
+| `task_poll_interval` | `60` | 待完成任务轮询间隔 |
+| `cookie_secure` | `false` | 反向代理终止 TLS 时使用 Secure Cookie |
+| `ip_rate_limit` | `240` | 每 IP 每分钟请求数 |
+| `user_rate_limit` | `120` | 每用户每分钟请求数 |
+| `token_rate_limit` | `60` | 每 Token 每分钟请求数 |
+| `model_rate_limit` | `200` | 每模型每分钟请求数 |
+
+配置更新先校验并带版本号提交数据库，再应用到当前进程。共用数据库的其他进程每秒检查版本并重载。`GET /api/option/status` 返回数据库版本、当前进程已应用版本及近期在线进程的版本；`GET /api/option/history?limit=50` 查询变更；`POST /api/option/rollback` 使用 `{"version":1,"expected_version":2}` 恢复第 1 版变更前的值。`PUT /api/option` 可附带 `expected_version`，并发修改冲突返回 409。Webhook URL 历史值会脱敏，不能通过历史回滚。进行中的请求沿用受理时的计价快照。
+
 ### 首次登录
 
 默认内置超级管理员账号:
@@ -288,6 +306,9 @@ curl http://localhost:3000/v1/models \
 | `POST` | `/api/channel/test/{id}` | 管理员 | 渠道测活(探针按渠道协议自动转换) |
 | `POST` / `GET` / `PUT` / `DELETE` | `/api/token`(`/{id}`) | 登录用户 | 令牌管理 |
 | `GET` / `PUT` | `/api/option` | 管理员 | 系统选项(含倍率配置) |
+| `GET` | `/api/option/status` | 管理员 | 数据库与实例配置版本 |
+| `GET` | `/api/option/history` | 管理员 | 配置变更历史 |
+| `POST` | `/api/option/rollback` | 管理员 | 恢复历史选项值 |
 | `GET` | `/api/log` | 登录用户 | 消费日志 |
 
 ## 中继 API 一览

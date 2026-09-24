@@ -71,8 +71,7 @@ func ResetModelRateLimits() {
 func TokenRateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenID, _ := r.Context().Value(common.CtxTokenID).(int64)
-		if tokenID > 0 && tokenLimiter.limit > 0 &&
-			!tokenLimiter.allow("token:"+strconv.FormatInt(tokenID, 10), time.Now()) {
+		if tokenID > 0 && !tokenLimiter.allow("token:"+strconv.FormatInt(tokenID, 10), time.Now()) {
 			writeRateLimited(w, r)
 			return
 		}
@@ -85,8 +84,7 @@ func TokenRateLimit(next http.Handler) http.Handler {
 func ModelRateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		model, _ := r.Context().Value(common.CtxRequestModel).(string)
-		if model != "" && modelLimiter.limit > 0 &&
-			!modelLimiter.allow("model:"+model, time.Now()) {
+		if model != "" && !modelLimiter.allow("model:"+model, time.Now()) {
 			writeRateLimited(w, r)
 			return
 		}
@@ -137,7 +135,7 @@ func ModelRateLimitWithOverrides(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if modelLimiter.limit > 0 && !modelLimiter.allow("model:"+model, now) {
+		if !modelLimiter.allow("model:"+model, now) {
 			writeRateLimited(w, r)
 			return
 		}

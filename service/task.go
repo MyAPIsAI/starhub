@@ -120,8 +120,20 @@ func settleTask(ch *model.Channel, task *model.Task, adaptor channel.TaskAdaptor
 		log.Printf("task %d has an unreadable request meta, refunding: %v", task.ID, err)
 		req = dto.TaskRequest{}
 	}
-	pricing := adaptor.AdjustBillingOnComplete(task.Model, task.Group, &req, result)
-	actual := relay.TaskPricingQuotaWithUserGroup(task.Model, task.Group, task.UserGroup, pricing)
+	accepted := adaptor.EstimateBilling(task.Model, task.Group, &req)
+	priceData := relay.NewPriceDataWithUserGroup(task.Model, task.Group, task.UserGroup)
+	if task.PricingMeta != "" {
+		var snapshot relay.TaskBillingSnapshot
+		if err := json.Unmarshal([]byte(task.PricingMeta), &snapshot); err != nil {
+			log.Printf("task %d has an unreadable pricing snapshot, refunding: %v", task.ID, err)
+			accepted = channel.TaskPricing{}
+		} else {
+			priceData = &snapshot.PriceData
+			accepted = snapshot.Estimate
+		}
+	}
+	pricing := adaptor.AdjustBillingOnComplete(task.Model, task.Group, &req, result, accepted)
+	actual := relay.TaskPricingQuotaWithPriceData(priceData, pricing)
 	if err := relay.PostConsumeQuotaAmount(task.UserID, task.TokenID, task.TokenName,
 		task.TokenUnlimited, ch.ID, task.Model, actual, task.Quota,
 		strconv.FormatInt(ch.ID, 10)); err != nil {

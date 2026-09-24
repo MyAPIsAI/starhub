@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 
+	"starhub/config"
 	"starhub/pkg/billingexpr"
 )
 
@@ -33,6 +34,7 @@ const (
 )
 
 var (
+	optionMu       sync.RWMutex
 	priceMu        sync.RWMutex
 	modelPrice     = map[string]float64{}
 	modelPriceExpr = map[string]string{}
@@ -43,16 +45,19 @@ var (
 // OptionKeys lists every option key the setting package owns, for seeding
 // and persistence.
 func OptionKeys() []string {
-	return append(append(append(append(RatioOptionKeys(),
+	return append(append(append(append(append(RatioOptionKeys(),
 		OptionKeyModelPrice, OptionKeyModelPriceExpr,
 		OptionKeyCacheRatio, OptionKeyAudioRatio),
 		GroupGroupRatioKeys()...),
 		AffiliateOptionKeys()...),
-		AlertOptionKeys()...)
+		AlertOptionKeys()...), config.OptionKeys()...)
 }
 
 // IsOptionKey reports whether the key is a known ratio / pricing option.
 func IsOptionKey(key string) bool {
+	if config.IsOptionKey(key) {
+		return true
+	}
 	if IsGroupGroupRatioKey(key) || IsAffiliateOptionKey(key) || IsAlertOptionKey(key) {
 		return true
 	}
@@ -66,6 +71,32 @@ func IsOptionKey(key string) bool {
 
 // UpdateOption validates and applies any known option key.
 func UpdateOption(key, value string) error {
+	optionMu.Lock()
+	defer optionMu.Unlock()
+	return updateOption(key, value)
+}
+
+// ApplyOptions replaces a validated option set without exposing partial prices.
+func ApplyOptions(values map[string]string) error {
+	for key, value := range values {
+		if _, err := NormalizeOption(key, value); err != nil {
+			return err
+		}
+	}
+	optionMu.Lock()
+	defer optionMu.Unlock()
+	for key, value := range values {
+		if err := updateOption(key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func updateOption(key, value string) error {
+	if config.IsOptionKey(key) {
+		return config.ApplyOption(key, value)
+	}
 	if IsGroupGroupRatioKey(key) {
 		return UpdateGroupGroupRatio(value)
 	}
@@ -83,6 +114,15 @@ func UpdateOption(key, value string) error {
 
 // SnapshotOption returns the current persisted representation of a key.
 func SnapshotOption(key string) (string, error) {
+	optionMu.RLock()
+	defer optionMu.RUnlock()
+	return snapshotOption(key)
+}
+
+func snapshotOption(key string) (string, error) {
+	if config.IsOptionKey(key) {
+		return config.SnapshotOption(key)
+	}
 	if IsGroupGroupRatioKey(key) {
 		return SnapshotGroupGroupRatio()
 	}
@@ -99,7 +139,8 @@ func SnapshotOption(key string) (string, error) {
 }
 
 // UpdatePricing validates and applies one pricing option key.
-func UpdatePricing(key, value string) error {	switch key {
+func UpdatePricing(key, value string) error {
+	switch key {
 	case OptionKeyModelPrice:
 		prices, err := parseModelPrice(value)
 		if err != nil {

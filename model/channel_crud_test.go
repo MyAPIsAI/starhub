@@ -37,6 +37,22 @@ func TestUpdateChannelStatusTogglesAbilities(t *testing.T) {
 	}
 }
 
+func TestUpdateChannelRollsBackWhenAbilitiesAreInvalid(t *testing.T) {
+	newTestDB(t)
+	channel := addChannel(t, "stable", "default", "gpt-4o", 0, 1, common.ChannelStatusEnabled)
+	channel.Models = ""
+	if err := UpdateChannel(channel); err == nil {
+		t.Fatal("invalid channel update should fail")
+	}
+	stored, err := GetChannelByID(channel.ID)
+	if err != nil || stored.Models != "gpt-4o" {
+		t.Fatalf("channel changed despite failed update: %+v, %v", stored, err)
+	}
+	if _, err := GetSatisfiedChannel("default", "gpt-4o"); err != nil {
+		t.Fatalf("ability disappeared despite failed update: %v", err)
+	}
+}
+
 func TestUpdateChannelStatusNotFound(t *testing.T) {
 	newTestDB(t)
 	if err := UpdateChannelStatus(9999, common.ChannelStatusEnabled); err != ErrChannelNotFound {

@@ -114,7 +114,7 @@ type TaskAdaptor interface {
 	EstimateBilling(modelName, group string, req *dto.TaskRequest) TaskPricing
 	// AdjustBillingOnComplete prices the terminal task (settlement input;
 	// a failed task prices to zero and is fully refunded).
-	AdjustBillingOnComplete(modelName, group string, req *dto.TaskRequest, res *dto.TaskResult) TaskPricing
+	AdjustBillingOnComplete(modelName, group string, req *dto.TaskRequest, res *dto.TaskResult, accepted TaskPricing) TaskPricing
 	// Upstream plumbing.
 	SubmitURL(baseURL string) string
 	FetchURL(baseURL, taskID string) string

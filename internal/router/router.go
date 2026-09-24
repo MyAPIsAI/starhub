@@ -58,6 +58,9 @@ func New() http.Handler {
 
 	mux.Handle("GET /api/option", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
+	mux.Handle("GET /api/option/status", middleware.AdminAuth(http.HandlerFunc(controller.OptionStatus)))
+	mux.Handle("GET /api/option/history", middleware.AdminAuth(http.HandlerFunc(controller.OptionHistory)))
+	mux.Handle("POST /api/option/rollback", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.RollbackOption))))
 	mux.Handle("PUT /api/option", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateOption))))
 	mux.Handle("PUT /api/option/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateOption))))
 

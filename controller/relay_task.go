@@ -64,8 +64,9 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 	//    reservation when no channel accepts the submit.
 	billingGroup := req.billingGroup()
 	pricing := taskPlatformAdaptor(platform).EstimateBilling(req.modelName, billingGroup, taskReq)
+	priceData := relay.NewPriceDataWithUserGroup(req.modelName, billingGroup, req.userGroup)
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited,
-		relay.TaskPricingQuotaWithUserGroup(req.modelName, billingGroup, req.userGroup, pricing))
+		relay.TaskPricingQuotaWithPriceData(priceData, pricing))
 	if err != nil {
 		writePreConsumeError(w, "", err)
 		return
@@ -79,7 +80,7 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 	flow.unsupported = 0
 	flow.lastErr = nil
 	flow.runChannels(func(ch *model.Channel) attemptResult {
-		return taskSubmitAttempt(flow, ch, platform, taskReq)
+		return taskSubmitAttempt(flow, ch, platform, taskReq, pricing)
 	})
 }
 
@@ -100,11 +101,16 @@ func taskPlatformAdaptor(platform string) channel.TaskAdaptor {
 }
 
 // taskSubmitAttempt submits the validated request to one channel.
-func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, taskReq *dto.TaskRequest) attemptResult {
+func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, taskReq *dto.TaskRequest, accepted channel.TaskPricing) attemptResult {
 	adaptor, err := relay.GetTaskAdaptor(ch.Type)
 	if err != nil || adaptor.Platform() != platform {
 		return attemptResult{outcome: attemptUnsupported,
 			cause: fmt.Errorf("channel %d does not serve platform %q", ch.ID, platform)}
+	}
+	priceData := relay.NewPriceDataWithUserGroup(taskReq.Model, flow.settleGroup(), flow.req.userGroup)
+	pricingMeta, err := json.Marshal(relay.TaskBillingSnapshot{PriceData: *priceData, Estimate: accepted})
+	if err != nil {
+		return attemptResult{outcome: attemptUpstreamError, cause: fmt.Errorf("encode task pricing: %v", err)}
 	}
 
 	body, err := adaptor.ConvertSubmitRequest(taskReq)
@@ -153,6 +159,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		UserGroup:      flow.req.userGroup,
 		Quota:          flow.preQuota,
 		RequestMeta:    string(requestMeta),
+		PricingMeta:    string(pricingMeta),
 	}
 	if err := model.InsertTask(task); err != nil {
 		return attemptResult{outcome: attemptUpstreamError,

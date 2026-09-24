@@ -157,6 +157,24 @@ The console shows `quota` as actually charged, and `unfunded_quota` separately a
 | `STARHUB_TASK_POLL_INTERVAL` | `60` | Background task poll interval, in seconds (`0` disables) |
 | `STARHUB_COOKIE_SECURE` | `false` | Set to `true` behind an HTTPS reverse proxy; direct TLS requests set the Secure cookie automatically |
 
+`STARHUB_PORT`, `STARHUB_DB`, and `STARHUB_ROOT_PASSWORD` are bootstrap settings. Changing the port or database path requires a restart; the root password variable only seeds a new database. The interval and cookie variables supply defaults when a new database is seeded. Once seeded, the option table is authoritative for hot-updatable values. `STARHUB_COOKIE_SECURE=true` remains a security floor even if the stored option is false.
+
+### Runtime Configuration and Reload
+
+The following keys can be changed through `PUT /api/option` without restarting the server. Interval values are seconds; `0` disables the corresponding task. The IP and user limits must be positive; `0` disables token or model limiting.
+
+| Option key | Default | Purpose |
+| --- | ---: | --- |
+| `channel_test_interval` | `1800` | Channel health-check interval |
+| `task_poll_interval` | `60` | Pending task polling interval |
+| `cookie_secure` | `false` | Require Secure session cookies behind TLS termination |
+| `ip_rate_limit` | `240` | Requests per IP per minute |
+| `user_rate_limit` | `120` | Requests per user per minute |
+| `token_rate_limit` | `60` | Requests per token per minute |
+| `model_rate_limit` | `200` | Requests per model per minute |
+
+An option update is validated and committed with a version before it is applied in memory. Other processes using the same database check the version every second and reload it. `GET /api/option/status` shows the database version, this process's loaded version, and recently active process versions. `GET /api/option/history?limit=50` lists changes; `POST /api/option/rollback` accepts `{"version":1,"expected_version":2}` and restores the value that preceded version 1. A `PUT /api/option` request may include `expected_version` to reject a concurrent edit with HTTP 409. Webhook URL history is redacted and cannot be restored by rollback. In-flight requests keep their accepted pricing snapshot.
+
 ### First Login
 
 A root account is created by default:
@@ -288,6 +306,9 @@ curl http://localhost:3000/v1/models \
 | `POST` | `/api/channel/test/{id}` | Admin | Channel health check (the probe converts according to the channel's protocol) |
 | `POST` / `GET` / `PUT` / `DELETE` | `/api/token` (`/{id}`) | Logged-in user | Token management |
 | `GET` / `PUT` | `/api/option` | Admin | System options (including ratio configuration) |
+| `GET` | `/api/option/status` | Admin | Stored and applied configuration versions |
+| `GET` | `/api/option/history` | Admin | Configuration change history |
+| `POST` | `/api/option/rollback` | Admin | Restore an earlier option value |
 | `GET` | `/api/log` | Logged-in user | Usage logs |
 
 ## Relay API Reference
