@@ -210,22 +210,27 @@ func readBoundedBodyInto(resp *http.Response, limit int64, dst []byte) []byte {
 	} else {
 		dst = dst[:0]
 	}
-	var scratch [32 * 1024]byte
-	emptyReads := 0
+	// Read the remaining bytes directly into dst's spare capacity, growing
+	// it with append. This avoids io.ReadAll's internal bytes.Buffer doubling
+	// (which allocates ~2x the body for chunked responses) and avoids a
+	// separate scratch buffer that would escape through the io.Reader
+	// interface. Go's append growth factor (~1.25x for large slices) keeps
+	// total allocation close to 1x the body size.
 	for int64(len(dst)) < limit {
-		remaining := limit - int64(len(dst))
-		chunk := scratch[:min(int64(len(scratch)), remaining)]
-		n, err := resp.Body.Read(chunk)
-		if n > 0 {
-			dst = append(dst, chunk[:n]...)
-			emptyReads = 0
-		} else if err == nil {
-			emptyReads++
-			if emptyReads >= 100 {
-				break
-			}
+		if cap(dst)-len(dst) == 0 {
+			dst = append(dst, 0)[:len(dst)] // force append growth
 		}
+		avail := cap(dst) - len(dst)
+		remaining := limit - int64(len(dst))
+		if int64(avail) > remaining {
+			avail = int(remaining)
+		}
+		n, err := resp.Body.Read(dst[len(dst) : len(dst)+avail])
+		dst = dst[:len(dst)+n]
 		if err != nil {
+			break
+		}
+		if n == 0 {
 			break
 		}
 	}

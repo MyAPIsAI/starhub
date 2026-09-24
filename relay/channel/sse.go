@@ -157,18 +157,27 @@ func (s *SSEByteReader) Next() (SSEByte, error) {
 		return result
 	}
 	for {
-		if b, _ := s.r.Peek(len(ssePrefixData)); len(b) >= len(ssePrefixData) && bytes.Equal(b, ssePrefixData) {
-			if haveData {
-				frame.append([]byte{'\n'})
+		// Peek a single byte before the multi-byte "data:" prefix check:
+		// Peek(5) blocks until 5 bytes are buffered, stalling event
+		// delivery when only the 1-byte blank-line terminator is available
+		// (the next frame has not arrived yet). By checking the first byte
+		// we skip straight to readLine for blank lines, event:, comments,
+		// and any non-"data:" line without waiting for more input.
+		first, _ := s.r.Peek(1)
+		if len(first) > 0 && first[0] == 'd' {
+			if b, _ := s.r.Peek(len(ssePrefixData)); len(b) >= len(ssePrefixData) && bytes.Equal(b, ssePrefixData) {
+				if haveData {
+					frame.append([]byte{'\n'})
+				}
+				start := frame.size
+				_, _ = s.r.Discard(len(ssePrefixData))
+				if err := s.appendDataPayload(&frame); err != nil {
+					return SSEByte{}, err
+				}
+				spans = append(spans, [2]int{start, frame.size})
+				haveData = true
+				continue
 			}
-			start := frame.size
-			_, _ = s.r.Discard(len(ssePrefixData))
-			if err := s.appendDataPayload(&frame); err != nil {
-				return SSEByte{}, err
-			}
-			spans = append(spans, [2]int{start, frame.size})
-			haveData = true
-			continue
 		}
 		line, lineErr := s.readLine()
 		if len(line) > 0 {
