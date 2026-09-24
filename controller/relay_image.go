@@ -106,13 +106,13 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 
 	stream := imgReq.Stream != nil && *imgReq.Stream
 	bill := &relay.ImageBill{
-		Model:    imgReq.Model,
-		Group:    req.billingGroup(),
+		Model:     imgReq.Model,
+		Group:     req.billingGroup(),
 		UserGroup: req.userGroup,
-		Size:     imgReq.Size,
-		Quality:  imgReq.Quality,
-		Prompt:   imgReq.Prompt,
-		Count:    int(imgReq.Count()),
+		Size:      imgReq.Size,
+		Quality:   imgReq.Quality,
+		Prompt:    imgReq.Prompt,
+		Count:     int(imgReq.Count()),
 	}
 
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, bill.PreQuota())
@@ -176,7 +176,8 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 // on the delivered count. The body buffer is the only full copy retained;
 // billing counts entries without materializing payload strings (P7.1).
 func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, bill *relay.ImageBill) attemptResult {
-	body := readBoundedBody(resp, maxModeResponseBytes)
+	body := readImageBody(resp)
+	defer releaseImageBody(body)
 	resp.Body.Close()
 	writePassthroughBody(flow.w, resp, body)
 
@@ -218,6 +219,7 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 	flusher, _ := flow.w.(http.Flusher)
 
 	reader := channel.NewSSEByteReader(resp.Body)
+	defer reader.Release()
 	defer resp.Body.Close()
 
 	completed := 0
@@ -305,7 +307,8 @@ var (
 // values, so beyond the body itself at most one entry's payload is alive
 // at a time (P7.1).
 func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, bill *relay.ImageBill) attemptResult {
-	body := readBoundedBody(resp, maxModeResponseBytes)
+	body := readImageBody(resp)
+	defer releaseImageBody(body)
 	resp.Body.Close()
 
 	// Count first: an unparseable or payload-less response passes
@@ -352,6 +355,33 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 	actual := bill.SettleQuota(count, usage)
 	settleImageAttempt(flow, ch, actual)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
+}
+
+const maxPooledImageBody = 4 << 20
+
+// A small shared cache avoids repeated megabyte allocations across HTTP
+// workers while placing a fixed bound on retained image response storage.
+var imageBodyPool = make(chan []byte, 4)
+
+func readImageBody(resp *http.Response) []byte {
+	var buf []byte
+	select {
+	case buf = <-imageBodyPool:
+	default:
+		buf = make([]byte, 0, 64*1024)
+	}
+	return readBoundedBodyInto(resp, maxModeResponseBytes, buf)
+}
+
+func releaseImageBody(body []byte) {
+	if cap(body) > maxPooledImageBody {
+		return
+	}
+	body = body[:0]
+	select {
+	case imageBodyPool <- body:
+	default:
+	}
 }
 
 // Frame segments of the synthesized image_generation.completed events.

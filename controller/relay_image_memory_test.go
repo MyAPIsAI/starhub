@@ -25,6 +25,28 @@ func TestReadBoundedImageBody(t *testing.T) {
 	}
 }
 
+func TestReadBoundedImageBodyIntoReuse(t *testing.T) {
+	storage := make([]byte, 0, 128)
+	for _, tc := range []struct {
+		body     string
+		declared int64
+	}{
+		{"first response", -1},
+		{"short", 2},
+		{"last", 4},
+	} {
+		resp := &http.Response{Body: io.NopCloser(bytes.NewBufferString(tc.body)), ContentLength: tc.declared}
+		got := readBoundedBodyInto(resp, 128, storage)
+		if string(got) != tc.body {
+			t.Fatalf("declared=%d: body=%q, want %q", tc.declared, got, tc.body)
+		}
+		if &got[:1][0] != &storage[:1][0] {
+			t.Fatal("reusable backing storage was replaced")
+		}
+		storage = got[:0]
+	}
+}
+
 func BenchmarkReadBoundedImageBody(b *testing.B) {
 	payload := bytes.Repeat([]byte("A"), 1<<20)
 	for _, declared := range []int64{-1, int64(len(payload))} {

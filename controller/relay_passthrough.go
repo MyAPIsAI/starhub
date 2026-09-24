@@ -184,23 +184,52 @@ const maxModeResponseBytes = 64 << 20
 // readBoundedBody reads up to limit bytes of an upstream response into a
 // buffer. Content-Length is only a hint; short or longer bodies are still
 // read up to the limit. Reading any tail separately avoids doubling a full
-// body buffer just to discover EOF. Unknown lengths use Go's chunked ReadAll.
+// body buffer just to discover EOF.
 func readBoundedBody(resp *http.Response, limit int64) []byte {
+	return readBoundedBodyInto(resp, limit, nil)
+}
+
+// readBoundedBodyInto reads into reusable storage. The caller owns the
+// returned slice and may reuse its backing array after consuming the body.
+func readBoundedBodyInto(resp *http.Response, limit int64, dst []byte) []byte {
 	if limit <= 0 {
 		return nil
 	}
+	dst = dst[:0]
 	if resp.ContentLength > 0 && resp.ContentLength <= limit {
-		body := make([]byte, resp.ContentLength)
+		if int64(cap(dst)) < resp.ContentLength {
+			dst = make([]byte, 0, resp.ContentLength)
+		}
+		body := dst[:resp.ContentLength]
 		n, err := io.ReadFull(resp.Body, body)
 		body = body[:n]
 		if err != nil || int64(n) == limit {
 			return body
 		}
-		tail, _ := io.ReadAll(io.LimitReader(resp.Body, limit-int64(n)))
-		return append(body, tail...)
+		dst = body
+	} else {
+		dst = dst[:0]
 	}
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
-	return body
+	var scratch [32 * 1024]byte
+	emptyReads := 0
+	for int64(len(dst)) < limit {
+		remaining := limit - int64(len(dst))
+		chunk := scratch[:min(int64(len(scratch)), remaining)]
+		n, err := resp.Body.Read(chunk)
+		if n > 0 {
+			dst = append(dst, chunk[:n]...)
+			emptyReads = 0
+		} else if err == nil {
+			emptyReads++
+			if emptyReads >= 100 {
+				break
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return dst
 }
 
 // estimateAudioTokens approximates the audio token count from the uploaded

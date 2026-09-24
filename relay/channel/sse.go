@@ -92,13 +92,40 @@ type SSEByteReader struct {
 	line  []byte
 }
 
+const maxPooledSSEFrame = 4 << 20
+
+// Limit retained frame storage while sharing large buffers across workers.
+var sseFramePool = make(chan []byte, 4)
+
 // NewSSEByteReader wraps an SSE body.
 func NewSSEByteReader(r io.Reader) *SSEByteReader {
+	var buf []byte
+	select {
+	case buf = <-sseFramePool:
+	default:
+		buf = make([]byte, 0, 64*1024)
+	}
 	return &SSEByteReader{
 		r:     bufio.NewReaderSize(r, 64*1024),
 		event: make([]byte, 0, 64),
-		data:  make([]byte, 0, 64*1024),
+		data:  buf[:0],
 	}
+}
+
+// Release makes the frame buffer available to another stream. The reader and
+// previously returned Event and Data slices must not be used after this call.
+func (s *SSEByteReader) Release() {
+	if s.data == nil {
+		return
+	}
+	if cap(s.data) <= maxPooledSSEFrame {
+		buf := s.data[:0]
+		select {
+		case sseFramePool <- buf:
+		default:
+		}
+	}
+	s.data = nil
 }
 
 // Next returns the next complete event. It returns io.EOF when the
