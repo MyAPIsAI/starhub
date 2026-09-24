@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/config"
 	"starhub/middleware"
 	"starhub/model"
 )
@@ -121,7 +122,10 @@ func TestP6ManagementContract(t *testing.T) {
 
 func TestP6CookieAndCrossOrigin(t *testing.T) {
 	env := setupRelayApp(t)
-	t.Setenv("STARHUB_COOKIE_SECURE", "true")
+	if err := config.ApplyStartup(config.Startup{Bootstrap: config.Bootstrap{ForceSecureCookie: true}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = config.ApplyStartup(config.Startup{}) })
 	login, _ := http.NewRequest("POST", env.base+"/api/user/login", strings.NewReader(`{"username":"root","password":"123456"}`))
 	login.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(login)

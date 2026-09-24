@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"os"
 	"strings"
 
 	"starhub/common"
@@ -29,5 +28,5 @@ func ManagementSecurity(next http.Handler) http.Handler {
 // SecureSessionCookie supports TLS termination without trusting forwarded
 // headers from arbitrary clients. Operators explicitly enable it at a proxy.
 func SecureSessionCookie(r *http.Request) bool {
-	return r.TLS != nil || config.Current().CookieSecure || strings.EqualFold(os.Getenv("STARHUB_COOKIE_SECURE"), "true")
+	return r.TLS != nil || config.Current().CookieSecure || config.ForceSecureCookie()
 }

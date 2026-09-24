@@ -10,5 +10,6 @@ web/playwright-report
 *.db-wal
 *.db-shm
 *.db-journal
+config.yml
 starhub
 starhub.exe

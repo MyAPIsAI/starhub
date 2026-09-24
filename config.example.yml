@@ -1,0 +1,24 @@
+# Copy this file and pass --config /path/to/config.yml to the server.
+version: 1
+
+server:
+  port: 3000
+
+database:
+  # Relative paths are resolved against this configuration file.
+  sqlite_path: starhub.db
+
+security:
+  # Keep this true when TLS terminates at a reverse proxy.
+  force_secure_cookie: false
+
+# These values seed only missing database options. Change existing options
+# through the management API so updates are versioned and reloaded.
+initial_options:
+  channel_test_interval: 1800
+  task_poll_interval: 60
+  cookie_secure: false
+  ip_rate_limit: 240
+  user_rate_limit: 120
+  token_rate_limit: 60
+  model_rate_limit: 200

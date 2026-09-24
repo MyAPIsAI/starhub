@@ -22,7 +22,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=backend /out/starhub /usr/local/bin/starhub
 USER starhub
 WORKDIR /data
-ENV STARHUB_DB=/data/starhub.db STARHUB_PORT=3000
 VOLUME ["/data"]
 EXPOSE 3000
 ENTRYPOINT ["/usr/local/bin/starhub"]

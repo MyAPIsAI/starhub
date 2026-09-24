@@ -24,9 +24,16 @@ func main() {
 	} else {
 		log.Print("web console: not embedded; this is an API-only build and / returns 404. Build with node scripts/build-release.mjs and run the binary from release/")
 	}
-	bootstrap := config.BootstrapFromEnv()
-	if err := config.InitFromEnv(); err != nil {
-		log.Fatalf("invalid runtime configuration: %v", err)
+	startup, err := config.LoadStartup(os.Args[1:], os.Getenv)
+	if err != nil {
+		log.Fatalf("invalid startup configuration: %v", err)
+	}
+	if err := config.ApplyStartup(startup); err != nil {
+		log.Fatalf("apply startup configuration: %v", err)
+	}
+	bootstrap := startup.Bootstrap
+	if startup.ConfigPath != "" {
+		log.Printf("configuration: %s", startup.ConfigPath)
 	}
 	if err := model.InitDB(bootstrap.DBPath); err != nil {
 		log.Fatalf("failed to init database: %v", err)
@@ -34,7 +41,7 @@ func main() {
 	rootPassword := bootstrap.RootPassword
 	if rootPassword == "" {
 		rootPassword = common.DefaultRootPasswd
-		log.Printf("WARNING: using default root password %q, set STARHUB_ROOT_PASSWORD to override", rootPassword)
+		log.Print("WARNING: using default root password; set STARHUB_ROOT_PASSWORD to override")
 	}
 	if err := model.Seed(rootPassword); err != nil {
 		log.Fatalf("failed to seed database: %v", err)

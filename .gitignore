@@ -2,6 +2,7 @@
 *.db-journal
 *.db-wal
 *.db-shm
+config.yml
 web/node_modules/
 web/dist/
 web/test-results/

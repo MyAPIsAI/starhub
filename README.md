@@ -146,6 +146,14 @@ A regular admin can read users, but only root can modify them. When setting a us
 
 The console shows `quota` as actually charged, and `unfunded_quota` separately as uncollected usage; the smallest 1 quota displays as $0.000002. Runtime metrics are a process snapshot, and the daily trend comes from UTC consumption aggregation.
 
+### Optional YAML Startup File
+
+Copy [`config.example.yml`](config.example.yml) to a private `config.yml`, then start with `./starhub --config /path/to/config.yml` or set `STARHUB_CONFIG=/path/to/config.yml`. The file is optional; startup without it retains the existing defaults and environment variables. The CLI flag takes precedence over `STARHUB_CONFIG`. The file must use `version: 1`; unknown fields, invalid values, and missing files stop startup with an error. A relative `database.sqlite_path` is resolved against the YAML file's directory.
+
+The file has `server.port`, `database.sqlite_path`, `security.force_secure_cookie`, and `initial_options` for the seven runtime keys listed below. Root credentials stay in `STARHUB_ROOT_PASSWORD`; do not put them in YAML. Environment variables override matching YAML startup and initial values. `security.force_secure_cookie: true` remains a security floor even when `STARHUB_COOKIE_SECURE=false` or the database option is false. Changes to port, database path, and this security floor require a restart. `initial_options` seeds missing database keys only; edit existing values through `PUT /api/option` for versioned hot reload.
+
+For Docker, mount the file read-only and pass `--config /etc/starhub/config.yml`. Set `database.sqlite_path: /data/starhub.db` in that file so SQLite stays on the `/data` volume. The image no longer fixes the port or database path through image environment variables.
+
 ### Environment Variables
 
 | Variable | Default | Description |

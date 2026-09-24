@@ -146,6 +146,14 @@ docker run --rm -p 3000:3000 -v starhub-data:/data -e STARHUB_ROOT_PASSWORD=chan
 
 控制台将 `quota` 展示为实扣、`unfunded_quota` 单独展示为未收费用，最小 1 quota 显示为 $0.000002；运行指标是进程快照，日趋势来自 UTC 消费聚合。
 
+### 可选 YAML 启动配置
+
+复制 [`config.example.yml`](config.example.yml) 为私有 `config.yml`，用 `./starhub --config /path/to/config.yml` 启动，或设置 `STARHUB_CONFIG=/path/to/config.yml`。不指定文件时保持原有默认值和环境变量行为。命令行参数优先于 `STARHUB_CONFIG`。文件必须声明 `version: 1`；未知字段、无效值或文件不存在时会报错并停止启动。相对路径的 `database.sqlite_path` 以 YAML 文件所在目录为基准。
+
+文件包含 `server.port`、`database.sqlite_path`、`security.force_secure_cookie`，以及下表七项运行选项的 `initial_options`。root 初始密码仍通过 `STARHUB_ROOT_PASSWORD` 提供，不放进 YAML。环境变量覆盖对应的 YAML 启动值和初始值。只要 `security.force_secure_cookie: true`，即使 `STARHUB_COOKIE_SECURE=false` 或数据库中的选项为 false，Cookie 仍必须使用 Secure。端口、数据库路径和这个安全下限变更后需重启；`initial_options` 只填充数据库缺失的键，已有值通过 `PUT /api/option` 修改并按版本热重载。
+
+Docker 部署可只读挂载该文件并传入 `--config /etc/starhub/config.yml`；文件中的 `database.sqlite_path` 应设为 `/data/starhub.db`，使 SQLite 保留在 `/data` 数据卷。镜像不再通过内置环境变量固定端口和数据库路径。
+
 ### 环境变量
 
 | 变量 | 默认值 | 说明 |

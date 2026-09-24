@@ -3,33 +3,11 @@ package config
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
-
-type Bootstrap struct {
-	DBPath       string
-	Port         string
-	RootPassword string
-}
-
-func BootstrapFromEnv() Bootstrap {
-	b := Bootstrap{
-		DBPath:       os.Getenv("STARHUB_DB"),
-		Port:         os.Getenv("STARHUB_PORT"),
-		RootPassword: os.Getenv("STARHUB_ROOT_PASSWORD"),
-	}
-	if b.DBPath == "" {
-		b.DBPath = "starhub.db"
-	}
-	if b.Port == "" {
-		b.Port = "3000"
-	}
-	return b
-}
 
 type Runtime struct {
 	ChannelTestInterval time.Duration
@@ -70,24 +48,6 @@ func IsOptionKey(key string) bool {
 		}
 	}
 	return false
-}
-
-// InitFromEnv establishes initial defaults before persisted options are loaded.
-func InitFromEnv() error {
-	values := map[string]string{
-		OptionChannelTestInterval: os.Getenv("STARHUB_CHANNEL_TEST_INTERVAL"),
-		OptionTaskPollInterval:    os.Getenv("STARHUB_TASK_POLL_INTERVAL"),
-		OptionCookieSecure:        os.Getenv("STARHUB_COOKIE_SECURE"),
-	}
-	for key, raw := range values {
-		if raw == "" {
-			continue
-		}
-		if err := ApplyOption(key, raw); err != nil {
-			return fmt.Errorf("%s: %w", key, err)
-		}
-	}
-	return nil
 }
 
 func Current() Runtime {
