@@ -78,6 +78,19 @@ func GetSatisfiedChannel(group, model string) (*Channel, error) {
 // one is exhausted; within a tier the pick is weighted random. It returns
 // ErrNoChannel when no candidate is left.
 func GetSatisfiedChannelExcluding(group, model string, exclude map[int64]bool) (*Channel, error) {
+	return getSatisfiedChannelExcludingPreferred(group, model, exclude, 0)
+}
+
+// GetSatisfiedChannelPreferred is GetSatisfiedChannelExcluding with a sticky
+// preference: when preferred (> 0) is a valid candidate inside the highest
+// available priority tier it is returned directly, otherwise the tier's
+// weighted draw runs unchanged. The preference therefore never lets a
+// lower-priority channel bypass a higher tier.
+func GetSatisfiedChannelPreferred(group, model string, exclude map[int64]bool, preferred int64) (*Channel, error) {
+	return getSatisfiedChannelExcludingPreferred(group, model, exclude, preferred)
+}
+
+func getSatisfiedChannelExcludingPreferred(group, model string, exclude map[int64]bool, preferred int64) (*Channel, error) {
 	var rows []Ability
 	err := DB.Where("\"group\" = ? AND model = ? AND enabled = ?", group, model, true).
 		Order("priority DESC").Limit(64).Find(&rows).Error
@@ -114,12 +127,21 @@ func GetSatisfiedChannelExcluding(group, model string, exclude map[int64]bool) (
 		}
 		tier := rows[i:j]
 		total := int64(0)
+		var prefCh *Channel
 		for _, a := range tier {
-			if _, ok := enabled[a.ChannelID]; ok {
-				total += effectiveWeight(a.Weight)
+			ch, ok := enabled[a.ChannelID]
+			if !ok {
+				continue
+			}
+			total += effectiveWeight(a.Weight)
+			if preferred != 0 && a.ChannelID == preferred {
+				prefCh = ch
 			}
 		}
 		if total > 0 {
+			if prefCh != nil {
+				return prefCh, nil
+			}
 			pick := rand.Int64N(total)
 			for _, a := range tier {
 				ch, ok := enabled[a.ChannelID]

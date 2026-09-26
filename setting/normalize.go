@@ -68,6 +68,21 @@ func NormalizeOption(key, value string) (string, error) {
 		}
 		b, err := json.Marshal(v)
 		return string(b), err
+	case OptionKeyRoutingAffinityEnabled:
+		v, err := parseBoolOption(value)
+		if err != nil {
+			return "", fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		return strconv.FormatBool(v), nil
+	case OptionKeyRoutingAffinityTTL:
+		var v int64
+		if err := json.Unmarshal([]byte(value), &v); err != nil || v <= 0 {
+			return "", fmt.Errorf("invalid value for %s: expected positive integer", key)
+		}
+		if v > MaxRoutingAffinityTTLSeconds {
+			v = MaxRoutingAffinityTTLSeconds
+		}
+		return strconv.FormatInt(v, 10), nil
 	default:
 		return "", fmt.Errorf("unknown option key: %s", key)
 	}
