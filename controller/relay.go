@@ -19,6 +19,7 @@ import (
 	"starhub/relay/channel"
 	"starhub/relay/dto"
 	"starhub/service"
+	"starhub/setting"
 )
 
 var upstreamHTTPClient = &http.Client{Timeout: 10 * time.Minute}
@@ -220,7 +221,14 @@ func (f *relayFlow) errorOut(status int, errType, code, message string) {
 // pricier on failure).
 func (f *relayFlow) pick() (*model.Channel, error) {
 	for {
-		ch, err := model.GetSatisfiedChannelExcluding(f.currentGroup, f.req.modelName, f.tried)
+		preferred := int64(0)
+		if f.affinityEligible() {
+			id, ok := model.AffinityChannel(f.affinityKey())
+			if ok && !f.tried[id] {
+				preferred = id
+			}
+		}
+		ch, err := model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred)
 		if err == nil {
 			return ch, nil
 		}
@@ -236,6 +244,18 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 	}
 }
 
+// affinityKey returns the sticky-affinity scope of the request: the token,
+// model and the group actually being attempted. The group is part of the key
+// so the auto-group walk keeps a preference inside its own group.
+func (f *relayFlow) affinityKey() model.AffinityKey {
+	return model.AffinityKey{TokenID: f.req.tokenID, Model: f.req.modelName, Group: f.currentGroup}
+}
+
+// affinityEligible reports whether sticky routing applies to this request.
+func (f *relayFlow) affinityEligible() bool {
+	return f.req.tokenID > 0 && setting.RoutingAffinityEnabled()
+}
+
 // settleGroup returns the group the settlement should bill through: the
 // current group of the successful attempt (auto-group aware).
 func (f *relayFlow) settleGroup() string {
@@ -248,6 +268,23 @@ func (f *relayFlow) settleGroup() string {
 func (f *relayFlow) begin(ch *model.Channel) {
 	f.tried[ch.ID] = true
 	f.trail = append(f.trail, strconv.FormatInt(ch.ID, 10))
+}
+
+// noteAffinity updates the sticky preference after an attempt. Only a
+// successful attempt is remembered; a retryable failure of the remembered
+// channel clears it so the next request does not keep hitting a broken
+// upstream first. 4xx (client error) is intentionally a no-op.
+func (f *relayFlow) noteAffinity(ch *model.Channel, outcome attemptOutcome) {
+	if !f.affinityEligible() {
+		return
+	}
+	key := f.affinityKey()
+	switch outcome {
+	case attemptSuccess:
+		model.RememberAffinity(key, ch.ID, setting.RoutingAffinityTTL())
+	case attemptUpstreamError:
+		model.ForgetAffinityIf(key, ch.ID)
+	}
 }
 
 // applyOutcome keeps the outcome bookkeeping of a finished attempt.
@@ -397,6 +434,7 @@ func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
 		f.span.EndAttempt(f.attempt, attemptOutcomeToMetric(res.outcome), res.statusCode)
 		f.attempt = nil
 		f.applyOutcome(res)
+		f.noteAffinity(ch, res.outcome)
 		switch res.outcome {
 		case attemptSuccess, attemptClientError:
 			return
