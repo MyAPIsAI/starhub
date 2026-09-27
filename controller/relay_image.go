@@ -157,6 +157,11 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 			body:        outBody,
 			key:         key,
 			keyIdx:      keyIdx,
+			// Image generation and edit are side-effecting: a transport
+			// error after the request was sent cannot prove the upstream
+			// did not execute it, so such a call is classified as
+			// attemptUncertain and is never auto-retried across channels.
+			sideEffect: true,
 		}
 		if stream {
 			call.ctx = streamCtx
