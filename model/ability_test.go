@@ -88,10 +88,9 @@ func TestGetSatisfiedChannelExcludingBeyondFirst64(t *testing.T) {
 	}
 	low := addChannel(t, "low", "default", "gpt-4o", 0, 1, common.ChannelStatusEnabled)
 
+	// The exclusion happens in SQL before the window limit, so the channel
+	// beyond the first 64 candidates is still reachable.
 	got, err := GetSatisfiedChannelExcluding("default", "gpt-4o", excluded)
-	if err == ErrNoChannel && got == nil {
-		t.Skip("known production defect: the 64-row query limit hides an available channel after excluded rows")
-	}
 	if err != nil {
 		t.Fatalf("a channel beyond the first 64 candidates was not found: %v", err)
 	}

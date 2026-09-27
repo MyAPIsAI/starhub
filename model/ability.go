@@ -105,8 +105,18 @@ func GetSatisfiedChannelHashed(group, model string, exclude map[int64]bool, hash
 
 func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred int64, hashKey string) (*Channel, error) {
 	var rows []Ability
-	err := DB.Where("\"group\" = ? AND model = ? AND enabled = ?", group, model, true).
-		Order("priority DESC").Limit(64).Find(&rows).Error
+	query := DB.Where("\"group\" = ? AND model = ? AND enabled = ?", group, model, true)
+	// Exclude already-attempted channels in SQL, BEFORE the window limit:
+	// filtering in Go after LIMIT 64 hides every candidate beyond the
+	// window when the first 64 are all already tried or disabled.
+	if len(exclude) > 0 {
+		ids := make([]int64, 0, len(exclude))
+		for id := range exclude {
+			ids = append(ids, id)
+		}
+		query = query.Where("channel_id NOT IN ?", ids)
+	}
+	err := query.Order("priority DESC").Limit(64).Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}

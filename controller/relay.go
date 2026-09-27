@@ -88,6 +88,12 @@ const (
 	// attemptUnsupported: the channel does not serve this relay mode — skip
 	// it and keep looking, without poisoning the error trail.
 	attemptUnsupported
+	// attemptUncertain: the upstream may have executed the request but the
+	// result is indeterminate (e.g. local persistence failed after upstream
+	// accepted a side-effecting operation). Must not be retried across
+	// channels; affinity is preserved. The attempt function must write the
+	// error response before returning this value.
+	attemptUncertain
 )
 
 type attemptResult struct {
@@ -159,6 +165,9 @@ type relayFlow struct {
 	trail        []string
 	lastErr      error
 	unsupported  int
+	sent         int    // actual upstream send attempts (unsupported skips excluded)
+	uncertain    bool   // a side-effecting attempt may have executed upstream
+	budgetStop   bool   // stopped because the total attempt budget was exhausted
 	currentGroup string // group of the current attempt (for auto-group walk)
 	groupIdx     int    // cursor into req.autoGroups (auto-group mode)
 	// Observability (P5): the request-level span and the current attempt
@@ -382,7 +391,7 @@ func (f *relayFlow) applyOutcome(res attemptResult) {
 	switch res.outcome {
 	case attemptUnsupported:
 		f.unsupported++
-	case attemptUpstreamError:
+	case attemptUpstreamError, attemptUncertain:
 		f.lastErr = res.cause
 	default:
 	}
@@ -390,8 +399,16 @@ func (f *relayFlow) applyOutcome(res attemptResult) {
 
 // exhausted writes the terminal error when every candidate failed. When
 // every channel was merely unsupported the request itself is invalid for
-// the model's channels (400 rather than 502).
+// the model's channels (400 rather than 502). Once any part of the client
+// response has been committed the error envelope must not be appended: the
+// attempt is logged and the stream ends without corrupting what was sent.
 func (f *relayFlow) exhausted() {
+	if f.sw.wrote {
+		if f.lastErr != nil {
+			log.Printf("relay stopped after the response was committed: %v", f.lastErr)
+		}
+		return
+	}
 	if len(f.trail) == 0 {
 		groups := f.req.group
 		if f.req.group == common.AutoGroup {
@@ -405,6 +422,12 @@ func (f *relayFlow) exhausted() {
 		f.errorOut(http.StatusBadRequest, "invalid_request_error", "unsupported_mode",
 			fmt.Sprintf("no channel for model %s serves this API (channels tried: %s)",
 				f.req.modelName, strings.Join(f.trail, "->")))
+		return
+	}
+	if f.budgetStop {
+		f.errorOut(http.StatusBadGateway, "server_error", "retry_budget_exhausted",
+			fmt.Sprintf("retry budget exhausted after %d upstream send(s) for model %s (channels: %s): %v",
+				f.sent, f.req.modelName, strings.Join(f.trail, "->"), f.lastErr))
 		return
 	}
 	f.errorOut(http.StatusBadGateway, "server_error", "upstream_unavailable",
@@ -445,7 +468,13 @@ type upstreamCall struct {
 	body        []byte
 	key         string
 	keyIdx      int
-	ctx         context.Context
+	// sideEffect marks a call whose repeated execution is unsafe (task
+	// submit, image generation). A transport error after the request was
+	// sent cannot prove the upstream did not execute it, so such a call is
+	// classified as attemptUncertain and is never auto-retried across
+	// channels.
+	sideEffect bool
+	ctx        context.Context
 }
 
 // callUpstream executes the request and applies the shared error policy:
@@ -477,6 +506,10 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor channel.ChatAdaptor,
 
 	resp, err := upstreamHTTPClient.Do(req)
 	if err != nil {
+		if call.sideEffect {
+			return nil, &attemptResult{outcome: attemptUncertain,
+				cause: fmt.Errorf("channel %d: send result uncertain: %v", ch.ID, err)}
+		}
 		return nil, &attemptResult{outcome: attemptUpstreamError,
 			cause: fmt.Errorf("channel %d unreachable: %v", ch.ID, err)}
 	}
@@ -509,16 +542,21 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor channel.ChatAdaptor,
 }
 
 // runChannels iterates candidate channels, running attempt per channel,
-// until one terminates the request (success or client error).
+// until one terminates the request (success or client error). The loop
+// enforces the total attempt budget (RetryTimes+1), a client-cancel guard
+// and a response-committed safety boundary. Unsupported skips do not
+// consume the attempt budget.
 func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
+loop:
 	for {
+		if f.ctx.Err() != nil || f.sw.wrote {
+			break
+		}
 		ch, err := f.pick()
 		if err != nil {
 			break
 		}
 		f.begin(ch)
-		// Open an attempt-level metric span so callUpstream / the
-		// streaming loops can record TTFT against it.
 		f.attempt = f.span.BeginAttempt(ch.ID)
 		res := attempt(ch)
 		f.span.EndAttempt(f.attempt, attemptOutcomeToMetric(res.outcome), res.statusCode)
@@ -528,6 +566,23 @@ func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
 		switch res.outcome {
 		case attemptSuccess, attemptClientError:
 			return
+		case attemptUncertain:
+			f.uncertain = true
+			if !f.sw.wrote {
+				f.errorOut(http.StatusBadGateway, "server_error", "upstream_result_uncertain",
+					fmt.Sprintf("upstream result for model %s is uncertain (the request may have executed): %v",
+						f.req.modelName, res.cause))
+			}
+			return
+		case attemptUpstreamError:
+			f.sent++
+			if f.sent > common.RetryTimes {
+				f.budgetStop = true
+				if f.lastErr == nil {
+					f.lastErr = fmt.Errorf("retry budget exhausted after %d upstream send(s)", f.sent)
+				}
+				break loop
+			}
 		}
 	}
 	f.exhausted()
@@ -543,6 +598,8 @@ func attemptOutcomeToMetric(o attemptOutcome) metric.AttemptClass {
 		return metric.AttemptClientError
 	case attemptUnsupported:
 		return metric.AttemptUnsupported
+	case attemptUncertain:
+		return metric.AttemptUncertain
 	default:
 		return metric.AttemptUpstreamError
 	}

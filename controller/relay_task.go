@@ -100,7 +100,10 @@ func taskPlatformAdaptor(platform string) channel.TaskAdaptor {
 	return nil
 }
 
-// taskSubmitAttempt submits the validated request to one channel.
+// taskSubmitAttempt submits the validated request to one channel. Side-effecting
+// failures (upstream accepted the request but local processing failed, or a
+// transport error after the send) return attemptUncertain to prevent unsafe
+// cross-channel retries.
 func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, taskReq *dto.TaskRequest, accepted channel.TaskPricing) attemptResult {
 	adaptor, err := relay.GetTaskAdaptor(ch.Type)
 	if err != nil || adaptor.Platform() != platform {
@@ -124,11 +127,12 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 	}
 	key, keyIdx := flow.selectKey(ch)
 	resp, fail := flow.callUpstream(ch, chatAdaptor, upstreamCall{
-		method: http.MethodPost,
-		url:    adaptor.SubmitURL(ch.BaseURL),
-		body:   body,
-		key:    key,
-		keyIdx: keyIdx,
+		method:     http.MethodPost,
+		url:        adaptor.SubmitURL(ch.BaseURL),
+		body:       body,
+		key:        key,
+		keyIdx:     keyIdx,
+		sideEffect: true,
 	})
 	if fail != nil {
 		return *fail
@@ -138,8 +142,11 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 
 	taskID, err := adaptor.ParseSubmitResponse(resp.StatusCode, respBody)
 	if err != nil {
-		return attemptResult{outcome: attemptUpstreamError,
-			cause: fmt.Errorf("channel %d: submit: %v", ch.ID, err)}
+		log.Printf("task submit: upstream %d accepted but parse submit response failed: %v", ch.ID, err)
+		flow.lastErr = fmt.Errorf("channel %d: parse submit response: %v", ch.ID, err)
+		dto.WriteUpstreamError(flow.w, http.StatusBadGateway, flow.inbound,
+			respBody, resp.Header.Get("Content-Type"))
+		return attemptResult{outcome: attemptUncertain, statusCode: resp.StatusCode}
 	}
 
 	// Persist the task with its pre-charge; the terminal poll settles.
@@ -162,8 +169,12 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		PricingMeta:    string(pricingMeta),
 	}
 	if err := model.InsertTask(task); err != nil {
-		return attemptResult{outcome: attemptUpstreamError,
-			cause: fmt.Errorf("persist task: %v", err)}
+		log.Printf("task %q accepted by upstream %d but persistence failed: %v", taskID, ch.ID, err)
+		flow.lastErr = fmt.Errorf("task accepted but not persisted: %v", err)
+		dto.WriteRelayError(flow.w, http.StatusInternalServerError, flow.inbound,
+			"server_error", "persistence_failed",
+			"task was accepted by upstream but could not be saved locally")
+		return attemptResult{outcome: attemptUncertain, statusCode: http.StatusInternalServerError}
 	}
 
 	// The pre-charge now belongs to the task row; the poll-side settlement

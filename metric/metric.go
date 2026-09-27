@@ -57,6 +57,10 @@ const (
 	AttemptClientError
 	AttemptUpstreamError
 	AttemptUnsupported
+	// AttemptUncertain: the upstream may have executed the request but the
+	// result is indeterminate (side-effect risk); the attempt must not be
+	// auto-retried across channels.
+	AttemptUncertain
 )
 
 // RequestMeta describes the request being measured.
