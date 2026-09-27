@@ -302,7 +302,7 @@ func runPassthroughMode(w http.ResponseWriter, r *http.Request, req relayRequest
 		if err != nil {
 			return attemptResult{outcome: attemptUnsupported, cause: err}
 		}
-		key, keyIdx := ch.SelectKey()
+		key, keyIdx := flow.selectKey(ch)
 		resp, fail := flow.callUpstream(ch, adaptor, upstreamCall{
 			method:      http.MethodPost,
 			url:         url,

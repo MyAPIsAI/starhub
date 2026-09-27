@@ -30,7 +30,7 @@ func TestPricingOptionDispatcher(t *testing.T) {
 		t.Fatal("unknown key must be rejected")
 	}
 	keys := OptionKeys()
-	if len(keys) != 21 {
+	if len(keys) != 24 {
 		t.Fatalf("OptionKeys = %v, want 21 keys", keys)
 	}
 	if err := UpdateOption("no_such_key", "1"); err == nil {

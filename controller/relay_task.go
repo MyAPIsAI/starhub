@@ -122,7 +122,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 	if err != nil {
 		return attemptResult{outcome: attemptUnsupported, cause: err}
 	}
-	key, keyIdx := ch.SelectKey()
+	key, keyIdx := flow.selectKey(ch)
 	resp, fail := flow.callUpstream(ch, chatAdaptor, upstreamCall{
 		method: http.MethodPost,
 		url:    adaptor.SubmitURL(ch.BaseURL),

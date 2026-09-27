@@ -156,6 +156,20 @@ func (c *Channel) IsMultiKey() bool {
 	return len(c.Keys()) > 1
 }
 
+// KeyAt returns the upstream key at index idx when it exists and is enabled.
+// It lets affinity pin a specific account of a multi-key channel.
+func (c *Channel) KeyAt(idx int) (string, bool) {
+	keys := c.Keys()
+	if idx < 0 || idx >= len(keys) {
+		return "", false
+	}
+	statuses := c.KeyStatuses()
+	if statuses[idx] != common.StatusEnabled {
+		return "", false
+	}
+	return keys[idx], true
+}
+
 // KeyStatuses returns the per-key status list aligned with Keys(); missing or
 // malformed entries default to enabled.
 func (c *Channel) KeyStatuses() []int {

@@ -135,3 +135,43 @@ func TestRecordFirstTokenIdempotent(t *testing.T) {
 	}
 	_ = first
 }
+
+func TestAffinityCounters(t *testing.T) {
+	Reset()
+	RecordAffinity(AffinityHit)
+	RecordAffinity(AffinityHit)
+	RecordAffinity(AffinityMiss)
+	RecordAffinity(AffinityPreferredFailed)
+	RecordAffinity(AffinityFallbackSuccess)
+	RecordAffinity(AffinityWrite)
+	RecordAffinity(AffinityClear)
+	// Out-of-range events must be ignored, not panic.
+	RecordAffinity(AffinityEvent(-1))
+	RecordAffinity(numAffinityEvents)
+
+	snap := TakeSnapshot()
+	counts := make(map[string]int64)
+	for _, a := range snap.Affinity {
+		counts[a.Event] = a.Count
+	}
+	want := map[string]int64{
+		"hit": 2, "miss": 1, "preferred_failed": 1,
+		"fallback_success": 1, "write": 1, "clear": 1,
+	}
+	for k, v := range want {
+		if counts[k] != v {
+			t.Fatalf("affinity %s = %d, want %d", k, counts[k], v)
+		}
+	}
+	if len(snap.Affinity) != 6 {
+		t.Fatalf("affinity events = %d, want 6", len(snap.Affinity))
+	}
+
+	// Reset clears the counters.
+	Reset()
+	for _, a := range TakeSnapshot().Affinity {
+		if a.Count != 0 {
+			t.Fatalf("affinity %s = %d after reset, want 0", a.Event, a.Count)
+		}
+	}
+}

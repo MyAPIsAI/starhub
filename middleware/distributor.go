@@ -2,7 +2,10 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
+	"hash/fnv"
 	"io"
 	"mime"
 	"net/http"
@@ -11,9 +14,23 @@ import (
 	"starhub/common"
 	"starhub/model"
 	"starhub/relay/dto"
+	"starhub/setting"
 )
 
 const maxRequestBodySize = 32 << 20
+
+// affinityPrefixMaxBytes caps how much of the leading prompt is hashed for
+// prefix-cache affinity: enough to fingerprint a conversation, small enough
+// to stay cheap on large bodies.
+const affinityPrefixMaxBytes = 1 << 10
+
+// chatMessage is the subset of an OpenAI/Claude chat message the prefix hash
+// needs. Content is kept raw so both string and multimodal array shapes hash
+// deterministically.
+type chatMessage struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
 
 // Distribute parses and caches the relay request body so the controller
 // can replay it on every retry attempt. JSON bodies are probed for the
@@ -65,6 +82,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 
 			var modelName string
 			var stream bool
+			var prefixHash string
 			if isMultipart(contentType) {
 				// Metadata-only parse: the cached raw body stays the only
 				// in-memory copy of uploaded files (P7.1).
@@ -89,27 +107,30 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				}
 				modelName = lite.Model
 				stream = lite.Stream
+				if setting.RoutingAffinityPrefixCacheEnabled() {
+					prefixHash = chatPrefixHashFromBody(body)
+				}
 			}
-		if modelName == "" && defaultModel != "" {
-			modelName = defaultModel
-		}
-		if modelName == "" {
-			fail(http.StatusBadRequest, "model_required",
-				"the \"model\" field is required")
-			return
-		}
-
-		// Token model whitelist: a sub-key can be restricted to a subset of
-		// models. The limits string is set by TokenAuth; empty means no limit.
-		if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
-			if !modelInList(modelName, model.SplitList(limits)) {
-				fail(http.StatusForbidden, "model_not_allowed",
-					"the model is not in the token's model whitelist")
+			if modelName == "" && defaultModel != "" {
+				modelName = defaultModel
+			}
+			if modelName == "" {
+				fail(http.StatusBadRequest, "model_required",
+					"the \"model\" field is required")
 				return
 			}
-		}
 
-		// Channel selection is left to the relay controller: it retries the
+			// Token model whitelist: a sub-key can be restricted to a subset of
+			// models. The limits string is set by TokenAuth; empty means no limit.
+			if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
+				if !modelInList(modelName, model.SplitList(limits)) {
+					fail(http.StatusForbidden, "model_not_allowed",
+						"the model is not in the token's model whitelist")
+					return
+				}
+			}
+
+			// Channel selection is left to the relay controller: it retries the
 			// request on alternative channels, and every attempt needs a fresh
 			// pick. The body stays cached in the context so each attempt can
 			// replay it.
@@ -117,7 +138,8 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				common.CtxRequestModel, modelName,
 				common.CtxRequestBody, body,
 				common.CtxRequestContentType, contentType,
-				common.CtxRequestStream, stream)
+				common.CtxRequestStream, stream,
+				common.CtxRequestPrefixHash, prefixHash)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -140,4 +162,58 @@ func modelInList(model string, list []string) bool {
 		}
 	}
 	return false
+}
+
+// chatPrefixHashFromBody derives a stable, non-reversible key from the leading
+// system prompt plus the first user message in a chat request body: the part of
+// a conversation most likely to be served from an upstream prompt cache. It
+// returns "" when no prefix could be extracted so affinity degrades to
+// channel-level stickiness. Only called when prefix-cache affinity is enabled,
+// so the extra parse never taxes the common path.
+func chatPrefixHashFromBody(body []byte) string {
+	var lite struct {
+		System   json.RawMessage `json:"system"`
+		Messages []chatMessage   `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &lite); err != nil {
+		return ""
+	}
+	h := fnv.New64a()
+	hashed := false
+	write := func(raw json.RawMessage) {
+		if len(raw) == 0 {
+			return
+		}
+		var s string
+		if json.Unmarshal(raw, &s) == nil {
+			if len(s) > affinityPrefixMaxBytes {
+				s = s[:affinityPrefixMaxBytes]
+			}
+			_, _ = h.Write([]byte(s))
+			hashed = true
+			return
+		}
+		var buf bytes.Buffer
+		if json.Compact(&buf, raw) == nil {
+			b := buf.Bytes()
+			if len(b) > affinityPrefixMaxBytes {
+				b = b[:affinityPrefixMaxBytes]
+			}
+			_, _ = h.Write(b)
+			hashed = true
+		}
+	}
+	write(lite.System)
+	for _, m := range lite.Messages {
+		if m.Role == "user" || m.Role == "system" {
+			write(m.Content)
+			break
+		}
+	}
+	if !hashed {
+		return ""
+	}
+	var out [8]byte
+	binary.LittleEndian.PutUint64(out[:], h.Sum64())
+	return hex.EncodeToString(out[:])
 }

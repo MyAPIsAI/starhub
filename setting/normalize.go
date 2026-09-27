@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"starhub/config"
 )
@@ -83,6 +84,27 @@ func NormalizeOption(key, value string) (string, error) {
 			v = MaxRoutingAffinityTTLSeconds
 		}
 		return strconv.FormatInt(v, 10), nil
+	case OptionKeyRoutingAffinityMode:
+		v := strings.TrimSpace(value)
+		if v != AffinityModeSticky && v != AffinityModeHash {
+			return "", fmt.Errorf("invalid value for %s: must be %q or %q", key, AffinityModeSticky, AffinityModeHash)
+		}
+		return v, nil
+	case OptionKeyRoutingAffinityCooldown:
+		var v int64
+		if err := json.Unmarshal([]byte(value), &v); err != nil || v <= 0 {
+			return "", fmt.Errorf("invalid value for %s: expected positive integer", key)
+		}
+		if v > MaxRoutingAffinityCooldownSeconds {
+			v = MaxRoutingAffinityCooldownSeconds
+		}
+		return strconv.FormatInt(v, 10), nil
+	case OptionKeyRoutingAffinityPrefixCache:
+		v, err := parseBoolOption(value)
+		if err != nil {
+			return "", fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		return strconv.FormatBool(v), nil
 	default:
 		return "", fmt.Errorf("unknown option key: %s", key)
 	}

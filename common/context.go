@@ -23,6 +23,10 @@ const (
 	// CtxTokenModelLimits carries the token's model whitelist (comma-separated)
 	// so the distributor can enforce it once the model name is parsed.
 	CtxTokenModelLimits ctxKey = "token_model_limits"
+	// CtxRequestPrefixHash carries a stable hash of the prompt prefix so
+	// prefix-cache affinity can keep a conversation on the same upstream.
+	// Empty when prefix affinity is disabled or no prefix could be derived.
+	CtxRequestPrefixHash ctxKey = "request_prefix_hash"
 )
 
 func WithValues(ctx context.Context, kv ...any) context.Context {

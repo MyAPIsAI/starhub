@@ -93,3 +93,76 @@ func TestAffinityBoolSnapshot(t *testing.T) {
 		t.Fatalf("enabled snapshot = %q, %v; want \"true\"", snapshot, err)
 	}
 }
+
+func TestAffinityModeUpdate(t *testing.T) {
+	ResetAffinityToDefaults()
+	t.Cleanup(ResetAffinityToDefaults)
+
+	if RoutingAffinityMode() != AffinityModeSticky {
+		t.Fatalf("default mode = %q, want %q", RoutingAffinityMode(), AffinityModeSticky)
+	}
+	if err := UpdateOption(OptionKeyRoutingAffinityMode, AffinityModeHash); err != nil {
+		t.Fatalf("setting hash mode failed: %v", err)
+	}
+	if RoutingAffinityMode() != AffinityModeHash {
+		t.Fatalf("mode = %q, want %q", RoutingAffinityMode(), AffinityModeHash)
+	}
+	snapshot, err := SnapshotOption(OptionKeyRoutingAffinityMode)
+	if err != nil || snapshot != AffinityModeHash {
+		t.Fatalf("mode snapshot = %q, %v; want %q", snapshot, err, AffinityModeHash)
+	}
+	for _, bad := range []string{`sticky2`, ``, `random`} {
+		if err := UpdateOption(OptionKeyRoutingAffinityMode, bad); err == nil {
+			t.Fatalf("invalid mode %q must be rejected", bad)
+		}
+	}
+}
+
+func TestAffinityCooldownUpdate(t *testing.T) {
+	ResetAffinityToDefaults()
+	t.Cleanup(ResetAffinityToDefaults)
+
+	if RoutingAffinityCooldown() != DefaultRoutingAffinityCooldown {
+		t.Fatalf("default cooldown = %v, want %v", RoutingAffinityCooldown(), DefaultRoutingAffinityCooldown)
+	}
+	if err := UpdateOption(OptionKeyRoutingAffinityCooldown, `45`); err != nil {
+		t.Fatalf("valid cooldown rejected: %v", err)
+	}
+	if RoutingAffinityCooldown() != 45*time.Second {
+		t.Fatalf("cooldown = %v, want 45s", RoutingAffinityCooldown())
+	}
+	// A value above the cap is clamped rather than rejected.
+	if err := UpdateOption(OptionKeyRoutingAffinityCooldown, `1000000`); err != nil {
+		t.Fatalf("over-cap cooldown rejected: %v", err)
+	}
+	if RoutingAffinityCooldown() != MaxRoutingAffinityCooldown {
+		t.Fatalf("over-cap cooldown = %v, want the cap %v", RoutingAffinityCooldown(), MaxRoutingAffinityCooldown)
+	}
+	for _, bad := range []string{`0`, `-3`, `notjson`} {
+		if err := UpdateOption(OptionKeyRoutingAffinityCooldown, bad); err == nil {
+			t.Fatalf("invalid cooldown %q must be rejected", bad)
+		}
+	}
+}
+
+func TestAffinityPrefixCacheUpdate(t *testing.T) {
+	ResetAffinityToDefaults()
+	t.Cleanup(ResetAffinityToDefaults)
+
+	if RoutingAffinityPrefixCacheEnabled() {
+		t.Fatal("prefix cache must be disabled by default")
+	}
+	if err := UpdateOption(OptionKeyRoutingAffinityPrefixCache, `true`); err != nil {
+		t.Fatalf("enabling prefix cache failed: %v", err)
+	}
+	if !RoutingAffinityPrefixCacheEnabled() {
+		t.Fatal("prefix cache not enabled")
+	}
+	snapshot, err := SnapshotOption(OptionKeyRoutingAffinityPrefixCache)
+	if err != nil || snapshot != "true" {
+		t.Fatalf("prefix cache snapshot = %q, %v; want \"true\"", snapshot, err)
+	}
+	if err := UpdateOption(OptionKeyRoutingAffinityPrefixCache, `maybe`); err == nil {
+		t.Fatal("invalid bool must be rejected")
+	}
+}

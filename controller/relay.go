@@ -29,8 +29,8 @@ var upstreamHTTPClient = &http.Client{Timeout: 10 * time.Minute}
 // poking at the writer from every error path.
 type statusWriter struct {
 	http.ResponseWriter
-	status   int
-	wrote    bool
+	status int
+	wrote  bool
 }
 
 func newStatusWriter(w http.ResponseWriter) *statusWriter {
@@ -112,6 +112,7 @@ type relayRequest struct {
 	body           []byte
 	contentType    string
 	stream         bool
+	prefixHash     string // prompt-prefix scope for prefix-cache affinity
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
@@ -126,6 +127,7 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 		modelName:      ctxValueString(ctx, common.CtxRequestModel),
 		contentType:    ctxValueString(ctx, common.CtxRequestContentType),
 		stream:         ctxValueBool(ctx, common.CtxRequestStream),
+		prefixHash:     ctxValueString(ctx, common.CtxRequestPrefixHash),
 	}
 	req.autoGroups, _ = ctx.Value(common.CtxAutoGroups).([]string)
 	req.body, _ = ctx.Value(common.CtxRequestBody).([]byte)
@@ -166,6 +168,12 @@ type relayFlow struct {
 	attempt *metric.AttemptSpan
 	sw      *statusWriter
 	mode    string // relay mode for the metric label (chat, embeddings, ...)
+
+	// Affinity bookkeeping per request (used by pick and noteAffinity).
+	affinityPreferred int64 // channel picked by affinity (0 when none)
+	affinityKeyIdx    int   // key index used for the current attempt (-1 = none)
+	affinityFailed    bool  // true when the affinity channel failed this request
+	affinityCounted   bool  // true when affinity hit/miss has been counted
 }
 
 func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat, mode string) *relayFlow {
@@ -175,8 +183,9 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 	sw := newStatusWriter(w)
 	flow := &relayFlow{
 		ctx: ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
-		tried: map[int64]bool{},
-		span:  metric.BeginRequest(metric.RequestMeta{
+		tried:          map[int64]bool{},
+		affinityKeyIdx: -1,
+		span: metric.BeginRequest(metric.RequestMeta{
 			UserID:  req.userID,
 			TokenID: req.tokenID,
 			Model:   req.modelName,
@@ -218,18 +227,44 @@ func (f *relayFlow) errorOut(status int, errType, code, message string) {
 // pick returns the next untried channel for the request model. In auto-group
 // mode, when the current group is exhausted the walk advances to the next
 // group in the token's auto-group sequence (cheapest-first, degrade to
-// pricier on failure).
+// pricier on failure). It also populates affinityPreferred for metrics and
+// noteAffinity.
 func (f *relayFlow) pick() (*model.Channel, error) {
 	for {
-		preferred := int64(0)
+		preferred, hashKey := int64(0), ""
 		if f.affinityEligible() {
-			id, ok := model.AffinityChannel(f.affinityKey())
-			if ok && !f.tried[id] {
-				preferred = id
+			switch setting.RoutingAffinityMode() {
+			case setting.AffinityModeHash:
+				hashKey = f.affinityHashKey()
+			default:
+				id, ok := model.AffinityChannel(f.affinityKey())
+				if ok && !f.tried[id] && !model.ChannelCoolingDown(id) {
+					preferred = id
+				}
 			}
 		}
-		ch, err := model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred)
+		var (
+			ch  *model.Channel
+			err error
+		)
+		if hashKey != "" {
+			ch, err = model.GetSatisfiedChannelHashed(f.currentGroup, f.req.modelName, f.tried, hashKey)
+		} else {
+			ch, err = model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred)
+		}
 		if err == nil {
+			f.affinityPreferred = 0
+			if preferred != 0 && ch.ID == preferred {
+				f.affinityPreferred = ch.ID
+			}
+			if !f.affinityCounted && f.affinityEligible() && setting.RoutingAffinityMode() != setting.AffinityModeHash {
+				f.affinityCounted = true
+				if preferred != 0 && ch.ID == preferred {
+					metric.RecordAffinity(metric.AffinityHit)
+				} else {
+					metric.RecordAffinity(metric.AffinityMiss)
+				}
+			}
 			return ch, nil
 		}
 		if !errors.Is(err, model.ErrNoChannel) {
@@ -245,10 +280,30 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 }
 
 // affinityKey returns the sticky-affinity scope of the request: the token,
-// model and the group actually being attempted. The group is part of the key
-// so the auto-group walk keeps a preference inside its own group.
+// model, group and optional prefix scope. The group is part of the key so the
+// auto-group walk keeps a preference inside its own group.
 func (f *relayFlow) affinityKey() model.AffinityKey {
-	return model.AffinityKey{TokenID: f.req.tokenID, Model: f.req.modelName, Group: f.currentGroup}
+	return model.AffinityKey{
+		TokenID: f.req.tokenID,
+		Model:   f.req.modelName,
+		Group:   f.currentGroup,
+		Prefix:  f.affinityPrefix(),
+	}
+}
+
+// affinityPrefix returns the prompt-prefix scope or "" when prefix-cache
+// affinity is disabled, so the key degrades to channel-level stickiness.
+func (f *relayFlow) affinityPrefix() string {
+	if !setting.RoutingAffinityPrefixCacheEnabled() {
+		return ""
+	}
+	return f.req.prefixHash
+}
+
+// affinityHashKey builds the deterministic hash key for rendezvous mode.
+func (f *relayFlow) affinityHashKey() string {
+	k := f.affinityKey()
+	return fmt.Sprintf("%d|%s|%s|%s", k.TokenID, k.Model, k.Group, k.Prefix)
 }
 
 // affinityEligible reports whether sticky routing applies to this request.
@@ -270,6 +325,26 @@ func (f *relayFlow) begin(ch *model.Channel) {
 	f.trail = append(f.trail, strconv.FormatInt(ch.ID, 10))
 }
 
+// selectKey picks the upstream key for one attempt, honoring a remembered
+// key-level affinity so prefix-cache traffic stays on the same account. The
+// chosen index is recorded for noteAffinity to persist on success.
+func (f *relayFlow) selectKey(ch *model.Channel) (string, int) {
+	f.affinityKeyIdx = -1
+	if f.affinityEligible() {
+		if idx, ok := model.AffinityKeyIndex(f.affinityKey()); ok {
+			if aid, ok := model.AffinityChannel(f.affinityKey()); ok && aid == ch.ID {
+				if key, ok := ch.KeyAt(idx); ok {
+					f.affinityKeyIdx = idx
+					return key, idx
+				}
+			}
+		}
+	}
+	key, idx := ch.SelectKey()
+	f.affinityKeyIdx = idx
+	return key, idx
+}
+
 // noteAffinity updates the sticky preference after an attempt. Only a
 // successful attempt is remembered; a retryable failure of the remembered
 // channel clears it so the next request does not keep hitting a broken
@@ -281,9 +356,24 @@ func (f *relayFlow) noteAffinity(ch *model.Channel, outcome attemptOutcome) {
 	key := f.affinityKey()
 	switch outcome {
 	case attemptSuccess:
-		model.RememberAffinity(key, ch.ID, setting.RoutingAffinityTTL())
+		keyIdx := -1
+		if ch.IsMultiKey() {
+			keyIdx = f.affinityKeyIdx
+		}
+		model.RememberAffinity(key, ch.ID, keyIdx, setting.RoutingAffinityTTL())
+		metric.RecordAffinity(metric.AffinityWrite)
+		if f.affinityFailed {
+			metric.RecordAffinity(metric.AffinityFallbackSuccess)
+		}
 	case attemptUpstreamError:
+		wasPreferred := f.affinityPreferred == ch.ID
 		model.ForgetAffinityIf(key, ch.ID)
+		metric.RecordAffinity(metric.AffinityClear)
+		if wasPreferred {
+			f.affinityFailed = true
+			metric.RecordAffinity(metric.AffinityPreferredFailed)
+			model.CoolDownChannel(ch.ID, setting.RoutingAffinityCooldown())
+		}
 	}
 }
 
@@ -612,7 +702,7 @@ func chatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, inboun
 	// Select the upstream key once per attempt: the URL of signed
 	// providers depends on it and round-robin channels advance their
 	// cursor on every selection.
-	upstreamKey, keyIdx := ch.SelectKey()
+	upstreamKey, keyIdx := flow.selectKey(ch)
 	call := upstreamCall{
 		method: http.MethodPost,
 		url:    adaptor.ChatURL(ch.BaseURL, upstreamKey, flow.req.modelName, flow.req.stream),

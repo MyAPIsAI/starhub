@@ -86,7 +86,7 @@ type AttemptSpan struct {
 	start         time.Time
 	upstreamReqID string
 	headerTime    time.Duration // request send -> response headers
-	ttft          time.Duration  // time to first token (headerTime when not streamed)
+	ttft          time.Duration // time to first token (headerTime when not streamed)
 	hasFirstToken bool
 	ended         bool
 	outcome       AttemptClass
@@ -261,29 +261,30 @@ func recordAttempt(channelID int64, ttft, duration time.Duration, success bool, 
 
 // ChannelStat is the aggregated view of one channel's rolling window.
 type ChannelStat struct {
-	ChannelID    int64   `json:"channel_id"`
-	Samples      int     `json:"samples"`
-	SuccessRate  float64 `json:"success_rate"`
-	AvgTTFTMs    float64 `json:"avg_ttft_ms"`     // average time to first token
-	P95TTFTMs    float64 `json:"p95_ttft_ms"`     // 95th percentile TTFT
-	AvgLatencyMs float64 `json:"avg_latency_ms"`  // average attempt duration
-	LastTTFTMs   float64 `json:"last_ttft_ms"`    // most recent TTFT
-	LastAttemptAt int64  `json:"last_attempt_at"` // unix seconds of the last sample
+	ChannelID     int64   `json:"channel_id"`
+	Samples       int     `json:"samples"`
+	SuccessRate   float64 `json:"success_rate"`
+	AvgTTFTMs     float64 `json:"avg_ttft_ms"`     // average time to first token
+	P95TTFTMs     float64 `json:"p95_ttft_ms"`     // 95th percentile TTFT
+	AvgLatencyMs  float64 `json:"avg_latency_ms"`  // average attempt duration
+	LastTTFTMs    float64 `json:"last_ttft_ms"`    // most recent TTFT
+	LastAttemptAt int64   `json:"last_attempt_at"` // unix seconds of the last sample
 }
 
 // RequestSnapshot is the request-level counter summary.
 type RequestSnapshot struct {
-	Class   string `json:"class"`
-	Count   int64  `json:"count"`
+	Class string `json:"class"`
+	Count int64  `json:"count"`
 }
 
 // Snapshot is the full observability surface for the admin API. It is
 // safe to call concurrently with the relay path.
 type Snapshot struct {
-	Requests      []RequestSnapshot `json:"requests"`
-	ChannelStats  []ChannelStat     `json:"channel_stats"`
-	Window        int               `json:"window"`
-	GeneratedAt   int64             `json:"generated_at"`
+	Requests     []RequestSnapshot  `json:"requests"`
+	ChannelStats []ChannelStat      `json:"channel_stats"`
+	Window       int                `json:"window"`
+	Affinity     []AffinitySnapshot `json:"affinity"`
+	GeneratedAt  int64              `json:"generated_at"`
 }
 
 // TakeSnapshot builds a point-in-time view of the registry.
@@ -306,6 +307,7 @@ func TakeSnapshot() Snapshot {
 		Requests:     reqs,
 		ChannelStats: stats,
 		Window:       rollingWindowSize,
+		Affinity:     affinitySnapshots(),
 		GeneratedAt:  time.Now().Unix(),
 	}
 }
@@ -404,4 +406,5 @@ func Reset() {
 		channelWindows.Delete(key)
 		return true
 	})
+	resetAffinity()
 }

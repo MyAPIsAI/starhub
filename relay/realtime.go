@@ -12,6 +12,7 @@ import (
 	"starhub/common"
 	"starhub/model"
 	"starhub/relay/dto"
+	"starhub/setting"
 )
 
 // Realtime relay (P3): a websocket pipe between the client and an upstream
@@ -72,12 +73,23 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Dial an upstream realtime channel first: a failure keeps the client
-	// handshake clean (plain HTTP error, no orphaned upgrade).
+	// handshake clean (plain HTTP error, no orphaned upgrade). A remembered
+	// affinity preference lets a reconnect land on the same upstream so an
+	// established session's cache keeps helping.
 	tried := map[int64]bool{}
+	affinityKey := model.AffinityKey{TokenID: tokenID, Model: modelName, Group: group}
+	affinityOn := tokenID > 0 && setting.RoutingAffinityEnabled() &&
+		setting.RoutingAffinityMode() != setting.AffinityModeHash
+	preferred := int64(0)
+	if affinityOn {
+		if id, ok := model.AffinityChannel(affinityKey); ok && !model.ChannelCoolingDown(id) {
+			preferred = id
+		}
+	}
 	var upstream *WSConn
 	var upstreamChannel *model.Channel
 	for {
-		ch, err := model.GetSatisfiedChannelExcluding(group, modelName, tried)
+		ch, err := model.GetSatisfiedChannelPreferred(group, modelName, tried, preferred)
 		if err != nil {
 			break
 		}
@@ -90,14 +102,28 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue // channel type without realtime support
 		}
-		key, _ := ch.SelectKey()
+		key, keyIdx := ch.SelectKey()
+		if affinityOn && ch.ID == preferred {
+			if idx, ok := model.AffinityKeyIndex(affinityKey); ok {
+				if k, ok := ch.KeyAt(idx); ok {
+					key, keyIdx = k, idx
+				}
+			}
+		}
 		header := http.Header{}
 		header.Set("Authorization", "Bearer "+key)
 		header.Set("OpenAI-Beta", "realtime=v1")
 		conn, err := WSDial(wsURL, header)
 		if err != nil {
 			log.Printf("realtime dial channel %d failed: %v", ch.ID, err)
+			if affinityOn && ch.ID == preferred {
+				model.ForgetAffinityIf(affinityKey, ch.ID)
+				model.CoolDownChannel(ch.ID, setting.RoutingAffinityCooldown())
+			}
 			continue
+		}
+		if affinityOn {
+			model.RememberAffinity(affinityKey, ch.ID, keyIdx, setting.RoutingAffinityTTL())
 		}
 		upstream = conn
 		upstreamChannel = ch
