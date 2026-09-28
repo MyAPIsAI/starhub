@@ -97,6 +97,12 @@ type TaskPricing struct {
 	// PromptTokens / CompletionTokens price token-billed models.
 	PromptTokens     int64
 	CompletionTokens int64
+	// ExprVars carries the expression variables (seconds, n, task_status,
+	// ...) for models configured with model_price_expr. When non-empty and
+	// the model's PriceData has an expression, the relay billing core
+	// evaluates the expression against these variables instead of using
+	// PerCallUSD/Units. The expression result is the complete USD price.
+	ExprVars map[string]float64 `json:",omitempty"`
 }
 
 // TaskAdaptor is the submit-and-poll lifecycle of asynchronous task

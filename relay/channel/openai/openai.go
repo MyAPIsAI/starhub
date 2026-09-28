@@ -299,6 +299,22 @@ func (VideoTaskAdaptor) ParseTaskResult(statusCode int, body []byte) (*dto.TaskR
 const soraPricePerSecond = 0.1
 
 func (VideoTaskAdaptor) EstimateBilling(modelName, group string, req *dto.TaskRequest) channel.TaskPricing {
+	// Expression path: when model_price_expr is configured, fill ExprVars
+	// with the request parameters. Pre-charge assumes task_status=1 (full
+	// success price); the settle step updates it with the terminal status.
+	if _, ok := setting.ModelPriceExpr(modelName); ok {
+		promptEst := dto.EstimateTokens(req.Prompt) + 100
+		return channel.TaskPricing{
+			ExprVars: map[string]float64{
+				"seconds":           float64(req.Seconds),
+				"n":                 float64(req.N),
+				"task_status":       1, // pre-charge assumes success
+				"prompt_tokens":     float64(promptEst),
+				"completion_tokens": 0,
+				"total_tokens":      float64(promptEst),
+			},
+		}
+	}
 	if price, ok := taskModelPrice(modelName); ok && price > 0 {
 		return channel.TaskPricing{
 			PerCallUSD: price,
@@ -312,6 +328,16 @@ func (VideoTaskAdaptor) EstimateBilling(modelName, group string, req *dto.TaskRe
 }
 
 func (VideoTaskAdaptor) AdjustBillingOnComplete(modelName, group string, req *dto.TaskRequest, res *dto.TaskResult, accepted channel.TaskPricing) channel.TaskPricing {
+	// Expression path: update ExprVars with the terminal status. The
+	// expression handles status-based discounting via the task_status
+	// variable (success=1, cancelled=0.5, failed=0), so the adaptor no
+	// longer hardcodes Units *= 0.5 for cancellations. Seconds/n stay
+	// from the request (the platform does not report delivered values).
+	if len(accepted.ExprVars) > 0 {
+		accepted.ExprVars["task_status"] = taskStatusValue(res.Status)
+		return accepted
+	}
+	// Non-expression path: preserve existing per-call / token fallback.
 	switch res.Status {
 	case dto.TaskStatusSucceeded:
 		// The platform does not report delivered seconds; the request
@@ -329,6 +355,19 @@ func (VideoTaskAdaptor) AdjustBillingOnComplete(modelName, group string, req *dt
 	default:
 		// Failed tasks are fully refunded.
 		return channel.TaskPricing{}
+	}
+}
+
+// taskStatusValue maps a terminal task status to the numeric value used by
+// pricing expressions: succeeded=1, cancelled=0.5, failed/unknown=0.
+func taskStatusValue(status string) float64 {
+	switch status {
+	case dto.TaskStatusSucceeded:
+		return 1
+	case dto.TaskStatusCancelled:
+		return 0.5
+	default:
+		return 0
 	}
 }
 

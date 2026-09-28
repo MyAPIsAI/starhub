@@ -27,7 +27,22 @@ func TaskPricingQuotaWithUserGroup(modelName, group, userGroup string, p channel
 }
 
 // TaskPricingQuotaWithPriceData uses the pricing snapshot captured at submit.
+//
+//	expression (ExprVars non-empty) -> Eval(expr, ExprVars) USD
+//	per-call (PerCallUSD > 0)       -> PerCallUSD x Units x EffectiveRatio
+//	token                           -> token billing on Prompt/CompletionTokens
+//
+// The expression path takes priority when the model has a configured
+// expression AND the platform filled ExprVars. A failed expression falls
+// through to per-call / token billing (same fallback semantics as
+// ComputeUsageQuota).
 func TaskPricingQuotaWithPriceData(pd *PriceData, p channel.TaskPricing) int64 {
+	if pd.IsExpression() && len(p.ExprVars) > 0 {
+		if q, ok := evalExpression(pd, p.ExprVars); ok {
+			return q
+		}
+		// expression failed: fall through to per-call / token
+	}
 	if p.PerCallUSD > 0 && p.Units > 0 {
 		return common.QuotaFromFloat64(
 			p.PerCallUSD * p.Units * float64(common.QuotaPerUSD) * pd.EffectiveRatio())

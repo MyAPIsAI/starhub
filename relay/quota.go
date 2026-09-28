@@ -6,7 +6,6 @@ import (
 
 	"starhub/common"
 	"starhub/model"
-	"starhub/pkg/billingexpr"
 	"starhub/relay/dto"
 	"starhub/setting"
 )
@@ -97,16 +96,14 @@ func estimatePreConsume(pd *PriceData, promptEstimate, completionBudget int64) i
 			"completion_tokens": float64(completionBudget),
 			"total_tokens":      float64(promptEstimate + completionBudget),
 		}
-		usd, err := billingexpr.Eval(pd.PriceExpr, vars)
-		if err != nil {
-			log.Printf("[%s] model %s expression %q failed at pre-charge (%v), falling back to token estimate",
-				common.QuotaSaturation, pd.ModelName, pd.PriceExpr, err)
-			return tokenUsageQuota(pd, &Usage{
-				PromptTokens:     promptEstimate,
-				CompletionTokens: completionBudget,
-			})
+		if q, ok := evalExpression(pd, vars); ok {
+			return q
 		}
-		return priceUSDToQuota(pd, usd)
+		// expression failed: fall back to token estimate
+		return tokenUsageQuota(pd, &Usage{
+			PromptTokens:     promptEstimate,
+			CompletionTokens: completionBudget,
+		})
 	}
 	if pd.IsPerCall() {
 		return priceUSDToQuota(pd, pd.ModelPriceUSD)

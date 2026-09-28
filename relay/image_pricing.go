@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"strconv"
 	"strings"
 
 	"starhub/relay/dto"
@@ -14,6 +15,12 @@ import (
 // with the actual count read from the response data array (guarded into
 // [1, MaxImageN]); token-billed models keep the usage-based path. Size x
 // quality and count are deliberately two independent multipliers.
+//
+// When model_price_expr is configured, the expression receives count, size
+// (long-edge pixels), quality (numeric ratio), and token variables; its
+// result is the complete USD price — size/quality/count are NOT applied as
+// OtherRatio on top. This lets operators express tiered / volume-discounted
+// pricing that the fixed-multiplier per-call path cannot.
 
 // imageSizeRatio scales the per-call price by resolution, relative to each
 // model's base size (list prices of the public price sheets).
@@ -85,14 +92,73 @@ func (b *ImageBill) priceData() *PriceData {
 	return NewPriceData(b.Model, b.Group)
 }
 
+// imageSizeValue extracts the long-edge pixel count from a "<w>x<h>" size
+// string (e.g. "1024x1792" -> 1792). "auto" and unparseable sizes map to
+// 1024 (the base resolution) so expression authors get a stable default.
+// The long edge is used (not the short edge) because it distinguishes every
+// preset tier: 1024x1024=1024, 1024x1792=1792, 1536x1024=1536, etc.
+func imageSizeValue(size string) float64 {
+	parts := strings.SplitN(size, "x", 2)
+	if len(parts) != 2 {
+		return 1024
+	}
+	w, err1 := strconv.Atoi(parts[0])
+	h, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		return 1024
+	}
+	if w > h {
+		return float64(w)
+	}
+	return float64(h)
+}
+
+// imageQualityValue maps a quality string to its numeric ratio for
+// expression evaluation: low=0.5 standard=1 medium=1 high=1.5 hd=2 auto=1.
+// Unknown / empty quality maps to 1 (standard) so an unpriceable
+// combination never zeroes the bill.
+func imageQualityValue(quality string) float64 {
+	if q, ok := imageQualityRatio[strings.ToLower(quality)]; ok && quality != "" {
+		return q
+	}
+	return 1
+}
+
+// evalImageExpr evaluates the pricing expression with image-specific
+// variables (count, size, quality, prompt_tokens, completion_tokens).
+// The expression result is the complete USD price — size/quality/count are
+// NOT applied as OtherRatio on top. Returns (quota, true) on success and
+// (0, false) on failure (caller falls back to per-call / token billing).
+func (b *ImageBill) evalImageExpr(pd *PriceData, count int, promptTokens, completionTokens int64) (int64, bool) {
+	vars := map[string]float64{
+		"count":             float64(count),
+		"size":              imageSizeValue(b.Size),
+		"quality":           imageQualityValue(b.Quality),
+		"prompt_tokens":     float64(promptTokens),
+		"completion_tokens": float64(completionTokens),
+		"total_tokens":      float64(promptTokens + completionTokens),
+	}
+	return evalExpression(pd, vars)
+}
+
 // PreQuota prices the pre-charge of the request.
 func (b *ImageBill) PreQuota() int64 {
 	pd := b.priceData()
-	if !pd.IsPerCall() && !pd.IsExpression() {
-		// Token-billed image models: the prompt drives the estimate.
-		return estimatePreConsume(pd, dto.EstimateTokens(b.Prompt)+estimateReserveTokens, 0)
+	promptEst := dto.EstimateTokens(b.Prompt) + estimateReserveTokens
+	if pd.IsExpression() {
+		// Expression path: count/size/quality are variables in the
+		// expression, NOT OtherRatio multipliers. Pre-charge uses the
+		// requested n (already an upper bound) and prompt estimate.
+		if q, ok := b.evalImageExpr(pd, b.Count, promptEst, 0); ok {
+			return q
+		}
+		// expression failed: fall through to per-call / token fallback
 	}
-	return b.quotaForCount(b.Count)
+	if pd.IsPerCall() {
+		return b.quotaForCount(b.Count)
+	}
+	// Token-billed image models: the prompt drives the estimate.
+	return tokenUsageQuota(pd, &Usage{PromptTokens: promptEst})
 }
 
 // SettleQuota prices the terminal bill. actualCount is the image count the
@@ -101,25 +167,40 @@ func (b *ImageBill) PreQuota() int64 {
 // stays the bill of record, P3.1 guardrail).
 func (b *ImageBill) SettleQuota(actualCount int, usage *dto.ImageUsage) int64 {
 	pd := b.priceData()
-	if !pd.IsPerCall() && !pd.IsExpression() {
-		if usage != nil && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
-			// Image APIs report usage as input_tokens/output_tokens; the
-			// overwrite mapping is image-path-only and must not leak into
-			// chat / embedding settlement (P3.1 warning).
-			return ComputeUsageQuota(pd, &Usage{
-				PromptTokens:     usage.InputTokens,
-				CompletionTokens: usage.OutputTokens,
-			})
-		}
-		// No usage report: keep the prompt estimate (settled against the
-		// same estimate as the pre-charge).
-		return estimatePreConsume(pd, dto.EstimateTokens(b.Prompt)+estimateReserveTokens, 0)
-	}
 	count := actualCount
 	if count <= 0 || count > dto.MaxImageN {
 		count = b.Count
 	}
-	return b.quotaForCount(count)
+	if pd.IsExpression() {
+		// Expression path: settle uses the actual delivered count and
+		// the real usage (if the upstream reports tokens).
+		var promptTok, completionTok int64
+		if usage != nil && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
+			promptTok = usage.InputTokens
+			completionTok = usage.OutputTokens
+		} else {
+			promptTok = dto.EstimateTokens(b.Prompt) + estimateReserveTokens
+		}
+		if q, ok := b.evalImageExpr(pd, count, promptTok, completionTok); ok {
+			return q
+		}
+		// expression failed: fall through to per-call / token fallback
+	}
+	if pd.IsPerCall() {
+		return b.quotaForCount(count)
+	}
+	// Token-billed image models: usage from the response (input_tokens ->
+	// prompt, output_tokens -> completion; the overwrite mapping is
+	// image-path-only and must not leak into chat / embedding settlement).
+	if usage != nil && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
+		return tokenUsageQuota(pd, &Usage{
+			PromptTokens:     usage.InputTokens,
+			CompletionTokens: usage.OutputTokens,
+		})
+	}
+	// No usage report: keep the prompt estimate (settled against the
+	// same estimate as the pre-charge).
+	return tokenUsageQuota(pd, &Usage{PromptTokens: dto.EstimateTokens(b.Prompt) + estimateReserveTokens})
 }
 
 func (b *ImageBill) quotaForCount(count int) int64 {

@@ -106,6 +106,22 @@ func (p *PriceData) IsExpression() bool { return p.PriceExpr != "" }
 // IsPerCall reports whether the model is billed per call (fixed price).
 func (p *PriceData) IsPerCall() bool { return p.ModelPriceUSD > 0 }
 
+// evalExpression evaluates the pricing expression against vars and converts
+// the USD result to quota. On failure it audits with the quota_saturation
+// marker and returns (0, false) so the caller can fall back to per-call or
+// token billing. This is the single expression-evaluation entry point used
+// by ComputeUsageQuota, estimatePreConsume, and the image / video billing
+// paths — keeping the variable set consistent and the audit log uniform.
+func evalExpression(p *PriceData, vars map[string]float64) (int64, bool) {
+	usd, err := billingexpr.Eval(p.PriceExpr, vars)
+	if err != nil {
+		log.Printf("[%s] model %s expression %q failed (%v), falling back",
+			common.QuotaSaturation, p.ModelName, p.PriceExpr, err)
+		return 0, false
+	}
+	return priceUSDToQuota(p, usd), true
+}
+
 // ComputeUsageQuota prices one usage report:
 //
 //	expression     -> Eval(expr, usage vars) USD
@@ -125,12 +141,8 @@ func ComputeUsageQuota(p *PriceData, usage *Usage) int64 {
 			"completion_tokens": float64(usage.CompletionTokens),
 			"total_tokens":      float64(usage.PromptTokens + usage.CompletionTokens),
 		}
-		usd, err := billingexpr.Eval(p.PriceExpr, vars)
-		if err != nil {
-			log.Printf("[%s] model %s expression %q failed (%v), falling back to token billing",
-				common.QuotaSaturation, p.ModelName, p.PriceExpr, err)
-		} else {
-			return priceUSDToQuota(p, usd)
+		if q, ok := evalExpression(p, vars); ok {
+			return q
 		}
 	}
 	if p.IsPerCall() {

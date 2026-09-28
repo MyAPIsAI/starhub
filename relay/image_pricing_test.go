@@ -100,3 +100,159 @@ func setOptionTest(t *testing.T, key, value string) {
 		_ = setting.UpdateOption(key, `{}`)
 	})
 }
+
+func TestImageSizeValue(t *testing.T) {
+	cases := []struct {
+		size string
+		want float64
+	}{
+		{"1024x1024", 1024},
+		{"1024x1792", 1792},
+		{"1792x1024", 1792},
+		{"1536x1024", 1536},
+		{"1024x1536", 1536},
+		{"256x256", 256},
+		{"512x512", 512},
+		{"auto", 1024},
+		{"", 1024},
+		{"bogus", 1024},
+	}
+	for _, c := range cases {
+		if got := imageSizeValue(c.size); got != c.want {
+			t.Fatalf("imageSizeValue(%q) = %v, want %v", c.size, got, c.want)
+		}
+	}
+}
+
+func TestImageQualityValue(t *testing.T) {
+	cases := []struct {
+		quality string
+		want    float64
+	}{
+		{"standard", 1},
+		{"hd", 2},
+		{"low", 0.5},
+		{"medium", 1},
+		{"high", 1.5},
+		{"auto", 1},
+		{"", 1},
+		{"unknown", 1},
+	}
+	for _, c := range cases {
+		if got := imageQualityValue(c.quality); got != c.want {
+			t.Fatalf("imageQualityValue(%q) = %v, want %v", c.quality, got, c.want)
+		}
+	}
+}
+
+func TestImageBillExpressionCount(t *testing.T) {
+	resetPricingForTests()
+	defer resetPricingForTests()
+	setOptionTest(t, "model_price_expr", `{"gpt-image-1":"0.04 * count"}`)
+	// Expression with count: pre uses requested n, settle uses actual.
+	bill := &ImageBill{Model: "gpt-image-1", Group: "default", Size: "1024x1024", Prompt: "cat", Count: 3}
+	// pre: 0.04 * 3 = 0.12 USD = 60000 quota (group 1, no OtherRatio)
+	if got := bill.PreQuota(); got != 0.04*3*500000 {
+		t.Fatalf("expr pre = %d, want %v", got, 0.04*3*500000)
+	}
+	// settle with actual count 2: 0.04 * 2 = 0.08 USD = 40000
+	if got := bill.SettleQuota(2, nil); got != 0.04*2*500000 {
+		t.Fatalf("expr settle(2) = %d, want %v", got, 0.04*2*500000)
+	}
+	// over-delivery: settle with 4 must bill 4 (no free images)
+	if got := bill.SettleQuota(4, nil); got != 0.04*4*500000 {
+		t.Fatalf("expr settle(4) = %d, want %v", got, 0.04*4*500000)
+	}
+	// hostile count falls back to requested n
+	for _, hostile := range []int{0, -1, 999999} {
+		if got := bill.SettleQuota(hostile, nil); got != 0.04*3*500000 {
+			t.Fatalf("hostile count %d must fall back to request: %d", hostile, got)
+		}
+	}
+}
+
+func TestImageBillExpressionSizeAndQuality(t *testing.T) {
+	resetPricingForTests()
+	defer resetPricingForTests()
+	// Expression that uses size and quality explicitly: the expression
+	// result is the complete USD price, NOT multiplied by OtherRatio.
+	expr := "0.04 * count * (size == 1792 ? 2.025 : 1) * quality"
+	setOptionTest(t, "model_price_expr", `{"dall-e-3":"`+expr+`"}`)
+
+	// 1024x1792, hd (quality=2): 0.04 * 1 * 2.025 * 2 = 0.162
+	bill := &ImageBill{Model: "dall-e-3", Group: "default", Size: "1024x1792", Quality: "hd", Prompt: "cat", Count: 1}
+	if got := bill.PreQuota(); got != int64(0.04*2.025*2*500000) {
+		t.Fatalf("expr size+quality pre = %d, want %v", got, 0.04*2.025*2*500000)
+	}
+
+	// 1024x1024, standard (quality=1): 0.04 * 1 * 1 * 1 = 0.04
+	bill2 := &ImageBill{Model: "dall-e-3", Group: "default", Size: "1024x1024", Quality: "standard", Prompt: "cat", Count: 1}
+	if got := bill2.PreQuota(); got != 0.04*500000 {
+		t.Fatalf("expr base pre = %d, want %v", got, 0.04*500000)
+	}
+
+	// 1536x1024, high (quality=1.5): 0.04 * 1 * 1 * 1.5 = 0.06
+	bill3 := &ImageBill{Model: "dall-e-3", Group: "default", Size: "1536x1024", Quality: "high", Prompt: "cat", Count: 1}
+	if got := bill3.PreQuota(); got != int64(0.04*1.5*500000) {
+		t.Fatalf("expr 1536+high pre = %d, want %v", got, 0.04*1.5*500000)
+	}
+}
+
+func TestImageBillExpressionNoOtherRatio(t *testing.T) {
+	resetPricingForTests()
+	defer resetPricingForTests()
+	// A constant expression: the result must NOT be multiplied by
+	// ImagePriceRatio or count (the key invariant of the expression path).
+	setOptionTest(t, "model_price_expr", `{"gpt-image-1":"0.10"}`)
+	bill := &ImageBill{Model: "gpt-image-1", Group: "default", Size: "1024x1792", Quality: "hd", Prompt: "cat", Count: 5}
+	// 0.10 USD flat, regardless of size/quality/count
+	if got := bill.PreQuota(); got != 0.10*500000 {
+		t.Fatalf("constant expr must not multiply OtherRatio: %d, want %v", got, 0.10*500000)
+	}
+}
+
+func TestImageBillExpressionWithTokens(t *testing.T) {
+	resetPricingForTests()
+	defer resetPricingForTests()
+	// Expression that uses prompt_tokens: settle uses real usage.
+	setOptionTest(t, "model_price_expr", `{"gpt-image-1":"0.001 * prompt_tokens"}`)
+	bill := &ImageBill{Model: "gpt-image-1", Group: "default", Size: "1024x1024", Prompt: "cat", Count: 2}
+	pre := bill.PreQuota()
+	if pre <= 0 {
+		t.Fatalf("expr with tokens pre must be positive, got %d", pre)
+	}
+	// settle with real usage: 0.001 * 500 = 0.5 USD = 250000
+	actual := bill.SettleQuota(2, &dto.ImageUsage{InputTokens: 500, OutputTokens: 0})
+	if actual != 0.001*500*500000 {
+		t.Fatalf("expr token settle = %d, want %v", actual, 0.001*500*500000)
+	}
+}
+
+func TestImageBillExpressionGroupRatio(t *testing.T) {
+	resetPricingForTests()
+	defer resetPricingForTests()
+	setOptionTest(t, "model_price_expr", `{"gpt-image-1":"0.04 * count"}`)
+	setOptionTest(t, "group_ratio", `{"default":1,"vip":0.5}`)
+	bill := &ImageBill{Model: "gpt-image-1", Group: "vip", Size: "1024x1024", Prompt: "cat", Count: 1}
+	// 0.04 * 0.5 (group) = 0.02 USD = 10000
+	if got := bill.PreQuota(); got != 0.04*0.5*500000 {
+		t.Fatalf("expr group ratio = %d, want %v", got, 0.04*0.5*500000)
+	}
+}
+
+func TestImageBillExpressionFailureFallback(t *testing.T) {
+	resetPricingForTests()
+	defer resetPricingForTests()
+	// A syntactically valid but eval-time-failing expression (division by
+	// zero at runtime when count is a variable... actually the engine
+	// rejects div by zero). Use a valid expression that references an
+	// unknown variable to trigger eval failure.
+	setOptionTest(t, "model_price_expr", `{"gpt-image-1":"0.04 * nonexistent_var"}`)
+	setOptionTest(t, "model_price", `{"gpt-image-1":0.04}`)
+	bill := &ImageBill{Model: "gpt-image-1", Group: "default", Size: "1024x1024", Prompt: "cat", Count: 2}
+	// Expression fails (unknown var) → falls back to per-call path:
+	// 0.04 * 1 (size) * 1 (quality) * 2 (count) = 0.08
+	if got := bill.PreQuota(); got != 0.04*2*500000 {
+		t.Fatalf("expr failure fallback to per-call = %d, want %v", got, 0.04*2*500000)
+	}
+}

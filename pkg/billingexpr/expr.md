@@ -43,16 +43,47 @@ primary := NUMBER | IDENT ("(" args ")")? | "(" expr ")"
 - `NUMBER`：十进制字面量（可带小数）。
 - `IDENT`：变量名（调用方给定）或白名单函数名，`true`/`false` 等价 1/0。
 
-## 当前变量（由文本中继结算层提供）
+## 变量（由调用方按模式传入）
 
-| 变量 | 含义 |
-| --- | --- |
-| `prompt_tokens` | 上游 usage 的 prompt tokens |
-| `completion_tokens` | 上游 usage 的 completion tokens |
-| `total_tokens` | prompt + completion |
+引擎本身不限制变量名（未声明变量求值时报错），扩展变量只需调用方
+传入。以下变量由各计费路径提供：
+
+### 通用变量（所有模式）
+
+| 变量 | 含义 | 预扣代入 | 结算代入 |
+| --- | --- | --- | --- |
+| `prompt_tokens` | 上游 usage 的 prompt tokens | 估算值 | 实际 usage |
+| `completion_tokens` | 上游 usage 的 completion tokens | 预算值 | 实际 usage |
+| `total_tokens` | prompt + completion | 估算 + 预算 | 实际 usage |
+
+### 图片变量（图片生成 / 编辑路径）
+
+| 变量 | 含义 | 预扣代入 | 结算代入 |
+| --- | --- | --- | --- |
+| `count` | 交付图片张数 | 请求 `n` | 响应实际张数（守卫到 `[1, MaxImageN]`） |
+| `size` | 长边像素（`1024`/`1792`/`1536`/`256`/`512`/...） | 请求 size | 请求 size（上游通常不回传） |
+| `quality` | 枚举数值映射：`low=0.5 standard=1 medium=1 high=1.5 hd=2 auto=1` | 请求 quality | 请求 quality |
+
+### 视频变量（视频任务路径）
+
+| 变量 | 含义 | 预扣代入 | 结算代入 |
+| --- | --- | --- | --- |
+| `seconds` | 视频时长（秒） | 请求 `seconds` | 终态实际时长（若上游返回，否则请求值） |
+| `n` | 视频路数 | 请求 `n` | 终态实际路数（若上游返回，否则请求值） |
+| `task_status` | 终态数值：`success=1 cancelled=0.5 failed=0` | `1`（按成功预扣） | 终态映射 |
 
 预扣阶段没有真实 usage，计价层用「prompt 估算值 / completion 预算值」
-代入同一表达式求预扣额（宁多勿少，结算多退少补）。
+代入同一表达式求预扣额（宁多勿少，结算多退少补）。图片 / 视频路径的
+预扣代入请求参数上限，结算代入实际交付值。
+
+**图片路径约束**：配置了 `model_price_expr` 的图片模型，表达式结果即
+完整的 USD 单次价格，**不再叠加** size/quality/count 作为 `OtherRatio`。
+运营若需保留 size 倍率，在表达式里显式写出（如
+`0.04 * count * (size == 1792 ? 2.025 : 1)`）。
+
+**视频路径约束**：配置了 `model_price_expr` 的视频模型，终态折扣
+（取消半价、失败全退）通过 `task_status` 变量交给表达式，适配器不再
+硬编码 `Units *= 0.5`。
 
 ## 示例
 
