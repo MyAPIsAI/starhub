@@ -73,6 +73,26 @@ func New() http.Handler {
 	mux.Handle("GET /api/metrics", middleware.AdminAuth(http.HandlerFunc(controller.GetMetrics)))
 	mux.Handle("GET /api/metrics/", middleware.AdminAuth(http.HandlerFunc(controller.GetMetrics)))
 
+	// Model plaza: a read-only browse surface over the channel graph, the
+	// metadata catalog and the live pricing options. These endpoints are
+	// intentionally unauthenticated — they serve the public catalog, and a
+	// visitor must be able to compare prices before signing up. When a valid
+	// session cookie is present the handlers price the catalog through that
+	// user's group, so a signed-in visitor sees their own numbers; an
+	// anonymous visitor gets the default group's list price.
+	//
+	// None of these handlers touch the relay or the ledger.
+	mux.HandleFunc("GET /api/plaza/models", controller.PlazaListModels)
+	mux.HandleFunc("GET /api/plaza/models/{id...}", controller.PlazaGetModel)
+	mux.HandleFunc("GET /api/plaza/filters", controller.PlazaFilters)
+	mux.HandleFunc("GET /api/plaza/rank", controller.PlazaRank)
+
+	// Metadata administration. Operators fill the catalog in; the plaza
+	// degrades gracefully for any model that has none.
+	mux.Handle("GET /api/plaza/meta", middleware.AdminAuth(http.HandlerFunc(controller.ListModelMeta)))
+	mux.Handle("PUT /api/plaza/meta", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertModelMeta))))
+	mux.Handle("DELETE /api/plaza/meta/{model...}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteModelMeta))))
+
 	mux.Handle("POST /api/redemption", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateRedemption))))
 	mux.Handle("POST /api/redemption/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateRedemption))))
 	mux.Handle("GET /api/redemption", middleware.AdminAuth(http.HandlerFunc(controller.ListRedemptions)))
