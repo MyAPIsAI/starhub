@@ -1963,6 +1963,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
       ? "0"
       : (BigInt(seedOpeningNano) - seedRequestsCost).toString();
     set((s) => ({
+      scenario,
       accountProfiles: {
         ...s.accountProfiles,
         [s.user.id]: profileMetadata(s.user),

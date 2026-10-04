@@ -15,7 +15,16 @@ export function TierBadge({ id }: { id: TierId }) {
         ))}
       </span>
       <span className="tier-label">
-        {language === "zh" && label === tier?.name.zh ? <><span>{tier.name.en}</span><span className="tier-translation">{tier.name.zh.replace(tier.name.en, "")}</span></> : label}
+        {language === "zh" && label === tier?.name.zh ? (
+          <>
+            <span>{tier.name.en}</span>
+            <span className="tier-translation">
+              {tier.name.zh.replace(tier.name.en, "")}
+            </span>
+          </>
+        ) : (
+          label
+        )}
       </span>
     </span>
   );

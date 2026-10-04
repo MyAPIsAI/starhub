@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
+    "lint": "tsc --noEmit",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:browser": "node tests/redesign-browser.mjs",

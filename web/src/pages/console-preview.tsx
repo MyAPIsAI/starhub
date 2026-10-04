@@ -85,7 +85,7 @@ import SmartRouting from "../features/resource-routing";
 import { StandardModels } from "../features/standard-models";
 import { Channels } from "../features/channels";
 import { ServiceGroups } from "../features/service-groups";
-import { useSystemAccess } from "../lib/system-access";
+import { useSystemAccess, isAdmin } from "../lib/system-access";
 import {
   filterExportRequests,
   serializeRequestExport,
@@ -125,7 +125,7 @@ export default function ConsolePreview() {
   const catalogModels = modelCatalog(useModelPricing((s) => s.config));
   const demoMode = useProductPreview((s) => s.demoMode);
   const role = useSystemAccess((s) => s.role);
-  const isSystemAdmin = role === "superAdmin";
+  const isSystemAdmin = isAdmin(role);
   const location = useLocation();
   const navigate = useNavigate();
 

@@ -5,7 +5,7 @@ import { useModelPricing } from "../lib/model-pricing";
 import { useProductPreview } from "../lib/product-preview";
 import { getKeyModels, resolveKeyModelResult } from "../lib/key-model-policy";
 import { groupResources } from "../lib/platform-catalog";
-import { useSystemAccess } from "../lib/system-access";
+import { useSystemAccess, isAdmin } from "../lib/system-access";
 import { Button } from "../components/ui/button";
 import "../components/catalog-management.css";
 export default function ResourceRouting() {
@@ -129,7 +129,7 @@ export default function ResourceRouting() {
           </p>
         )}
       </section>
-      {role === "superAdmin" && (
+      {isAdmin(role) && (
         <details className="cm-callout">
           <summary>高级视图 · 资源快照</summary>
           <p>

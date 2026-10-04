@@ -22,7 +22,7 @@ import {
 } from "./channel-source-controls";
 
 type Edit = { id: string; placement: ResourcePlacement; revision: string };
-export function Channels({ role }: { role: string }) {
+export function Channels({ role }: { role: number }) {
   const config = useModelPricing((s) => s.config),
     save = useModelPricing((s) => s.save),
     keys = useProductPreview((s) => s.keys);

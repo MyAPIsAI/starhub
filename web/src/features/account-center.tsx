@@ -20,7 +20,7 @@ import { Input } from "../components/ui/primitives";
 import { Modal } from "../components/ui/overlay";
 import { useProductPreview } from "../lib/product-preview";
 import { usePreferences } from "../lib/preferences";
-import { useSystemAccess } from "../lib/system-access";
+import { useSystemAccess, isAdmin } from "../lib/system-access";
 import {
   accountDisplayName,
   DEMO_ACCOUNT_PROFILE,
@@ -597,7 +597,7 @@ export default function AccountCenter({
           <div className="ac-meta">
             <span>{c("账号身份", "Account role", "دور الحساب")}</span>
             <strong>
-              {role === "superAdmin"
+              {isAdmin(role)
                 ? c(
                     "平台管理员 · 演示",
                     "Platform administrator · Demo",

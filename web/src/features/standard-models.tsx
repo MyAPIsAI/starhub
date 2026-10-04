@@ -15,7 +15,7 @@ import { ModelPricingAdmin } from "./model-pricing-admin";
 import { useSettingsText } from "./pricing-settings-shared";
 import "../components/catalog-management.css";
 
-export function StandardModels({ role }: { role: string }) {
+export function StandardModels({ role }: { role: number }) {
   const { text } = useSettingsText();
   const config = useModelPricing((s) => s.config);
   const save = useModelPricing((s) => s.save);

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { catalogModels, getModelLowestPrice, getModelTierPrices } from "../src/config/models";
 import { createDefaultPricing, estimateModelCharge, getModelRate, getModelsForTier, isValidMultiplier, isValidPrice, PRICING_STORAGE_KEY, useModelPricing, validatePricing } from "../src/lib/model-pricing";
+import { ROLE_ADMIN } from "../src/lib/system-access";
 
 let storage: Map<string, string>;
 beforeEach(() => {
@@ -64,12 +65,12 @@ describe("published platform pricing", () => {
     draft.models["gpt-4.1"].pricing.input_per_million_usd = "3";
     const store = useModelPricing.getState();
     expect(store.save(draft, "finance", "sample-1")).toEqual({ ok: false, reason: "forbidden" });
-    const result = store.save(draft, "superAdmin", "sample-1");
+    const result = store.save(draft, ROLE_ADMIN, "sample-1");
     expect(result.ok).toBe(true);
     const persisted = JSON.parse(storage.get(PRICING_STORAGE_KEY)!);
     expect(validatePricing(persisted)).toBe(true);
     expect(getModelRate("gpt-4.1", "pro").input).toBe("2.4");
-    expect(store.save(draft, "superAdmin", "sample-1")).toEqual({ ok: false, reason: "conflict" });
+    expect(store.save(draft, ROLE_ADMIN, "sample-1")).toEqual({ ok: false, reason: "conflict" });
     // A retained snapshot continues quoting old prices after publication.
     expect(getModelRate("gpt-4.1", "pro", createDefaultPricing()).input).toBe("1.6");
   });
@@ -77,12 +78,12 @@ describe("published platform pricing", () => {
   it("rejects corrupt configurations, newer cross-tab versions and storage failure", () => {
     const draft = createDefaultPricing();
     draft.models["gpt-4.1"].pricing.input_per_million_usd = "-1";
-    expect(useModelPricing.getState().save(draft, "superAdmin", "sample-1")).toEqual({ ok: false, reason: "invalid" });
+    expect(useModelPricing.getState().save(draft, ROLE_ADMIN, "sample-1")).toEqual({ ok: false, reason: "invalid" });
     const other = createDefaultPricing(); other.revision = "other-tab-2";
     storage.set(PRICING_STORAGE_KEY, JSON.stringify(other));
-    expect(useModelPricing.getState().save(createDefaultPricing(), "superAdmin", "sample-1")).toEqual({ ok: false, reason: "conflict" });
+    expect(useModelPricing.getState().save(createDefaultPricing(), ROLE_ADMIN, "sample-1")).toEqual({ ok: false, reason: "conflict" });
     vi.stubGlobal("localStorage", { getItem: () => JSON.stringify(other), setItem: () => { throw new Error("blocked"); } });
-    expect(useModelPricing.getState().save(other, "superAdmin", "other-tab-2")).toEqual({ ok: false, reason: "storage" });
+    expect(useModelPricing.getState().save(other, ROLE_ADMIN, "other-tab-2")).toEqual({ ok: false, reason: "storage" });
     expect(useModelPricing.getState().config.revision).toBe("other-tab-2");
   });
 });

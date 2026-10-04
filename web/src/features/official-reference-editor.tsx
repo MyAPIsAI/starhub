@@ -166,9 +166,13 @@ export function OfficialReferenceEditor({
                 <span>
                   {text("报价状态", "Reference status", "حالة المرجع")}
                 </span>
-              <select
-                aria-label={text("报价状态", "Reference status", "حالة المرجع")}
-                value={reference.status}
+                <select
+                  aria-label={text(
+                    "报价状态",
+                    "Reference status",
+                    "حالة المرجع",
+                  )}
+                  value={reference.status}
                   onChange={(event) =>
                     patch({
                       status: event.target
@@ -200,9 +204,13 @@ export function OfficialReferenceEditor({
                     "وحدة السعر الرسمي",
                   )}
                 </span>
-              <select
-                aria-label={text("官方计价单位", "Official pricing unit", "وحدة السعر الرسمي")}
-                value={
+                <select
+                  aria-label={text(
+                    "官方计价单位",
+                    "Official pricing unit",
+                    "وحدة السعر الرسمي",
+                  )}
+                  value={
                     reference.rate.mode === "tokens"
                       ? "tokens"
                       : reference.rate.unit

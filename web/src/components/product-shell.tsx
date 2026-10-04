@@ -23,7 +23,7 @@ import { CodeExample } from "../features/code-example";
 import { type Language } from "../config/placeholders";
 import { useFocusReturn } from "./ui/focus-return";
 import "./public-header.css";
-import { useSystemAccess } from "../lib/system-access";
+import { useSystemAccess, isAdmin } from "../lib/system-access";
 
 export function ProductBrand({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
@@ -314,7 +314,7 @@ export function ProductSearch() {
                     </Command.Item>
                   ))}
                 </Command.Group>
-                {role === "superAdmin" && (
+                {isAdmin(role) && (
                   <Command.Group
                     heading={text(
                       "系统设置",

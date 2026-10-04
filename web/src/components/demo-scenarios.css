@@ -73,9 +73,23 @@
   display: grid;
   gap: 16px;
 }
-.demo-inline-footer { display: flex; justify-content: flex-end; margin-top: 20px; }
-.demo-inline-footer .demo-controls-inline { position: static; inset: auto; box-shadow: none; max-width: 100%; border-radius: 8px; gap: 0; }
-.demo-inline-footer .demo-controls-inline > button { font-size: 11px; color: var(--muted); }
+.demo-inline-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.demo-inline-footer .demo-controls-inline {
+  position: static;
+  inset: auto;
+  box-shadow: none;
+  max-width: 100%;
+  border-radius: 8px;
+  gap: 0;
+}
+.demo-inline-footer .demo-controls-inline > button {
+  font-size: 11px;
+  color: var(--muted);
+}
 .demo-controls-panel .demo-scenario-card {
   padding: 10px;
   gap: 8px;

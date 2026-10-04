@@ -15,7 +15,7 @@ import { useProductPreview, type PreviewRequest } from "../lib/product-preview";
 import { copyText } from "./code-example";
 import "../components/demo-scenarios.css";
 import { PricingSnapshot } from "../components/pricing-snapshot";
-import { useSystemAccess } from "../lib/system-access";
+import { useSystemAccess, isAdmin } from "../lib/system-access";
 
 const errors: Record<string, [string, string, string]> = {
   insufficient_balance: [
@@ -127,7 +127,7 @@ export default function RequestInspector({
   const setOutage = useProductPreview((s) => s.demoSetUpstreamOutage);
   const role = useSystemAccess((s) => s.role);
   // M6 §3.5：详情抽屉不向客户显示渠道或资源实例。仅运营视角（非 customer）可见内部来源标识。
-  const isOps = role !== "customer";
+  const isOps = isAdmin(role);
   const failed = record?.status !== "success";
   const error = record?.error_code ? errors[record.error_code] : undefined;
   const reason = error
@@ -211,7 +211,11 @@ export default function RequestInspector({
             <Copy size={14} />
             {text("复制诊断信息", "Copy diagnostics", "نسخ التشخيص")}
           </Button>
-          <Button variant="primary" onClick={onRetry} disabled={record?.metered_demo && role !== "superAdmin"}>
+          <Button
+            variant="primary"
+            onClick={onRetry}
+            disabled={record?.metered_demo && !isAdmin(role)}
+          >
             {text(
               failed ? "保留输入并重试" : "复用请求验证",
               failed ? "Retry with input" : "Reuse request",
@@ -335,40 +339,64 @@ export default function RequestInspector({
                 <TierBadge id={record.tier} />
               </dd>
             </div>
-            {record.pricing_snapshot ? <PricingSnapshot snapshot={record.pricing_snapshot} /> : record.metered_demo ? <div><dt>{text("模拟用量（未结算）", "Simulated usage (unsettled)", "الاستخدام المحاكى غير المسوى")}</dt><dd><code style={{overflowWrap:"anywhere"}}>{JSON.stringify(record.metered_usage)}</code><small className="request-rate-note">{record.error_message}</small></dd></div> : <><div>
-              <dt>
-                {text(
-                  "输入 / 输出词元",
-                  "Input / output tokens",
-                  "رموز الإدخال / الإخراج",
-                )}
-              </dt>
-              <dd>
-                {record.input_tokens.toLocaleString()} /{" "}
-                {record.output_tokens.toLocaleString()}
-              </dd>
-            </div>
-            <div>
-              <dt>
-                {text(
-                  "调用时输入 / 输出单价",
-                  "Input / output rate at request",
-                  "سعر الإدخال / الإخراج وقت الطلب",
-                )}
-              </dt>
-              <dd>
-                {record.input_rate_usd !== undefined
-                  ? `$${record.input_rate_usd} / $${record.output_rate_usd}`
-                  : `${formatMoney(record.input_price_nano, "detail")} / ${formatMoney(record.output_price_nano, "detail")}`}
-                <small className="request-rate-note">
+            {record.pricing_snapshot ? (
+              <PricingSnapshot snapshot={record.pricing_snapshot} />
+            ) : record.metered_demo ? (
+              <div>
+                <dt>
                   {text(
-                    "美元 / 百万词元，已包含分组倍率",
-                    "USD / 1M tokens, group multiplier included",
-                    "دولار / مليون رمز، شاملاً معامل المجموعة",
+                    "模拟用量（未结算）",
+                    "Simulated usage (unsettled)",
+                    "الاستخدام المحاكى غير المسوى",
                   )}
-                </small>
-              </dd>
-            </div></>}
+                </dt>
+                <dd>
+                  <code style={{ overflowWrap: "anywhere" }}>
+                    {JSON.stringify(record.metered_usage)}
+                  </code>
+                  <small className="request-rate-note">
+                    {record.error_message}
+                  </small>
+                </dd>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <dt>
+                    {text(
+                      "输入 / 输出词元",
+                      "Input / output tokens",
+                      "رموز الإدخال / الإخراج",
+                    )}
+                  </dt>
+                  <dd>
+                    {record.input_tokens.toLocaleString()} /{" "}
+                    {record.output_tokens.toLocaleString()}
+                  </dd>
+                </div>
+                <div>
+                  <dt>
+                    {text(
+                      "调用时输入 / 输出单价",
+                      "Input / output rate at request",
+                      "سعر الإدخال / الإخراج وقت الطلب",
+                    )}
+                  </dt>
+                  <dd>
+                    {record.input_rate_usd !== undefined
+                      ? `$${record.input_rate_usd} / $${record.output_rate_usd}`
+                      : `${formatMoney(record.input_price_nano, "detail")} / ${formatMoney(record.output_price_nano, "detail")}`}
+                    <small className="request-rate-note">
+                      {text(
+                        "美元 / 百万词元，已包含分组倍率",
+                        "USD / 1M tokens, group multiplier included",
+                        "دولار / مليون رمز، شاملاً معامل المجموعة",
+                      )}
+                    </small>
+                  </dd>
+                </div>
+              </>
+            )}
             <div>
               <dt>{text("费率快照", "Rate snapshot", "لقطة السعر")}</dt>
               <dd className="mono" dir="ltr">
@@ -417,7 +445,38 @@ export default function RequestInspector({
               <Plus size={15} />
             </summary>
             <dl className="product-detail-list">
-              {isOps && record.resource_id && <><div><dt>{text("资源实例 / 渠道", "Resource / channel", "المورد / القناة")}</dt><dd><code>{record.resource_id} / {record.channel_id}</code></dd></div><div><dt>{text("来源快照 / 上游模型", "Snapshot / upstream model", "اللقطة / نموذج المصدر")}</dt><dd><code>{record.resource_snapshot_id} / {record.upstream_model}</code></dd></div></>}
+              {isOps && record.resource_id && (
+                <>
+                  <div>
+                    <dt>
+                      {text(
+                        "资源实例 / 渠道",
+                        "Resource / channel",
+                        "المورد / القناة",
+                      )}
+                    </dt>
+                    <dd>
+                      <code>
+                        {record.resource_id} / {record.channel_id}
+                      </code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>
+                      {text(
+                        "来源快照 / 上游模型",
+                        "Snapshot / upstream model",
+                        "اللقطة / نموذج المصدر",
+                      )}
+                    </dt>
+                    <dd>
+                      <code>
+                        {record.resource_snapshot_id} / {record.upstream_model}
+                      </code>
+                    </dd>
+                  </div>
+                </>
+              )}
               <div>
                 <dt>{text("错误代码", "Error code", "رمز الخطأ")}</dt>
                 <dd className="mono">{record.error_code ?? "—"}</dd>
@@ -442,17 +501,23 @@ export default function RequestInspector({
               <div>
                 <dt>{text("来源", "Source", "المصدر")}</dt>
                 <dd>
-                  {record.metered_demo ? text("管理员计费模拟（未生成媒体）", "Admin billing simulation (no media generated)", "محاكاة فوترة المسؤول دون إنشاء وسائط") : record.source === "playground"
+                  {record.metered_demo
                     ? text(
-                        "调试台模拟",
-                        "Playground simulation",
-                        "محاكاة مساحة التجربة",
+                        "管理员计费模拟（未生成媒体）",
+                        "Admin billing simulation (no media generated)",
+                        "محاكاة فوترة المسؤول دون إنشاء وسائط",
                       )
-                    : text(
-                        "模拟客户端请求",
-                        "Simulated client request",
-                        "طلب عميل محاكى",
-                      )}
+                    : record.source === "playground"
+                      ? text(
+                          "调试台模拟",
+                          "Playground simulation",
+                          "محاكاة مساحة التجربة",
+                        )
+                      : text(
+                          "模拟客户端请求",
+                          "Simulated client request",
+                          "طلب عميل محاكى",
+                        )}
                 </dd>
               </div>
             </dl>

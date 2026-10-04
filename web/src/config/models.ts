@@ -185,8 +185,17 @@ export interface PricingTimeWindow {
   multiplier: string;
   tokenPrices?: Partial<ModelPricing>;
 }
-export interface PricingAttributes { resolution?: string; quality?: string; audio?: boolean; }
-export interface ConditionalUnitPrice { id: string; label: string; when: PricingAttributes; priceUsd: string; }
+export interface PricingAttributes {
+  resolution?: string;
+  quality?: string;
+  audio?: boolean;
+}
+export interface ConditionalUnitPrice {
+  id: string;
+  label: string;
+  when: PricingAttributes;
+  priceUsd: string;
+}
 export type PricingRule = (
   | { mode: "tokens" }
   | {
@@ -231,10 +240,38 @@ export interface ServiceGroupConfig {
 }
 
 /** Reference price × service-group multiplier. Defaults are unverified examples. */
-export interface ResourceChannel { id: string; name: string; provider: string; enabled: boolean }
-export interface ResourceInstance { id: string; channelId: string; upstreamModel: string; canonicalModel: string; protocols: ModelItem["protocols"]; capabilities: ModelItem["capabilities"]; contextLength: number; region: string; status: "available" | "unavailable" | "retired"; latencyMs: number }
-export interface ResourceSnapshot { id: string; sequence: number; publishedAt: string; receivedAt: string; source: string; channels: ResourceChannel[]; instances: ResourceInstance[] }
-export interface ResourcePlacement { modelId: string | null; groupIds: string[]; enabled: boolean }
+export interface ResourceChannel {
+  id: string;
+  name: string;
+  provider: string;
+  enabled: boolean;
+}
+export interface ResourceInstance {
+  id: string;
+  channelId: string;
+  upstreamModel: string;
+  canonicalModel: string;
+  protocols: ModelItem["protocols"];
+  capabilities: ModelItem["capabilities"];
+  contextLength: number;
+  region: string;
+  status: "available" | "unavailable" | "retired";
+  latencyMs: number;
+}
+export interface ResourceSnapshot {
+  id: string;
+  sequence: number;
+  publishedAt: string;
+  receivedAt: string;
+  source: string;
+  channels: ResourceChannel[];
+  instances: ResourceInstance[];
+}
+export interface ResourcePlacement {
+  modelId: string | null;
+  groupIds: string[];
+  enabled: boolean;
+}
 export interface PricingCatalogConfig {
   catalog?: Record<string, ModelItem>;
   resources?: ResourceSnapshot;
@@ -269,7 +306,22 @@ export function getModelTierPrices(
   config?: PricingCatalogConfig,
 ) {
   const current = config?.models[model.id] ?? model;
-  return (config ? Object.keys(config.groups).map(id => ({ ...(placeholders.tiers.find(item => item.id === id) ?? {id,name:{zh:config.groups[id].name,en:config.groups[id].name,ar:config.groups[id].name},mark:1,multiplier:config.multipliers[id]}) })) : placeholders.tiers).map((tier) => {
+  return (
+    config
+      ? Object.keys(config.groups).map((id) => ({
+          ...(placeholders.tiers.find((item) => item.id === id) ?? {
+            id,
+            name: {
+              zh: config.groups[id].name,
+              en: config.groups[id].name,
+              ar: config.groups[id].name,
+            },
+            mark: 1,
+            multiplier: config.multipliers[id],
+          }),
+        }))
+      : placeholders.tiers
+  ).map((tier) => {
     const multiplier = config?.multipliers[tier.id] ?? tier.multiplier;
     return {
       tier: { ...tier, multiplier },

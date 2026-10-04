@@ -7,6 +7,7 @@ import {
   PRICING_STORAGE_KEY,
   readPricing,
 } from "../src/lib/model-pricing";
+import { ROLE_ADMIN } from "../src/lib/system-access";
 import {
   applyResourceSnapshot,
   nextDemoSnapshot,
@@ -55,7 +56,7 @@ function commit(config: ReturnType<typeof createDefaultPricing>) {
   const current = useModelPricing.getState();
   const result = current.save(
     materializeAvailability(config),
-    "superAdmin",
+    ROLE_ADMIN,
     current.config.revision,
   );
   expect(result.ok).toBe(true);
@@ -316,7 +317,7 @@ describe("standard catalog and mapped resource ownership", () => {
     const old = structuredClone(c);
     commit(c);
     expect(
-      useModelPricing.getState().save(old, "superAdmin", old.revision),
+      useModelPricing.getState().save(old, ROLE_ADMIN, old.revision),
     ).toMatchObject({ ok: false, reason: "conflict" });
     expect(
       JSON.parse(storage.get(PRICING_STORAGE_KEY)!).resources.sequence,

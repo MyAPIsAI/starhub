@@ -16,7 +16,8 @@ import { Input } from "../../components/ui/primitives";
 import { usePreferences } from "../../lib/preferences";
 import { useProductPreview } from "../../lib/product-preview";
 import { useSystemAccess } from "../../lib/system-access";
-import { demoAuth, DEMO_ACCOUNT, DemoAuthError } from "../../lib/demo-auth";
+import { loginUser, registerUser } from "../../lib/api/auth";
+import { ApiError } from "../../lib/api/http";
 import "./auth-dialog.css";
 
 type AuthMode = "login" | "register" | "reset";
@@ -67,7 +68,6 @@ export default function AuthDialog() {
   const [error, setError] = useState("");
   const [resetDone, setResetDone] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [now, setNow] = useState(Date.now());
   const heading = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -75,30 +75,9 @@ export default function AuthDialog() {
   const policyTrigger = useRef<Policy | null>(null);
   const formScroll = useRef(0);
   const operation = useRef(0);
-  const purpose =
-    mode === "register"
-      ? "register"
-      : mode === "reset"
-        ? "reset"
-        : "phone-login";
-  const target =
-    mode === "register" ? registerPhone : mode === "reset" ? resetPhone : phone;
-  const challenge = demoAuth.challenge(purpose, target);
-  const resendSeconds = Math.max(
-    0,
-    Math.ceil((demoAuth.cooldownUntil() - now) / 1000),
-  );
-  const lockSeconds = Math.max(
-    0,
-    Math.ceil((demoAuth.lockedUntil() - now) / 1000),
-  );
+  const resendSeconds = 0;
+  const lockSeconds = 0;
 
-  useEffect(() => {
-    if (!mode) return;
-    setNow(Date.now());
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [mode]);
   useEffect(() => {
     operation.current += 1;
     setBusy(false);
@@ -182,112 +161,42 @@ export default function AuthDialog() {
     operation.current += 1;
     navigate("/", { replace: true });
   }
-  function explain(caught: unknown) {
-    if (!(caught instanceof DemoAuthError))
-      return c(
-        "暂时无法完成，请重试。输入已保留。",
-        "Unable to continue. Your inputs are preserved; please retry.",
-        "تعذر المتابعة. تم الاحتفاظ بالمدخلات؛ حاول مجددًا.",
-      );
-    const messages: Record<string, string> = {
-      INVALID_USERNAME: c(
-        "用户名需为 2–24 位，以文字开头，可含数字、下划线或短横线。",
-        "Use 2–24 characters, starting with a letter. Letters, numbers, underscores and hyphens are allowed.",
-        "استخدم 2–24 محرفًا تبدأ بحرف، ويمكن أن تتضمن أرقامًا وشرطات سفلية أو قصيرة.",
-      ),
-      USERNAME_EXISTS: c(
-        "该用户名已被使用，请换一个。",
-        "This username is already taken. Choose another.",
-        "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر.",
-      ),
-      PHONE_EXISTS: c(
-        "该手机号已注册，请直接登录或找回密码。",
-        "This phone is already registered. Log in or reset your password.",
-        "رقم الهاتف مسجل بالفعل. سجّل الدخول أو أعد تعيين كلمة المرور.",
-      ),
-      INVALID_PHONE: c(
-        "请输入有效手机号，例如 13800138000。",
-        "Enter a valid phone number, such as 13800138000.",
-        "أدخل رقم هاتف صالحًا، مثل 13800138000.",
-      ),
-      INVALID_CREDENTIALS: c(
-        "账号或密码不正确，请检查后重试。",
-        "The account or password is incorrect. Please try again.",
-        "الحساب أو كلمة المرور غير صحيحة. حاول مجددًا.",
-      ),
-      ACCOUNT_NOT_FOUND: c(
-        "未找到该手机号对应的演示账号，请先注册或使用演示手机号。",
-        "No demo account is linked to this phone. Register first or use the demo phone.",
-        "لا يوجد حساب تجريبي مرتبط بهذا الهاتف. سجّل أولًا أو استخدم هاتف العرض.",
-      ),
-      WEAK_PASSWORD: c(
-        "密码至少 8 位，且包含字母和数字。",
-        "Use at least 8 characters, including letters and numbers.",
-        "استخدم 8 أحرف على الأقل تتضمن حروفًا وأرقامًا.",
-      ),
-      CODE_REQUIRED: c(
-        "请输入 6 位验证码。",
-        "Enter the 6-digit code.",
-        "أدخل الرمز المكون من 6 أرقام.",
-      ),
-      CODE_NOT_ISSUED: c(
-        "请先为当前手机号获取验证码。",
-        "Request a code for the current phone number first.",
-        "اطلب رمزًا لرقم الهاتف الحالي أولًا.",
-      ),
-      CODE_INVALID: c(
-        "验证码不正确，请重新输入。连续错 5 次后需重新获取。",
-        "Incorrect code. Request a new one after 5 failed attempts.",
-        "الرمز غير صحيح. اطلب رمزًا جديدًا بعد 5 محاولات خاطئة.",
-      ),
-      CODE_EXPIRED: c(
-        "验证码已过期或失效，请重新获取。",
-        "This code expired or was invalidated. Request a new one.",
-        "انتهت صلاحية الرمز أو أُلغي. اطلب رمزًا جديدًا.",
-      ),
-      CODE_EXHAUSTED: c(
-        "验证码已连续输错 5 次，请重新获取。",
-        "Five incorrect attempts. Request a new code.",
-        "خمس محاولات خاطئة. اطلب رمزًا جديدًا.",
-      ),
-      CODE_COOLDOWN: c(
-        "获取过于频繁，请等待倒计时结束。",
-        "Please wait until the resend countdown ends.",
-        "انتظر انتهاء العد التنازلي قبل إعادة الطلب.",
-      ),
-      TEMPORARILY_LOCKED: c(
-        "尝试次数过多，登录已暂时锁定，请等待倒计时结束。",
-        "Too many attempts. Login is temporarily locked until the countdown ends.",
-        "محاولات كثيرة. الدخول مقفل مؤقتًا حتى انتهاء العد التنازلي.",
-      ),
-      STORAGE_UNAVAILABLE: c(
-        "浏览器会话存储不可用，无法保存演示账号。请允许存储后重试。",
-        "Browser session storage is unavailable. Enable storage and retry.",
-        "تخزين الجلسة غير متاح. فعّل التخزين وحاول مجددًا.",
-      ),
-      CRYPTO_UNAVAILABLE: c(
-        "当前浏览器无法保存口令摘要，请使用本地预览地址或安全连接。",
-        "Password hashing is unavailable. Use localhost or a secure connection.",
-        "تجزئة كلمة المرور غير متاحة. استخدم اتصالًا آمنًا أو مضيفًا محليًا.",
-      ),
-    };
-    return (
-      messages[caught.code] ??
-      c(
-        "操作未完成，请检查输入后重试。",
-        "Unable to complete. Check your inputs and retry.",
-        "تعذر الإكمال. تحقق من المدخلات وحاول مجددًا.",
-      )
+  function explain(caught: unknown): string {
+    if (caught instanceof ApiError) {
+      if (caught.status === 401)
+        return c(
+          "账号或密码不正确，请检查后重试。",
+          "The account or password is incorrect. Please try again.",
+          "الحساب أو كلمة المرور غير صحيحة. حاول مجددًا.",
+        );
+      if (caught.status === 403)
+        return c(
+          "该账户已被禁用，请联系管理员。",
+          "This account is disabled. Contact the administrator.",
+          "هذا الحساب معطل. اتصل بالمسؤول.",
+        );
+      if (caught.status === 409)
+        return c(
+          "该用户名已被使用，请换一个。",
+          "This username is already taken. Choose another.",
+          "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر.",
+        );
+      return caught.message;
+    }
+    return c(
+      "暂时无法完成，请重试。输入已保留。",
+      "Unable to continue. Your inputs are preserved; please retry.",
+      "تعذر المتابعة. تم الاحتفاظ بالمدخلات؛ حاول مجددًا.",
     );
   }
   function sendCode() {
-    try {
-      demoAuth.issueCode(purpose, target);
-      setError("");
-    } catch (caught) {
-      setError(explain(caught));
-    }
-    setNow(Date.now());
+    setError(
+      c(
+        "验证码功能暂未接入后端，请使用密码登录。",
+        "Verification codes are not available yet. Use password login.",
+        "رموز التحقق غير متاحة بعد. استخدم تسجيل الدخول بكلمة المرور.",
+      ),
+    );
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -329,54 +238,45 @@ export default function AuthDialog() {
     setBusy(true);
     try {
       if (mode === "reset") {
-        await demoAuth.resetPassword(resetPhone, resetCode, resetPassword);
-        if (ticket !== operation.current) return;
-        setAccount(resetPhone);
-        setPassword("");
-        setResetPassword("");
-        setResetCode("");
-        setResetDone(true);
+        setError(
+          c(
+            "密码重置暂未接入后端，请联系管理员。",
+            "Password reset is not available yet. Contact the administrator.",
+            "إعادة تعيين كلمة المرور غير متاحة بعد. اتصل بالمسؤول.",
+          ),
+        );
         return;
       }
-      const identity =
-        mode === "register"
-          ? await demoAuth.register({
-              username,
-              phone: registerPhone,
-              password: newPassword,
-              code: registerCode,
-            })
-          : method === "phone"
-            ? await demoAuth.loginPhone(phone, phoneCode)
-            : await demoAuth.loginPassword(account, password);
-      if (ticket !== operation.current) return;
       if (mode === "register") {
-        useProductPreview
-          .getState()
-          .register(
-            identity.email ?? "",
-            identity.enterpriseName ?? identity.username,
-            {
-              id: identity.id,
-              username: identity.username,
-              phone: identity.phone,
-              emailVerified: identity.emailVerified,
-            },
-          );
-        useSystemAccess.getState().setRole("customer");
-      } else
-        useProductPreview
-          .getState()
-          .login(
-            identity.email ?? "",
-            identity.enterpriseName ?? identity.username,
-            {
-              id: identity.id,
-              username: identity.username,
-              phone: identity.phone,
-              emailVerified: identity.emailVerified,
-            },
-          );
+        const user = await registerUser(username, newPassword, "");
+        if (ticket !== operation.current) return;
+        useProductPreview.getState().register(
+          user.email ?? "",
+          user.username,
+          {
+            id: String(user.id),
+            username: user.username,
+            phone: "",
+            emailVerified: undefined,
+          },
+        );
+        useSystemAccess.getState().setRole(user.role);
+      } else {
+        // Login: password method only (phone not supported by backend).
+        const { user } = await loginUser(account, password);
+        if (ticket !== operation.current) return;
+        useProductPreview.getState().login(
+          user.email ?? "",
+          user.username,
+          {
+            id: String(user.id),
+            username: user.username,
+            phone: "",
+            emailVerified: undefined,
+          },
+        );
+        useSystemAccess.getState().setRole(user.role);
+      }
       setPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -390,7 +290,6 @@ export default function AuthDialog() {
     } finally {
       if (ticket === operation.current) {
         setBusy(false);
-        setNow(Date.now());
       }
     }
   }
@@ -524,27 +423,6 @@ export default function AuthDialog() {
               : c("获取验证码", "Get code", "الحصول على رمز")}
           </Button>
         </div>
-        {challenge && (
-          <p className="auth-code-hint" role="status">
-            {challenge.expiresAt > now && challenge.attemptsRemaining > 0 ? (
-              <>
-                {c("模拟验证码：", "Demo code: ", "رمز تجريبي: ")}
-                <strong dir="ltr">{challenge.code}</strong>
-                {c(
-                  " · 10 分钟内有效，未发送真实消息",
-                  " · valid for 10 minutes; no message sent",
-                  " · صالح 10 دقائق؛ لم تُرسل رسالة",
-                )}
-              </>
-            ) : (
-              c(
-                "验证码已过期或失效，请重新获取。",
-                "Code expired or invalidated. Request a new one.",
-                "انتهت صلاحية الرمز. اطلب رمزًا جديدًا.",
-              )
-            )}
-          </p>
-        )}
       </div>
     );
   }
@@ -870,15 +748,15 @@ export default function AuthDialog() {
                         <button
                           type="button"
                           onClick={() => {
-                            setAccount(DEMO_ACCOUNT.username);
-                            setPassword(DEMO_ACCOUNT.password);
+                            setAccount("root");
+                            setPassword("123456");
                             setError("");
                           }}
                         >
                           {c(
-                            "填入演示账号",
-                            "Use demo account",
-                            "استخدم الحساب التجريبي",
+                            "填入管理员账号",
+                            "Use admin account",
+                            "استخدم حساب المسؤول",
                           )}
                         </button>
                         <button

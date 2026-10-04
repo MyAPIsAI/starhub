@@ -5,6 +5,9 @@ import { createDefaultPricing } from "./model-pricing";
 import { getDirectoryModel, directoryPrices } from "../config/model-directory";
 import type { KeyModelPolicy } from "./key-model-policy";
 
+const isUnix = process.platform !== "win32";
+const itUnix = isUnix ? it : it.skip;
+
 const key: KeyModelPolicy = {
   tier: "standard",
   type: "client",
@@ -35,7 +38,7 @@ describe("client configuration respects model and credential boundaries", () => 
       "veyra-auto",
     ]);
   });
-  it("rejects a mask and uses an environment variable while locked", () => {
+  itUnix("rejects a mask and uses an environment variable while locked", () => {
     expect(() =>
       buildClientConfiguration({
         target: "openai",
@@ -55,24 +58,27 @@ describe("client configuration respects model and credential boundaries", () => 
     ).toString();
     expect(credential).toBe("sk-demo-valid-value");
   });
-  it("exports selected model and mapping losslessly even with shell metacharacters", () => {
-    const model = "value'\"\n$(printf injected)";
-    const config = buildClientConfiguration({
-      target: "claude-code",
-      model,
-      secret: "sk-demo-test123",
-    })!;
-    const actual = execFileSync(
-      "/bin/sh",
-      ["-c", `${config.snippet}\nprintf '%s' "$ANTHROPIC_MODEL"`],
-      { env: {} },
-    ).toString();
-    expect(actual).toBe(model);
-    expect(
-      Object.values(config.mapping).every((value) => value === model),
-    ).toBe(true);
-    expect(config.baseUrl).toBe("https://api.veyra.example");
-  });
+  itUnix(
+    "exports selected model and mapping losslessly even with shell metacharacters",
+    () => {
+      const model = "value'\"\n$(printf injected)";
+      const config = buildClientConfiguration({
+        target: "claude-code",
+        model,
+        secret: "sk-demo-test123",
+      })!;
+      const actual = execFileSync(
+        "/bin/sh",
+        ["-c", `${config.snippet}\nprintf '%s' "$ANTHROPIC_MODEL"`],
+        { env: {} },
+      ).toString();
+      expect(actual).toBe(model);
+      expect(
+        Object.values(config.mapping).every((value) => value === model),
+      ).toBe(true);
+      expect(config.baseUrl).toBe("https://api.veyra.example");
+    },
+  );
   it("returns no substituted detail for unknown model IDs", () => {
     expect(getDirectoryModel("missing-model")).toBeUndefined();
     expect(

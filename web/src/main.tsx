@@ -25,7 +25,8 @@ import "./components/select-controls.css";
 import i18n from "./i18n";
 import { usePreferences } from "./lib/preferences";
 import { DemoControlBar } from "./components/demo-control-bar";
-import { useSystemAccess } from "./lib/system-access";
+import { useSystemAccess, isAdmin } from "./lib/system-access";
+import { onAuthLoss, ApiError } from "./lib/api/http";
 
 const DesignSystem = lazy(() => import("./pages/design-system"));
 const BrandHome = lazy(() => import("./pages/brand-home"));
@@ -38,7 +39,16 @@ const AdminPortal = lazy(() => import("./pages/admin"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 60000, retry: false, refetchOnWindowFocus: false },
+    queries: {
+      staleTime: 60000,
+      // Retry on transient server errors (5xx) or network
+      // failures (fetch throws TypeError, not ApiError). Never
+      // retry 4xx client errors. (B14)
+      retry: (failureCount, error) =>
+        (!(error instanceof ApiError) || error.status >= 500) &&
+        failureCount < 1,
+      refetchOnWindowFocus: false,
+    },
   },
 });
 
@@ -92,12 +102,25 @@ function RouteContext() {
  */
 function AdminOnly({ children }: { children: React.ReactNode }) {
   const role = useSystemAccess((s) => s.role);
-  if (role !== "superAdmin") return <Navigate to="/console" replace />;
+  if (!isAdmin(role)) return <Navigate to="/console" replace />;
   return <>{children}</>;
 }
 
 function App() {
   const { language, theme } = usePreferences();
+
+  // Allow clearing the demo-auth lockout via ?unlock — visit
+  // /login?unlock to reset the client-side auth state. (demoAuth)
+  useEffect(() => {
+    if (window.location.search.includes("unlock")) {
+      try {
+        sessionStorage.removeItem("veyra.demo-auth.v2");
+      } catch {
+        /* Storage may be blocked; continue. */
+      }
+      window.location.replace("/login");
+    }
+  }, []);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -105,6 +128,18 @@ function App() {
     document.documentElement.dataset.theme = theme;
     void i18n.changeLanguage(language);
   }, [language, theme]);
+
+  // Wire up the 401 auth-loss listener: when the HTTP client gets
+  // a 401 outside auth pages, silently redirect to /login. (B8/B9)
+  useEffect(() => {
+    onAuthLoss(() => {
+      // Hard redirect: the session is gone, so the full app state
+      // must be discarded. This also avoids stale React Query caches.
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    });
+  }, []);
 
   return (
     <DirectionProvider dir={language === "ar" ? "rtl" : "ltr"}>

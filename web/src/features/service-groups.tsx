@@ -26,7 +26,7 @@ type Draft = {
   fresh: boolean;
   revision: string;
 };
-export function ServiceGroups({ role }: { role: string }) {
+export function ServiceGroups({ role }: { role: number }) {
   const user = useProductPreview((s) => s.user);
   const demoAccounts = seedAccounts.some((account) => account.id === user.id)
     ? seedAccounts.map((account) =>

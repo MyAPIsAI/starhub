@@ -1,6 +1,12 @@
-import { quotePricingRule, examplePricingAttributes } from "../lib/pricing-rules";
+import {
+  quotePricingRule,
+  examplePricingAttributes,
+} from "../lib/pricing-rules";
 import { modelCatalog } from "../lib/platform-catalog";
-import { PricingConditions, PricingConditionInputs } from "./pricing-conditions";
+import {
+  PricingConditions,
+  PricingConditionInputs,
+} from "./pricing-conditions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -75,7 +81,15 @@ const modeName = (
         }[rule.unit]
       : text("表达式", "Expression", "تعبير");
 
-export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: string; modelId?: string; embedded?: boolean }) {
+export function ModelPricingAdmin({
+  role,
+  modelId,
+  embedded = false,
+}: {
+  role: number;
+  modelId?: string;
+  embedded?: boolean;
+}) {
   const state = usePricingDraft("models", role, modelId);
   const {
     config,
@@ -143,13 +157,21 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
   const [selected, setSelected] = useState(modelId ?? initialQuote.modelId);
   const [selectedKey, setSelectedKey] = useState(initialQuote.keyId);
   const [usage, setUsage] = useState<Usage>(initialQuote.usage);
-  const [attributes, setAttributes] = useState<PricingAttributes>(initialQuote.attributes);
+  const [attributes, setAttributes] = useState<PricingAttributes>(
+    initialQuote.attributes,
+  );
   const [at, setAt] = useState(initialQuote.at);
   useEffect(() => {
     try {
       sessionStorage.setItem(
         "veyra-metered-simulator-v1",
-        JSON.stringify({ modelId: selected, keyId: selectedKey, usage, at, attributes }),
+        JSON.stringify({
+          modelId: selected,
+          keyId: selectedKey,
+          usage,
+          at,
+          attributes,
+        }),
       );
     } catch {
       /* In-memory values remain usable. */
@@ -164,7 +186,8 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
   useEffect(() => {
     // A scenario reset replaces the sample config even when its revision stays
     // "sample-1". Mount/refresh and ordinary publications must retain the form.
-    const scenarioReset = previousPricing.current !== config && config.updatedAt === null;
+    const scenarioReset =
+      previousPricing.current !== config && config.updatedAt === null;
     previousPricing.current = config;
     if (!scenarioReset) return;
     setSelected(modelId ?? catalogModels[0].id);
@@ -174,7 +197,8 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
     setAt(localDateTime());
     setResult(null);
   }, [config]);
-  const model = catalogModels.find((item) => item.id === selected) ?? catalogModels[0];
+  const model =
+    catalogModels.find((item) => item.id === selected) ?? catalogModels[0];
   const entry = draft.models[selected];
   const sourceError =
     entry.source === "manual-official" &&
@@ -271,16 +295,28 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
         ),
       };
     try {
-      const quoted = key ? quoteModelCharge(
-        {
-          modelId: selected,
-          tierId: key.tier,
-          usage: billableUsage,
-          attributes,
-          at: quoteAt,
-        },
-        draft,
-      ) : (() => { const result = quotePricingRule(rule, entry.pricing, billableUsage, "1", quoteAt, attributes); return {amountNano:result.amountNano,snapshot:result}; })();
+      const quoted = key
+        ? quoteModelCharge(
+            {
+              modelId: selected,
+              tierId: key.tier,
+              usage: billableUsage,
+              attributes,
+              at: quoteAt,
+            },
+            draft,
+          )
+        : (() => {
+            const result = quotePricingRule(
+              rule,
+              entry.pricing,
+              billableUsage,
+              "1",
+              quoteAt,
+              attributes,
+            );
+            return { amountNano: result.amountNano, snapshot: result };
+          })();
       return {
         amount: formatMoney(quoted.amountNano, "call"),
         error: "",
@@ -311,7 +347,10 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
     );
   });
   const billingChangedModels = changedModels.filter((item) => {
-    const billing = (snapshot: PricingCatalogConfig) => ({ pricing: snapshot.models[item.id].pricing, rule: snapshot.models[item.id].rule });
+    const billing = (snapshot: PricingCatalogConfig) => ({
+      pricing: snapshot.models[item.id].pricing,
+      rule: snapshot.models[item.id].rule,
+    });
     return JSON.stringify(billing(base)) !== JSON.stringify(billing(draft));
   });
   const affectedKeys = keys.filter(
@@ -327,7 +366,9 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
         getKeyModels(key, draft).some((candidate) => candidate.id === item.id),
       )
       .map((key) => {
-        const exampleAttributes = examplePricingAttributes(draft.models[item.id].rule);
+        const exampleAttributes = examplePricingAttributes(
+          draft.models[item.id].rule,
+        );
         const amount = (snapshot: PricingCatalogConfig) => {
           try {
             return formatMoney(
@@ -403,7 +444,13 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
         : (Object.keys(usageLabels) as (keyof Usage)[]);
   const submitUsage = () => {
     if (!canEdit || !key || dirty || !quoteAt) return;
-    const record = recordMeteredCall(key.id, selected, billableUsage, quoteAt, attributes);
+    const record = recordMeteredCall(
+      key.id,
+      selected,
+      billableUsage,
+      quoteAt,
+      attributes,
+    );
     setResult({
       trace: record.trace_id,
       success: record.status === "success",
@@ -632,7 +679,11 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
                         : mode === "unit"
                           ? {
                               mode,
-                              unit: model.capabilities.includes("image") ? "image" : model.capabilities.includes("video") ? "second" : "request",
+                              unit: model.capabilities.includes("image")
+                                ? "image"
+                                : model.capabilities.includes("video")
+                                  ? "second"
+                                  : "request",
                               priceUsd: "0.01",
                               minimum: "0",
                               ceilTo: "1",
@@ -717,7 +768,11 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
                       {text("计量单位", "Metering unit", "وحدة القياس")}
                     </span>
                     <select
-                      aria-label={text("计量单位", "Metering unit", "وحدة القياس")}
+                      aria-label={text(
+                        "计量单位",
+                        "Metering unit",
+                        "وحدة القياس",
+                      )}
                       value={rule.unit}
                       disabled={!canEdit}
                       onChange={(event) =>
@@ -780,7 +835,13 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
                 </p>
               </>
             )}
-            {rule.mode === "unit" && <PricingConditions rule={rule} onChange={setRule} disabled={!canEdit}/>}
+            {rule.mode === "unit" && (
+              <PricingConditions
+                rule={rule}
+                onChange={setRule}
+                disabled={!canEdit}
+              />
+            )}
             {rule.mode === "expression" && (
               <div className="settings-expression">
                 <label>
@@ -864,7 +925,11 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
                 {text("用于试算的密钥", "Key for quotation", "مفتاح الحساب")}
               </span>
               <select
-                aria-label={text("用于试算的密钥", "Key for quotation", "مفتاح الحساب")}
+                aria-label={text(
+                  "用于试算的密钥",
+                  "Key for quotation",
+                  "مفتاح الحساب",
+                )}
                 value={key?.id ?? ""}
                 onChange={(event) => {
                   setSelectedKey(event.target.value);
@@ -897,7 +962,14 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
                 </Link>
               </p>
             )}
-            <PricingConditionInputs rule={rule} attributes={attributes} onChange={value=>{setAttributes(value);setResult(null);}}/>
+            <PricingConditionInputs
+              rule={rule}
+              attributes={attributes}
+              onChange={(value) => {
+                setAttributes(value);
+                setResult(null);
+              }}
+            />
             <div className="settings-fields settings-usage-fields">
               {usageFields.map((field) => (
                 <label key={field}>
@@ -1151,7 +1223,58 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
                   />
                 </label>
               </div>
-              {rule.mode === 'tokens' && <div className="cm-callout"><label className="cm-check"><input type="checkbox" checked={Boolean(window.tokenPrices)} disabled={!canEdit} onChange={e=>updateWindow(window.id,{tokenPrices:e.target.checked?{input_per_million_usd:entry.pricing.input_per_million_usd}:undefined,multiplier:'1'})}/>为此时段单独设置词元价格</label><p className="pricing-help">适用于输入、输出或缓存折扣比例不同的高低峰价格。未覆盖的价格沿用常规基准；使用独立价格时不叠加时段系数。</p>{window.tokenPrices && <div className="settings-fields">{(Object.keys(labels) as (keyof ModelPricing)[]).map(field=><label key={field}>{labels[field]}（美元 / 百万词元）<input aria-label={`${window.label} ${labels[field]}`} inputMode="decimal" disabled={!canEdit} value={window.tokenPrices![field]??''} placeholder="留空沿用常规价" onChange={e=>{const prices={...window.tokenPrices};if(e.target.value==='')delete prices[field];else prices[field]=e.target.value;updateWindow(window.id,{tokenPrices:prices});}}/></label>)}</div>}</div>}
+              {rule.mode === "tokens" && (
+                <div className="cm-callout">
+                  <label className="cm-check">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(window.tokenPrices)}
+                      disabled={!canEdit}
+                      onChange={(e) =>
+                        updateWindow(window.id, {
+                          tokenPrices: e.target.checked
+                            ? {
+                                input_per_million_usd:
+                                  entry.pricing.input_per_million_usd,
+                              }
+                            : undefined,
+                          multiplier: "1",
+                        })
+                      }
+                    />
+                    为此时段单独设置词元价格
+                  </label>
+                  <p className="pricing-help">
+                    适用于输入、输出或缓存折扣比例不同的高低峰价格。未覆盖的价格沿用常规基准；使用独立价格时不叠加时段系数。
+                  </p>
+                  {window.tokenPrices && (
+                    <div className="settings-fields">
+                      {(Object.keys(labels) as (keyof ModelPricing)[]).map(
+                        (field) => (
+                          <label key={field}>
+                            {labels[field]}（美元 / 百万词元）
+                            <input
+                              aria-label={`${window.label} ${labels[field]}`}
+                              inputMode="decimal"
+                              disabled={!canEdit}
+                              value={window.tokenPrices![field] ?? ""}
+                              placeholder="留空沿用常规价"
+                              onChange={(e) => {
+                                const prices = { ...window.tokenPrices };
+                                if (e.target.value === "") delete prices[field];
+                                else prices[field] = e.target.value;
+                                updateWindow(window.id, {
+                                  tokenPrices: prices,
+                                });
+                              }}
+                            />
+                          </label>
+                        ),
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="settings-window-footer">
                 <div
                   className="settings-weekdays"
@@ -1214,7 +1337,12 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
             </div>
           ))}
         </div>
-        <OfficialReferenceEditor modelId={selected} config={draft} disabled={!canEdit} onChange={(officialReference) => setEntry({ officialReference })} />
+        <OfficialReferenceEditor
+          modelId={selected}
+          config={draft}
+          disabled={!canEdit}
+          onChange={(officialReference) => setEntry({ officialReference })}
+        />
       </section>
       <div className="pricing-save-bar" data-dirty={dirty}>
         <div>
@@ -1308,7 +1436,13 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
               )
               .join("、")}
           </p>
-          <p>{text(`${billingChangedModels.length} 个模型的计费规则变化。官方参考价只影响广场展示，不参与费用计算。`, `${billingChangedModels.length} models have billing changes. Official references affect catalog display only, never charges.`, `${billingChangedModels.length} نماذج بتغييرات فوترة. المراجع الرسمية للعرض فقط ولا تحتسب في الرسوم.`)}</p>
+          <p>
+            {text(
+              `${billingChangedModels.length} 个模型的计费规则变化。官方参考价只影响广场展示，不参与费用计算。`,
+              `${billingChangedModels.length} models have billing changes. Official references affect catalog display only, never charges.`,
+              `${billingChangedModels.length} نماذج بتغييرات فوترة. المراجع الرسمية للعرض فقط ولا تحتسب في الرسوم.`,
+            )}
+          </p>
         </div>
         <p className="pricing-help">
           {text(
@@ -1335,7 +1469,17 @@ export function ModelPricingAdmin({ role, modelId, embedded = false }: { role: s
             <tbody>
               {impact.map((row) => (
                 <tr key={`${row.model}-${row.key}`}>
-                  <th>{row.model}{row.attributes && <small className="pricing-help" style={{display:"block"}}>示例规格：{JSON.stringify(row.attributes)}</small>}</th>
+                  <th>
+                    {row.model}
+                    {row.attributes && (
+                      <small
+                        className="pricing-help"
+                        style={{ display: "block" }}
+                      >
+                        示例规格：{JSON.stringify(row.attributes)}
+                      </small>
+                    )}
+                  </th>
                   <td>{row.key}</td>
                   <td dir="ltr">
                     {row.before} → {row.after}

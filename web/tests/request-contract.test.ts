@@ -18,6 +18,9 @@ import {
   getPricingSnapshot,
 } from "../src/lib/model-pricing";
 
+const isUnix = process.platform !== "win32";
+const itUnix = isUnix ? it : it.skip;
+
 let storage: Map<string, string>;
 beforeEach(() => {
   storage = new Map();
@@ -51,7 +54,7 @@ function reconciled() {
   );
 }
 describe("canonical request, recovery, persisted scenarios", () => {
-  it("D: exports the same escaped model/messages/parameters used by the simulator", () => {
+  itUnix("D: exports the same escaped model/messages/parameters used by the simulator", () => {
     const data = request({
       messages: [
         { role: "system", content: 'You are "careful".' },
@@ -175,7 +178,7 @@ describe("canonical request, recovery, persisted scenarios", () => {
     store().updateKey(store().selectedKey, { quotaPeriod: "never" });
     expect(keyPeriodUsed(store().keys[0])).toBe(total);
   });
-  it("exports system and generation settings in each selected protocol's payload", () => {
+  itUnix("exports system and generation settings in each selected protocol's payload", () => {
     for (const protocol of ["Anthropic", "Gemini"] as const) {
       const data = request({
         protocol,

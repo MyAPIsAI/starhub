@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isAdmin, type SystemRole } from "./system-access";
 import {
   catalogModels,
   getModelTierPrices,
@@ -194,7 +195,9 @@ export function validatePricing(
     const entry = candidate.models[model.id];
     return Boolean(
       entry?.pricing &&
-      (entry.officialReference === undefined || entry.officialReference === null || validateOfficialReference(entry.officialReference)) &&
+      (entry.officialReference === undefined ||
+        entry.officialReference === null ||
+        validateOfficialReference(entry.officialReference)) &&
       entry.tierAvailability &&
       validatePricingRule(entry.rule) &&
       ["sample", "manual-official"].includes(entry.source) &&
@@ -320,14 +323,14 @@ export const useModelPricing = create<{
   config: PricingCatalogConfig;
   save: (
     draft: PricingCatalogConfig,
-    role: string,
+    role: SystemRole,
     expectedRevision: string,
   ) => PricingSaveResult;
 }>((set, get) => ({
   config: readPricing(),
   save: (draft, role, expectedRevision) => {
     // Demo role guard only. A production service must authorize and validate server-side.
-    if (role !== "superAdmin") return { ok: false, reason: "forbidden" };
+    if (!isAdmin(role)) return { ok: false, reason: "forbidden" };
     if (
       !validatePricing(draft) ||
       Object.values(draft.models).some(

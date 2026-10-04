@@ -355,31 +355,25 @@ describe("account center identity and business integration", () => {
 
   it("attributes newly created keys to the stable user ID", () => {
     const store = useProductPreview;
-    store
-      .getState()
-      .register("", "another", {
+    store.getState().register("", "another", {
+      id: "account-new-owner",
+      username: "another",
+      phone: "+8613900003333",
+    });
+    const key = store.getState().createKeyDetailed({
+      name: "New owner key",
+      tier: "pro",
+      model: "gpt-4.1",
+    });
+    expect(key.accountId).toBe("account-new-owner");
+    store.getState().applyAccountSecurity(
+      {
         id: "account-new-owner",
         username: "another",
-        phone: "+8613900003333",
-      });
-    const key = store
-      .getState()
-      .createKeyDetailed({
-        name: "New owner key",
-        tier: "pro",
-        model: "gpt-4.1",
-      });
-    expect(key.accountId).toBe("account-new-owner");
-    store
-      .getState()
-      .applyAccountSecurity(
-        {
-          id: "account-new-owner",
-          username: "another",
-          phone: "+8613900004444",
-        },
-        "phone_changed",
-      );
+        phone: "+8613900004444",
+      },
+      "phone_changed",
+    );
     expect(store.getState().keys[0].accountId).toBe("account-new-owner");
   });
 
@@ -393,21 +387,17 @@ describe("account center identity and business integration", () => {
     };
     useModelPricing.setState({ config: custom });
     try {
-      useProductPreview
-        .getState()
-        .register("", "restricted_user", {
-          id: "account-new-restricted",
-          username: "restricted_user",
-          phone: "+8613900005555",
-        });
+      useProductPreview.getState().register("", "restricted_user", {
+        id: "account-new-restricted",
+        username: "restricted_user",
+        phone: "+8613900005555",
+      });
       expect(() =>
-        useProductPreview
-          .getState()
-          .createKeyDetailed({
-            name: "Private group",
-            tier: "pro",
-            model: "gpt-4.1",
-          }),
+        useProductPreview.getState().createKeyDetailed({
+          name: "Private group",
+          tier: "pro",
+          model: "gpt-4.1",
+        }),
       ).toThrow("No available authorized model");
       expect(useProductPreview.getState().keys).toEqual([]);
       expect(useProductPreview.getState().balance).toBe("0");

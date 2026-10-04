@@ -98,14 +98,11 @@ export default function DesignSystem() {
     setMobileOpen(false);
     setCommandOpen(false);
     requestAnimationFrame(() =>
-      document
-        .getElementById(id)
-        ?.scrollIntoView({
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
-            .matches
-            ? "instant"
-            : "smooth",
-        }),
+      document.getElementById(id)?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "instant"
+          : "smooth",
+      }),
     );
   };
   useEffect(() => {
@@ -269,7 +266,12 @@ export default function DesignSystem() {
               </h1>
               <p>{t("intro")}</p>
             </div>
-            <Button asChild variant="primary"><Link to="/preview/home">{t("pReviewHome")}<ArrowUpRight /></Link></Button>
+            <Button asChild variant="primary">
+              <Link to="/preview/home">
+                {t("pReviewHome")}
+                <ArrowUpRight />
+              </Link>
+            </Button>
             <Button onClick={() => chooseRecord(sampleRequests[0])}>
               <PanelRightOpen />
               {t("openDrawer")}

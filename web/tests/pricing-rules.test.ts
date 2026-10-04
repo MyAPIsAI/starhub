@@ -22,6 +22,7 @@ import {
   resolveKeyModelResult,
 } from "../src/lib/key-model-policy";
 import { useProductPreview } from "../src/lib/product-preview";
+import { ROLE_ADMIN } from "../src/lib/system-access";
 import { filterExportRequests, serializeRequestExport, serializeUsageExport } from "../src/lib/request-export";
 
 const date = "2026-09-25T12:00:00Z";
@@ -283,18 +284,18 @@ describe("metered reference pricing", () => {
     });
     entry.source = "manual-official";
     expect(
-      useModelPricing.getState().save(config, "superAdmin", "sample-1"),
+      useModelPricing.getState().save(config, ROLE_ADMIN, "sample-1"),
     ).toEqual({ ok: false, reason: "invalid" });
     entry.sourceUrl = "https://example.com/pricing";
     entry.verifiedAt = "2026-01-01";
     entry.effectiveAt = "2999-01-01";
     expect(
-      useModelPricing.getState().save(config, "superAdmin", "sample-1"),
+      useModelPricing.getState().save(config, ROLE_ADMIN, "sample-1"),
     ).toEqual({ ok: false, reason: "invalid" });
     entry.effectiveAt = "2026-01-01";
     const saved = useModelPricing
       .getState()
-      .save(config, "superAdmin", "sample-1");
+      .save(config, ROLE_ADMIN, "sample-1");
     expect(saved.ok).toBe(true);
     if (saved.ok)
       expect(saved.config.models["gpt-4.1"].version).toBe(
@@ -335,7 +336,7 @@ describe("settlement and authorization", () => {
       ceilTo: "1",
     };
     expect(
-      useModelPricing.getState().save(draft, "superAdmin", "sample-1").ok,
+      useModelPricing.getState().save(draft, ROLE_ADMIN, "sample-1").ok,
     ).toBe(true);
     const next = useProductPreview
       .getState()
@@ -452,6 +453,8 @@ describe("settlement and authorization", () => {
   it("exports actual request and aggregate counts, full metered snapshots, and escaped names", () => {
     const state = useProductPreview.getState(), key = state.keys[0];
     state.updateKey(key.id, { name: '图片 "报价"\n验证' });
+    // Clear seed requests so the export only counts the 4 test calls below.
+    useProductPreview.setState({ requests: [] });
     state.recordMeteredCall(key.id, "veyra-demo-image", { images: 1 });
     state.recordMeteredCall(key.id, "veyra-demo-image", { images: 2 });
     state.recordMeteredCall(key.id, "veyra-demo-video", { seconds: 1.1 });

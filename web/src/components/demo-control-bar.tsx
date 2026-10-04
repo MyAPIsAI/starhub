@@ -9,7 +9,13 @@ import {
 import { useProductPreview } from "../lib/product-preview";
 import { usePreferences } from "../lib/preferences";
 import { DemoScenarios, demoScenarios } from "./demo-scenarios";
-import { useSystemAccess, systemRoleForScenario } from "../lib/system-access";
+import {
+  useSystemAccess,
+  systemRoleForScenario,
+  isAdmin,
+  ROLE_USER,
+  ROLE_ADMIN,
+} from "../lib/system-access";
 
 export function DemoControlBar({ inline = false }: { inline?: boolean }) {
   const language = usePreferences((s) => s.language);
@@ -31,7 +37,7 @@ export function DemoControlBar({ inline = false }: { inline?: boolean }) {
     [text("验证配置", "Verify", "التحقق"), "/console/playground"],
     [text("调用记录", "Requests", "الطلبات"), "/console/requests"],
     [text("账务", "Billing", "الفوترة"), "/console/billing"],
-    ...(role === "superAdmin"
+    ...(isAdmin(role)
       ? [
           [
             text("标准模型", "Standard models", "النماذج القياسية"),
@@ -49,7 +55,7 @@ export function DemoControlBar({ inline = false }: { inline?: boolean }) {
   // These workspaces provide an inline footer to keep row actions unobstructed.
   if (
     !inline &&
-    ((role === "superAdmin" && /\/channels\/?$/.test(location.pathname)) ||
+    ((isAdmin(role) && /\/channels\/?$/.test(location.pathname)) ||
       /\/(requests|service-quality)\/?$/.test(location.pathname) ||
       location.pathname === "/models")
   )
@@ -101,14 +107,14 @@ export function DemoControlBar({ inline = false }: { inline?: boolean }) {
             </strong>
             <div className="demo-control-options">
               <button
-                aria-pressed={role === "customer"}
-                onClick={() => setRole("customer")}
+                aria-pressed={role === ROLE_USER}
+                onClick={() => setRole(ROLE_USER)}
               >
                 {text("普通用户", "Customer", "مستخدم")}
               </button>
               <button
-                aria-pressed={role === "superAdmin"}
-                onClick={() => setRole("superAdmin")}
+                aria-pressed={isAdmin(role)}
+                onClick={() => setRole(ROLE_ADMIN)}
               >
                 {text("系统管理员", "System administrator", "مسؤول النظام")}
               </button>

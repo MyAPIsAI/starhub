@@ -1,12 +1,20 @@
 import { examplePricingAttributes } from "../lib/pricing-rules";
-import { modelCatalog, groupResources, accountCanUseGroup } from "../lib/platform-catalog";
+import {
+  modelCatalog,
+  groupResources,
+  accountCanUseGroup,
+} from "../lib/platform-catalog";
 import {
   catalogModels,
   type ModelItem,
   type PricingCatalogConfig,
 } from "./models";
 import type { TierId } from "./placeholders";
-import { getPricingSnapshot, quoteModelCharge, type MeteredUsage } from "../lib/model-pricing";
+import {
+  getPricingSnapshot,
+  quoteModelCharge,
+  type MeteredUsage,
+} from "../lib/model-pricing";
 
 export type DirectoryModel = Omit<ModelItem, "vendor" | "pricing"> & {
   vendor: ModelItem["vendor"] | "Veyra";
@@ -41,7 +49,17 @@ export const directoryModels: DirectoryModel[] = [
   smartDirectoryModel,
   ...catalogModels.map((model) => ({ ...model, kind: "specified" as const })),
 ];
-export function getDirectoryModels(config = getPricingSnapshot()): DirectoryModel[] { return [smartDirectoryModel, ...modelCatalog(config).map(model=>({...model,kind:"specified" as const}))]; }
+export function getDirectoryModels(
+  config = getPricingSnapshot(),
+): DirectoryModel[] {
+  return [
+    smartDirectoryModel,
+    ...modelCatalog(config).map((model) => ({
+      ...model,
+      kind: "specified" as const,
+    })),
+  ];
+}
 export function getDirectoryModel(id?: string, config = getPricingSnapshot()) {
   return getDirectoryModels(config).find((model) => model.id === id);
 }
@@ -59,9 +77,11 @@ export function directoryCandidates(
         ? candidate.capabilities.includes("text") &&
           candidate.protocols.length > 0
         : candidate.id === model.id) &&
-      accountCanUseGroup(pricing,tier,accountId) &&
+      accountCanUseGroup(pricing, tier, accountId) &&
       candidate.online &&
-      pricing.models[candidate.id]?.tierAvailability[tier] && (!pricing.resources || groupResources(pricing,tier,candidate.id).length>0),
+      pricing.models[candidate.id]?.tierAvailability[tier] &&
+      (!pricing.resources ||
+        groupResources(pricing, tier, candidate.id).length > 0),
   );
 }
 /** Display assumptions are explicit and shared by cards and detail tables. */

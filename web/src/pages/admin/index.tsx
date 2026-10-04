@@ -22,6 +22,7 @@ import { Modal } from "../../components/ui/overlay";
 import { useProductPreview } from "../../lib/product-preview";
 import { formatMoney } from "../../lib/money";
 import { ModelPricingAdmin } from "../../features/model-pricing-admin";
+import { useSystemAccess } from "../../lib/system-access";
 
 export default function AdminPortal() {
   const { t, i18n } = useTranslation();
@@ -37,6 +38,7 @@ export default function AdminPortal() {
   const [role, setRole] = useState<"superAdmin" | "finance" | "ops" | "tech">(
     "superAdmin",
   );
+  const authRole = useSystemAccess((s) => s.role);
   const [tab, setTab] = useState<
     "customers" | "models" | "analytics" | "resources" | "incidents" | "audit"
   >(() =>
@@ -716,7 +718,7 @@ export default function AdminPortal() {
 
         {/* Keep drafts mounted when switching admin sections. */}
         <div hidden={tab !== "models"}>
-          <ModelPricingAdmin role={role} />
+          <ModelPricingAdmin role={authRole} />
         </div>
 
         {/* Tab 3: Analytics */}

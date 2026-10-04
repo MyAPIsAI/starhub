@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useModelPricing, validatePricing } from "../lib/model-pricing";
+import { isAdmin } from "../lib/system-access";
 import type { PricingCatalogConfig } from "../config/models";
 
 export function useSettingsText() {
@@ -18,7 +19,11 @@ export function useSettingsText() {
 }
 
 /** Separate recoverable drafts for the two settings modules. Published revisions remain authoritative. */
-export function usePricingDraft(module: "models" | "groups", role: string, scope?: string) {
+export function usePricingDraft(
+  module: "models" | "groups",
+  role: number,
+  scope?: string,
+) {
   const config = useModelPricing((state) => state.config);
   const save = useModelPricing((state) => state.save);
   const storageKey = `veyra-settings-${module}-draft-v2${scope ? `-${scope}` : ""}`;
@@ -132,7 +137,7 @@ export function usePricingDraft(module: "models" | "groups", role: string, scope
     discard,
     publish,
     valid: validatePricing(draft),
-    canEdit: role === "superAdmin",
+    canEdit: isAdmin(role),
     text,
   };
 }

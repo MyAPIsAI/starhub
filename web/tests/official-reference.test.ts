@@ -12,6 +12,7 @@ import {
   PRICING_STORAGE_KEY,
   migratePricing,
 } from "../src/lib/model-pricing";
+import { ROLE_ADMIN } from "../src/lib/system-access";
 import type { OfficialPriceReference } from "../src/config/models";
 
 let storage: Map<string, string>;
@@ -107,7 +108,7 @@ describe("independent official references", () => {
     config.models["gemini-2.5-pro"].officialReference = ref;
     const saved = useModelPricing
       .getState()
-      .save(config, "superAdmin", "sample-1");
+      .save(config, ROLE_ADMIN, "sample-1");
     expect(saved.ok).toBe(true);
     const restored = migratePricing(
       JSON.parse(storage.get(PRICING_STORAGE_KEY)!),
@@ -199,7 +200,7 @@ describe("independent official references", () => {
     ).toEqual({ ok: false, reason: "forbidden" });
     config.models["gpt-4.1"].officialReference!.sourceUrl = "";
     expect(
-      useModelPricing.getState().save(config, "superAdmin", "sample-1"),
+      useModelPricing.getState().save(config, ROLE_ADMIN, "sample-1"),
     ).toEqual({ ok: false, reason: "invalid" });
     expect(storage.has(PRICING_STORAGE_KEY)).toBe(false);
   });
