@@ -12,6 +12,15 @@ starhub
 starhub.exe
 release/
 doc/
-web/
+old-web/
 scripts/
 .workbuddy/
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+web/.sites-runtime/
+web/.env*
+web/!.env.example
+web/test-results/
+web/docs/
+web/dbg-tmp.ts

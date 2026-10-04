@@ -1,0 +1,45 @@
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+const out = new URL('../docs/verification-2026-09-26-round2/', import.meta.url);
+await mkdir(out,{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const context=await browser.newContext({viewport:{width:1440,height:1000}});
+const page=await context.newPage();
+const errors=[];
+page.on('pageerror',e=>errors.push(String(e)));
+await page.addInitScript(()=>{ localStorage.setItem('i18nextLng','zh'); localStorage.setItem('veyra-demo-account-role-v1','superAdmin'); });
+const capture=async(name)=>{await page.screenshot({path:fileURLToPath(new URL(name+'.png',out)),fullPage:true}); return {name,overflow:await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth)};};
+const shots=[];
+await page.goto('http://127.0.0.1:5198/console/model-pricing');
+await page.locator('.settings-pricing').waitFor();
+shots.push(await capture('settings-model-desktop'));
+await page.getByRole('button',{name:'表达式 · 高级',exact:true}).click();
+await page.getByLabel('计费表达式（结果单位：美元）',{exact:true}).fill('images * 0.05 + seconds * 0.01');
+assert.equal(await page.getByLabel('计费表达式（结果单位：美元）',{exact:true}).inputValue(), 'images * 0.05 + seconds * 0.01');
+await page.getByText('查看变量与单位',{exact:true}).click();
+await page.getByRole('button',{name:'添加时段',exact:true}).click();
+shots.push(await capture('settings-expression-desktop'));
+await page.setViewportSize({width:390,height:844});
+shots.push(await capture('settings-model-mobile'));
+await page.getByRole('link',{name:'管理服务分组',exact:true}).click();
+await page.locator('.settings-group-layout').waitFor();
+shots.push(await capture('settings-groups-mobile'));
+await page.setViewportSize({width:1440,height:1000});
+shots.push(await capture('settings-groups-desktop'));
+await page.getByRole('link',{name:'设置模型定价',exact:true}).click();
+await page.getByRole('button',{name:'放弃修改',exact:true}).click();
+await page.setViewportSize({width:390,height:844});
+// Set locale and theme via the same application stores used by the header controls.
+for (const language of ['en','ar']) {
+  await page.evaluate(async(value)=>{const loaded=performance.getEntriesByType('resource').find(e=>e.name.includes('/src/lib/preferences.ts')); const preferences=(await import(loaded.name)).usePreferences; preferences.getState().setLanguage(value); preferences.getState().setTheme('dark');},language);
+  await page.waitForTimeout(120);
+  shots.push(await capture(`settings-model-mobile-${language}-dark`));
+  await page.locator('.pricing-page-heading a').click();
+  shots.push(await capture(`settings-groups-mobile-${language}-dark`));
+  await page.locator('.pricing-page-heading a').click();
+}
+await writeFile(new URL('settings-layout-results.json',out),JSON.stringify({at:new Date().toISOString(),shots,errors},null,2));
+console.log(JSON.stringify({shots,errors},null,2));
+await browser.close();

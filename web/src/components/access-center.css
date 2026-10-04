@@ -1,0 +1,409 @@
+.access-center {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+  max-width: 1240px;
+  margin-inline: auto;
+}
+.access-heading h1 {
+  font-size: 28px;
+  margin: 0 0 10px;
+  letter-spacing: -0.7px;
+}
+.access-heading p,
+.access-detail-heading p {
+  max-width: 780px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 10px 0 0;
+}
+.access-demo-label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.access-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.access-steps span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.access-steps b {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+.access-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 20px;
+  align-items: start;
+}
+.access-panel {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  min-width: 0;
+}
+.access-panel h2 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 17px;
+  margin: 0 0 16px;
+}
+.access-panel p {
+  line-height: 1.7;
+}
+.access-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.access-field {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+  min-width: 0;
+}
+.access-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.access-field select,
+.access-select,
+.access-inline-label select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.access-field small,
+.access-muted {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.access-inline-label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.access-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--brand-soft);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.access-notice svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.access-error {
+  background: var(--warning-soft);
+  color: var(--text);
+}
+.access-success {
+  background: var(--success-soft);
+}
+.access-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.access-config-fields {
+  display: grid;
+  gap: 13px;
+  margin: 18px 0;
+}
+.access-config-fields > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+}
+.access-config-fields dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.access-config-fields dd {
+  margin: 0;
+  word-break: break-all;
+  font-size: 13px;
+}
+.access-code {
+  display: block;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--subtle);
+  padding: 16px;
+  overflow: auto;
+  direction: ltr;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.8;
+  max-height: 340px;
+}
+.access-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 16px 0;
+}
+.access-check input {
+  margin-top: 4px;
+}
+.access-details {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+}
+.access-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.access-details ol {
+  padding-inline-start: 20px;
+  font-size: 13px;
+  line-height: 1.9;
+}
+.access-status {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.access-status svg {
+  flex-shrink: 0;
+  color: var(--brand);
+}
+.access-status strong {
+  font-size: 14px;
+}
+.access-status p {
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.access-empty {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  padding: 35px 22px;
+  color: var(--muted);
+}
+.access-empty h1,
+.access-empty h2 {
+  color: var(--text);
+  margin: 0;
+}
+.access-kind {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  white-space: nowrap;
+}
+.access-model-protocols {
+  font-size: 12px;
+  color: var(--muted);
+}
+.access-result-count {
+  font-size: 12px;
+  color: var(--muted);
+  margin-inline-start: auto;
+  align-self: center;
+}
+.catalog-smart-card {
+  border-color: var(--brand) !important;
+}
+.catalog-card-bottom > div {
+  display: grid;
+  gap: 5px;
+}
+.catalog-card-bottom small:last-child {
+  font-size: 10px;
+  line-height: 1.6;
+}
+.access-model-detail {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 72px;
+  display: grid;
+  gap: 24px;
+}
+.access-model-detail > .button {
+  justify-self: start;
+}
+.access-detail-heading {
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.access-detail-heading h1 {
+  font-size: 36px;
+  letter-spacing: -1px;
+  margin: 12px 0;
+}
+.access-detail-heading code {
+  color: var(--muted);
+  word-break: break-all;
+}
+.access-detail-heading .access-actions {
+  margin-top: 12px;
+  align-self: start;
+}
+.access-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.access-facts > div {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 8px;
+}
+.access-facts small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.access-facts strong {
+  font-size: 15px;
+}
+.access-price-estimate {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--brand-soft);
+  margin: 16px 0;
+}
+.access-price-estimate strong {
+  font-size: 25px;
+}
+.access-price-estimate span {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.access-table-wrap {
+  overflow-x: auto;
+}
+.access-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+  text-align: start;
+}
+.access-table th,
+.access-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+}
+.access-table th {
+  color: var(--muted);
+  font-weight: 500;
+}
+@media (max-width: 760px) {
+  .access-layout {
+    grid-template-columns: 1fr;
+  }
+  .access-panel {
+    padding: 18px;
+  }
+  .access-heading h1 {
+    font-size: 24px;
+  }
+  .access-config-fields > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .access-facts {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .access-model-detail {
+    padding: 24px 16px 50px;
+  }
+  .access-detail-heading h1 {
+    font-size: 29px;
+  }
+  .access-steps {
+    padding: 14px;
+    gap: 12px;
+  }
+  .access-steps span {
+    font-size: 11px;
+  }
+  .access-actions .button {
+    white-space: normal;
+    height: auto;
+    min-height: 38px;
+  }
+  .catalog-toolbar {
+    flex-wrap: wrap;
+  }
+  .catalog-toolbar .access-select {
+    width: 100%;
+  }
+  .catalog-pricing-source {
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+}
+
+.access-price-estimate strong {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+.access-table td:not(:first-child) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

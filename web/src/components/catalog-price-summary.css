@@ -1,0 +1,92 @@
+.catalog-model-price.catalog-price-summary {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  color: var(--secondary);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.catalog-price-summary-unit,
+.catalog-price-summary-label,
+.catalog-price-summary-note {
+  display: block;
+  color: var(--secondary);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.catalog-price-summary-unit {
+  margin-bottom: 2px;
+}
+.catalog-price-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.catalog-price-summary-table th,
+.catalog-price-summary-table td {
+  text-align: end;
+  vertical-align: top;
+  padding: 3px 0;
+}
+.catalog-price-summary-table th:first-child {
+  width: 23%;
+  text-align: start;
+}
+.catalog-price-summary-table thead th,
+.catalog-price-summary-table tbody th {
+  color: var(--secondary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.catalog-price-summary-table thead th {
+  padding-bottom: 4px;
+}
+.catalog-price-summary-table td {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.catalog-price-summary-table td[data-price-kind="public"],
+.catalog-price-summary [data-price-kind="public"] .catalog-price-summary-value {
+  color: var(--brand);
+}
+.catalog-price-summary-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.catalog-price-summary-pair > div,
+.catalog-price-summary-message {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+}
+.catalog-price-summary-value {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.catalog-price-summary-message {
+  padding-block: 8px;
+}
+:root:not([data-theme="dark"])
+  .catalog-price-summary-table
+  td[data-price-kind="public"],
+:root:not([data-theme="dark"])
+  .catalog-price-summary
+  [data-price-kind="public"]
+  .catalog-price-summary-value {
+  color: #2855d9;
+}
+@media (max-width: 640px) {
+  .catalog-price-summary-pair {
+    gap: 12px;
+  }
+}

@@ -1,0 +1,38 @@
+.directory-price {
+  display: grid;
+  gap: 5px;
+  min-inline-size: 0;
+}
+.directory-price > strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.directory-price > small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: normal;
+}
+.directory-price.has-error > strong {
+  color: var(--warning);
+}
+.directory-price-expression {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.access-table .directory-price {
+  min-inline-size: 230px;
+  max-inline-size: 580px;
+}
+
+.directory-detail-single {
+  padding: 18px 0;
+  border-block: 1px solid var(--border);
+}
+.directory-detail-single .directory-price > strong {
+  font-size: 23px;
+}
+.directory-detail-single .directory-price > small {
+  font-size: 12px;
+}

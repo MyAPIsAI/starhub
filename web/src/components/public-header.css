@@ -1,0 +1,216 @@
+.veyra-public-header {
+  --public-header-ink: #182235;
+  --public-header-muted: #647083;
+  --public-header-blue: #3569f6;
+  --public-header-surface: #fff;
+  --public-header-line: #e9edf3;
+  position: relative;
+  z-index: 40;
+  flex-shrink: 0;
+  width: 100%;
+  color: var(--public-header-ink);
+  background: var(--public-header-surface);
+  border-bottom: 1px solid var(--public-header-line);
+}
+.veyra-public-header-inner {
+  width: min(1280px, calc(100% - 64px));
+  min-height: 84px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.veyra-public-header .product-brand {
+  gap: 10px;
+  color: var(--public-header-ink);
+}
+.veyra-public-header .product-wordmark {
+  font-size: 23px;
+  letter-spacing: -0.035em;
+}
+.veyra-public-header .product-brand .brand-mark {
+  width: 31px;
+  height: 31px;
+  color: var(--public-header-blue);
+}
+.veyra-public-nav {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-inline: auto;
+}
+.veyra-public-nav > a {
+  position: relative;
+  padding: 10px 12px;
+  white-space: nowrap;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--public-header-muted);
+  transition:
+    color 0.18s,
+    background 0.18s;
+}
+.veyra-public-nav > a:hover,
+.veyra-public-nav > a[aria-current="page"] {
+  color: var(--public-header-blue);
+  background: color-mix(in srgb, var(--public-header-blue) 7%, transparent);
+}
+.veyra-public-nav > a[aria-current="page"] {
+  font-weight: 600;
+}
+.veyra-public-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 17px;
+}
+.veyra-public-actions .product-preferences {
+  gap: 1px;
+}
+.veyra-public-actions .select-trigger {
+  min-inline-size: 69px;
+  padding-inline: 6px;
+  color: var(--public-header-muted);
+  font-size: 12px;
+}
+.veyra-public-actions .button-icon {
+  width: 32px;
+  height: 36px;
+}
+.veyra-public-login {
+  color: var(--public-header-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.veyra-public-login:hover {
+  color: var(--public-header-blue);
+}
+.veyra-public-console {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 39px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #477bff, #2c61ed);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+  box-shadow: 0 3px 7px #3264f520;
+}
+.veyra-public-console:hover {
+  background: #2859de;
+}
+.veyra-public-menu,
+.veyra-public-mobile-actions {
+  display: none;
+}
+[data-theme="dark"] .veyra-public-header {
+  --public-header-ink: #e7edf9;
+  --public-header-muted: #9ba8bc;
+  --public-header-blue: #87a8ff;
+  --public-header-surface: #0e1523;
+  --public-header-line: #253047;
+}
+@media (max-width: 1100px) {
+  .veyra-public-header-inner {
+    gap: 14px;
+    width: calc(100% - 40px);
+  }
+  .veyra-public-nav > a {
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+  .veyra-public-actions {
+    gap: 10px;
+  }
+  .veyra-public-login {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .veyra-public-header-inner {
+    min-height: 74px;
+    justify-content: space-between;
+  }
+  .veyra-public-nav {
+    display: none;
+  }
+  .veyra-public-nav.is-open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    position: absolute;
+    inset-inline: 20px;
+    top: calc(100% + 8px);
+    padding: 12px;
+    border: 1px solid var(--public-header-line);
+    border-radius: 14px;
+    background: var(--public-header-surface);
+    box-shadow: 0 16px 42px #18223515;
+  }
+  .veyra-public-nav > a {
+    padding: 12px;
+    font-size: 14px;
+  }
+  .veyra-public-mobile-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 8px 2px;
+    margin-top: 8px;
+    border-top: 1px solid var(--public-header-line);
+    font-size: 13px;
+  }
+  .veyra-public-menu {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid var(--public-header-line);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--public-header-ink);
+    cursor: pointer;
+  }
+}
+@media (max-width: 520px) {
+  .veyra-public-header-inner {
+    width: calc(100% - 36px);
+    gap: 10px;
+  }
+  .veyra-public-header .product-brand {
+    gap: 7px;
+  }
+  .veyra-public-header .product-wordmark {
+    font-size: 21px;
+  }
+  .veyra-public-header .product-brand .brand-mark {
+    width: 27px;
+    height: 27px;
+  }
+  .veyra-public-actions {
+    gap: 5px;
+  }
+  .veyra-public-desktop-console {
+    display: none;
+  }
+  .veyra-public-actions .select-trigger {
+    min-inline-size: 61px;
+    padding-inline: 4px;
+  }
+  .veyra-public-nav.is-open {
+    inset-inline: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .veyra-public-nav > a {
+    transition: none;
+  }
+}

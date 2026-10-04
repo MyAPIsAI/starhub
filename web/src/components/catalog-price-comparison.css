@@ -1,0 +1,198 @@
+.price-comparison {
+  min-width: 0;
+  width: 100%;
+}
+.price-comparison-unit {
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 9px;
+}
+.price-comparison-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.price-comparison-table th,
+.price-comparison-table td {
+  text-align: end;
+  padding: 5px 0;
+  vertical-align: top;
+}
+.price-comparison-table thead th {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--secondary);
+  padding-bottom: 8px;
+}
+.price-comparison-table th:first-child {
+  width: 20%;
+  text-align: start;
+}
+.price-comparison-table tbody th {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.price-comparison-table td {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  color: var(--secondary);
+}
+.price-comparison-table td:last-child {
+  color: var(--brand);
+}
+.price-comparison-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.price-comparison-pair section {
+  min-width: 0;
+}
+.price-comparison-pair h3 {
+  color: var(--secondary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.6;
+  margin: 0 0 7px;
+}
+.price-comparison-pair section strong {
+  font-size: 16px;
+  display: block;
+  overflow-wrap: anywhere;
+}
+.price-comparison-pair section:first-child strong {
+  color: var(--secondary);
+  font-size: 14px;
+}
+.price-comparison-pair section:last-child strong {
+  color: var(--brand);
+}
+.price-comparison-pair small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.price-comparison-meta {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.65;
+}
+.price-comparison-meta p {
+  margin: 0;
+}
+.price-official-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+  align-items: center;
+}
+.price-official-meta a {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  color: var(--secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.price-legacy {
+  color: var(--secondary);
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.price-public-source {
+  color: var(--secondary);
+}
+.price-routing {
+  display: grid;
+  gap: 5px;
+}
+.price-routing > div {
+  display: grid;
+  gap: 4px;
+}
+.price-routing strong {
+  font-size: 18px;
+  color: var(--brand);
+}
+.price-routing small,
+.price-comparison-label {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.price-public-status {
+  margin: 5px 0 0;
+  color: var(--secondary);
+  font-size: 11px;
+}
+.price-error-details summary {
+  cursor: pointer;
+  color: var(--secondary);
+}
+.price-error-details ul {
+  padding-inline-start: 18px;
+}
+[dir="rtl"] .price-comparison strong[dir="ltr"] {
+  text-align: right;
+}
+:root:not([data-theme="dark"]) .price-comparison-table td:last-child,
+:root:not([data-theme="dark"])
+  .price-comparison-pair
+  section:last-child
+  strong {
+  color: #2855d9;
+}
+.access-public-comparison .price-comparison {
+  max-width: 780px;
+}
+.access-public-comparison .price-comparison-table {
+  max-width: 600px;
+}
+.access-public-comparison .price-comparison-table td {
+  font-size: 18px;
+}
+.access-public-comparison .price-comparison-table th {
+  font-size: 12px;
+}
+.access-public-comparison .price-comparison-meta {
+  font-size: 12px;
+  gap: 8px;
+}
+.access-public-comparison .price-comparison-pair h3 {
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .price-comparison-table td {
+    font-size: 13px;
+  }
+  .price-comparison-table thead th {
+    font-size: 10px;
+  }
+  .access-public-comparison .price-comparison-table td {
+    font-size: 15px;
+  }
+}
+.price-conditions {
+  margin-top: 2px;
+}
+.price-conditions summary {
+  cursor: pointer;
+  color: var(--secondary);
+}
+.price-conditions[open] summary {
+  margin-bottom: 5px;
+}
+.price-conditions p + p {
+  margin-top: 7px;
+}

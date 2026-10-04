@@ -1,0 +1,100 @@
+// All provisional product choices are centralized here. No live endpoints or secrets.
+export const placeholders = {
+  brand: {
+    en: "Veyra",
+    zh: "Veyra",
+    ar: "Veyra",
+    domain: "veyra.example",
+  },
+  region: {
+    id: "me",
+    country: "AE",
+    currency: "USD",
+    timeZone: "Asia/Dubai",
+    defaultLanguage: "en",
+  },
+  tiers: [
+    {
+      id: "ultra",
+      grade: 10,
+      name: { en: "Ultra", zh: "Ultra（旗舰）", ar: "ألترا" },
+      multiplier: "1.0000",
+      success: "99.5",
+      p95: 800,
+      mark: 4,
+    },
+    {
+      id: "pro",
+      grade: 8,
+      name: { en: "Pro", zh: "Pro（专业）", ar: "برو" },
+      multiplier: "0.8000",
+      success: "99.0",
+      p95: 1500,
+      mark: 3,
+    },
+    {
+      id: "standard",
+      grade: 6,
+      name: { en: "Standard", zh: "Standard（标准）", ar: "قياسي" },
+      multiplier: "0.6000",
+      success: "97.5",
+      p95: 3000,
+      mark: 2,
+    },
+    {
+      id: "lite",
+      grade: 4,
+      name: { en: "Lite", zh: "Lite（轻量）", ar: "لايت" },
+      multiplier: "0.4000",
+      success: "97.5",
+      p95: 3000,
+      mark: 1,
+    },
+  ],
+  apiBase: "https://api.veyra.example/v1",
+  launchModels: [
+    "gpt-4.1",
+    "claude-sonnet-4-20250514",
+    "gemini-2.5-pro",
+    "deepseek-chat",
+    "qwen-plus",
+  ],
+  payment: {
+    provider: "mock",
+    minimum_nano: "10000000000",
+    maximum_nano: "10000000000000",
+  },
+  balanceAlert_nano: "5000000000",
+  closureDust_nano: "10000000",
+  legal: {
+    version: "demo-1",
+    effectiveAt: "2026-09-18T00:00:00+04:00",
+    chineseEnabled: true,
+    retentionYears: null,
+    taxRate: null,
+  },
+  cookieConsent: "necessary-only",
+  emailHourlyLimit: 10,
+  features: {
+    arabic: true,
+    videoCatalog: true,
+    textPlaygroundOnly: true,
+    countTokens: false,
+  },
+  priorities: ["reliability", "control", "compatibility", "price"],
+  externalInputs: {
+    toolVersions: null,
+    productionModelPrices: null,
+    successTargets: null,
+    minimumDeployment: null,
+    interfaceContract: null,
+  },
+  mock: {
+    minimumDelay: 300,
+    maximumDelay: 800,
+    now: "2026-09-18T14:42:00+04:00",
+  },
+} as const;
+
+export type TierId = string;
+export type Language = "en" | "zh" | "ar";
