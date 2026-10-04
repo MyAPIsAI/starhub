@@ -33,6 +33,7 @@ import {
 import { CatalogPriceSummary } from "../../components/catalog-price-summary";
 import { ModelIdCopy } from "../../components/model-id-copy";
 import { getPublicCatalogPrice } from "../../lib/catalog-public-pricing";
+import { usePlazaModels, plazaToDirectoryModel } from "../../lib/api/plaza";
 import "../../components/model-pricing.css";
 import "../../components/access-center.css";
 import "../../components/catalog-browser.css";
@@ -148,10 +149,10 @@ export default function ModelSquare() {
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const pricing = useModelPricing((s) => s.config);
-  const directoryModels = getDirectoryModels(pricing);
+  // Source from backend /api/plaza/models; fall back to local catalog
+  // when the API is unavailable (e.g. dev without backend running).
+  const localModels = getDirectoryModels(pricing);
   const [params, setParams] = useSearchParams();
-  // Freeze the initial preference: browser back to a URL without view must not
-  // be changed by a preference saved later in this mounted browsing session.
   const [initialView] = useState(savedView);
   const viewParam = params.get("view");
   const view: CatalogView =
@@ -164,6 +165,15 @@ export default function ModelSquare() {
   }, [params, setParams, viewParam, initialView]);
   const search = params.get("q") ?? "";
   const vendor = params.get("vendor") ?? "";
+  const plazaQuery = usePlazaModels({
+    q: search || undefined,
+    vendors: vendor || undefined,
+    page_size: 200,
+  });
+  const directoryModels: DirectoryModel[] =
+    plazaQuery.data?.items?.length
+      ? plazaQuery.data.items.map(plazaToDirectoryModel)
+      : localModels;
   const models = filterCatalogModels(directoryModels, {
     vendor: vendor || undefined,
     query: search,

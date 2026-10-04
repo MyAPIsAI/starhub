@@ -26,6 +26,7 @@ import { useModelPricing } from "../../lib/model-pricing";
 import { useProductPreview } from "../../lib/product-preview";
 import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
 import { getKeyModelOptions } from "../../lib/key-model-policy";
+import { usePlazaModel, plazaToDirectoryModel } from "../../lib/api/plaza";
 import "../../components/model-pricing.css";
 import "../../components/access-center.css";
 
@@ -57,7 +58,11 @@ export default function ModelDetail() {
       ? from
       : "/models";
   const quotedAt = new Date().toISOString();
-  const model = getDirectoryModel(id, pricing);
+  // Source from backend /api/plaza/models/{id}; fall back to local.
+  const plazaDetail = usePlazaModel(id);
+  const model =
+    (plazaDetail.data?.model && plazaToDirectoryModel(plazaDetail.data.model)) ||
+    getDirectoryModel(id, pricing);
   const compatibleKey =
     model &&
     [...keys]
