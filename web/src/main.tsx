@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, lazy, Suspense } from "react";
+import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import {
   BrowserRouter,
@@ -26,7 +26,9 @@ import i18n from "./i18n";
 import { usePreferences } from "./lib/preferences";
 import { DemoControlBar } from "./components/demo-control-bar";
 import { useSystemAccess, isAdmin } from "./lib/system-access";
+import { useProductPreview } from "./lib/product-preview";
 import { onAuthLoss, ApiError } from "./lib/api/http";
+import { getSelf } from "./lib/api/auth";
 
 const DesignSystem = lazy(() => import("./pages/design-system"));
 const BrandHome = lazy(() => import("./pages/brand-home"));
@@ -106,6 +108,30 @@ function AdminOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * RequireAuth gates console routes on login state. During the
+ * initial session-restore it shows a loader; once ready,
+ * unauthenticated users are redirected to the landing page. (GAP-2)
+ */
+function RequireAuth({
+  children,
+  authReady,
+}: {
+  children: React.ReactNode;
+  authReady: boolean;
+}) {
+  const isLoggedIn = useProductPreview((s) => s.user.isLoggedIn);
+  if (!authReady) {
+    return (
+      <div className="route-loading" role="status">
+        {i18n.t("loading")}
+      </div>
+    );
+  }
+  if (!isLoggedIn) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function App() {
   const { language, theme } = usePreferences();
 
@@ -128,6 +154,38 @@ function App() {
     document.documentElement.dataset.theme = theme;
     void i18n.changeLanguage(language);
   }, [language, theme]);
+
+  // Restore session on app startup: if a valid session cookie
+  // exists, GET /api/user/self hydrates the user and role. On 401,
+  // the user stays unauthenticated and must log in. (GAP-1)
+  const [authReady, setAuthReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getSelf()
+      .then((user) => {
+        if (cancelled) return;
+        useSystemAccess.getState().setRole(user.role);
+        useProductPreview.getState().login(
+          user.email ?? "",
+          user.username,
+          {
+            id: String(user.id),
+            username: user.username,
+            phone: "",
+            emailVerified: undefined,
+          },
+        );
+      })
+      .catch(() => {
+        // Not authenticated — stay on the public/landing page.
+      })
+      .finally(() => {
+        if (!cancelled) setAuthReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Wire up the 401 auth-loss listener: when the HTTP client gets
   // a 401 outside auth pages, silently redirect to /login. (B8/B9)
@@ -179,16 +237,32 @@ function App() {
                   path="/smart-routing"
                   element={<Navigate to="/console/smart-routing" replace />}
                 />
-                <Route path="/console/*" element={<ConsolePreview />} />
-                <Route path="/preview/console/*" element={<ConsolePreview />} />
+                <Route
+                  path="/console/*"
+                  element={
+                    <RequireAuth authReady={authReady}>
+                      <ConsolePreview />
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/preview/console/*"
+                  element={
+                    <RequireAuth authReady={authReady}>
+                      <ConsolePreview />
+                    </RequireAuth>
+                  }
+                />
 
                 {/* Operations back office (M9): reachable only as the system admin. */}
                 <Route
                   path="/admin/*"
                   element={
-                    <AdminOnly>
-                      <AdminPortal />
-                    </AdminOnly>
+                    <RequireAuth authReady={authReady}>
+                      <AdminOnly>
+                        <AdminPortal />
+                      </AdminOnly>
+                    </RequireAuth>
                   }
                 />
 

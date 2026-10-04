@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Copy,
@@ -19,8 +20,9 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { Modal } from "../components/ui/overlay";
 import { useProductPreview } from "../lib/product-preview";
+import { useSystemAccess, isAdmin, ROLE_USER } from "../lib/system-access";
+import { logoutUser } from "../lib/api/auth";
 import { usePreferences } from "../lib/preferences";
-import { useSystemAccess, isAdmin } from "../lib/system-access";
 import {
   accountDisplayName,
   DEMO_ACCOUNT_PROFILE,
@@ -78,6 +80,7 @@ export default function AccountCenter({
     (state) => state.terminateOtherSessions,
   );
   const logout = useProductPreview((state) => state.logout);
+  const queryClient = useQueryClient();
   const role = useSystemAccess((state) => state.role);
   const language = usePreferences((state) => state.language);
   const navigate = useNavigate();
@@ -425,8 +428,15 @@ export default function AccountCenter({
       );
     }
   }
-  function signOut(path = "/login") {
+  async function signOut(path = "/login") {
+    try {
+      await logoutUser();
+    } catch {
+      // Best-effort: clear local state even if the server is unreachable.
+    }
+    useSystemAccess.getState().setRole(ROLE_USER);
     logout();
+    queryClient.clear();
     navigate(path);
   }
   function passwordField(

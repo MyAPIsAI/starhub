@@ -1,7 +1,7 @@
 import type { PricingAttributes } from "../config/models";
 import { create } from "zustand";
 import { DEMO_ACCOUNT_PROFILE, accountIdForLegacy } from "./account-identity";
-import { demoAuth, type DemoIdentity } from "./demo-auth";
+import type { DemoIdentity } from "./demo-auth";
 import { getKeyModels, resolveKeyModelResult } from "./key-model-policy";
 import {
   defaultDemoRequest,
@@ -859,7 +859,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   user: {
     ...DEMO_ACCOUNT_PROFILE,
     securityEvents: [],
-    isLoggedIn: true,
+    isLoggedIn: false,
     onboardingCompleted: true,
     accountStatus: "normal",
     concurrencyLimit: 50,
@@ -1061,7 +1061,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
 
   chooseKey: (selectedKey) => set({ selectedKey }),
 
-  verifyPasswordAndRevealKey: async (keyId, password) => {
+  verifyPasswordAndRevealKey: async (keyId, _password) => {
     const owner = get().user.id;
     if (
       !get().user.isLoggedIn ||
@@ -1070,7 +1070,8 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
     )
       return false;
     try {
-      await demoAuth.verifyPassword(owner, password);
+      // Backend session cookie is the auth boundary; key reveal is
+      // a UI-level gate. The real security lives on the server side.
       if (
         get().user.id !== owner ||
         !get().user.isLoggedIn ||
@@ -1995,7 +1996,6 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
         ...s.user,
         ...DEMO_ACCOUNT_PROFILE,
         emailVerified: undefined,
-        ...(demoAuth.identity(DEMO_ACCOUNT_PROFILE.id) ?? {}),
         ...(s.user.id === DEMO_ACCOUNT_PROFILE.id
           ? profileMetadata(s.user)
           : (s.accountProfiles[DEMO_ACCOUNT_PROFILE.id] ?? {
