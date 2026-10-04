@@ -3,24 +3,24 @@ import { useSearchParams, Link } from "react-router-dom";
 import { Plus, ArrowLeft, Pencil, Search, Boxes } from "lucide-react";
 import { useModelPricing } from "../lib/model-pricing";
 import { modelCatalog } from "../lib/platform-catalog";
-import {
-  addStandardModel,
-  removeStandardModel,
-} from "../lib/catalog-mutations";
-import { useProductPreview } from "../lib/product-preview";
-import type { ModelItem, PricingCatalogConfig } from "../config/models";
+import type { ModelItem } from "../config/models";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { ModelPricingAdmin } from "./model-pricing-admin";
 import { useSettingsText } from "./pricing-settings-shared";
+import {
+  usePlazaModelMeta,
+  useUpsertModelMeta,
+  useDeleteModelMeta,
+  metaToModelItem,
+  modelItemToMeta,
+} from "../lib/api/plaza-meta";
+import { ApiError } from "../lib/api/http";
 import "../components/catalog-management.css";
 
 export function StandardModels({ role }: { role: number }) {
   const { text } = useSettingsText();
   const config = useModelPricing((s) => s.config);
-  const save = useModelPricing((s) => s.save);
-  const keys = useProductPreview((s) => s.keys),
-    requests = useProductPreview((s) => s.requests);
   const [params, setParams] = useSearchParams(),
     selected = params.get("model");
   const [query, setQuery] = useState(""),
@@ -32,19 +32,18 @@ export function StandardModels({ role }: { role: number }) {
     price: string;
   } | null>(null);
   const [remove, setRemove] = useState<string | null>(null);
-  const models = modelCatalog(config),
-    current = models.find((m) => m.id === selected);
-  const commit = (draft: PricingCatalogConfig, revision = config.revision) => {
-    const result = save(draft, role, revision);
-    setNotice(
-      result.ok
-        ? "已保存，后续请求使用新配置。"
-        : result.reason === "conflict"
-          ? "配置已更新，请关闭编辑后重新打开。"
-          : "未保存，请检查字段和权限。",
-    );
-    return result.ok;
-  };
+
+  // Source from backend /api/plaza/meta (AdminAuth); fall back to
+  // local catalog when the API is unavailable.
+  const metaQuery = usePlazaModelMeta();
+  const upsertMeta = useUpsertModelMeta();
+  const deleteMeta = useDeleteModelMeta();
+  const localModels = modelCatalog(config);
+  const models: ModelItem[] =
+    metaQuery.data?.length
+      ? metaQuery.data.map(metaToModelItem)
+      : localModels;
+  const current = models.find((m) => m.id === selected);
   const edit = (model?: ModelItem) => {
     setNotice("");
     setEditing({
@@ -77,18 +76,20 @@ export function StandardModels({ role }: { role: number }) {
     );
   const submit = () => {
     if (!editing) return;
-    try {
-      let draft = structuredClone(config);
-      if (editing.fresh)
-        draft = addStandardModel(config, editing.model, editing.price);
-      else draft.catalog![editing.model.id] = editing.model;
-      if (commit(draft, editing.revision)) {
+    setNotice("");
+    upsertMeta.mutate(modelItemToMeta(editing.model), {
+      onSuccess: () => {
         setParams({ model: editing.model.id });
         setEditing(null);
-      }
-    } catch (error) {
-      setNotice((error as Error).message);
-    }
+      },
+      onError: (err) => {
+        setNotice(
+          err instanceof ApiError
+            ? err.message
+            : "保存失败，请检查字段和权限后重试。",
+        );
+      },
+    });
   };
   return (
     <div className="catalog-management">
@@ -265,7 +266,11 @@ export function StandardModels({ role }: { role: number }) {
             {!models.length && <p>暂无标准模型，请先创建。</p>}
           </div>
           <p className="pricing-help">
-            已有模型来自演示种子数据，已迁移为可编辑记录；新增模型保存在当前浏览器。模型名称用于展示，调用标识创建后保持稳定。
+            {text(
+              "已有模型来自后端 /api/plaza/meta。新增模型保存到后端数据库。",
+              "Models are loaded from the backend /api/plaza/meta. New models are saved to the backend database.",
+              "تُحمّل النماذج من الخادم. تُحفظ النماذج الجديدة في قاعدة بيانات الخادم.",
+            )}
           </p>
         </>
       )}
@@ -496,15 +501,21 @@ export function StandardModels({ role }: { role: number }) {
             <Button
               variant="primary"
               onClick={() => {
-                try {
-                  if (
-                    remove &&
-                    commit(removeStandardModel(config, remove, keys, requests))
-                  )
+                if (!remove) return;
+                setNotice("");
+                deleteMeta.mutate(remove, {
+                  onSuccess: () => {
                     setRemove(null);
-                } catch (e) {
-                  setNotice((e as Error).message);
-                }
+                    setParams({});
+                  },
+                  onError: (err) => {
+                    setNotice(
+                      err instanceof ApiError
+                        ? err.message
+                        : "删除失败，模型可能存在引用。",
+                    );
+                  },
+                });
               }}
             >
               确认删除
