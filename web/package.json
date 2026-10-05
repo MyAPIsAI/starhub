@@ -26,6 +26,7 @@
     "test:browser:account-scope": "node tests/account-scope-browser.mjs",
     "test:browser:account-center": "node tests/account-center-browser.mjs",
     "test:browser:marketplace": "node tests/catalog-vendor-browser.mjs",
+    "test:browser:plaza": "node tests/plaza-browser.mjs",
     "test:a11y:marketplace": "node tests/catalog-vendor-accessibility.mjs",
     "test:browser:comparison": "node tests/catalog-comparison-browser.mjs",
     "test:browser:official-reference": "node tests/official-reference-browser.mjs"

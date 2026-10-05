@@ -1,0 +1,43 @@
+.plaza-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block: 24px;
+  color: var(--secondary);
+  font-size: 13px;
+}
+
+.plaza-group-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.plaza-group-list > span,
+.plaza-group-list > a {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--subtle);
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.plaza-group-list > [data-current-group="true"] {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.model-detail-refined .catalog-price-summary {
+  max-width: 640px;
+}
+
+.catalog-browser .access-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block: 12px;
+}

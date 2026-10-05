@@ -10,7 +10,6 @@ import {
   Search,
   Cpu,
   ArrowUpRight,
-  Sparkles,
   LayoutGrid,
   List,
   Info,
@@ -19,24 +18,19 @@ import {
 import { DemoControlBar } from "../../components/demo-control-bar";
 import { PublicHeader } from "../../components/product-shell";
 import { Button } from "../../components/ui/button";
-import {
-  getDirectoryModels,
-  type DirectoryModel,
-} from "../../config/model-directory";
 import { usePreferences } from "../../lib/preferences";
-import { useModelPricing } from "../../lib/model-pricing";
-import {
-  catalogVendor,
-  getCatalogVendors,
-  filterCatalogModels,
-} from "../../lib/catalog-browser";
-import { CatalogPriceSummary } from "../../components/catalog-price-summary";
+import { PlazaPrice } from "../../components/plaza-price";
 import { ModelIdCopy } from "../../components/model-id-copy";
-import { getPublicCatalogPrice } from "../../lib/catalog-public-pricing";
-import { usePlazaModels, plazaToDirectoryModel } from "../../lib/api/plaza";
+import {
+  usePlazaModels,
+  usePlazaFilters,
+  plazaToDirectoryModel,
+  type PlazaDirectoryModel,
+} from "../../lib/api/plaza";
 import "../../components/model-pricing.css";
 import "../../components/access-center.css";
 import "../../components/catalog-browser.css";
+import "../../components/plaza.css";
 
 type CatalogView = "cards" | "list";
 const viewPreference = "veyra-catalog-view-v1";
@@ -148,10 +142,6 @@ export default function ModelSquare() {
   const lang = usePreferences((s) => s.language);
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
-  const pricing = useModelPricing((s) => s.config);
-  // Source from backend /api/plaza/models; fall back to local catalog
-  // when the API is unavailable (e.g. dev without backend running).
-  const localModels = getDirectoryModels(pricing);
   const [params, setParams] = useSearchParams();
   const [initialView] = useState(savedView);
   const viewParam = params.get("view");
@@ -165,24 +155,30 @@ export default function ModelSquare() {
   }, [params, setParams, viewParam, initialView]);
   const search = params.get("q") ?? "";
   const vendor = params.get("vendor") ?? "";
+  const requestedPage = Number(params.get("page") ?? "1");
+  const page =
+    Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 1_000_000)
+      : 1;
   const plazaQuery = usePlazaModels({
     q: search || undefined,
     vendors: vendor || undefined,
-    page_size: 200,
+    page,
+    page_size: 24,
   });
-  const directoryModels: DirectoryModel[] =
-    plazaQuery.data?.items?.length
-      ? plazaQuery.data.items.map(plazaToDirectoryModel)
-      : localModels;
-  const models = filterCatalogModels(directoryModels, {
-    vendor: vendor || undefined,
-    query: search,
-  });
-  const vendors = getCatalogVendors(directoryModels);
+  const filtersQuery = usePlazaFilters();
+  const models = plazaQuery.data?.items.map(plazaToDirectoryModel) ?? [];
+  const vendors = filtersQuery.data?.vendors ?? [];
+  const total = plazaQuery.data?.total ?? 0;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(total / (plazaQuery.data?.page_size ?? 24)),
+  );
   const updateFilters = (values: Record<string, string>, replace = false) => {
     const next = new URLSearchParams(params);
     // Record view explicitly when navigating so refresh and return are exact.
     next.set("view", view);
+    if ("q" in values || "vendor" in values) next.delete("page");
     for (const [key, value] of Object.entries(values)) {
       if (!value) next.delete(key);
       else next.set(key, value);
@@ -200,12 +196,8 @@ export default function ModelSquare() {
   const returnParams = new URLSearchParams(params);
   returnParams.set("view", view);
   const returnTo = `/models?${returnParams.toString()}`;
-  const detailUrl = (model: DirectoryModel) =>
+  const detailUrl = (model: PlazaDirectoryModel) =>
     `/models/${encodeURIComponent(model.id)}?from=${encodeURIComponent(returnTo)}`;
-  const vendorLabel = (value: string) =>
-    value === "Veyra"
-      ? text("Veyra（平台）", "Veyra platform", "منصة Veyra")
-      : value;
   const capabilities: Record<string, string> = {
     text: text("文本", "Text", "نص"),
     code: text("编程", "Code", "برمجة"),
@@ -213,39 +205,31 @@ export default function ModelSquare() {
     reasoning: text("推理", "Reasoning", "استدلال"),
     image: text("图片", "Image", "صور"),
     video: text("视频", "Video", "فيديو"),
+    function_call: text("工具调用", "Tool calling", "استدعاء الأدوات"),
   };
-  const renderKind = (model: DirectoryModel) =>
-    model.kind === "smart" ? (
-      <span className="access-kind catalog-smart-label">
-        {text("智能路由", "Smart routing", "توجيه ذكي")}
-      </span>
-    ) : !model.protocols.length ? (
+  const renderKind = (model: PlazaDirectoryModel) =>
+    !model.isAvailable ? (
       <span className="access-kind catalog-specific-label">
         {text(
-          "计费样例 · 不可接入",
-          "Billing sample · no API",
-          "مثال فوترة · دون واجهة",
+          "当前分组不可用",
+          "Unavailable in this group",
+          "غير متاح في المجموعة الحالية",
         )}
       </span>
     ) : null;
-  const renderCapabilities = (model: DirectoryModel) => (
+  const renderCapabilities = (model: PlazaDirectoryModel) => (
     <div className="catalog-capabilities">
       {model.capabilities.map((c) => (
         <span key={c}>{capabilities[c] ?? c}</span>
       ))}
     </div>
   );
-  const quotedAt = new Date().toISOString();
-  const entries = models.map((model) => ({
-    model,
-    price: getPublicCatalogPrice(model, pricing, quotedAt),
-  }));
-  const renderPrice = ({ model, price }: (typeof entries)[number]) => (
-    <CatalogPriceSummary model={model} config={pricing} publicPrice={price} />
+  const entries = models.map((model) => ({ model }));
+  const renderPrice = ({ model }: (typeof entries)[number]) => (
+    <PlazaPrice pricing={model.pricing} />
   );
-  const renderAction = ({ model, price }: (typeof entries)[number]) => {
-    const canConnect =
-      model.online && model.protocols.length > 0 && price.status === "ready";
+  const renderAction = ({ model }: (typeof entries)[number]) => {
+    const canConnect = model.isAvailable && model.protocols.length > 0;
     return (
       <Link
         className="catalog-try"
@@ -257,9 +241,7 @@ export default function ModelSquare() {
       >
         {canConnect
           ? text("接入此模型", "Connect model", "توصيل النموذج")
-          : !model.protocols.length
-            ? text("查看计费样例", "View billing sample", "عرض مثال الفوترة")
-            : text("查看状态", "View status", "عرض الحالة")}
+          : text("查看状态", "View status", "عرض الحالة")}
         <ArrowUpRight size={13} />
       </Link>
     );
@@ -313,25 +295,24 @@ export default function ModelSquare() {
             "التصفية حسب المورد",
           )}
         >
-          {[{ id: "", count: directoryModels.length }, ...vendors].map(
-            (item) => (
-              <button
-                type="button"
-                key={item.id}
-                data-catalog-vendor={
-                  item.id === "all" ? "vendor:all" : item.id || "all"
-                }
-                className={vendor === item.id ? "is-active" : ""}
-                aria-pressed={vendor === item.id}
-                onClick={() => updateFilters({ vendor: item.id })}
-              >
-                {!item.id
-                  ? text("全部厂商", "All vendors", "كل الموردين")
-                  : vendorLabel(item.id)}
-                <span>{item.count}</span>
-              </button>
-            ),
-          )}
+          {[
+            { value: "", label: "", count: filtersQuery.data?.total },
+            ...vendors,
+          ].map((item) => (
+            <button
+              type="button"
+              key={item.value}
+              data-catalog-vendor={item.value || "all"}
+              className={vendor === item.value ? "is-active" : ""}
+              aria-pressed={vendor === item.value}
+              onClick={() => updateFilters({ vendor: item.value })}
+            >
+              {!item.value
+                ? text("全部厂商", "All vendors", "كل الموردين")
+                : item.label}
+              <span>{item.count ?? "—"}</span>
+            </button>
+          ))}
         </div>
         <div className="catalog-toolbar">
           <label className="catalog-search">
@@ -340,9 +321,9 @@ export default function ModelSquare() {
               type="search"
               aria-label={text("搜索模型", "Search models", "البحث عن نماذج")}
               placeholder={text(
-                "搜索名称、模型标识或厂商",
-                "Search name, model ID, or vendor",
-                "ابحث بالاسم أو المعرف أو المورد",
+                "搜索名称、模型标识、厂商或说明",
+                "Search name, model ID, vendor, or description",
+                "ابحث بالاسم أو المعرف أو المورد أو الوصف",
               )}
               value={search}
               onChange={(e) => updateFilters({ q: e.target.value }, true)}
@@ -359,7 +340,8 @@ export default function ModelSquare() {
           </label>
           <div className="catalog-toolbar-end">
             <span className="catalog-result-count" role="status">
-              {models.length} {text("个模型", "models", "نماذج")}
+              {plazaQuery.isPending ? "—" : total}{" "}
+              {text("个模型", "models", "نماذج")}
             </span>
             <div
               className="catalog-view-switch"
@@ -391,13 +373,42 @@ export default function ModelSquare() {
           <Info size={14} aria-hidden="true" />
           <p>
             {text(
-              "平台最低价为当前通用分组的模拟报价，实际按密钥分组计费。官方参考价的适用条件见详情。",
-              "Platform minima are current public-group demo rates; billing follows your key group. Official rate conditions are in model details.",
-              "أقل أسعار المنصة تجريبية للمجموعات العامة حاليًا؛ الفوترة حسب مجموعة مفتاحك. شروط السعر الرسمي في التفاصيل.",
+              `当前分组：${plazaQuery.data?.group ?? "—"}。报价已包含该分组倍率，官方参考价仅用于对照。`,
+              `Current group: ${plazaQuery.data?.group ?? "—"}. Quotes include the group multiplier; official prices are for comparison.`,
+              `المجموعة الحالية: ${plazaQuery.data?.group ?? "—"}. تشمل الأسعار معامل المجموعة والأسعار الرسمية للمقارنة.`,
             )}
           </p>
         </div>
-        {!models.length ? (
+        {filtersQuery.isError && (
+          <div className="access-notice" role="alert">
+            {text(
+              "厂商选项加载失败。",
+              "Vendor filters could not be loaded.",
+              "تعذر تحميل مرشحات الموردين.",
+            )}
+            <Button size="small" onClick={() => void filtersQuery.refetch()}>
+              {text("重试", "Retry", "إعادة المحاولة")}
+            </Button>
+          </div>
+        )}
+        {plazaQuery.isPending ? (
+          <div className="catalog-empty" role="status">
+            {text("正在加载模型…", "Loading models…", "جار تحميل النماذج…")}
+          </div>
+        ) : plazaQuery.isError ? (
+          <div className="catalog-empty" role="alert">
+            <h2>
+              {text(
+                "模型加载失败",
+                "Models could not be loaded",
+                "تعذر تحميل النماذج",
+              )}
+            </h2>
+            <Button onClick={() => void plazaQuery.refetch()}>
+              {text("重试", "Retry", "إعادة المحاولة")}
+            </Button>
+          </div>
+        ) : !models.length ? (
           <div className="catalog-empty">
             <Cpu size={36} />
             <h2>
@@ -434,15 +445,9 @@ export default function ModelSquare() {
                 >
                   <div className="catalog-card-top">
                     <span className="catalog-vendor-mark" aria-hidden="true">
-                      {catalogVendor(model) === "Veyra" ? (
-                        <Sparkles size={22} />
-                      ) : (
-                        catalogVendor(model).slice(0, 1)
-                      )}
+                      {model.vendor.slice(0, 1)}
                     </span>
-                    <span className="catalog-vendor">
-                      {vendorLabel(catalogVendor(model))}
-                    </span>
+                    <span className="catalog-vendor">{model.vendor}</span>
                     {renderKind(model)}
                   </div>
                   <Link className="catalog-model-name" to={detailUrl(model)}>
@@ -452,14 +457,10 @@ export default function ModelSquare() {
                   <ModelIdCopy id={model.id} />
                   <div className="catalog-model-meta">
                     {renderCapabilities(model)}
-                    {model.protocols.length > 0 && model.kind !== "smart" && (
+                    {model.contextLength > 0 && (
                       <span
                         className="catalog-context-info"
-                        title={text(
-                          "演示上下文",
-                          "Demo context",
-                          "السياق التجريبي",
-                        )}
+                        title={text("上下文上限", "Context limit", "حد السياق")}
                       >
                         <bdi>{model.contextDisplay}</bdi>
                       </span>
@@ -509,7 +510,7 @@ export default function ModelSquare() {
                 >
                   <div className="catalog-list-identity" role="cell">
                     <div className="catalog-list-vendor">
-                      <span>{vendorLabel(catalogVendor(model))}</span>
+                      <span>{model.vendor}</span>
                       {renderKind(model)}
                     </div>
                     <Link className="catalog-model-name" to={detailUrl(model)}>
@@ -520,7 +521,7 @@ export default function ModelSquare() {
                   </div>
                   <div className="catalog-list-capabilities" role="cell">
                     {renderCapabilities(model)}
-                    {model.protocols.length > 0 && model.kind !== "smart" && (
+                    {model.contextLength > 0 && (
                       <div className="catalog-context-info">
                         {text("上下文", "Context", "السياق")}{" "}
                         <bdi>{model.contextDisplay}</bdi>
@@ -537,6 +538,34 @@ export default function ModelSquare() {
               );
             })}
           </div>
+        )}
+        {plazaQuery.isSuccess && totalPages > 1 && (
+          <nav
+            className="plaza-pagination"
+            aria-label={text("模型分页", "Model pagination", "صفحات النماذج")}
+          >
+            <Button
+              disabled={page <= 1}
+              onClick={() =>
+                updateFilters({ page: String(Math.min(page - 1, totalPages)) })
+              }
+            >
+              {text("上一页", "Previous", "السابق")}
+            </Button>
+            <span>
+              {text(
+                `第 ${page} / ${totalPages} 页`,
+                `Page ${page} / ${totalPages}`,
+                `الصفحة ${page} / ${totalPages}`,
+              )}
+            </span>
+            <Button
+              disabled={page >= totalPages}
+              onClick={() => updateFilters({ page: String(page + 1) })}
+            >
+              {text("下一页", "Next", "التالي")}
+            </Button>
+          </nav>
         )}
         <div className="demo-inline-footer">
           <DemoControlBar inline />

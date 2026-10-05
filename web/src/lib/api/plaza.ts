@@ -1,14 +1,12 @@
 // Plaza API hooks — calls the Go backend /api/plaza/* endpoints.
 //
 // The backend returns plazaRow objects with snake_case JSON keys and
-// a nested pricing object. The adapter (plazaToDirectoryModel)
-// converts these to the frontend DirectoryModel shape used by the
-// catalog pages.
+// a nested pricing object. Catalog pages keep those prices and group IDs
+// separate from the local console demo's pricing configuration.
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "./http";
-import type { DirectoryModel } from "../../config/model-directory";
-import type { TierId } from "../../config/placeholders";
+import { useProductPreview } from "../product-preview";
 
 // --- Backend response types (mirror controller/plaza_pricing.go) ---
 
@@ -38,6 +36,7 @@ export interface PlazaRow {
   tags: string[];
   context_length: number;
   max_output: number;
+  protocols: string[];
   pricing: PlazaPricing;
   available_groups: string[];
   is_available: boolean;
@@ -80,12 +79,13 @@ export interface PlazaFiltersResponse {
 
 export interface PlazaDetailResponse {
   model: PlazaRow;
+  group: string;
   related: {
     same_vendor: PlazaRow[];
     same_price: PlazaRow[];
   };
-  max_output: number;
-  meta: {
+  max_output?: number;
+  meta?: {
     score: number | null;
     sort_weight: number;
     created_at: number;
@@ -123,16 +123,21 @@ function buildQueryString(query: PlazaQuery): string {
 // --- Hooks ---
 
 export function usePlazaModels(query: PlazaQuery = {}) {
+  const identity = usePlazaIdentity();
   return useQuery({
-    queryKey: ["plaza-models", query],
+    queryKey: ["plaza-models", identity, query],
     queryFn: ({ signal }) =>
-      apiGet<PlazaListResponse>(`/api/plaza/models${buildQueryString(query)}`, signal),
+      apiGet<PlazaListResponse>(
+        `/api/plaza/models${buildQueryString(query)}`,
+        signal,
+      ),
   });
 }
 
 export function usePlazaModel(id: string | undefined) {
+  const identity = usePlazaIdentity();
   return useQuery({
-    queryKey: ["plaza-model", id],
+    queryKey: ["plaza-model", identity, id],
     enabled: Boolean(id),
     queryFn: ({ signal }) =>
       apiGet<PlazaDetailResponse>(
@@ -143,57 +148,64 @@ export function usePlazaModel(id: string | undefined) {
 }
 
 export function usePlazaFilters() {
+  const identity = usePlazaIdentity();
   return useQuery({
-    queryKey: ["plaza-filters"],
+    queryKey: ["plaza-filters", identity],
     queryFn: ({ signal }) =>
       apiGet<PlazaFiltersResponse>("/api/plaza/filters", signal),
   });
 }
 
-// --- Adapter: PlazaRow -> DirectoryModel ---
+function usePlazaIdentity() {
+  return useProductPreview((state) =>
+    state.user.isLoggedIn ? state.user.id : "anonymous",
+  );
+}
+
+export interface PlazaDirectoryModel {
+  id: string;
+  name: string;
+  vendorId: string;
+  vendor: string;
+  capabilities: string[];
+  contextLength: number;
+  contextDisplay: string;
+  maxOutput: number;
+  protocols: string[];
+  description: { en: string; zh: string; ar: string };
+  pricing: PlazaPricing;
+  availableGroups: string[];
+  isAvailable: boolean;
+  unavailableReason: string | null;
+}
 
 function formatContextDisplay(length: number): string {
-  if (length <= 0) return "";
-  if (length >= 1_000_000) return `${(length / 1_000_000).toFixed(0)}M`;
-  if (length >= 1000) return `${Math.round(length / 1000)}K`;
+  if (length <= 0) return "—";
+  if (length >= 1_000_000) return `${length / 1_000_000}M`;
+  if (length >= 1000) return `${length / 1000}K`;
   return String(length);
 }
 
-const TIER_IDS: TierId[] = ["ultra", "pro", "standard", "lite"];
-
-/** Convert a backend PlazaRow to the frontend DirectoryModel shape. */
-export function plazaToDirectoryModel(row: PlazaRow): DirectoryModel {
-  const tags = row.tags ?? [];
-  const capabilities = tags.filter(
-    (t): t is DirectoryModel["capabilities"][number] =>
-      ["text", "code", "vision", "reasoning", "image", "video"].includes(t),
-  ) as DirectoryModel["capabilities"];
-
-  // Derive tierAvailability from available_groups: any group means
-  // available at all tiers (the backend doesn't expose per-tier yet).
-  const tierAvailability = TIER_IDS.reduce(
-    (acc, tier) => {
-      acc[tier] = row.is_available;
-      return acc;
-    },
-    {} as Record<TierId, boolean>,
-  );
-
+/** Preserve the backend catalog's identifiers, prices and coverage. */
+export function plazaToDirectoryModel(row: PlazaRow): PlazaDirectoryModel {
   return {
     id: row.id,
     name: row.name,
+    vendorId: row.vendor,
     vendor: row.vendor_display || row.vendor,
-    kind: "specified",
-    capabilities: capabilities.length ? capabilities : ["text"],
+    capabilities: row.tags ?? [],
     contextLength: row.context_length,
     contextDisplay: formatContextDisplay(row.context_length),
-    protocols: [],
+    maxOutput: row.max_output,
+    protocols: row.protocols ?? [],
     description: {
       en: row.description || "",
       zh: row.description || "",
       ar: row.description || "",
     },
-    tierAvailability,
-    online: row.is_available,
-  } as DirectoryModel;
+    pricing: row.pricing,
+    availableGroups: row.available_groups ?? [],
+    isAvailable: row.is_available,
+    unavailableReason: row.unavailable_reason,
+  };
 }

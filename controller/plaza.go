@@ -127,7 +127,7 @@ func PlazaGetModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	detail := map[string]any{"model": found}
+	detail := map[string]any{"model": found, "group": group}
 
 	// Related models: same vendor first, then price neighbours. Both lists
 	// are computed from the already-filtered catalog so a visitor never gets
@@ -159,10 +159,10 @@ func PlazaGetModel(w http.ResponseWriter, r *http.Request) {
 	if meta != nil {
 		detail["max_output"] = meta.MaxOutput
 		detail["meta"] = map[string]any{
-			"score":        meta.Score,
-			"sort_weight":  meta.SortWeight,
-			"created_at":   meta.CreatedAt,
-			"per_request":  meta.PerRequestUSD,
+			"score":       meta.Score,
+			"sort_weight": meta.SortWeight,
+			"created_at":  meta.CreatedAt,
+			"per_request": meta.PerRequestUSD,
 		}
 	}
 
@@ -252,11 +252,11 @@ func PlazaFilters(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.ApiSuccess(w, map[string]any{
-		"vendors":          vendors,
-		"tags":             tags,
-		"price_histogram":  hist,
-		"total":            len(rows),
-		"group":            group,
+		"vendors":         vendors,
+		"tags":            tags,
+		"price_histogram": hist,
+		"total":           len(rows),
+		"group":           group,
 	})
 }
 

@@ -44,6 +44,9 @@ export function useUpsertModelMeta() {
     mutationFn: (meta: ModelMeta) => apiPut<ModelMeta>("/api/plaza/meta", meta),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: META_KEY });
+      queryClient.invalidateQueries({ queryKey: ["plaza-models"] });
+      queryClient.invalidateQueries({ queryKey: ["plaza-model"] });
+      queryClient.invalidateQueries({ queryKey: ["plaza-filters"] });
     },
   });
 }
@@ -52,9 +55,14 @@ export function useDeleteModelMeta() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (model: string) =>
-      apiDelete<{ model: string }>(`/api/plaza/meta/${encodeURIComponent(model)}`),
+      apiDelete<{ model: string }>(
+        `/api/plaza/meta/${encodeURIComponent(model)}`,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: META_KEY });
+      queryClient.invalidateQueries({ queryKey: ["plaza-models"] });
+      queryClient.invalidateQueries({ queryKey: ["plaza-model"] });
+      queryClient.invalidateQueries({ queryKey: ["plaza-filters"] });
     },
   });
 }
@@ -91,10 +99,16 @@ export function metaToModelItem(meta: ModelMeta): ModelItem {
       input_per_million_usd: meta.official_input_per_m?.toFixed(6) ?? "0",
       output_per_million_usd: meta.official_output_per_m?.toFixed(6) ?? "0",
       ...(meta.official_cache_read_per_m != null
-        ? { cache_read_per_million_usd: meta.official_cache_read_per_m.toFixed(6) }
+        ? {
+            cache_read_per_million_usd:
+              meta.official_cache_read_per_m.toFixed(6),
+          }
         : {}),
       ...(meta.official_cache_write_per_m != null
-        ? { cache_write_per_million_usd: meta.official_cache_write_per_m.toFixed(6) }
+        ? {
+            cache_write_per_million_usd:
+              meta.official_cache_write_per_m.toFixed(6),
+          }
         : {}),
     },
     protocols: [],
@@ -130,8 +144,12 @@ export function modelItemToMeta(model: ModelItem): ModelMeta {
     max_output: 0,
     official_input_per_m: toFloat(model.pricing.input_per_million_usd),
     official_output_per_m: toFloat(model.pricing.output_per_million_usd),
-    official_cache_read_per_m: toFloat(model.pricing.cache_read_per_million_usd),
-    official_cache_write_per_m: toFloat(model.pricing.cache_write_per_million_usd),
+    official_cache_read_per_m: toFloat(
+      model.pricing.cache_read_per_million_usd,
+    ),
+    official_cache_write_per_m: toFloat(
+      model.pricing.cache_write_per_million_usd,
+    ),
     official_per_request: null,
     per_request_usd: null,
     score: null,

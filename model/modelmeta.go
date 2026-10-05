@@ -140,6 +140,7 @@ type ModelCoverage struct {
 	Model        string
 	Groups       []string
 	ChannelCount int
+	ChannelTypes []int
 }
 
 // ListModelCoverage projects the ability table into one row per model.
@@ -149,39 +150,57 @@ type ModelCoverage struct {
 // instead of being advertised as purchasable.
 func ListModelCoverage() (map[string]*ModelCoverage, error) {
 	type row struct {
-		Model      string
-		Group      string
-		ChannelCnt int64
+		Model       string
+		Group       string
+		ChannelType int
+		ChannelCnt  int64
 	}
 	var rows []row
 	err := DB.Table("abilities AS a").
-		Select("a.model AS model, a.\"group\" AS \"group\", COUNT(DISTINCT a.channel_id) AS channel_cnt").
+		Select("a.model AS model, a.\"group\" AS \"group\", c.type AS channel_type, COUNT(DISTINCT a.channel_id) AS channel_cnt").
 		Joins("JOIN channels AS c ON c.id = a.channel_id").
 		Where("a.enabled = ? AND c.status = ?", true, common.ChannelStatusEnabled).
-		Group("a.model, a.\"group\"").
+		Group("a.model, a.\"group\", c.type").
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
 
 	out := map[string]*ModelCoverage{}
+	groupCounts := map[string]map[string]int{}
 	for _, r := range rows {
 		cov, ok := out[r.Model]
 		if !ok {
 			cov = &ModelCoverage{Model: r.Model, Groups: []string{}}
 			out[r.Model] = cov
+			groupCounts[r.Model] = map[string]int{}
 		}
-		cov.Groups = append(cov.Groups, r.Group)
+		if _, exists := groupCounts[r.Model][r.Group]; !exists {
+			cov.Groups = append(cov.Groups, r.Group)
+		}
+		if !containsChannelType(cov.ChannelTypes, r.ChannelType) {
+			cov.ChannelTypes = append(cov.ChannelTypes, r.ChannelType)
+		}
 		// The per-group counts are distinct within a group, so summing them
 		// would double-count a channel serving several groups. Track the
 		// maximum instead: it is the number of channels reachable in the
 		// model's best-covered group, which is the honest "how many lines"
 		// answer if a caller ever surfaces it.
-		if int(r.ChannelCnt) > cov.ChannelCount {
-			cov.ChannelCount = int(r.ChannelCnt)
+		groupCounts[r.Model][r.Group] += int(r.ChannelCnt)
+		if groupCounts[r.Model][r.Group] > cov.ChannelCount {
+			cov.ChannelCount = groupCounts[r.Model][r.Group]
 		}
 	}
 	return out, nil
+}
+
+func containsChannelType(types []int, want int) bool {
+	for _, channelType := range types {
+		if channelType == want {
+			return true
+		}
+	}
+	return false
 }
 
 // AllPlazaModels returns the union of every served model name and every
