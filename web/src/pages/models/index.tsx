@@ -19,21 +19,19 @@ import {
 import { DemoControlBar } from "../../components/demo-control-bar";
 import { PublicHeader } from "../../components/product-shell";
 import { Button } from "../../components/ui/button";
-import {
-  getDirectoryModels,
-  type DirectoryModel,
-} from "../../config/model-directory";
+import { type DirectoryModel } from "../../config/model-directory";
 import { usePreferences } from "../../lib/preferences";
 import { useModelPricing } from "../../lib/model-pricing";
-import {
-  catalogVendor,
-  getCatalogVendors,
-  filterCatalogModels,
-} from "../../lib/catalog-browser";
+import { catalogVendor } from "../../lib/catalog-browser";
 import { CatalogPriceSummary } from "../../components/catalog-price-summary";
 import { ModelIdCopy } from "../../components/model-id-copy";
 import { getPublicCatalogPrice } from "../../lib/catalog-public-pricing";
-import { usePlazaModels, plazaToDirectoryModel } from "../../lib/api/plaza";
+import {
+  usePlazaModels,
+  usePlazaFilters,
+  plazaToDirectoryModel,
+  resolvePlazaVendor,
+} from "../../lib/api/plaza";
 import "../../components/model-pricing.css";
 import "../../components/access-center.css";
 import "../../components/catalog-browser.css";
@@ -149,9 +147,6 @@ export default function ModelSquare() {
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const pricing = useModelPricing((s) => s.config);
-  // Source from backend /api/plaza/models; fall back to local catalog
-  // when the API is unavailable (e.g. dev without backend running).
-  const localModels = getDirectoryModels(pricing);
   const [params, setParams] = useSearchParams();
   const [initialView] = useState(savedView);
   const viewParam = params.get("view");
@@ -164,21 +159,31 @@ export default function ModelSquare() {
     setParams(next, { replace: true });
   }, [params, setParams, viewParam, initialView]);
   const search = params.get("q") ?? "";
-  const vendor = params.get("vendor") ?? "";
-  const plazaQuery = usePlazaModels({
-    q: search || undefined,
-    vendors: vendor || undefined,
-    page_size: 200,
-  });
-  const directoryModels: DirectoryModel[] =
-    plazaQuery.data?.items?.length
-      ? plazaQuery.data.items.map(plazaToDirectoryModel)
-      : localModels;
-  const models = filterCatalogModels(directoryModels, {
-    vendor: vendor || undefined,
-    query: search,
-  });
-  const vendors = getCatalogVendors(directoryModels);
+  const vendorParam = params.get("vendor") ?? "";
+  const plazaFilters = usePlazaFilters();
+  const vendor = resolvePlazaVendor(
+    vendorParam,
+    plazaFilters.data?.vendors ?? [],
+  );
+  useEffect(() => {
+    if (vendor === vendorParam) return;
+    const next = new URLSearchParams(params);
+    next.set("vendor", vendor);
+    setParams(next, { replace: true });
+  }, [params, setParams, vendor, vendorParam]);
+  const plazaQuery = usePlazaModels(
+    {
+      q: search || undefined,
+      vendors: vendor || undefined,
+      page_size: 200,
+    },
+    !vendorParam || Boolean(plazaFilters.data) || plazaFilters.isError,
+  );
+  const models = plazaQuery.isError
+    ? []
+    : (plazaQuery.data?.items ?? []).map(plazaToDirectoryModel);
+  const vendors = plazaFilters.data?.vendors ?? [];
+  const catalogTotal = plazaFilters.data?.total ?? plazaQuery.data?.total ?? 0;
   const updateFilters = (values: Record<string, string>, replace = false) => {
     const next = new URLSearchParams(params);
     // Record view explicitly when navigating so refresh and return are exact.
@@ -313,21 +318,21 @@ export default function ModelSquare() {
             "التصفية حسب المورد",
           )}
         >
-          {[{ id: "", count: directoryModels.length }, ...vendors].map(
+          {[{ value: "", label: "", count: catalogTotal }, ...vendors].map(
             (item) => (
               <button
                 type="button"
-                key={item.id}
+                key={item.value}
                 data-catalog-vendor={
-                  item.id === "all" ? "vendor:all" : item.id || "all"
+                  item.value === "all" ? "vendor:all" : item.value || "all"
                 }
-                className={vendor === item.id ? "is-active" : ""}
-                aria-pressed={vendor === item.id}
-                onClick={() => updateFilters({ vendor: item.id })}
+                className={vendor === item.value ? "is-active" : ""}
+                aria-pressed={vendor === item.value}
+                onClick={() => updateFilters({ vendor: item.value })}
               >
-                {!item.id
+                {!item.value
                   ? text("全部厂商", "All vendors", "كل الموردين")
-                  : vendorLabel(item.id)}
+                  : vendorLabel(item.label || item.value)}
                 <span>{item.count}</span>
               </button>
             ),
@@ -359,7 +364,11 @@ export default function ModelSquare() {
           </label>
           <div className="catalog-toolbar-end">
             <span className="catalog-result-count" role="status">
-              {models.length} {text("个模型", "models", "نماذج")}
+              {plazaQuery.isPending
+                ? text("加载中…", "Loading…", "جار التحميل…")
+                : plazaQuery.isError
+                  ? text("加载失败", "Load failed", "تعذر التحميل")
+                  : `${models.length} ${text("个模型", "models", "نماذج")}`}
             </span>
             <div
               className="catalog-view-switch"
@@ -397,29 +406,62 @@ export default function ModelSquare() {
             )}
           </p>
         </div>
-        {!models.length ? (
-          <div className="catalog-empty">
+        {plazaQuery.isPending || plazaQuery.isError || !models.length ? (
+          <div
+            className="catalog-empty"
+            role={plazaQuery.isError ? "alert" : "status"}
+            aria-busy={plazaQuery.isPending}
+          >
             <Cpu size={36} />
             <h2>
-              {text(
-                "没有符合条件的模型",
-                "No matching models",
-                "لا توجد نماذج مطابقة",
-              )}
+              {plazaQuery.isPending
+                ? text("正在加载模型", "Loading models", "جار تحميل النماذج")
+                : plazaQuery.isError
+                  ? text(
+                      "模型加载失败",
+                      "Failed to load models",
+                      "تعذر تحميل النماذج",
+                    )
+                  : text(
+                      "没有符合条件的模型",
+                      "No matching models",
+                      "لا توجد نماذج مطابقة",
+                    )}
             </h2>
             <p>
-              {text(
-                "试试其他厂商或关键词。",
-                "Try another vendor or search term.",
-                "جرّب موردًا أو كلمة بحث أخرى.",
-              )}
+              {plazaQuery.isPending
+                ? text(
+                    "正在获取模型目录，请稍候。",
+                    "Fetching the model catalog. Please wait.",
+                    "جار جلب دليل النماذج. يرجى الانتظار.",
+                  )
+                : plazaQuery.isError
+                  ? text(
+                      "暂时无法获取模型目录，请重试。",
+                      "The model catalog is unavailable. Please retry.",
+                      "دليل النماذج غير متاح حاليًا. يرجى إعادة المحاولة.",
+                    )
+                  : text(
+                      "试试其他厂商或关键词。",
+                      "Try another vendor or search term.",
+                      "جرّب موردًا أو كلمة بحث أخرى.",
+                    )}
             </p>
-            <Button
-              variant="secondary"
-              onClick={() => updateFilters({ q: "", vendor: "" })}
-            >
-              {text("清除筛选", "Clear filters", "مسح عوامل التصفية")}
-            </Button>
+            {!plazaQuery.isPending && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (plazaQuery.isError) {
+                    void plazaQuery.refetch();
+                    if (plazaFilters.isError) void plazaFilters.refetch();
+                  } else updateFilters({ q: "", vendor: "" });
+                }}
+              >
+                {plazaQuery.isError
+                  ? text("重试", "Retry", "إعادة المحاولة")
+                  : text("清除筛选", "Clear filters", "مسح عوامل التصفية")}
+              </Button>
+            )}
           </div>
         ) : view === "cards" ? (
           <div className="catalog-grid">

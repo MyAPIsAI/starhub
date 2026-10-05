@@ -10,10 +10,7 @@ import {
 } from "lucide-react";
 import { PublicHeader } from "../../components/product-shell";
 import { Button } from "../../components/ui/button";
-import {
-  getDirectoryModel,
-  directoryPrices,
-} from "../../config/model-directory";
+import { directoryPrices } from "../../config/model-directory";
 import { type TierId } from "../../config/placeholders";
 import { getPublicCatalogPrice } from "../../lib/catalog-public-pricing";
 import { CatalogPriceComparison } from "../../components/catalog-price-comparison";
@@ -27,6 +24,7 @@ import { useProductPreview } from "../../lib/product-preview";
 import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
 import { getKeyModelOptions } from "../../lib/key-model-policy";
 import { usePlazaModel, plazaToDirectoryModel } from "../../lib/api/plaza";
+import { ApiError } from "../../lib/api/http";
 import "../../components/model-pricing.css";
 import "../../components/access-center.css";
 
@@ -58,11 +56,17 @@ export default function ModelDetail() {
       ? from
       : "/models";
   const quotedAt = new Date().toISOString();
-  // Source from backend /api/plaza/models/{id}; fall back to local.
   const plazaDetail = usePlazaModel(id);
   const model =
-    (plazaDetail.data?.model && plazaToDirectoryModel(plazaDetail.data.model)) ||
-    getDirectoryModel(id, pricing);
+    !plazaDetail.isError && plazaDetail.data?.model
+      ? plazaToDirectoryModel(plazaDetail.data.model)
+      : undefined;
+  const isLoading = plazaDetail.isPending;
+  const hasLoadError =
+    plazaDetail.isError &&
+    !(
+      plazaDetail.error instanceof ApiError && plazaDetail.error.status === 404
+    );
   const compatibleKey =
     model &&
     [...keys]
@@ -112,27 +116,57 @@ export default function ModelDetail() {
           </Link>
         </Button>
         {!model ? (
-          <section className="access-empty">
+          <section
+            className="access-empty"
+            role={hasLoadError ? "alert" : "status"}
+            aria-busy={isLoading}
+          >
             <h1>
-              {text("模型不存在", "Model not found", "النموذج غير موجود")}
+              {isLoading
+                ? text("正在加载模型", "Loading model", "جار تحميل النموذج")
+                : hasLoadError
+                  ? text(
+                      "模型加载失败",
+                      "Failed to load model",
+                      "تعذر تحميل النموذج",
+                    )
+                  : text("模型不存在", "Model not found", "النموذج غير موجود")}
             </h1>
             <p>
-              {text(
-                "没有找到此模型标识，请返回目录选择可用模型。不会替换成其他模型。",
-                "This model ID was not found. Return to the catalog to choose a model; no substitution was made.",
-                "لم يتم العثور على معرف النموذج. اختر نموذجًا من الدليل؛ لم يتم استبداله.",
-              )}
+              {isLoading
+                ? text(
+                    "正在获取模型详情，请稍候。",
+                    "Fetching model details. Please wait.",
+                    "جار جلب تفاصيل النموذج. يرجى الانتظار.",
+                  )
+                : hasLoadError
+                  ? text(
+                      "暂时无法获取模型详情，请重试。",
+                      "Model details are unavailable. Please retry.",
+                      "تفاصيل النموذج غير متاحة حاليًا. يرجى إعادة المحاولة.",
+                    )
+                  : text(
+                      "没有找到此模型标识，请返回目录选择可用模型。不会替换成其他模型。",
+                      "This model ID was not found. Return to the catalog to choose a model; no substitution was made.",
+                      "لم يتم العثور على معرف النموذج. اختر نموذجًا من الدليل؛ لم يتم استبداله.",
+                    )}
             </p>
             <code>{id}</code>
-            <Button asChild>
-              <Link to={returnTo}>
-                {text(
-                  "查看模型目录",
-                  "View model directory",
-                  "عرض دليل النماذج",
-                )}
-              </Link>
-            </Button>
+            {hasLoadError ? (
+              <Button onClick={() => void plazaDetail.refetch()}>
+                {text("重试", "Retry", "إعادة المحاولة")}
+              </Button>
+            ) : !isLoading ? (
+              <Button asChild>
+                <Link to={returnTo}>
+                  {text(
+                    "查看模型目录",
+                    "View model directory",
+                    "عرض دليل النماذج",
+                  )}
+                </Link>
+              </Button>
+            ) : null}
           </section>
         ) : (
           <>

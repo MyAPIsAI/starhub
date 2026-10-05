@@ -122,11 +122,15 @@ function buildQueryString(query: PlazaQuery): string {
 
 // --- Hooks ---
 
-export function usePlazaModels(query: PlazaQuery = {}) {
+export function usePlazaModels(query: PlazaQuery = {}, enabled = true) {
   return useQuery({
     queryKey: ["plaza-models", query],
+    enabled,
     queryFn: ({ signal }) =>
-      apiGet<PlazaListResponse>(`/api/plaza/models${buildQueryString(query)}`, signal),
+      apiGet<PlazaListResponse>(
+        `/api/plaza/models${buildQueryString(query)}`,
+        signal,
+      ),
   });
 }
 
@@ -161,8 +165,22 @@ function formatContextDisplay(length: number): string {
 
 const TIER_IDS: TierId[] = ["ultra", "pro", "standard", "lite"];
 
+export type PlazaDirectoryModel = DirectoryModel & { vendorId: string };
+
+/** Resolve older display-name URLs while preserving vendor identifiers. */
+export function resolvePlazaVendor(
+  value: string,
+  vendors: readonly PlazaVendorFacet[],
+): string {
+  return (
+    vendors.find((vendor) => vendor.value === value)?.value ??
+    vendors.find((vendor) => vendor.label === value)?.value ??
+    value
+  );
+}
+
 /** Convert a backend PlazaRow to the frontend DirectoryModel shape. */
-export function plazaToDirectoryModel(row: PlazaRow): DirectoryModel {
+export function plazaToDirectoryModel(row: PlazaRow): PlazaDirectoryModel {
   const tags = row.tags ?? [];
   const capabilities = tags.filter(
     (t): t is DirectoryModel["capabilities"][number] =>
@@ -183,6 +201,7 @@ export function plazaToDirectoryModel(row: PlazaRow): DirectoryModel {
     id: row.id,
     name: row.name,
     vendor: row.vendor_display || row.vendor,
+    vendorId: row.vendor,
     kind: "specified",
     capabilities: capabilities.length ? capabilities : ["text"],
     contextLength: row.context_length,
@@ -195,5 +214,5 @@ export function plazaToDirectoryModel(row: PlazaRow): DirectoryModel {
     },
     tierAvailability,
     online: row.is_available,
-  } as DirectoryModel;
+  };
 }
