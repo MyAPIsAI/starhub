@@ -5,30 +5,49 @@ import { getOfficialReference } from "../lib/official-reference";
 import { usePreferences } from "../lib/preferences";
 import { describeDirectoryRate } from "./directory-price";
 import "./catalog-price-summary.css";
+import {
+  describePlazaPrice,
+  plazaAmounts,
+  plazaCatalogOffer,
+  plazaOfficialReference,
+  type PlazaQuote,
+} from "../lib/plaza-pricing";
 
 /** Browse-level prices; sources, conditions and estimates belong to model detail. */
 export function CatalogPriceSummary({
   model,
   config,
   publicPrice,
+  plazaQuote,
 }: {
   model: DirectoryModel;
   config: PricingCatalogConfig;
-  publicPrice: PublicCatalogPrice;
+  publicPrice?: PublicCatalogPrice;
+  plazaQuote?: PlazaQuote;
 }) {
   const lang = usePreferences((state) => state.language);
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
-  const reference =
-    model.kind === "smart" ? null : getOfficialReference(model.id, config);
-  const rate =
-    publicPrice.status === "ready" ? publicPrice.price?.rates[0] : undefined;
-  const info = rate ? describeDirectoryRate(rate, lang) : null;
+  const offer = plazaQuote ? plazaCatalogOffer(plazaQuote) : publicPrice!;
+  const reference = plazaQuote
+    ? plazaOfficialReference(plazaQuote.model.pricing)
+    : model.kind === "smart"
+      ? null
+      : getOfficialReference(model.id, config);
+  const rate = offer.status === "ready" ? offer.price?.rates[0] : undefined;
+  const info = plazaQuote
+    ? describePlazaPrice(plazaQuote.model.pricing, lang)
+    : rate
+      ? describeDirectoryRate(rate, lang)
+      : null;
+  const amounts = plazaQuote ? plazaAmounts(plazaQuote.model.pricing) : rate;
   const officialLabel =
     reference?.status === "legacy"
       ? text("历史参考", "Historical", "مرجع تاريخي")
       : text("官方参考", "Official", "مرجع رسمي");
-  const publicLabel = text("平台最低", "Platform from", "سعر المنصة من");
+  const publicLabel = plazaQuote
+    ? text("平台报价", "Platform price", "سعر المنصة")
+    : text("平台最低", "Platform from", "سعر المنصة من");
   const tokenUnit = text(
     "美元 / 百万词元",
     "USD / million tokens",
@@ -48,9 +67,9 @@ export function CatalogPriceSummary({
       "لا يوجد مورد عام متاح",
     ),
     "quote-error": text(
-      "暂无法确定最低价",
-      "Minimum unavailable",
-      "تعذر تحديد أقل سعر",
+      plazaQuote ? "报价暂不可用" : "暂无法确定最低价",
+      plazaQuote ? "Quote unavailable" : "Minimum unavailable",
+      plazaQuote ? "السعر غير متاح" : "تعذر تحديد أقل سعر",
     ),
     ready: "",
   };
@@ -63,7 +82,9 @@ export function CatalogPriceSummary({
       request: text("美元 / 次", "USD / request", "دولار / طلب"),
     })[unit];
   const tokenComparison =
-    rate?.rule.mode === "tokens" &&
+    (plazaQuote
+      ? plazaQuote.model.pricing.mode === "per_token"
+      : rate?.rule.mode === "tokens") &&
     (!reference || reference.rate.mode === "tokens");
   const officialTokens =
     reference?.rate.mode === "tokens" ? reference.rate.pricing : null;
@@ -73,27 +94,30 @@ export function CatalogPriceSummary({
       rate.rule.conditionRates?.length ||
       Object.keys(rate.attributes ?? {}).length,
     );
-  const platformValue =
-    rate?.rule.mode === "expression"
+  const platformValue = plazaQuote
+    ? info?.value
+    : rate?.rule.mode === "expression"
       ? text("按用量计价", "Usage-based pricing", "حسب الاستخدام")
       : specificationPrice
         ? text("按规格计价", "Specification pricing", "حسب المواصفات")
         : (info?.value ??
           text("查看计价详情", "See pricing details", "عرض تفاصيل التسعير"));
   const showPlatformAmount =
-    rate?.rule.mode !== "expression" && !specificationPrice;
+    (plazaQuote
+      ? plazaQuote.model.pricing.mode !== "tiered"
+      : rate?.rule.mode !== "expression") && !specificationPrice;
 
   return (
     <div
       className="catalog-model-price catalog-price-summary"
-      data-public-group={publicPrice.groupId ?? ""}
-      data-public-status={publicPrice.status}
+      data-public-group={plazaQuote?.group ?? offer.groupId ?? ""}
+      data-public-status={offer.status}
     >
-      {publicPrice.status !== "ready" ? (
+      {offer.status !== "ready" ? (
         <div className="catalog-price-summary-message" data-price-kind="public">
           <span className="catalog-price-summary-label">{publicLabel}</span>
           <span className="catalog-price-summary-value">
-            {statusLabels[publicPrice.status]}
+            {statusLabels[offer.status]}
           </span>
         </div>
       ) : model.kind === "smart" ? (
@@ -140,7 +164,7 @@ export function CatalogPriceSummary({
                   </bdi>
                 </td>
                 <td data-price-kind="public">
-                  <bdi dir="ltr">{amount(rate.input)}</bdi>
+                  <bdi dir="ltr">{amount(amounts?.input)}</bdi>
                 </td>
               </tr>
               <tr>
@@ -151,7 +175,7 @@ export function CatalogPriceSummary({
                   </bdi>
                 </td>
                 <td data-price-kind="public">
-                  <bdi dir="ltr">{amount(rate.output)}</bdi>
+                  <bdi dir="ltr">{amount(amounts?.output)}</bdi>
                 </td>
               </tr>
             </tbody>

@@ -25,7 +25,7 @@ import { useModelPricing } from "../../lib/model-pricing";
 import { catalogVendor } from "../../lib/catalog-browser";
 import { CatalogPriceSummary } from "../../components/catalog-price-summary";
 import { ModelIdCopy } from "../../components/model-id-copy";
-import { getPublicCatalogPrice } from "../../lib/catalog-public-pricing";
+import { type PlazaQuote } from "../../lib/plaza-pricing";
 import {
   usePlazaModels,
   usePlazaFilters,
@@ -227,9 +227,9 @@ export default function ModelSquare() {
     ) : !model.protocols.length ? (
       <span className="access-kind catalog-specific-label">
         {text(
-          "计费样例 · 不可接入",
-          "Billing sample · no API",
-          "مثال فوترة · دون واجهة",
+          "客户端接入未提供",
+          "Client connection unavailable",
+          "اتصال العميل غير متوفر",
         )}
       </span>
     ) : null;
@@ -240,17 +240,16 @@ export default function ModelSquare() {
       ))}
     </div>
   );
-  const quotedAt = new Date().toISOString();
+  const quoteGroup = plazaQuery.data?.group ?? plazaFilters.data?.group ?? "";
   const entries = models.map((model) => ({
     model,
-    price: getPublicCatalogPrice(model, pricing, quotedAt),
+    quote: { model, group: quoteGroup } satisfies PlazaQuote,
   }));
-  const renderPrice = ({ model, price }: (typeof entries)[number]) => (
-    <CatalogPriceSummary model={model} config={pricing} publicPrice={price} />
+  const renderPrice = ({ model, quote }: (typeof entries)[number]) => (
+    <CatalogPriceSummary model={model} config={pricing} plazaQuote={quote} />
   );
-  const renderAction = ({ model, price }: (typeof entries)[number]) => {
-    const canConnect =
-      model.online && model.protocols.length > 0 && price.status === "ready";
+  const renderAction = ({ model }: (typeof entries)[number]) => {
+    const canConnect = model.online && model.protocols.length > 0;
     return (
       <Link
         className="catalog-try"
@@ -262,9 +261,7 @@ export default function ModelSquare() {
       >
         {canConnect
           ? text("接入此模型", "Connect model", "توصيل النموذج")
-          : !model.protocols.length
-            ? text("查看计费样例", "View billing sample", "عرض مثال الفوترة")
-            : text("查看状态", "View status", "عرض الحالة")}
+          : text("查看状态", "View status", "عرض الحالة")}
         <ArrowUpRight size={13} />
       </Link>
     );
@@ -400,9 +397,9 @@ export default function ModelSquare() {
           <Info size={14} aria-hidden="true" />
           <p>
             {text(
-              "平台最低价为当前通用分组的模拟报价，实际按密钥分组计费。官方参考价的适用条件见详情。",
-              "Platform minima are current public-group demo rates; billing follows your key group. Official rate conditions are in model details.",
-              "أقل أسعار المنصة تجريبية للمجموعات العامة حاليًا؛ الفوترة حسب مجموعة مفتاحك. شروط السعر الرسمي في التفاصيل.",
+              `平台报价来自后端当前分组 ${quoteGroup || "—"}，已包含分组倍率；实际按密钥分组计费。官方参考价的适用条件见详情。`,
+              `Platform quotes are for backend group ${quoteGroup || "—"}, with its multiplier included; billing follows your key group. See details for official reference conditions.`,
+              `أسعار الخادم للمجموعة ${quoteGroup || "—"} شاملة المعامل؛ الفوترة حسب مجموعة المفتاح. راجع شروط المرجع الرسمي في التفاصيل.`,
             )}
           </p>
         </div>

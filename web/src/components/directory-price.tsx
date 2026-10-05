@@ -2,6 +2,7 @@ import type { DirectoryRate } from "../config/model-directory";
 import type { Language } from "../config/placeholders";
 import { multiplyDecimalPrice } from "../config/models";
 import { formatMoney } from "../lib/money";
+import { describePlazaPrice } from "../lib/plaza-pricing";
 import "./directory-price.css";
 
 export function describeDirectoryRate(rate: DirectoryRate, lang: Language) {
@@ -130,47 +131,62 @@ export function describeDirectoryRate(rate: DirectoryRate, lang: Language) {
 
 export function DirectoryPrice({
   rate,
+  plazaPricing,
   lang,
   compact = false,
 }: {
-  rate: DirectoryRate;
+  rate?: DirectoryRate;
+  plazaPricing?: import("../lib/api/plaza").PlazaPricing;
   lang: Language;
   compact?: boolean;
 }) {
-  const info = describeDirectoryRate(rate, lang);
+  const info = plazaPricing
+    ? describePlazaPrice(plazaPricing, lang)
+    : describeDirectoryRate(rate!, lang);
   return (
-    <div className={`directory-price${rate.error ? " has-error" : ""}`}>
+    <div className={`directory-price${rate?.error ? " has-error" : ""}`}>
       <small>{info.mode}</small>
-      <strong dir={rate.quote ? "ltr" : undefined}>
+      <strong
+        dir={
+          (plazaPricing ? "hasAmount" in info && info.hasAmount : rate?.quote)
+            ? "ltr"
+            : undefined
+        }
+      >
         <bdi>{info.value}</bdi>
       </strong>
       <small>{info.unit}</small>
-      {!compact && (
-        <>
-          <small>
-            {info.assumption}{" "}
-            {lang === "zh"
-              ? "示例费用："
-              : lang === "ar"
-                ? "تكلفة المثال: "
-                : "Example cost: "}
-            {info.estimate}
-          </small>
-          {info.details && (
-            <small
-              className={
-                rate.rule.mode === "expression"
-                  ? "directory-price-expression"
-                  : ""
-              }
-            >
-              {info.details}
-            </small>
-          )}
-          {info.schedule && <small>{info.schedule}</small>}
-        </>
-      )}
-      {compact && rate.rule.mode === "expression" && (
+      {!compact &&
+        (plazaPricing ? (
+          <small>{info.details}</small>
+        ) : (
+          "assumption" in info && (
+            <>
+              <small>
+                {info.assumption}{" "}
+                {lang === "zh"
+                  ? "示例费用："
+                  : lang === "ar"
+                    ? "تكلفة المثال: "
+                    : "Example cost: "}
+                {info.estimate}
+              </small>
+              {info.details && (
+                <small
+                  className={
+                    rate?.rule.mode === "expression"
+                      ? "directory-price-expression"
+                      : ""
+                  }
+                >
+                  {info.details}
+                </small>
+              )}
+              {info.schedule && <small>{info.schedule}</small>}
+            </>
+          )
+        ))}
+      {compact && rate?.rule.mode === "expression" && "assumption" in info && (
         <small>{info.assumption}</small>
       )}
     </div>

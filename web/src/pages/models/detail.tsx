@@ -1,4 +1,3 @@
-import { visibleGroups } from "../../lib/platform-catalog";
 import { useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import {
@@ -10,13 +9,11 @@ import {
 } from "lucide-react";
 import { PublicHeader } from "../../components/product-shell";
 import { Button } from "../../components/ui/button";
-import { directoryPrices } from "../../config/model-directory";
-import { type TierId } from "../../config/placeholders";
-import { getPublicCatalogPrice } from "../../lib/catalog-public-pricing";
+import { type DirectoryRate } from "../../config/model-directory";
+import { plazaAmounts } from "../../lib/plaza-pricing";
 import { CatalogPriceComparison } from "../../components/catalog-price-comparison";
 import { ModelIdCopy } from "../../components/model-id-copy";
 import { DirectoryPrice } from "../../components/directory-price";
-import { serviceGroupLabel } from "../../lib/service-group-label";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../lib/preferences";
 import { useModelPricing } from "../../lib/model-pricing";
@@ -37,17 +34,7 @@ export default function ModelDetail() {
   const accountId = useProductPreview((s) => s.user.id);
   const keys = useProductPreview((s) => s.keys);
   const selectedKey = useProductPreview((s) => s.selectedKey);
-  const context = resolveCatalogPricingContext(
-    pricing,
-    accountId,
-    keys,
-    selectedKey,
-  );
-  const groups = visibleGroups(pricing, accountId ?? "");
-  const [selectedTier, setTier] = useState<TierId | null>(null);
-  const tier = groups.some((group) => group.id === selectedTier)
-    ? selectedTier
-    : context.tier;
+  const [selectedTier, setTier] = useState<string | null>(null);
   const [params] = useSearchParams();
   const from = params.get("from");
   // Only a relative marketplace path is a supported return destination.
@@ -55,12 +42,18 @@ export default function ModelDetail() {
     from && (from === "/models" || from.startsWith("/models?"))
       ? from
       : "/models";
-  const quotedAt = new Date().toISOString();
   const plazaDetail = usePlazaModel(id);
   const model =
     !plazaDetail.isError && plazaDetail.data?.model
       ? plazaToDirectoryModel(plazaDetail.data.model)
       : undefined;
+  const quoteGroup = plazaDetail.data?.group ?? "";
+  // Only the current backend group has a quote; never copy it to other groups.
+  const groups = model && quoteGroup ? [{ id: quoteGroup }] : [];
+  const tier = groups.some((group) => group.id === selectedTier)
+    ? selectedTier
+    : quoteGroup;
+  const amounts = model ? plazaAmounts(model.pricing) : undefined;
   const isLoading = plazaDetail.isPending;
   const hasLoadError =
     plazaDetail.isError &&
@@ -84,25 +77,22 @@ export default function ModelDetail() {
   const connectUrl = model
     ? `/console/connect?model=${encodeURIComponent(model.id)}${compatibleKey ? `&key=${encodeURIComponent(compatibleKey.id)}` : ""}`
     : "/models";
-  const price =
-    model && tier
-      ? directoryPrices(model, tier, pricing, quotedAt, accountId ?? "")
-      : null;
+  const price = model
+    ? {
+        available: model.online,
+        rates: [] as DirectoryRate[],
+        canEstimate: false,
+        minAmountNano: undefined,
+        maxAmountNano: undefined,
+      }
+    : null;
   const supportsClient = Boolean(model?.protocols.length);
-  const canConnect = Boolean(
-    model?.online && supportsClient && price?.available,
-  );
+  const canConnect = Boolean(model?.online && supportsClient);
   const tierPrices =
     model && model.kind !== "smart"
       ? groups.map((item) => ({
           tier: item,
-          price: directoryPrices(
-            model,
-            item.id,
-            pricing,
-            quotedAt,
-            accountId ?? "",
-          ),
+          price,
         }))
       : [];
   return (
@@ -234,18 +224,18 @@ export default function ModelDetail() {
             {!model.online && (
               <div className="access-notice access-error">
                 {text(
-                  "此模型已下架，暂不可接入；历史调用和账单继续保留。",
-                  "This model is retired and unavailable. Historical requests and bills are retained.",
-                  "هذا النموذج متوقف. تبقى الطلبات والفواتير السابقة محفوظة.",
+                  "当前分组没有启用的渠道覆盖此模型，暂不可接入；历史调用和账单继续保留。",
+                  "No enabled channel serves this model in the current group. Historical requests and bills are retained.",
+                  "لا توجد قناة مفعلة لهذا النموذج في المجموعة الحالية. تبقى الطلبات والفواتير السابقة محفوظة.",
                 )}
               </div>
             )}
             {!supportsClient && (
               <div className="access-notice">
                 {text(
-                  "此条目仅演示媒体计费规则，未提供客户端接口，也不生成图片或视频。系统管理员可在工作台 → 系统设置 → 标准模型中模拟结算。",
-                  "This entry demonstrates media billing only, with no client API or media generation. System administrators can simulate settlement under Console → System settings → Standard models.",
-                  "يعرض هذا الإدخال فوترة الوسائط فقط دون واجهة عميل أو إنشاء وسائط. يمكن للمسؤول محاكاة التسوية في لوحة التحكم ← إعدادات النظام ← النماذج القياسية.",
+                  "当前分组尚未提供可用的客户端协议，请检查渠道配置。",
+                  "No supported client protocol is available in this group. Check channel configuration.",
+                  "لا يوجد بروتوكول عميل مدعوم في المجموعة الحالية. تحقق من إعدادات القناة.",
                 )}
               </div>
             )}
@@ -274,9 +264,9 @@ export default function ModelDetail() {
                   {supportsClient
                     ? model.protocols.join(" / ")
                     : text(
-                        "未提供 · 仅计费演示",
-                        "Not provided · billing demo only",
-                        "غير متوفرة · عرض فوترة فقط",
+                        "当前分组未提供",
+                        "Unavailable in this group",
+                        "غير متوفرة في المجموعة الحالية",
                       )}
                 </strong>
               </div>
@@ -332,22 +322,22 @@ export default function ModelDetail() {
             <section className="access-panel access-public-comparison">
               <h2>
                 {text(
-                  "官方参考与平台公开报价",
-                  "Official reference and public platform prices",
-                  "المرجع الرسمي وأسعار المنصة العامة",
+                  "官方参考与平台报价",
+                  "Official reference and platform prices",
+                  "المرجع الرسمي وأسعار المنصة",
                 )}
               </h2>
               <p className="access-muted">
                 {text(
-                  "公开价只比较有可用资源的通用分组，平台价格为模拟；当前密钥的实际售价见下方。官价按所列条件参考，不自动改变平台计费。",
-                  "Public offers compare available resources in common groups. Platform rates are simulated; see your key's effective rates below. Official references have their own conditions and never change billing.",
-                  "تقارن العروض العامة موارد المجموعات العامة. أسعار المنصة تجريبية؛ أسعار مفتاحك الفعلية أدناه. للمراجع الرسمية شروطها ولا تغيّر الفوترة.",
+                  "平台报价来自后端当前分组，已包含分组倍率，实际按密钥分组计费。官方参考由平台维护，不自动改变平台计费。",
+                  "Backend quotes include the current group multiplier; billing follows your key group. Official references are maintained by the platform and do not change billing.",
+                  "أسعار الخادم شاملة معامل المجموعة الحالية؛ الفوترة حسب مجموعة المفتاح. يدير المسؤول المرجع الرسمي دون تغيير الفوترة.",
                 )}
               </p>
               <CatalogPriceComparison
                 model={model}
                 config={pricing}
-                publicPrice={getPublicCatalogPrice(model, pricing, quotedAt)}
+                plazaQuote={{ model, group: quoteGroup }}
                 detailed
               />
             </section>
@@ -365,7 +355,7 @@ export default function ModelDetail() {
                   <select
                     value={tier ?? ""}
                     disabled={!groups.length}
-                    onChange={(e) => setTier(e.target.value as TierId)}
+                    onChange={(e) => setTier(e.target.value)}
                   >
                     {!groups.length && (
                       <option value="">
@@ -377,12 +367,8 @@ export default function ModelDetail() {
                       </option>
                     )}
                     {groups.map((item) => (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                        disabled={!pricing.groups[item.id].enabled}
-                      >
-                        {serviceGroupLabel(item.id, lang, pricing)}
+                      <option key={item.id} value={item.id}>
+                        {item.id}
                       </option>
                     ))}
                   </select>
@@ -390,9 +376,9 @@ export default function ModelDetail() {
               </div>
               <p className="access-muted">
                 {text(
-                  "模拟价格 · 按各模型的计价方式及单位展示 · 已计入分组和当前时段系数",
-                  "Sample prices · Each model uses its configured units · group and current time multipliers included",
-                  "أسعار تجريبية بوحدات كل نموذج مع معاملات المجموعة والوقت الحالي",
+                  "后端报价 · 按模型计价方式及单位展示 · 已计入当前分组倍率",
+                  "Backend quotes · Configured billing units · Current group multiplier included",
+                  "أسعار الخادم حسب وحدات النموذج وشاملة معامل المجموعة الحالية",
                 )}
               </p>
               {!price?.available ? (
@@ -439,24 +425,26 @@ export default function ModelDetail() {
                   )}
                   {model.kind === "specified" ? (
                     <div className="directory-detail-single">
-                      <DirectoryPrice rate={price.rates[0]} lang={lang} />
-                      {price.rates[0].rule.mode === "tokens" &&
-                        price.rates[0].quote && (
-                          <p className="access-muted">
-                            {text(
-                              "缓存读取 / 写入（美元 / 百万词元）：",
-                              "Cache read / write (USD / million tokens): ",
-                              "قراءة / كتابة التخزين (دولار / مليون رمز): ",
-                            )}
-                            {price.rates[0].cacheRead !== undefined
-                              ? `$${price.rates[0].cacheRead}`
-                              : "—"}{" "}
-                            /{" "}
-                            {price.rates[0].cacheWrite !== undefined
-                              ? `$${price.rates[0].cacheWrite}`
-                              : "—"}
-                          </p>
-                        )}
+                      <DirectoryPrice
+                        plazaPricing={model.pricing}
+                        lang={lang}
+                      />
+                      {model.pricing.mode === "per_token" && (
+                        <p className="access-muted">
+                          {text(
+                            "缓存读取 / 写入（美元 / 百万词元）：",
+                            "Cache read / write (USD / million tokens): ",
+                            "قراءة / كتابة التخزين (دولار / مليون رمز): ",
+                          )}
+                          {amounts?.cacheRead !== undefined
+                            ? `$${amounts.cacheRead}`
+                            : "—"}{" "}
+                          /{" "}
+                          {amounts?.cacheWrite !== undefined
+                            ? `$${amounts.cacheWrite}`
+                            : "—"}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -545,9 +533,9 @@ export default function ModelDetail() {
                   )}
                   <p className="access-muted">
                     {text(
-                      `分组倍率 ${pricing.multipliers[tier ?? ""]}× 已包含在上述售价中，不重复计算。未配置缓存价格显示 —，不代表免费。历史账单保留请求当时费率。`,
-                      `Group multiplier ${pricing.multipliers[tier ?? ""]}× is already included. An unconfigured cache rate is —, not free. Historical bills retain their original rates.`,
-                      `معامل المجموعة ${pricing.multipliers[tier ?? ""]}× محسوب بالفعل. — لا تعني المجانية. تحتفظ الفواتير السابقة بالأسعار الأصلية.`,
+                      `分组倍率 ${model.pricing.group_ratio}× 已包含在上述售价中，不重复计算。未配置缓存价格显示 —，不代表免费。历史账单保留请求当时费率。`,
+                      `Group multiplier ${model.pricing.group_ratio}× is already included. An unconfigured cache rate is —, not free. Historical bills retain their original rates.`,
+                      `معامل المجموعة ${model.pricing.group_ratio}× محسوب بالفعل. — لا تعني المجانية. تحتفظ الفواتير السابقة بالأسعار الأصلية.`,
                     )}
                   </p>
                 </>
@@ -556,9 +544,9 @@ export default function ModelDetail() {
                 <details className="access-details">
                   <summary>
                     {text(
-                      "查看全部分组价格",
-                      "All service group rates",
-                      "أسعار جميع المجموعات",
+                      "查看当前分组价格",
+                      "Current group rates",
+                      "أسعار المجموعة الحالية",
                     )}
                   </summary>
                   <div
@@ -589,13 +577,11 @@ export default function ModelDetail() {
                         {tierPrices.map(
                           ({ tier: group, price: groupPrice }) => (
                             <tr key={group.id}>
+                              <td>{group.id}</td>
                               <td>
-                                {serviceGroupLabel(group.id, lang, pricing)}
-                              </td>
-                              <td>
-                                {groupPrice.available && groupPrice.rates[0] ? (
+                                {groupPrice?.available ? (
                                   <DirectoryPrice
-                                    rate={groupPrice.rates[0]}
+                                    plazaPricing={model.pricing}
                                     lang={lang}
                                     compact
                                   />
@@ -603,7 +589,7 @@ export default function ModelDetail() {
                                   text("不可用", "Unavailable", "غير متاح")
                                 )}
                               </td>
-                              <td>{pricing.multipliers[group.id]}×</td>
+                              <td>{model.pricing.group_ratio}×</td>
                             </tr>
                           ),
                         )}

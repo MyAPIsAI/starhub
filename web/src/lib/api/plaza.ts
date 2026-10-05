@@ -7,6 +7,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "./http";
+import { useProductPreview } from "../product-preview";
 import type { DirectoryModel } from "../../config/model-directory";
 import type { TierId } from "../../config/placeholders";
 
@@ -38,6 +39,7 @@ export interface PlazaRow {
   tags: string[];
   context_length: number;
   max_output: number;
+  protocols: string[];
   pricing: PlazaPricing;
   available_groups: string[];
   is_available: boolean;
@@ -80,6 +82,7 @@ export interface PlazaFiltersResponse {
 
 export interface PlazaDetailResponse {
   model: PlazaRow;
+  group: string;
   related: {
     same_vendor: PlazaRow[];
     same_price: PlazaRow[];
@@ -123,8 +126,9 @@ function buildQueryString(query: PlazaQuery): string {
 // --- Hooks ---
 
 export function usePlazaModels(query: PlazaQuery = {}, enabled = true) {
+  const identity = usePlazaIdentity();
   return useQuery({
-    queryKey: ["plaza-models", query],
+    queryKey: ["plaza-models", identity, query],
     enabled,
     queryFn: ({ signal }) =>
       apiGet<PlazaListResponse>(
@@ -135,8 +139,9 @@ export function usePlazaModels(query: PlazaQuery = {}, enabled = true) {
 }
 
 export function usePlazaModel(id: string | undefined) {
+  const identity = usePlazaIdentity();
   return useQuery({
-    queryKey: ["plaza-model", id],
+    queryKey: ["plaza-model", identity, id],
     enabled: Boolean(id),
     queryFn: ({ signal }) =>
       apiGet<PlazaDetailResponse>(
@@ -147,11 +152,19 @@ export function usePlazaModel(id: string | undefined) {
 }
 
 export function usePlazaFilters() {
+  const identity = usePlazaIdentity();
   return useQuery({
-    queryKey: ["plaza-filters"],
+    queryKey: ["plaza-filters", identity],
     queryFn: ({ signal }) =>
       apiGet<PlazaFiltersResponse>("/api/plaza/filters", signal),
   });
+}
+
+// Prices and supported protocols are scoped to the browsing account's group.
+function usePlazaIdentity() {
+  return useProductPreview((state) =>
+    state.user.isLoggedIn ? state.user.id : "anonymous",
+  );
 }
 
 // --- Adapter: PlazaRow -> DirectoryModel ---
@@ -165,7 +178,11 @@ function formatContextDisplay(length: number): string {
 
 const TIER_IDS: TierId[] = ["ultra", "pro", "standard", "lite"];
 
-export type PlazaDirectoryModel = DirectoryModel & { vendorId: string };
+export type PlazaDirectoryModel = DirectoryModel & {
+  vendorId: string;
+  pricing: PlazaPricing;
+  availableGroups: string[];
+};
 
 /** Resolve older display-name URLs while preserving vendor identifiers. */
 export function resolvePlazaVendor(
@@ -206,7 +223,14 @@ export function plazaToDirectoryModel(row: PlazaRow): PlazaDirectoryModel {
     capabilities: capabilities.length ? capabilities : ["text"],
     contextLength: row.context_length,
     contextDisplay: formatContextDisplay(row.context_length),
-    protocols: [],
+    protocols: (row.protocols ?? []).filter(
+      (protocol): protocol is DirectoryModel["protocols"][number] =>
+        protocol === "OpenAI" ||
+        protocol === "Anthropic" ||
+        protocol === "Gemini",
+    ),
+    pricing: row.pricing,
+    availableGroups: row.available_groups,
     description: {
       en: row.description || "",
       zh: row.description || "",

@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -140,6 +141,7 @@ type ModelCoverage struct {
 	Model        string
 	Groups       []string
 	ChannelCount int
+	ChannelTypes map[string][]int
 }
 
 // ListModelCoverage projects the ability table into one row per model.
@@ -149,13 +151,14 @@ type ModelCoverage struct {
 // instead of being advertised as purchasable.
 func ListModelCoverage() (map[string]*ModelCoverage, error) {
 	type row struct {
-		Model      string
-		Group      string
-		ChannelCnt int64
+		Model        string
+		Group        string
+		ChannelTypes string
+		ChannelCnt   int64
 	}
 	var rows []row
 	err := DB.Table("abilities AS a").
-		Select("a.model AS model, a.\"group\" AS \"group\", COUNT(DISTINCT a.channel_id) AS channel_cnt").
+		Select("a.model AS model, a.\"group\" AS \"group\", GROUP_CONCAT(DISTINCT c.type) AS channel_types, COUNT(DISTINCT a.channel_id) AS channel_cnt").
 		Joins("JOIN channels AS c ON c.id = a.channel_id").
 		Where("a.enabled = ? AND c.status = ?", true, common.ChannelStatusEnabled).
 		Group("a.model, a.\"group\"").
@@ -168,10 +171,15 @@ func ListModelCoverage() (map[string]*ModelCoverage, error) {
 	for _, r := range rows {
 		cov, ok := out[r.Model]
 		if !ok {
-			cov = &ModelCoverage{Model: r.Model, Groups: []string{}}
+			cov = &ModelCoverage{Model: r.Model, Groups: []string{}, ChannelTypes: map[string][]int{}}
 			out[r.Model] = cov
 		}
 		cov.Groups = append(cov.Groups, r.Group)
+		for _, value := range SplitList(r.ChannelTypes) {
+			if channelType, err := strconv.Atoi(value); err == nil {
+				cov.ChannelTypes[r.Group] = append(cov.ChannelTypes[r.Group], channelType)
+			}
+		}
 		// The per-group counts are distinct within a group, so summing them
 		// would double-count a channel serving several groups. Track the
 		// maximum instead: it is the number of channels reachable in the

@@ -11,31 +11,46 @@ import { formatMoney } from "../lib/money";
 import { describeDirectoryRate } from "./directory-price";
 import { ExternalLink } from "lucide-react";
 import "./catalog-price-comparison.css";
+import {
+  describePlazaPrice,
+  plazaAmounts,
+  plazaCatalogOffer,
+  plazaOfficialReference,
+  type PlazaQuote,
+} from "../lib/plaza-pricing";
 
 export function CatalogPriceComparison({
   model,
   config,
   publicPrice,
+  plazaQuote,
   detailed = false,
 }: {
   model: DirectoryModel;
   config: PricingCatalogConfig;
   publicPrice?: PublicCatalogPrice;
+  plazaQuote?: PlazaQuote;
   detailed?: boolean;
 }) {
   const lang = usePreferences((s) => s.language);
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
-  const offer = publicPrice ?? getPublicCatalogPrice(model, config);
-  const reference =
-    model.kind === "smart" ? null : getOfficialReference(model.id, config);
+  const offer = plazaQuote
+    ? plazaCatalogOffer(plazaQuote)
+    : (publicPrice ?? getPublicCatalogPrice(model, config));
+  const reference = plazaQuote
+    ? plazaOfficialReference(plazaQuote.model.pricing)
+    : model.kind === "smart"
+      ? null
+      : getOfficialReference(model.id, config);
   const sample = model.id.startsWith("veyra-demo-");
   const officialLabel =
     reference?.status === "legacy"
       ? text("历史官方参考", "Historical official", "مرجع رسمي تاريخي")
       : text("官方参考价", "Official reference", "المرجع الرسمي");
-  const publicLabel =
-    offer.mode === "expression"
+  const publicLabel = plazaQuote
+    ? text("当前分组报价", "Current group price", "سعر المجموعة الحالية")
+    : offer.mode === "expression"
       ? text("公开最低示例费用", "Lowest public example", "أقل تكلفة مثال عامة")
       : model.kind === "smart"
         ? text("公开路由估算", "Public routing estimate", "تقدير التوجيه العام")
@@ -60,20 +75,28 @@ export function CatalogPriceComparison({
       "لا يوجد مورد عام متاح",
     ),
     "quote-error": text(
-      "暂无法确定最低价",
-      "Minimum unavailable",
-      "تعذر تحديد أقل سعر",
+      plazaQuote ? "报价暂不可用" : "暂无法确定最低价",
+      plazaQuote ? "Quote unavailable" : "Minimum unavailable",
+      plazaQuote ? "السعر غير متاح" : "تعذر تحديد أقل سعر",
     ),
     ready: "",
   };
   const rate = offer.status === "ready" ? offer.price?.rates[0] : undefined;
-  const info = rate ? describeDirectoryRate(rate, lang) : null;
+  const info = plazaQuote
+    ? describePlazaPrice(plazaQuote.model.pricing, lang)
+    : rate
+      ? describeDirectoryRate(rate, lang)
+      : null;
+  const amounts = plazaQuote ? plazaAmounts(plazaQuote.model.pricing) : rate;
+  const tokenRate = plazaQuote
+    ? plazaQuote.model.pricing.mode === "per_token"
+    : rate?.rule.mode === "tokens";
   const referenceTokens =
     reference?.rate.mode === "tokens" ? reference.rate.pricing : null;
   const tokens =
     model.kind !== "smart" &&
     (!reference || reference.rate.mode === "tokens") &&
-    (rate?.rule.mode === "tokens" || (!rate && referenceTokens));
+    (tokenRate || (!plazaQuote && !rate && referenceTokens));
   const smartTokenExample = offer.price?.rates.every(
     (candidate) =>
       candidate.rule.mode === "tokens" &&
@@ -88,32 +111,31 @@ export function CatalogPriceComparison({
     {
       label: text("输入", "Input", "إدخال"),
       official: referenceTokens?.input_per_million_usd,
-      platform: rate?.rule.mode === "tokens" ? rate.input : undefined,
+      platform: tokenRate ? amounts?.input : undefined,
     },
     {
       label: text("输出", "Output", "إخراج"),
       official: referenceTokens?.output_per_million_usd,
-      platform: rate?.rule.mode === "tokens" ? rate.output : undefined,
+      platform: tokenRate ? amounts?.output : undefined,
     },
     ...(referenceTokens?.cache_read_per_million_usd !== undefined ||
-    (rate?.rule.mode === "tokens" && rate.cacheRead !== undefined)
+    (tokenRate && amounts?.cacheRead !== undefined)
       ? [
           {
             label: text("缓存读", "Cache read", "قراءة الذاكرة"),
             official: referenceTokens?.cache_read_per_million_usd,
-            platform: rate?.rule.mode === "tokens" ? rate.cacheRead : undefined,
+            platform: tokenRate ? amounts?.cacheRead : undefined,
           },
         ]
       : []),
     ...(detailed &&
     (referenceTokens?.cache_write_per_million_usd !== undefined ||
-      (rate?.rule.mode === "tokens" && rate.cacheWrite !== undefined))
+      (tokenRate && amounts?.cacheWrite !== undefined))
       ? [
           {
             label: text("缓存写", "Cache write", "كتابة الذاكرة"),
             official: referenceTokens?.cache_write_per_million_usd,
-            platform:
-              rate?.rule.mode === "tokens" ? rate.cacheWrite : undefined,
+            platform: tokenRate ? amounts?.cacheWrite : undefined,
           },
         ]
       : []),
@@ -151,7 +173,7 @@ export function CatalogPriceComparison({
   return (
     <div
       className="catalog-model-price price-comparison"
-      data-public-group={offer.groupId ?? ""}
+      data-public-group={plazaQuote?.group ?? offer.groupId ?? ""}
       data-public-status={offer.status}
     >
       {model.kind === "smart" ? (
@@ -256,7 +278,7 @@ export function CatalogPriceComparison({
       <div className="price-comparison-meta">
         {model.kind !== "smart" && (
           <div className="price-official-meta">
-            {reference ? (
+            {reference && "sourceUrl" in reference ? (
               <>
                 <a href={reference.sourceUrl} target="_blank" rel="noreferrer">
                   {text("官方来源", "Official source", "المصدر الرسمي")}
@@ -281,22 +303,35 @@ export function CatalogPriceComparison({
             ) : (
               <span>
                 {text("官方参考：", "Official reference: ", "المرجع الرسمي: ")}
-                {noOfficial}
+                {plazaQuote && reference
+                  ? text(
+                      "管理员维护，适用条件请向平台确认。",
+                      "Maintained by the platform; confirm applicable conditions.",
+                      "يديره المسؤول؛ تحقق من الشروط مع المنصة.",
+                    )
+                  : noOfficial}
               </span>
             )}
           </div>
         )}
-        {offer.groupId && (
+        {(plazaQuote?.group || offer.groupId) && (
           <p className="price-public-source">
-            {serviceGroupLabel(offer.groupId, lang, config)} ·{" "}
+            {plazaQuote?.group ??
+              serviceGroupLabel(offer.groupId!, lang, config)}{" "}
+            ·{" "}
             {text(
-              "当前时段 · 模拟售价",
-              "Current window · demo rate",
-              "الفترة الحالية · سعر تجريبي",
+              plazaQuote ? "后端报价 · 已包含分组倍率" : "当前时段 · 模拟售价",
+              plazaQuote
+                ? "Backend quote · group multiplier included"
+                : "Current window · demo rate",
+              plazaQuote
+                ? "سعر الخادم شامل معامل المجموعة"
+                : "الفترة الحالية · سعر تجريبي",
             )}
           </p>
         )}
         {reference &&
+          "scope" in reference &&
           (detailed ? (
             <p className="price-reference-scope">{reference.scope[lang]}</p>
           ) : (
@@ -345,12 +380,17 @@ export function CatalogPriceComparison({
             )}
           </p>
         )}
-        {info && rate?.rule.mode !== "tokens" && model.kind !== "smart" && (
-          <p className="price-example-scope">
-            {info.assumption} {rate?.rule.mode === "unit" ? info.details : ""}
-          </p>
+        {info &&
+          "assumption" in info &&
+          rate?.rule.mode !== "tokens" &&
+          model.kind !== "smart" && (
+            <p className="price-example-scope">
+              {info.assumption} {rate?.rule.mode === "unit" ? info.details : ""}
+            </p>
+          )}
+        {info && "schedule" in info && info.schedule && (
+          <p className="price-time-scope">{info.schedule}</p>
         )}
-        {info?.schedule && <p className="price-time-scope">{info.schedule}</p>}
         {model.kind === "smart" && offer.groupId && (
           <p className="price-reference-scope">
             {text(
@@ -377,9 +417,15 @@ export function CatalogPriceComparison({
         {tokens && detailed && (
           <p className="price-reference-scope">
             {text(
-              "— 表示未配置该项报价，不代表免费。平台同一列取自同一公开分组，倍率仅计算一次；不自动切换当前密钥分组。",
-              "— means no configured rate, not free. Platform rates come from one public group, with its multiplier applied once; your key group is not changed.",
-              "— تعني عدم وجود سعر وليست مجانية. أسعار المنصة من مجموعة عامة واحدة ومعامل واحد؛ لا تتغير مجموعة مفتاحك.",
+              plazaQuote
+                ? "— 表示未配置该项报价，不代表免费。平台价格取自后端当前分组，已包含分组倍率；不自动切换当前密钥分组。"
+                : "— 表示未配置该项报价，不代表免费。平台同一列取自同一公开分组，倍率仅计算一次；不自动切换当前密钥分组。",
+              plazaQuote
+                ? "— means no configured rate, not free. Backend prices include the current group multiplier; your key group is not changed."
+                : "— means no configured rate, not free. Platform rates come from one public group, with its multiplier applied once; your key group is not changed.",
+              plazaQuote
+                ? "— تعني عدم وجود سعر وليست مجانية. أسعار الخادم شاملة معامل المجموعة الحالية؛ لا تتغير مجموعة مفتاحك."
+                : "— تعني عدم وجود سعر وليست مجانية. أسعار المنصة من مجموعة عامة واحدة ومعامل واحد؛ لا تتغير مجموعة مفتاحك.",
             )}
           </p>
         )}

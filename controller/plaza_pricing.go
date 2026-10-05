@@ -7,6 +7,8 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/relay"
+	"starhub/relay/channel"
 	"starhub/setting"
 )
 
@@ -125,14 +127,15 @@ func resolvePlazaPrice(modelName, group, userGroup string) priceModel {
 // plazaRow is one model as the plaza API presents it. Prices are always USD;
 // currency conversion is a presentation concern and belongs to the client.
 type plazaRow struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Vendor        string  `json:"vendor"`
-	VendorDisplay string  `json:"vendor_display"`
-	Description   string  `json:"description"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Vendor        string   `json:"vendor"`
+	VendorDisplay string   `json:"vendor_display"`
+	Description   string   `json:"description"`
 	Tags          []string `json:"tags"`
-	ContextLength int64   `json:"context_length"`
-	MaxOutput     int64   `json:"max_output"`
+	ContextLength int64    `json:"context_length"`
+	MaxOutput     int64    `json:"max_output"`
+	Protocols     []string `json:"protocols"`
 
 	Pricing plazaPricingJSON `json:"pricing"`
 
@@ -148,26 +151,26 @@ type plazaRow struct {
 	Score   *float64 `json:"score"`
 	Calls7D *int64   `json:"calls_7d"`
 
-	ChannelCount int    `json:"channel_count"`
-	CreatedAt    int64  `json:"created_at"`
-	SortWeight   int64  `json:"sort_weight"`
+	ChannelCount int   `json:"channel_count"`
+	CreatedAt    int64 `json:"created_at"`
+	SortWeight   int64 `json:"sort_weight"`
 }
 
 type plazaPricingJSON struct {
-	Mode                  string   `json:"mode"`
-	InputPerM             *float64 `json:"input_per_m"`
-	OutputPerM            *float64 `json:"output_per_m"`
-	CacheReadPerM         *float64 `json:"cache_read_per_m"`
-	CacheWritePerM        *float64 `json:"cache_write_per_m"`
-	PerRequest            *float64 `json:"per_request"`
-	OfficialInputPerM     *float64 `json:"official_input_per_m"`
-	OfficialOutputPerM    *float64 `json:"official_output_per_m"`
-	OfficialCacheReadPerM *float64 `json:"official_cache_read_per_m"`
+	Mode                   string   `json:"mode"`
+	InputPerM              *float64 `json:"input_per_m"`
+	OutputPerM             *float64 `json:"output_per_m"`
+	CacheReadPerM          *float64 `json:"cache_read_per_m"`
+	CacheWritePerM         *float64 `json:"cache_write_per_m"`
+	PerRequest             *float64 `json:"per_request"`
+	OfficialInputPerM      *float64 `json:"official_input_per_m"`
+	OfficialOutputPerM     *float64 `json:"official_output_per_m"`
+	OfficialCacheReadPerM  *float64 `json:"official_cache_read_per_m"`
 	OfficialCacheWritePerM *float64 `json:"official_cache_write_per_m"`
-	OfficialPerRequest    *float64 `json:"official_per_request"`
-	GroupRatio            float64  `json:"group_ratio"`
-	Explicit              bool     `json:"explicit"`
-	Currency              string   `json:"currency"`
+	OfficialPerRequest     *float64 `json:"official_per_request"`
+	GroupRatio             float64  `json:"group_ratio"`
+	Explicit               bool     `json:"explicit"`
+	Currency               string   `json:"currency"`
 }
 
 // buildPlazaRows joins the channel graph, the metadata catalog and the live
@@ -205,6 +208,7 @@ func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
 			Vendor:          "unknown",
 			VendorDisplay:   "其他",
 			Tags:            []string{},
+			Protocols:       []string{},
 			AvailableGroups: []string{},
 			CreatedAt:       0,
 		}
@@ -227,6 +231,7 @@ func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
 		if cov != nil {
 			row.AvailableGroups = sortedUnique(cov.Groups)
 			row.ChannelCount = cov.ChannelCount
+			row.Protocols = plazaProtocols(cov.ChannelTypes[group], row.Tags)
 		}
 
 		p := resolvePlazaPrice(name, group, userGroup)
@@ -266,6 +271,29 @@ func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
 	}
 
 	return rows, nil
+}
+
+// Return gateway request formats supported by enabled channels in this group.
+func plazaProtocols(channelTypes []int, tags []string) []string {
+	nonChat := false
+	for _, tag := range []string{"image", "video", "embedding", "embeddings", "rerank", "audio", "tts", "stt"} {
+		if containsString(tags, tag) {
+			nonChat = true
+			break
+		}
+	}
+	for _, channelType := range channelTypes {
+		if nonChat {
+			if channelType == channel.ChannelTypeOpenAI {
+				return []string{"OpenAI"}
+			}
+			continue
+		}
+		if _, err := relay.GetChatAdaptor(channelType); err == nil {
+			return []string{"OpenAI", "Anthropic"}
+		}
+	}
+	return []string{}
 }
 
 /* --- sorting ----------------------------------------------------------- */
