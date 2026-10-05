@@ -26,6 +26,8 @@ import (
 // metadata row must never hide a model that can actually be served.
 type ModelMeta struct {
 	Model string `gorm:"primaryKey;size:128" json:"model"`
+	// Name is a display label; Model remains the relay identifier.
+	Name string `gorm:"size:128;not null;default:''" json:"name"`
 
 	Vendor        string `gorm:"size:64;not null;default:''" json:"vendor"`
 	VendorDisplay string `gorm:"size:128;not null;default:''" json:"vendor_display"`

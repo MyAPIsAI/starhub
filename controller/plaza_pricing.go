@@ -214,6 +214,7 @@ func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
 		}
 
 		if m != nil {
+			row.Name = firstNonEmpty(m.Name, name)
 			row.Vendor = firstNonEmpty(m.Vendor, inferVendorSlug(name))
 			row.VendorDisplay = firstNonEmpty(m.VendorDisplay, inferVendorDisplay(name))
 			row.Description = m.Description

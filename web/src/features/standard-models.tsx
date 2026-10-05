@@ -3,7 +3,6 @@ import { useSearchParams, Link } from "react-router-dom";
 import { Plus, ArrowLeft, Pencil, Search, Boxes } from "lucide-react";
 import { useModelPricing } from "../lib/model-pricing";
 import { modelCatalog } from "../lib/platform-catalog";
-import type { ModelItem } from "../config/models";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { ModelPricingAdmin } from "./model-pricing-admin";
@@ -14,6 +13,7 @@ import {
   useDeleteModelMeta,
   metaToModelItem,
   modelItemToMeta,
+  type MetaModelItem,
 } from "../lib/api/plaza-meta";
 import { ApiError } from "../lib/api/http";
 import "../components/catalog-management.css";
@@ -26,7 +26,7 @@ export function StandardModels({ role }: { role: number }) {
   const [query, setQuery] = useState(""),
     [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<{
-    model: ModelItem;
+    model: MetaModelItem;
     fresh: boolean;
     revision: string;
     price: string;
@@ -39,12 +39,11 @@ export function StandardModels({ role }: { role: number }) {
   const upsertMeta = useUpsertModelMeta();
   const deleteMeta = useDeleteModelMeta();
   const localModels = modelCatalog(config);
-  const models: ModelItem[] =
-    metaQuery.data?.length
-      ? metaQuery.data.map(metaToModelItem)
-      : localModels;
+  const models: MetaModelItem[] = metaQuery.data?.length
+    ? metaQuery.data.map(metaToModelItem)
+    : localModels.map((model) => ({ ...model, vendorDisplay: model.vendor }));
   const current = models.find((m) => m.id === selected);
-  const edit = (model?: ModelItem) => {
+  const edit = (model?: MetaModelItem) => {
     setNotice("");
     setEditing({
       fresh: !model,
@@ -56,6 +55,7 @@ export function StandardModels({ role }: { role: number }) {
             id: "",
             name: "",
             vendor: "",
+            vendorDisplay: "",
             capabilities: ["text"],
             protocols: ["OpenAI"],
             contextLength: 128000,
@@ -70,7 +70,7 @@ export function StandardModels({ role }: { role: number }) {
           },
     });
   };
-  const setModel = (patch: Partial<ModelItem>) =>
+  const setModel = (patch: Partial<MetaModelItem>) =>
     setEditing(
       (value) => value && { ...value, model: { ...value.model, ...patch } },
     );
@@ -149,12 +149,22 @@ export function StandardModels({ role }: { role: number }) {
               个资源实例。
             </p>
           </div>
-          <ModelPricingAdmin
-            key={current.id}
-            role={role}
-            modelId={current.id}
-            embedded
-          />
+          {config.models[current.id] ? (
+            <ModelPricingAdmin
+              key={current.id}
+              role={role}
+              modelId={current.id}
+              embedded
+            />
+          ) : (
+            <p className="pricing-help">
+              {text(
+                "暂无定价配置，请先维护平台报价。",
+                "No pricing configuration yet. Configure platform prices first.",
+                "لا توجد إعدادات أسعار بعد. اضبط أسعار المنصة أولاً.",
+              )}
+            </p>
+          )}
         </>
       ) : (
         <>
@@ -182,7 +192,7 @@ export function StandardModels({ role }: { role: number }) {
               <tbody>
                 {models
                   .filter((m) =>
-                    `${m.id} ${m.name} ${m.vendor}`
+                    `${m.id} ${m.name} ${m.vendor} ${m.vendorDisplay}`
                       .toLowerCase()
                       .includes(query.toLowerCase()),
                   )
@@ -190,7 +200,7 @@ export function StandardModels({ role }: { role: number }) {
                     const count = Object.values(config.placements ?? {}).filter(
                       (p) => p.modelId === model.id,
                     ).length;
-                    const rule = config.models[model.id].rule;
+                    const rule = config.models[model.id]?.rule;
                     return (
                       <tr key={model.id}>
                         <td>
@@ -203,7 +213,7 @@ export function StandardModels({ role }: { role: number }) {
                           <code>{model.id}</code>
                         </td>
                         <td>
-                          {model.vendor}
+                          {model.vendorDisplay}
                           <small>
                             {model.capabilities
                               .map(
@@ -221,15 +231,17 @@ export function StandardModels({ role }: { role: number }) {
                           </small>
                         </td>
                         <td>
-                          {rule.mode === "tokens"
-                            ? "按词元"
-                            : rule.mode === "expression"
-                              ? "表达式"
-                              : {
-                                  image: "按张",
-                                  second: "按秒",
-                                  request: "按次",
-                                }[rule.unit]}
+                          {!rule
+                            ? text("未配置", "Not configured", "غير مضبوط")
+                            : rule.mode === "tokens"
+                              ? "按词元"
+                              : rule.mode === "expression"
+                                ? "表达式"
+                                : {
+                                    image: "按张",
+                                    second: "按秒",
+                                    request: "按次",
+                                  }[rule.unit]}
                         </td>
                         <td>{count} 个实例</td>
                         <td>
@@ -292,9 +304,9 @@ export function StandardModels({ role }: { role: number }) {
         {editing && (
           <div className="cm-form">
             <label>
-              模型名称
+              {text("模型名称", "Model name", "اسم النموذج")}
               <input
-                aria-label="模型名称"
+                aria-label={text("模型名称", "Model name", "اسم النموذج")}
                 value={editing.model.name}
                 onChange={(e) => setModel({ name: e.target.value })}
                 placeholder="例如：GPT 模型 / 通用文本模型"
@@ -311,11 +323,25 @@ export function StandardModels({ role }: { role: number }) {
               />
             </label>
             <label>
-              模型厂商
+              {text("厂商标识", "Vendor ID", "معرّف المورّد")}
               <input
-                aria-label="模型厂商"
+                aria-label={text("厂商标识", "Vendor ID", "معرّف المورّد")}
                 value={editing.model.vendor}
                 onChange={(e) => setModel({ vendor: e.target.value })}
+                placeholder="openai"
+              />
+            </label>
+            <label>
+              {text("厂商显示名", "Vendor display name", "اسم المورّد المعروض")}
+              <input
+                aria-label={text(
+                  "厂商显示名",
+                  "Vendor display name",
+                  "اسم المورّد المعروض",
+                )}
+                value={editing.model.vendorDisplay}
+                onChange={(e) => setModel({ vendorDisplay: e.target.value })}
+                placeholder="OpenAI"
               />
             </label>
             <label>

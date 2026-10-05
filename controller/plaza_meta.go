@@ -42,6 +42,9 @@ func UpsertModelMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	meta.Model = strings.TrimSpace(meta.Model)
+	meta.Name = strings.TrimSpace(meta.Name)
+	meta.Vendor = strings.TrimSpace(meta.Vendor)
+	meta.VendorDisplay = strings.TrimSpace(meta.VendorDisplay)
 	if meta.Model == "" {
 		common.ApiError(w, http.StatusBadRequest, "model is required")
 		return

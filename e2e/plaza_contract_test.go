@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"starhub/common"
@@ -131,4 +132,64 @@ func TestPlazaBrowseContract(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestPlazaModelIdentity(t *testing.T) {
+	env := setupRelayApp(t)
+	meta := model.ModelMeta{
+		Model: "gpt-4o", Name: " GPT-4o Chat ", Vendor: " openai ", VendorDisplay: " OpenAI ",
+		Tags: "text,function_call", MaxOutput: 4096, CompatibleGroups: "default,vip",
+	}
+	get := func(path string, target any) {
+		t.Helper()
+		res := doRequest(env.base, "GET", path, env.session, nil)
+		var body struct {
+			Success bool            `json:"success"`
+			Data    json.RawMessage `json:"data"`
+		}
+		if res.Status != 200 || json.Unmarshal([]byte(res.Body), &body) != nil || !body.Success {
+			t.Fatalf("%s: unexpected response status %d", path, res.Status)
+		}
+		if err := json.Unmarshal(body.Data, target); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{" GPT-4o Chat ", "GPT-4o Renamed"} {
+		meta.Name = name
+		res := doRequest(env.base, "PUT", "/api/plaza/meta", env.session, meta)
+		if res.Status != 200 {
+			t.Fatalf("save metadata: status %d", res.Status)
+		}
+		var stored []model.ModelMeta
+		get("/api/plaza/meta", &stored)
+		if len(stored) != 1 || stored[0].Name != strings.TrimSpace(name) ||
+			stored[0].Vendor != "openai" || stored[0].VendorDisplay != "OpenAI" ||
+			stored[0].MaxOutput != 4096 || stored[0].CompatibleGroups != "default,vip" {
+			t.Fatalf("model and vendor identities did not persist independently: %+v", stored)
+		}
+		var listing struct {
+			Items []struct{ ID, Name, Vendor, VendorDisplay string } `json:"items"`
+		}
+		get("/api/plaza/models?q="+url.QueryEscape(strings.TrimSpace(name)), &listing)
+		if len(listing.Items) != 1 || listing.Items[0].ID != "gpt-4o" || listing.Items[0].Name != strings.TrimSpace(name) {
+			t.Fatalf("model display name missing from plaza: %+v", listing)
+		}
+		var facets struct {
+			Vendors []struct{ Value, Label string } `json:"vendors"`
+		}
+		get("/api/plaza/filters", &facets)
+		if len(facets.Vendors) != 1 || facets.Vendors[0].Value != "openai" || facets.Vendors[0].Label != "OpenAI" {
+			t.Fatalf("renaming the model changed its vendor tab: %+v", facets)
+		}
+	}
+	if err := model.UpsertModelMeta(&model.ModelMeta{Model: "gpt-legacy", Vendor: "openai", VendorDisplay: "OpenAI"}); err != nil {
+		t.Fatal(err)
+	}
+	var detail struct {
+		Model struct{ ID, Name string } `json:"model"`
+	}
+	get("/api/plaza/models/gpt-legacy", &detail)
+	if detail.Model.ID != "gpt-legacy" || detail.Model.Name != "gpt-legacy" {
+		t.Fatalf("legacy metadata must fall back to its model ID: %+v", detail)
+	}
 }

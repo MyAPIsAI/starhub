@@ -7,10 +7,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut, apiDelete } from "./http";
 import type { ModelItem } from "../../config/models";
 
-// --- Backend response type (mirrors model/modelmeta.go:27-73) ---
+// --- Backend response type ---
 
 export interface ModelMeta {
   model: string;
+  name?: string;
   vendor: string;
   vendor_display: string;
   description: string;
@@ -27,6 +28,11 @@ export interface ModelMeta {
   compatible_groups: string;
   sort_weight: number;
   created_at: number;
+}
+
+export interface MetaModelItem extends ModelItem {
+  vendorDisplay: string;
+  sourceMeta?: ModelMeta;
 }
 
 const META_KEY = ["plaza-meta"] as const;
@@ -79,7 +85,7 @@ function formatContextDisplay(length: number): string {
 }
 
 /** Convert a backend ModelMeta to the frontend ModelItem shape. */
-export function metaToModelItem(meta: ModelMeta): ModelItem {
+export function metaToModelItem(meta: ModelMeta): MetaModelItem {
   const tags = meta.tags
     ? meta.tags
         .split(",")
@@ -90,14 +96,16 @@ export function metaToModelItem(meta: ModelMeta): ModelItem {
     : [];
   return {
     id: meta.model,
-    name: meta.vendor_display || meta.model,
-    vendor: meta.vendor || meta.vendor_display || meta.model,
+    name: meta.name || meta.model,
+    vendor: meta.vendor,
+    vendorDisplay: meta.vendor_display || meta.vendor,
+    sourceMeta: meta,
     capabilities: tags.length ? tags : ["text"],
     contextLength: meta.context_length,
     contextDisplay: formatContextDisplay(meta.context_length),
     pricing: {
-      input_per_million_usd: meta.official_input_per_m?.toFixed(6) ?? "0",
-      output_per_million_usd: meta.official_output_per_m?.toFixed(6) ?? "0",
+      input_per_million_usd: meta.official_input_per_m?.toFixed(6) ?? "",
+      output_per_million_usd: meta.official_output_per_m?.toFixed(6) ?? "",
       ...(meta.official_cache_read_per_m != null
         ? {
             cache_read_per_million_usd:
@@ -128,33 +136,63 @@ export function metaToModelItem(meta: ModelMeta): ModelItem {
 }
 
 /** Convert a frontend ModelItem to a backend ModelMeta for upsert. */
-export function modelItemToMeta(model: ModelItem): ModelMeta {
+export function modelItemToMeta(model: MetaModelItem): ModelMeta {
   const toFloat = (s: string | undefined): number | null => {
     if (!s) return null;
     const n = Number(s);
     return Number.isFinite(n) && n >= 0 ? n : null;
   };
+  const original = model.sourceMeta;
+  const previous = original ? metaToModelItem(original) : undefined;
+  const price = (
+    field: keyof ModelItem["pricing"],
+    originalPrice: number | null | undefined,
+  ) =>
+    previous && model.pricing[field] === previous.pricing[field]
+      ? (originalPrice ?? null)
+      : toFloat(model.pricing[field]);
   return {
-    model: model.id,
-    vendor: model.vendor,
-    vendor_display: model.name,
-    description: model.description.en || model.description.zh || "",
-    tags: model.capabilities.join(","),
-    context_length: model.contextLength,
     max_output: 0,
-    official_input_per_m: toFloat(model.pricing.input_per_million_usd),
-    official_output_per_m: toFloat(model.pricing.output_per_million_usd),
-    official_cache_read_per_m: toFloat(
-      model.pricing.cache_read_per_million_usd,
-    ),
-    official_cache_write_per_m: toFloat(
-      model.pricing.cache_write_per_million_usd,
-    ),
     official_per_request: null,
     per_request_usd: null,
     score: null,
     compatible_groups: "",
     sort_weight: 0,
     created_at: 0,
+    ...original,
+    model: model.id,
+    name: model.name,
+    vendor: model.vendor,
+    vendor_display: model.vendorDisplay || model.vendor,
+    description: model.description.en || model.description.zh || "",
+    tags:
+      previous &&
+      model.capabilities.join(",") === previous.capabilities.join(",")
+        ? original!.tags
+        : [
+            ...(original?.tags
+              .split(",")
+              .filter((tag) => !KNOWN_TAGS.includes(tag.trim())) ?? []),
+            ...model.capabilities,
+          ]
+            .filter(Boolean)
+            .join(","),
+    context_length: model.contextLength,
+    official_input_per_m: price(
+      "input_per_million_usd",
+      original?.official_input_per_m,
+    ),
+    official_output_per_m: price(
+      "output_per_million_usd",
+      original?.official_output_per_m,
+    ),
+    official_cache_read_per_m: price(
+      "cache_read_per_million_usd",
+      original?.official_cache_read_per_m,
+    ),
+    official_cache_write_per_m: price(
+      "cache_write_per_million_usd",
+      original?.official_cache_write_per_m,
+    ),
   };
 }
