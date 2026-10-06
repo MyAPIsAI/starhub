@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
+import React, { useEffect, useRef, lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import {
   BrowserRouter,
@@ -25,10 +25,14 @@ import "./components/select-controls.css";
 import i18n from "./i18n";
 import { usePreferences } from "./lib/preferences";
 import { DemoControlBar } from "./components/demo-control-bar";
-import { useSystemAccess, isAdmin } from "./lib/system-access";
+import { useSystemAccess, isAdmin, ROLE_USER } from "./lib/system-access";
 import { useProductPreview } from "./lib/product-preview";
 import { onAuthLoss, ApiError } from "./lib/api/http";
-import { getSelf } from "./lib/api/auth";
+import {
+  SessionRestoreProvider,
+  useSessionRestore,
+} from "./lib/session-restore";
+import { Button } from "./components/ui/button";
 
 const DesignSystem = lazy(() => import("./pages/design-system"));
 const BrandHome = lazy(() => import("./pages/brand-home"));
@@ -113,15 +117,27 @@ function AdminOnly({ children }: { children: React.ReactNode }) {
  * initial session-restore it shows a loader; once ready,
  * unauthenticated users are redirected to the landing page. (GAP-2)
  */
-function RequireAuth({
-  children,
-  authReady,
-}: {
-  children: React.ReactNode;
-  authReady: boolean;
-}) {
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { status, retry } = useSessionRestore();
+  const language = usePreferences((s) => s.language);
   const isLoggedIn = useProductPreview((s) => s.user.isLoggedIn);
-  if (!authReady) {
+  if (status === "unavailable") {
+    const message =
+      language === "zh"
+        ? "暂时无法确认登录状态，请重试。"
+        : language === "ar"
+          ? "تعذر التحقق من حالة تسجيل الدخول مؤقتًا. حاول مجددًا."
+          : "Unable to check your session. Please retry.";
+    return (
+      <div className="route-loading" role="alert">
+        {message}
+        <Button variant="ghost" onClick={retry}>
+          {i18n.t("retry")}
+        </Button>
+      </div>
+    );
+  }
+  if (status === "checking") {
     return (
       <div className="route-loading" role="status">
         {i18n.t("loading")}
@@ -155,42 +171,13 @@ function App() {
     void i18n.changeLanguage(language);
   }, [language, theme]);
 
-  // Restore session on app startup: if a valid session cookie
-  // exists, GET /api/user/self hydrates the user and role. On 401,
-  // the user stays unauthenticated and must log in. (GAP-1)
-  const [authReady, setAuthReady] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    getSelf()
-      .then((user) => {
-        if (cancelled) return;
-        useSystemAccess.getState().setRole(user.role);
-        useProductPreview.getState().login(
-          user.email ?? "",
-          user.username,
-          {
-            id: String(user.id),
-            username: user.username,
-            phone: "",
-            emailVerified: undefined,
-          },
-        );
-      })
-      .catch(() => {
-        // Not authenticated — stay on the public/landing page.
-      })
-      .finally(() => {
-        if (!cancelled) setAuthReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Wire up the 401 auth-loss listener: when the HTTP client gets
   // a 401 outside auth pages, silently redirect to /login. (B8/B9)
   useEffect(() => {
-    onAuthLoss(() => {
+    return onAuthLoss(() => {
+      useProductPreview.getState().logout();
+      useSystemAccess.getState().setRole(ROLE_USER);
+      queryClient.clear();
       // Hard redirect: the session is gone, so the full app state
       // must be discarded. This also avoids stale React Query caches.
       if (window.location.pathname !== "/login") {
@@ -240,7 +227,7 @@ function App() {
                 <Route
                   path="/console/*"
                   element={
-                    <RequireAuth authReady={authReady}>
+                    <RequireAuth>
                       <ConsolePreview />
                     </RequireAuth>
                   }
@@ -248,7 +235,7 @@ function App() {
                 <Route
                   path="/preview/console/*"
                   element={
-                    <RequireAuth authReady={authReady}>
+                    <RequireAuth>
                       <ConsolePreview />
                     </RequireAuth>
                   }
@@ -258,7 +245,7 @@ function App() {
                 <Route
                   path="/admin/*"
                   element={
-                    <RequireAuth authReady={authReady}>
+                    <RequireAuth>
                       <AdminOnly>
                         <AdminPortal />
                       </AdminOnly>
@@ -294,7 +281,9 @@ function App() {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <SessionRestoreProvider>
+        <App />
+      </SessionRestoreProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );
