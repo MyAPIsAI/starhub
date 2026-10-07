@@ -287,6 +287,9 @@ export function parseBillingSnapshot(raw: string): BillingSnapshot | null {
       typeof value.sampleRequestsEnabled !== "boolean"
     )
       return null;
+    // Older backend profiles used an empty string for an unavailable phone.
+    // Treat only that legacy value as absent before validating the whole snapshot.
+    if (record(value.user) && value.user.phone === "") delete value.user.phone;
     if (
       !Array.isArray(value.ledger) ||
       value.ledger.length > 20000 ||

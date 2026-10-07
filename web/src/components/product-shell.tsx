@@ -19,6 +19,9 @@ import { Select } from "./ui/primitives";
 import { Modal } from "./ui/overlay";
 import { BrandMark } from "./brand";
 import { usePreferences } from "../lib/preferences";
+import { useProductPreview } from "../lib/product-preview";
+import { accountDisplayName } from "../lib/account-identity";
+import { useSessionRestore } from "../lib/session-restore";
 import { CodeExample } from "../features/code-example";
 import { type Language } from "../config/placeholders";
 import { useFocusReturn } from "./ui/focus-return";
@@ -39,8 +42,10 @@ export function ProductBrand({ compact = false }: { compact?: boolean }) {
 }
 export function PublicHeader() {
   const { t } = useTranslation();
-  const { pathname, hash } = useLocation();
+  const { pathname, search, hash } = useLocation();
   const language = usePreferences((s) => s.language);
+  const user = useProductPreview((s) => s.user);
+  const { status, retry } = useSessionRestore();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
   const headerRef = useRef<HTMLElement>(null);
@@ -49,6 +54,66 @@ export function PublicHeader() {
   const home = pathname === "/" || pathname === "/preview/home";
   const text = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
+  const accountCenter = text("账号中心", "Account center", "مركز الحساب");
+  const accountName = user.isLoggedIn
+    ? accountDisplayName(user, accountCenter)
+    : t("navLogin");
+  const accountLabel = user.isLoggedIn
+    ? `${accountName} · ${accountCenter}`
+    : accountName;
+  const accountEntry = (mobile = false) => {
+    const className = [
+      !mobile && "veyra-public-login",
+      status === "ready" && user.isLoggedIn && "veyra-public-account",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    if (status === "checking") {
+      return (
+        <span
+          className={className}
+          role="status"
+          aria-label={text(
+            "正在确认登录状态",
+            "Checking your session",
+            "جارٍ التحقق من تسجيل الدخول",
+          )}
+        >
+          …
+        </span>
+      );
+    }
+    const unavailable = status === "unavailable";
+    const label = unavailable
+      ? text(
+          "暂时无法确认登录状态，点击重试",
+          "Unable to check your session. Retry",
+          "تعذر التحقق من تسجيل الدخول. حاول مجددًا",
+        )
+      : accountLabel;
+    return (
+      <Link
+        className={className}
+        to={
+          unavailable
+            ? `${pathname}${search}${hash}`
+            : user.isLoggedIn
+              ? "/console/settings"
+              : "/login"
+        }
+        aria-label={label}
+        title={label}
+        onClick={(event) => {
+          if (unavailable) {
+            event.preventDefault();
+            retry();
+          } else if (mobile) setMenuOpen(false);
+        }}
+      >
+        {unavailable ? text("重试", "Retry", "إعادة المحاولة") : accountName}
+      </Link>
+    );
+  };
   const links = [
     { to: "/", label: t("pHome"), active: home },
     {
@@ -103,9 +168,7 @@ export function PublicHeader() {
             </Link>
           ))}
           <div className="veyra-public-mobile-actions">
-            <Link to="/login" onClick={() => setMenuOpen(false)}>
-              {t("navLogin")}
-            </Link>
+            {accountEntry(true)}
             <Link
               className="veyra-public-console"
               to="/console"
@@ -118,9 +181,7 @@ export function PublicHeader() {
         </nav>
         <div className="veyra-public-actions">
           <Preferences />
-          <Link className="veyra-public-login" to="/login">
-            {t("navLogin")}
-          </Link>
+          {accountEntry()}
           <Link
             className="veyra-public-console veyra-public-desktop-console"
             to="/console"

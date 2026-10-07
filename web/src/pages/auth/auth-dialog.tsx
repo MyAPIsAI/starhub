@@ -16,8 +16,9 @@ import { Input } from "../../components/ui/primitives";
 import { usePreferences } from "../../lib/preferences";
 import { useProductPreview } from "../../lib/product-preview";
 import { useSystemAccess } from "../../lib/system-access";
-import { loginUser, registerUser } from "../../lib/api/auth";
+import { authUserProfile, loginUser, registerUser } from "../../lib/api/auth";
 import { ApiError } from "../../lib/api/http";
+import { useSessionRestore } from "../../lib/session-restore";
 import "./auth-dialog.css";
 
 type AuthMode = "login" | "register" | "reset";
@@ -34,6 +35,7 @@ const modeFor = (path: string): AuthMode | null =>
 export default function AuthDialog() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { complete: completeSessionRestore } = useSessionRestore();
   const language = usePreferences((s) => s.language);
   const c = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
@@ -250,32 +252,19 @@ export default function AuthDialog() {
       if (mode === "register") {
         const user = await registerUser(username, newPassword, "");
         if (ticket !== operation.current) return;
-        useProductPreview.getState().register(
-          user.email ?? "",
-          user.username,
-          {
-            id: String(user.id),
-            username: user.username,
-            phone: "",
-            emailVerified: undefined,
-          },
-        );
+        useProductPreview
+          .getState()
+          .register(user.email ?? "", user.username, authUserProfile(user));
         useSystemAccess.getState().setRole(user.role);
       } else {
         // Login: password method only (phone not supported by backend).
         const { user } = await loginUser(account, password);
         if (ticket !== operation.current) return;
-        useProductPreview.getState().login(
-          user.email ?? "",
-          user.username,
-          {
-            id: String(user.id),
-            username: user.username,
-            phone: "",
-            emailVerified: undefined,
-          },
-        );
+        useProductPreview
+          .getState()
+          .login(user.email ?? "", user.username, authUserProfile(user));
         useSystemAccess.getState().setRole(user.role);
+        completeSessionRestore();
       }
       setPassword("");
       setNewPassword("");

@@ -18,8 +18,7 @@
  *  with VITE_API_BASE_URL only for standalone frontend deployment. */
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
-/** Paths that must not trigger a 401 redirect (the auth pages
- *  themselves, and the self-check request). Prevents redirect loops. */
+/** Auth pages handle their own unauthorized responses to avoid redirect loops. */
 const AUTH_PATHS = ["/login", "/register", "/forgot-password"];
 
 /** Listener notified once when the session is lost (401). The auth
@@ -27,9 +26,17 @@ const AUTH_PATHS = ["/login", "/register", "/forgot-password"];
 type AuthLossListener = () => void;
 let authLossListener: AuthLossListener | null = null;
 
-export const onAuthLoss = (listener: AuthLossListener): void => {
+export const onAuthLoss = (listener: AuthLossListener): (() => void) => {
   authLossListener = listener;
+  return () => {
+    if (authLossListener === listener) authLossListener = null;
+  };
 };
+
+export interface ApiRequestOptions {
+  /** Session probes handle anonymous visitors without a global redirect. */
+  handleUnauthorizedLocally?: boolean;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -48,6 +55,7 @@ export type ApiResult<T> = T;
 export async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
+  options: ApiRequestOptions = {},
 ): Promise<T> {
   const res = await fetch(BASE_URL + path, {
     ...init,
@@ -63,7 +71,11 @@ export async function apiRequest<T>(
     // Avoid redirect loops: don't fire auth-loss when already on an
     // auth page. The caller may still get the 401 to handle locally.
     const pathname = window.location.pathname;
-    if (!AUTH_PATHS.includes(pathname) && authLossListener) {
+    if (
+      !options.handleUnauthorizedLocally &&
+      !AUTH_PATHS.includes(pathname) &&
+      authLossListener
+    ) {
       authLossListener();
     }
     throw new ApiError(401, "session expired");
@@ -88,8 +100,11 @@ export async function apiRequest<T>(
   throw new ApiError(res.status, `unexpected response (${res.status})`);
 }
 
-export const apiGet = <T>(path: string, signal?: AbortSignal): Promise<T> =>
-  apiRequest<T>(path, { method: "GET", signal });
+export const apiGet = <T>(
+  path: string,
+  signal?: AbortSignal,
+  options?: ApiRequestOptions,
+): Promise<T> => apiRequest<T>(path, { method: "GET", signal }, options);
 
 export const apiPost = <T>(path: string, body?: unknown): Promise<T> =>
   apiRequest<T>(path, {

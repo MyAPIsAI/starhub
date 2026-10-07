@@ -8,7 +8,7 @@
 // Phone login, OTP, and password reset are NOT available on the
 // backend — only username+password login and register.
 
-import { apiGet, apiPost } from "./http";
+import { apiGet, apiPost, type ApiRequestOptions } from "./http";
 
 export interface AuthUser {
   id: number;
@@ -29,16 +29,31 @@ interface LoginResponse {
   user: AuthUser;
 }
 
-export function loginUser(username: string, password: string): Promise<LoginResponse> {
+/** Backend accounts have no phone field; omit it to keep saved profiles valid. */
+export function authUserProfile(user: AuthUser) {
+  return { id: String(user.id), username: user.username };
+}
+
+export function loginUser(
+  username: string,
+  password: string,
+): Promise<LoginResponse> {
   return apiPost<LoginResponse>("/api/user/login", { username, password });
 }
 
-export function registerUser(username: string, password: string, email: string): Promise<AuthUser> {
+export function registerUser(
+  username: string,
+  password: string,
+  email: string,
+): Promise<AuthUser> {
   return apiPost<AuthUser>("/api/user/register", { username, password, email });
 }
 
-export function getSelf(): Promise<AuthUser> {
-  return apiGet<AuthUser>("/api/user/self");
+export function getSelf(
+  options?: ApiRequestOptions,
+  signal?: AbortSignal,
+): Promise<AuthUser> {
+  return apiGet<AuthUser>("/api/user/self", signal, options);
 }
 
 export function logoutUser(): Promise<null> {

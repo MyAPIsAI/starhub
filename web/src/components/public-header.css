@@ -86,6 +86,12 @@
 .veyra-public-login:hover {
   color: var(--public-header-blue);
 }
+.veyra-public-account {
+  max-inline-size: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .veyra-public-console {
   display: inline-flex;
   align-items: center;
