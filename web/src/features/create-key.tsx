@@ -20,6 +20,15 @@ import { useProductPreview, type PreviewKey } from "../lib/product-preview";
 import { getKeyModels, getKeyModelOptions } from "../lib/key-model-policy";
 import { type TierId } from "../config/placeholders";
 import { copyText } from "./code-example";
+import { useCreateToken } from "../lib/api/tokens";
+import type { TokenCreateInput } from "../lib/api/tokens";
+import { ApiError } from "../lib/api/http";
+import {
+  tierToGroup,
+  usdToQuota,
+  joinList,
+  tokenToPreviewKey,
+} from "../lib/api/key-adapter";
 
 const draftKey = "veyra-key-draft-v2";
 function readDraft() {
@@ -33,10 +42,12 @@ export default function CreateKey({
   open,
   setOpen,
   initialModel,
+  onCreated,
 }: {
   open: boolean;
   setOpen: (v: boolean) => void;
   initialModel?: string;
+  onCreated?: (keyId: string, plaintext: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   const c = (zh: string, en: string, ar: string) =>
@@ -62,7 +73,7 @@ export default function CreateKey({
   const config = useModelPricing((s) => s.config);
   const accountId = useProductPreview((s) => s.user.id);
   const keys = useProductPreview((s) => s.keys);
-  const create = useProductPreview((s) => s.createKeyDetailed);
+  const createToken = useCreateToken();
   const available = getTierModels(tier, config);
   const allowed =
     access === "all"
@@ -185,28 +196,37 @@ export default function CreateKey({
       return;
     }
     try {
-      setCreated(
-        create({
-          name: name.trim(),
-          tier,
-          model: allowed.some((m) => m.id === initialModel)
-            ? initialModel!
-            : allowed[0].id,
-          type: "client",
-          modelAccess: access,
-          allowedModels:
-            access === "custom" ? allowed.map((m) => m.id) : undefined,
-          quotaLimit_usd: quota === "" ? null : Number(quota),
-          quotaPeriod: period,
-          ipWhitelist: ipsEnabled
-            ? ips
+      const input: TokenCreateInput = {
+        name: name.trim(),
+        group: tierToGroup(tier),
+        remain_quota: quota === "" ? undefined : usdToQuota(Number(quota)),
+        unlimited_quota: quota === "" ? true : undefined,
+        model_limits:
+          access === "custom" ? joinList(allowed.map((m) => m.id)) : "",
+        allow_ips: ipsEnabled
+          ? joinList(
+              ips
                 .split("\n")
                 .map((v) => v.trim())
-                .filter(Boolean)
-            : [],
-        }),
-      );
-      setError("");
+                .filter(Boolean),
+            )
+          : "",
+      };
+      createToken.mutate(input, {
+        onSuccess: (token) => {
+          const previewKey = tokenToPreviewKey(token, token.key);
+          setCreated(previewKey);
+          setError("");
+          onCreated?.(String(token.id), token.key);
+        },
+        onError: (err) => {
+          setError(
+            err instanceof ApiError
+              ? err.message
+              : String(err instanceof Error ? err.message : err),
+          );
+        },
+      });
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
     }
@@ -259,7 +279,7 @@ export default function CreateKey({
               form="new-key-form"
               type="submit"
               variant="primary"
-              disabled={!allowed.length}
+              disabled={!allowed.length || createToken.isPending}
             >
               {c("创建密钥", "Create key", "إنشاء مفتاح")}
             </Button>

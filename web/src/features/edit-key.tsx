@@ -10,8 +10,12 @@ import {
 } from "../components/key-model-access";
 import { getTierModels } from "../components/tier-model-picker";
 import { useModelPricing } from "../lib/model-pricing";
-import { useProductPreview, type PreviewKey } from "../lib/product-preview";
+import { type PreviewKey } from "../lib/product-preview";
 import { formatMoney } from "../lib/money";
+import { useUpdateToken } from "../lib/api/tokens";
+import type { TokenUpdateInput } from "../lib/api/tokens";
+import { ApiError } from "../lib/api/http";
+import { usdToQuota, joinList } from "../lib/api/key-adapter";
 export default function EditKey({
   item,
   onClose,
@@ -38,7 +42,7 @@ export default function EditKey({
   );
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const config = useModelPricing((s) => s.config);
-  const update = useProductPreview((s) => s.updateKey);
+  const updateToken = useUpdateToken();
   const available = getTierModels(item.tier, config);
   const save = () => {
     if (
@@ -68,24 +72,55 @@ export default function EditKey({
       );
       return;
     }
-    try {
-      update(item.id, {
-        name: name.trim(),
-        quotaLimit_usd: quota === "" ? null : Number(quota),
-        quotaPeriod: period,
-        modelAccess: access,
-        allowedModels: access === "custom" ? models : undefined,
-        ipWhitelist: ipsEnabled
-          ? ips
-              .split("\n")
-              .map((v) => v.trim())
-              .filter(Boolean)
-          : [],
-      });
-      onClose();
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+    // Build the partial update. The backend uses an optimistic-
+    // concurrency guard on remain_quota: when remain_quota is set,
+    // expected_quota must match the value read at form-open time.
+    // item.quota stores the raw remain_quota from the adapter.
+    const input: TokenUpdateInput = {
+      id: Number(item.id),
+      name: name.trim(),
+    };
+    const isUnlimited = quota === "";
+    if (isUnlimited) {
+      input.unlimited_quota = true;
+    } else {
+      input.remain_quota = usdToQuota(Number(quota));
+      // expected_quota: the raw remain_quota captured when the key was
+      // loaded. For unlimited keys this is 0 (the unlimited reset value).
+      input.expected_quota = item.quota ?? 0;
     }
+    input.model_limits =
+      access === "custom" ? joinList(models) : "";
+    input.allow_ips = ipsEnabled
+      ? joinList(
+          ips
+            .split("\n")
+            .map((v) => v.trim())
+            .filter(Boolean),
+        )
+      : "";
+    updateToken.mutate(input, {
+      onSuccess: () => {
+        onClose();
+      },
+      onError: (err) => {
+        if (err instanceof ApiError && err.status === 409) {
+          setError(
+            c(
+              "额度已被其他操作改变，请关闭后重新编辑。",
+              "Balance changed since the form opened. Close and retry.",
+              "تغيّر الرصيد منذ فتح النموذج. أغلق وحاول مجددًا.",
+            ),
+          );
+        } else {
+          setError(
+            err instanceof ApiError
+              ? err.message
+              : String(err instanceof Error ? err.message : err),
+          );
+        }
+      },
+    });
   };
   return (
     <Modal
@@ -108,7 +143,12 @@ export default function EditKey({
       footer={
         <>
           <Button onClick={onClose}>{t("cancel")}</Button>
-          <Button type="submit" form="edit-key-form" variant="primary">
+          <Button
+            type="submit"
+            form="edit-key-form"
+            variant="primary"
+            disabled={updateToken.isPending}
+          >
             {c("保存修改", "Save changes", "حفظ التغييرات")}
           </Button>
         </>

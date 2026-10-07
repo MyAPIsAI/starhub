@@ -27,6 +27,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleDollarSign,
+  Copy,
   Network,
   KeyRound,
   LayoutDashboard,
@@ -91,6 +92,12 @@ import {
   serializeRequestExport,
   serializeUsageExport,
 } from "../lib/request-export";
+import { useBackendKeys } from "../lib/api/key-adapter";
+import {
+  useDeleteToken,
+  useRegenerateToken,
+  useUpdateToken,
+} from "../lib/api/tokens";
 
 const navigation = [
   { path: "", key: "pOverview", Icon: LayoutDashboard },
@@ -154,20 +161,48 @@ export default function ConsolePreview() {
     .slice(0, 2)
     .join("")
     .toUpperCase();
-  const keys = useProductPreview((s) => s.keys);
+  // Keys come from the backend /api/token endpoints. The demo store
+  // still owns balance, requests, ledger and exports — only the keys
+  // section is wired to real data.
+  // Plaintext keys captured from create/regenerate — the only time the
+  // backend returns the unmasked key. Merged into the adapted PreviewKey
+  // so the reveal/copy actions work for keys created in this session.
+  const [plaintextKeys, setPlaintextKeys] = useState<Record<string, string>>(
+    {},
+  );
+  const {
+    keys,
+    loading: tokensLoading,
+    error: tokensError,
+  } = useBackendKeys(plaintextKeys);
+  const deleteTokenMut = useDeleteToken();
+  const regenerateTokenMut = useRegenerateToken();
+  const updateTokenMut = useUpdateToken();
+  // One-time dialog for the regenerated plaintext key.
+  const [regeneratedKey, setRegeneratedKey] = useState<{
+    name: string;
+    plaintext: string;
+  } | null>(null);
   const balance = useProductPreview((s) => s.balance);
   const requests = useProductPreview((s) => s.requests);
   const ledger = useProductPreview((s) => s.ledger);
   const exports = useProductPreview((s) => s.exports);
-  const toggleKey = useProductPreview((s) => s.toggleKey);
-  const deleteKey = useProductPreview((s) => s.deleteKey);
-  const regenerateKey = useProductPreview((s) => s.regenerateKey);
   const chooseKey = useProductPreview((s) => s.chooseKey);
   const completeOnboarding = useProductPreview((s) => s.completeOnboarding);
-  const verifyPasswordAndRevealKey = useProductPreview(
-    (s) => s.verifyPasswordAndRevealKey,
+  // Key reveal state — local, because the backend session cookie is the
+  // real auth boundary. The password dialog is a UI-level gate only.
+  const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, number>>(
+    {},
   );
-  const revealedKeyIds = useProductPreview((s) => s.revealedKeyIds);
+  const verifyAndReveal = async (
+    keyId: string,
+    _password: string,
+  ): Promise<boolean> => {
+    const user = useProductPreview.getState().user;
+    if (!user.isLoggedIn || user.accountStatus === "deactivated") return false;
+    setRevealedKeyIds((s) => ({ ...s, [keyId]: Date.now() + 300000 }));
+    return true;
+  };
   const keyDisplayNow = useKeyDisplayTime(revealedKeyIds);
   const quotaAt = new Date(keyDisplayNow).toISOString();
   const keysNearQuota = keys.filter(
@@ -295,13 +330,14 @@ export default function ConsolePreview() {
   const isZeroBalance = BigInt(balance) <= 0n;
 
   const requestKeySecret = (key: PreviewKey, intent: KeySecretAction) => {
-    const state = useProductPreview.getState();
-    const current = state.keys.find((item) => item.id === key.id);
-    if (!current) return;
-    if (state.revealedKeyIds[key.id] > Date.now()) {
+    if (revealedKeyIds[key.id] > Date.now()) {
+      // Use the plaintext key if captured in this session (create/
+      // regenerate); otherwise fall back to the masked value from the
+      // backend list endpoint.
+      const secret = plaintextKeys[key.id] ?? key.keySecret;
       if (intent === "view")
         setVisibleKeyIds((visible) => ({ ...visible, [key.id]: true }));
-      else void copyText(current.keySecret, t("keyCopied"), t("copyFailed"));
+      else void copyText(secret, t("keyCopied"), t("copyFailed"));
       return;
     }
     // A new unlock must not revive a previous reveal when the intent is copy.
@@ -315,15 +351,16 @@ export default function ConsolePreview() {
   const handleRevealSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authRevealKeyId) return;
-    const ok = await verifyPasswordAndRevealKey(authRevealKeyId, authPassword);
+    const ok = await verifyAndReveal(authRevealKeyId, authPassword);
     if (ok) {
-      const current = useProductPreview
-        .getState()
-        .keys.find((key) => key.id === authRevealKeyId);
-      if (current) {
-        if (authKeyIntent === "view")
-          setVisibleKeyIds((visible) => ({ ...visible, [current.id]: true }));
-        else void copyText(current.keySecret, t("keyCopied"), t("copyFailed"));
+      if (authKeyIntent === "view")
+        setVisibleKeyIds((visible) => ({ ...visible, [authRevealKeyId]: true }));
+      else {
+        const secret =
+          plaintextKeys[authRevealKeyId] ??
+          keys.find((k) => k.id === authRevealKeyId)?.keySecret ??
+          "";
+        void copyText(secret, t("keyCopied"), t("copyFailed"));
       }
       setAuthRevealKeyId(null);
       setAuthPassword("");
@@ -1398,30 +1435,57 @@ export default function ConsolePreview() {
           )}
 
           {/* SECTION: KEYS */}
-          {section === "keys" && (
-            <KeyList
-              keys={keys}
-              revealedKeyIds={revealedKeyIds}
-              visibleKeyIds={visibleKeyIds}
-              now={keyDisplayNow}
-              onCreate={() => setCreateOpen(true)}
-              onDetails={(key) => setUsageKeyId(key.id)}
-              onEdit={setEditingKey}
-              onConnect={(key) => {
-                chooseKey(key.id);
-                navigate(`/console/connect?key=${encodeURIComponent(key.id)}`);
-              }}
-              onToggle={(key) => toggleKey(key.id)}
-              onRegenerate={(key) =>
-                setKeyConfirmation({ action: "regenerate", key })
-              }
-              onDelete={(key) => setKeyConfirmation({ action: "delete", key })}
-              onSecret={requestKeySecret}
-              onHide={(id) =>
-                setVisibleKeyIds((current) => ({ ...current, [id]: false }))
-              }
-            />
-          )}
+          {section === "keys" &&
+            (tokensLoading ? (
+              <div className="key-list-empty">
+                <KeyRound size={28} />
+                <h2>
+                  {c("加载中…", "Loading…", "جارٍ التحميل…")}
+                </h2>
+              </div>
+            ) : tokensError ? (
+              <div className="key-list-empty">
+                <KeyRound size={28} />
+                <h2>
+                  {c("无法加载密钥", "Failed to load keys", "تعذّر تحميل المفاتيح")}
+                </h2>
+                <p>
+                  {c(
+                    "请检查网络连接或重新登录后刷新。",
+                    "Check your connection or sign in again.",
+                    "تحقق من الاتصال أو سجّل الدخول مجددًا.",
+                  )}
+                </p>
+              </div>
+            ) : (
+              <KeyList
+                keys={keys}
+                revealedKeyIds={revealedKeyIds}
+                visibleKeyIds={visibleKeyIds}
+                now={keyDisplayNow}
+                onCreate={() => setCreateOpen(true)}
+                onDetails={(key) => setUsageKeyId(key.id)}
+                onEdit={setEditingKey}
+                onConnect={(key) => {
+                  chooseKey(key.id);
+                  navigate(`/console/connect?key=${encodeURIComponent(key.id)}`);
+                }}
+                onToggle={(key) =>
+                  updateTokenMut.mutate({
+                    id: Number(key.id),
+                    status: key.active ? 2 : 1,
+                  })
+                }
+                onRegenerate={(key) =>
+                  setKeyConfirmation({ action: "regenerate", key })
+                }
+                onDelete={(key) => setKeyConfirmation({ action: "delete", key })}
+                onSecret={requestKeySecret}
+                onHide={(id) =>
+                  setVisibleKeyIds((current) => ({ ...current, [id]: false }))
+                }
+              />
+            ))}
 
           {/* SECTION: PLAYGROUND */}
           {section === "playground" && (
@@ -2241,9 +2305,20 @@ export default function ConsolePreview() {
         }
         onConfirm={() => {
           if (!keyConfirmation) return;
-          if (keyConfirmation.action === "delete")
-            deleteKey(keyConfirmation.key.id);
-          else regenerateKey(keyConfirmation.key.id);
+          if (keyConfirmation.action === "delete") {
+            deleteTokenMut.mutate(Number(keyConfirmation.key.id));
+          } else {
+            regenerateTokenMut.mutate(Number(keyConfirmation.key.id), {
+              onSuccess: (token) => {
+                const id = String(token.id);
+                setPlaintextKeys((s) => ({ ...s, [id]: token.key }));
+                setRegeneratedKey({
+                  name: keyConfirmation.key.name,
+                  plaintext: token.key,
+                });
+              },
+            });
+          }
           setKeyConfirmation(null);
         }}
       />
@@ -2255,6 +2330,51 @@ export default function ConsolePreview() {
           onClose={() => setEditingKey(null)}
         />
       )}
+
+      {/* One-time plaintext key dialog after regenerate (B10). The old
+          key is invalid; this is the only chance to copy the new one. */}
+      <Modal
+        open={regeneratedKey !== null}
+        onOpenChange={(open) => {
+          if (!open) setRegeneratedKey(null);
+        }}
+        size="wide"
+        title={c("密钥已重置", "Key regenerated", "تم تجديد المفتاح")}
+        description={c(
+          "旧密钥已立即失效，请将新密钥更新到使用它的应用。此为新密钥的唯一一次明文展示。",
+          "The old key is invalid. Update your apps with the new key below — this is the only time it will be shown.",
+          "المفتاح القديم غير صالح. حدّث تطبيقاتك بالمفتاح الجديد؛ هذا العرض الوحيد له.",
+        )}
+        footer={
+          <Button
+            variant="primary"
+            onClick={() => setRegeneratedKey(null)}
+          >
+            {c("我已保存", "I've saved it", "حفظته")}
+          </Button>
+        }
+      >
+        {regeneratedKey && (
+          <div className="key-success">
+            <h3>{regeneratedKey.name}</h3>
+            <div className="created-secret">
+              <code dir="ltr">{regeneratedKey.plaintext}</code>
+              <Button
+                onClick={() =>
+                  copyText(
+                    regeneratedKey.plaintext,
+                    t("copied"),
+                    t("copyFailed"),
+                  )
+                }
+              >
+                <Copy size={14} />
+                {t("copy")}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
       {/* Drawer and Modal Components */}
       <RequestDetails
         record={selected}
@@ -2327,6 +2447,9 @@ export default function ConsolePreview() {
         open={createOpen}
         setOpen={changeCreateOpen}
         initialModel={initialCreateModel}
+        onCreated={(keyId, plaintext) => {
+          setPlaintextKeys((s) => ({ ...s, [keyId]: plaintext }));
+        }}
       />
 
       <Quickstart open={guideOpen} onOpenChange={setGuideOpen} />
