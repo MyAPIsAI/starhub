@@ -28,6 +28,16 @@ import { accountDisplayName } from "../lib/account-identity";
 import { validateRechargeAmount } from "../lib/billing";
 import { formatMoney } from "../lib/money";
 import { placeholders } from "../config/placeholders";
+import {
+  useLedger,
+  useRechargeOrders,
+  useCreateRechargeOrder,
+  useBeginRechargePayment,
+  useResolveRechargeOrder,
+  adaptRechargeOrder,
+  adaptLedgerEntry,
+} from "../lib/api/billing";
+import type { RechargeOrder } from "../lib/product-preview";
 import "../components/recharge-flow.css";
 
 const messages = {
@@ -333,15 +343,22 @@ export default function RechargeFlow({
   const language = usePreferences((state) => state.language);
   const t = (key: keyof typeof messages) =>
     messages[key][language === "zh" ? 0 : language === "ar" ? 2 : 1];
-  const balance = useProductPreview((state) => state.balance);
+  // Balance and recharge orders come from the backend. The wallet
+  // balance is derived from the latest ledger entry's balance_after.
+  const ledgerQuery = useLedger();
+  const ordersQuery = useRechargeOrders();
+  const createOrderMut = useCreateRechargeOrder();
+  const beginPaymentMut = useBeginRechargePayment();
+  const resolveOrderMut = useResolveRechargeOrder();
   const accountName = useProductPreview((state) =>
     accountDisplayName(state.user),
   );
-  const orders = useProductPreview((state) => state.rechargeOrders);
-  const createOrder = useProductPreview((state) => state.createRechargeOrder);
-  const beginPayment = useProductPreview((state) => state.beginRechargePayment);
-  const resolveOrder = useProductPreview((state) => state.resolveRechargeOrder);
-  const expireOrders = useProductPreview((state) => state.expireRechargeOrders);
+  const backendOrders = (ordersQuery.data ?? []).map(adaptRechargeOrder);
+  const balance = (() => {
+    const entries = (ledgerQuery.data ?? []).map(adaptLedgerEntry);
+    return entries.length ? entries[0].balance_after_nano : "0";
+  })();
+  const orders: RechargeOrder[] = backendOrders as unknown as RechargeOrder[];
   const [activeId, setActiveId] = useState<string | null>(orderId ?? null);
   const [amount, setAmount] = useState("100");
   const [attempted, setAttempted] = useState(false);
@@ -376,20 +393,17 @@ export default function RechargeFlow({
     setAttempted(false);
     setNow(Date.now());
     submitted.current = false;
-    expireOrders();
-  }, [orderId, expireOrders]);
+  }, [orderId]);
 
   useEffect(() => {
     if (!isWaiting) return;
     const tick = () => {
-      const timestamp = Date.now();
-      setNow(timestamp);
-      expireOrders(timestamp);
+      setNow(Date.now());
     };
     tick();
     const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, [isWaiting, activeId, expireOrders]);
+  }, [isWaiting, activeId]);
 
   useLayoutEffect(() => {
     const next = !activeId
@@ -421,7 +435,7 @@ export default function RechargeFlow({
               : "genericError",
     );
   };
-  const confirmAmount = () => {
+  const confirmAmount = async () => {
     setAttempted(true);
     setActionError(null);
     if (!validAmount.ok) {
@@ -430,42 +444,64 @@ export default function RechargeFlow({
     }
     if (submitted.current) return;
     submitted.current = true;
-    const result = createOrder(amount, "card");
-    if (!result.ok) {
-      submitted.current = false;
-      displayError(result.error);
-      return;
-    }
-    setNow(Date.now());
-    setActiveId(result.order.id);
-    onOrderChange?.(result.order.id);
-    setCashier(false);
-    setNotice(null);
+    createOrderMut.mutate(
+      { amount_usd: amount, channel: "card" },
+      {
+        onSuccess: (order) => {
+          const adapted = adaptRechargeOrder(order);
+          setNow(Date.now());
+          setActiveId(adapted.id);
+          onOrderChange?.(adapted.id);
+          setCashier(false);
+          setNotice(null);
+        },
+        onError: (err) => {
+          submitted.current = false;
+          displayError(
+            err instanceof Error ? err.message : String(err),
+          );
+        },
+      },
+    );
   };
-  const checkout = () => {
+  const checkout = async () => {
     if (!order) return;
     setActionError(null);
     setNotice(null);
-    const result = beginPayment(order.id);
-    if (!result.ok) return displayError(result.error);
-    setCashier(true);
+    beginPaymentMut.mutate(Number(order.id), {
+      onSuccess: () => {
+        setCashier(true);
+      },
+      onError: (err) => {
+        displayError(err instanceof Error ? err.message : String(err));
+      },
+    });
   };
   const resolve = (
     outcome: "success" | "failed" | "cancelled",
-    late = false,
+    _late = false,
   ) => {
     if (!order) return;
     setActionError(null);
     setNotice(null);
-    const result = resolveOrder(
-      order.id,
-      outcome,
-      late ? { now: expires + 1000 } : undefined,
+    resolveOrderMut.mutate(
+      { id: Number(order.id), outcome },
+      {
+        onSuccess: (order) => {
+          setCashier(false);
+          if (order.status === "paid") {
+            // Check if it was already paid before this resolve.
+            const previous = backendOrders.find(
+              (o) => o.id === String(order.id),
+            );
+            if (previous?.status === "paid") setNotice("repeated");
+          }
+        },
+        onError: (err) => {
+          displayError(err instanceof Error ? err.message : String(err));
+        },
+      },
     );
-    if (!result.ok) return displayError(result.error);
-    setCashier(false);
-    if (result.alreadyProcessed && result.order.status === "paid")
-      setNotice("repeated");
   };
   const startAgain = () => {
     if (order) setAmount(order.amount_usd);
@@ -929,7 +965,6 @@ export default function RechargeFlow({
                       type="button"
                       disabled={!isWaiting}
                       onClick={() => {
-                        expireOrders(expires + 1000);
                         setNow(expires + 1000);
                         setCashier(false);
                         setActionError(null);

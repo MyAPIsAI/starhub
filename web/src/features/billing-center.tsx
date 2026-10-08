@@ -26,11 +26,13 @@ import {
 import { Button } from "../components/ui/button";
 import { Drawer, Modal } from "../components/ui/overlay";
 import { usePreferences } from "../lib/preferences";
+import type { LedgerEntry, RechargeOrder } from "../lib/product-preview";
 import {
-  useProductPreview,
-  type LedgerEntry,
-  type RechargeOrder,
-} from "../lib/product-preview";
+  useLedger,
+  useRechargeOrders,
+  adaptRechargeOrder,
+  adaptLedgerEntry,
+} from "../lib/api/billing";
 import { formatMoney } from "../lib/money";
 import {
   billingDate,
@@ -103,10 +105,24 @@ export default function BillingCenter({
   const location = useLocation();
   const tab =
     params.get("tab") === "ledger" || params.has("trace") ? "ledger" : "orders";
-  const balance = useProductPreview((s) => s.balance);
-  const ledger = useProductPreview((s) => s.ledger);
-  const orders = useProductPreview((s) => s.rechargeOrders);
-  const expireOrders = useProductPreview((s) => s.expireRechargeOrders);
+  // Balance comes from the demo store (wallet sidebar) until the
+  // sidebar is also wired; the billing-center reads the wallet via the
+  // ledger's latest balance_after, or from the wallet hook fallback.
+  // For now, derive balance from the latest ledger entry.
+  const ledgerQuery = useLedger();
+  const ordersQuery = useRechargeOrders();
+  const ledger: LedgerEntry[] = (ledgerQuery.data ?? []).map(
+    adaptLedgerEntry,
+  ) as unknown as LedgerEntry[];
+  const orders: RechargeOrder[] = (ordersQuery.data ?? []).map(
+    adaptRechargeOrder,
+  ) as unknown as RechargeOrder[];
+  const balance = ledger.length
+    ? ledger[0].balance_after_nano
+    : "0";
+  const expireOrders = () => {
+    // No-op: the backend lazily expires stale orders on list/resolve.
+  };
   const today = billingDate(new Date().toISOString());
   const month = today.slice(0, 7);
   const [from, setFrom] = useState(`${month}-01`);
@@ -405,9 +421,9 @@ export default function BillingCenter({
         <Info size={14} />
         <span>
           {c(
-            "当前为交互演示：不会真实扣款；正式支付渠道待接入。",
-            "Interactive demo: no real charges. Production payment integration is pending.",
-            "عرض تفاعلي بلا خصم حقيقي. تكامل الدفع الفعلي لم يُفعّل بعد.",
+            "充值与余额已联通后端；支付确认由手动模拟，不产生真实扣款。",
+            "Balance and recharge are backed by the server; payment confirmation is manually simulated — no real charges.",
+            "الرصيد والشحن مدعومان من الخادم؛ تأكيد الدفع محاكى يدويًا بلا خصم حقيقي.",
           )}
         </span>
       </div>

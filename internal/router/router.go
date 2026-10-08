@@ -103,6 +103,19 @@ func New() http.Handler {
 	// User self-service: redeem a prepaid code.
 	mux.Handle("POST /api/user/redeem", middleware.UserAuth(http.HandlerFunc(controller.RedeemCode)))
 
+	// Wallet & billing: balance, ledger, recharge orders. All require an
+	// authenticated user; admins see all records, users see their own.
+	mux.Handle("GET /api/wallet", middleware.UserAuth(http.HandlerFunc(controller.GetWallet)))
+	mux.Handle("GET /api/ledger", middleware.UserAuth(http.HandlerFunc(controller.ListLedger)))
+	mux.Handle("GET /api/ledger/", middleware.UserAuth(http.HandlerFunc(controller.ListLedger)))
+	mux.Handle("GET /api/recharge", middleware.UserAuth(http.HandlerFunc(controller.ListRechargeOrders)))
+	mux.Handle("GET /api/recharge/", middleware.UserAuth(http.HandlerFunc(controller.ListRechargeOrders)))
+	mux.Handle("POST /api/recharge", middleware.UserAuth(http.HandlerFunc(controller.CreateRechargeOrder)))
+	mux.Handle("POST /api/recharge/", middleware.UserAuth(http.HandlerFunc(controller.CreateRechargeOrder)))
+	mux.Handle("GET /api/recharge/{id}", middleware.UserAuth(http.HandlerFunc(controller.GetRechargeOrder)))
+	mux.Handle("POST /api/recharge/{id}/begin", middleware.UserAuth(http.HandlerFunc(controller.BeginRechargePayment)))
+	mux.Handle("POST /api/recharge/{id}/resolve", middleware.UserAuth(http.HandlerFunc(controller.ResolveRechargeOrder)))
+
 	// Relay endpoints (P3 multi-protocol family). All of them share the
 	// TokenAuth -> UserRateLimit -> TokenRateLimit -> Distribute ->
 	// ModelRateLimit -> Relay chain; the chat endpoints differ only in

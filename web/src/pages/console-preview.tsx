@@ -98,6 +98,7 @@ import {
   useRegenerateToken,
   useUpdateToken,
 } from "../lib/api/tokens";
+import { useWallet } from "../lib/api/billing";
 
 const navigation = [
   { path: "", key: "pOverview", Icon: LayoutDashboard },
@@ -183,7 +184,14 @@ export default function ConsolePreview() {
     name: string;
     plaintext: string;
   } | null>(null);
-  const balance = useProductPreview((s) => s.balance);
+  // Balance comes from the backend wallet. Falls back to the demo
+  // store value while loading or on error so the sidebar degrades
+  // gracefully instead of showing "0".
+  const walletQuery = useWallet();
+  const demoBalance = useProductPreview((s) => s.balance);
+  const balance = walletQuery.data
+    ? String(walletQuery.data.balance)
+    : demoBalance;
   const requests = useProductPreview((s) => s.requests);
   const ledger = useProductPreview((s) => s.ledger);
   const exports = useProductPreview((s) => s.exports);
