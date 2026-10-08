@@ -102,6 +102,18 @@ func ListLedger(userID int64) ([]LedgerEntry, error) {
 	return entries, err
 }
 
+// ListLedgerSince returns ledger entries since the given unix timestamp
+// for a user (or all users when userID == 0), ordered newest first.
+func ListLedgerSince(userID int64, since int64) ([]LedgerEntry, error) {
+	var entries []LedgerEntry
+	q := DB.Model(&LedgerEntry{}).Where("created_at >= ?", since)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.Order("id DESC").Limit(10000).Find(&entries).Error
+	return entries, err
+}
+
 // --- Recharge order ---
 
 // CreateRechargeOrder inserts a new pending order with a 30-minute expiry.

@@ -116,6 +116,13 @@ func New() http.Handler {
 	mux.Handle("POST /api/recharge/{id}/begin", middleware.UserAuth(http.HandlerFunc(controller.BeginRechargePayment)))
 	mux.Handle("POST /api/recharge/{id}/resolve", middleware.UserAuth(http.HandlerFunc(controller.ResolveRechargeOrder)))
 
+	// Exports: server-generated CSV files from logs and ledger.
+	mux.Handle("GET /api/export", middleware.UserAuth(http.HandlerFunc(controller.ListExports)))
+	mux.Handle("GET /api/export/", middleware.UserAuth(http.HandlerFunc(controller.ListExports)))
+	mux.Handle("POST /api/export", middleware.UserAuth(http.HandlerFunc(controller.CreateExport)))
+	mux.Handle("POST /api/export/", middleware.UserAuth(http.HandlerFunc(controller.CreateExport)))
+	mux.Handle("GET /api/export/{id}/download", middleware.UserAuth(http.HandlerFunc(controller.DownloadExport)))
+
 	// Relay endpoints (P3 multi-protocol family). All of them share the
 	// TokenAuth -> UserRateLimit -> TokenRateLimit -> Distribute ->
 	// ModelRateLimit -> Relay chain; the chat endpoints differ only in

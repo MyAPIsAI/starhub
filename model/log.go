@@ -79,3 +79,16 @@ func ListLogs(userID int64, page, pageSize int64, model string) ([]Log, int64, e
 	err := q.Order("id DESC").Limit(int(pageSize)).Offset(int((page - 1) * pageSize)).Find(&logs).Error
 	return logs, total, err
 }
+
+// ListLogsSince returns all logs since the given unix timestamp for a
+// user (or all users when userID == 0), ordered newest first. Used by
+// the export feature to generate CSV files without pagination limits.
+func ListLogsSince(userID int64, since int64) ([]Log, error) {
+	q := DB.Model(&Log{}).Where("created_at >= ?", since)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	var logs []Log
+	err := q.Order("id DESC").Limit(10000).Find(&logs).Error
+	return logs, err
+}
