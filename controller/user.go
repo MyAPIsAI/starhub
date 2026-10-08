@@ -311,3 +311,67 @@ func publicUser(u *model.User) map[string]any {
 		"created_at": u.CreatedAt,
 	}
 }
+
+// --- Self-service profile updates ---
+
+type updateSelfRequest struct {
+	CurrentPassword *string `json:"current_password"`
+	NewPassword     *string `json:"new_password"`
+	Email           *string `json:"email"`
+}
+
+// UpdateSelf lets the authenticated user change their own password and
+// email. Password change requires the current password; email change
+// does not (matches the demo UI which treats email as a profile field).
+func UpdateSelf(w http.ResponseWriter, r *http.Request) {
+	var req updateSelfRequest
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	user, err := model.GetUserByID(requestUserID(r))
+	if err != nil {
+		common.ApiError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	fields := map[string]any{}
+	if req.NewPassword != nil {
+		if req.CurrentPassword == nil || !common.VerifyPassword(*req.CurrentPassword, user.Password) {
+			common.ApiError(w, http.StatusForbidden, "current password is incorrect")
+			return
+		}
+		pw := strings.TrimSpace(*req.NewPassword)
+		if len(pw) < 6 || len(pw) > 64 {
+			common.ApiError(w, http.StatusBadRequest, "password must be 6-64 characters")
+			return
+		}
+		hashed, err := common.HashPassword(pw)
+		if err != nil {
+			common.ApiError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		fields["password"] = hashed
+	}
+	if req.Email != nil {
+		email := strings.TrimSpace(*req.Email)
+		if !validEmail(email) {
+			common.ApiError(w, http.StatusBadRequest, "invalid email")
+			return
+		}
+		fields["email"] = email
+	}
+	if len(fields) == 0 {
+		common.ApiError(w, http.StatusBadRequest, "nothing to update")
+		return
+	}
+	if err := model.UpdateUserFields(user.ID, fields); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Return the updated public user so the caller can refresh state.
+	updated, err := model.GetUserByID(user.ID)
+	if err != nil {
+		common.ApiSuccess(w, nil)
+		return
+	}
+	common.ApiSuccess(w, publicUser(updated))
+}

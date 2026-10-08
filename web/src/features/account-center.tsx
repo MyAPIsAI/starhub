@@ -22,6 +22,8 @@ import { Modal } from "../components/ui/overlay";
 import { useProductPreview } from "../lib/product-preview";
 import { useSystemAccess, isAdmin, ROLE_USER } from "../lib/system-access";
 import { logoutUser } from "../lib/api/auth";
+import { useUpdateSelf } from "../lib/api/user";
+import { ApiError } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
 import {
   accountDisplayName,
@@ -81,6 +83,7 @@ export default function AccountCenter({
   );
   const logout = useProductPreview((state) => state.logout);
   const queryClient = useQueryClient();
+  const updateSelfMut = useUpdateSelf();
   const role = useSystemAccess((state) => state.role);
   const language = usePreferences((state) => state.language);
   const navigate = useNavigate();
@@ -362,29 +365,49 @@ export default function AccountCenter({
     setError("");
     setBusy(true);
     try {
-      const identity =
-        mode === "password"
-          ? await demoAuth.changePassword({
-              accountId: user.id,
-              currentPassword,
-              newPassword,
-            })
-          : await demoAuth.changeContact({
-              accountId: user.id,
-              currentPassword,
-              purpose,
-              target,
-              code,
-            });
-      if (token !== operation.current) return;
-      applySecurity(
-        identity,
-        mode === "password"
-          ? "password_changed"
-          : mode === "phone"
-            ? "phone_changed"
-            : "email_changed",
-      );
+      // Password and email changes go to the backend; phone stays on
+      // the demo path because the backend has no phone support.
+      if (mode === "password") {
+        await updateSelfMut.mutateAsync({
+          current_password: currentPassword,
+          new_password: newPassword,
+        });
+        if (token !== operation.current) return;
+        applySecurity(
+          {
+            id: user.id,
+            username: user.username ?? user.email ?? "",
+            email: user.email,
+            phone: user.phone,
+          },
+          "password_changed",
+        );
+      } else if (mode === "email") {
+        await updateSelfMut.mutateAsync({
+          email: target,
+        });
+        if (token !== operation.current) return;
+        applySecurity(
+          {
+            id: user.id,
+            username: user.username ?? user.email ?? "",
+            email: target,
+            phone: user.phone,
+          },
+          "email_changed",
+        );
+      } else {
+        // Phone change: demo-only (no backend support).
+        const identity = await demoAuth.changeContact({
+          accountId: user.id,
+          currentPassword,
+          purpose,
+          target,
+          code,
+        });
+        if (token !== operation.current) return;
+        applySecurity(identity, "phone_changed");
+      }
       setNotice(
         mode === "password"
           ? c(
@@ -406,7 +429,22 @@ export default function AccountCenter({
       setCode("");
       setVisible({});
     } catch (caught) {
-      if (token === operation.current) setError(explain(caught));
+      if (token !== operation.current) return;
+      if (caught instanceof ApiError) {
+        if (caught.status === 403 && caught.message.includes("current password")) {
+          setError(
+            c(
+              "当前密码不正确。",
+              "Current password is incorrect.",
+              "كلمة المرور الحالية غير صحيحة.",
+            ),
+          );
+        } else {
+          setError(caught.message);
+        }
+      } else {
+        setError(explain(caught));
+      }
     } finally {
       if (token === operation.current) setBusy(false);
     }
@@ -787,9 +825,9 @@ export default function AccountCenter({
           <Info size={15} />
           <span>
             {c(
-              "本地认证演示，不发送真实短信或邮件。演示凭据仅保留在当前标签页，关闭后已注册账号需重新演示。修改安全信息不改变余额、历史账单或接口密钥权限。",
-              "Local authentication demo; no real SMS or email is sent. Credentials last only in this tab; registered accounts must be demonstrated again after closing it. Security changes preserve your balance, billing history and API-key permissions.",
-              "عرض مصادقة محلي دون رسائل حقيقية. تبقى بيانات الدخول في علامة التبويب الحالية فقط؛ بعد إغلاقها يلزم إعادة تجربة الحسابات المسجلة. لا تغير إجراءات الأمان الرصيد أو الفواتير أو أذونات المفاتيح.",
+              "密码和邮箱修改已联通后端；手机绑定仍为本地演示，不发送真实短信。修改安全信息不改变余额、历史账单或接口密钥权限。",
+              "Password and email changes are backed by the server; phone binding remains a local demo (no real SMS). Security changes preserve your balance, billing history and API-key permissions.",
+              "تعديل كلمة المرور والبريد مدعوم من الخادم؛ ربط الهاتف تجريبي محلي بلا رسائل حقيقية. لا تغير إجراءات الأمان الرصيد أو الفواتير أو أذونات المفاتيح.",
             )}
           </span>
         </div>
