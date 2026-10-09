@@ -106,10 +106,9 @@ export default function BillingCenter({
   const location = useLocation();
   const tab =
     params.get("tab") === "ledger" || params.has("trace") ? "ledger" : "orders";
-  // Balance comes from the demo store (wallet sidebar) until the
-  // sidebar is also wired; the billing-center reads the wallet via the
-  // ledger's latest balance_after, or from the wallet hook fallback.
-  // For now, derive balance from the latest ledger entry.
+  // Balance comes from the backend wallet API (GET /api/wallet),
+  // falling back to the latest ledger entry's balance_after when the
+  // wallet query has no data yet.
   const ledgerQuery = useLedger();
   const ordersQuery = useRechargeOrders();
   const walletQuery = useWallet();

@@ -241,10 +241,14 @@ export default function ConsolePreview() {
   useEffect(() => {
     const trace = new URLSearchParams(location.search).get("trace");
     if (trace && section === "requests")
-      setSelected(requests.find((r) => r.trace_id === trace) || null);
+      setSelected(
+        (backendRequests as any[]).find(
+          (r) => r.trace_id === trace,
+        ) as PreviewRequest | null,
+      );
     else if (previousTrace.current) setSelected(null);
     previousTrace.current = section === "requests" ? trace : null;
-  }, [location.search, section, requests]);
+  }, [location.search, section, backendRequests]);
   const [createOpen, setCreateOpen] = useState(false);
   const requestedModel = new URLSearchParams(location.search).get("model");
   const initialCreateModel = catalogModels.some(

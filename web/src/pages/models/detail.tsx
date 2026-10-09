@@ -18,6 +18,7 @@ import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../lib/preferences";
 import { useModelPricing } from "../../lib/model-pricing";
 import { useProductPreview } from "../../lib/product-preview";
+import { useBackendKeys } from "../../lib/api/key-adapter";
 import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
 import { getKeyModelOptions } from "../../lib/key-model-policy";
 import { usePlazaModel, plazaToDirectoryModel } from "../../lib/api/plaza";
@@ -32,7 +33,7 @@ export default function ModelDetail() {
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const pricing = useModelPricing((s) => s.config);
   const accountId = useProductPreview((s) => s.user.id);
-  const keys = useProductPreview((s) => s.keys);
+  const keys = useBackendKeys().keys;
   const selectedKey = useProductPreview((s) => s.selectedKey);
   const [selectedTier, setTier] = useState<string | null>(null);
   const [params] = useSearchParams();
