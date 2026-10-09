@@ -347,7 +347,12 @@ export default function ConsolePreview() {
       return usageItems.map((item) => ({
         date: item.date.slice(5, 10).replace("-", "/"),
         requests: item.requests,
-        cost: Number(quotaToNanoUsd(item.quota)),
+        // The chart and tooltip expect USD (small numbers like 0.0042),
+        // not nano-USD. Convert quota -> USD.
+        cost: Number(quotaToNanoUsd(item.quota)) / 1e9,
+        // The backend usage API has no latency; default to 0 so the
+        // latency chart shows a flat line instead of crashing.
+        latency: 0,
       }));
     }
     // Fallback to demo data.
