@@ -124,6 +124,14 @@ func New() http.Handler {
 	mux.Handle("POST /api/export/", middleware.UserAuth(http.HandlerFunc(controller.CreateExport)))
 	mux.Handle("GET /api/export/{id}/download", middleware.UserAuth(http.HandlerFunc(controller.DownloadExport)))
 
+	// Service group management (admin only). The multiplier is synced
+	// to the group_ratio option so relay billing picks up changes.
+	mux.Handle("GET /api/service-group", middleware.AdminAuth(http.HandlerFunc(controller.ListServiceGroups)))
+	mux.Handle("GET /api/service-group/", middleware.AdminAuth(http.HandlerFunc(controller.ListServiceGroups)))
+	mux.Handle("PUT /api/service-group", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertServiceGroup))))
+	mux.Handle("PUT /api/service-group/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertServiceGroup))))
+	mux.Handle("DELETE /api/service-group/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteServiceGroup))))
+
 	// Relay endpoints (P3 multi-protocol family). All of them share the
 	// TokenAuth -> UserRateLimit -> TokenRateLimit -> Distribute ->
 	// ModelRateLimit -> Relay chain; the chat endpoints differ only in

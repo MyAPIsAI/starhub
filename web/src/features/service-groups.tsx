@@ -6,15 +6,21 @@ import {
   demoAccounts as seedAccounts,
   accountCanUseGroup,
   groupResources,
-  materializeAvailability,
 } from "../lib/platform-catalog";
-import { removeServiceGroup } from "../lib/catalog-mutations";
 import { accountDisplayName } from "../lib/account-identity";
 import { useProductPreview } from "../lib/product-preview";
 import type {
   ServiceGroupConfig,
   PricingCatalogConfig,
 } from "../config/models";
+import {
+  useServiceGroups,
+  useUpsertServiceGroup,
+  useDeleteServiceGroup,
+  type ServiceGroup,
+  type ServiceGroupInput,
+} from "../lib/api/service-group";
+import { ApiError } from "../lib/api/http";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import "../components/catalog-management.css";
@@ -26,7 +32,7 @@ type Draft = {
   fresh: boolean;
   revision: string;
 };
-export function ServiceGroups({ role }: { role: number }) {
+export function ServiceGroups({ role: _role }: { role: number }) {
   const user = useProductPreview((s) => s.user);
   const demoAccounts = seedAccounts.some((account) => account.id === user.id)
     ? seedAccounts.map((account) =>
@@ -35,10 +41,33 @@ export function ServiceGroups({ role }: { role: number }) {
           : account,
       )
     : [...seedAccounts, { id: user.id, name: accountDisplayName(user) }];
-  const config = useModelPricing((s) => s.config),
-    save = useModelPricing((s) => s.save);
-  const keys = useProductPreview((s) => s.keys),
-    requests = useProductPreview((s) => s.requests);
+  const config = useModelPricing((s) => s.config);
+  const keys = useProductPreview((s) => s.keys);
+  // Groups come from the backend /api/service-group endpoint.
+  const groupsQuery = useServiceGroups();
+  const upsertMut = useUpsertServiceGroup();
+  const deleteMut = useDeleteServiceGroup();
+  // Build a groups/multipliers map from backend data for the local
+  // config-based helpers (groupResources, accountCanUseGroup, etc.).
+  const backendGroups: Record<string, ServiceGroupConfig> = {};
+  const backendMultipliers: Record<string, string> = {};
+  const backendList: ServiceGroup[] = groupsQuery.data ?? [];
+  for (const g of backendList) {
+    backendGroups[g.group_id] = {
+      name: g.name,
+      description: g.description,
+      enabled: g.enabled,
+      visibility: g.visibility,
+      accountIds: g.account_ids,
+    };
+    backendMultipliers[g.group_id] = g.multiplier;
+  }
+  // Merge backend groups into a config-like object for local helpers.
+  const mergedConfig: PricingCatalogConfig = {
+    ...config,
+    groups: { ...config.groups, ...backendGroups },
+    multipliers: { ...config.multipliers, ...backendMultipliers },
+  };
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("all"),
     [account, setAccount] = useState("account-demo");
@@ -52,7 +81,7 @@ export function ServiceGroups({ role }: { role: number }) {
     setEditing({
       id: id ?? "",
       group: id
-        ? structuredClone(config.groups[id])
+        ? structuredClone(mergedConfig.groups[id])
         : {
             name: "",
             description: "",
@@ -60,24 +89,13 @@ export function ServiceGroups({ role }: { role: number }) {
             visibility: "common",
             accountIds: [],
           },
-      multiplier: id ? config.multipliers[id] : "1",
+      multiplier: id ? mergedConfig.multipliers[id] : "1",
       fresh: !id,
-      revision: config.revision,
+      revision: mergedConfig.revision,
     });
   };
   const patch = (update: Partial<ServiceGroupConfig>) =>
     setEditing((e) => e && { ...e, group: { ...e.group, ...update } });
-  const publish = (next: PricingCatalogConfig, revision = config.revision) => {
-    const result = save(materializeAvailability(next), role, revision);
-    setNotice(
-      result.ok
-        ? "分组已更新，后续请求使用新设置。"
-        : result.reason === "conflict"
-          ? "配置已被更新，请关闭编辑后重试。"
-          : "未保存，请检查字段、权限或浏览器存储。",
-    );
-    return result.ok;
-  };
   const validate = () => {
     if (!editing) return false;
     if (
@@ -88,7 +106,7 @@ export function ServiceGroups({ role }: { role: number }) {
       setNotice("请填写有效的名称、分组标识和倍率（大于 0，不超过 100）。");
       return false;
     }
-    if (editing.fresh && config.groups[editing.id]) {
+    if (editing.fresh && mergedConfig.groups[editing.id]) {
       setNotice("分组标识已存在。");
       return false;
     }
@@ -104,15 +122,31 @@ export function ServiceGroups({ role }: { role: number }) {
   };
   const submit = () => {
     if (!editing || !validate()) return;
-    const next = structuredClone(config);
-    next.groups[editing.id] = editing.group;
-    next.multipliers[editing.id] = editing.multiplier;
-    if (publish(next, editing.revision)) {
-      setEditing(null);
-      setReview(false);
-    }
+    const input: ServiceGroupInput = {
+      group_id: editing.id,
+      name: editing.group.name,
+      description: editing.group.description,
+      enabled: editing.group.enabled,
+      visibility: editing.group.visibility ?? "common",
+      account_ids: editing.group.accountIds ?? [],
+      multiplier: editing.multiplier,
+    };
+    upsertMut.mutate(input, {
+      onSuccess: () => {
+        setNotice("分组已更新，后续请求使用新设置。");
+        setEditing(null);
+        setReview(false);
+      },
+      onError: (err) => {
+        setNotice(
+          err instanceof ApiError
+            ? err.message
+            : "未保存，请检查字段或网络。",
+        );
+      },
+    });
   };
-  const rows = Object.entries(config.groups).filter(
+  const rows = Object.entries(mergedConfig.groups).filter(
     ([id, g]) =>
       `${id} ${g.name}`.toLowerCase().includes(query.toLowerCase()) &&
       (filter === "all" || g.visibility === filter),
@@ -180,9 +214,9 @@ export function ServiceGroups({ role }: { role: number }) {
           </thead>
           <tbody>
             {rows.map(([id, g]) => {
-              const resources = groupResources(config, id, undefined, false);
+              const resources = groupResources(mergedConfig, id, undefined, false);
               const models = new Set(
-                resources.map((r) => config.placements?.[r.id]?.modelId),
+                resources.map((r) => mergedConfig.placements?.[r.id]?.modelId),
               );
               return (
                 <tr key={id}>
@@ -259,8 +293,8 @@ export function ServiceGroups({ role }: { role: number }) {
           </select>
         </div>
         <p>
-          {Object.entries(config.groups)
-            .filter(([id]) => accountCanUseGroup(config, id, account))
+          {Object.entries(mergedConfig.groups)
+            .filter(([id]) => accountCanUseGroup(mergedConfig, id, account))
             .map(([, g]) => g.name)
             .join("、") || "此账号没有可用分组"}
         </p>
@@ -455,17 +489,20 @@ export function ServiceGroups({ role }: { role: number }) {
             <Button
               variant="primary"
               onClick={() => {
-                try {
-                  if (
-                    removing &&
-                    publish(
-                      removeServiceGroup(config, removing, keys, requests),
-                    )
-                  )
+                if (!removing) return;
+                deleteMut.mutate(removing, {
+                  onSuccess: () => {
                     setRemoving(null);
-                } catch (e) {
-                  setNotice((e as Error).message);
-                }
+                    setNotice("分组已删除。");
+                  },
+                  onError: (err) => {
+                    setNotice(
+                      err instanceof ApiError
+                        ? err.message
+                        : "删除失败，请检查是否有密钥或调用引用此分组。",
+                    );
+                  },
+                });
               }}
             >
               确认删除
@@ -473,7 +510,7 @@ export function ServiceGroups({ role }: { role: number }) {
           </>
         }
       >
-        <p>{removing && config.groups[removing]?.name}</p>
+        <p>{removing && mergedConfig.groups[removing]?.name}</p>
         {notice && <p role="alert">{notice}</p>}
       </Modal>
     </div>
