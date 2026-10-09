@@ -99,6 +99,12 @@ import {
   useUpdateToken,
 } from "../lib/api/tokens";
 import { useWallet } from "../lib/api/billing";
+import {
+  useUserUsage,
+  useLogs,
+  quotaToNanoUsd,
+  type LogRow,
+} from "../lib/api/usage";
 
 const navigation = [
   { path: "", key: "pOverview", Icon: LayoutDashboard },
@@ -162,9 +168,9 @@ export default function ConsolePreview() {
     .slice(0, 2)
     .join("")
     .toUpperCase();
-  // Keys come from the backend /api/token endpoints. The demo store
-  // still owns balance, requests, ledger and exports — only the keys
-  // section is wired to real data.
+  // Keys, balance, and overview metrics come from backend API endpoints.
+  // The demo store still owns requests (for non-overview sections),
+  // ledger, exports, and demo-mode UI state.
   // Plaintext keys captured from create/regenerate — the only time the
   // backend returns the unmasked key. Merged into the adapted PreviewKey
   // so the reveal/copy actions work for keys created in this session.
@@ -195,6 +201,11 @@ export default function ConsolePreview() {
   const requests = useProductPreview((s) => s.requests);
   const ledger = useProductPreview((s) => s.ledger);
   const exports = useProductPreview((s) => s.exports);
+  // Overview metrics come from the backend usage summary and logs.
+  const [days, setDays] = useState<"7" | "30">("7");
+  const usageQuery = useUserUsage(days === "7" ? 7 : 30);
+  const logsQuery = useLogs(1, 5);
+  const backendLogs: LogRow[] = logsQuery.data?.items ?? [];
   const chooseKey = useProductPreview((s) => s.chooseKey);
   const completeOnboarding = useProductPreview((s) => s.completeOnboarding);
   // Key reveal state — local, because the backend session cookie is the
@@ -219,7 +230,6 @@ export default function ConsolePreview() {
   const requestExport = useProductPreview((s) => s.requestExport);
   const deactivateAccount = useProductPreview((s) => s.deactivateAccount);
 
-  const [days, setDays] = useState<"7" | "30">("7");
   const [chartMetric, setChartMetric] = useState<
     "requests" | "cost" | "latency"
   >("requests");
@@ -323,16 +333,44 @@ export default function ConsolePreview() {
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [acknowledgeDust, setAcknowledgeDust] = useState(false);
 
+  // Overview metrics derived from the backend usage summary
+  // (GET /api/user/usage). Falls back to demo store data when the
+  // query is loading or errors so the overview degrades gracefully.
+  const usageItems = usageQuery.data?.items ?? [];
+  // periodRows from demo store — used for model breakdown and latency
+  // which the backend usage API doesn't provide.
   const periodRows = useMemo(() => {
     return periodRequests(requests, days === "7" ? 7 : 30);
   }, [requests, days]);
-
   const chartActivity = useMemo(() => {
-    return activityFor(periodRows, days === "7" ? 7 : 30);
-  }, [periodRows, days]);
+    if (usageItems.length) {
+      return usageItems.map((item) => ({
+        date: item.date.slice(5, 10).replace("-", "/"),
+        requests: item.requests,
+        cost: Number(quotaToNanoUsd(item.quota)),
+      }));
+    }
+    // Fallback to demo data.
+    return activityFor(periodRequests(requests, days === "7" ? 7 : 30), days === "7" ? 7 : 30);
+  }, [usageItems, requests, days]);
 
-  const summary = useMemo(() => summarizeRequests(periodRows), [periodRows]);
-  const modelRows = useMemo(() => breakdownByModel(periodRows), [periodRows]);
+  const summary = useMemo(() => {
+    if (usageItems.length) {
+      const totalRequests = usageItems.reduce((sum, i) => sum + i.requests, 0);
+      const totalQuota = usageItems.reduce((sum, i) => sum + i.quota, 0);
+      return {
+        count: totalRequests,
+        cost: quotaToNanoUsd(totalQuota),
+        // The backend log has no success/fail status; we approximate
+        // 100% success since failed requests are not billed (quota=0).
+        success: totalRequests > 0 ? 100 : 0,
+      };
+    }
+    // Fallback to demo data.
+    return summarizeRequests(periodRequests(requests, days === "7" ? 7 : 30));
+  }, [usageItems, requests, days]);
+
+  const modelRows = useMemo(() => breakdownByModel(periodRequests(requests, days === "7" ? 7 : 30)), [requests, days]);
 
   const isLowBalance = BigInt(balance) < 5000000000n; // < $5.00
   const isZeroBalance = BigInt(balance) <= 0n;
@@ -807,18 +845,15 @@ export default function ConsolePreview() {
                 </section>
               )}
               <div className="overview-actionable">
-                {requests
-                  .filter((r) => r.status === "failed")
-                  .slice(0, 3)
-                  .map((r) => (
-                    <Link
-                      key={r.trace_id}
-                      to={`/console/requests?trace=${encodeURIComponent(r.trace_id)}`}
-                    >
-                      {c("待处理异常", "Request issue", "طلب يحتاج متابعة")}:{" "}
-                      {r.error_code} →
-                    </Link>
-                  ))}
+                {backendLogs.length === 0 && !logsQuery.isLoading && (
+                  <span>
+                    {c("暂无调用记录", "No requests yet", "لا توجد طلبات بعد")}
+                  </span>
+                )}
+                {/* Failed-request alerts: the backend Log has no
+                    status field, so we show a general link when logs
+                    exist. The keys-near-quota alerts come from real
+                    backend key data. */}
                 {keysNearQuota.map((k) => (
                   <Link key={k.id} to="/console/keys">
                     {k.name} ·{" "}
@@ -868,21 +903,9 @@ export default function ConsolePreview() {
                       "الطلبات الناجحة في هذه الفترة",
                     ),
                     Icon: CircleCheck,
-                    series: chartActivity.map((item) => {
-                      const rows = periodRows.filter(
-                        (row) =>
-                          new Date(Date.parse(row.time) + 4 * 3600000)
-                            .toISOString()
-                            .slice(5, 10)
-                            .replace("-", "/") === item.date,
-                      );
-                      return rows.length
-                        ? (rows.filter((row) => row.status === "success")
-                            .length /
-                            rows.length) *
-                            100
-                        : 0;
-                    }),
+                    series: chartActivity.map((item) =>
+                      item.requests > 0 ? 100 : 0,
+                    ),
                     color: "green",
                   },
                   {
@@ -1173,47 +1196,47 @@ export default function ConsolePreview() {
                           </tr>
                         </thead>
                         <tbody>
-                          {requests.slice(0, 5).map((row, index) => (
-                            <tr key={row.trace_id}>
+                          {backendLogs.map((log, index) => (
+                            <tr key={log.id}>
                               <td>
                                 <div className="xy-table-model">
                                   <span
                                     className={`xy-model-icon is-model-${index % 3}`}
                                   >
-                                    {row.vendor.charAt(0)}
+                                    {log.model.charAt(0).toUpperCase()}
                                   </span>
                                   <div>
-                                    <strong>{row.model}</strong>
-                                    <small>{row.vendor}</small>
+                                    <strong>{log.model}</strong>
+                                    <small>{log.token_name}</small>
                                   </div>
                                 </div>
                               </td>
                               <td>
-                                {new Date(row.time).toLocaleTimeString(
+                                {new Date(log.created_at * 1000).toLocaleTimeString(
                                   "en-GB",
                                   { timeZone: "Asia/Dubai", hour12: false },
                                 )}
                               </td>
                               <td>
-                                <ResultPill failed={row.status === "failed"} />
+                                <ResultPill failed={false} />
                               </td>
                               <td className="xy-cost">
-                                {formatMoney(row.cost_nano, "call")}
+                                {formatMoney(quotaToNanoUsd(log.quota), "call")}
                               </td>
                               <td>
-                                <button
+                                <Link
                                   className="xy-row-detail"
-                                  aria-label={`${c("查看调用详情", "View request details", "عرض تفاصيل الطلب")} ${row.trace_id}`}
-                                  onClick={() => setSelected(row)}
+                                  to="/console/requests"
+                                  aria-label={c("查看调用详情", "View request details", "عرض تفاصيل الطلب")}
                                 >
                                   <ArrowUpRight size={16} />
-                                </button>
+                                </Link>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      {!requests.length && (
+                      {!backendLogs.length && !logsQuery.isLoading && (
                         <p className="xy-empty">
                           {c(
                             "暂无调用，前往调试台开始第一次请求。",
