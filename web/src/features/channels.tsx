@@ -10,7 +10,7 @@ import type {
   ResourcePlacement,
   ResourceSnapshot,
 } from "../config/models";
-import { useProductPreview } from "../lib/product-preview";
+import { useBackendKeys } from "../lib/api/key-adapter";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { DemoControlBar } from "../components/demo-control-bar";
@@ -25,7 +25,7 @@ type Edit = { id: string; placement: ResourcePlacement; revision: string };
 export function Channels({ role }: { role: number }) {
   const config = useModelPricing((s) => s.config),
     save = useModelPricing((s) => s.save),
-    keys = useProductPreview((s) => s.keys);
+    keys = useBackendKeys().keys;
   const snapshot = config.resources!;
   const [notice, setNotice] = useState("");
   const [removedOpen, setRemovedOpen] = useState(false);

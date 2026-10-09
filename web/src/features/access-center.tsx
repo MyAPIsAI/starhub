@@ -13,6 +13,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { usePreferences } from "../lib/preferences";
 import { useProductPreview } from "../lib/product-preview";
+import { useBackendKeys } from "../lib/api/key-adapter";
 import { useModelPricing } from "../lib/model-pricing";
 import { serviceGroupLabel } from "../lib/service-group-label";
 import {
@@ -51,7 +52,7 @@ export default function AccessCenter() {
   const lang = usePreferences((s) => s.language);
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
-  const keys = useProductPreview((s) => s.keys);
+  const { keys } = useBackendKeys();
   const selectedKey = useProductPreview((s) => s.selectedKey);
   const requests = useProductPreview((s) => s.requests);
   const revealed = useProductPreview((s) => s.revealedKeyIds);

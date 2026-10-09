@@ -88,3 +88,52 @@ export function quotaToNanoUsd(quota: number): string {
 export function quotaToUsdNumber(quota: number): number {
   return quota / QUOTA_PER_USD;
 }
+
+// --- Adapter: LogRow -> PreviewRequest-compatible shape ---
+
+/**
+ * Adapt a backend LogRow to the PreviewRequest shape expected by the
+ * request-history component. Fields the backend doesn't have (vendor,
+ * duration_ms, status, error_code) are filled with sensible defaults.
+ */
+export function adaptLogRow(log: LogRow): PreviewRequestLike {
+  return {
+    trace_id: `log_${log.id}`,
+    time: new Date(log.created_at * 1000).toISOString(),
+    model: log.model,
+    vendor: log.model.split("-")[0] ?? log.model,
+    status: "success" as const,
+    cost_nano: quotaToNanoUsd(log.quota),
+    duration_ms: 0,
+    key_id: log.token_id ? String(log.token_id) : "",
+    input_tokens: log.prompt_tokens,
+    output_tokens: log.completion_tokens,
+    error_code: "",
+    error_message: "",
+  };
+}
+
+export interface PreviewRequestLike {
+  trace_id: string;
+  time: string;
+  model: string;
+  vendor: string;
+  status: "success" | "failed";
+  cost_nano: string;
+  duration_ms: number;
+  key_id: string;
+  input_tokens: number;
+  output_tokens: number;
+  error_code: string;
+  error_message: string;
+}
+
+/**
+ * Fetch backend logs with a larger page size for the requests page.
+ * Returns adapted PreviewRequest-compatible objects.
+ */
+export function useBackendRequests(pageSize: number = 100) {
+  const { data, isLoading, error } = useLogs(1, pageSize);
+  const rows = (data?.items ?? []).map(adaptLogRow);
+  return { rows, total: data?.total ?? 0, loading: isLoading, error };
+}

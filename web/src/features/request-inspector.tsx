@@ -12,6 +12,7 @@ import { Drawer } from "../components/ui/overlay";
 import { TierBadge } from "../components/tier-badge";
 import { formatMoney } from "../lib/money";
 import { useProductPreview, type PreviewRequest } from "../lib/product-preview";
+import { useBackendKeys } from "../lib/api/key-adapter";
 import { copyText } from "./code-example";
 import "../components/demo-scenarios.css";
 import { PricingSnapshot } from "../components/pricing-snapshot";
@@ -122,7 +123,7 @@ export default function RequestInspector({
       : "en";
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
-  const keys = useProductPreview((s) => s.keys);
+  const { keys } = useBackendKeys();
   const ledger = useProductPreview((s) => s.ledger);
   const setOutage = useProductPreview((s) => s.demoSetUpstreamOutage);
   const role = useSystemAccess((s) => s.role);

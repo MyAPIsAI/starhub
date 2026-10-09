@@ -102,6 +102,7 @@ import { useWallet } from "../lib/api/billing";
 import {
   useUserUsage,
   useLogs,
+  useBackendRequests,
   quotaToNanoUsd,
   type LogRow,
 } from "../lib/api/usage";
@@ -206,6 +207,8 @@ export default function ConsolePreview() {
   const usageQuery = useUserUsage(days === "7" ? 7 : 30);
   const logsQuery = useLogs(1, 5);
   const backendLogs: LogRow[] = logsQuery.data?.items ?? [];
+  // Backend logs for the requests page (larger page size).
+  const { rows: backendRequests } = useBackendRequests(100);
   const chooseKey = useProductPreview((s) => s.chooseKey);
   const completeOnboarding = useProductPreview((s) => s.completeOnboarding);
   // Key reveal state — local, because the backend session cookie is the
@@ -1223,6 +1226,10 @@ export default function ConsolePreview() {
                                 )}
                               </td>
                               <td>
+                                {/* Backend logs only contain billed
+                                    (successful) requests. Failed requests
+                                    are not logged, so failed={false} is
+                                    always correct here. */}
                                 <ResultPill failed={false} />
                               </td>
                               <td className="xy-cost">
@@ -1705,13 +1712,15 @@ export default function ConsolePreview() {
                       marginBottom: 4,
                     }}
                   >
-                    Avg Latency
+                    {c("平均延迟", "Avg latency", "متوسط الاستجابة")}
                   </div>
                   <div
                     className="mono"
                     style={{ fontSize: "var(--text-2xl)", fontWeight: 700 }}
                   >
-                    1,248ms
+                    {periodRows.length
+                      ? `${Math.round(periodRows.reduce((total, row) => total + row.duration_ms, 0) / periodRows.length)}ms`
+                      : "—"}
                   </div>
                 </div>
               </div>
@@ -1827,7 +1836,7 @@ export default function ConsolePreview() {
           {/* SECTION: REQUESTS */}
           {section === "requests" && (
             <RequestHistory
-              requests={requests}
+              requests={backendRequests as any}
               onSelect={setSelected}
               onExport={() => {
                 setExportType("requests");

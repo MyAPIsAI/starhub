@@ -14,6 +14,7 @@ import { Button } from "../components/ui/button";
 import { Field, Input } from "../components/ui/primitives";
 import { TierBadge } from "../components/tier-badge";
 import { useProductPreview, type PreviewRequest } from "../lib/product-preview";
+import { useBackendKeys } from "../lib/api/key-adapter";
 import { getKeyModelOptions } from "../lib/key-model-policy";
 import { useModelPricing } from "../lib/model-pricing";
 import {
@@ -47,7 +48,7 @@ export default function Playground({
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const [draft] = useState(readDraft);
-  const keys = useProductPreview((s) => s.keys);
+  const { keys } = useBackendKeys();
   const selected = useProductPreview((s) => s.selectedKey);
   const choose = useProductPreview((s) => s.chooseKey);
   const recordCall = useProductPreview((s) => s.recordCall);

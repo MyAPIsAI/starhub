@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Route } from "lucide-react";
 import { useModelPricing } from "../lib/model-pricing";
 import { useProductPreview } from "../lib/product-preview";
+import { useBackendKeys } from "../lib/api/key-adapter";
 import { getKeyModels, resolveKeyModelResult } from "../lib/key-model-policy";
 import { groupResources } from "../lib/platform-catalog";
 import { useSystemAccess, isAdmin } from "../lib/system-access";
@@ -10,7 +11,7 @@ import { Button } from "../components/ui/button";
 import "../components/catalog-management.css";
 export default function ResourceRouting() {
   const config = useModelPricing((s) => s.config),
-    keys = useProductPreview((s) => s.keys),
+    keys = useBackendKeys().keys,
     requests = useProductPreview((s) => s.requests),
     role = useSystemAccess((s) => s.role);
   const [keyId, setKeyId] = useState("");

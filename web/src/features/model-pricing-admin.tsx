@@ -33,6 +33,7 @@ import {
   quoteModelCharge,
 } from "../lib/model-pricing";
 import { useProductPreview } from "../lib/product-preview";
+import { useBackendKeys } from "../lib/api/key-adapter";
 import { getKeyModels } from "../lib/key-model-policy";
 import { formatMoney } from "../lib/money";
 import { serviceGroupLabel } from "../lib/service-group-label";
@@ -109,7 +110,7 @@ export function ModelPricingAdmin({
   } = state;
   const catalogModels = modelCatalog(config);
   const { lang } = useSettingsText();
-  const keys = useProductPreview((s) => s.keys);
+  const keys = useBackendKeys().keys;
   const balance = useProductPreview((s) => s.balance);
   const recordMeteredCall = useProductPreview((s) => s.recordMeteredCall);
   const [initialQuote] = useState(() => {

@@ -9,6 +9,7 @@ import {
 } from "../lib/platform-catalog";
 import { accountDisplayName } from "../lib/account-identity";
 import { useProductPreview } from "../lib/product-preview";
+import { useBackendKeys } from "../lib/api/key-adapter";
 import type {
   ServiceGroupConfig,
   PricingCatalogConfig,
@@ -42,7 +43,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
       )
     : [...seedAccounts, { id: user.id, name: accountDisplayName(user) }];
   const config = useModelPricing((s) => s.config);
-  const keys = useProductPreview((s) => s.keys);
+  const keys = useBackendKeys().keys;
   // Groups come from the backend /api/service-group endpoint.
   const groupsQuery = useServiceGroups();
   const upsertMut = useUpsertServiceGroup();

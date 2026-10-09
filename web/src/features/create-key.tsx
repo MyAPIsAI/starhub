@@ -28,6 +28,7 @@ import {
   usdToQuota,
   joinList,
   tokenToPreviewKey,
+  useBackendKeys,
 } from "../lib/api/key-adapter";
 
 const draftKey = "veyra-key-draft-v2";
@@ -72,7 +73,7 @@ export default function CreateKey({
   const [created, setCreated] = useState<PreviewKey | null>(null);
   const config = useModelPricing((s) => s.config);
   const accountId = useProductPreview((s) => s.user.id);
-  const keys = useProductPreview((s) => s.keys);
+  const keys = useBackendKeys().keys;
   const createToken = useCreateToken();
   const available = getTierModels(tier, config);
   const allowed =

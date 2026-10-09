@@ -30,6 +30,7 @@ import type { LedgerEntry, RechargeOrder } from "../lib/product-preview";
 import {
   useLedger,
   useRechargeOrders,
+  useWallet,
   adaptRechargeOrder,
   adaptLedgerEntry,
 } from "../lib/api/billing";
@@ -111,15 +112,18 @@ export default function BillingCenter({
   // For now, derive balance from the latest ledger entry.
   const ledgerQuery = useLedger();
   const ordersQuery = useRechargeOrders();
+  const walletQuery = useWallet();
   const ledger: LedgerEntry[] = (ledgerQuery.data ?? []).map(
     adaptLedgerEntry,
   ) as unknown as LedgerEntry[];
   const orders: RechargeOrder[] = (ordersQuery.data ?? []).map(
     adaptRechargeOrder,
   ) as unknown as RechargeOrder[];
-  const balance = ledger.length
-    ? ledger[0].balance_after_nano
-    : "0";
+  const balance = walletQuery.data
+    ? String(walletQuery.data.balance)
+    : ledger.length
+      ? ledger[0].balance_after_nano
+      : "0";
   const expireOrders = () => {
     // No-op: the backend lazily expires stale orders on list/resolve.
   };
