@@ -11,7 +11,6 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { DemoControlBar } from "../components/demo-control-bar";
 import { TierBadge } from "../components/tier-badge";
 import { formatMoney } from "../lib/money";
 import type { PreviewRequest } from "../lib/product-preview";
@@ -446,9 +445,6 @@ export default function RequestHistory({
             </Button>
           </div>
         </footer>
-      </div>
-      <div className="demo-inline-footer">
-        <DemoControlBar inline />
       </div>
     </section>
   );

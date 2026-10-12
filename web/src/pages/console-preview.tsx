@@ -345,8 +345,8 @@ export default function ConsolePreview() {
   // (GET /api/user/usage). Falls back to demo store data when the
   // query is loading or errors so the overview degrades gracefully.
   const usageItems = usageQuery.data?.items ?? [];
-  // periodRows from demo store — used for model breakdown and latency
-  // which the backend usage API doesn't provide.
+  // periodRows from demo store — used as fallback for model breakdown
+  // and latency when the backend usage API has no data.
   const periodRows = useMemo(() => {
     return periodRequests(requests, days === "7" ? 7 : 30);
   }, [requests, days]);
@@ -374,8 +374,10 @@ export default function ConsolePreview() {
       return {
         count: totalRequests,
         cost: quotaToNanoUsd(totalQuota),
-        // The backend log has no success/fail status; we approximate
-        // 100% success since failed requests are not billed (quota=0).
+        // The backend Log now has a status field (1=success, 2=failed),
+        // but DailyUsage aggregates don't include a success count yet.
+        // Until they do, we approximate 100% since only billed (successful)
+        // requests are logged.
         success: totalRequests > 0 ? 100 : 0,
       };
     }
@@ -482,23 +484,35 @@ export default function ConsolePreview() {
       : chartMetric === "latency"
         ? `${periodRows.length ? Math.round(periodRows.reduce((total, row) => total + row.duration_ms, 0) / periodRows.length) : 0} ms`
         : summary.count.toLocaleString();
-  const modelBreakdown = Object.entries(
-    periodRows.reduce<Record<string, number>>((acc, row) => {
-      acc[row.vendor] = (acc[row.vendor] || 0) + 1;
-      return acc;
-    }, {}),
-  ).sort((a, b) => b[1] - a[1]);
+  // Model breakdown: use backend by_model when available, else demo.
+  const byModel = usageQuery.data?.by_model ?? [];
+  const modelBreakdown = byModel.length
+    ? Object.entries(
+        byModel.reduce<Record<string, number>>((acc, item) => {
+          acc[item.model] = (acc[item.model] || 0) + item.requests;
+          return acc;
+        }, {}),
+      ).sort((a, b) => b[1] - a[1])
+    : Object.entries(
+        periodRows.reduce<Record<string, number>>((acc, row) => {
+          acc[row.vendor] = (acc[row.vendor] || 0) + 1;
+          return acc;
+        }, {}),
+      ).sort((a, b) => b[1] - a[1]);
+  const breakdownTotal = byModel.length
+    ? byModel.reduce((sum, item) => sum + item.requests, 0)
+    : periodRows.length;
   const modelShares = modelBreakdown.map(([, count]) =>
-    Math.floor((count / (periodRows.length || 1)) * 100),
+    Math.floor((count / (breakdownTotal || 1)) * 100),
   );
-  const remainingShare = periodRows.length
+  const remainingShare = breakdownTotal
     ? 100 - modelShares.reduce((sum, value) => sum + value, 0)
     : 0;
   // Distribute rounding remainders so the visible shares always total 100%.
   modelBreakdown
     .map(([, count], index) => ({
       index,
-      remainder: (count / (periodRows.length || 1)) * 100 - modelShares[index],
+      remainder: (count / (breakdownTotal || 1)) * 100 - modelShares[index],
     }))
     .sort((a, b) => b.remainder - a.remainder)
     .slice(0, remainingShare)
