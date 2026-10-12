@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Route } from "lucide-react";
 import { useModelPricing } from "../lib/model-pricing";
-import { useProductPreview } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
+import { useBackendRequests } from "../lib/api/usage";
 import { getKeyModels, resolveKeyModelResult } from "../lib/key-model-policy";
 import { groupResources } from "../lib/platform-catalog";
 import { useSystemAccess, isAdmin } from "../lib/system-access";
@@ -12,7 +12,7 @@ import "../components/catalog-management.css";
 export default function ResourceRouting() {
   const config = useModelPricing((s) => s.config),
     keys = useBackendKeys().keys,
-    requests = useProductPreview((s) => s.requests),
+    requests = useBackendRequests(20).rows as any[],
     role = useSystemAccess((s) => s.role);
   const [keyId, setKeyId] = useState("");
   const key = keys.find((k) => k.id === keyId) ?? keys.find((k) => k.active);

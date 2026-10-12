@@ -14,6 +14,7 @@ import { Input } from "../components/ui/primitives";
 import { usePreferences } from "../lib/preferences";
 import { useProductPreview } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
+import { useBackendRequests } from "../lib/api/usage";
 import { useModelPricing } from "../lib/model-pricing";
 import { serviceGroupLabel } from "../lib/service-group-label";
 import {
@@ -54,7 +55,7 @@ export default function AccessCenter() {
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const { keys } = useBackendKeys();
   const selectedKey = useProductPreview((s) => s.selectedKey);
-  const requests = useProductPreview((s) => s.requests);
+  const requests = useBackendRequests(20).rows as any[];
   const revealed = useProductPreview((s) => s.revealedKeyIds);
   const chooseKey = useProductPreview((s) => s.chooseKey);
   const unlock = useProductPreview((s) => s.verifyPasswordAndRevealKey);

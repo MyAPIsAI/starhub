@@ -13,6 +13,7 @@ import { TierBadge } from "../components/tier-badge";
 import { formatMoney } from "../lib/money";
 import { useProductPreview, type PreviewRequest } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
+import { useLedger, adaptLedgerEntry } from "../lib/api/billing";
 import { copyText } from "./code-example";
 import "../components/demo-scenarios.css";
 import { PricingSnapshot } from "../components/pricing-snapshot";
@@ -124,7 +125,8 @@ export default function RequestInspector({
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const { keys } = useBackendKeys();
-  const ledger = useProductPreview((s) => s.ledger);
+  const ledgerQuery = useLedger();
+  const ledger = (ledgerQuery.data ?? []).map(adaptLedgerEntry) as any[];
   const setOutage = useProductPreview((s) => s.demoSetUpstreamOutage);
   const role = useSystemAccess((s) => s.role);
   // M6 §3.5：详情抽屉不向客户显示渠道或资源实例。仅运营视角（非 customer）可见内部来源标识。
