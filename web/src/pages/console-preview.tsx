@@ -99,6 +99,7 @@ import {
   downloadExport as downloadBackendExport,
   type ExportRecord,
 } from "../lib/api/exports";
+import { loginUser } from "../lib/api/auth";
 import {
   useUserUsage,
   useLogs,
@@ -213,19 +214,25 @@ export default function ConsolePreview() {
   const { rows: backendRequests } = useBackendRequests(100);
   const chooseKey = useProductPreview((s) => s.chooseKey);
   const completeOnboarding = useProductPreview((s) => s.completeOnboarding);
-  // Key reveal state — local, because the backend session cookie is the
-  // real auth boundary. The password dialog is a UI-level gate only.
+  // Key reveal state — local. The password is verified against the
+  // backend via the login endpoint (POST /api/user/login).
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, number>>(
     {},
   );
   const verifyAndReveal = async (
     keyId: string,
-    _password: string,
+    password: string,
   ): Promise<boolean> => {
     const user = useProductPreview.getState().user;
     if (!user.isLoggedIn || user.accountStatus === "deactivated") return false;
-    setRevealedKeyIds((s) => ({ ...s, [keyId]: Date.now() + 300000 }));
-    return true;
+    if (!password) return false;
+    try {
+      await loginUser(user.username || user.email || "", password);
+      setRevealedKeyIds((s) => ({ ...s, [keyId]: Date.now() + 300000 }));
+      return true;
+    } catch {
+      return false;
+    }
   };
   const keyDisplayNow = useKeyDisplayTime(revealedKeyIds);
   const quotaAt = new Date(keyDisplayNow).toISOString();
