@@ -9,7 +9,6 @@ import KeyList, {
 } from "../features/key-list";
 import { keyQuotaSummary } from "../lib/key-quota-summary";
 import RechargeFlow from "../features/recharge-flow";
-import { filterLedger, serializeLedgerCsv } from "../lib/billing-export";
 import { useTranslation } from "react-i18next";
 import {
   Area,
@@ -87,11 +86,6 @@ import { StandardModels } from "../features/standard-models";
 import { Channels } from "../features/channels";
 import { ServiceGroups } from "../features/service-groups";
 import { useSystemAccess, isAdmin } from "../lib/system-access";
-import {
-  filterExportRequests,
-  serializeRequestExport,
-  serializeUsageExport,
-} from "../lib/request-export";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import {
   useDeleteToken,
@@ -99,6 +93,12 @@ import {
   useUpdateToken,
 } from "../lib/api/tokens";
 import { useWallet } from "../lib/api/billing";
+import {
+  useExports,
+  useCreateExport,
+  downloadExport as downloadBackendExport,
+  type ExportRecord,
+} from "../lib/api/exports";
 import {
   useUserUsage,
   useLogs,
@@ -200,8 +200,10 @@ export default function ConsolePreview() {
     ? String(walletQuery.data.balance)
     : demoBalance;
   const requests = useProductPreview((s) => s.requests);
-  const ledger = useProductPreview((s) => s.ledger);
-  const exports = useProductPreview((s) => s.exports);
+  // Exports come from the backend /api/export endpoints.
+  const exportsQuery = useExports();
+  const createExportMut = useCreateExport();
+  const backendExports: ExportRecord[] = exportsQuery.data ?? [];
   // Overview metrics come from the backend usage summary and logs.
   const [days, setDays] = useState<"7" | "30">("7");
   const usageQuery = useUserUsage(days === "7" ? 7 : 30);
@@ -230,7 +232,6 @@ export default function ConsolePreview() {
   const keysNearQuota = keys.filter(
     (key) => keyQuotaSummary(key, quotaAt).nearLimit,
   );
-  const requestExport = useProductPreview((s) => s.requestExport);
   const deactivateAccount = useProductPreview((s) => s.deactivateAccount);
 
   const [chartMetric, setChartMetric] = useState<
@@ -434,43 +435,24 @@ export default function ConsolePreview() {
       setExportError(t("max31DaysWarning"));
       return;
     }
-    requestExport(exportType, exportDays);
-    setExportModalOpen(false);
-    setExportError("");
+    createExportMut.mutate(
+      { type: exportType, range_days: exportDays },
+      {
+        onSuccess: () => {
+          setExportModalOpen(false);
+          setExportError("");
+        },
+        onError: (err) => {
+          setExportError(
+            err instanceof Error ? err.message : String(err),
+          );
+        },
+      },
+    );
   };
 
-  const downloadSampleCsv = (exp: any) => {
-    if (exp.type === "ledger") {
-      const rows = filterLedger(ledger, {
-        from: exp.startDate.slice(0, 10),
-        to: exp.endDate.slice(0, 10),
-      });
-      const lang =
-        i18n.language === "zh" ? "zh" : i18n.language === "ar" ? "ar" : "en";
-      const url = URL.createObjectURL(
-        new Blob([serializeLedgerCsv(rows, lang)], {
-          type: "text/csv;charset=utf-8",
-        }),
-      );
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = exp.filename;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return;
-    }
-    const rows = filterExportRequests(requests, exp);
-    const content =
-      exp.type === "usage"
-        ? serializeUsageExport(rows)
-        : serializeRequestExport(rows, keys);
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = exp.filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadExportFile = (exp: ExportRecord) => {
+    void downloadBackendExport(exp.id, exp.filename);
   };
 
   const activeSection =
@@ -1954,7 +1936,7 @@ export default function ConsolePreview() {
                     </tr>
                   </thead>
                   <tbody>
-                    {exports.map((exp) => (
+                    {backendExports.map((exp) => (
                       <tr
                         key={exp.id}
                         style={{ borderBottom: "1px solid var(--border)" }}
@@ -1978,10 +1960,10 @@ export default function ConsolePreview() {
                             color: "var(--muted)",
                           }}
                         >
-                          {exp.startDate} – {exp.endDate} ({exp.rangeDays}d)
+                          {exp.range_days}d
                         </td>
                         <td className="mono" style={{ padding: "12px 14px" }}>
-                          {new Date(exp.createdAt).toLocaleDateString()}
+                          {new Date(exp.created_at * 1000).toLocaleDateString()}
                         </td>
                         <td style={{ padding: "12px 14px" }}>
                           <span
@@ -1994,14 +1976,14 @@ export default function ConsolePreview() {
                               fontSize: 11,
                             }}
                           >
-                            COMPLETED
+                            {exp.status.toUpperCase()}
                           </span>
                         </td>
                         <td style={{ padding: "12px 14px", textAlign: "end" }}>
                           <Button
                             size="small"
                             variant="secondary"
-                            onClick={() => downloadSampleCsv(exp)}
+                            onClick={() => downloadExportFile(exp)}
                           >
                             <Download
                               size={13}
@@ -2225,7 +2207,7 @@ export default function ConsolePreview() {
             </span>
           </div>
 
-          <Button type="submit" variant="primary">
+          <Button type="submit" variant="primary" disabled={createExportMut.isPending}>
             {c("生成 CSV（表格文件）", "Generate CSV export", "إنشاء ملف CSV")}
           </Button>
         </form>
