@@ -124,7 +124,10 @@ export default function BillingCenter({
       ? ledger[0].balance_after_nano
       : "0";
   const expireOrders = () => {
-    // No-op: the backend lazily expires stale orders on list/resolve.
+    // Trigger a refetch so the backend lazily expires stale orders
+    // and the list updates with the latest state.
+    void ordersQuery.refetch();
+    void ledgerQuery.refetch();
   };
   const today = billingDate(new Date().toISOString());
   const month = today.slice(0, 7);
@@ -481,9 +484,9 @@ export default function BillingCenter({
                 expireOrders();
                 setMessage(
                   c(
-                    "已更新本地演示订单状态。",
-                    "Local demo order status updated.",
-                    "تم تحديث حالة الطلبات التجريبية.",
+                    "已刷新订单与流水。",
+                    "Orders and transactions refreshed.",
+                    "تم تحديث الطلبات والحركات.",
                   ),
                 );
               }}
@@ -724,9 +727,9 @@ export default function BillingCenter({
                             <span className="bc-method">
                               <CreditCard size={15} />
                               {c(
-                                "银行卡 · 演示",
-                                "Card · demo",
-                                "بطاقة · تجريبي",
+                                "银行卡",
+                                "Card",
+                                "بطاقة",
                               )}
                             </span>
                           </td>
