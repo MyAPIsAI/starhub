@@ -201,6 +201,13 @@ func UserUsage(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, map[string]any{
 		"days":  days,
 		"items": items,
+		"by_model": func() any {
+			modelItems, err := model.SummarizeLogsByModel(userID, since)
+			if err != nil {
+				return []any{}
+			}
+			return modelItems
+		}(),
 	})
 }
 

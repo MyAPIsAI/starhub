@@ -178,17 +178,17 @@ func RefundPreConsumedQuota(tokenID, userID int64, tokenUnlimited bool, amount i
 // the retry trail ("channelID->channelID") of the request for
 // troubleshooting.
 func PostConsumeQuota(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName, group string, usage *Usage, preQuota int64, usedChannels string) error {
+	channelID int64, modelName, group string, usage *Usage, preQuota int64, usedChannels string, durationMs int64) error {
 	return PostConsumeQuotaWithPrice(NewPriceData(modelName, group), userID, tokenID, tokenName,
-		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels)
+		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels, durationMs)
 }
 
 // PostConsumeQuotaWithUserGroup is PostConsumeQuota with the user's own group
 // for the group x group matrix multiplier.
 func PostConsumeQuotaWithUserGroup(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName, group, userGroup string, usage *Usage, preQuota int64, usedChannels string) error {
+	channelID int64, modelName, group, userGroup string, usage *Usage, preQuota int64, usedChannels string, durationMs int64) error {
 	return PostConsumeQuotaWithPrice(NewPriceDataWithUserGroup(modelName, group, userGroup), userID, tokenID, tokenName,
-		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels)
+		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels, durationMs)
 }
 
 // PostConsumeQuotaWithPrice is the settlement entry for relay modes that
@@ -196,7 +196,7 @@ func PostConsumeQuotaWithUserGroup(userID, tokenID int64, tokenName string, toke
 // the caller resolves its own PriceData and this function only balances
 // the books.
 func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, usage *Usage, preQuota int64, usedChannels string) error {
+	channelID int64, modelName string, usage *Usage, preQuota int64, usedChannels string, durationMs int64) error {
 	if usage == nil {
 		usage = &Usage{}
 	}
@@ -212,6 +212,8 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		CompletionTokens: usage.CompletionTokens,
 		Quota:            actual,
 		UsedChannels:     usedChannels,
+		DurationMs:       durationMs,
+		Status:           1, // success
 	}
 	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
 		return err
@@ -251,7 +253,7 @@ func applyAffiliateRebate(userID, actual int64) {
 // bills such as tasks, where the actual is computed from platform pricing
 // rather than a usage report).
 func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, actual, preQuota int64, usedChannels string) error {
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64) error {
 	delta := actual - preQuota
 	entry := &model.Log{
 		UserID:       userID,
@@ -261,6 +263,8 @@ func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimi
 		Model:        modelName,
 		Quota:        actual,
 		UsedChannels: usedChannels,
+		DurationMs:   durationMs,
+		Status:       1, // success
 	}
 	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
 		return err

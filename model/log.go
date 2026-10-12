@@ -14,7 +14,13 @@ type Log struct {
 	// records the actual charge; their sum is the full priced usage.
 	UnfundedQuota int64  `gorm:"not null;default:0" json:"unfunded_quota"`
 	UsedChannels  string `gorm:"size:256;not null;default:''" json:"used_channels"`
-	CreatedAt     int64  `gorm:"index;autoCreateTime" json:"created_at"`
+	// DurationMs is the upstream response time in milliseconds. Zero
+	// when not measured (legacy logs, or fast-path responses).
+	DurationMs int64  `gorm:"not null;default:0" json:"duration_ms"`
+	// Status is 1=success (billed), 2=failed (unbilled). Defaults to
+	// 1 so existing log insertion code that omits the field is correct.
+	Status     int    `gorm:"not null;default:1" json:"status"`
+	CreatedAt  int64  `gorm:"index;autoCreateTime" json:"created_at"`
 }
 
 func InsertLog(l *Log) error {
@@ -51,6 +57,31 @@ func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
 	}
 	rows := make([]DailyUsage, 0)
 	err := q.Group("date(created_at, 'unixepoch')").Order("date ASC").Scan(&rows).Error
+	return rows, err
+}
+
+// ModelDailyUsage is a per-day per-model usage summary.
+type ModelDailyUsage struct {
+	Date             string `json:"date"`
+	Model            string `json:"model"`
+	Requests         int64  `json:"requests"`
+	Quota            int64  `json:"quota"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+}
+
+// SummarizeLogsByModel returns daily usage broken down by model.
+func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) {
+	q := DB.Model(&Log{}).
+		Select("date(created_at, 'unixepoch') AS date, model AS model, "+
+			"COUNT(*) AS requests, SUM(quota) AS quota, "+
+			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
+		Where("created_at >= ?", since)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	var rows []ModelDailyUsage
+	err := q.Group("date(created_at, 'unixepoch'), model").Order("date ASC, model ASC").Scan(&rows).Error
 	return rows, err
 }
 

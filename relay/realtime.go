@@ -160,7 +160,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := PostConsumeQuotaWithUserGroup(userID, tokenID, tokenName, tokenUnlimited,
 		upstreamChannel.ID, modelName, group, userGroup, actualUsage, pre,
-		fmt.Sprintf("%d", upstreamChannel.ID)); err != nil {
+		fmt.Sprintf("%d", upstreamChannel.ID), 0); err != nil {
 		log.Printf("post consume realtime quota failed: %v", err)
 	}
 	settled = true

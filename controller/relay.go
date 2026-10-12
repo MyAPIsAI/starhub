@@ -876,7 +876,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	}
 	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
-		flow.preQuota, flow.trailString()); err != nil {
+		flow.preQuota, flow.trailString(), 0); err != nil {
 		log.Printf("post consume quota failed: %v", err)
 	}
 	flow.settled = true

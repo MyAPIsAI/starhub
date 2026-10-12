@@ -18,9 +18,19 @@ export interface DailyUsage {
   completion_tokens: number;
 }
 
+export interface ModelDailyUsage {
+  date: string;
+  model: string;
+  requests: number;
+  quota: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
 export interface UsageResponse {
   days: number;
   items: DailyUsage[];
+  by_model?: ModelDailyUsage[];
 }
 
 // --- Types matching the backend Log struct (model/log.go) ---
@@ -37,6 +47,8 @@ export interface LogRow {
   quota: number;
   unfunded_quota: number;
   used_channels: string;
+  duration_ms: number;
+  status: number; // 1=success, 2=failed
   created_at: number; // unix seconds
 }
 
@@ -102,9 +114,9 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     time: new Date(log.created_at * 1000).toISOString(),
     model: log.model,
     vendor: log.model.split("-")[0] ?? log.model,
-    status: "success" as const,
+    status: log.status === 2 ? "failed" : "success",
     cost_nano: quotaToNanoUsd(log.quota),
-    duration_ms: 0,
+    duration_ms: log.duration_ms,
     key_id: log.token_id ? String(log.token_id) : "",
     input_tokens: log.prompt_tokens,
     output_tokens: log.completion_tokens,
