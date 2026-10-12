@@ -79,7 +79,10 @@ export default function Playground({
   const [busy, setBusy] = useState(false);
   const [lastId, setLastId] = useState<string | null>(draft.lastId || null);
   const requests = useProductPreview((s) => s.requests);
-  const last = requests.find((r) => r.trace_id === lastId);
+  // Real relay result (when the key has a plaintext secret and the call
+  // reaches the server). Falls back to demo-store requests when null.
+  const [relayResult, setRelayResult] = useState<PreviewRequest | null>(null);
+  const last = relayResult ?? requests.find((r) => r.trace_id === lastId);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const currentKey = keys.find((k) => k.id === keyId);
   const options = currentKey ? getKeyModelOptions(currentKey, protocol) : [];
@@ -136,16 +139,94 @@ export default function Playground({
     },
     [],
   );
-  const send = () => {
+  const send = async () => {
     if (!currentKey || !prompt.trim() || busy) return;
     setBusy(true);
+    setRelayResult(null);
     const snapshot = structuredClone(request);
     const credential = currentKey.id;
-    timer.current = setTimeout(() => {
-      const row = recordCall(credential, outage, snapshot.model, snapshot);
-      if (row) setLastId(row.trace_id);
+    // If the key has a plaintext secret (not masked), try a real relay
+    // call. Otherwise, fall back to the demo simulation.
+    const secret = currentKey.keySecret;
+    const isMasked = !secret || secret.includes("******");
+    if (isMasked) {
+      // No plaintext key available — simulate as before.
+      timer.current = setTimeout(() => {
+        const row = recordCall(credential, outage, snapshot.model, snapshot);
+        if (row) setLastId(row.trace_id);
+        setBusy(false);
+      }, 420);
+      return;
+    }
+    try {
+      const res = await fetch("/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${secret}`,
+        },
+        body: JSON.stringify({
+          model: snapshot.model,
+          messages: snapshot.messages,
+          temperature: snapshot.temperature,
+          max_tokens: snapshot.max_tokens,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const errMsg =
+          data?.error?.message ?? `HTTP ${res.status}`;
+        setRelayResult({
+          trace_id: `relay_${Date.now()}`,
+          time: new Date().toISOString(),
+          model: snapshot.model,
+          vendor: snapshot.model.split("-")[0] ?? snapshot.model,
+          status: "failed",
+          cost_nano: "0",
+          duration_ms: 0,
+          key_id: credential,
+          input_tokens: 0,
+          output_tokens: 0,
+          error_code: `http_${res.status}`,
+          error_message: errMsg,
+          requested_model: snapshot.model,
+          response_text: "",
+        } as any);
+        setLastId(`relay_${Date.now()}`);
+        setBusy(false);
+        return;
+      }
+      const content =
+        data?.choices?.[0]?.message?.content ?? "";
+      const inputTokens = data?.usage?.prompt_tokens ?? 0;
+      const outputTokens = data?.usage?.completion_tokens ?? 0;
+      setRelayResult({
+        trace_id: `relay_${Date.now()}`,
+        time: new Date().toISOString(),
+        model: snapshot.model,
+        vendor: snapshot.model.split("-")[0] ?? snapshot.model,
+        status: "success",
+        cost_nano: "0",
+        duration_ms: 0,
+        key_id: credential,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        error_code: "",
+        error_message: "",
+        requested_model: snapshot.model,
+        actual_model: data?.model ?? snapshot.model,
+        response_text: content,
+      } as any);
+      setLastId(`relay_${Date.now()}`);
+    } catch {
+      // Network error — fall back to simulation.
+      timer.current = setTimeout(() => {
+        const row = recordCall(credential, outage, snapshot.model, snapshot);
+        if (row) setLastId(row.trace_id);
+      }, 420);
+    } finally {
       setBusy(false);
-    }, 420);
+    }
   };
   const error = last?.status === "failed";
   return (
@@ -433,11 +514,17 @@ export default function Playground({
               </details>
               <div className="verify-send">
                 <span>
-                  {c(
-                    "仅模拟扣除演示余额",
-                    "Charges demo balance only",
-                    "يخصم الرصيد التجريبي فقط",
-                  )}
+                  {currentKey?.keySecret?.includes("******")
+                    ? c(
+                        "密钥明文不可用 · 将模拟请求",
+                        "Key secret unavailable · will simulate",
+                        "سر المفتاح غير متاح · محاكاة",
+                      )
+                    : c(
+                        "将通过真实接口调用",
+                        "Sends a real API request",
+                        "يرسل طلبًا حقيقيًا",
+                      )}
                 </span>
                 <Button
                   variant="primary"
@@ -446,12 +533,8 @@ export default function Playground({
                 >
                   <Play size={14} />
                   {busy
-                    ? c("正在模拟…", "Simulating…", "جارٍ المحاكاة…")
-                    : c(
-                        "发送模拟请求",
-                        "Send simulated request",
-                        "إرسال طلب محاكاة",
-                      )}
+                    ? c("正在发送…", "Sending…", "جارٍ الإرسال…")
+                    : c("发送请求", "Send request", "إرسال الطلب")}
                 </Button>
               </div>
             </>
@@ -461,7 +544,9 @@ export default function Playground({
           <div className="verify-card-heading">
             <h2>{c("验证结果", "Verification result", "نتيجة التحقق")}</h2>
             <span className="verify-demo-label">
-              {c("模拟", "SIMULATION", "محاكاة")}
+              {relayResult
+                ? c("接口调用", "API CALL", "استدعاء")
+                : c("模拟", "SIMULATION", "محاكاة")}
             </span>
           </div>
           {last ? (
