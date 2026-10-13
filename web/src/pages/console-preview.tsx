@@ -378,14 +378,18 @@ export default function ConsolePreview() {
     if (usageItems.length) {
       const totalRequests = usageItems.reduce((sum, i) => sum + i.requests, 0);
       const totalQuota = usageItems.reduce((sum, i) => sum + i.quota, 0);
+      const totalSuccess = usageItems.reduce((sum, i) => sum + (i.success_count ?? 0), 0);
       return {
         count: totalRequests,
         cost: quotaToNanoUsd(totalQuota),
-        // The backend Log now has a status field (1=success, 2=failed),
-        // but DailyUsage aggregates don't include a success count yet.
-        // Until they do, we approximate 100% since only billed (successful)
-        // requests are logged.
-        success: totalRequests > 0 ? 100 : 0,
+        // Compute the real success rate from the backend's per-day
+        // success_count. Falls back to 100% when success_count is 0
+        // (old logs without the status field).
+        success: totalRequests > 0
+          ? totalSuccess > 0
+            ? Number(((totalSuccess / totalRequests) * 100).toFixed(2))
+            : 100
+          : 0,
       };
     }
     // Fallback to demo data.

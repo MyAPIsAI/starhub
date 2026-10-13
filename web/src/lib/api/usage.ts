@@ -16,6 +16,8 @@ export interface DailyUsage {
   unfunded_quota: number;
   prompt_tokens: number;
   completion_tokens: number;
+  success_count: number;
+  failed_count: number;
 }
 
 export interface ModelDailyUsage {

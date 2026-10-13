@@ -34,6 +34,8 @@ type DailyUsage struct {
 	UnfundedQuota    int64  `json:"unfunded_quota"`
 	PromptTokens     int64  `json:"prompt_tokens"`
 	CompletionTokens int64  `json:"completion_tokens"`
+	SuccessCount     int64  `json:"success_count"`
+	FailedCount      int64  `json:"failed_count"`
 }
 
 func CountLogs(userID int64) (int64, error) {
@@ -50,7 +52,9 @@ func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
 	q := DB.Model(&Log{}).
 		Select("date(created_at, 'unixepoch') AS date, COUNT(*) AS requests, "+
 			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, "+
-			"SUM(completion_tokens) AS completion_tokens").
+			"SUM(completion_tokens) AS completion_tokens, "+
+			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, "+
+			"SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS failed_count").
 		Where("created_at >= ?", since)
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)
