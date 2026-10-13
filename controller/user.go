@@ -161,6 +161,23 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, nil)
 }
 
+// DeactivateSelf disables the current user's account and clears the
+// session. The user can no longer log in until an admin re-enables
+// the account. Wallet balance and keys are preserved.
+func DeactivateSelf(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
+	if err := model.UpdateUserFields(userID, map[string]any{
+		"status": common.StatusDisabled,
+	}); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	middleware.Sessions.Remove(middleware.SessionToken(r))
+	http.SetCookie(w, &http.Cookie{Name: "session", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: middleware.SecureSessionCookie(r), SameSite: http.SameSiteLaxMode})
+	common.ApiSuccess(w, nil)
+}
+
 func GetSelf(w http.ResponseWriter, r *http.Request) {
 	user, err := model.GetUserByID(requestUserID(r))
 	if err != nil {

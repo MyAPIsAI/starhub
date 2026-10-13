@@ -8,7 +8,7 @@
 //   - Both mutations invalidate the cached user profile so callers refetch.
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiPut } from "./http";
+import { apiPut, apiPost } from "./http";
 import type { AuthUser } from "./auth";
 
 const USER_KEY = ["user-self"] as const;
@@ -28,4 +28,12 @@ export function useUpdateSelf() {
       queryClient.invalidateQueries({ queryKey: USER_KEY });
     },
   });
+}
+
+/**
+ * Deactivate the current user's account. The backend disables the
+ * user and clears the session. Wallet balance and keys are preserved.
+ */
+export async function deactivateSelf(): Promise<void> {
+  await apiPost<null>("/api/user/deactivate");
 }

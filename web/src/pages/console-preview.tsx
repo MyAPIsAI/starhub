@@ -100,6 +100,7 @@ import {
   type ExportRecord,
 } from "../lib/api/exports";
 import { loginUser } from "../lib/api/auth";
+import { deactivateSelf } from "../lib/api/user";
 import {
   useUserUsage,
   useLogs,
@@ -239,7 +240,16 @@ export default function ConsolePreview() {
   const keysNearQuota = keys.filter(
     (key) => keyQuotaSummary(key, quotaAt).nearLimit,
   );
-  const deactivateAccount = useProductPreview((s) => s.deactivateAccount);
+  const deactivateAccount = async () => {
+    try {
+      await deactivateSelf();
+    } catch {
+      // Best-effort: proceed with local cleanup even if the server is unreachable.
+    }
+    // Hard redirect to clear all client-side state (React Query cache,
+    // Zustand stores, sessionStorage drafts).
+    window.location.href = "/";
+  };
 
   const [chartMetric, setChartMetric] = useState<
     "requests" | "cost" | "latency"
@@ -2269,14 +2279,14 @@ export default function ConsolePreview() {
                 BigInt(balance) >= 10000000n ||
                 (BigInt(balance) > 0n && !acknowledgeDust)
               }
-              onClick={() => {
+              onClick={async () => {
                 if (
                   BigInt(balance) < 0n ||
                   BigInt(balance) >= 10000000n ||
                   (BigInt(balance) > 0n && !acknowledgeDust)
                 )
                   return;
-                deactivateAccount();
+                await deactivateAccount();
                 setDeactivateOpen(false);
                 setAcknowledgeDust(false);
                 navigate("/");

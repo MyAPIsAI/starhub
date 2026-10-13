@@ -144,3 +144,52 @@ func TestUpdateSelfPasswordAndEmailTogether(t *testing.T) {
 		t.Fatal("new password does not verify")
 	}
 }
+
+func TestDeactivateSelf(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 1000)
+
+	rr := call(DeactivateSelf, testRequest{
+		method: http.MethodPost,
+		target: "/api/user/deactivate",
+		userID: u.ID,
+		role:   common.RoleUser,
+	})
+	expectStatus(t, rr, http.StatusOK)
+
+	// Verify the user is now disabled.
+	user, _ := model.GetUserByID(u.ID)
+	if user.Status != common.StatusDisabled {
+		t.Fatalf("status = %d, want %d (disabled)", user.Status, common.StatusDisabled)
+	}
+}
+
+func TestDeactivateSelfPreservesData(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 5000)
+
+	// Create a token and a wallet so we can verify they survive.
+	mustToken(t, u.ID, 1000)
+	model.GetOrCreateWallet(u.ID)
+
+	call(DeactivateSelf, testRequest{
+		method: http.MethodPost,
+		target: "/api/user/deactivate",
+		userID: u.ID,
+		role:   common.RoleUser,
+	})
+
+	// Tokens should still exist.
+	tokens, _ := model.ListTokens(u.ID)
+	if len(tokens) != 1 {
+		t.Fatalf("tokens count = %d, want 1 (preserved)", len(tokens))
+	}
+	// Wallet should still exist.
+	wallet, err := model.GetOrCreateWallet(u.ID)
+	if err != nil {
+		t.Fatalf("wallet error: %v", err)
+	}
+	if wallet.Balance != 0 {
+		t.Fatalf("balance = %d, want 0", wallet.Balance)
+	}
+}

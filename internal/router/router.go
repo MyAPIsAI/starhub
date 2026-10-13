@@ -33,6 +33,7 @@ func New() http.Handler {
 	mux.Handle("POST /api/user/logout", middleware.UserAuth(http.HandlerFunc(controller.Logout)))
 	mux.Handle("GET /api/user/self", middleware.UserAuth(http.HandlerFunc(controller.GetSelf)))
 	mux.Handle("PUT /api/user/self", middleware.UserAuth(http.HandlerFunc(controller.UpdateSelf)))
+	mux.Handle("POST /api/user/deactivate", middleware.UserAuth(http.HandlerFunc(controller.DeactivateSelf)))
 	mux.Handle("GET /api/user/usage", middleware.UserAuth(http.HandlerFunc(controller.UserUsage)))
 	mux.Handle("GET /api/user", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
 	mux.Handle("GET /api/user/", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
