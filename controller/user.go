@@ -178,6 +178,20 @@ func DeactivateSelf(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, nil)
 }
 
+// ListSessions returns the current user's active sessions.
+func ListSessions(w http.ResponseWriter, r *http.Request) {
+	token := middleware.SessionToken(r)
+	infos := middleware.Sessions.ListByUser(requestUserID(r), token)
+	common.ApiSuccess(w, infos)
+}
+
+// TerminateOtherSessions removes all sessions for the current user
+// except the one making the request.
+func TerminateOtherSessions(w http.ResponseWriter, r *http.Request) {
+	count := middleware.Sessions.RemoveAllExcept(requestUserID(r), middleware.SessionToken(r))
+	common.ApiSuccess(w, map[string]any{"terminated": count})
+}
+
 func GetSelf(w http.ResponseWriter, r *http.Request) {
 	user, err := model.GetUserByID(requestUserID(r))
 	if err != nil {

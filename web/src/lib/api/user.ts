@@ -7,11 +7,12 @@
 //     which treats email as a profile field).
 //   - Both mutations invalidate the cached user profile so callers refetch.
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiPut, apiPost } from "./http";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiPut, apiPost, apiGet } from "./http";
 import type { AuthUser } from "./auth";
 
 const USER_KEY = ["user-self"] as const;
+const SESSIONS_KEY = ["user-sessions"] as const;
 
 export interface UpdateSelfInput {
   current_password?: string;
@@ -36,4 +37,29 @@ export function useUpdateSelf() {
  */
 export async function deactivateSelf(): Promise<void> {
   await apiPost<null>("/api/user/deactivate");
+}
+
+export interface SessionInfo {
+  created_at: number;
+  expires_at: number;
+  is_current: boolean;
+}
+
+export function useSessions() {
+  return useQuery({
+    queryKey: SESSIONS_KEY,
+    queryFn: ({ signal }) =>
+      apiGet<SessionInfo[]>("/api/user/sessions", signal),
+  });
+}
+
+export function useTerminateOtherSessions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiPost<{ terminated: number }>("/api/user/sessions/terminate-others"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
+    },
+  });
 }

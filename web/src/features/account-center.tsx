@@ -22,7 +22,7 @@ import { Modal } from "../components/ui/overlay";
 import { useProductPreview } from "../lib/product-preview";
 import { useSystemAccess, isAdmin, ROLE_USER } from "../lib/system-access";
 import { logoutUser } from "../lib/api/auth";
-import { useUpdateSelf } from "../lib/api/user";
+import { useUpdateSelf, useSessions, useTerminateOtherSessions, type SessionInfo } from "../lib/api/user";
 import { ApiError } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
 import {
@@ -78,9 +78,9 @@ export default function AccountCenter({
   const applySecurity = useProductPreview(
     (state) => state.applyAccountSecurity,
   );
-  const terminateOthers = useProductPreview(
-    (state) => state.terminateOtherSessions,
-  );
+  const sessionsQuery = useSessions();
+  const terminateOthersMut = useTerminateOtherSessions();
+  const backendSessions: SessionInfo[] = sessionsQuery.data ?? [];
   const logout = useProductPreview((state) => state.logout);
   const queryClient = useQueryClient();
   const updateSelfMut = useUpdateSelf();
@@ -126,12 +126,10 @@ export default function AccountCenter({
     c("演示账号", "Demo account", "حساب تجريبي"),
   );
   const phone = user.phone?.replace(/(\d{3})\d{4}(\d{4})$/, "$1 **** $2");
+  const otherSessions = backendSessions.filter((s) => !s.is_current).length > 0;
   const email = user.email
     ? user.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2")
     : "";
-  const otherSessions = user.sessions.filter(
-    (session) => !session.isCurrent,
-  ).length;
   const events = user.securityEvents ?? [];
   const formatDate = (value?: string) =>
     value && Number.isFinite(Date.parse(value))
@@ -842,53 +840,65 @@ export default function AccountCenter({
               </h2>
               <p>
                 {c(
-                  "演示设备列表；下线操作仅改变本地状态。",
-                  "Demo devices; signing out changes local state only.",
-                  "أجهزة تجريبية؛ الخروج يغير الحالة المحلية فقط.",
+                  "活跃会话列表。",
+                  "Active sessions for your account.",
+                  "الجلسات النشطة لحسابك.",
                 )}
               </p>
             </div>
           </div>
           <div className="ac-devices">
-            {user.sessions.map((session) => (
-              <div className="ac-device" key={session.id}>
+            {backendSessions.map((session, i) => (
+              <div className="ac-device" key={i}>
                 <Monitor size={18} />
                 <div>
                   <strong>
-                    {session.device.replace(/\s*\(Current\)/, "")}
+                    {session.is_current
+                      ? c("当前会话", "Current session", "الجلسة الحالية")
+                      : c("其他会话", "Other session", "جلسة أخرى")}
                   </strong>
-                  <p dir="ltr">{session.ip}</p>
+                  <p dir="ltr">
+                    {c("创建于", "Created", "أُنشئت")}{" "}
+                    {new Date(session.created_at * 1000).toLocaleString(
+                      language === "zh" ? "zh-CN" : "en-GB",
+                    )}
+                  </p>
                   <small>
-                    {session.isCurrent
-                      ? c("正在使用", "In use now", "قيد الاستخدام")
-                      : c(
-                          "模拟历史会话",
-                          "Simulated previous session",
-                          "جلسة سابقة تجريبية",
-                        )}
+                    {c("过期于", "Expires", "تنتهي")}{" "}
+                    {new Date(session.expires_at * 1000).toLocaleString(
+                      language === "zh" ? "zh-CN" : "en-GB",
+                    )}
                   </small>
                 </div>
-                {session.isCurrent && (
+                {session.is_current && (
                   <span className="ac-badge ac-badge--success">
                     {c("当前", "Current", "الحالي")}
                   </span>
                 )}
               </div>
             ))}
+            {!backendSessions.length && !sessionsQuery.isLoading && (
+              <p className="ac-empty-hint">
+                {c("暂无活跃会话。", "No active sessions.", "لا توجد جلسات نشطة.")}
+              </p>
+            )}
           </div>
           <div className="ac-device-actions">
             <Button
               size="small"
-              disabled={!otherSessions}
+              disabled={!otherSessions || terminateOthersMut.isPending}
               onClick={() => {
-                terminateOthers();
-                setNotice(
-                  c(
-                    "其他模拟设备已下线。",
-                    "Other demo devices were signed out.",
-                    "سُجل خروج الأجهزة التجريبية الأخرى.",
-                  ),
-                );
+                terminateOthersMut.mutate(undefined, {
+                  onSuccess: () => {
+                    setNotice(
+                      c(
+                        "其他设备已下线。",
+                        "Other devices were signed out.",
+                        "سُجل خروج الأجهزة الأخرى.",
+                      ),
+                    );
+                  },
+                });
               }}
             >
               {c(
