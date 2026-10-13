@@ -219,14 +219,16 @@ export default function Playground({
       } as any);
       setLastId(`relay_${Date.now()}`);
     } catch {
-      // Network error — fall back to simulation.
+      // Network error — fall back to simulation. Keep busy=true
+      // until the simulation completes so the user can't double-click.
       timer.current = setTimeout(() => {
         const row = recordCall(credential, outage, snapshot.model, snapshot);
         if (row) setLastId(row.trace_id);
+        setBusy(false);
       }, 420);
-    } finally {
-      setBusy(false);
+      return;
     }
+    setBusy(false);
   };
   const error = last?.status === "failed";
   return (
