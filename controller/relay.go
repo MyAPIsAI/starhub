@@ -170,6 +170,7 @@ type relayFlow struct {
 	budgetStop   bool   // stopped because the total attempt budget was exhausted
 	currentGroup string // group of the current attempt (for auto-group walk)
 	groupIdx     int    // cursor into req.autoGroups (auto-group mode)
+	startTime    time.Time // request start for duration_ms logging
 	// Observability (P5): the request-level span and the current attempt
 	// span. The attempt span is set by runChannels before each attempt
 	// and read by callUpstream / the streaming loops to record TTFT.
@@ -192,6 +193,7 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 	sw := newStatusWriter(w)
 	flow := &relayFlow{
 		ctx: ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
+		startTime:      time.Now(),
 		tried:          map[int64]bool{},
 		affinityKeyIdx: -1,
 		span: metric.BeginRequest(metric.RequestMeta{
@@ -876,7 +878,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	}
 	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
-		flow.preQuota, flow.trailString(), 0); err != nil {
+		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds()); err != nil {
 		log.Printf("post consume quota failed: %v", err)
 	}
 	flow.settled = true

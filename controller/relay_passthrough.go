@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
@@ -325,7 +326,7 @@ func settleModeAttempt(flow *relayFlow, ch *model.Channel, usage *relay.Usage) a
 	}
 	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
-		flow.preQuota, flow.trailString(), 0); err != nil {
+		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds()); err != nil {
 		log.Printf("post consume quota failed: %v", err)
 	}
 	flow.settled = true
