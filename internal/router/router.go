@@ -132,6 +132,10 @@ func New() http.Handler {
 	mux.Handle("PUT /api/service-group/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertServiceGroup))))
 	mux.Handle("DELETE /api/service-group/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteServiceGroup))))
 
+	// Service quality: per-model SLA metrics aggregated from logs.
+	mux.Handle("GET /api/service-quality", middleware.UserAuth(http.HandlerFunc(controller.GetServiceQuality)))
+	mux.Handle("GET /api/service-quality/", middleware.UserAuth(http.HandlerFunc(controller.GetServiceQuality)))
+
 	// Relay endpoints (P3 multi-protocol family). All of them share the
 	// TokenAuth -> UserRateLimit -> TokenRateLimit -> Distribute ->
 	// ModelRateLimit -> Relay chain; the chat endpoints differ only in

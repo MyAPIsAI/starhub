@@ -34,9 +34,10 @@ import {
   type QualityUnit,
   type QualityTrend,
 } from "../lib/service-quality-demo";
+import { useServiceQuality, type ServiceQualitySummary } from "../lib/api/service-quality";
 import "../components/service-quality.css";
 import { catalogModels } from "../config/models";
-import { placeholders } from "../config/placeholders";
+import { placeholders, type TierId } from "../config/placeholders";
 
 type Copy = (zh: string, en: string, ar: string) => string;
 const statusWords: Record<QualityStatus, [string, string, string]> = {
@@ -265,9 +266,64 @@ export default function ServiceQuality({
   const returnPosition = useRef<{ scroll: number; unit: string } | null>(
     location.state?.qualityReturn ?? null,
   );
+  const qualityQuery = useServiceQuality(168); // last 7 days
+  // When backend data is available, adapt it to QualityUnit[].
+  // Otherwise fall back to the demo seeds.
+  const adaptToUnits = (summary: ServiceQualitySummary): QualityUnit[] =>
+    summary.by_model.map((m, i) => ({
+      id: `sq_${i}`,
+      userId: 0,
+      group: "default" as TierId,
+      tier: "Pro" as const,
+      model: m.model,
+      stream: false,
+      version: "1",
+      requests: m.total_requests,
+      successes: m.success_count,
+      successRate: m.success_rate * 100,
+      successTarget: 99.5,
+      completeness: null,
+      minSamples: 100,
+      unknownInputs: 0,
+      buckets: [
+        {
+          id: "g0" as const,
+          p95: m.avg_duration_ms,
+          limit: 3000,
+          samples: m.total_requests,
+          status: (m.avg_duration_ms > 0 && m.avg_duration_ms < 3000
+            ? "pass"
+            : m.avg_duration_ms === 0
+              ? "insufficient"
+              : "below") as QualityStatus,
+        },
+      ],
+      successStatus: (m.success_rate >= 0.995
+        ? "pass"
+        : m.success_rate >= 0.97
+          ? "near"
+          : m.total_requests === 0
+            ? "insufficient"
+            : "below") as QualityStatus,
+      performanceStatus: m.avg_duration_ms > 0
+        ? (m.avg_duration_ms < 3000 ? "pass" : "below") as QualityStatus
+        : null,
+      status: (m.success_rate >= 0.995
+        ? "pass"
+        : m.success_rate >= 0.97
+          ? "near"
+          : m.total_requests === 0
+            ? "insufficient"
+            : "below") as QualityStatus,
+    }));
   const allUnits = useMemo(
-    () => (months.includes(month) ? createQualityUnits(month) : []),
-    [month, months],
+    () =>
+      qualityQuery.data
+        ? adaptToUnits(qualityQuery.data)
+        : months.includes(month)
+          ? createQualityUnits(month)
+          : [],
+    [qualityQuery.data, month, months],
   );
   const units = useMemo(
     () =>
