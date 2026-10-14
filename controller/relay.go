@@ -441,7 +441,9 @@ func (f *relayFlow) trailString() string { return strings.Join(f.trail, "->") }
 
 // refundUnlessSettled returns the pre-payment when the request never
 // reached settlement (failure, 4xx passthrough, panic path). Install it
-// with defer right after the pre-charge.
+// with defer right after the pre-charge. It also logs a failed-request
+// entry (Status=2, Quota=0) so the service-quality and error-rate
+// analytics reflect real failures.
 func (f *relayFlow) refundUnlessSettled() {
 	if f.settled {
 		return
@@ -451,6 +453,20 @@ func (f *relayFlow) refundUnlessSettled() {
 	} else {
 		log.Printf("relay for model %s failed on channels [%s], refunded %d quota",
 			f.req.modelName, f.trailString(), f.preQuota)
+	}
+	// Log the failed request for analytics (does not affect quota).
+	// Only when a channel was actually tried (trail is non-empty),
+	// so pre-channel failures (no channel available) don't inflate
+	// usage counts.
+	if len(f.trail) > 0 {
+		_ = model.InsertFailedLog(&model.Log{
+			UserID:       f.req.userID,
+			TokenID:      f.req.tokenID,
+			TokenName:    f.req.tokenName,
+			Model:        f.req.modelName,
+			UsedChannels:  f.trailString(),
+			DurationMs:   time.Since(f.startTime).Milliseconds(),
+		})
 	}
 }
 

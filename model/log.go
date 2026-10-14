@@ -27,6 +27,20 @@ func InsertLog(l *Log) error {
 	return DB.Create(l).Error
 }
 
+// InsertFailedLog records a failed request without touching quota. It
+// sets Status=2 (failed) and Quota=0. The entry is used for service
+// quality and error-rate analytics. Only logged when channelID > 0
+// to avoid polluting usage counts with pre-channel failures.
+func InsertFailedLog(l *Log) error {
+	if l == nil || l.ChannelID == 0 {
+		return nil
+	}
+	l.Status = 2 // failed
+	l.Quota = 0
+	l.UnfundedQuota = 0
+	return DB.Create(l).Error
+}
+
 type DailyUsage struct {
 	Date             string `json:"date"`
 	Requests         int64  `json:"requests"`
