@@ -27,10 +27,12 @@ import {
   useAdminAudit,
   useAdminMetrics,
   useAdminChannels,
+  useTestChannel,
   userIsActive,
   userStatusText,
   quotaToUsd,
   type AdminUser,
+  type ChannelTestResult,
 } from "../../lib/api/admin";
 import { ApiError } from "../../lib/api/http";
 
@@ -67,7 +69,13 @@ export default function AdminPortal() {
   const auditQuery = useAdminAudit(1, 20);
   const metricsQuery = useAdminMetrics();
   const channelsQuery = useAdminChannels();
+  const testChannelMut = useTestChannel();
   const queryClient = useQueryClient();
+
+  // Channel test result per channel id (cleared on next test).
+  const [testResults, setTestResults] = useState<
+    Record<number, ChannelTestResult | string>
+  >({});
 
   // Incidents have no backend endpoint — keep as local state.
   const [incidents, setIncidents] = useState<
@@ -1006,13 +1014,16 @@ export default function AdminPortal() {
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
                       {text("平均 TTFT (ms)", "Avg TTFT (ms)", "متوسط TTFT (ملث)")}
                     </th>
+                    <th style={{ padding: "10px 14px", textAlign: "end" }}>
+                      {text("操作", "Actions", "الإجراءات")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {channelsQuery.isLoading && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         style={{
                           padding: "24px",
                           textAlign: "center",
@@ -1088,6 +1099,83 @@ export default function AdminPortal() {
                           style={{ padding: "10px 14px" }}
                         >
                           {stat ? stat.avg_ttft_ms.toFixed(0) : "—"}
+                        </td>
+                        <td style={{ padding: "10px 14px", textAlign: "end" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 4,
+                              alignItems: "flex-end",
+                            }}
+                          >
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              disabled={
+                                testChannelMut.isPending &&
+                                testChannelMut.variables?.id === ch.id
+                              }
+                              onClick={() => {
+                                setTestResults((s) => {
+                                  const next = { ...s };
+                                  delete next[ch.id];
+                                  return next;
+                                });
+                                testChannelMut.mutate(
+                                  { id: ch.id },
+                                  {
+                                    onSuccess: (res) =>
+                                      setTestResults((s) => ({
+                                        ...s,
+                                        [ch.id]: res,
+                                      })),
+                                    onError: (err) =>
+                                      setTestResults((s) => ({
+                                        ...s,
+                                        [ch.id]:
+                                          err instanceof ApiError
+                                            ? err.message
+                                            : text(
+                                                "测试失败",
+                                                "Test failed",
+                                                "فشل الاختبار",
+                                              ),
+                                      })),
+                                  },
+                                );
+                              }}
+                            >
+                              {testChannelMut.isPending &&
+                              testChannelMut.variables?.id === ch.id
+                                ? text("测试中…", "Testing…", "اختبار…")
+                                : text("测试连通", "Test", "اختبار")}
+                            </Button>
+                            {testResults[ch.id] &&
+                              (typeof testResults[ch.id] === "string" ? (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: "var(--danger)",
+                                  }}
+                                >
+                                  {testResults[ch.id] as string}
+                                </span>
+                              ) : (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: (testResults[ch.id] as ChannelTestResult).ok
+                                      ? "var(--success)"
+                                      : "var(--danger)",
+                                  }}
+                                >
+                                  {(testResults[ch.id] as ChannelTestResult).ok
+                                    ? `${text("成功", "OK", "نجح")} · ${(testResults[ch.id] as ChannelTestResult).elapsed_ms}ms`
+                                    : text("失败", "Failed", "فشل")}
+                                </span>
+                              ))}
+                          </div>
                         </td>
                       </tr>
                     );

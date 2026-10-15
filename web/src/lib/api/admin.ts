@@ -1,12 +1,12 @@
 // Admin API hooks — typed wrappers around the Go backend's admin-only
 // endpoints: /api/user (list + update), /api/audit, /api/metrics,
-// /api/channel (list).
+// /api/channel (list + test).
 //
 // The admin portal (pages/admin/index.tsx) uses these to replace the
 // demo store with real backend data.
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPut } from "./http";
+import { apiGet, apiPut, apiPost } from "./http";
 
 // --- Types: Users ---
 
@@ -99,6 +99,15 @@ export interface AdminChannel {
   created_at: number; // unix seconds
 }
 
+/** Backend channelTestResult (controller/channel.go:232). */
+export interface ChannelTestResult {
+  ok: boolean;
+  model: string;
+  elapsed_ms: number;
+  message: string;
+  status: number;
+}
+
 // --- Query keys ---
 
 const ADMIN_USERS_KEY = ["admin-users"] as const;
@@ -154,6 +163,20 @@ export function useAdminChannels() {
   return useQuery({
     queryKey: ADMIN_CHANNELS_KEY,
     queryFn: ({ signal }) => apiGet<AdminChannel[]>("/api/channel", signal),
+  });
+}
+
+export function useTestChannel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, model }: { id: number; model?: string }) =>
+      apiPost<ChannelTestResult>(
+        `/api/channel/test/${id}${model ? `?model=${encodeURIComponent(model)}` : ""}`,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_CHANNELS_KEY });
+      queryClient.invalidateQueries({ queryKey: ADMIN_METRICS_KEY });
+    },
   });
 }
 
