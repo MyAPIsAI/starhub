@@ -1,5 +1,5 @@
-import { accountDisplayName } from "../../lib/account-identity";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -19,10 +19,20 @@ import {
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/primitives";
 import { Modal } from "../../components/ui/overlay";
-import { useProductPreview } from "../../lib/product-preview";
-import { formatMoney } from "../../lib/money";
 import { ModelPricingAdmin } from "../../features/model-pricing-admin";
 import { useSystemAccess } from "../../lib/system-access";
+import {
+  useAdminUsers,
+  useUpdateUser,
+  useAdminAudit,
+  useAdminMetrics,
+  useAdminChannels,
+  userIsActive,
+  userStatusText,
+  quotaToUsd,
+  type AdminUser,
+} from "../../lib/api/admin";
+import { ApiError } from "../../lib/api/http";
 
 export default function AdminPortal() {
   const { t, i18n } = useTranslation();
@@ -51,21 +61,29 @@ export default function AdminPortal() {
       setTab("models");
   }, [location.search]);
 
-  const user = useProductPreview((s) => s.user);
-  const balance = useProductPreview((s) => s.balance);
-  const adminReviews = useProductPreview((s) => s.adminReviews);
-  const adminCreateTopUp = useProductPreview((s) => s.adminCreateTopUp);
-  const adminUpdateConcurrency = useProductPreview(
-    (s) => s.adminUpdateConcurrency,
-  );
-  const adminToggleAccountStatus = useProductPreview(
-    (s) => s.adminToggleAccountStatus,
-  );
-  const incidents = useProductPreview((s) => s.incidents);
-  const adminPublishIncident = useProductPreview((s) => s.adminPublishIncident);
+  // Backend API hooks.
+  const usersQuery = useAdminUsers();
+  const updateUserMut = useUpdateUser();
+  const auditQuery = useAdminAudit(1, 20);
+  const metricsQuery = useAdminMetrics();
+  const channelsQuery = useAdminChannels();
+  const queryClient = useQueryClient();
 
-  // Top-up modal state
+  // Incidents have no backend endpoint — keep as local state.
+  const [incidents, setIncidents] = useState<
+    {
+      id: string;
+      title: { en: string; zh: string; ar: string };
+      impactedVendor: string;
+      status: string;
+      updatedAt: string;
+      content: { en: string; zh: string; ar: string };
+    }[]
+  >([]);
+
+  // Top-up modal state — targets a specific user.
   const [topUpOpen, setTopUpOpen] = useState(false);
+  const [topUpTarget, setTopUpTarget] = useState<AdminUser | null>(null);
   const [topUpAmount, setTopUpAmount] = useState("1200");
   const [topUpType, setTopUpType] = useState<
     "gift" | "compensation" | "offline_payment" | "clawback"
@@ -87,46 +105,77 @@ export default function AdminPortal() {
 
   const handleTopUpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!topUpTarget) return;
     const amt = parseFloat(topUpAmount);
     if (isNaN(amt) || amt === 0) return;
 
-    const operator =
-      role === "finance" ? "财务管理员（当前账号）" : "超级管理员（当前账号）";
-    adminCreateTopUp({
-      amount_usd: amt,
-      type: topUpType,
-      reason: topUpReason,
-      operator,
-    });
+    const currentQuota = topUpTarget.quota;
+    const deltaNano = Math.round(amt * 1e9);
+    const newQuota =
+      topUpType === "clawback"
+        ? Math.max(0, currentQuota + deltaNano)
+        : currentQuota + deltaNano;
 
-    // #105：单人操作，提交即入账，不再有金额阈值与待复核分支。
-    setTopUpNotice(
-      `已为 ${user.enterpriseName} 入账 $${amt.toFixed(2)}（操作人：${operator}）。`,
+    setTopUpNotice("");
+    updateUserMut.mutate(
+      {
+        id: topUpTarget.id,
+        quota: newQuota,
+        expected_quota: currentQuota,
+      },
+      {
+        onSuccess: () => {
+          setTopUpNotice(
+            text(
+              `已为 ${topUpTarget.username} ${topUpType === "clawback" ? "扣除" : "入账"} $${Math.abs(amt).toFixed(2)}。`,
+              `Credited $${Math.abs(amt).toFixed(2)} to ${topUpTarget.username}.`,
+              `تم إيداع $${Math.abs(amt).toFixed(2)} في حساب ${topUpTarget.username}.`,
+            ),
+          );
+          setTopUpOpen(false);
+        },
+        onError: (err) => {
+          const msg =
+            err instanceof ApiError
+              ? err.message
+              : text("操作失败", "Operation failed", "فشلت العملية");
+          setTopUpNotice(msg);
+        },
+      },
     );
+  };
 
-    setTopUpOpen(false);
+  const handleToggleStatus = (user: AdminUser) => {
+    const nextStatus = userIsActive(user.status) ? 2 : 1;
+    updateUserMut.mutate({ id: user.id, status: nextStatus });
   };
 
   const handleForceSync = () => {
     setSyncing(true);
-    setTimeout(() => {
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["admin-metrics"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-channels"] }),
+    ]).then(() => {
       setSyncing(false);
       setSyncedMessage(t("syncConfirmed"));
       setTimeout(() => setSyncedMessage(""), 4000);
-    }, 800);
+    });
   };
 
   const handlePublishIncidentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!incTitle || !incContent) return;
-    adminPublishIncident({
-      id: `inc_${Date.now()}`,
-      title: { en: incTitle, zh: incTitle, ar: incTitle },
-      impactedVendor: incVendor,
-      status: "investigating",
-      updatedAt: "Just now",
-      content: { en: incContent, zh: incContent, ar: incContent },
-    });
+    setIncidents((prev) => [
+      {
+        id: `inc_${Date.now()}`,
+        title: { en: incTitle, zh: incTitle, ar: incTitle },
+        impactedVendor: incVendor,
+        status: "investigating",
+        updatedAt: text("刚刚", "Just now", "الآن"),
+        content: { en: incContent, zh: incContent, ar: incContent },
+      },
+      ...prev,
+    ]);
     setIncidentOpen(false);
     setIncTitle("");
     setIncContent("");
@@ -363,192 +412,25 @@ export default function AdminPortal() {
               </div>
 
               {(role === "finance" || role === "superAdmin") && (
-                <Button variant="primary" onClick={() => setTopUpOpen(true)}>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const first = usersQuery.data?.[0];
+                    if (first) {
+                      setTopUpTarget(first);
+                      setTopUpAmount("");
+                      setTopUpReason("");
+                      setTopUpOpen(true);
+                    }
+                  }}
+                >
                   <Plus size={15} style={{ marginInlineEnd: 4 }} />
                   {t("manualTopUp")}
                 </Button>
               )}
             </div>
 
-            {/* Customer Overview Card */}
-            <div
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                padding: "var(--space-5)",
-                marginBottom: "var(--space-6)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  flexWrap: "wrap",
-                  gap: "var(--space-4)",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--space-2)",
-                      marginBottom: 4,
-                    }}
-                  >
-                    <h2
-                      style={{
-                        fontSize: "var(--text-lg)",
-                        fontWeight: 600,
-                        margin: 0,
-                      }}
-                    >
-                      {accountDisplayName(user)}
-                    </h2>
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: "var(--radius-sm)",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background:
-                          user.accountStatus === "normal"
-                            ? "var(--success-soft)"
-                            : "var(--danger-soft)",
-                        color:
-                          user.accountStatus === "normal"
-                            ? "var(--success)"
-                            : "var(--danger)",
-                      }}
-                    >
-                      {user.accountStatus.toUpperCase()}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    {user.email} ·{" "}
-                    {text(
-                      "注册于 2026-09-01 · 迪拜时区",
-                      "Registered 2026-09-01 · Dubai time",
-                      "مسجل في 2026-09-01 · توقيت دبي",
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "var(--space-3)" }}>
-                  <Button
-                    size="small"
-                    variant="secondary"
-                    onClick={() => {
-                      const newLim = prompt(
-                        "Set account concurrency limit (default 50):",
-                        user.concurrencyLimit.toString(),
-                      );
-                      if (newLim)
-                        adminUpdateConcurrency(parseInt(newLim) || 50);
-                    }}
-                  >
-                    {t("concurrencyLimit")}: <b>{user.concurrencyLimit}</b>
-                  </Button>
-
-                  <Button
-                    size="small"
-                    variant={
-                      user.accountStatus === "normal" ? "danger" : "primary"
-                    }
-                    onClick={adminToggleAccountStatus}
-                  >
-                    {user.accountStatus === "normal"
-                      ? t("disableAccount")
-                      : t("enableAccount")}
-                  </Button>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                  gap: "var(--space-4)",
-                  marginTop: "var(--space-4)",
-                  paddingTop: "var(--space-4)",
-                  borderTop: "1px solid var(--border)",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    {text(
-                      "当前预付余额",
-                      "Current prepaid balance",
-                      "الرصيد الحالي",
-                    )}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: "var(--text-xl)",
-                      fontWeight: "var(--weight-bold)",
-                      color: "var(--brand)",
-                    }}
-                  >
-                    {formatMoney(balance)}
-                  </div>
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    {text(
-                      "本月累计用量",
-                      "Month-to-date usage",
-                      "استخدام الشهر الحالي",
-                    )}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{ fontSize: "var(--text-xl)", fontWeight: 600 }}
-                  >
-                    $14.2850
-                  </div>
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    {text(
-                      "使用中的团队密钥",
-                      "Active team keys",
-                      "مفاتيح الفريق النشطة",
-                    )}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{ fontSize: "var(--text-xl)", fontWeight: 600 }}
-                  >
-                    3
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Pending Top-up Reviews Table */}
+            {/* Backend user list table */}
             <section
               style={{
                 background: "var(--surface)",
@@ -571,10 +453,10 @@ export default function AdminPortal() {
                     fontWeight: 600,
                   }}
                 >
-                  {t("topUpReviews")} ({adminReviews.length})
+                  {text("用户列表", "User list", "قائمة المستخدمين")} (
+                  {usersQuery.data?.length ?? 0})
                 </h3>
               </div>
-
               <table
                 style={{
                   width: "100%",
@@ -590,25 +472,22 @@ export default function AdminPortal() {
                     }}
                   >
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("单号", "Record ID", "معرّف السجل")}
+                      {text("用户名", "Username", "اسم المستخدم")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("账号", "Account", "الحساب")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("金额", "Amount", "المبلغ")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("类型与原因", "Type & reason", "النوع والسبب")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("操作人", "Operator", "المشغّل")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("操作时间", "Time", "الوقت")}
+                      {text("邮箱", "Email", "البريد")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
                       {t("status")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("余额", "Balance", "الرصيد")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("已用", "Used", "المستخدم")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("分组", "Group", "المجموعة")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "end" }}>
                       {text("操作", "Actions", "الإجراءات")}
@@ -616,100 +495,150 @@ export default function AdminPortal() {
                   </tr>
                 </thead>
                 <tbody>
-                  {adminReviews.map((rev) => {
-                    return (
-                      <tr
-                        key={rev.id}
-                        style={{ borderBottom: "1px solid var(--border)" }}
+                  {usersQuery.isLoading && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        style={{
+                          padding: "24px",
+                          textAlign: "center",
+                          color: "var(--muted)",
+                        }}
                       >
-                        <td className="mono" style={{ padding: "12px 14px" }}>
-                          {rev.id}
-                        </td>
-                        <td style={{ padding: "12px 14px", fontWeight: 500 }}>
-                          {rev.enterpriseName}
-                        </td>
-                        <td
-                          className="mono"
+                        {text("加载中…", "Loading…", "جارٍ التحميل…")}
+                      </td>
+                    </tr>
+                  )}
+                  {usersQuery.isError && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        style={{
+                          padding: "24px",
+                          textAlign: "center",
+                          color: "var(--danger)",
+                        }}
+                      >
+                        {text(
+                          "加载失败",
+                          "Failed to load",
+                          "فشل التحميل",
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  {usersQuery.data?.map((u) => (
+                    <tr
+                      key={u.id}
+                      style={{ borderBottom: "1px solid var(--border)" }}
+                    >
+                      <td
+                        style={{
+                          padding: "10px 14px",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {u.username}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: "var(--text-xs)",
+                          color: "var(--muted)",
+                        }}
+                      >
+                        {u.email || "—"}
+                      </td>
+                      <td style={{ padding: "10px 14px" }}>
+                        <span
                           style={{
-                            padding: "12px 14px",
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            borderRadius: 4,
                             fontWeight: 600,
-                            color: "var(--brand)",
+                            background: userIsActive(u.status)
+                              ? "var(--success-soft)"
+                              : "var(--danger-soft)",
+                            color: userIsActive(u.status)
+                              ? "var(--success)"
+                              : "var(--danger)",
                           }}
                         >
-                          ${rev.amount_usd}
-                        </td>
-                        <td style={{ padding: "12px 14px" }}>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              padding: "2px 6px",
-                              background: "var(--subtle)",
-                              borderRadius: 3,
-                              marginInlineEnd: 6,
-                            }}
-                          >
-                            {rev.type}
-                          </span>
-                          <span
-                            style={{
-                              color: "var(--muted)",
-                              fontSize: "var(--text-xs)",
-                            }}
-                          >
-                            {rev.reason}
-                          </span>
-                        </td>
-                        <td
+                          {userStatusText(u.status)}
+                        </span>
+                      </td>
+                      <td
+                        className="mono"
+                        style={{
+                          padding: "10px 14px",
+                          fontWeight: 600,
+                          color: "var(--brand)",
+                        }}
+                      >
+                        ${quotaToUsd(u.quota)}
+                      </td>
+                      <td
+                        className="mono"
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: "var(--text-xs)",
+                          color: "var(--muted)",
+                        }}
+                      >
+                        ${quotaToUsd(u.used_quota)}
+                      </td>
+                      <td style={{ padding: "10px 14px" }}>
+                        <span
                           style={{
-                            padding: "12px 14px",
-                            fontSize: "var(--text-xs)",
-                            color: "var(--muted)",
+                            fontSize: 11,
+                            padding: "2px 6px",
+                            background: "var(--subtle)",
+                            borderRadius: 3,
                           }}
                         >
-                          {rev.operator}
-                        </td>
-                        <td
-                          className="mono"
+                          {u.group || "default"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 14px", textAlign: "end" }}>
+                        <div
                           style={{
-                            padding: "12px 14px",
-                            fontSize: "var(--text-xs)",
-                            color: "var(--muted)",
+                            display: "flex",
+                            gap: 4,
+                            justifyContent: "flex-end",
                           }}
                         >
-                          {new Date(rev.created_at).toLocaleString()}
-                        </td>
-                        <td style={{ padding: "12px 14px" }}>
-                          {/* #105：单人提交即入账，只有「已入账」一种状态。 */}
-                          <span
-                            style={{
-                              fontSize: 11,
-                              padding: "2px 8px",
-                              borderRadius: 4,
-                              fontWeight: 600,
-                              background: "var(--success-soft)",
-                              color: "var(--success)",
+                          <Button
+                            size="small"
+                            variant="secondary"
+                            onClick={() => {
+                              setTopUpTarget(u);
+                              setTopUpAmount("");
+                              setTopUpReason("");
+                              setTopUpOpen(true);
                             }}
                           >
-                            {text("已入账", "CREDITED", "تم الإيداع")}
-                          </span>
-                        </td>
-                        <td style={{ padding: "12px 14px", textAlign: "end" }}>
-                          <span
-                            style={{
-                              fontSize: "var(--text-xs)",
-                              color: "var(--muted)",
-                            }}
+                            <Plus size={12} style={{ marginInlineEnd: 2 }} />
+                            {text("加款", "Top-up", "شحن")}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant={
+                              userIsActive(u.status) ? "danger" : "primary"
+                            }
+                            onClick={() => handleToggleStatus(u)}
+                            disabled={
+                              updateUserMut.isPending &&
+                              updateUserMut.variables?.id === u.id
+                            }
                           >
-                            {text(
-                              "已记入审计日志",
-                              "Audit log written",
-                              "تم تسجيله في سجل التدقيق",
-                            )}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                            {userIsActive(u.status)
+                              ? t("disableAccount")
+                              : t("enableAccount")}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </section>
@@ -757,9 +686,9 @@ export default function AdminPortal() {
                   }}
                 >
                   {text(
-                    "近 30 天平台充值",
-                    "30-day platform top-ups",
-                    "شحن المنصة خلال 30 يومًا",
+                    "总请求数",
+                    "Total requests",
+                    "إجمالي الطلبات",
                   )}
                 </div>
                 <div
@@ -770,7 +699,10 @@ export default function AdminPortal() {
                     color: "var(--brand)",
                   }}
                 >
-                  $42,850.00
+                  {(metricsQuery.data?.requests.reduce(
+                    (sum, r) => sum + r.count,
+                    0,
+                  ) ?? 0).toLocaleString()}
                 </div>
               </div>
               <div
@@ -788,11 +720,7 @@ export default function AdminPortal() {
                     marginBottom: 4,
                   }}
                 >
-                  {text(
-                    "累计调用次数",
-                    "Total requests served",
-                    "إجمالي الطلبات",
-                  )}
+                  {text("活跃用户", "Active users", "المستخدمون النشطون")}
                 </div>
                 <div
                   className="mono"
@@ -801,7 +729,9 @@ export default function AdminPortal() {
                     fontWeight: "var(--weight-bold)",
                   }}
                 >
-                  1,248,910
+                  {(usersQuery.data?.filter((u) =>
+                    userIsActive(u.status),
+                  ).length ?? 0).toLocaleString()}
                 </div>
               </div>
               <div
@@ -819,7 +749,7 @@ export default function AdminPortal() {
                     marginBottom: 4,
                   }}
                 >
-                  {text("活跃调用账号", "Active accounts", "الحسابات النشطة")}
+                  {text("渠道数", "Channels", "القنوات")}
                 </div>
                 <div
                   className="mono"
@@ -828,7 +758,7 @@ export default function AdminPortal() {
                     fontWeight: "var(--weight-bold)",
                   }}
                 >
-                  184
+                  {channelsQuery.data?.length ?? 0}
                 </div>
               </div>
               <div
@@ -846,11 +776,7 @@ export default function AdminPortal() {
                     marginBottom: 4,
                   }}
                 >
-                  {text(
-                    "路由成功率（演示）",
-                    "Routing success (demo)",
-                    "نجاح التوجيه (تجريبي)",
-                  )}
+                  {text("请求成功率", "Request success rate", "معدل نجاح الطلبات")}
                 </div>
                 <div
                   className="mono"
@@ -860,10 +786,98 @@ export default function AdminPortal() {
                     color: "var(--success)",
                   }}
                 >
-                  99.98%
+                  {(() => {
+                    const reqs = metricsQuery.data?.requests ?? [];
+                    const total = reqs.reduce((s, r) => s + r.count, 0);
+                    const success =
+                      reqs.find((r) => r.class === "success")?.count ?? 0;
+                    return total > 0
+                      ? ((success / total) * 100).toFixed(2) + "%"
+                      : "—";
+                  })()}
                 </div>
               </div>
             </div>
+
+            {/* Request breakdown by class */}
+            {metricsQuery.data && metricsQuery.data.requests.length > 0 && (
+              <section
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-lg)",
+                  overflowX: "auto",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "var(--space-4)",
+                    borderBottom: "1px solid var(--border)",
+                    background: "var(--subtle)",
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "var(--text-base)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {text(
+                      "请求分类统计",
+                      "Request breakdown by class",
+                      "تصنيف الطلبات حسب الفئة",
+                    )}
+                  </h3>
+                </div>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: "var(--text-sm)",
+                  }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        borderBottom: "1px solid var(--border)",
+                        background: "var(--subtle)",
+                      }}
+                    >
+                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                        {text("分类", "Class", "الفئة")}
+                      </th>
+                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                        {text("次数", "Count", "العدد")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metricsQuery.data.requests.map((r) => (
+                      <tr
+                        key={r.class}
+                        style={{ borderBottom: "1px solid var(--border)" }}
+                      >
+                        <td
+                          style={{
+                            padding: "10px 14px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {r.class}
+                        </td>
+                        <td
+                          className="mono"
+                          style={{ padding: "10px 14px" }}
+                        >
+                          {r.count.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
           </div>
         )}
 
@@ -935,96 +949,152 @@ export default function AdminPortal() {
               </div>
             )}
 
-            <div
+            {/* Channel list from backend */}
+            <section
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: "var(--space-4)",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-lg)",
+                overflowX: "auto",
                 marginBottom: "var(--space-6)",
               }}
             >
               <div
                 style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
                   padding: "var(--space-4)",
+                  borderBottom: "1px solid var(--border)",
+                  background: "var(--subtle)",
                 }}
               >
-                <div
-                  style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}
-                >
-                  {t("snapshotSeq")}
-                </div>
-                <div
-                  className="mono"
+                <h3
                   style={{
-                    fontSize: "var(--text-lg)",
+                    margin: 0,
+                    fontSize: "var(--text-base)",
                     fontWeight: 600,
-                    marginTop: 4,
                   }}
                 >
-                  seq_20260918_144200
-                </div>
+                  {text("渠道列表", "Channels", "القنوات")} (
+                  {channelsQuery.data?.length ?? 0})
+                </h3>
               </div>
-              <div
+              <table
                 style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: "var(--text-sm)",
                 }}
               >
-                <div
-                  style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}
-                >
-                  {t("snapshotAge")}
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-lg)",
-                    fontWeight: 600,
-                    color: "var(--success)",
-                    marginTop: 4,
-                  }}
-                >
-                  {text(
-                    "42 秒 · 正常",
-                    "42 seconds · Healthy",
-                    "42 ثانية · سليم",
+                <thead>
+                  <tr
+                    style={{
+                      borderBottom: "1px solid var(--border)",
+                      background: "var(--subtle)",
+                    }}
+                  >
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("名称", "Name", "الاسم")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("模型", "Models", "النماذج")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {t("status")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("成功率", "Success rate", "معدل النجاح")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("平均 TTFT (ms)", "Avg TTFT (ms)", "متوسط TTFT (ملث)")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {channelsQuery.isLoading && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        style={{
+                          padding: "24px",
+                          textAlign: "center",
+                          color: "var(--muted)",
+                        }}
+                      >
+                        {text("加载中…", "Loading…", "جارٍ التحميل…")}
+                      </td>
+                    </tr>
                   )}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div
-                  style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}
-                >
-                  {text("网关实例", "Gateway instances", "مثيلات البوابة")}
-                </div>
-                <div
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    fontWeight: 600,
-                    color: "var(--success)",
-                    marginTop: 4,
-                  }}
-                >
-                  {text(
-                    "4 / 4 个实例已同步",
-                    "4 / 4 instances in sync",
-                    "4 / 4 مثيلات متزامنة",
-                  )}
-                </div>
-              </div>
-            </div>
+                  {channelsQuery.data?.map((ch) => {
+                    const stat = metricsQuery.data?.channel_stats.find(
+                      (s) => s.channel_id === ch.id,
+                    );
+                    return (
+                      <tr
+                        key={ch.id}
+                        style={{ borderBottom: "1px solid var(--border)" }}
+                      >
+                        <td
+                          style={{
+                            padding: "10px 14px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {ch.name}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 14px",
+                            fontSize: "var(--text-xs)",
+                            color: "var(--muted)",
+                            maxWidth: 200,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {ch.models}
+                        </td>
+                        <td style={{ padding: "10px 14px" }}>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              padding: "2px 8px",
+                              borderRadius: 4,
+                              fontWeight: 600,
+                              background:
+                                ch.status === 1
+                                  ? "var(--success-soft)"
+                                  : "var(--danger-soft)",
+                              color:
+                                ch.status === 1
+                                  ? "var(--success)"
+                                  : "var(--danger)",
+                            }}
+                          >
+                            {ch.status === 1
+                              ? text("启用", "Enabled", "مُفعّل")
+                              : text("禁用", "Disabled", "مُعطّل")}
+                          </span>
+                        </td>
+                        <td
+                          className="mono"
+                          style={{ padding: "10px 14px" }}
+                        >
+                          {stat
+                            ? (stat.success_rate * 100).toFixed(1) + "%"
+                            : "—"}
+                        </td>
+                        <td
+                          className="mono"
+                          style={{ padding: "10px 14px" }}
+                        >
+                          {stat ? stat.avg_ttft_ms.toFixed(0) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </section>
           </div>
         )}
 
@@ -1174,104 +1244,141 @@ export default function AdminPortal() {
                     }}
                   >
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      Time (UTC+4)
+                      {text("时间", "Time", "الوقت")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      Operator
+                      {text("用户", "User", "المستخدم")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      Role
+                      {text("方法", "Method", "الأسلوب")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      Action
+                      {text("路径", "Path", "المسار")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      Object
+                      {text("状态码", "Status", "الحالة")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      Audit Summary
+                      {text("IP", "IP", "IP")}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    {
-                      time: "2026-09-18 14:41",
-                      op: "Alex Chen",
-                      role: "Finance",
-                      action: "Top-up Created",
-                      obj: "rev_801",
-                      desc: "Initiated $2,500 manual top-up (pending review)",
-                    },
-                    {
-                      time: "2026-09-18 13:20",
-                      op: "Admin User",
-                      role: "Super Admin",
-                      action: "Key Viewed",
-                      obj: "pk_2",
-                      desc: "Password re-verified to view plaintext key",
-                    },
-                    {
-                      time: "2026-09-17 16:22",
-                      op: "Michael Vance",
-                      role: "Super Admin",
-                      action: "Top-up Approved",
-                      obj: "rev_802",
-                      desc: "Approved $500 compensation top-up",
-                    },
-                    {
-                      time: "2026-09-17 10:15",
-                      op: "Sara Lin",
-                      role: "Ops",
-                      action: "Concurrency Adjusted",
-                      obj: "Account",
-                      desc: "Limit updated 50 -> 100",
-                    },
-                  ].map((row, idx) => (
+                  {auditQuery.isLoading && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        style={{
+                          padding: "24px",
+                          textAlign: "center",
+                          color: "var(--muted)",
+                        }}
+                      >
+                        {text("加载中…", "Loading…", "جارٍ التحميل…")}
+                      </td>
+                    </tr>
+                  )}
+                  {auditQuery.data?.items.map((log) => (
                     <tr
-                      key={idx}
+                      key={log.id}
                       style={{ borderBottom: "1px solid var(--border)" }}
                     >
                       <td
                         className="mono"
                         style={{ padding: "10px 14px", fontSize: 12 }}
                       >
-                        {row.time}
-                      </td>
-                      <td style={{ padding: "10px 14px", fontWeight: 500 }}>
-                        {row.op}
+                        {new Date(
+                          log.created_at * 1000,
+                        ).toLocaleString()}
                       </td>
                       <td
+                        style={{ padding: "10px 14px", fontWeight: 500 }}
+                      >
+                        {log.username || `#${log.user_id}`}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: 12,
+                        }}
+                      >
+                        {log.method}
+                      </td>
+                      <td
+                        className="mono"
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: 12,
+                          color: "var(--secondary)",
+                        }}
+                      >
+                        {log.path}
+                      </td>
+                      <td style={{ padding: "10px 14px" }}>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            borderRadius: 4,
+                            fontWeight: 600,
+                            background:
+                              log.status >= 200 && log.status < 300
+                                ? "var(--success-soft)"
+                                : "var(--danger-soft)",
+                            color:
+                              log.status >= 200 && log.status < 300
+                                ? "var(--success)"
+                                : "var(--danger)",
+                          }}
+                        >
+                          {log.status || "—"}
+                        </span>
+                      </td>
+                      <td
+                        className="mono"
                         style={{
                           padding: "10px 14px",
                           fontSize: 12,
                           color: "var(--muted)",
                         }}
                       >
-                        {row.role}
-                      </td>
-                      <td style={{ padding: "10px 14px", fontWeight: 500 }}>
-                        {row.action}
-                      </td>
-                      <td
-                        className="mono"
-                        style={{ padding: "10px 14px", fontSize: 12 }}
-                      >
-                        {row.obj}
-                      </td>
-                      <td
-                        style={{
-                          padding: "10px 14px",
-                          color: "var(--secondary)",
-                        }}
-                      >
-                        {row.desc}
+                        {log.ip || "—"}
                       </td>
                     </tr>
                   ))}
+                  {auditQuery.data && auditQuery.data.items.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        style={{
+                          padding: "24px",
+                          textAlign: "center",
+                          color: "var(--muted)",
+                        }}
+                      >
+                        {text("暂无记录", "No records", "لا سجلات")}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
+            {auditQuery.data && auditQuery.data.total > 20 && (
+              <p
+                style={{
+                  textAlign: "center",
+                  color: "var(--muted)",
+                  fontSize: "var(--text-xs)",
+                  marginTop: "var(--space-3)",
+                }}
+              >
+                {text(
+                  `显示前 20 条（共 ${auditQuery.data.total} 条）`,
+                  `Showing 20 of ${auditQuery.data.total}`,
+                  `عرض 20 من ${auditQuery.data.total}`,
+                )}
+              </p>
+            )}
           </div>
         )}
       </main>
@@ -1291,7 +1398,12 @@ export default function AdminPortal() {
         footer={
           <>
             <Button onClick={() => setTopUpOpen(false)}>{t("cancel")}</Button>
-            <Button variant="primary" type="submit" form="admin-top-up-form">
+            <Button
+              variant="primary"
+              type="submit"
+              form="admin-top-up-form"
+              disabled={updateUserMut.isPending}
+            >
               {text("提交充值", "Submit top-up", "إرسال الشحن")}
             </Button>
           </>
@@ -1306,6 +1418,28 @@ export default function AdminPortal() {
             gap: "var(--space-4)",
           }}
         >
+          {topUpTarget && (
+            <div
+              style={{
+                padding: "var(--space-3) var(--space-4)",
+                background: "var(--subtle)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "var(--text-sm)",
+              }}
+            >
+              <strong>{topUpTarget.username}</strong>
+              <span
+                style={{
+                  marginInlineStart: 8,
+                  color: "var(--muted)",
+                  fontSize: "var(--text-xs)",
+                }}
+              >
+                {text("当前余额", "Current balance", "الرصيد الحالي")}: $
+                {quotaToUsd(topUpTarget.quota)}
+              </span>
+            </div>
+          )}
           <div>
             <label
               htmlFor="admin-top-up-amount"
