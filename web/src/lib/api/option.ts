@@ -10,7 +10,7 @@
 // server so they survive across sessions and instances.
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPut } from "./http";
+import { apiGet, apiPut, apiPost } from "./http";
 
 export interface Option {
   key: string;
@@ -18,6 +18,8 @@ export interface Option {
 }
 
 const OPTIONS_KEY = ["options"] as const;
+const OPTION_STATUS_KEY = ["option-status"] as const;
+const OPTION_HISTORY_KEY = ["option-history"] as const;
 
 export function useOptions() {
   return useQuery({
@@ -36,6 +38,60 @@ export function useUpdateOption() {
     }) => apiPut("/api/option", input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OPTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: OPTION_STATUS_KEY });
+      queryClient.invalidateQueries({ queryKey: OPTION_HISTORY_KEY });
+    },
+  });
+}
+
+// --- Option status (GET /api/option/status) ---
+
+export interface OptionStatus {
+  database_version: number;
+  loaded_version: number;
+  in_sync: boolean;
+  instances: { id: string; version: number; last_seen: number }[];
+}
+
+export function useOptionStatus() {
+  return useQuery({
+    queryKey: OPTION_STATUS_KEY,
+    queryFn: ({ signal }) =>
+      apiGet<OptionStatus>("/api/option/status", signal),
+  });
+}
+
+// --- Option history (GET /api/option/history) ---
+
+export interface OptionChange {
+  id: number;
+  version: number;
+  key: string;
+  old_value: string;
+  new_value: string;
+  actor_id: number;
+  created_at: number; // unix seconds
+}
+
+export function useOptionHistory(limit = 50) {
+  return useQuery({
+    queryKey: [...OPTION_HISTORY_KEY, limit],
+    queryFn: ({ signal }) =>
+      apiGet<OptionChange[]>(`/api/option/history?limit=${limit}`, signal),
+  });
+}
+
+// --- Option rollback (POST /api/option/rollback) ---
+
+export function useRollbackOption() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { version: number; expected_version: number }) =>
+      apiPost<{ version: number }>("/api/option/rollback", input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OPTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: OPTION_STATUS_KEY });
+      queryClient.invalidateQueries({ queryKey: OPTION_HISTORY_KEY });
     },
   });
 }

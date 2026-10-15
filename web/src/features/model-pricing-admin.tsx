@@ -34,6 +34,8 @@ import {
 } from "../lib/model-pricing";
 import { useProductPreview } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
+import { useOptionStatus, useOptionHistory, useRollbackOption } from "../lib/api/option";
+import { ApiError } from "../lib/api/http";
 import { getKeyModels } from "../lib/key-model-policy";
 import { formatMoney } from "../lib/money";
 import { serviceGroupLabel } from "../lib/service-group-label";
@@ -113,6 +115,11 @@ export function ModelPricingAdmin({
   const keys = useBackendKeys().keys;
   const balance = useProductPreview((s) => s.balance);
   const recordMeteredCall = useProductPreview((s) => s.recordMeteredCall);
+  const optionStatusQuery = useOptionStatus();
+  const optionHistoryQuery = useOptionHistory(20);
+  const rollbackMut = useRollbackOption();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [rollbackNotice, setRollbackNotice] = useState("");
   const [initialQuote] = useState(() => {
     try {
       const retry = sessionStorage.getItem("veyra-metered-retry-v1");
@@ -1390,6 +1397,48 @@ export function ModelPricingAdmin({
           </Button>
         </div>
       </div>
+
+      {/* Option config status & history */}
+      {canEdit && (
+        <div className="pricing-table-scroll" style={{ marginTop: "var(--space-6)" }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "var(--space-3)",
+          }}>
+            <div>
+              <strong>
+                {text("配置版本", "Config version", "إصدار الإعداد")}
+              </strong>
+              {optionStatusQuery.data && (
+                <span style={{ marginInlineStart: 8, fontSize: "var(--text-sm)" }}>
+                  v{optionStatusQuery.data.database_version}
+                  {optionStatusQuery.data.in_sync
+                    ? text(" · 已同步", " · in sync", " · متزامن")
+                    : text(" · 未同步", " · out of sync", " · غير متزامن")}
+                </span>
+              )}
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setRollbackNotice("");
+                setHistoryOpen(true);
+              }}
+            >
+              <Clock3 size={15} style={{ marginInlineEnd: 4 }} />
+              {text("历史与回滚", "History & rollback", "السجل والتراجع")}
+            </Button>
+          </div>
+          {rollbackNotice && (
+            <p role="alert" style={{ fontSize: "var(--text-sm)", color: "var(--success)" }}>
+              {rollbackNotice}
+            </p>
+          )}
+        </div>
+      )}
+
       <Modal
         open={reviewOpen}
         onOpenChange={setReviewOpen}
@@ -1502,6 +1551,109 @@ export function ModelPricingAdmin({
           </table>
         </div>
         {notice && <p role="alert">{notice}</p>}
+      </Modal>
+
+      {/* Option history & rollback modal */}
+      <Modal
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        title={text("配置变更历史", "Config change history", "سجل تغييرات الإعداد")}
+        description={text(
+          "回滚将恢复某次变更前的值，需指定当前版本号。",
+          "Rollback restores the pre-change value; current version required.",
+          "يستعيد التراجع القيمة السابقة مع تحديد الإصدار الحالي.",
+        )}
+        size="wide"
+      >
+        {optionHistoryQuery.isLoading ? (
+          <p style={{ color: "var(--muted)" }}>
+            {text("加载中…", "Loading…", "جارٍ التحميل…")}
+          </p>
+        ) : (
+          <table className="pricing-table-scroll">
+            <thead>
+              <tr>
+                <th>{text("版本", "Version", "الإصدار")}</th>
+                <th>{text("键", "Key", "المفتاح")}</th>
+                <th>{text("旧值", "Old value", "القيمة القديمة")}</th>
+                <th>{text("新值", "New value", "القيمة الجديدة")}</th>
+                <th>{text("时间", "Time", "الوقت")}</th>
+                <th>{text("操作", "Action", "الإجراء")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {optionHistoryQuery.data?.map((change) => (
+                <tr key={change.id}>
+                  <td className="mono" style={{ padding: "8px 10px", fontSize: 12 }}>v{change.version}</td>
+                  <td style={{ padding: "8px 10px" }}>{change.key}</td>
+                  <td className="mono" style={{
+                    padding: "8px 10px",
+                    fontSize: 11,
+                    maxWidth: 200,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }} dir="ltr">
+                    {change.old_value || "—"}
+                  </td>
+                  <td className="mono" style={{
+                    padding: "8px 10px",
+                    fontSize: 11,
+                    maxWidth: 200,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }} dir="ltr">
+                    {change.new_value || "—"}
+                  </td>
+                  <td className="mono" style={{ padding: "8px 10px", fontSize: 12 }}>
+                    {new Date(change.created_at * 1000).toLocaleString()}
+                  </td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      disabled={
+                        rollbackMut.isPending ||
+                        !optionStatusQuery.data ||
+                        change.version === optionStatusQuery.data.database_version
+                      }
+                      onClick={() => {
+                        const currentVersion = optionStatusQuery.data?.database_version;
+                        if (!currentVersion) return;
+                        setRollbackNotice("");
+                        rollbackMut.mutate(
+                          { version: change.version, expected_version: currentVersion },
+                          {
+                            onSuccess: () =>
+                              setRollbackNotice(
+                                text("已回滚到此版本。", "Rolled back.", "تم التراجع."),
+                              ),
+                            onError: (err) =>
+                              setRollbackNotice(
+                                err instanceof ApiError
+                                  ? err.message
+                                  : text("回滚失败", "Rollback failed", "فشل التراجع"),
+                              ),
+                          },
+                        );
+                      }}
+                    >
+                      {text("回滚到此版本", "Rollback", "تراجع")}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {optionHistoryQuery.data && optionHistoryQuery.data.length === 0 && (
+                <tr>
+                  <td colSpan={6} style={{ padding: 16, textAlign: "center", color: "var(--muted)" }}>
+                    {text("暂无变更记录", "No changes", "لا تغييرات")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </Modal>
     </div>
   );
