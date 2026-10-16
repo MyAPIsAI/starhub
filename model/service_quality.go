@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // ServiceQualityMetric is a per-model quality summary computed from the
 // Log table. It mirrors the headline SLA indicators from the resource
@@ -18,12 +21,25 @@ type ServiceQualityMetric struct {
 	ErrorRate        float64 `json:"error_rate"`         // 0.0–1.0
 }
 
+// ServiceQualityDailyMetric is one day's quality summary for a single
+// model (or the overall aggregate when Model is empty).
+type ServiceQualityDailyMetric struct {
+	Date          string  `json:"date"`           // "2006-01-02"
+	Model         string  `json:"model"`
+	TotalRequests int64   `json:"total_requests"`
+	SuccessCount  int64   `json:"success_count"`
+	FailedCount   int64   `json:"failed_count"`
+	SuccessRate   float64 `json:"success_rate"`
+	AvgDurationMs int64   `json:"avg_duration_ms"`
+}
+
 // ServiceQualitySummary is the top-level response: overall metrics plus
-// per-model breakdown.
+// per-model breakdown and optional per-day trends.
 type ServiceQualitySummary struct {
-	WindowHours int                     `json:"window_hours"`
-	Overall     ServiceQualityMetric    `json:"overall"`
-	ByModel     []ServiceQualityMetric  `json:"by_model"`
+	WindowHours int                        `json:"window_hours"`
+	Overall     ServiceQualityMetric       `json:"overall"`
+	ByModel     []ServiceQualityMetric     `json:"by_model"`
+	ByDay       []ServiceQualityDailyMetric `json:"by_day"`
 }
 
 // SummarizeServiceQuality aggregates the Log table into per-model
@@ -104,12 +120,52 @@ func SummarizeServiceQuality(userID int64, windowHours int) (*ServiceQualitySumm
 	if overallTotal > 0 {
 		overall.SuccessRate = float64(overallSuccess) / float64(overallTotal)
 		overall.ErrorRate = 1.0 - overall.SuccessRate
-		overall.AvgDurationMs = overallDurationSum / overallTotal
+	overall.AvgDurationMs = overallDurationSum / overallTotal
+	}
+
+	// Daily breakdown for trend charts.
+	type dayRow struct {
+		DateStr    string
+		Total      int64
+		Success    int64
+		Failed     int64
+		AvgDur     int64
+	}
+	var dayRows []dayRow
+	err = DB.Model(&Log{}).
+		Select(fmt.Sprintf(
+			"strftime('%%Y-%%m-%%d', datetime(created_at, 'unixepoch')) AS date_str, "+
+				"COUNT(*) AS total, "+
+				"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success, "+
+				"SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS failed, "+
+				"COALESCE(AVG(duration_ms), 0) AS avg_dur")).
+		Where(baseWhere, args...).
+		Group("date_str").
+		Order("date_str ASC").
+		Scan(&dayRows).Error
+	if err != nil {
+		return nil, err
+	}
+	byDay := make([]ServiceQualityDailyMetric, 0, len(dayRows))
+	for _, dr := range dayRows {
+		sr := 0.0
+		if dr.Total > 0 {
+			sr = float64(dr.Success) / float64(dr.Total)
+		}
+		byDay = append(byDay, ServiceQualityDailyMetric{
+			Date:          dr.DateStr,
+			TotalRequests: dr.Total,
+			SuccessCount:  dr.Success,
+			FailedCount:   dr.Failed,
+			SuccessRate:   sr,
+			AvgDurationMs: dr.AvgDur,
+		})
 	}
 
 	return &ServiceQualitySummary{
 		WindowHours: windowHours,
 		Overall:     overall,
 		ByModel:     byModel,
+		ByDay:       byDay,
 	}, nil
 }

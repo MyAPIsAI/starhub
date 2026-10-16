@@ -34,7 +34,11 @@ import {
   type QualityUnit,
   type QualityTrend,
 } from "../lib/service-quality-demo";
-import { useServiceQuality, type ServiceQualitySummary } from "../lib/api/service-quality";
+import {
+  useServiceQuality,
+  type ServiceQualitySummary,
+  type ServiceQualityDailyMetric,
+} from "../lib/api/service-quality";
 import "../components/service-quality.css";
 import { catalogModels } from "../config/models";
 import { placeholders, type TierId } from "../config/placeholders";
@@ -356,10 +360,20 @@ export default function ServiceQuality({
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
   );
-  const trend = useMemo(
-    () => (selected ? createQualityTrend(selected, month) : []),
-    [selected, month],
-  );
+  const trend = useMemo(() => {
+    // Use real backend by_day data when available; fall back to demo.
+    const byDay = qualityQuery.data?.by_day;
+    if (byDay && byDay.length > 0) {
+      return byDay.map((d: ServiceQualityDailyMetric) => ({
+        date: d.date,
+        success: d.success_rate * 100,
+        g0: d.avg_duration_ms,
+        g1: 0,
+        g2: 0,
+      })) as QualityTrend[];
+    }
+    return selected ? createQualityTrend(selected, month) : [];
+  }, [qualityQuery.data, selected, month]);
   const chartMetric: QualityMetric = !selected?.stream ? "success" : metric;
   const target = selected?.successTarget
     ? chartMetric === "success"

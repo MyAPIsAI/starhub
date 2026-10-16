@@ -19,10 +19,20 @@ export interface ServiceQualityMetric {
   error_rate: number; // 0.0–1.0
 }
 
+export interface ServiceQualityDailyMetric {
+  date: string; // "2006-01-02"
+  total_requests: number;
+  success_count: number;
+  failed_count: number;
+  success_rate: number; // 0.0–1.0
+  avg_duration_ms: number;
+}
+
 export interface ServiceQualitySummary {
   window_hours: number;
   overall: ServiceQualityMetric;
   by_model: ServiceQualityMetric[];
+  by_day: ServiceQualityDailyMetric[];
 }
 
 export function useServiceQuality(hours: number = 24) {
