@@ -8,40 +8,22 @@ export const ROLE_ADMIN = 10;
 export const ROLE_ROOT = 100;
 
 export type SystemRole = number;
-const storageKey = "veyra-demo-account-role-v1";
 
 // isAdmin reports whether role carries management privileges. This
 // is the single source of truth for admin-only UI; the backend still
 // enforces authorization on every write.
 export const isAdmin = (role: SystemRole): boolean => role >= ROLE_ADMIN;
 
-function initialRole(): SystemRole {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (raw == null) return ROLE_USER;
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : ROLE_USER;
-  } catch {
-    return ROLE_USER;
-  }
-}
-
-// Local demo identity only. Production permissions must be enforced
-// by a server. role defaults to ROLE_USER; the demo control bar can
-// promote to ROLE_ADMIN for scenario exploration.
+// In-memory only — no localStorage persistence. The role is set by
+// session-restore.tsx from GET /api/user/self on every page load, so
+// there is no need to persist it across sessions. This prevents
+// client-side role tampering via devtools.
 export const useSystemAccess = create<{
   role: SystemRole;
   setRole: (role: SystemRole) => void;
 }>((set) => ({
-  role: initialRole(),
-  setRole: (role) => {
-    try {
-      localStorage.setItem(storageKey, String(role));
-    } catch {
-      // Keep the identity usable in the current session without persistence.
-    }
-    set({ role });
-  },
+  role: ROLE_USER,
+  setRole: (role) => set({ role }),
 }));
 
 export const systemRoleForScenario = (scenario: string): SystemRole =>

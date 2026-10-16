@@ -7,7 +7,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "./http";
-import { useProductPreview } from "../product-preview";
+import { useSystemAccess } from "../system-access";
 import type { DirectoryModel } from "../../config/model-directory";
 import type { TierId } from "../../config/placeholders";
 
@@ -160,11 +160,12 @@ export function usePlazaFilters() {
   });
 }
 
-// Prices and supported protocols are scoped to the browsing account's group.
+// The backend resolves the user's group from the session cookie
+// automatically. We only need a cache-busting key that changes when
+// the session changes — the role (from GET /api/user/self via
+// session-restore) serves this purpose without touching the demo store.
 function usePlazaIdentity() {
-  return useProductPreview((state) =>
-    state.user.isLoggedIn ? state.user.id : "anonymous",
-  );
+  return useSystemAccess((state) => state.role);
 }
 
 // --- Adapter: PlazaRow -> DirectoryModel ---

@@ -13,6 +13,7 @@ import { ApiError } from "../src/lib/api/http";
 import ModelSquare from "../src/pages/models/index";
 import ModelDetail from "../src/pages/models/detail";
 import { useProductPreview } from "../src/lib/product-preview";
+import { useSystemAccess, ROLE_USER } from "../src/lib/system-access";
 
 vi.mock("../src/components/product-shell", () => ({
   PublicHeader: () => null,
@@ -95,8 +96,7 @@ function renderPage({
       },
     },
   });
-  const user = useProductPreview.getState().user;
-  const identity = user.isLoggedIn ? user.id : "anonymous";
+  const identity = useSystemAccess.getState().role;
   client.setQueryData(["plaza-filters", identity], filters);
   const quoteIdentity = otherIdentityOnly ? "other-user" : identity;
   const url = new URL(route, "http://localhost");
