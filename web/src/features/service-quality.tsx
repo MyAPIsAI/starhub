@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
-import { DemoControlBar } from "../components/demo-control-bar";
 import { usePreferences } from "../lib/preferences";
 import {
   createQualityTrend,
@@ -1574,9 +1573,6 @@ export default function ServiceQuality({
           </div>
         </>
       )}
-      <div className="demo-inline-footer">
-        <DemoControlBar inline />
-      </div>
       <Modal
         size="wide"
         open={guideOpen}

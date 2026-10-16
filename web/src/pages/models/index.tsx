@@ -16,7 +16,6 @@ import {
   Info,
   X,
 } from "lucide-react";
-import { DemoControlBar } from "../../components/demo-control-bar";
 import { PublicHeader } from "../../components/product-shell";
 import { Button } from "../../components/ui/button";
 import { type DirectoryModel } from "../../config/model-directory";
@@ -577,9 +576,6 @@ export default function ModelSquare() {
             })}
           </div>
         )}
-        <div className="demo-inline-footer">
-          <DemoControlBar inline />
-        </div>
       </main>
     </div>
   );

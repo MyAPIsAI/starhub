@@ -13,7 +13,6 @@ import type {
 import { useBackendKeys } from "../lib/api/key-adapter";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
-import { DemoControlBar } from "../components/demo-control-bar";
 import "../components/catalog-management.css";
 import { ChannelWorkspace } from "./channel-workspace";
 import {
@@ -136,9 +135,6 @@ export function Channels({ role }: { role: number }) {
         onRemoved={() => setRemovedOpen(true)}
         removedCount={missing.length}
       />
-      <div className="channel-demo-footer">
-        <DemoControlBar inline />
-      </div>
       <RemovedChannelResources
         config={config}
         open={removedOpen}

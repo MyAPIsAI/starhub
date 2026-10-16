@@ -24,7 +24,6 @@ import "./components/refinement.css";
 import "./components/select-controls.css";
 import i18n from "./i18n";
 import { usePreferences } from "./lib/preferences";
-import { DemoControlBar } from "./components/demo-control-bar";
 import { useSystemAccess, isAdmin, ROLE_USER } from "./lib/system-access";
 import { useProductPreview } from "./lib/product-preview";
 import { onAuthLoss, ApiError } from "./lib/api/http";
@@ -260,9 +259,6 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
-
-            {/* Global floating Demo Control Panel */}
-            <DemoControlBar />
           </BrowserRouter>
 
           <Toaster
