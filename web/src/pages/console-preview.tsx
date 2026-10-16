@@ -217,7 +217,15 @@ export default function ConsolePreview() {
   // when the current user is not an admin.
   const metricsQuery = useAdminMetrics();
   const chooseKey = useProductPreview((s) => s.chooseKey);
-  const completeOnboarding = useProductPreview((s) => s.completeOnboarding);
+  // Onboarding completion is derived from real backend state: the
+  // user has at least one key and a positive balance. A local
+  // "dismissed" flag lets the user hide the banner for the session
+  // without needing a backend field.
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const onboardingComplete =
+    onboardingDismissed ||
+    keys.length > 0 ||
+    (walletQuery.data ? walletQuery.data.balance > 0 : false);
   // Key reveal state — local. The password is verified against the
   // backend via the login endpoint (POST /api/user/login).
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, number>>(
@@ -816,7 +824,7 @@ export default function ConsolePreview() {
                   </button>
                 </div>
               </div>
-              {!user.onboardingCompleted && (
+{!onboardingComplete && (
                 <section className="xy-onboarding">
                   <div>
                     <span className="xy-onboarding-icon">
@@ -832,7 +840,7 @@ export default function ConsolePreview() {
                         )}
                       </p>
                     </div>
-                    <button onClick={completeOnboarding}>
+                    <button onClick={() => setOnboardingDismissed(true)}>
                       {t("dismissOnboarding")}
                     </button>
                   </div>
