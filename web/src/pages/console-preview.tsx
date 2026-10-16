@@ -106,6 +106,7 @@ import {
   useLogs,
   useBackendRequests,
   quotaToNanoUsd,
+  resolveVendor,
   type LogRow,
 } from "../lib/api/usage";
 import { useAdminMetrics } from "../lib/api/admin";
@@ -417,7 +418,37 @@ export default function ConsolePreview() {
     return summarizeRequests(periodRequests(requests, days === "7" ? 7 : 30));
   }, [usageItems, requests, days]);
 
-  const modelRows = useMemo(() => breakdownByModel(periodRequests(requests, days === "7" ? 7 : 30)), [requests, days]);
+  const modelRows = useMemo(() => {
+    // Use backend by_model when available; fall back to demo store.
+    const byModel = usageQuery.data?.by_model;
+    if (byModel && byModel.length > 0) {
+      const buckets = new Map<string, { count: number; quota: number; tokens: number }>();
+      for (const row of byModel) {
+        const existing = buckets.get(row.model);
+        if (existing) {
+          existing.count += row.requests;
+          existing.quota += row.quota;
+          existing.tokens += row.prompt_tokens + row.completion_tokens;
+        } else {
+          buckets.set(row.model, {
+            count: row.requests,
+            quota: row.quota,
+            tokens: row.prompt_tokens + row.completion_tokens,
+          });
+        }
+      }
+      return [...buckets.entries()]
+        .map(([model, agg]) => ({
+          model,
+          vendor: resolveVendor(model),
+          count: agg.count,
+          cost: quotaToNanoUsd(agg.quota),
+          success: agg.count > 0 ? "100" : "—",
+        }))
+        .sort((a, b) => b.count - a.count);
+    }
+    return breakdownByModel(periodRequests(requests, days === "7" ? 7 : 30));
+  }, [usageQuery.data, requests, days]);
 
   const isLowBalance = BigInt(balance) < 5000000000n; // < $5.00
   const isZeroBalance = BigInt(balance) <= 0n;
