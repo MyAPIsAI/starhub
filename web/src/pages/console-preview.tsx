@@ -108,6 +108,7 @@ import {
   quotaToNanoUsd,
   type LogRow,
 } from "../lib/api/usage";
+import { useAdminMetrics } from "../lib/api/admin";
 
 const navigation = [
   { path: "", key: "pOverview", Icon: LayoutDashboard },
@@ -140,7 +141,6 @@ export default function ConsolePreview() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const sidebarNav = useRef<HTMLElement>(null);
   const catalogModels = modelCatalog(useModelPricing((s) => s.config));
-  const demoMode = useProductPreview((s) => s.demoMode);
   const role = useSystemAccess((s) => s.role);
   const isSystemAdmin = isAdmin(role);
   const location = useLocation();
@@ -213,6 +213,9 @@ export default function ConsolePreview() {
   const backendLogs: LogRow[] = logsQuery.data?.items ?? [];
   // Backend logs for the requests page (larger page size).
   const { rows: backendRequests } = useBackendRequests(100);
+  // Admin metrics for the health card; gracefully degrades to null
+  // when the current user is not an admin.
+  const metricsQuery = useAdminMetrics();
   const chooseKey = useProductPreview((s) => s.chooseKey);
   const completeOnboarding = useProductPreview((s) => s.completeOnboarding);
   // Key reveal state — local. The password is verified against the
@@ -702,7 +705,16 @@ export default function ConsolePreview() {
             <ProductSearch />
             <Link className="xy-system-link" to="/status">
               <span
-                className={`xy-status-dot ${demoMode.upstreamOutage ? "is-warning" : ""}`}
+                className={`xy-status-dot ${
+                  (() => {
+                    const reqs = metricsQuery.data?.requests ?? [];
+                    const total = reqs.reduce((s, r) => s + r.count, 0);
+                    const errs = reqs
+                      .filter((r) => r.class !== "success" && r.class !== "client_error")
+                      .reduce((s, r) => s + r.count, 0);
+                    return total > 0 && errs / total > 0.01 ? "is-warning" : "";
+                  })()
+                }`}
               />
               {c("系统状态", "System status", "حالة النظام")}
             </Link>
@@ -1325,91 +1337,117 @@ export default function ConsolePreview() {
                         <ArrowUpRight size={17} />
                       </Link>
                     </div>
-                    <div
-                      className={`xy-health-summary ${demoMode.upstreamOutage ? "has-issue" : ""}`}
-                    >
-                      <span>
-                        <ShieldCheck size={23} />
-                      </span>
-                      <div>
-                        <strong>
-                          {demoMode.upstreamOutage
-                            ? c(
-                                "部分上游异常",
-                                "Upstream degraded",
-                                "تدهور خدمة المزود",
-                              )
-                            : c(
-                                "模拟上游可用",
-                                "Simulated upstream available",
-                                "جميع الأنظمة تعمل",
+                    {(() => {
+                      const reqs = metricsQuery.data?.requests ?? [];
+                      const total = reqs.reduce((s, r) => s + r.count, 0);
+                      const errors = reqs
+                        .filter(
+                          (r) =>
+                            r.class !== "success" &&
+                            r.class !== "client_error",
+                        )
+                        .reduce((s, r) => s + r.count, 0);
+                      const hasIssue = total > 0 && errors / total > 0.01;
+                      return (
+                        <>
+                          <div
+                            className={`xy-health-summary ${hasIssue ? "has-issue" : ""}`}
+                          >
+                            <span>
+                              <ShieldCheck size={23} />
+                            </span>
+                            <div>
+                              <strong>
+                                {!total
+                                  ? c(
+                                      "暂无请求",
+                                      "No requests yet",
+                                      "لا طلبات بعد",
+                                    )
+                                  : hasIssue
+                                    ? c(
+                                        "部分上游异常",
+                                        "Upstream degraded",
+                                        "تدهور خدمة المزود",
+                                      )
+                                    : c(
+                                        "运行正常",
+                                        "Operational",
+                                        "جميع الأنظمة تعمل",
+                                      )}
+                              </strong>
+                              <small>
+                                {total > 0
+                                  ? c(
+                                      `${total} 次请求 · ${errors} 错误`,
+                                      `${total} requests · ${errors} errors`,
+                                      `${total} طلبات · ${errors} أخطاء`,
+                                    )
+                                  : c(
+                                      "等待第一次调用",
+                                      "Awaiting first request",
+                                      "بانتظار أول طلب",
+                                    )}
+                              </small>
+                            </div>
+                          </div>
+                          <div className="xy-health-bars" aria-hidden="true">
+                            {Array.from({ length: 36 }, (_, index) => (
+                              <i
+                                key={index}
+                                className={
+                                  hasIssue && index > 30 ? "has-issue" : ""
+                                }
+                              />
+                            ))}
+                          </div>
+                          <div className="xy-health-caption">
+                            <span>
+                              {c("平台状态", "Platform status", "حالة المنصة")}
+                            </span>
+                            <strong>
+                              {!total
+                                ? c(
+                                    "尚无请求，待验证",
+                                    "No requests · unverified",
+                                    "لا طلبات · غير متحقق",
+                                  )
+                                : hasIssue
+                                  ? c(
+                                      "检测到上游异常",
+                                      "Upstream issues detected",
+                                      "تم رصد مشكلات",
+                                    )
+                                  : c(
+                                      "查看调用结果",
+                                      "See request results",
+                                      "راجع نتائج الطلبات",
+                                    )}
+                            </strong>
+                          </div>
+                          <div className="xy-health-divider" />
+                          <div className="xy-health-line">
+                            <span>
+                              {c("网关区域", "Gateway region", "منطقة البوابة")}
+                            </span>
+                            <strong>
+                              {c("迪拜", "Dubai", "دبي")}
+                              <span className="xy-status-dot" />
+                            </strong>
+                          </div>
+                          <div className="xy-health-line">
+                            <span>
+                              {c(
+                                "活跃密钥",
+                                "Active keys",
+                                "المفاتيح النشطة",
                               )}
-                        </strong>
-                        <small>
-                          {c(
-                            "当前演示环境",
-                            "Current demo environment",
-                            "بيئة العرض الحالية",
-                          )}
-                        </small>
-                      </div>
-                    </div>
-                    <div className="xy-health-bars" aria-hidden="true">
-                      {Array.from({ length: 36 }, (_, index) => (
-                        <i
-                          key={index}
-                          className={
-                            demoMode.upstreamOutage && index > 30
-                              ? "has-issue"
-                              : ""
-                          }
-                        />
-                      ))}
-                    </div>
-                    <div className="xy-health-caption">
-                      <span>
-                        {c(
-                          "本地验证状态",
-                          "Local verification",
-                          "التحقق المحلي",
-                        )}
-                      </span>
-                      <strong>
-                        {!requests.length
-                          ? c(
-                              "尚无请求，待验证",
-                              "No requests · unverified",
-                              "لا طلبات · غير متحقق",
-                            )
-                          : demoMode.upstreamOutage
-                            ? c(
-                                "模拟上游异常",
-                                "Simulated upstream issue",
-                                "عطل محاكاة",
-                              )
-                            : c(
-                                "查看调用结果",
-                                "See request results",
-                                "راجع نتائج الطلبات",
-                              )}
-                      </strong>
-                    </div>
-                    <div className="xy-health-divider" />
-                    <div className="xy-health-line">
-                      <span>
-                        {c("网关区域", "Gateway region", "منطقة البوابة")}
-                      </span>
-                      <strong>
-                        {c("迪拜", "Dubai", "دبي")}
-                        <span className="xy-status-dot" />
-                      </strong>
-                    </div>
-                    <div className="xy-health-line">
-                      <span>
-                        {c("并发配额", "Concurrency limit", "حد التزامن")}
-                      </span>
-                      <strong>{user.concurrencyLimit}</strong>
-                    </div>
+                            </span>
+                            <strong>{keys.length}</strong>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </section>
                   <section className="xy-card xy-shortcuts">
                     <h2>
