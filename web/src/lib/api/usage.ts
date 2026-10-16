@@ -6,6 +6,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "./http";
+import { catalogModels } from "../../config/models";
 
 // --- Types matching the backend DailyUsage struct (model/log.go) ---
 
@@ -103,19 +104,59 @@ export function quotaToUsdNumber(quota: number): number {
   return quota / QUOTA_PER_USD;
 }
 
+// --- Vendor resolution ---
+
+// Build a lookup from exact model id → vendor name, plus prefix → vendor
+// for models not in the catalog but sharing a known prefix (e.g.
+// "gpt-4o-mini" → "OpenAI").
+const vendorByModelId = new Map<string, string>();
+const vendorByPrefix: [string, string][] = [];
+for (const model of catalogModels) {
+  vendorByModelId.set(model.id, model.vendor);
+}
+// Ordered prefix table for fuzzy matching. Longer prefixes first so
+// "dall-e" wins over "dall".
+const knownPrefixes: [string, string][] = [
+  ["gpt-", "OpenAI"],
+  ["o1-", "OpenAI"],
+  ["o3-", "OpenAI"],
+  ["o4-", "OpenAI"],
+  ["dall-e", "OpenAI"],
+  ["tts-", "OpenAI"],
+  ["whisper", "OpenAI"],
+  ["claude-", "Anthropic"],
+  ["gemini-", "Google"],
+  ["deepseek-", "DeepSeek"],
+  ["qwen-", "Qwen"],
+];
+vendorByPrefix.push(...knownPrefixes);
+
+/** Resolve a vendor display name from a model id. Falls back to the
+ *  model's first dash-segment when no known prefix matches. */
+export function resolveVendor(modelId: string): string {
+  const exact = vendorByModelId.get(modelId);
+  if (exact) return exact;
+  const lower = modelId.toLowerCase();
+  for (const [prefix, vendor] of vendorByPrefix) {
+    if (lower.startsWith(prefix)) return vendor;
+  }
+  return modelId.split("-")[0] ?? modelId;
+}
+
 // --- Adapter: LogRow -> PreviewRequest-compatible shape ---
 
 /**
  * Adapt a backend LogRow to the PreviewRequest shape expected by the
- * request-history component. Fields the backend doesn't have (vendor,
- * duration_ms, status, error_code) are filled with sensible defaults.
+ * request-history component. The vendor field is resolved from the
+ * model catalog and a prefix table; duration_ms and status come from
+ * the backend Log table.
  */
 export function adaptLogRow(log: LogRow): PreviewRequestLike {
   return {
     trace_id: `log_${log.id}`,
     time: new Date(log.created_at * 1000).toISOString(),
     model: log.model,
-    vendor: log.model.split("-")[0] ?? log.model,
+    vendor: resolveVendor(log.model),
     status: log.status === 2 ? "failed" : "success",
     cost_nano: quotaToNanoUsd(log.quota),
     duration_ms: log.duration_ms,

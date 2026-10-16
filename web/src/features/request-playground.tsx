@@ -15,6 +15,7 @@ import { Field, Input } from "../components/ui/primitives";
 import { TierBadge } from "../components/tier-badge";
 import { useProductPreview, type PreviewRequest } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
+import { resolveVendor } from "../lib/api/usage";
 import { getKeyModelOptions } from "../lib/key-model-policy";
 import { useModelPricing } from "../lib/model-pricing";
 import {
@@ -180,7 +181,7 @@ export default function Playground({
           trace_id: `relay_${Date.now()}`,
           time: new Date().toISOString(),
           model: snapshot.model,
-          vendor: snapshot.model.split("-")[0] ?? snapshot.model,
+          vendor: resolveVendor(snapshot.model),
           status: "failed",
           cost_nano: "0",
           duration_ms: 0,
@@ -204,7 +205,7 @@ export default function Playground({
         trace_id: `relay_${Date.now()}`,
         time: new Date().toISOString(),
         model: snapshot.model,
-        vendor: snapshot.model.split("-")[0] ?? snapshot.model,
+        vendor: resolveVendor(snapshot.model),
         status: "success",
         cost_nano: "0",
         duration_ms: 0,
