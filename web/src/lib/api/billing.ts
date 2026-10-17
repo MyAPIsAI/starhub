@@ -91,6 +91,22 @@ export function useRechargeOrders() {
   });
 }
 
+/** Fetch a single recharge order by id. Used for precise polling of
+ *  the active order's status without refetching the entire list. */
+export function useRechargeOrder(id?: number) {
+  return useQuery({
+    queryKey: [...RECHARGE_KEY, "single", id] as const,
+    queryFn: ({ signal }) =>
+      apiGet<RechargeOrder>(`/api/recharge/${id}`, signal),
+    enabled: id != null && id > 0,
+    refetchInterval: (query) => {
+      // Auto-poll while the order is still pending/processing.
+      const status = query.state.data?.status;
+      return status === "pending" || status === "processing" ? 5000 : false;
+    },
+  });
+}
+
 export function useCreateRechargeOrder() {
   const queryClient = useQueryClient();
   return useMutation({

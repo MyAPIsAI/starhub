@@ -31,13 +31,14 @@ import { placeholders } from "../config/placeholders";
 import {
   useLedger,
   useRechargeOrders,
+  useRechargeOrder,
   useCreateRechargeOrder,
   useBeginRechargePayment,
   useResolveRechargeOrder,
   adaptRechargeOrder,
   adaptLedgerEntry,
 } from "../lib/api/billing";
-import type { RechargeOrder } from "../lib/product-preview";
+import type { RechargeOrder } from "../lib/billing";
 import "../components/recharge-flow.css";
 
 const messages = {
@@ -360,6 +361,14 @@ export default function RechargeFlow({
   })();
   const orders: RechargeOrder[] = backendOrders as unknown as RechargeOrder[];
   const [activeId, setActiveId] = useState<string | null>(orderId ?? null);
+  // Precise single-order polling: when an order is active and waiting,
+  // poll GET /api/recharge/{id} every 5s for status updates instead of
+  // refetching the entire order list.
+  const activeNumericId = activeId ? Number(activeId) : undefined;
+  const singleOrderQuery = useRechargeOrder(activeNumericId);
+  const polledOrder = singleOrderQuery.data
+    ? adaptRechargeOrder(singleOrderQuery.data)
+    : undefined;
   const [amount, setAmount] = useState("100");
   const [attempted, setAttempted] = useState(false);
   const [cashier, setCashier] = useState(false);
@@ -373,7 +382,7 @@ export default function RechargeFlow({
   const previousStage = useRef("");
   const submitted = useRef(false);
   const formId = useId();
-  const order = orders.find((item) => item.id === activeId);
+  const order = polledOrder ?? orders.find((item) => item.id === activeId);
   const validAmount = validateRechargeAmount(amount);
   const isWaiting =
     order?.status === "pending" || order?.status === "processing";
