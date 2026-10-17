@@ -31,8 +31,6 @@ import { useFocusReturn } from "../components/ui/focus-return";
 import { BrandMark } from "../components/brand";
 import { TierBadge } from "../components/tier-badge";
 import { DataStateView } from "../components/ui/states";
-import { Activity } from "../features/activity";
-import { Requests } from "../features/requests";
 import { FormSpecimens } from "../features/form-specimens";
 import { CodeExample, copyText } from "../features/code-example";
 import { usePreferences, type DataState } from "../lib/preferences";
@@ -77,7 +75,6 @@ export default function DesignSystem() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
   const [pattern, setPattern] = useState("empty");
-  const [resetKey, setResetKey] = useState(0);
   const mobileFocus = useFocusReturn();
   const commandFocus = useFocusReturn();
   const chooseRecord = useCallback((record: RequestRecord) => {
@@ -90,7 +87,6 @@ export default function DesignSystem() {
   };
   const reset = () => {
     setDataState("ready");
-    setResetKey((k) => k + 1);
     setConfirmOpen(false);
   };
   const navigate = (id: string) => {
@@ -340,8 +336,9 @@ export default function DesignSystem() {
               title={t("activityTitle")}
               subtitle={t("activityNote")}
             />
-            <Activity />
-            <Requests onSelect={chooseRecord} resetKey={resetKey} />
+            <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)", padding: "var(--space-4) 0" }}>
+              {t("activityNote")}
+            </p>
           </section>
           <section id="components" className="section">
             <SectionTitle
