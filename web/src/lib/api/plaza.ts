@@ -160,6 +160,34 @@ export function usePlazaFilters() {
   });
 }
 
+// --- Plaza rank (GET /api/plaza/rank?type=value|hot|new) ---
+
+export type PlazaRankType = "value" | "hot" | "new";
+
+export interface PlazaRankItem {
+  rank: number;
+  model: PlazaRow;
+  metric_label: string;
+  metric_value: string;
+}
+
+export interface PlazaRankResponse {
+  type: string;
+  items: PlazaRankItem[];
+}
+
+export function usePlazaRank(rankType: PlazaRankType = "value") {
+  const identity = usePlazaIdentity();
+  return useQuery({
+    queryKey: ["plaza-rank", identity, rankType] as const,
+    queryFn: ({ signal }) =>
+      apiGet<PlazaRankResponse>(
+        `/api/plaza/rank?type=${rankType}`,
+        signal,
+      ),
+  });
+}
+
 // The backend resolves the user's group from the session cookie
 // automatically. We only need a cache-busting key that changes when
 // the session changes — the role (from GET /api/user/self via
