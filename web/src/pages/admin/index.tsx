@@ -10,6 +10,7 @@ import {
   Radio,
   History,
   Plus,
+  CircleDollarSign,
 } from "lucide-react";
 import {
   ProductBrand,
@@ -40,6 +41,12 @@ import {
   useDeleteChannel,
   type ChannelInput,
 } from "../../lib/api/channel";
+import {
+  useRedemptions,
+  useCreateRedemption,
+  useDeleteRedemption,
+  type Redemption,
+} from "../../lib/api/redemption";
 import { ApiError } from "../../lib/api/http";
 
 export default function AdminPortal() {
@@ -58,7 +65,13 @@ export default function AdminPortal() {
   );
   const authRole = useSystemAccess((s) => s.role);
   const [tab, setTab] = useState<
-    "customers" | "models" | "analytics" | "resources" | "incidents" | "audit"
+    | "customers"
+    | "models"
+    | "analytics"
+    | "resources"
+    | "incidents"
+    | "audit"
+    | "redemption"
   >(() =>
     new URLSearchParams(location.search).get("tab") === "models"
       ? "models"
@@ -79,6 +92,9 @@ export default function AdminPortal() {
   const createChannelMut = useCreateChannel();
   const updateChannelMut = useUpdateChannel();
   const deleteChannelMut = useDeleteChannel();
+  const redemptionsQuery = useRedemptions();
+  const createRedemptionMut = useCreateRedemption();
+  const deleteRedemptionMut = useDeleteRedemption();
   const queryClient = useQueryClient();
 
   // Channel test result per channel id (cleared on next test).
@@ -101,6 +117,12 @@ export default function AdminPortal() {
     priority: 0,
     weight: 1,
   });
+
+  // Redemption create modal state.
+  const [redeemModalOpen, setRedeemModalOpen] = useState(false);
+  const [redeemQuota, setRedeemQuota] = useState("10");
+  const [redeemCount, setRedeemCount] = useState("1");
+  const [redeemNotice, setRedeemNotice] = useState("");
 
   // Incidents have no backend endpoint — keep as local state.
   const [incidents, setIncidents] = useState<
@@ -336,6 +358,7 @@ export default function AdminPortal() {
             { id: "resources", label: t("adminResources"), Icon: RefreshCw },
             { id: "incidents", label: t("adminIncidents"), Icon: Radio },
             { id: "audit", label: t("adminAudit"), Icon: History },
+            { id: "redemption", label: text("兑换码", "Redemption", "استرداد"), Icon: CircleDollarSign },
           ].map(({ id, label, Icon }) => {
             const active = tab === id;
             return (
@@ -1564,6 +1587,122 @@ export default function AdminPortal() {
             )}
           </div>
         )}
+
+        {/* Tab: Redemption codes */}
+        {tab === "redemption" && (
+          <div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "var(--space-6)",
+              }}
+            >
+              <div>
+                <h1 style={{ fontSize: "var(--text-xl)", fontWeight: "var(--weight-bold)", margin: 0 }}>
+                  {text("兑换码管理", "Redemption codes", "أكواد الاسترداد")}
+                </h1>
+                <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)", margin: "4px 0 0 0" }}>
+                  {text("创建、查看和删除预付费兑换码。", "Create, view and delete prepaid redemption codes.", "إنشاء وعرض وحذف أكواد الاسترداد المدفوعة مسبقاً.")}
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setRedeemQuota("10");
+                  setRedeemCount("1");
+                  setRedeemNotice("");
+                  setRedeemModalOpen(true);
+                }}
+              >
+                <Plus size={15} style={{ marginInlineEnd: 4 }} />
+                {text("创建兑换码", "Create codes", "إنشاء أكواد")}
+              </Button>
+            </div>
+            {redeemNotice && (
+              <div style={{
+                padding: "var(--space-3) var(--space-4)",
+                background: "var(--success-soft)",
+                color: "var(--success)",
+                borderRadius: "var(--radius-md)",
+                marginBottom: "var(--space-4)",
+                fontSize: "var(--text-sm)",
+              }}>
+                {redeemNotice}
+              </div>
+            )}
+            <section style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)",
+              overflowX: "auto",
+            }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-sm)" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--subtle)" }}>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("码", "Code", "الرمز")}</th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("面值", "Value", "القيمة")}</th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{t("status")}</th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("使用人", "Used by", "استُخدم من")}</th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("创建时间", "Created", "أُنشئ")}</th>
+                    <th style={{ padding: "10px 14px", textAlign: "end" }}>{text("操作", "Actions", "الإجراءات")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {redemptionsQuery.isLoading && (
+                    <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                      {text("加载中…", "Loading…", "جارٍ التحميل…")}
+                    </td></tr>
+                  )}
+                  {redemptionsQuery.data?.map((rd: Redemption) => (
+                    <tr key={rd.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <td className="mono" style={{ padding: "10px 14px", fontWeight: 600 }}>{rd.code}</td>
+                      <td className="mono" style={{ padding: "10px 14px", color: "var(--brand)" }}>
+                        ${(rd.quota / 1e9).toFixed(2)}
+                      </td>
+                      <td style={{ padding: "10px 14px" }}>
+                        <span style={{
+                          fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600,
+                          background: rd.status === 1 ? "var(--success-soft)" : "var(--subtle)",
+                          color: rd.status === 1 ? "var(--success)" : "var(--muted)",
+                        }}>
+                          {rd.status === 1 ? text("未使用", "Unused", "غير مستخدم") : text("已使用", "Used", "مستخدم")}
+                        </span>
+                      </td>
+                      <td className="mono" style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>
+                        {rd.used_by ? `#${rd.used_by}` : "—"}
+                      </td>
+                      <td className="mono" style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>
+                        {new Date(rd.created_at * 1000).toLocaleString()}
+                      </td>
+                      <td style={{ padding: "10px 14px", textAlign: "end" }}>
+                        {rd.status === 1 && (
+                          <Button
+                            size="small"
+                            variant="danger"
+                            disabled={deleteRedemptionMut.isPending && deleteRedemptionMut.variables === rd.id}
+                            onClick={() => {
+                              if (!confirm(text("确认删除此兑换码？", "Delete this code?", "حذف هذا الرمز؟"))) return;
+                              deleteRedemptionMut.mutate(rd.id);
+                            }}
+                          >
+                            {text("删除", "Delete", "حذف")}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {redemptionsQuery.data && redemptionsQuery.data.length === 0 && (
+                    <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                      {text("暂无兑换码", "No codes", "لا أكواد")}
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </section>
+          </div>
+        )}
       </main>
 
       {/* Manual Top-up Modal */}
@@ -1955,6 +2094,95 @@ export default function AdminPortal() {
               value={channelForm.base_url}
               onChange={(e) => setChannelForm((f) => ({ ...f, base_url: e.target.value }))}
               placeholder="https://api.openai.com/v1"
+            />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Redemption create modal */}
+      <Modal
+        size="default"
+        preventOutsideClose
+        open={redeemModalOpen}
+        onOpenChange={setRedeemModalOpen}
+        title={text("创建兑换码", "Create redemption codes", "إنشاء أكواد استرداد")}
+        description={text(
+          "指定面值和数量，系统将生成随机兑换码。",
+          "Specify value and count; the system will generate random codes.",
+          "حدد القيمة والعدد؛ سيقوم النظام بإنشاء أكواد عشوائية.",
+        )}
+        footer={
+          <>
+            <Button onClick={() => setRedeemModalOpen(false)}>{t("cancel")}</Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="admin-redeem-form"
+              disabled={createRedemptionMut.isPending}
+            >
+              {text("创建", "Create", "إنشاء")}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="admin-redeem-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const usd = parseFloat(redeemQuota);
+            if (isNaN(usd) || usd <= 0) return;
+            const count = parseInt(redeemCount) || 1;
+            createRedemptionMut.mutate(
+              { quota: Math.round(usd * 1e9), count },
+              {
+                onSuccess: (result) => {
+                  setRedeemNotice(
+                    text(
+                      `已创建 ${result.count} 个兑换码：${result.codes.join(", ")}`,
+                      `Created ${result.count} code(s): ${result.codes.join(", ")}`,
+                      `تم إنشاء ${result.count} رمز: ${result.codes.join(", ")}`,
+                    ),
+                  );
+                  setRedeemModalOpen(false);
+                },
+                onError: (err) => {
+                  setRedeemNotice(
+                    err instanceof ApiError
+                      ? err.message
+                      : text("创建失败", "Failed", "فشل"),
+                  );
+                },
+              },
+            );
+          }}
+          style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
+        >
+          <div>
+            <label htmlFor="redeem-quota" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+              {text("面值 (USD)", "Value (USD)", "القيمة (دولار)")}
+            </label>
+            <Input
+              id="redeem-quota"
+              type="number"
+              value={redeemQuota}
+              onChange={(e) => setRedeemQuota(e.target.value)}
+              placeholder="10"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="redeem-count" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+              {text("数量", "Count", "العدد")}
+            </label>
+            <Input
+              id="redeem-count"
+              type="number"
+              value={redeemCount}
+              onChange={(e) => setRedeemCount(e.target.value)}
+              placeholder="1"
+              min="1"
+              max="100"
+              required
             />
           </div>
         </form>

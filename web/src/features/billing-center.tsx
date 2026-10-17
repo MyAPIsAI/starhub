@@ -34,6 +34,8 @@ import {
   adaptRechargeOrder,
   adaptLedgerEntry,
 } from "../lib/api/billing";
+import { useRedeemCode } from "../lib/api/redemption";
+import { ApiError } from "../lib/api/http";
 import { formatMoney } from "../lib/money";
 import {
   billingDate,
@@ -139,6 +141,10 @@ export default function BillingCenter({
   const [guide, setGuide] = useState<"help" | "transfer" | null>(null);
   const [entry, setEntry] = useState<LedgerEntry | null>(null);
   const [message, setMessage] = useState("");
+  // Redemption code input state.
+  const redeemMut = useRedeemCode();
+  const [redeemCode, setRedeemCode] = useState("");
+  const [redeemMsg, setRedeemMsg] = useState("");
   useEffect(() => {
     expireOrders();
     const timer = setInterval(expireOrders, 15000);
@@ -363,6 +369,65 @@ export default function BillingCenter({
             )}
           </div>
         </section>
+
+        {/* Redemption code input */}
+        <section className="bc-redeem-card" style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "var(--space-4)",
+          marginBottom: "var(--space-4)",
+        }}>
+          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <label htmlFor="redeem-code-input" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+                {c("兑换码", "Redemption code", "رمز الاسترداد")}
+              </label>
+              <input
+                id="redeem-code-input"
+                className="input"
+                value={redeemCode}
+                onChange={(e) => { setRedeemCode(e.target.value); setRedeemMsg(""); }}
+                placeholder="RD-xxxxxxxxxxxx"
+                style={{ width: "100%" }}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              disabled={!redeemCode.trim() || redeemMut.isPending}
+              onClick={() => {
+                setRedeemMsg("");
+                redeemMut.mutate(redeemCode.trim(), {
+                  onSuccess: (res) => {
+                    setRedeemMsg(c("兑换成功", `Redeemed $${(res.quota / 1e9).toFixed(2)}`, "تم الاسترداد"));
+                    setRedeemCode("");
+                  },
+                  onError: (err) => {
+                    setRedeemMsg(
+                      err instanceof ApiError
+                        ? err.message
+                        : c("兑换失败", "Redemption failed", "فشل الاسترداد"),
+                    );
+                  },
+                });
+              }}
+            >
+              {c("兑换", "Redeem", "استرد")}
+            </Button>
+          </div>
+          {redeemMsg && (
+            <p style={{
+              margin: "8px 0 0 0",
+              fontSize: "var(--text-sm)",
+              color: redeemMsg.includes("失败") || redeemMsg.includes("failed") || redeemMsg.includes("فشل")
+                ? "var(--danger)"
+                : "var(--success)",
+            }}>
+              {redeemMsg}
+            </p>
+          )}
+        </section>
+
         <section className="bc-month-card">
           <div className="bc-small-heading">
             <span>{c("本月资金概览", "This month", "هذا الشهر")}</span>
