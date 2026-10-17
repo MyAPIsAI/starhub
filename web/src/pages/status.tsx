@@ -5,12 +5,34 @@ import { PublicHeader } from "../components/product-shell";
 import { catalogModels } from "../config/models";
 import { useProductPreview } from "../lib/product-preview";
 import { usePreferences } from "../lib/preferences";
+import { useServiceQuality } from "../lib/api/service-quality";
 
 export default function StatusPage() {
   const { t } = useTranslation();
   const lang = usePreferences((s) => s.language);
   const incidents = useProductPreview((s) => s.incidents);
   const upstreamOutage = useProductPreview((s) => s.demoMode.upstreamOutage);
+  // Fetch real service-quality metrics (last 7 days). Degrades to
+  // demo defaults when the endpoint is unavailable or has no data.
+  const sqQuery = useServiceQuality(168);
+
+  // Build a model → quality metric lookup from the backend.
+  const metricByModel = useMemo(() => {
+    const map = new Map<string, { successRate: number; avgDurationMs: number }>();
+    for (const m of sqQuery.data?.by_model ?? []) {
+      map.set(m.model, {
+        successRate: m.success_rate,
+        avgDurationMs: m.avg_duration_ms,
+      });
+    }
+    return map;
+  }, [sqQuery.data]);
+
+  // Overall health from backend metrics.
+  const overall = sqQuery.data?.overall;
+  const hasRealData = (overall?.total_requests ?? 0) > 0;
+  const overallSuccessRate = overall?.success_rate ?? 1;
+  const isBackendDegraded = hasRealData && overallSuccessRate < 0.99;
 
   // Group models by vendor
   const vendorGroups = useMemo(() => {
@@ -39,7 +61,9 @@ export default function StatusPage() {
   };
 
   const isGlobalDegraded =
-    upstreamOutage || incidents.some((inc) => inc.status !== "resolved");
+    isBackendDegraded ||
+    upstreamOutage ||
+    incidents.some((inc) => inc.status !== "resolved");
 
   return (
     <div
@@ -120,11 +144,17 @@ export default function StatusPage() {
             }}
           >
             <Radio size={12} style={{ color: "var(--brand)" }} />
-            {lang === "zh"
-              ? "演示数据 · 迪拜时区（UTC+4）"
-              : lang === "ar"
-                ? "بيانات تجريبية · دبي (UTC+4)"
-                : "Demo data · Dubai (UTC+4)"}
+            {hasRealData
+              ? lang === "zh"
+                ? "实时数据 · 迪拜时区（UTC+4）"
+                : lang === "ar"
+                  ? "بيانات حية · دبي (UTC+4)"
+                  : "Live data · Dubai (UTC+4)"
+              : lang === "zh"
+                ? "暂无请求数据"
+                : lang === "ar"
+                  ? "لا بيانات طلبات"
+                  : "No request data yet"}
           </div>
         </div>
 
@@ -272,9 +302,12 @@ export default function StatusPage() {
                 }}
               >
                 {models.map((model) => {
-                  const isAnthropicOutage =
-                    upstreamOutage && model.vendor === "Anthropic";
-                  const bars = getDailyBars(isAnthropicOutage);
+                  const metric = metricByModel.get(model.id);
+                  const hasModelData = metric && metric.successRate > 0;
+                  const isDegraded = hasModelData
+                    ? metric!.successRate < 0.99
+                    : upstreamOutage && model.vendor === "Anthropic";
+                  const bars = getDailyBars(isDegraded);
 
                   return (
                     <div
@@ -346,12 +379,16 @@ export default function StatusPage() {
                               style={{
                                 fontSize: "var(--text-sm)",
                                 fontWeight: "var(--weight-bold)",
-                                color: isAnthropicOutage
+                                color: isDegraded
                                   ? "var(--warning)"
                                   : "var(--text)",
                               }}
                             >
-                              {isAnthropicOutage ? "97.2%" : "99.98%"}
+                              {hasModelData
+                                ? (metric!.successRate * 100).toFixed(2) + "%"
+                                : upstreamOutage && model.vendor === "Anthropic"
+                                  ? "97.2%"
+                                  : "—"}
                             </div>
                           </div>
 
@@ -371,7 +408,9 @@ export default function StatusPage() {
                                 fontWeight: "var(--weight-semibold)",
                               }}
                             >
-                              {isAnthropicOutage ? "1,240ms" : "320ms"}
+                              {hasModelData && metric!.avgDurationMs > 0
+                                ? metric!.avgDurationMs + "ms"
+                                : "—"}
                             </div>
                           </div>
 
@@ -382,7 +421,7 @@ export default function StatusPage() {
                               gap: 6,
                               fontSize: "var(--text-xs)",
                               fontWeight: "var(--weight-semibold)",
-                              color: isAnthropicOutage
+                              color: isDegraded
                                 ? "var(--warning)"
                                 : "var(--success)",
                             }}
@@ -392,12 +431,12 @@ export default function StatusPage() {
                                 width: 8,
                                 height: 8,
                                 borderRadius: "50%",
-                                background: isAnthropicOutage
+                                background: isDegraded
                                   ? "var(--warning)"
                                   : "var(--success)",
                               }}
                             />
-                            {isAnthropicOutage
+                            {isDegraded
                               ? t("degraded")
                               : t("operational")}
                           </span>
@@ -451,7 +490,7 @@ export default function StatusPage() {
                                 ? "قبل 90 يومًا"
                                 : "90 days ago"}
                           </span>
-                          <span>{t("uptime90Days")}: 99.95%</span>
+                          <span>{t("uptime90Days")}: {hasRealData ? (overallSuccessRate * 100).toFixed(2) + "%" : "—"}</span>
                           <span>
                             {lang === "zh"
                               ? "今天"
