@@ -4,7 +4,7 @@ import type {
   ProductPreviewState,
   AdminTopUpRecord,
 } from "./product-preview";
-import type { RequestRecord } from "../mocks/service";
+import type { RequestRecord } from "./request-record";
 
 /** Local payment simulation only. No payment credentials are collected or stored. */
 export type RechargeStatus =

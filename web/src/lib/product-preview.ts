@@ -20,7 +20,8 @@ import {
   useModelPricing,
   PRICING_STORAGE_KEY,
 } from "./model-pricing";
-import { sampleRequests, type RequestRecord } from "../mocks/service";
+import { sampleRequests } from "../mocks/service";
+import type { RequestRecord } from "./request-record";
 import { sumNano, type NanoString } from "./money";
 import {
   billingDate,

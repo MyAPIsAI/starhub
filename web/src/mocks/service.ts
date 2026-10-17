@@ -1,25 +1,11 @@
 import { placeholders, type TierId } from "../config/placeholders";
 import { sumNano } from "../lib/money";
+import type { RequestRecord } from "../lib/request-record";
 
-export interface RequestRecord {
-  trace_id: string;
-  model: string;
-  vendor: string;
-  tier: TierId;
-  status: "success" | "failed" | "interrupted";
-  time: string;
-  cost_nano: string;
-  input_tokens: number;
-  output_tokens: number;
-  cache_tokens: number;
-  duration_ms: number;
-  ttft_ms: number;
-  fallback: boolean;
-  source: "playground";
-  error_code: string | null;
-  input_price_nano: string;
-  output_price_nano: string;
-}
+// Re-export for existing importers; the canonical definition now lives
+// in lib/request-record.ts.
+export type { RequestRecord };
+
 const models = [
   ["gpt-4.1", "OpenAI"],
   ["claude-sonnet-4-20250514", "Anthropic"],
