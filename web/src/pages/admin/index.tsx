@@ -34,6 +34,12 @@ import {
   type AdminUser,
   type ChannelTestResult,
 } from "../../lib/api/admin";
+import {
+  useCreateChannel,
+  useUpdateChannel,
+  useDeleteChannel,
+  type ChannelInput,
+} from "../../lib/api/channel";
 import { ApiError } from "../../lib/api/http";
 
 export default function AdminPortal() {
@@ -70,12 +76,31 @@ export default function AdminPortal() {
   const metricsQuery = useAdminMetrics();
   const channelsQuery = useAdminChannels();
   const testChannelMut = useTestChannel();
+  const createChannelMut = useCreateChannel();
+  const updateChannelMut = useUpdateChannel();
+  const deleteChannelMut = useDeleteChannel();
   const queryClient = useQueryClient();
 
   // Channel test result per channel id (cleared on next test).
   const [testResults, setTestResults] = useState<
     Record<number, ChannelTestResult | string>
   >({});
+
+  // Channel create/edit modal state.
+  const [channelModalOpen, setChannelModalOpen] = useState(false);
+  const [editingChannel, setEditingChannel] = useState<number | null>(null);
+  const [channelForm, setChannelForm] = useState<ChannelInput>({
+    name: "",
+    key: "",
+    models: "",
+    group: "default",
+    base_url: "",
+    key_mode: "",
+    type: 1,
+    status: 1,
+    priority: 0,
+    weight: 1,
+  });
 
   // Incidents have no backend endpoint — keep as local state.
   const [incidents, setIncidents] = useState<
@@ -981,8 +1006,35 @@ export default function AdminPortal() {
                     fontWeight: 600,
                   }}
                 >
-                  {text("渠道列表", "Channels", "القنوات")} (
-                  {channelsQuery.data?.length ?? 0})
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>
+                      {text("渠道列表", "Channels", "القنوات")} (
+                      {channelsQuery.data?.length ?? 0})
+                    </span>
+                    <Button
+                      size="small"
+                      variant="primary"
+                      onClick={() => {
+                        setEditingChannel(null);
+                        setChannelForm({
+                          name: "",
+                          key: "",
+                          models: "",
+                          group: "default",
+                          base_url: "",
+                          key_mode: "",
+                          type: 1,
+                          status: 1,
+                          priority: 0,
+                          weight: 1,
+                        });
+                        setChannelModalOpen(true);
+                      }}
+                    >
+                      <Plus size={14} style={{ marginInlineEnd: 4 }} />
+                      {text("新建渠道", "New channel", "قناة جديدة")}
+                    </Button>
+                  </div>
                 </h3>
               </div>
               <table
@@ -1015,7 +1067,10 @@ export default function AdminPortal() {
                       {text("平均 TTFT (ms)", "Avg TTFT (ms)", "متوسط TTFT (ملث)")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                      {text("操作", "Actions", "الإجراءات")}
+                      {text("测试", "Test", "اختبار")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "end" }}>
+                      {text("管理", "Manage", "إدارة")}
                     </th>
                   </tr>
                 </thead>
@@ -1023,7 +1078,7 @@ export default function AdminPortal() {
                   {channelsQuery.isLoading && (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         style={{
                           padding: "24px",
                           textAlign: "center",
@@ -1175,6 +1230,46 @@ export default function AdminPortal() {
                                     : text("失败", "Failed", "فشل")}
                                 </span>
                               ))}
+                          </div>
+                        </td>
+                        <td style={{ padding: "10px 14px", textAlign: "end" }}>
+                          <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              onClick={() => {
+                                setEditingChannel(ch.id);
+                                setChannelForm({
+                                  name: ch.name,
+                                  key: "",
+                                  models: ch.models,
+                                  group: ch.group || "default",
+                                  base_url: ch.base_url,
+                                  key_mode: ch.key_mode,
+                                  type: ch.type,
+                                  status: ch.status,
+                                  priority: ch.priority,
+                                  weight: ch.weight,
+                                });
+                                setChannelModalOpen(true);
+                              }}
+                            >
+                              {text("编辑", "Edit", "تعديل")}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="danger"
+                              disabled={
+                                deleteChannelMut.isPending &&
+                                deleteChannelMut.variables === ch.id
+                              }
+                              onClick={() => {
+                                if (!confirm(text("确认删除此渠道？", "Delete this channel?", "حذف هذه القناة؟"))) return;
+                                deleteChannelMut.mutate(ch.id);
+                              }}
+                            >
+                              {text("删除", "Delete", "حذف")}
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -1749,6 +1844,117 @@ export default function AdminPortal() {
               className="input"
               rows={4}
               required
+            />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Channel create/edit modal */}
+      <Modal
+        size="default"
+        preventOutsideClose
+        open={channelModalOpen}
+        onOpenChange={setChannelModalOpen}
+        title={editingChannel
+          ? text("编辑渠道", "Edit channel", "تعديل القناة")
+          : text("新建渠道", "New channel", "قناة جديدة")}
+        description={text(
+          "配置渠道名称、密钥、模型和分组。",
+          "Configure channel name, key, models and group.",
+          "تكوين اسم القناة والمفتاح والنماذج والمجموعة.",
+        )}
+        footer={
+          <>
+            <Button onClick={() => setChannelModalOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="admin-channel-form"
+              disabled={
+                createChannelMut.isPending || updateChannelMut.isPending
+              }
+            >
+              {editingChannel
+                ? text("保存", "Save", "حفظ")
+                : text("创建", "Create", "إنشاء")}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="admin-channel-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (editingChannel) {
+              updateChannelMut.mutate(
+                { ...channelForm, id: editingChannel },
+                { onSuccess: () => setChannelModalOpen(false) },
+              );
+            } else {
+              createChannelMut.mutate(channelForm, {
+                onSuccess: () => setChannelModalOpen(false),
+              });
+            }
+          }}
+          style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
+        >
+          <div>
+            <label htmlFor="ch-name" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+              {text("名称", "Name", "الاسم")}
+            </label>
+            <Input
+              id="ch-name"
+              value={channelForm.name}
+              onChange={(e) => setChannelForm((f) => ({ ...f, name: e.target.value }))}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="ch-key" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+              {text("密钥", "API Key", "المفتاح")}
+            </label>
+            <Input
+              id="ch-key"
+              type="password"
+              value={channelForm.key}
+              onChange={(e) => setChannelForm((f) => ({ ...f, key: e.target.value }))}
+              placeholder={editingChannel ? text("留空则不修改", "Leave empty to keep", "اترك فارغًا للإبقاء") : ""}
+              required={!editingChannel}
+            />
+          </div>
+          <div>
+            <label htmlFor="ch-models" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+              {text("模型（逗号分隔）", "Models (comma-separated)", "النماذج (مفصولة بفواصل)")}
+            </label>
+            <Input
+              id="ch-models"
+              value={channelForm.models}
+              onChange={(e) => setChannelForm((f) => ({ ...f, models: e.target.value }))}
+              placeholder="gpt-4.1,claude-sonnet-4-20250514"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="ch-group" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+              {text("分组", "Group", "المجموعة")}
+            </label>
+            <Input
+              id="ch-group"
+              value={channelForm.group}
+              onChange={(e) => setChannelForm((f) => ({ ...f, group: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label htmlFor="ch-base-url" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+              {text("Base URL（可选）", "Base URL (optional)", "عنوان أساسي (اختياري)")}
+            </label>
+            <Input
+              id="ch-base-url"
+              value={channelForm.base_url}
+              onChange={(e) => setChannelForm((f) => ({ ...f, base_url: e.target.value }))}
+              placeholder="https://api.openai.com/v1"
             />
           </div>
         </form>
