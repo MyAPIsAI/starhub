@@ -1,35 +1,55 @@
 #!/usr/bin/env bash
-set -e
+# Unified test runner for StarHub.
+# Runs L0 (static checks), L1 (unit tests), and L3 (e2e) in sequence.
+# Any test failure causes non-zero exit.
+set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
+FAILED=0
 
-echo ""
+run_step() {
+    local name="$1"
+    shift
+    echo ""
+    echo "=== $name ==="
+    if "$@"; then
+        echo "PASS: $name"
+    else
+        echo "FAIL: $name (exit code $?)"
+        FAILED=1
+    fi
+}
+
+# L0: Static Checks
 echo "=== L0: Static Checks ==="
-go build ./...
-go vet ./...
-
-cd "$ROOT/web"
-npm run build > /dev/null 2>&1
-echo "PASS: L0 static checks"
-
-echo ""
-echo "=== L1: Go Unit Tests ==="
 cd "$ROOT"
-go test ./controller/... ./model/... ./middleware/... ./relay/... ./service/... ./setting/... ./config/... ./pkg/... ./metric/... -count=1
-echo "PASS: L1 Go unit tests"
-
-echo ""
-echo "=== L1: Frontend Unit Tests ==="
+go build ./... && go vet ./... || { echo "FAIL: L0 Go"; FAILED=1; }
 cd "$ROOT/web"
-npm run test:unit 2>&1 || echo "WARN: Frontend tests had failures (1 pre-existing)"
-echo "PASS: L1 Frontend unit tests"
+npm run build > /dev/null 2>&1 || { echo "FAIL: L0 Frontend build"; FAILED=1; }
+[ "$FAILED" -eq 0 ] && echo "PASS: L0 static checks"
 
-echo ""
-echo "=== L3: E2E Integration Tests ==="
+# L1: Go Unit Tests (go test ./... includes common, e2e, all packages)
+run_step "L1: Go Unit Tests" bash -c 'cd "$ROOT" && go test ./... -count=1'
+
+# L1: Frontend Unit Tests
+cd "$ROOT/web"
+npm run test:unit > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "PASS: L1: Frontend Unit Tests"
+else
+    echo "FAIL: L1: Frontend Unit Tests"
+    FAILED=1
+fi
+
+# L3: E2E is already included in go test ./... above, but run explicitly for clarity
+# Skip if L1 already ran it
+
 cd "$ROOT"
-go test ./e2e/ -count=1
-echo "PASS: L3 E2E integration tests"
-
-echo ""
-echo "=== All tests passed ==="
+if [ "$FAILED" -eq 1 ]; then
+    echo ""
+    echo "=== TESTS FAILED ==="
+    exit 1
+else
+    echo ""
+    echo "=== All tests passed ==="
+fi
