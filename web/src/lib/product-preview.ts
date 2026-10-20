@@ -1,7 +1,7 @@
 import type { PricingAttributes } from "../config/models";
 import { create } from "zustand";
 import { DEMO_ACCOUNT_PROFILE, accountIdForLegacy } from "./account-identity";
-import type { DemoIdentity } from "./demo-auth";
+import { demoAuth, type DemoIdentity } from "./demo-auth";
 import { getKeyModels, resolveKeyModelResult } from "./key-model-policy";
 import {
   defaultDemoRequest,
@@ -1062,7 +1062,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
 
   chooseKey: (selectedKey) => set({ selectedKey }),
 
-  verifyPasswordAndRevealKey: async (keyId, _password) => {
+  verifyPasswordAndRevealKey: async (keyId, password) => {
     const owner = get().user.id;
     if (
       !get().user.isLoggedIn ||
@@ -1070,22 +1070,19 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
       !get().keys.some((key) => key.id === keyId)
     )
       return false;
-    try {
-      // Backend session cookie is the auth boundary; key reveal is
-      // a UI-level gate. The real security lives on the server side.
-      if (
-        get().user.id !== owner ||
-        !get().user.isLoggedIn ||
-        !get().keys.some((key) => key.id === keyId)
-      )
-        return false;
-      set((s) => ({
-        revealedKeyIds: { ...s.revealedKeyIds, [keyId]: Date.now() + 300000 },
-      }));
-      return true;
-    } catch {
-      return false;
-    }
+    // Verify the password through the demo auth service. The real
+    // security boundary is the backend session; this UI-level gate
+    // prevents casual shoulder-surfing. Console-preview.tsx calls
+    // POST /api/user/login instead, but this method is used by
+    // tests and the demo flow.
+    const ok = await demoAuth
+      .verifyPassword(owner, password)
+      .catch(() => false);
+    if (!ok) return false;
+    set((s) => ({
+      revealedKeyIds: { ...s.revealedKeyIds, [keyId]: Date.now() + 300000 },
+    }));
+    return true;
   },
 
   recordCall: (id, failed, requestedModel, submittedRequest) => {
