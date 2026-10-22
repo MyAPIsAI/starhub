@@ -1,8 +1,12 @@
 package controller
 
 import (
+	"encoding/csv"
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
@@ -140,6 +144,66 @@ func TestCreateExportLedger(t *testing.T) {
 	}
 }
 
+func TestEmptyExportContainsOnlyHeader(t *testing.T) {
+	cases := []struct {
+		typ    string
+		header []string
+	}{
+		{"requests", []string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"}},
+		{"usage", []string{"Date", "Requests", "Prompt Tokens", "Completion Tokens", "Quota"}},
+		{"ledger", []string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.typ, func(t *testing.T) {
+			newTestDB(t)
+			u := newUser(t, "alice", common.RoleUser, 1000)
+			rr := call(CreateExport, testRequest{
+				method: http.MethodPost,
+				target: "/api/export",
+				body:   `{"type":"` + tc.typ + `","range_days":7}`,
+				userID: u.ID,
+				role:   common.RoleUser,
+			})
+			var exp model.ExportRecord
+			decodeData(t, rr, &exp)
+			if exp.ID <= 0 || exp.Type != tc.typ || exp.RowCount != 0 || exp.Status != "completed" {
+				t.Fatalf("export metadata = %+v, want a completed empty %s export", exp, tc.typ)
+			}
+			stored, err := model.GetExport(exp.ID)
+			if err != nil {
+				t.Fatalf("GetExport failed: %v", err)
+			}
+			if stored.RowCount != 0 || stored.Status != "completed" || stored.UserID != u.ID {
+				t.Fatalf("persisted export metadata = %+v, want a completed empty export owned by %d", stored, u.ID)
+			}
+
+			rr = call(DownloadExport, testRequest{
+				method: http.MethodGet,
+				target: "/api/export/" + itoa(exp.ID) + "/download",
+				userID: u.ID,
+				role:   common.RoleUser,
+				path:   map[string]string{"id": itoa(exp.ID)},
+			})
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
+			}
+			if got := rr.Header().Get("Content-Type"); got != "text/csv; charset=utf-8" {
+				t.Fatalf("Content-Type = %q, want text/csv; charset=utf-8", got)
+			}
+			if rr.Body.String() != string(stored.Content) {
+				t.Fatal("download differs from persisted CSV content")
+			}
+			rows, err := csv.NewReader(strings.NewReader(rr.Body.String())).ReadAll()
+			if err != nil {
+				t.Fatalf("invalid CSV: %v", err)
+			}
+			if want := [][]string{tc.header}; !reflect.DeepEqual(rows, want) {
+				t.Fatalf("CSV rows = %q, want only the header %q", rows, want)
+			}
+		})
+	}
+}
+
 func TestListExportsUserSeesOwnOnly(t *testing.T) {
 	newTestDB(t)
 	alice := newUser(t, "alice", common.RoleUser, 1000)
@@ -222,6 +286,72 @@ func TestDownloadExport(t *testing.T) {
 	body := rr.Body.String()
 	if body == "" {
 		t.Fatal("download body should not be empty")
+	}
+}
+
+func TestDownloadExportRequestsCSVEscaping(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 1000)
+	createdAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	const tokenName = "key,\"quoted\"\nsecond line"
+	const modelName = "model,\"variant\"\nnext line"
+	l := &model.Log{
+		UserID:           u.ID,
+		TokenID:          42,
+		TokenName:        tokenName,
+		Model:            modelName,
+		PromptTokens:     100,
+		CompletionTokens: 50,
+		Quota:            23,
+		CreatedAt:        createdAt.Unix(),
+	}
+	if err := model.InsertLog(l); err != nil {
+		t.Fatalf("InsertLog failed: %v", err)
+	}
+
+	rr := call(CreateExport, testRequest{
+		method: http.MethodPost,
+		target: "/api/export",
+		body:   `{"type":"requests","range_days":7}`,
+		userID: u.ID,
+		role:   common.RoleUser,
+	})
+	var exp model.ExportRecord
+	decodeData(t, rr, &exp)
+	if exp.RowCount != 1 || exp.Status != "completed" {
+		t.Fatalf("export metadata = %+v, want 1 completed row", exp)
+	}
+	stored, err := model.GetExport(exp.ID)
+	if err != nil {
+		t.Fatalf("GetExport failed: %v", err)
+	}
+
+	rr = call(DownloadExport, testRequest{
+		method: http.MethodGet,
+		target: "/api/export/" + itoa(exp.ID) + "/download",
+		userID: u.ID,
+		role:   common.RoleUser,
+		path:   map[string]string{"id": itoa(exp.ID)},
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "text/csv; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want text/csv; charset=utf-8", got)
+	}
+	if rr.Body.String() != string(stored.Content) {
+		t.Fatal("download differs from persisted CSV content")
+	}
+	rows, err := csv.NewReader(strings.NewReader(rr.Body.String())).ReadAll()
+	if err != nil {
+		t.Fatalf("invalid CSV: %v (body %q)", err, rr.Body.String())
+	}
+	want := [][]string{
+		{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"},
+		{itoa(l.ID), createdAt.Format(time.RFC3339), itoa(u.ID), "42", tokenName, modelName, "100", "50", "23"},
+	}
+	if !reflect.DeepEqual(rows, want) {
+		t.Fatalf("CSV rows = %q, want %q", rows, want)
 	}
 }
 
