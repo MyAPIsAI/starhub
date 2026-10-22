@@ -15,15 +15,36 @@ import (
 func TestCreateExportValidation(t *testing.T) {
 	newTestDB(t)
 	u := newUser(t, "alice", common.RoleUser, 1000)
+	existing := &model.ExportRecord{
+		UserID:    u.ID,
+		Type:      "usage",
+		RangeDays: 7,
+		RowCount:  1,
+		Content:   []byte("Date,Requests,Prompt Tokens,Completion Tokens,Quota\n2026-10-20,1,100,50,23\n"),
+	}
+	if err := model.InsertExport(existing); err != nil {
+		t.Fatalf("InsertExport failed: %v", err)
+	}
+	before, err := model.ListExports(0)
+	if err != nil {
+		t.Fatalf("ListExports before validation failed: %v", err)
+	}
+	const typeError = "type must be requests, ledger or usage"
+	const rangeError = "range_days must be between 1 and 31"
 
 	cases := []struct {
-		name string
-		body string
+		name    string
+		body    string
+		message string
 	}{
-		{"invalid type", `{"type":"invalid","range_days":7}`},
-		{"range too small", `{"type":"requests","range_days":0}`},
-		{"range too large", `{"type":"requests","range_days":32}`},
-		{"missing type", `{"range_days":7}`},
+		{"invalid type", `{"type":"invalid","range_days":7}`, typeError},
+		{"range too small", `{"type":"requests","range_days":0}`, rangeError},
+		{"range too large", `{"type":"requests","range_days":32}`, rangeError},
+		{"missing type", `{"range_days":7}`, typeError},
+		{"negative range", `{"type":"requests","range_days":-1}`, rangeError},
+		{"missing range", `{"type":"requests"}`, rangeError},
+		{"malformed JSON", `{"type":"requests",`, "invalid request body:"},
+		{"wrong range type", `{"type":"requests","range_days":"7"}`, "invalid request body:"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -34,7 +55,14 @@ func TestCreateExportValidation(t *testing.T) {
 				userID: u.ID,
 				role:   common.RoleUser,
 			})
-			expectError(t, rr, http.StatusBadRequest, "")
+			expectError(t, rr, http.StatusBadRequest, tc.message)
+			after, err := model.ListExports(0)
+			if err != nil {
+				t.Fatalf("ListExports after validation failed: %v", err)
+			}
+			if !reflect.DeepEqual(after, before) {
+				t.Fatalf("invalid request changed exports: got %+v, want %+v", after, before)
+			}
 		})
 	}
 }
