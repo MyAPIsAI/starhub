@@ -82,15 +82,19 @@ func TestCreateExportRequests(t *testing.T) {
 func TestCreateExportUsage(t *testing.T) {
 	newTestDB(t)
 	u := newUser(t, "alice", common.RoleUser, 1000)
-
-	model.InsertLog(&model.Log{
-		UserID:           u.ID,
-		Model:            "gpt-4o",
-		PromptTokens:     200,
-		CompletionTokens: 100,
-		Quota:            500,
-		TokenName:        "k1",
-	})
+	day := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -2)
+	logs := []model.Log{
+		{CreatedAt: day.Add(23*time.Hour + 58*time.Minute).Unix(), PromptTokens: 100, CompletionTokens: 50, Quota: 23},
+		{CreatedAt: day.Add(23*time.Hour + 59*time.Minute).Unix(), PromptTokens: 20, CompletionTokens: 10, Quota: 7},
+		{CreatedAt: day.Add(24*time.Hour + time.Minute).Unix(), PromptTokens: 5, CompletionTokens: 3, Quota: 2},
+	}
+	for i := range logs {
+		logs[i].UserID = u.ID
+		logs[i].Model = "gpt-4o"
+		if err := model.InsertLog(&logs[i]); err != nil {
+			t.Fatalf("InsertLog(%d) failed: %v", i, err)
+		}
+	}
 
 	rr := call(CreateExport, testRequest{
 		method: http.MethodPost,
@@ -99,13 +103,51 @@ func TestCreateExportUsage(t *testing.T) {
 		userID: u.ID,
 		role:   common.RoleUser,
 	})
-	var got map[string]any
-	decodeData(t, rr, &got)
-	if got["type"] != "usage" {
-		t.Fatalf("type = %v, want usage", got["type"])
+	var exp model.ExportRecord
+	decodeData(t, rr, &exp)
+	if exp.Type != "usage" || exp.Status != "completed" || exp.RowCount != 2 {
+		t.Fatalf("export metadata = %+v, want a completed usage export with 2 daily rows", exp)
 	}
-	if got["row_count"].(float64) < 1 {
-		t.Fatalf("row_count = %v, want >= 1", got["row_count"])
+	stored, err := model.GetExport(exp.ID)
+	if err != nil {
+		t.Fatalf("GetExport failed: %v", err)
+	}
+	if stored.RowCount != 2 {
+		t.Fatalf("persisted row_count = %d, want 2", stored.RowCount)
+	}
+	rr = call(DownloadExport, testRequest{
+		method: http.MethodGet,
+		target: "/api/export/" + itoa(exp.ID) + "/download",
+		userID: u.ID,
+		role:   common.RoleUser,
+		path:   map[string]string{"id": itoa(exp.ID)},
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
+	}
+	if rr.Body.String() != string(stored.Content) {
+		t.Fatal("download differs from persisted CSV content")
+	}
+	rows, err := csv.NewReader(strings.NewReader(rr.Body.String())).ReadAll()
+	if err != nil {
+		t.Fatalf("invalid CSV: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("CSV rows = %q, want a header and 2 daily rows", rows)
+	}
+	if want := []string{"Date", "Requests", "Prompt Tokens", "Completion Tokens", "Quota"}; !reflect.DeepEqual(rows[0], want) {
+		t.Fatalf("CSV header = %q, want %q", rows[0], want)
+	}
+	wantByDay := map[string][]string{
+		day.Format("2006-01-02"):                  {day.Format("2006-01-02"), "2", "120", "60", "30"},
+		day.AddDate(0, 0, 1).Format("2006-01-02"): {day.AddDate(0, 0, 1).Format("2006-01-02"), "1", "5", "3", "2"},
+	}
+	for _, row := range rows[1:] {
+		want, ok := wantByDay[row[0]]
+		if !ok || !reflect.DeepEqual(row, want) {
+			t.Fatalf("CSV daily row = %q, want %q", row, want)
+		}
+		delete(wantByDay, row[0])
 	}
 }
 
