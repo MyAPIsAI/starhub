@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -157,6 +159,72 @@ func TestExportListUserIsolation(t *testing.T) {
 			}
 			if !reflect.DeepEqual(after, before) {
 				t.Fatalf("listing changed unexpired export records: got %+v, want %+v", after, before)
+			}
+		})
+	}
+}
+
+func TestExportRequestsContentUserIsolation(t *testing.T) {
+	env := setupRelayApp(t)
+	t.Cleanup(func() { middleware.Sessions.Remove(env.session) })
+	aliceID, aliceSession := exportTestUser(t, env.base, "export-alice")
+	bobID, bobSession := exportTestUser(t, env.base, "export-bob")
+	aliceLog := &model.Log{UserID: aliceID, TokenName: "alice-private-key", Model: "model-alice", PromptTokens: 100, CompletionTokens: 50, Quota: 23}
+	bobLog := &model.Log{UserID: bobID, TokenName: "bob-private-key", Model: "model-bob", PromptTokens: 900, CompletionTokens: 400, Quota: 99}
+	for _, log := range []*model.Log{aliceLog, bobLog} {
+		if err := model.InsertLog(log); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, total, err := model.ListLogs(0, 1, 10, "")
+	if err != nil || total != 2 {
+		t.Fatalf("read source logs: total=%d, err=%v, want 2", total, err)
+	}
+	cases := []struct {
+		name    string
+		userID  int64
+		session string
+		row     []string
+	}{
+		{"alice", aliceID, aliceSession, []string{fmt.Sprint(aliceLog.ID), time.Unix(aliceLog.CreatedAt, 0).UTC().Format(time.RFC3339), fmt.Sprint(aliceID), "0", "alice-private-key", "model-alice", "100", "50", "23"}},
+		{"bob", bobID, bobSession, []string{fmt.Sprint(bobLog.ID), time.Unix(bobLog.CreatedAt, 0).UTC().Format(time.RFC3339), fmt.Sprint(bobID), "0", "bob-private-key", "model-bob", "900", "400", "99"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := doRequest(env.base, http.MethodPost, "/api/export", tc.session, map[string]any{"type": "requests", "range_days": 7})
+			var created struct {
+				Success bool               `json:"success"`
+				Data    model.ExportRecord `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(res.Body), &created); err != nil || res.Status != http.StatusOK || !created.Success || created.Data.ID <= 0 || created.Data.UserID != tc.userID || created.Data.Type != "requests" || created.Data.RowCount != 1 {
+				t.Fatalf("create owned export failed: %d %s (decode error %v)", res.Status, res.Body, err)
+			}
+			stored, err := model.GetExport(created.Data.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.UserID != tc.userID || stored.RowCount != 1 {
+				t.Fatalf("unexpected persisted export metadata: %+v", stored)
+			}
+			path := fmt.Sprintf("/api/export/%d/download", created.Data.ID)
+			res = doRequest(env.base, http.MethodGet, path, tc.session, nil)
+			if res.Status != http.StatusOK || res.Body != string(stored.Content) {
+				t.Fatalf("download differs from persisted export: %d %q", res.Status, res.Body)
+			}
+			rows, err := csv.NewReader(strings.NewReader(res.Body)).ReadAll()
+			if err != nil {
+				t.Fatalf("invalid CSV: %v", err)
+			}
+			want := [][]string{
+				{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"},
+				tc.row,
+			}
+			if !reflect.DeepEqual(rows, want) {
+				t.Fatalf("CSV rows = %q, want only owned data %q", rows, want)
+			}
+			after, total, err := model.ListLogs(0, 1, 10, "")
+			if err != nil || total != 2 || !reflect.DeepEqual(after, before) {
+				t.Fatalf("export changed source logs: total=%d, err=%v, got %+v, want %+v", total, err, after, before)
 			}
 		})
 	}
