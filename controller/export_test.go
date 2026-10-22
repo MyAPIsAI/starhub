@@ -239,6 +239,58 @@ func TestCreateExportLedger(t *testing.T) {
 	}
 }
 
+func TestBuildLedgerExportPreservesNanoUSD(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 1000)
+	from := time.Date(2026, time.October, 20, 0, 0, 0, 0, time.UTC)
+	entries := []model.LedgerEntry{
+		{UserID: u.ID, Type: "recharge", Amount: 1, BalanceAfter: 1, Description: "one nano", OrderID: "ord-tiny", CreatedAt: from.Unix()},
+		{UserID: u.ID, Type: "recharge", Amount: 1_000_000_001, BalanceAfter: 1_000_000_002, Description: "credit", OrderID: "ord-credit", CreatedAt: from.Unix()},
+		{UserID: u.ID, Type: "call_summary", Amount: -2, BalanceAfter: 1_000_000_000, Description: "debit", TraceID: "trace-debit", CreatedAt: from.Unix()},
+	}
+	if err := model.DB.Create(&entries).Error; err != nil {
+		t.Fatalf("create ledger fixtures failed: %v", err)
+	}
+
+	content, rowCount, err := buildLedgerExport(u.ID, from)
+	if err != nil {
+		t.Fatalf("buildLedgerExport failed: %v", err)
+	}
+	if rowCount != 3 {
+		t.Fatalf("row_count = %d, want 3", rowCount)
+	}
+	rows, err := csv.NewReader(strings.NewReader(string(content))).ReadAll()
+	if err != nil {
+		t.Fatalf("invalid CSV: %v", err)
+	}
+	if len(rows) != 4 {
+		t.Fatalf("CSV rows = %q, want a header and 3 data rows", rows)
+	}
+	if want := []string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID"}; !reflect.DeepEqual(rows[0], want) {
+		t.Fatalf("CSV header = %q, want %q", rows[0], want)
+	}
+	wantByID := map[string][]string{
+		itoa(entries[0].ID): {itoa(entries[0].ID), "2026-10-20T00:00:00Z", "recharge", "1", "1", "one nano", "ord-tiny", ""},
+		itoa(entries[1].ID): {itoa(entries[1].ID), "2026-10-20T00:00:00Z", "recharge", "1000000001", "1000000002", "credit", "ord-credit", ""},
+		itoa(entries[2].ID): {itoa(entries[2].ID), "2026-10-20T00:00:00Z", "call_summary", "-2", "1000000000", "debit", "", "trace-debit"},
+	}
+	for _, row := range rows[1:] {
+		want, ok := wantByID[row[0]]
+		if !ok || !reflect.DeepEqual(row, want) {
+			t.Fatalf("CSV ledger row = %q, want %q", row, want)
+		}
+		delete(wantByID, row[0])
+	}
+	stored, err := model.ListLedger(u.ID)
+	if err != nil {
+		t.Fatalf("ListLedger failed: %v", err)
+	}
+	wantStored := []model.LedgerEntry{entries[2], entries[1], entries[0]}
+	if !reflect.DeepEqual(stored, wantStored) {
+		t.Fatalf("source ledger changed: got %+v, want %+v", stored, wantStored)
+	}
+}
+
 func TestEmptyExportContainsOnlyHeader(t *testing.T) {
 	cases := []struct {
 		typ    string
