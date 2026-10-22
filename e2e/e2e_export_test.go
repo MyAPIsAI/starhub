@@ -266,3 +266,40 @@ func TestExportCreateRequiresLogin(t *testing.T) {
 		})
 	}
 }
+
+func TestExportCreateRejectsLoggedOutSession(t *testing.T) {
+	env := setupRelayApp(t)
+	t.Cleanup(func() { middleware.Sessions.Remove(env.session) })
+	userID, session := exportTestUser(t, env.base, "export-member")
+	payload := map[string]any{"type": "requests", "range_days": 7}
+	res := doRequest(env.base, http.MethodPost, "/api/export", session, payload)
+	var created common.APIResponse
+	if err := json.Unmarshal([]byte(res.Body), &created); err != nil || res.Status != http.StatusOK || !created.Success {
+		t.Fatalf("create before logout failed: %d %s (decode error %v)", res.Status, res.Body, err)
+	}
+	before, err := model.ListExports(0)
+	if err != nil || len(before) != 1 || before[0].UserID != userID {
+		t.Fatalf("read created export: got %+v, err=%v, want 1 owned record", before, err)
+	}
+
+	res = doRequest(env.base, http.MethodPost, "/api/user/logout", session, nil)
+	var loggedOut common.APIResponse
+	if err := json.Unmarshal([]byte(res.Body), &loggedOut); err != nil || res.Status != http.StatusOK || !loggedOut.Success {
+		t.Fatalf("logout failed: %d %s (decode error %v)", res.Status, res.Body, err)
+	}
+	if _, ok := middleware.Sessions.Get(session); ok {
+		t.Fatal("logout left the session active")
+	}
+	res = doRequest(env.base, http.MethodPost, "/api/export", session, payload)
+	var denied common.APIResponse
+	if err := json.Unmarshal([]byte(res.Body), &denied); err != nil || res.Status != http.StatusUnauthorized || denied.Success || denied.Message != "login required" || denied.Data != nil {
+		t.Fatalf("old session created an export: %d %s (decode error %v)", res.Status, res.Body, err)
+	}
+	after, err := model.ListExports(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("post-logout request changed exports: got %+v, want %+v", after, before)
+	}
+}
