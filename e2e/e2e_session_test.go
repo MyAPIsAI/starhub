@@ -27,44 +27,54 @@ func TestTerminateOtherSessionsPreservesCurrentAndOtherUsers(t *testing.T) {
 	}
 	other := login.Data.Session
 	t.Cleanup(func() { middleware.Sessions.Remove(other) })
-	res = doRequest(env.base, http.MethodPost, "/api/user/sessions/terminate-others", current, nil)
-	var terminated struct {
-		Success bool `json:"success"`
-		Data    struct {
-			Terminated int `json:"terminated"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(res.Body), &terminated); err != nil || res.Status != http.StatusOK || !terminated.Success || terminated.Data.Terminated != 1 {
-		t.Fatalf("terminate others failed: %d %s (decode error %v)", res.Status, res.Body, err)
-	}
-	cases := []struct {
-		name    string
-		session string
-		userID  int64
+	for _, step := range []struct {
+		name  string
+		count int
 	}{
-		{"current session", current, aliceID},
-		{"terminated session", other, 0},
-		{"other user", bobSession, bobID},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			res := doRequest(env.base, http.MethodGet, "/api/user/self", tc.session, nil)
-			var got struct {
-				Success bool   `json:"success"`
-				Message string `json:"message"`
-				Data    *struct {
-					ID int64 `json:"id"`
+		{"first termination", 1},
+		{"repeat termination", 0},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			res := doRequest(env.base, http.MethodPost, "/api/user/sessions/terminate-others", current, nil)
+			var terminated struct {
+				Success bool `json:"success"`
+				Data    struct {
+					Terminated *int `json:"terminated"`
 				} `json:"data"`
 			}
-			if err := json.Unmarshal([]byte(res.Body), &got); err != nil {
-				t.Fatalf("invalid self response: %s (decode error %v)", res.Body, err)
+			if err := json.Unmarshal([]byte(res.Body), &terminated); err != nil || res.Status != http.StatusOK || !terminated.Success || terminated.Data.Terminated == nil || *terminated.Data.Terminated != step.count {
+				t.Fatalf("terminate others: want count %d, got %d %s (decode error %v)", step.count, res.Status, res.Body, err)
 			}
-			if tc.userID == 0 {
-				if res.Status != http.StatusUnauthorized || got.Success || got.Message != "login required" || got.Data != nil {
-					t.Fatalf("terminated session remained usable: %d %s", res.Status, res.Body)
-				}
-			} else if res.Status != http.StatusOK || !got.Success || got.Data == nil || got.Data.ID != tc.userID {
-				t.Fatalf("valid session was affected: %d %s", res.Status, res.Body)
+			cases := []struct {
+				name    string
+				session string
+				userID  int64
+			}{
+				{"current session", current, aliceID},
+				{"terminated session", other, 0},
+				{"other user", bobSession, bobID},
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					res := doRequest(env.base, http.MethodGet, "/api/user/self", tc.session, nil)
+					var got struct {
+						Success bool   `json:"success"`
+						Message string `json:"message"`
+						Data    *struct {
+							ID int64 `json:"id"`
+						} `json:"data"`
+					}
+					if err := json.Unmarshal([]byte(res.Body), &got); err != nil {
+						t.Fatalf("invalid self response: %s (decode error %v)", res.Body, err)
+					}
+					if tc.userID == 0 {
+						if res.Status != http.StatusUnauthorized || got.Success || got.Message != "login required" || got.Data != nil {
+							t.Fatalf("terminated session remained usable: %d %s", res.Status, res.Body)
+						}
+					} else if res.Status != http.StatusOK || !got.Success || got.Data == nil || got.Data.ID != tc.userID {
+						t.Fatalf("valid session was affected: %d %s", res.Status, res.Body)
+					}
+				})
 			}
 		})
 	}
