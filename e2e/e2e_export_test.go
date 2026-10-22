@@ -229,3 +229,40 @@ func TestExportRequestsContentUserIsolation(t *testing.T) {
 		})
 	}
 }
+
+func TestExportCreateRequiresLogin(t *testing.T) {
+	env := setupRelayApp(t)
+	t.Cleanup(func() { middleware.Sessions.Remove(env.session) })
+	existing := &model.ExportRecord{UserID: env.rootID, Type: "usage", Filename: "existing-private.csv", RowCount: 1, Content: []byte("existing-private-content")}
+	if err := model.InsertExport(existing); err != nil {
+		t.Fatal(err)
+	}
+	before, err := model.ListExports(0)
+	if err != nil || len(before) != 1 {
+		t.Fatalf("read existing export: got %+v, err=%v, want 1 record", before, err)
+	}
+	cases := []struct {
+		name       string
+		credential string
+	}{
+		{"anonymous", ""},
+		{"invalid session", "invalid-export-session"},
+		{"relay API key", env.apiKey},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := doRequest(env.base, http.MethodPost, "/api/export", tc.credential, map[string]any{"type": "requests", "range_days": 7})
+			var got common.APIResponse
+			if err := json.Unmarshal([]byte(res.Body), &got); err != nil || res.Status != http.StatusUnauthorized || got.Success || got.Message != "login required" || got.Data != nil {
+				t.Fatalf("unexpected unauthenticated create response: %d %s (decode error %v)", res.Status, res.Body, err)
+			}
+			after, err := model.ListExports(0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(after, before) {
+				t.Fatalf("unauthenticated create changed exports: got %+v, want %+v", after, before)
+			}
+		})
+	}
+}
