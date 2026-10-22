@@ -1,0 +1,133 @@
+{
+  "_comment": "Versioned API contract samples. Backend responses must match these structures. Frontend adapters/hooks use the same samples to assert parsing.",
+  "_version": 1,
+  "_generated_from": "scripts/gen-api-contracts.ps1",
+  "_total_routes": 90,
+
+  "auth": {
+    "POST /api/user/login": {
+      "request": { "username": "string (3-64 chars)", "password": "string (6-64 chars)" },
+      "response_200": {
+        "success": true,
+        "data": { "session": "string", "user": { "id": "int64", "username": "string", "email": "string", "role": "int", "status": "int", "quota": "int64", "used_quota": "int64", "group": "string", "aff_code": "string", "inviter_id": "int64", "created_at": "int64 (unix)" } }
+      },
+      "response_401": { "success": false, "message": "invalid username or password" }
+    },
+    "POST /api/user/register": {
+      "request": { "username": "string (3-64)", "password": "string (6-64)", "email": "string (optional, 5-64)" },
+      "response_200": { "success": true, "data": { "id": "int64", "username": "string", "..." : "AuthUser fields" } },
+      "response_409": { "success": false, "message": "username already exists" }
+    },
+    "POST /api/user/logout": { "auth": "UserAuth", "response_200": { "success": true } },
+    "GET /api/user/self": { "auth": "UserAuth", "response_200": { "success": true, "data": "AuthUser" }, "response_401": { "success": false, "message": "login required" } },
+    "PUT /api/user/self": { "auth": "UserAuth", "request": { "current_password": "string (for password change)", "new_password": "string (6-64)", "email": "string" }, "response_200": { "success": true, "data": "AuthUser" } },
+    "POST /api/user/deactivate": { "auth": "UserAuth", "response_200": { "success": true } },
+    "GET /api/user/sessions": { "auth": "UserAuth", "response_200": { "success": true, "data": [{ "created_at": "int64", "expires_at": "int64", "is_current": "bool" }] } },
+    "POST /api/user/sessions/terminate-others": { "auth": "UserAuth", "response_200": { "success": true, "data": { "terminated": "int" } } },
+    "GET /api/user/usage": { "auth": "UserAuth", "params": { "days": "int (1-720)" }, "response_200": { "success": true, "data": { "days": "int", "items": "DailyUsage[]", "by_model": "ModelDailyUsage[]" } } }
+  },
+
+  "admin_users": {
+    "GET /api/user": { "auth": "AdminAuth", "response_200": { "success": true, "data": "AuthUser[]" } },
+    "PUT /api/user": { "auth": "AdminAuth+Audit", "request": { "id": "int64", "quota": "int64 (nano-USD, requires expected_quota)", "status": "int (1=enabled, 2=disabled)", "group": "string", "password": "string (6-64)" }, "response_200": { "success": true }, "response_409": { "success": false, "message": "balance changed" } }
+  },
+
+  "tokens": {
+    "POST /api/token": { "auth": "UserAuth", "request": { "name": "string", "remain_quota": "int64", "unlimited_quota": "bool", "expired_time": "int64", "model_limit": "string", "group": "string", "allowed_ips": "string" }, "response_200": { "success": true, "data": { "id": "int64", "key": "string (sk-..., plaintext only on create)" } } },
+    "GET /api/token": { "auth": "UserAuth", "response_200": { "success": true, "data": [{ "id": "int64", "name": "string", "key": "string (masked sk-****)", "..." : "Token fields" }] } },
+    "PUT /api/token": { "auth": "UserAuth", "request": { "id": "int64", "name": "string", "remain_quota": "int64", "unlimited_quota": "bool", "status": "int" } },
+    "DELETE /api/token/{id}": { "auth": "UserAuth", "response_200": { "success": true } },
+    "POST /api/token/{id}/regenerate": { "auth": "UserAuth", "response_200": { "success": true, "data": { "id": "int64", "key": "string (new plaintext)" } } }
+  },
+
+  "channels": {
+    "POST /api/channel": { "auth": "AdminAuth+Audit", "request": { "name": "string", "type": "int", "key": "string", "models": "string (comma-sep)", "group": "string", "base_url": "string", "status": "int" } },
+    "GET /api/channel": { "auth": "AdminAuth", "response_200": { "success": true, "data": [{ "id": "int64", "name": "string", "key": "string (masked)", "models": "string", "status": "int" }] } },
+    "GET /api/channel/{id}": { "auth": "AdminAuth" },
+    "PUT /api/channel": { "auth": "AdminAuth+Audit" },
+    "DELETE /api/channel/{id}": { "auth": "AdminAuth+Audit" },
+    "POST /api/channel/test/{id}": { "auth": "AdminAuth+Audit", "response_200": { "success": true, "data": { "ok": "bool", "model": "string", "elapsed_ms": "int64", "message": "string", "status": "int" } } }
+  },
+
+  "options": {
+    "GET /api/option": { "auth": "AdminAuth" },
+    "GET /api/option/status": { "auth": "AdminAuth", "response_200": { "success": true, "data": { "database_version": "int64", "loaded_version": "int64", "in_sync": "bool", "instances": "[]" } } },
+    "GET /api/option/history": { "auth": "AdminAuth", "params": { "limit": "int (1-100)" } },
+    "PUT /api/option": { "auth": "AdminAuth+Audit", "request": { "key": "string", "value": "string", "expected_version": "int64" }, "response_409": { "success": false, "message": "option version changed" } },
+    "POST /api/option/rollback": { "auth": "AdminAuth+Audit", "request": { "version": "int64", "expected_version": "int64" } }
+  },
+
+  "billing": {
+    "GET /api/wallet": { "auth": "UserAuth", "response_200": { "success": true, "data": { "balance": "int64 (nano-USD)" } } },
+    "GET /api/ledger": { "auth": "UserAuth" },
+    "GET /api/recharge": { "auth": "UserAuth" },
+    "POST /api/recharge": { "auth": "UserAuth", "request": { "amount_usd": "string (10-10000, 2 decimals)" } },
+    "GET /api/recharge/{id}": { "auth": "UserAuth" },
+    "POST /api/recharge/{id}/begin": { "auth": "UserAuth" },
+    "POST /api/recharge/{id}/resolve": { "auth": "UserAuth", "request": { "outcome": "string (success|failed|cancelled)" } }
+  },
+
+  "exports": {
+    "GET /api/export": { "auth": "UserAuth" },
+    "POST /api/export": { "auth": "UserAuth", "request": { "type": "string (requests|usage|ledger)", "range_days": "int (1-30)" } },
+    "GET /api/export/{id}/download": { "auth": "UserAuth", "response_200": "CSV (Content-Type: text/csv)" }
+  },
+
+  "redemption": {
+    "POST /api/redemption": { "auth": "AdminAuth+Audit", "request": { "quota": "int64 (>0)", "count": "int (1-100)", "code": "string (optional)" }, "response_200": { "success": true, "data": { "codes": "string[]", "count": "int" } } },
+    "GET /api/redemption": { "auth": "AdminAuth" },
+    "DELETE /api/redemption/{id}": { "auth": "AdminAuth+Audit" },
+    "POST /api/user/redeem": { "auth": "UserAuth", "request": { "code": "string" }, "response_200": { "success": true, "data": { "quota": "int64", "message": "string" } }, "response_404": { "success": false, "message": "invalid or already used code" } }
+  },
+
+  "logs_audit_metrics": {
+    "GET /api/log": { "auth": "UserAuth", "params": { "p": "int (page)", "page_size": "int", "model": "string" }, "response_200": { "success": true, "data": { "items": "Log[]", "total": "int64" } } },
+    "GET /api/audit": { "auth": "AdminAuth", "params": { "p": "int", "page_size": "int" } },
+    "GET /api/metrics": { "auth": "AdminAuth", "response_200": { "success": true, "data": { "requests": "RequestCounter[]", "channel_stats": "ChannelStat[]", "window": "int", "affinity": "[]", "generated_at": "int64" } } }
+  },
+
+  "service": {
+    "GET /api/service-group": { "auth": "AdminAuth" },
+    "PUT /api/service-group": { "auth": "AdminAuth+Audit" },
+    "DELETE /api/service-group/{id}": { "auth": "AdminAuth+Audit" },
+    "GET /api/service-quality": { "auth": "UserAuth", "params": { "hours": "int (1-720)" }, "response_200": { "success": true, "data": { "window_hours": "int", "overall": "ServiceQualityMetric", "by_model": "ServiceQualityMetric[]", "by_day": "ServiceQualityDailyMetric[]" } } }
+  },
+
+  "plaza": {
+    "GET /api/plaza/models": { "auth": "none", "params": { "q": "string", "vendors": "string", "page_size": "int" } },
+    "GET /api/plaza/models/{id}": { "auth": "none" },
+    "GET /api/plaza/filters": { "auth": "none" },
+    "GET /api/plaza/rank": { "auth": "none", "params": { "type": "string (value|hot|new)" }, "response_200": { "success": true, "data": { "type": "string", "items": [{ "rank": "int", "model": "PlazaRow", "metric_label": "string", "metric_value": "string" }] } } },
+    "GET /api/plaza/meta": { "auth": "AdminAuth" },
+    "PUT /api/plaza/meta": { "auth": "AdminAuth+Audit" },
+    "DELETE /api/plaza/meta/{model}": { "auth": "AdminAuth+Audit" }
+  },
+
+  "relay": {
+    "POST /v1/chat/completions": { "auth": "TokenAuth", "protocol": "OpenAI chat completions", "request": "OpenAI ChatCompletionRequest" },
+    "POST /v1/messages": { "auth": "TokenAuth", "protocol": "Claude messages" },
+    "POST /v1/embeddings": { "auth": "TokenAuth" },
+    "POST /v1/rerank": { "auth": "TokenAuth" },
+    "POST /v1/audio/speech": { "auth": "TokenAuth" },
+    "POST /v1/audio/transcriptions": { "auth": "TokenAuth" },
+    "POST /v1/images/generations": { "auth": "TokenAuth" },
+    "POST /v1/images/edits": { "auth": "TokenAuth" },
+    "POST /v1/video/generations": { "auth": "TokenAuth" },
+    "GET /v1/video/generations/{id}": { "auth": "TokenAuth" },
+    "GET /v1/realtime": { "auth": "TokenAuth (WebSocket)" },
+    "GET /v1/models": { "auth": "TokenAuth" }
+  },
+
+  "_auth_levels": {
+    "none": "Unauthenticated (public catalog)",
+    "UserAuth": "Session cookie, any logged-in user",
+    "AdminAuth": "Session cookie, role >= admin (10)",
+    "AdminAuth+Audit": "Session cookie, admin, writes to audit log",
+    "TokenAuth": "Bearer API key (sk-...)"
+  },
+
+  "_envelope": {
+    "success": { "success": true, "data": "<type-specific>" },
+    "error": { "success": false, "message": "<human-readable>" }
+  }
+}
