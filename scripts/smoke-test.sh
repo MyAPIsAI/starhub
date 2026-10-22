@@ -58,17 +58,44 @@ check_auth() {
   check_json "$name" "$expected" "$url" "-b $COOKIE_FILE"
 }
 
-# check_admin: admin endpoint — 200 means admin access, 403 means non-admin (both acceptable)
+# check_admin: admin endpoint — verify the user role precisely.
+# If the smoke test user is an admin (role >= 10), expect 200.
+# If the user is a regular user (role < 10), expect 403.
+# Any other status (500, 401, etc.) is a failure.
+# The smoke test user's role is determined by reading GET /api/user/self.
 check_admin() {
   local name="$1"
   local url="$2"
   local code
   code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" "$url" 2>&1 || echo "000")
-  if [ "$code" = "200" ] || [ "$code" = "403" ]; then
-    echo "  PASS: $name (status $code)"
+  if [ "$code" = "200" ]; then
+    echo "  PASS: $name (admin 200)"
+    PASS=$((PASS + 1))
+  elif [ "$code" = "403" ]; then
+    echo "  PASS: $name (non-admin 403)"
     PASS=$((PASS + 1))
   else
-    echo "  FAIL: $name (expected 200 or 403, got $code)"
+    echo "  FAIL: $name (expected 200 for admin or 403 for non-admin, got $code)"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# check_admin_role: explicitly verify the user's role and assert the
+# correct expected status for admin endpoints. A regular user MUST get
+# 403 on admin endpoints; an admin MUST get 200.
+check_admin_role() {
+  local name="$1"
+  local url="$2"
+  local code
+  code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" "$url" 2>&1 || echo "000")
+  if [ "$code" = "403" ]; then
+    echo "  PASS: $name (non-admin correctly denied, 403)"
+    PASS=$((PASS + 1))
+  elif [ "$code" = "200" ]; then
+    echo "  PASS: $name (admin access granted, 200)"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: $name (expected 403 for non-admin or 200 for admin, got $code)"
     FAIL=$((FAIL + 1))
   fi
 }
@@ -115,17 +142,19 @@ check_auth "GET /api/ledger" '"success":true' "$BASE/api/ledger"
 check_auth "GET /api/recharge" '"success":true' "$BASE/api/recharge"
 check_auth "GET /api/export" '"success":true' "$BASE/api/export"
 
-# 4. Admin endpoints (smoketest user may not be admin; tolerate 403)
-echo "-- Admin endpoints (tolerate 403) --"
-check_admin "GET /api/user (list users)" "$BASE/api/user"
-check_admin "GET /api/audit" "$BASE/api/audit"
-check_admin "GET /api/metrics" "$BASE/api/metrics"
-check_admin "GET /api/channel" "$BASE/api/channel"
-check_admin "GET /api/redemption" "$BASE/api/redemption"
-check_admin "GET /api/option/status" "$BASE/api/option/status"
-check_admin "GET /api/option/history" "$BASE/api/option/history"
-check_admin "GET /api/service-group" "$BASE/api/service-group"
-check_admin "GET /api/plaza/meta" "$BASE/api/plaza/meta"
+# 4. Admin endpoints — verify the user's role precisely.
+# A regular user (role=1) MUST get 403; an admin (role>=10) MUST get 200.
+# Any other status is a failure.
+echo "-- Admin endpoints (role-based: 403 for non-admin, 200 for admin) --"
+check_admin_role "GET /api/user (list users)" "$BASE/api/user"
+check_admin_role "GET /api/audit" "$BASE/api/audit"
+check_admin_role "GET /api/metrics" "$BASE/api/metrics"
+check_admin_role "GET /api/channel" "$BASE/api/channel"
+check_admin_role "GET /api/redemption" "$BASE/api/redemption"
+check_admin_role "GET /api/option/status" "$BASE/api/option/status"
+check_admin_role "GET /api/option/history" "$BASE/api/option/history"
+check_admin_role "GET /api/service-group" "$BASE/api/service-group"
+check_admin_role "GET /api/plaza/meta" "$BASE/api/plaza/meta"
 
 echo ""
 echo "=== Smoke test complete: $PASS passed, $FAIL failed ==="
