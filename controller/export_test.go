@@ -79,6 +79,59 @@ func TestCreateExportRequests(t *testing.T) {
 	}
 }
 
+func TestBuildLogExportStartTimeBoundary(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 1000)
+	from := time.Date(2026, time.October, 20, 0, 0, 0, 0, time.UTC)
+	logs := []model.Log{
+		{CreatedAt: from.Add(-time.Second).Unix(), Model: "before-start"},
+		{CreatedAt: from.Unix(), Model: "at-start"},
+		{CreatedAt: from.Add(time.Second).Unix(), Model: "after-start"},
+	}
+	for i := range logs {
+		logs[i].UserID = u.ID
+		logs[i].TokenName = "key"
+		logs[i].PromptTokens = 100
+		logs[i].CompletionTokens = 50
+		logs[i].Quota = 23
+		if err := model.InsertLog(&logs[i]); err != nil {
+			t.Fatalf("InsertLog(%d) failed: %v", i, err)
+		}
+	}
+
+	content, rowCount, err := buildLogExport("requests", u.ID, from)
+	if err != nil {
+		t.Fatalf("buildLogExport failed: %v", err)
+	}
+	if rowCount != 2 {
+		t.Fatalf("row_count = %d, want 2", rowCount)
+	}
+	rows, err := csv.NewReader(strings.NewReader(string(content))).ReadAll()
+	if err != nil {
+		t.Fatalf("invalid CSV: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("CSV rows = %q, want a header and 2 data rows", rows)
+	}
+	if want := []string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"}; !reflect.DeepEqual(rows[0], want) {
+		t.Fatalf("CSV header = %q, want %q", rows[0], want)
+	}
+	wantByID := map[string][]string{
+		itoa(logs[1].ID): {itoa(logs[1].ID), "2026-10-20T00:00:00Z", itoa(u.ID), "0", "key", "at-start", "100", "50", "23"},
+		itoa(logs[2].ID): {itoa(logs[2].ID), "2026-10-20T00:00:01Z", itoa(u.ID), "0", "key", "after-start", "100", "50", "23"},
+	}
+	for _, row := range rows[1:] {
+		want, ok := wantByID[row[0]]
+		if !ok || !reflect.DeepEqual(row, want) {
+			t.Fatalf("CSV row = %q, want %q", row, want)
+		}
+		delete(wantByID, row[0])
+	}
+	if count, err := model.CountLogs(u.ID); err != nil || count != 3 {
+		t.Fatalf("source log count = %d, err = %v, want 3 unchanged logs", count, err)
+	}
+}
+
 func TestCreateExportUsage(t *testing.T) {
 	newTestDB(t)
 	u := newUser(t, "alice", common.RoleUser, 1000)
