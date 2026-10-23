@@ -9,7 +9,7 @@
       "request": { "username": "string (3-64 chars)", "password": "string (6-64 chars)" },
       "response_200": {
         "success": true,
-        "data": { "session": "string", "user": { "id": "int64", "username": "string", "email": "string", "role": "int", "status": "int", "quota": "int64", "used_quota": "int64", "group": "string", "aff_code": "string", "inviter_id": "int64", "created_at": "int64 (unix)" } }
+        "data": { "session": "string", "user": { "id": "int64", "username": "string", "email": "string", "role": "int", "status": "int", "quota": "int64 (quota units; 1 USD = 500000 quota)", "used_quota": "int64 (quota units)", "group": "string", "aff_code": "string", "inviter_id": "int64", "created_at": "int64 (unix)" } }
       },
       "response_401": { "success": false, "message": "invalid username or password" }
     },
@@ -29,7 +29,7 @@
 
   "admin_users": {
     "GET /api/user": { "auth": "AdminAuth", "response_200": { "success": true, "data": "AuthUser[]" } },
-    "PUT /api/user": { "auth": "AdminAuth+Audit", "request": { "id": "int64", "quota": "int64 (nano-USD, requires expected_quota)", "status": "int (1=enabled, 2=disabled)", "group": "string", "password": "string (6-64)" }, "response_200": { "success": true }, "response_409": { "success": false, "message": "balance changed" } }
+    "PUT /api/user": { "auth": "AdminAuth+Audit", "request": { "id": "int64", "quota": "int64 (quota units; 1 USD = 500000 quota, requires expected_quota)", "status": "int (1=enabled, 2=disabled)", "group": "string", "password": "string (6-64)" }, "response_200": { "success": true }, "response_409": { "success": false, "message": "balance changed" } }
   },
 
   "tokens": {
@@ -74,10 +74,10 @@
   },
 
   "redemption": {
-    "POST /api/redemption": { "auth": "AdminAuth+Audit", "request": { "quota": "int64 (>0)", "count": "int (1-100)", "code": "string (optional)" }, "response_200": { "success": true, "data": { "codes": "string[]", "count": "int" } } },
+    "POST /api/redemption": { "auth": "AdminAuth+Audit", "request": { "quota": "int64 (quota units; 1 USD = 500000 quota)", "count": "int (1-100)", "code": "string (optional)" }, "response_200": { "success": true, "data": { "codes": "string[]", "count": "int" } } },
     "GET /api/redemption": { "auth": "AdminAuth" },
     "DELETE /api/redemption/{id}": { "auth": "AdminAuth+Audit" },
-    "POST /api/user/redeem": { "auth": "UserAuth", "request": { "code": "string" }, "response_200": { "success": true, "data": { "quota": "int64", "message": "string" } }, "response_404": { "success": false, "message": "invalid or already used code" } }
+    "POST /api/user/redeem": { "auth": "UserAuth", "request": { "code": "string" }, "response_200": { "success": true, "data": { "quota": "int64 (quota units credited)", "message": "string" } }, "response_404": { "success": false, "message": "invalid or already used code" } }
   },
 
   "logs_audit_metrics": {
