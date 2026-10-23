@@ -72,11 +72,24 @@ $report.frontendTests = @{
 
 Set-Location $root
 $report.finishedAt = (Get-Date -Format "o")
-$report.passed = ($fail -eq 0 -and $npmExit -eq 0)
+# Overall pass requires ALL exit codes to be zero AND no test failures.
+# goExit != 0 means build failure or test failure even if parse found 0 fails.
+$report.passed = ($goExit -eq 0 -and $fail -eq 0 -and $npmExit -eq 0)
+
+# If go test failed but we parsed 0 failures, the failure was outside tests
+# (e.g., build error). Record this explicitly.
+if ($goExit -ne 0 -and $fail -eq 0) {
+    $report.goTests.buildOrSetupError = $true
+}
 
 # Write report
 $reportPath = Join-Path $root "test-report.json"
 $report | ConvertTo-Json -Depth 5 | Out-File -FilePath $reportPath -Encoding UTF8
+
+# Exit with non-zero if overall failed
+if (-not $report.passed) {
+    exit 1
+}
 
 Write-Host ""
 Write-Host "=== Test Report ===" -ForegroundColor Green

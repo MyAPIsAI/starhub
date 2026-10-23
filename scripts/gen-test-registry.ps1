@@ -144,7 +144,7 @@ foreach ($file in $testFiles) {
         $layer = Get-Layer -Package $pkg
         $module = Get-Module -TestName $name -Package $pkg
         $rule = Get-Rule -TestName $name
-        $lines += "$id`t$module`t$priority`t$layer`t$rule`t$relPath`t$name`tautomated`tpass"
+        $lines += "$id`t$module`t$priority`t$layer`t$rule`t$relPath`t$name`tautomated`tnot_run"
 
         # Stats
         $key = "$module/$priority"
@@ -156,6 +156,8 @@ $lines | Out-File -FilePath $out -Encoding UTF8
 $count = $lines.Count - 1  # subtract header
 
 Write-Host "Generated $out with $count test cases from $($testFiles.Count) files" -ForegroundColor Green
+Write-Host "Note: all cases marked 'not_run' — this is an inventory, not an execution result."
+Write-Host "Run scripts/gen-test-report.ps1 to get actual execution results."
 Write-Host ""
 Write-Host "Summary by module/priority:" -ForegroundColor Cyan
 foreach ($key in ($stats.Keys | Sort-Object)) {
