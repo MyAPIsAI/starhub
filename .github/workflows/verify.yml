@@ -3,6 +3,9 @@ name: Verify
 on:
   push:
   pull_request:
+  schedule:
+    # Nightly at 03:00 UTC
+    - cron: "0 3 * * *"
 
 permissions:
   contents: read
@@ -65,3 +68,32 @@ jobs:
           path: |
             web/playwright-report/
             web/test-results/
+
+  # Nightly job: shuffle tests to detect order-dependent failures.
+  # Only runs on schedule (not on every push/PR).
+  nightly-shuffle:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: true
+      - name: Run shuffled tests (3 rounds)
+        run: |
+          for i in 1 2 3; do
+            echo "=== Shuffle run $i/3 ==="
+            go test ./... -count=1 -shuffle=on 2>&1 | tee -a shuffle-output.txt
+            EXIT=$?
+            if [ $EXIT -ne 0 ]; then
+              echo "FAIL: shuffle run $i"
+              grep -o '\-shuffle=[0-9]*' shuffle-output.txt | tail -1 | \
+                xargs -I{} echo "Reproduce: go test ./... -count=1 {}"
+              exit 1
+            fi
+            echo "PASS: shuffle run $i"
+          done
+          echo "=== All 3 shuffle runs passed ==="
