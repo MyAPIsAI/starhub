@@ -97,3 +97,23 @@ jobs:
             echo "PASS: shuffle run $i"
           done
           echo "=== All 3 shuffle runs passed ==="
+
+  # Nightly job: race detector. Linux runners have gcc, so
+  # CGO_ENABLED=1 works. Only runs on schedule.
+  nightly-race:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: true
+      - name: Run race detector on critical packages
+        run: |
+          go test -race -count=1 ./controller/... ./model/... ./middleware/... ./service/... ./relay/... ./common/... ./pkg/... ./setting/...
+      - name: Run race detector on e2e
+        run: |
+          go test -race -count=1 ./e2e/
