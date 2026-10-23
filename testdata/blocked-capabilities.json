@@ -1,0 +1,57 @@
+{
+  "_comment": "Registry of unimplemented/blocked capabilities. Demo tests covering these features must NOT be marked as production-capability passing. See P20 item 9/10b/20/29 for details.",
+  "_version": 1,
+  "_updated": "2026-10-22",
+
+  "blocked_capabilities": [
+    {
+      "id": "BLK-001",
+      "capability": "Channel resource placement management",
+      "p20_ref": "item 9",
+      "reason": "Backend needs new resource/placement tables and API (/api/resource, /api/placement). Features/channels.tsx resource snapshot and placement editing only stored in localStorage.",
+      "demo_test_paths": [
+        "web/src/features/channels.tsx (localStorage resource snapshots)",
+        "web/src/features/channel-source-controls.tsx (local demo sync)"
+      ],
+      "blocker": "New backend infrastructure required"
+    },
+    {
+      "id": "BLK-002",
+      "capability": "Phone binding & OTP/SMS verification",
+      "p20_ref": "item 10b/27",
+      "reason": "Requires external SMS gateway service. Phone binding and verification code flow use client-side fake authentication (lib/demo-auth.ts, sessionStorage).",
+      "demo_test_paths": [
+        "web/src/lib/demo-auth.ts",
+        "web/src/features/account-center.tsx (phone/OTP demo path)"
+      ],
+      "blocker": "External SMS gateway dependency"
+    },
+    {
+      "id": "BLK-003",
+      "capability": "Real payment gateway integration",
+      "p20_ref": "item 20",
+      "reason": "Recharge flow uses manual payment result selection (simulate success/failure/expiry). No real payment gateway integration. The begin/resolve endpoints are wired but resolve is triggered manually.",
+      "demo_test_paths": [
+        "web/src/features/recharge-flow.tsx (simulate success/failure/expiry buttons)"
+      ],
+      "blocker": "External payment gateway dependency"
+    },
+    {
+      "id": "BLK-004",
+      "capability": "Billing/pricing localStorage persistence removal",
+      "p20_ref": "item 29",
+      "reason": "lib/billing.ts localStorage persistence (veyra-billing-demo-v1) is deeply coupled with product-preview.ts demo store initialization. 25+ test cases directly assert localStorage round-trip behavior. Removal requires simultaneous refactor of demo store init logic and full test suite.",
+      "demo_test_paths": [
+        "web/tests/billing.test.ts",
+        "web/src/lib/product-preview.ts (syncBillingStorage / writeBillingStorage)"
+      ],
+      "blocker": "Deep coupling with demo store; requires full refactor"
+    }
+  ],
+
+  "rules": [
+    "Demo tests that exercise these capabilities must NOT be marked as production-capability passing in test reports.",
+    "Test reports must explicitly list which capabilities are unverified/blocked.",
+    "When a blocked capability becomes implemented, move it out of this file and add production tests."
+  ]
+}
