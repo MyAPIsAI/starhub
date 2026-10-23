@@ -80,23 +80,49 @@ check_admin() {
   fi
 }
 
-# check_admin_role: explicitly verify the user's role and assert the
-# correct expected status for admin endpoints. A regular user MUST get
-# 403 on admin endpoints; an admin MUST get 200.
+# Determine the current user's role from /api/user/self.
+# Sets USER_ROLE to "admin" or "user" based on the role field.
+determine_role() {
+  local body
+  body=$(curl -sS -b "$COOKIE_FILE" "$BASE/api/user/self" 2>&1 || echo "")
+  # Parse the role field from the JSON response.
+  # role >= 10 means admin (10=admin, 100=root).
+  local role
+  role=$(echo "$body" | grep -o '"role":[0-9]*' | head -1 | grep -o '[0-9]*')
+  if [ -n "$role" ] && [ "$role" -ge 10 ]; then
+    USER_ROLE="admin"
+  else
+    USER_ROLE="user"
+  fi
+  echo "  Role check: $USER_ROLE (role=$role)"
+}
+
+# check_admin_role: determine the user's actual role, then assert the
+# EXACT expected status — non-admin MUST get 403, admin MUST get 200.
+# The other status or any other code is a failure.
 check_admin_role() {
   local name="$1"
   local url="$2"
   local code
   code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" "$url" 2>&1 || echo "000")
-  if [ "$code" = "403" ]; then
-    echo "  PASS: $name (non-admin correctly denied, 403)"
-    PASS=$((PASS + 1))
-  elif [ "$code" = "200" ]; then
-    echo "  PASS: $name (admin access granted, 200)"
-    PASS=$((PASS + 1))
+  if [ "$USER_ROLE" = "admin" ]; then
+    # Admin MUST get 200 on admin endpoints.
+    if [ "$code" = "200" ]; then
+      echo "  PASS: $name (admin 200 — correct)"
+      PASS=$((PASS + 1))
+    else
+      echo "  FAIL: $name (admin expected 200, got $code)"
+      FAIL=$((FAIL + 1))
+    fi
   else
-    echo "  FAIL: $name (expected 403 for non-admin or 200 for admin, got $code)"
-    FAIL=$((FAIL + 1))
+    # Non-admin MUST get 403 on admin endpoints.
+    if [ "$code" = "403" ]; then
+      echo "  PASS: $name (non-admin 403 — correctly denied)"
+      PASS=$((PASS + 1))
+    else
+      echo "  FAIL: $name (non-admin expected 403, got $code)"
+      FAIL=$((FAIL + 1))
+    fi
   fi
 }
 
@@ -142,10 +168,9 @@ check_auth "GET /api/ledger" '"success":true' "$BASE/api/ledger"
 check_auth "GET /api/recharge" '"success":true' "$BASE/api/recharge"
 check_auth "GET /api/export" '"success":true' "$BASE/api/export"
 
-# 4. Admin endpoints — verify the user's role precisely.
-# A regular user (role=1) MUST get 403; an admin (role>=10) MUST get 200.
-# Any other status is a failure.
-echo "-- Admin endpoints (role-based: 403 for non-admin, 200 for admin) --"
+# 4. Admin endpoints — determine actual role first, then assert exact status.
+echo "-- Admin endpoints (role-based assertion) --"
+determine_role
 check_admin_role "GET /api/user (list users)" "$BASE/api/user"
 check_admin_role "GET /api/audit" "$BASE/api/audit"
 check_admin_role "GET /api/metrics" "$BASE/api/metrics"
