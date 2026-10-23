@@ -1,0 +1,37 @@
+{
+  "_comment": "Coverage baseline and minimum thresholds. Run scripts/test-coverage.* to measure current coverage, then compare against these thresholds. Fail the build if any metric drops below its minimum.",
+  "_updated": "2026-10-22",
+
+  "go": {
+    "baseline": {
+      "statements_pct": 52.2,
+      "measured_at": "2026-10-22",
+      "measured_from": "scripts/test-coverage.ps1"
+    },
+    "thresholds": {
+      "statements_pct_min": 38.0
+    }
+  },
+
+  "frontend": {
+    "baseline": {
+      "statements_pct": 24.16,
+      "branches_pct": 83.08,
+      "functions_pct": 71.49,
+      "measured_at": "2026-10-22",
+      "measured_from": "npm run test:coverage"
+    },
+    "thresholds": {
+      "statements_pct_min": 20.0,
+      "branches_pct_min": 75.0,
+      "functions_pct_min": 65.0
+    }
+  },
+
+  "_notes": [
+    "Thresholds are set at ~2-4 percentage points below baseline to allow normal fluctuation.",
+    "Raise thresholds as coverage improves; never lower them without justification.",
+    "To update baseline: run coverage scripts, edit this file with new baseline values.",
+    "CI should run: test-coverage -> parse result -> compare against thresholds -> fail if below."
+  ]
+}
