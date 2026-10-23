@@ -25,6 +25,12 @@ jobs:
           go test ./...
       - name: Verify retrycheck suite (retry, failover, uncertain scenarios)
         run: go test -tags=retrycheck ./e2e -run '^TestRetryCheck' -count=1 -v
+      - name: Check Go coverage against threshold
+        run: |
+          go test ./controller/... ./model/... ./common/... -count=1 \
+            -coverprofile=coverage.out -coverpkg=./...
+          go tool cover -func=coverage.out | grep "^total:" | \
+            awk '{gsub(/%/,"",$3); if ($3+0 < 38.0) { print "FAIL: coverage", $3, "< 38.0%"; exit 1 } else { print "PASS: coverage", $3, ">= 38.0%" }}'
       - uses: actions/setup-node@v4
         with:
           node-version-file: web/.node-version
