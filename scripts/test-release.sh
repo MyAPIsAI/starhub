@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Release tier test runner — builds the release binary and runs the full
-# test suite plus a smoke test against the actual binary.
+# test suite plus a smoke test against the actual binary in an isolated
+# environment (temp DB, random port).
 # Usage: ./scripts/test-release.sh
 set -uo pipefail
 
@@ -34,19 +35,19 @@ npm run build > /dev/null 2>&1 || { echo "FAIL: Frontend Build"; FAILED=1; }
 npm run test:unit > /dev/null 2>&1 || { echo "FAIL: Frontend Unit"; FAILED=1; }
 [ "$FAILED" -eq 0 ] && echo "PASS: Frontend Unit"
 
-# 4. Build the release binary.
+# 4. Build the release binary (uses absolute path to build-release.mjs).
 cd "$ROOT"
 echo ""
 echo "=== Release Binary Build ==="
-if [ -f "scripts/build-release.mjs" ]; then
-    (cd "$ROOT/web" && node scripts/build-release.mjs > /dev/null 2>&1) \
+if [ -f "$ROOT/web/scripts/build-release.mjs" ]; then
+    (cd "$ROOT/web" && node "$ROOT/web/scripts/build-release.mjs" > /dev/null 2>&1) \
         && echo "PASS: Release Build" \
         || { echo "FAIL: Release Build"; FAILED=1; }
 else
     echo "SKIP: build-release.mjs not found"
 fi
 
-# 5. Smoke test against the release binary.
+# 5. Smoke test against the release binary (isolated DB + random port).
 BINARY=""
 if [ -f "$ROOT/release/starhub" ]; then
     BINARY="$ROOT/release/starhub"
@@ -54,25 +55,47 @@ elif [ -f "$ROOT/release/starhub.exe" ]; then
     BINARY="$ROOT/release/starhub.exe"
 fi
 
-if [ -n "$BINARY" ]; then
-    echo ""
-    echo "=== Smoke Test (release binary) ==="
-    cd "$ROOT/release"
-    "$BINARY" &
-    PID=$!
-    sleep 3
+if [ -z "$BINARY" ]; then
+    echo "FAIL: release binary not found after build"
+    FAILED=1
+else
+    echo "Binary found: $BINARY"
 
-    if "$ROOT/scripts/smoke-test.sh" "http://localhost:3000"; then
-        echo "PASS: Smoke Test"
-    else
-        echo "FAIL: Smoke Test"
+    # Create an isolated temp directory for the DB.
+    TEMP_DIR=$(mktemp -d)
+    # Find a free port.
+    PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()" 2>/dev/null || echo "3000")
+
+    echo "Smoke test: port=$PORT, DB=$TEMP_DIR"
+
+    # Start the binary in the temp directory.
+    cd "$TEMP_DIR"
+    "$BINARY" -port "$PORT" &
+    PID=$!
+
+    # Wait for the server to be ready (poll every 500ms, max 15s).
+    READY=0
+    for i in $(seq 1 30); do
+        sleep 0.5
+        if curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/api/plaza/models" 2>/dev/null | grep -q "200"; then
+            READY=1
+            break
+        fi
+    done
+
+    if [ "$READY" -eq 0 ]; then
+        echo "FAIL: server did not become ready within 15s"
         FAILED=1
+    else
+        echo "Server ready on port $PORT"
+        run_step "Smoke Test (release binary, isolated)" \
+            "$ROOT/scripts/smoke-test.sh" "http://localhost:$PORT"
     fi
 
+    # Cleanup: kill the server and remove the temp directory.
     kill "$PID" 2>/dev/null || true
     wait "$PID" 2>/dev/null || true
-else
-    echo "WARN: release binary not found — skipping smoke test"
+    rm -rf "$TEMP_DIR"
 fi
 
 cd "$ROOT"
