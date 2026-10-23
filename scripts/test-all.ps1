@@ -31,7 +31,7 @@ Test-Step "L0: Static Checks" {
     npm run build 2>&1 | Out-Null
 }
 
-Test-Step "L1: Go Unit Tests" {
+Test-Step "L1: Go Tests (includes e2e)" {
     Set-Location $root
     go test ./... -count=1
 }
@@ -39,11 +39,6 @@ Test-Step "L1: Go Unit Tests" {
 Test-Step "L1: Frontend Unit Tests" {
     Set-Location "$root/web"
     npm run test:unit 2>&1 | Out-Null
-}
-
-Test-Step "L3: E2E Integration Tests" {
-    Set-Location $root
-    go test ./e2e/ -count=1
 }
 
 Set-Location $root

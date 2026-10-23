@@ -2,9 +2,10 @@
 # Unified test runner for StarHub.
 # Runs L0 (static checks), L1 (unit tests), and L3 (e2e) in sequence.
 # Any test failure causes non-zero exit.
-set -euo pipefail
+set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export ROOT
 FAILED=0
 
 run_step() {
@@ -29,20 +30,17 @@ npm run build > /dev/null 2>&1 || { echo "FAIL: L0 Frontend build"; FAILED=1; }
 [ "$FAILED" -eq 0 ] && echo "PASS: L0 static checks"
 
 # L1: Go Unit Tests (go test ./... includes common, e2e, all packages)
-run_step "L1: Go Unit Tests" bash -c 'cd "$ROOT" && go test ./... -count=1'
+# E2E is included in go test ./... so no separate L3 step is needed.
+run_step "L1: Go Tests (includes e2e)" go test ./... -count=1
 
 # L1: Frontend Unit Tests
 cd "$ROOT/web"
-npm run test:unit > /dev/null 2>&1
-if [ $? -eq 0 ]; then
+if npm run test:unit > /dev/null 2>&1; then
     echo "PASS: L1: Frontend Unit Tests"
 else
     echo "FAIL: L1: Frontend Unit Tests"
     FAILED=1
 fi
-
-# L3: E2E is already included in go test ./... above, but run explicitly for clarity
-# Skip if L1 already ran it
 
 cd "$ROOT"
 if [ "$FAILED" -eq 1 ]; then
