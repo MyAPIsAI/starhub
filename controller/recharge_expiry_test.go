@@ -162,4 +162,132 @@ func TestRechargeOrderExpiryBoundary(t *testing.T) {
 			t.Fatalf("wallet = %d, want 0", w.Balance)
 		}
 	})
+
+	t.Run("cancelled transition: pending -> cancelled, no credit, idempotent", func(t *testing.T) {
+		newTestDB(t)
+		u := newUser(t, "eve", 1, 1000)
+
+		// Create order via handler.
+		rr := call(CreateRechargeOrder, testRequest{
+			method: http.MethodPost,
+			target: "/api/recharge",
+			body:   `{"amount_usd":"10.00"}`,
+			userID: u.ID,
+			role:   1,
+		})
+		var order map[string]any
+		decodeData(t, rr, &order)
+		orderID := int64(order["id"].(float64))
+
+		// Resolve as cancelled.
+		resolved, err := model.ResolveRechargeOrder(orderID, "cancelled")
+		if err != nil {
+			t.Fatalf("ResolveRechargeOrder cancelled failed: %v", err)
+		}
+		if resolved.Status != model.RechargeCancelled {
+			t.Fatalf("status = %q, want cancelled", resolved.Status)
+		}
+		if resolved.FailureReason != "payment_cancelled" {
+			t.Fatalf("failure_reason = %q, want payment_cancelled", resolved.FailureReason)
+		}
+
+		// No wallet credit.
+		w, _ := model.GetOrCreateWallet(u.ID)
+		if w.Balance != 0 {
+			t.Fatalf("wallet = %d, want 0 (cancelled should not credit)", w.Balance)
+		}
+
+		// No ledger entry.
+		entries, _ := model.ListLedger(u.ID)
+		if len(entries) != 0 {
+			t.Fatalf("expected 0 ledger entries, got %d", len(entries))
+		}
+
+		// Idempotent: resolve again with different outcome, status unchanged.
+		r2, _ := model.ResolveRechargeOrder(orderID, "success")
+		if r2.Status != model.RechargeCancelled {
+			t.Fatalf("second resolve: status = %q, want cancelled (idempotent)", r2.Status)
+		}
+		// Still no credit.
+		w2, _ := model.GetOrCreateWallet(u.ID)
+		if w2.Balance != 0 {
+			t.Fatalf("wallet after second resolve = %d, want 0", w2.Balance)
+		}
+	})
+
+	t.Run("failed transition: pending -> failed, no credit, idempotent", func(t *testing.T) {
+		newTestDB(t)
+		u := newUser(t, "frank", 1, 1000)
+
+		rr := call(CreateRechargeOrder, testRequest{
+			method: http.MethodPost,
+			target: "/api/recharge",
+			body:   `{"amount_usd":"10.00"}`,
+			userID: u.ID,
+			role:   1,
+		})
+		var order map[string]any
+		decodeData(t, rr, &order)
+		orderID := int64(order["id"].(float64))
+
+		// Resolve as failed.
+		resolved, err := model.ResolveRechargeOrder(orderID, "failed")
+		if err != nil {
+			t.Fatalf("ResolveRechargeOrder failed: %v", err)
+		}
+		if resolved.Status != model.RechargeFailed {
+			t.Fatalf("status = %q, want failed", resolved.Status)
+		}
+		if resolved.FailureReason != "payment_failed" {
+			t.Fatalf("failure_reason = %q, want payment_failed", resolved.FailureReason)
+		}
+
+		// No wallet credit.
+		w, _ := model.GetOrCreateWallet(u.ID)
+		if w.Balance != 0 {
+			t.Fatalf("wallet = %d, want 0 (failed should not credit)", w.Balance)
+		}
+
+		// Idempotent.
+		r2, _ := model.ResolveRechargeOrder(orderID, "success")
+		if r2.Status != model.RechargeFailed {
+			t.Fatalf("second resolve: status = %q, want failed (idempotent)", r2.Status)
+		}
+		w2, _ := model.GetOrCreateWallet(u.ID)
+		if w2.Balance != 0 {
+			t.Fatalf("wallet after second resolve = %d, want 0", w2.Balance)
+		}
+	})
+
+	t.Run("all terminal states reject further transitions", func(t *testing.T) {
+		newTestDB(t)
+		u := newUser(t, "grace", 1, 1000)
+
+		// Create and resolve as paid.
+		rr := call(CreateRechargeOrder, testRequest{
+			method: http.MethodPost,
+			target: "/api/recharge",
+			body:   `{"amount_usd":"10.00"}`,
+			userID: u.ID,
+			role:   1,
+		})
+		var order map[string]any
+		decodeData(t, rr, &order)
+		orderID := int64(order["id"].(float64))
+
+		_, _ = model.ResolveRechargeOrder(orderID, "success")
+		wBefore, _ := model.GetOrCreateWallet(u.ID)
+
+		// Try all outcomes on the paid (terminal) order — must be idempotent.
+		for _, outcome := range []string{"success", "failed", "cancelled"} {
+			r, _ := model.ResolveRechargeOrder(orderID, outcome)
+			if r.Status != model.RechargePaid {
+				t.Fatalf("resolve %q on paid: status = %q, want paid (terminal)", outcome, r.Status)
+			}
+			wAfter, _ := model.GetOrCreateWallet(u.ID)
+			if wAfter.Balance != wBefore.Balance {
+				t.Fatalf("resolve %q on paid: wallet changed %d -> %d", outcome, wBefore.Balance, wAfter.Balance)
+			}
+		}
+	})
 }
