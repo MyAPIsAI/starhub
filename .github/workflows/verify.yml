@@ -84,6 +84,7 @@ jobs:
           cache: true
       - name: Run shuffled tests (3 rounds)
         run: |
+          set -o pipefail
           for i in 1 2 3; do
             echo "=== Shuffle run $i/3 ==="
             go test ./... -count=1 -shuffle=on 2>&1 | tee -a shuffle-output.txt

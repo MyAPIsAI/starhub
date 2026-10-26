@@ -72,7 +72,7 @@ await check("console redirects when not logged in", async () => {
   // The URL after redirect should NOT be exactly /console
   // (it redirects to / or /login or shows the homepage content).
   assert.ok(
-    !finalUrl.endsWith("/console") || !finalUrl.endsWith("/console/"),
+    !finalUrl.endsWith("/console") && !finalUrl.endsWith("/console/"),
     `expected redirect away from /console, but URL is ${finalUrl}`,
   );
   const body = await page.textContent("body");
