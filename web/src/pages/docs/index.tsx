@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   BookOpen,
   ChevronRight,
+  Search,
 } from "lucide-react";
 import { PublicHeader } from "../../components/product-shell";
 import { copyText } from "../../features/code-example";
@@ -49,6 +50,7 @@ export default function DocsPage() {
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const [activeTab, setActiveTab] = useState<ArticleId>("quickstart");
+  const [searchQuery, setSearchQuery] = useState("");
   const articles: { id: ArticleId; title: string; Icon: typeof Terminal }[] = [
     { id: "quickstart", title: t("docsQuickstart"), Icon: Terminal },
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
@@ -58,6 +60,34 @@ export default function DocsPage() {
     { id: "billing", title: t("docsBilling"), Icon: Coins },
   ];
   const current = articles.find((article) => article.id === activeTab)!;
+
+  // Article search: filter articles by title, keywords, and content tags.
+  const articleKeywords: Record<ArticleId, string[]> = {
+    quickstart: ["curl", "python", "node", "api key", "base url", "getting started", "快速开始", "入门", "创建密钥"],
+    auth: ["authentication", "authorization", "bearer", "token", "api key", "认证", "授权", "密钥", "bearer"],
+    tiers: ["service tier", "group", "ultra", "pro", "standard", "lite", "分组", "等级", "服务"],
+    claudeCode: ["claude", "anthropic", "codex", "cursor", "gemini", "工具集成", "claude code", "编程工具"],
+    errors: ["error", "400", "401", "403", "429", "502", "503", "错误", "错误码", "故障排除"],
+    billing: ["billing", "quota", "cost", "charge", "balance", "top-up", "计费", "费用", "余额", "充值"],
+  };
+  const filteredArticles = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return articles;
+    return articles.filter(({ id, title }) => {
+      const keywords = articleKeywords[id] || [];
+      return (
+        title.toLowerCase().includes(q) ||
+        keywords.some((kw) => kw.toLowerCase().includes(q) || q.includes(kw.toLowerCase()))
+      );
+    });
+  }, [searchQuery, lang]);
+
+  // When search matches exactly one article, auto-select it.
+  useEffect(() => {
+    if (searchQuery.trim() && filteredArticles.length === 1) {
+      setActiveTab(filteredArticles[0].id);
+    }
+  }, [searchQuery, filteredArticles]);
   const CodeBlock = ({ title, code }: { title: string; code: string }) => (
     <div className="docs-code">
       <div>
@@ -86,7 +116,26 @@ export default function DocsPage() {
             {t("docsStationTitle")}
           </div>
           <nav aria-label={t("navDocs")}>
-            {articles.map(({ id, title, Icon }) => (
+            <div className="docs-search-box" style={{ marginBottom: 8 }}>
+              <Search size={14} style={{ opacity: 0.5, position: "absolute", marginInlineStart: 8, marginTop: 7 }} />
+              <input
+                type="search"
+                placeholder={text("搜索文档…", "Search docs…", "ابحث في المستندات…")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "6px 10px 6px 28px",
+                  fontSize: "var(--text-xs)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-sm)",
+                  background: "var(--surface)",
+                  color: "var(--text)",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            {filteredArticles.map(({ id, title, Icon }) => (
               <button
                 key={id}
                 className={activeTab === id ? "is-active" : ""}
@@ -98,6 +147,11 @@ export default function DocsPage() {
                 {activeTab === id && <ChevronRight size={14} />}
               </button>
             ))}
+            {filteredArticles.length === 0 && (
+              <p style={{ padding: "8px 4px", fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+                {text("未找到匹配的文档", "No matching docs", "لا مستندات مطابقة")}
+              </p>
+            )}
           </nav>
           <div className="docs-sidebar-note">
             <Sparkles size={20} />
