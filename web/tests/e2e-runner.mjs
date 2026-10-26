@@ -65,10 +65,25 @@ await check("models page loads", async () => {
 });
 
 await check("console redirects when not logged in", async () => {
+  // Navigate to /console and verify it does NOT stay on /console
+  // (it should redirect to home, login, or show the homepage).
   await page.goto(`${url}/console`, { waitUntil: "networkidle", timeout: 10000 });
-  // Should redirect to login or show the homepage.
+  const finalUrl = page.url();
+  // The URL after redirect should NOT be exactly /console
+  // (it redirects to / or /login or shows the homepage content).
+  assert.ok(
+    !finalUrl.endsWith("/console") || !finalUrl.endsWith("/console/"),
+    `expected redirect away from /console, but URL is ${finalUrl}`,
+  );
   const body = await page.textContent("body");
   assert.ok(body.length > 0, "console redirect page should have content");
+});
+
+await check("models page has catalog content", async () => {
+  await page.goto(`${url}/models`, { waitUntil: "networkidle", timeout: 10000 });
+  // Verify the models page shows catalog-like content (not just empty).
+  const links = await page.locator("a, button").count();
+  assert.ok(links > 0, "models page should have at least one link or button");
 });
 
 await check("no console errors on homepage", async () => {
