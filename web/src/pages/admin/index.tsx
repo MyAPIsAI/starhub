@@ -140,6 +140,7 @@ export default function AdminPortal() {
   // Top-up modal state — targets a specific user.
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpTarget, setTopUpTarget] = useState<AdminUser | null>(null);
+  const [detailUser, setDetailUser] = useState<AdminUser | null>(null);
   const [topUpAmount, setTopUpAmount] = useState("1200");
   const [topUpType, setTopUpType] = useState<
     "gift" | "compensation" | "offline_payment" | "clawback"
@@ -692,6 +693,15 @@ export default function AdminPortal() {
                             {userIsActive(u.status)
                               ? t("disableAccount")
                               : t("enableAccount")}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="secondary"
+                            onClick={() => {
+                              setDetailUser(u);
+                            }}
+                          >
+                            {text("详情", "Details", "التفاصيل")}
                           </Button>
                         </div>
                       </td>
@@ -2362,6 +2372,98 @@ export default function AdminPortal() {
             />
           </div>
         </form>
+      </Modal>
+
+      {/* Account detail modal */}
+      <Modal
+        size="default"
+        open={!!detailUser}
+        onOpenChange={(open) => { if (!open) setDetailUser(null); }}
+        title={text("账户详情", "Account details", "تفاصيل الحساب")}
+        description={detailUser ? detailUser.username : ""}
+        footer={
+          <>
+            <Button onClick={() => {
+              if (detailUser) {
+                setTopUpTarget(detailUser);
+                setTopUpAmount("");
+                setTopUpReason("");
+                setTopUpOpen(true);
+                setDetailUser(null);
+              }
+            }}>
+              {t("manualTopUp")}
+            </Button>
+            <Button variant={detailUser && userIsActive(detailUser.status) ? "danger" : "primary"}
+              onClick={() => {
+                if (detailUser) {
+                  handleToggleStatus(detailUser);
+                  setDetailUser(null);
+                }
+              }}
+            >
+              {detailUser && userIsActive(detailUser.status) ? t("disableAccount") : t("enableAccount")}
+            </Button>
+            <Button variant="secondary" onClick={() => setDetailUser(null)}>
+              {text("关闭", "Close", "إغلاق")}
+            </Button>
+          </>
+        }
+      >
+        {detailUser && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("用户名", "Username", "اسم المستخدم")}</small>
+                <div style={{ fontWeight: 600 }}>{detailUser.username}</div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("邮箱", "Email", "البريد")}</small>
+                <div>{detailUser.email || "—"}</div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("角色", "Role", "الدور")}</small>
+                <div>
+                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600, background: "var(--subtle)" }}>
+                    {detailUser.role >= 100 ? "Root" : detailUser.role >= 10 ? "Admin" : "User"}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{t("status")}</small>
+                <div>
+                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600, background: userIsActive(detailUser.status) ? "var(--success-soft)" : "var(--danger-soft)", color: userIsActive(detailUser.status) ? "var(--success)" : "var(--danger)" }}>
+                    {userStatusText(detailUser.status)}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("余额", "Balance", "الرصيد")}</small>
+                <div className="mono" style={{ fontWeight: 600, color: "var(--brand)" }}>${quotaToUsd(detailUser.quota)}</div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("已用", "Used", "المستخدم")}</small>
+                <div className="mono" style={{ color: "var(--muted)" }}>${quotaToUsd(detailUser.used_quota)}</div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("分组", "Group", "المجموعة")}</small>
+                <div>{detailUser.group || "default"}</div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("邀请码", "Affiliate code", "رمز الإحالة")}</small>
+                <div className="mono">{detailUser.aff_code || "—"}</div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("邀请人", "Inviter", "الداعي")}</small>
+                <div>{detailUser.inviter_id ? `#${detailUser.inviter_id}` : "—"}</div>
+              </div>
+              <div>
+                <small style={{ color: "var(--muted)" }}>{text("注册时间", "Registered", "مسجل")}</small>
+                <div className="mono" style={{ fontSize: "var(--text-xs)" }}>{new Date(detailUser.created_at * 1000).toLocaleString()}</div>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
