@@ -333,34 +333,169 @@ export default function DocsPage() {
               <div className="docs-errors">
                 {[
                   [
-                    "403",
-                    "key_quota_exceeded",
+                    "401",
+                    "invalid_api_key",
                     text(
-                      "密钥配额已用尽，请调整日限额或月限额，或等待下个计费周期。",
-                      "The key has reached its quota. Adjust its limit or wait for the next cycle.",
-                      "وصل المفتاح إلى حصته. عدّل الحد أو انتظر الدورة التالية.",
+                      "API 密钥无效或不存在。检查 Authorization 请求头中的 Bearer token 是否正确。",
+                      "The API key is invalid or not found. Check the Bearer token in the Authorization header.",
+                      "مفتاح API غير صالح أو غير موجود. تحقق من رمز Bearer في ترويسة Authorization.",
                     ),
                   ],
                   [
-                    "402",
-                    "account_balance_depleted",
+                    "401",
+                    "token_disabled",
                     text(
-                      "账户可用余额不足，请在控制台完成充值后重试。",
-                      "The account balance is insufficient. Top up in the console and retry.",
-                      "رصيد الحساب غير كافٍ. أضف رصيدًا وأعد المحاولة.",
+                      "API 密钥已被禁用。在控制台的密钥管理中启用该密钥，或创建新密钥。",
+                      "The API key has been disabled. Enable it in key management, or create a new key.",
+                      "تم تعطيل مفتاح API. فعّله في إدارة المفاتيح أو أنشئ مفتاحًا جديدًا.",
+                    ),
+                  ],
+                  [
+                    "401",
+                    "token_expired",
+                    text(
+                      "API 密钥已过期。创建新密钥或延长原密钥的有效期。",
+                      "The API key has expired. Create a new key or extend its validity.",
+                      "انتهت صلاحية مفتاح API. أنشئ مفتاحًا جديدًا أو مدّد صلاحيته.",
+                    ),
+                  ],
+                  [
+                    "403",
+                    "insufficient_quota",
+                    text(
+                      "密钥或账户额度不足以完成本次调用。失败请求不扣费。请充值或调整密钥限额后重试。",
+                      "The key or account quota is insufficient for this request. Failed requests are not charged. Top up or adjust the key limit, then retry.",
+                      "حصة المفتاح أو الحساب غير كافية لهذا الطلب. الطلبات الفاشلة مجانية. أضف رصيدًا أو عدّل حد المفتاح ثم أعد المحاولة.",
+                    ),
+                  ],
+                  [
+                    "403",
+                    "token_quota_exhausted",
+                    text(
+                      "密钥配额已用尽。调整密钥的日/月限额，或等待下个计费周期。",
+                      "The key has reached its quota. Adjust its daily or monthly limit, or wait for the next cycle.",
+                      "وصل المفتاح إلى حصته. عدّل الحد اليومي أو الشهري أو انتظر الدورة التالية.",
+                    ),
+                  ],
+                  [
+                    "403",
+                    "auto_group_empty",
+                    text(
+                      "密钥的自动分组中没有可用模型。检查密钥的分组配置。",
+                      "The key's auto group has no available models. Check the key's group configuration.",
+                      "لا توجد نماذج متاحة في المجموعة التلقائية للمفتاح. تحقق من إعدادات المجموعة.",
+                    ),
+                  ],
+                  [
+                    "403",
+                    "group_not_available",
+                    text(
+                      "该密钥未授权所请求的服务分组。检查密钥的分组权限设置。",
+                      "The key is not authorized for the requested service group. Check the key's group permissions.",
+                      "المفتاح غير مصرح له بالمجموعة المطلوبة. تحقق من أذونات المجموعة.",
+                    ),
+                  ],
+                  [
+                    "400",
+                    "invalid_request_body",
+                    text(
+                      "请求体格式错误。检查 JSON / multipart 格式是否正确，以及必填字段是否缺失。",
+                      "The request body is invalid. Check the JSON or multipart format and required fields.",
+                      "نص الطلب غير صالح. تحقق من تنسيق JSON أو multipart والحقول المطلوبة.",
+                    ),
+                  ],
+                  [
+                    "400",
+                    "invalid_json",
+                    text(
+                      "JSON 解析失败。确保请求体是有效的 JSON 文本。",
+                      "JSON parsing failed. Ensure the body is valid JSON.",
+                      "فشل تحليل JSON. تأكد من أن النص JSON صالح.",
+                    ),
+                  ],
+                  [
+                    "400",
+                    "invalid_multipart",
+                    text(
+                      "multipart 表单解析失败。检查文件上传的表单格式。",
+                      "Multipart form parsing failed. Check the file upload form format.",
+                      "فشل تحليل نموذج multipart. تحقق من تنسيق نموذج رفع الملفات.",
+                    ),
+                  ],
+                  [
+                    "400",
+                    "model_required",
+                    text(
+                      "缺少 model 字段。在请求中指定要调用的模型标识。",
+                      "The model field is missing. Specify the model to call in the request.",
+                      "حقل model مفقود. حدد النموذج المطلوب في الطلب.",
+                    ),
+                  ],
+                  [
+                    "429",
+                    "rate_limit_exceeded",
+                    text(
+                      "请求频率超出限制。降低并发或等待窗口重置后重试。",
+                      "Rate limit exceeded. Reduce concurrency or wait for the window to reset.",
+                      "تم تجاوز حد المعدل. قلل التزامن أو انتظر إعادة تعيين النافذة.",
+                    ),
+                  ],
+                  [
+                    "502",
+                    "upstream_unavailable",
+                    text(
+                      "上游服务暂时不可用。系统会自动重试其他渠道；全失败时退款。请稍后重试。",
+                      "The upstream service is temporarily unavailable. The system auto-retries other channels; full failure refunds. Retry later.",
+                      "الخدمة غير متوفرة مؤقتًا. يعيد النظام المحاولة تلقائيًا عبر قنوات أخرى؛ الرفض الكامل يسترد الرسوم. أعد المحاولة لاحقًا.",
+                    ),
+                  ],
+                  [
+                    "502",
+                    "retry_budget_exhausted",
+                    text(
+                      "重试预算耗尽，所有渠道均失败。预扣额度已全额退还。请检查渠道配置或稍后重试。",
+                      "Retry budget exhausted; all channels failed. The pre-charged quota has been fully refunded. Check channel configuration or retry later.",
+                      "استنفدت ميزانية المحاولة؛ فشلت جميع القنوات. تم استرداد الحجز بالكامل. تحقق من إعدادات القناة أو أعد المحاولة لاحقًا.",
+                    ),
+                  ],
+                  [
+                    "502",
+                    "upstream_result_uncertain",
+                    text(
+                      "上游结果不确定（请求可能已执行但结果未知）。为避免重复生成，不自动重试。请检查调用明细确认实际状态。",
+                      "The upstream result is uncertain (the request may have executed but the result is unknown). No auto-retry to avoid duplicate generation. Check the request log for actual status.",
+                      "نتيجة المنبع غير مؤكدة (قد يكون الطلب نُفذ دون معرفة النتيجة). لا إعادة محاولة تلقائية لتفادي التكرار. راجع سجل الطلبات للتأكد.",
                     ),
                   ],
                   [
                     "503",
-                    "upstream_unavailable",
+                    "no_available_channel",
                     text(
-                      "上游服务暂时不可用。请稍后重试，并检查服务状态页。",
-                      "The upstream service is temporarily unavailable. Retry later and check the status page.",
-                      "الخدمة غير متوفرة مؤقتًا. أعد المحاولة لاحقًا وراجع صفحة الحالة.",
+                      "当前没有可用渠道为该模型提供服务。可能是渠道被禁用或无匹配分组。请检查渠道和服务分组配置。",
+                      "No available channel serves this model. The channel may be disabled or no group matches. Check channel and service group configuration.",
+                      "لا توجد قناة متاحة لهذا النموذج. قد تكون معطلة أو لا تطابق المجموعة. تحقق من إعدادات القناة والمجموعة.",
+                    ),
+                  ],
+                  [
+                    "500",
+                    "pre_consume_failed",
+                    text(
+                      "预扣额度时发生内部错误。请求未执行，不会产生费用。请稍后重试。",
+                      "An internal error occurred during the quota pre-charge. The request was not executed and no charges apply. Retry later.",
+                      "حدث خطأ داخلي أثناء حجز الحصة. لم يُنفذ الطلب ولا رسوم. أعد المحاولة لاحقًا.",
+                    ),
+                  ],
+                  [
+                    "500",
+                    "channel_selection_failed",
+                    text(
+                      "渠道选择时发生内部错误。请稍后重试或联系管理员。",
+                      "An internal error occurred during channel selection. Retry later or contact the administrator.",
+                      "حدث خطأ داخلي أثناء اختيار القناة. أعد المحاولة لاحقًا أو اتصل بالمسؤول.",
                     ),
                   ],
                 ].map(([status, code, description]) => (
-                  <section key={status}>
+                  <section key={code}>
                     <span>{status}</span>
                     <div>
                       <code>{code}</code>
