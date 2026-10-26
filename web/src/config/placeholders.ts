@@ -1,10 +1,10 @@
 // All provisional product choices are centralized here. No live endpoints or secrets.
 export const placeholders = {
   brand: {
-    en: "Veyra",
-    zh: "Veyra",
-    ar: "Veyra",
-    domain: "veyra.example",
+    en: "MyAPIs",
+    zh: "MyAPIs",
+    ar: "MyAPIs",
+    domain: "myapis.ai",
   },
   region: {
     id: "me",
@@ -51,7 +51,7 @@ export const placeholders = {
       mark: 1,
     },
   ],
-  apiBase: "https://api.veyra.example/v1",
+  apiBase: "https://api.myapis.ai/v1",
   launchModels: [
     "gpt-4.1",
     "claude-sonnet-4-20250514",
