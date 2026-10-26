@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   KeyRound,
+  ShieldCheck,
   Sparkles,
   Terminal,
 } from "lucide-react";
@@ -292,6 +293,27 @@ export default function ModelDetail() {
                         "النموذج المطلوب نفسه",
                       )}
                 </strong>
+              </div>
+              <div>
+                <small>{text("服务质量", "Service quality", "جودة الخدمة")}</small>
+                <Link
+                  to={`/console/service-quality?model=${encodeURIComponent(model.id)}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    color: "var(--brand)",
+                    fontSize: "var(--text-sm)",
+                    textDecoration: "none",
+                  }}
+                >
+                  <ShieldCheck size={14} />
+                  {text(
+                    "查看成功率与延迟",
+                    "View success rate & latency",
+                    "عرض النجاح والاستجابة",
+                  )}
+                </Link>
               </div>
             </section>
             {model.kind === "smart" && (
