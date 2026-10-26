@@ -19,20 +19,20 @@ import { copyText } from "../../features/code-example";
 import { usePreferences } from "../../lib/preferences";
 
 type ArticleId =
-  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing";
-const curlExample = `curl https://api.veyra.example/v1/chat/completions \\
-  -H "Authorization: Bearer $VEYRA_API_KEY" \\
+  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols";
+const curlExample = `curl https://api.myapis.ai/v1/chat/completions \\
+  -H "Authorization: Bearer $MYAPIS_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "gpt-4.1",
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true
   }'`;
-const pythonExample = `from openai import OpenAI
+  const pythonExample = `from openai import OpenAI
 
 client = OpenAI(
     api_key="YOUR_API_KEY",
-    base_url="https://api.veyra.example/v1"
+    base_url="https://api.myapis.ai/v1"
 )
 
 response = client.chat.completions.create(
@@ -55,6 +55,7 @@ export default function DocsPage() {
     { id: "quickstart", title: t("docsQuickstart"), Icon: Terminal },
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
     { id: "tiers", title: t("docsTiers"), Icon: Cpu },
+    { id: "protocols", title: text("协议", "Protocols", "البروتوكولات"), Icon: ArrowUpRight },
     { id: "claudeCode", title: t("docsClaudeCode"), Icon: Sparkles },
     { id: "errors", title: t("docsErrors"), Icon: ShieldCheck },
     { id: "billing", title: t("docsBilling"), Icon: Coins },
@@ -69,6 +70,7 @@ export default function DocsPage() {
     claudeCode: ["claude", "anthropic", "codex", "cursor", "gemini", "工具集成", "claude code", "编程工具"],
     errors: ["error", "400", "401", "403", "429", "502", "503", "错误", "错误码", "故障排除"],
     billing: ["billing", "quota", "cost", "charge", "balance", "top-up", "计费", "费用", "余额", "充值"],
+    protocols: ["protocol", "endpoint", "api", "curl", "url", "path", "协议", "端点", "路径", "接口"],
   };
   const filteredArticles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -612,10 +614,62 @@ export default function DocsPage() {
               </div>
             </>
           )}
+          {activeTab === "protocols" && (
+            <>
+              <p className="docs-lead">
+                {text(
+                  "平台支持多种 API 协议，下方表格列出各协议的端点地址与调用路径。",
+                  "The platform supports multiple API protocols. The table below lists each protocol's base URL and endpoint path.",
+                  "تدعم المنصة عدة بروتوكولات API. يسرد الجدول أدناه عنوان الأساس ومسار كل بروتوكول.",
+                )}
+              </p>
+              <div className="docs-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{text("协议", "Protocol", "البروتوكول")}</th>
+                      <th>Base URL</th>
+                      <th>{text("路径", "Path", "المسار")}</th>
+                      <th>{text("认证方式", "Auth", "المصادقة")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      [text("Chat Completions（OpenAI 兼容）", "Chat Completions (OpenAI)", "Chat Completions (OpenAI)"), "https://api.myapis.ai/v1", "/chat/completions", "Bearer token"],
+                      [text("Messages（Anthropic 兼容）", "Messages (Anthropic)", "Messages (Anthropic)"), "https://api.myapis.ai/v1", "/messages", "Bearer token"],
+                      [text("Embeddings（OpenAI 兼容）", "Embeddings (OpenAI)", "Embeddings (OpenAI)"), "https://api.myapis.ai/v1", "/embeddings", "Bearer token"],
+                      [text("Images（OpenAI 兼容）", "Images (OpenAI)", "Images (OpenAI)"), "https://api.myapis.ai/v1", "/images/generations", "Bearer token"],
+                      [text("Audio TTS（OpenAI 兼容）", "Audio TTS (OpenAI)", "Audio TTS (OpenAI)"), "https://api.myapis.ai/v1", "/audio/speech", "Bearer token"],
+                      [text("Audio STT（OpenAI 兼容）", "Audio STT (OpenAI)", "Audio STT (OpenAI)"), "https://api.myapis.ai/v1", "/audio/transcriptions", "Bearer token"],
+                      [text("Video（任务提交+轮询）", "Video (submit+poll)", "Video (submit+poll)"), "https://api.myapis.ai/v1", "/video/generations", "Bearer token"],
+                      [text("Realtime（WebSocket）", "Realtime (WebSocket)", "Realtime (WebSocket)"), "https://api.myapis.ai/v1", "/realtime", "Bearer token"],
+                      [text("Models（模型列表）", "Models (list)", "Models (list)"), "https://api.myapis.ai/v1", "/models", "Bearer token"],
+                    ].map(([protocol, baseUrl, path, auth], i) => (
+                      <tr key={i}>
+                        <td>{protocol}</td>
+                        <td><code className="mono">{baseUrl}</code></td>
+                        <td><code className="mono">{path}</code></td>
+                        <td>{auth}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="docs-callout">
+                <p>
+                  {text(
+                    "所有协议使用统一的 Bearer token 认证（API 密钥）。密钥在控制台的密钥管理中创建，具有授权模型范围限制。",
+                    "All protocols use unified Bearer token authentication (API key). Keys are created in the console's key management with authorized model scope limits.",
+                    "تستخدم جميع البروتوكولات مصادقة Bearer token الموحدة (مفتاح API). تُنشأ المفاتيح في إدارة المفاتيح بالوحدة التحكم مع حدود النماذج المصروح بها.",
+                  )}
+                </p>
+              </div>
+            </>
+          )}
           <footer className="docs-article-footer">
             {text(
-              "Veyra开发者文档 · 产品演示",
-              "Veyra developer documentation · Product preview",
+              "MyAPIs开发者文档 · 产品演示",
+              "MyAPIs developer documentation · Product preview",
               "وثائق مطوري Veyra · معاينة المنتج",
             )}
           </footer>
