@@ -113,7 +113,8 @@ const copy = {
     demo: "交互演示版本 · 展示数据不代表实时服务承诺",
     docs: "开发文档",
     system: "设计系统",
-    privacy: "模型与价格",
+    privacy: "隐私政策",
+    terms: "服务条款",
     menu: "展开导航",
   },
   en: {
@@ -200,7 +201,8 @@ const copy = {
     demo: "Interactive demo · Sample data is not a live service guarantee",
     docs: "Documentation",
     system: "Design system",
-    privacy: "Models & pricing",
+    privacy: "Privacy Policy",
+    terms: "Terms of Service",
     menu: "Open navigation",
   },
   ar: {
@@ -285,7 +287,8 @@ const copy = {
     demo: "عرض تفاعلي · البيانات ليست ضماناً للخدمة",
     docs: "التوثيق",
     system: "نظام التصميم",
-    privacy: "النماذج والأسعار",
+    privacy: "سياسة الخصوصية",
+    terms: "شروط الخدمة",
     menu: "فتح القائمة",
   },
 };
@@ -800,7 +803,8 @@ export default function BrandHome() {
         </div>
         <nav>
           <Link to="/docs">{c.docs}</Link>
-          <Link to="/models">{c.privacy}</Link>
+          <Link to="/legal/privacy">{c.privacy}</Link>
+          <Link to="/legal/terms">{c.terms}</Link>
           <Link to="/design-system">{c.system}</Link>
         </nav>
         <small>{c.demo}</small>

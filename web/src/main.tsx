@@ -39,6 +39,7 @@ const ModelSquare = lazy(() => import("./pages/models/index"));
 const ModelDetail = lazy(() => import("./pages/models/detail"));
 const StatusPage = lazy(() => import("./pages/status"));
 const DocsPage = lazy(() => import("./pages/docs/index"));
+const LegalPage = lazy(() => import("./pages/legal/index"));
 const ConsolePreview = lazy(() => import("./pages/console-preview"));
 const AdminPortal = lazy(() => import("./pages/admin"));
 
@@ -208,6 +209,7 @@ function App() {
                 <Route path="/models/:id" element={<ModelDetail />} />
                 <Route path="/status" element={<StatusPage />} />
                 <Route path="/docs" element={<DocsPage />} />
+                <Route path="/legal/:doc" element={<LegalPage />} />
 
                 {/* Authentication */}
                 <Route path="/login" element={<BrandHome />} />
