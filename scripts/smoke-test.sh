@@ -58,28 +58,6 @@ check_auth() {
   check_json "$name" "$expected" "$url" "-b $COOKIE_FILE"
 }
 
-# check_admin: admin endpoint — verify the user role precisely.
-# If the smoke test user is an admin (role >= 10), expect 200.
-# If the user is a regular user (role < 10), expect 403.
-# Any other status (500, 401, etc.) is a failure.
-# The smoke test user's role is determined by reading GET /api/user/self.
-check_admin() {
-  local name="$1"
-  local url="$2"
-  local code
-  code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" "$url" 2>&1 || echo "000")
-  if [ "$code" = "200" ]; then
-    echo "  PASS: $name (admin 200)"
-    PASS=$((PASS + 1))
-  elif [ "$code" = "403" ]; then
-    echo "  PASS: $name (non-admin 403)"
-    PASS=$((PASS + 1))
-  else
-    echo "  FAIL: $name (expected 200 for admin or 403 for non-admin, got $code)"
-    FAIL=$((FAIL + 1))
-  fi
-}
-
 # Determine the current user's role from /api/user/self.
 # Sets USER_ROLE to "admin" or "user" based on the role field.
 determine_role() {
