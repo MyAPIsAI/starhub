@@ -702,6 +702,19 @@ export default function ModelDetail() {
                   </tbody>
                 </table>
               </div>
+              <div className="pricing-mobile-cards" style={{ display: "none" }}>
+                {[
+                  { label: text("输入 Token", "Input tokens", "رموز الإدخال"), value: amounts?.input },
+                  { label: text("输出 Token", "Output tokens", "رموز الإخراج"), value: amounts?.output },
+                  ...(amounts?.cacheRead !== undefined ? [{ label: text("缓存读取", "Cache read", "قراءة التخزين"), value: amounts.cacheRead }] : []),
+                  ...(amounts?.cacheWrite !== undefined ? [{ label: text("缓存写入", "Cache write", "كتابة التخزين"), value: amounts.cacheWrite }] : []),
+                ].map((item) => (
+                  <div key={item.label} className="pricing-mobile-card">
+                    <span className="pricing-mobile-label">{item.label}</span>
+                    <span className="mono pricing-mobile-value">${item.value ?? "—"}</span>
+                  </div>
+                ))}
+              </div>
               <p className="access-muted">
                 {text(
                   `当前分组倍率：${model.pricing.group_ratio}×（已包含在上方售价中）。历史账单保留请求当时费率。`,
