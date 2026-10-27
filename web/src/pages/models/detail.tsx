@@ -18,6 +18,7 @@ import { ModelIdCopy } from "../../components/model-id-copy";
 import { DirectoryPrice } from "../../components/directory-price";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../lib/preferences";
+import { placeholders } from "../../config/placeholders";
 import { useProductPreview } from "../../lib/product-preview";
 import { useBackendKeys } from "../../lib/api/key-adapter";
 import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
@@ -594,6 +595,7 @@ export default function ModelDetail() {
                             )}
                           </th>
                           <th>{text("成功率/延迟", "Success/P95", "النجاح/P95")}</th>
+                          <th>{text("SLA 目标", "SLA targets", "أهداف SLA")}</th>
                           <th>{text("辅助倍率", "Multiplier", "المعامل")}</th>
                         </tr>
                       </thead>
@@ -629,6 +631,17 @@ export default function ModelDetail() {
                                 )}
                               </td>
                               <td>{model.pricing.group_ratio}×</td>
+                              <td>
+                                {(() => {
+                                  const tierDef = placeholders.tiers.find((t) => t.id === group.id);
+                                  if (!tierDef) return "—";
+                                  return (
+                                    <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
+                                      {tierDef.success}% / {tierDef.p95}ms
+                                    </span>
+                                  );
+                                })()}
+                              </td>
                               <td>
                                 {(() => {
                                   const sqKey = `sq-${model.id}-${group.id}`;
