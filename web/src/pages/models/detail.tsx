@@ -622,6 +622,94 @@ export default function ModelDetail() {
                 </details>
               )}
             </section>
+            <section className="access-panel">
+              <h2>
+                {text("定价详情", "Pricing details", "تفاصيل التسعير")}
+              </h2>
+              <p className="access-muted">
+                {text(
+                  "以下展示模型的定价结构与缓存折扣。实际费用取决于请求时的用量、缓存命中和分组倍率。",
+                  "The following shows the model's pricing structure and cache discounts. Actual cost depends on request usage, cache hits, and group multiplier.",
+                  "يعرض ما يلي هيكل تسعير النموذج وخصومات التخزين. التكلفة الفعلية تعتمد على الاستخدام وذاكرة التخزين المؤقتة ومعامل المجموعة.",
+                )}
+              </p>
+              <div className="access-table-wrap" tabIndex={0} role="region">
+                <table className="access-table">
+                  <thead>
+                    <tr>
+                      <th>{text("计费项", "Billing item", "بند الفوترة")}</th>
+                      <th>{text("单价（美元/百万 Token）", "Rate (USD/M tokens)", "السعر (دولار/مليون رمز)")}</th>
+                      <th>{text("说明", "Description", "الوصف")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{text("输入 Token", "Input tokens", "رموز الإدخال")}</td>
+                      <td className="mono">
+                        ${amounts?.input ?? "—"}
+                      </td>
+                      <td>
+                        {text(
+                          "请求中的提示词和对话内容",
+                          "Prompt and conversation content in the request",
+                          "المحتوى التلقيني والمحادثة في الطلب",
+                        )}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>{text("输出 Token", "Output tokens", "رموز الإخراج")}</td>
+                      <td className="mono">
+                        ${amounts?.output ?? "—"}
+                      </td>
+                      <td>
+                        {text(
+                          "模型生成的回复内容",
+                          "Model-generated response content",
+                          "محتوى الاستجابة المُنشأ بواسطة النموذج",
+                        )}
+                      </td>
+                    </tr>
+                    {amounts?.cacheRead !== undefined && (
+                      <tr>
+                        <td>{text("缓存读取", "Cache read", "قراءة التخزين")}</td>
+                        <td className="mono">
+                          ${amounts.cacheRead}
+                        </td>
+                        <td>
+                          {text(
+                            "命中缓存的输入按折扣价计费",
+                            "Cached input is billed at a discounted rate",
+                            "الإدخال المخزن يُحاسب بسعر مخفض",
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    {amounts?.cacheWrite !== undefined && (
+                      <tr>
+                        <td>{text("缓存写入", "Cache write", "كتابة التخزين")}</td>
+                        <td className="mono">
+                          ${amounts.cacheWrite}
+                        </td>
+                        <td>
+                          {text(
+                            "首次写入缓存的输入内容",
+                            "Initial write of input to cache",
+                            "الكتابة الأولى للإدخال إلى التخزين",
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="access-muted">
+                {text(
+                  `当前分组倍率：${model.pricing.group_ratio}×（已包含在上方售价中）。历史账单保留请求当时费率。`,
+                  `Current group multiplier: ${model.pricing.group_ratio}× (included above). Historical bills retain their original rates.`,
+                  `معامل المجموعة الحالي: ${model.pricing.group_ratio}× (مضمّن أعلاه). تحتفظ الفواتير السابقة بأسعارها الأصلية.`,
+                )}
+              </p>
+            </section>
             {supportsClient && (
               <section className="access-panel">
                 <h2>
