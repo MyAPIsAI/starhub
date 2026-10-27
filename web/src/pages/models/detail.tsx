@@ -593,6 +593,7 @@ export default function ModelDetail() {
                               "السعر الفعلي الحالي",
                             )}
                           </th>
+                          <th>{text("成功率/延迟", "Success/P95", "النجاح/P95")}</th>
                           <th>{text("辅助倍率", "Multiplier", "المعامل")}</th>
                         </tr>
                       </thead>
@@ -628,6 +629,36 @@ export default function ModelDetail() {
                                 )}
                               </td>
                               <td>{model.pricing.group_ratio}×</td>
+                              <td>
+                                {(() => {
+                                  const sqKey = `sq-${model.id}-${group.id}`;
+                                  try {
+                                    const raw = localStorage.getItem(sqKey);
+                                    if (raw) {
+                                      const sq = JSON.parse(raw);
+                                      const success = sq.success != null ? `${(sq.success * 100).toFixed(1)}%` : "—";
+                                      const p95 = sq.p95 != null ? `${sq.p95}ms` : "—";
+                                      return (
+                                        <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
+                                          {success} / {p95}
+                                        </span>
+                                      );
+                                    }
+                                  } catch { /* ignore */ }
+                                  return (
+                                    <Link
+                                      to={`/console/service-quality?model=${encodeURIComponent(model.id)}&group=${encodeURIComponent(group.id)}`}
+                                      style={{
+                                        fontSize: "var(--text-xs)",
+                                        color: "var(--brand)",
+                                        textDecoration: "none",
+                                      }}
+                                    >
+                                      {text("查看", "View", "عرض")}
+                                    </Link>
+                                  );
+                                })()}
+                              </td>
                             </tr>
                           ),
                         )}
