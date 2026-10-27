@@ -599,17 +599,32 @@ export default function ModelDetail() {
                       <tbody>
                         {tierPrices.map(
                           ({ tier: group, price: groupPrice }) => (
-                            <tr key={group.id}>
+                            <tr key={group.id} className={!groupPrice?.available ? "detail-group-unavailable" : ""}>
                               <td>{group.id}</td>
                               <td>
                                 {groupPrice?.available ? (
-                                  <DirectoryPrice
-                                    plazaPricing={model.pricing}
-                                    lang={lang}
-                                    compact
-                                  />
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <DirectoryPrice
+                                      plazaPricing={model.pricing}
+                                      lang={lang}
+                                      compact
+                                    />
+                                    <Link
+                                      to={`/console/keys?create=1&model=${encodeURIComponent(model.id)}&group=${encodeURIComponent(group.id)}`}
+                                      style={{
+                                        fontSize: "var(--text-xs)",
+                                        color: "var(--brand)",
+                                        textDecoration: "none",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {text("用此分组", "Use group", "استخدم")}
+                                    </Link>
+                                  </div>
                                 ) : (
-                                  text("不可用", "Unavailable", "غير متاح")
+                                  <span style={{ color: "var(--muted)" }}>
+                                    {text("暂不可用", "Unavailable", "غير متاح")}
+                                  </span>
                                 )}
                               </td>
                               <td>{model.pricing.group_ratio}×</td>
