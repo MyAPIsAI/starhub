@@ -19,7 +19,7 @@ import { copyText } from "../../features/code-example";
 import { usePreferences } from "../../lib/preferences";
 
 type ArticleId =
-  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols";
+  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols" | "routing" | "limits" | "faq";
 const curlExample = `curl https://api.myapis.ai/v1/chat/completions \\
   -H "Authorization: Bearer $MYAPIS_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -59,6 +59,9 @@ export default function DocsPage() {
     { id: "claudeCode", title: t("docsClaudeCode"), Icon: Sparkles },
     { id: "errors", title: t("docsErrors"), Icon: ShieldCheck },
     { id: "billing", title: t("docsBilling"), Icon: Coins },
+    { id: "routing", title: text("路由与权限", "Routing & authz", "التوجيه والصلاحيات"), Icon: ArrowUpRight },
+    { id: "limits", title: text("配额与限流", "Limits & rate", "الحدود والمعدل"), Icon: BookOpen },
+    { id: "faq", title: text("常见问题", "FAQ", "الأسئلة الشائعة"), Icon: ChevronRight },
   ];
   const current = articles.find((article) => article.id === activeTab)!;
 
@@ -71,6 +74,9 @@ export default function DocsPage() {
     errors: ["error", "400", "401", "403", "429", "502", "503", "错误", "错误码", "故障排除"],
     billing: ["billing", "quota", "cost", "charge", "balance", "top-up", "计费", "费用", "余额", "充值"],
     protocols: ["protocol", "endpoint", "api", "curl", "url", "path", "协议", "端点", "路径", "接口"],
+    routing: ["routing", "authorization", "group", "model", "allowlist", "auto", "路由", "授权", "分组", "白名单"],
+    limits: ["limit", "rate", "quota", "concurrency", "throttle", "配额", "限流", "并发", "额度"],
+    faq: ["faq", "question", "answer", "常见问题", "问题", "解答"],
   };
   const filteredArticles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -664,6 +670,106 @@ export default function DocsPage() {
                   )}
                 </p>
               </div>
+            </>
+          )}
+          {activeTab === "routing" && (
+            <>
+              <p className="docs-lead">
+                {text(
+                  "模型授权和路由选择在密钥创建时配置。每个密钥绑定服务分组和模型范围。",
+                  "Model authorization and routing are configured at key creation. Each key binds to a service group and model scope.",
+                  "يتم تكوين تفويض النموذج والتوجيه عند إنشاء المفتاح. يرتبط كل مفتاح بمجموعة خدمة ونطاق نموذج.",
+                )}
+              </p>
+              <div className="docs-callout">
+                <p>
+                  {text(
+                    "路由流程：密钥认证 → 用户额度检查 → 密钥额度检查 → 渠道选择（按分组+模型匹配）→ 预扣额度 → 上游调用 → 结算或退款。",
+                    "Routing flow: key auth → user quota check → key quota check → channel selection (group + model match) → pre-charge → upstream call → settle or refund.",
+                    "تدفق التوجيه: مصادقة المفتاح → فحص حصة المستخدم → فحص حصة المفتاح → اختيار القناة (مطابقة المجموعة + النموذج) → الخصم المسبق → استدعاء المنبع → التسوية أو الاسترداد.",
+                  )}
+                </p>
+              </div>
+              <h2>{text("密钥授权范围", "Key authorization scope", "نطاق تفويض المفتاح")}</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>{text("字段", "Field", "الحقل")}</th>
+                    <th>{text("说明", "Description", "الوصف")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td><code>group</code></td><td>{text("密钥所属服务分组，决定可用的模型和倍率", "Service group, determines available models and multipliers", "مجموعة الخدمة، تحدد النماذج والمضاعفات المتاحة")}</td></tr>
+                  <tr><td><code>model_limit</code></td><td>{text("授权模型列表，逗号分隔；为空表示使用分组内全部模型", "Authorized model list, comma-separated; empty = all models in group", "قائمة النماذج المصرّح بها، مفصولة بفواصل؛ فارغ = كل النماذج في المجموعة")}</td></tr>
+                  <tr><td><code>allowed_ips</code></td><td>{text("IP 白名单，CIDR 格式；为空表示不限制", "IP allowlist, CIDR format; empty = unrestricted", "قائمة IP المسموحة، تنسيق CIDR؛ فارغ = غير مقيد")}</td></tr>
+                  <tr><td><code>remain_quota</code></td><td>{text("密钥剩余额度（quota 单位）；0 表示无限额", "Remaining key quota (quota units); 0 = unlimited", "الحصة المتبقية للمفتاح (وحدات الحصة)؛ 0 = غير محدود")}</td></tr>
+                </tbody>
+              </table>
+            </>
+          )}
+          {activeTab === "limits" && (
+            <>
+              <p className="docs-lead">
+                {text(
+                  "平台对账户和密钥设有配额与速率限制，防止滥用并保障公平使用。",
+                  "The platform enforces quota and rate limits on accounts and keys to prevent abuse and ensure fair usage.",
+                  "تفرض المنصة حدود الحصة والمعدل على الحسابات والمفاتيح لمنع الإساءة وضمان الاستخدام العادل.",
+                )}
+              </p>
+              <div className="docs-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{text("限制类型", "Limit type", "نوع الحد")}</th>
+                      <th>{text("默认值", "Default", "الافتراضي")}</th>
+                      <th>{text("说明", "Description", "الوصف")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>{text("用户速率限制", "User rate limit", "حد معدل المستخدم")}</td><td className="mono">100 req/min</td><td>{text("每用户每分钟最大请求数", "Max requests per user per minute", "الحد الأقصى للطلبات لكل مستخدم في الدقيقة")}</td></tr>
+                    <tr><td>{text("密钥速率限制", "Key rate limit", "حد معدل المفتاح")}</td><td className="mono">50 req/min</td><td>{text("每密钥每分钟最大请求数", "Max requests per key per minute", "الحد الأقصى للطلبات لكل مفتاح في الدقيقة")}</td></tr>
+                    <tr><td>{text("模型速率限制", "Model rate limit", "حد معدل النموذج")}</td><td className="mono">500 req/min</td><td>{text("每模型每分钟最大请求数", "Max requests per model per minute", "الحد الأقصى للطلبات لكل نموذج في الدقيقة")}</td></tr>
+                    <tr><td>{text("单次预扣上限", "Per-request cap", "حد الخصم المسبق")}</td><td className="mono">2,000,000 quota</td><td>{text("单次请求预扣额度上限，防止恶意大请求", "Per-request pre-charge cap, prevents malicious large requests", "حد الخصم المسبق لكل طلب، يمنع الطلبات الكبيرة الخبيثة")}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="docs-callout">
+                <p>{text("超出速率限制返回 429（rate_limit_exceeded）。超出预扣上限返回 403（insufficient_quota）。", "Exceeding rate limits returns 429 (rate_limit_exceeded). Exceeding pre-charge cap returns 403 (insufficient_quota).", "تجاوز حدود المعدل يُرجع 429. تجاوز حد الخصم المسبق يُرجع 403.")}</p>
+              </div>
+            </>
+          )}
+          {activeTab === "faq" && (
+            <>
+              <p className="docs-lead">
+                {text(
+                  "关于平台使用的常见问题与解答。",
+                  "Frequently asked questions about the platform.",
+                  "الأسئلة الشائعة حول استخدام المنصة.",
+                )}
+              </p>
+              {[
+                {
+                  q: text("密钥明文能在哪里看到？", "Where can I see the plaintext API key?", "أين يمكنني رؤية مفتاح API الصريح؟"),
+                  a: text("仅在创建或重置密钥时一次性显示。之后只显示掩码（sk-****）。请妥善保存。", "Only shown once at creation or regeneration. After that only the mask (sk-****) is displayed. Save it securely.", "يُعرض مرة واحدة فقط عند الإنشاء أو إعادة التعيين. بعد ذلك يُعرض القناع فقط (sk-****). احفظه بأمان."),
+                },
+                {
+                  q: text("失败请求会扣费吗？", "Are failed requests charged?", "هل تُحاسب الطلبات الفاشلة؟"),
+                  a: text("不会。失败请求不扣费。预扣额度在失败时全额退还。", "No. Failed requests are not charged. Pre-charged quota is fully refunded on failure.", "لا. لا تُحاسب الطلبات الفاشلة. تُسترد الحصة المخصومة مسبقًا بالكامل عند الفشل."),
+                },
+                {
+                  q: text("如何切换模型？", "How do I switch models?", "كيف أبدل النماذج؟"),
+                  a: text("在请求中将 model 字段改为目标模型标识即可。前提是密钥授权范围内包含该模型。", "Change the model field in your request to the target model ID. Requires the model to be in your key's authorized scope.", "غيّر حقل model في طلبك إلى معرف النموذج المستهدف. يتطلب أن يكون النموذج ضمن نطاق تفويض مفتاحك."),
+                },
+                {
+                  q: text("充值后多久到账？", "How long does top-up take?", "كم يستغرق الشحن؟"),
+                  a: text("充值成功后即时到账。可在余额页查看最新余额。", "Credited immediately upon successful payment. Check the balance page for the latest amount.", "يُضاف فور نجاح الدفع. راجع صفحة الرصيد للحصول على أحدث مبلغ."),
+                },
+              ].map(({ q, a }, i) => (
+                <details key={i} className="docs-callout">
+                  <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "var(--text-sm)" }}>{q}</summary>
+                  <p style={{ marginTop: 8, fontSize: "var(--text-sm)", color: "var(--secondary)" }}>{a}</p>
+                </details>
+              ))}
             </>
           )}
           <footer className="docs-article-footer">
