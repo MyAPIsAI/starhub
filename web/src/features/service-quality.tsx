@@ -292,12 +292,12 @@ export default function ServiceQuality({
       buckets: [
         {
           id: "g0" as const,
-          p95: m.avg_duration_ms,
+          p95: m.p95_duration_ms,
           limit: 3000,
           samples: m.total_requests,
-          status: (m.avg_duration_ms > 0 && m.avg_duration_ms < 3000
+          status: (m.p95_duration_ms > 0 && m.p95_duration_ms < 3000
             ? "pass"
-            : m.avg_duration_ms === 0
+            : m.p95_duration_ms === 0
               ? "insufficient"
               : "below") as QualityStatus,
         },
@@ -309,8 +309,8 @@ export default function ServiceQuality({
           : m.total_requests === 0
             ? "insufficient"
             : "below") as QualityStatus,
-      performanceStatus: m.avg_duration_ms > 0
-        ? (m.avg_duration_ms < 3000 ? "pass" : "below") as QualityStatus
+      performanceStatus: m.p95_duration_ms > 0
+        ? (m.p95_duration_ms < 3000 ? "pass" : "below") as QualityStatus
         : null,
       status: (m.success_rate >= 0.995
         ? "pass"
