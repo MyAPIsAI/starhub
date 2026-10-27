@@ -752,6 +752,46 @@ export default function ModelDetail() {
                 </div>
               </section>
             )}
+            {model.pricing.mode === "per_request" && model.pricing.per_request !== null && model.pricing.per_request > 0 && (
+              <section className="access-panel">
+                <h2>
+                  {text("计量定价", "Per-request pricing", "تسعير لكل طلب")}
+                </h2>
+                <p className="access-muted">
+                  {text(
+                    "此模型按次计费，每次请求收取固定费用。实际费用取决于请求次数。",
+                    "This model is billed per request at a fixed rate. Actual cost depends on the number of requests.",
+                    "يُحاسب هذا النموذج لكل طلب بسعر ثابت. التكلفة الفعلية تعتمد على عدد الطلبات.",
+                  )}
+                </p>
+                <div className="access-table-wrap" tabIndex={0} role="region">
+                  <table className="access-table">
+                    <thead>
+                      <tr>
+                        <th>{text("计费项", "Billing item", "بند الفوترة")}</th>
+                        <th>{text("单价（美元/次）", "Rate (USD/request)", "السعر (دولار/طلب)")}</th>
+                        <th>{text("说明", "Description", "الوصف")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>{text("每次请求", "Per request", "لكل طلب")}</td>
+                        <td className="mono">
+                          ${model.pricing.per_request.toFixed(6)}
+                        </td>
+                        <td>
+                          {text(
+                            "无论用量多少，每次 API 请求收取固定费用",
+                            "A fixed charge per API request regardless of usage",
+                            "رسم ثابت لكل طلب API بغض النظر عن الاستخدام",
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
             {supportsClient && (
               <section className="access-panel">
                 <h2>
