@@ -3,14 +3,12 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight,
   ArrowUpRight,
-  Check,
   CheckCheck,
   ChevronDown,
   Code2,
   Copy,
   Layers3,
   ShieldCheck,
-  Sparkles,
   Zap,
 } from "lucide-react";
 import {
@@ -29,6 +27,7 @@ import { formatMoney } from "../lib/money";
 import { usePreferences } from "../lib/preferences";
 import "../components/home-redesign.css";
 import AuthDialog from "./auth/auth-dialog";
+import { HomePortal } from "../components/home-portal";
 
 const copy = {
   zh: {
@@ -327,474 +326,386 @@ export default function BrandHome() {
     }
   };
   return (
-    <div className="xy-home">
+    <div className="xy-home xy-home-portal">
       <PublicHeader />
       <main>
-        <section className="xy-hero xy-width">
-          <div className="xy-hero-copy">
-            <div className="xy-eyebrow">
-              <span className="xy-spark">
-                <Sparkles size={13} />
-              </span>
-              {c.eyebrow}
+        <HomePortal language={language} onDemo={() => setScenariosOpen(true)}>
+          <section className="xy-provider-section xy-width">
+            <div className="xy-provider-heading">
+              <span>{c.providers}</span>
+              <small>{c.select}</small>
             </div>
-            <h1>
-              {c.title[0]}
-              <br />
-              <span>{c.title[1]}</span>
-            </h1>
-            <p>{c.intro}</p>
-            <div className="xy-hero-actions">
-              <Link className="xy-btn xy-btn-blue" to="/console/connect">
-                {c.start}
-                <ArrowUpRight size={18} />
-              </Link>
-              <button
-                className="xy-text-button"
-                onClick={() => setScenariosOpen(true)}
-              >
-                {c.guide}
-                <ArrowRight size={16} />
-              </button>
-            </div>
-            <div className="xy-hero-note">
-              <ShieldCheck size={14} />
-              {c.footnote}
-            </div>
-          </div>
-          <div className="xy-hero-art">
-            <div className="xy-art-light" />
-            <div className="xy-pixel-field" aria-hidden="true">
-              {Array.from({ length: 36 }, (_, i) => (
-                <span
-                  key={i}
-                  className={`pixel pixel-${i}`}
-                  style={
-                    {
-                      "--i": i,
-                      "--x": i % 6,
-                      "--y": Math.floor(i / 6),
-                    } as CSSProperties
-                  }
-                />
+            <div className="xy-providers">
+              {providers.map((p, i) => (
+                <button
+                  key={p.name}
+                  className={i === active ? "is-selected" : ""}
+                  aria-pressed={active === i}
+                  onClick={() => setActive(i)}
+                >
+                  <span className="xy-provider-icon" style={{ color: p.color }}>
+                    {p.short}
+                  </span>
+                  <b>{p.name}</b>
+                  <span className="provider-dot" />
+                </button>
               ))}
             </div>
-            <div className="xy-orbit orbit-one" />
-            <div className="xy-orbit orbit-two" />
-            <div className="xy-core">
-              <BrandMark />
-              <span>{language === "zh" ? "Veyra" : "VEYRA"}</span>
-            </div>
-            <div className="xy-float-card xy-float-top">
-              <div className="xy-float-icon">
-                <Layers3 size={17} />
-              </div>
-              <div>
-                <span>{c.route}</span>
-                <strong>
-                  {c.online}
-                  <i />
-                </strong>
-              </div>
-              <ArrowUpRight size={15} />
-            </div>
-            <div className="xy-float-card xy-float-bottom">
-              <span
-                className="xy-provider-icon"
-                style={{ color: providers[active].color }}
-              >
-                {providers[active].short}
-              </span>
-              <div>
-                <span>{c.selected}</span>
-                <strong>{selected.name}</strong>
-              </div>
-              <span className="xy-connected">
-                <Check size={12} />
-              </span>
-            </div>
-            <div className="xy-art-caption">
-              <span>01 — 05</span>
-              <span>{c.visualLabel}</span>
-              <ArrowUpRight size={13} />
-            </div>
-          </div>
-        </section>
-        <section className="xy-provider-section xy-width">
-          <div className="xy-provider-heading">
-            <span>{c.providers}</span>
-            <small>{c.select}</small>
-          </div>
-          <div className="xy-providers">
-            {providers.map((p, i) => (
-              <button
-                key={p.name}
-                className={i === active ? "is-selected" : ""}
-                aria-pressed={active === i}
-                onClick={() => setActive(i)}
-              >
-                <span className="xy-provider-icon" style={{ color: p.color }}>
-                  {p.short}
-                </span>
-                <b>{p.name}</b>
-                <span className="provider-dot" />
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className="xy-workspace-section" id="why">
-          <div className="xy-width">
-            <div className="xy-section-heading">
-              <div>
-                <span className="xy-section-kicker">{c.productEyebrow}</span>
-                <h2>{c.productTitle}</h2>
-              </div>
-              <div>
-                <p>{c.productBody}</p>
-                <Link className="xy-text-button" to="/console">
-                  {c.dashboard}
-                  <ArrowUpRight size={16} />
-                </Link>
-              </div>
-            </div>
-            <div className="xy-dashboard-preview">
-              <div className="xy-preview-side" aria-hidden="true">
-                <BrandMark />
-                {[Layers3, Zap, Code2, ShieldCheck].map((Icon, i) => (
-                  <span className={i === 0 ? "active" : ""} key={i}>
-                    <Icon size={17} />
-                  </span>
-                ))}
-              </div>
-              <div className="xy-preview-main">
-                <div className="xy-preview-top">
-                  <strong>{c.overview}</strong>
-                  <span>
-                    <i />
-                    {c.preview}
-                  </span>
+          </section>
+          <section className="xy-workspace-section" id="why">
+            <div className="xy-width">
+              <div className="xy-section-heading">
+                <div>
+                  <span className="xy-section-kicker">{c.productEyebrow}</span>
+                  <h2>{c.productTitle}</h2>
                 </div>
-                <div className="xy-preview-metrics">
-                  {[
-                    [c.expense, "$38.2045"],
-                    [c.requests, "24,892"],
-                    [c.success, "99.82%"],
-                  ].map(([label, value], i) => (
-                    <div key={label}>
-                      <span>
-                        {label}
-                        <ArrowUpRight size={13} />
-                      </span>
-                      <strong>{value}</strong>
-                      <small>
-                        {i === 0 ? c.date : i === 1 ? "5 " + c.model : c.done}
-                      </small>
-                    </div>
+                <div>
+                  <p>{c.productBody}</p>
+                  <Link className="xy-text-button" to="/console">
+                    {c.dashboard}
+                    <ArrowUpRight size={16} />
+                  </Link>
+                </div>
+              </div>
+              <div className="xy-dashboard-preview">
+                <div className="xy-preview-side" aria-hidden="true">
+                  <BrandMark />
+                  {[Layers3, Zap, Code2, ShieldCheck].map((Icon, i) => (
+                    <span className={i === 0 ? "active" : ""} key={i}>
+                      <Icon size={17} />
+                    </span>
                   ))}
                 </div>
-                <div className="xy-preview-bottom">
-                  <div className="xy-preview-chart">
-                    <div>
-                      <b>{c.trend}</b>
-                      <span>
-                        {c.date}
-                        <ChevronDown size={12} />
-                      </span>
-                    </div>
-                    <div className="xy-chart-container">
-                      <div className="xy-axis">
-                        <span>$12</span>
-                        <span>$8</span>
-                        <span>$4</span>
-                        <span>$0</span>
-                      </div>
-                      <svg
-                        viewBox="0 0 650 150"
-                        preserveAspectRatio="none"
-                        role="img"
-                        aria-label={c.trend}
-                      >
-                        <defs>
-                          <linearGradient
-                            id="home-chart-fill"
-                            x1="0"
-                            x2="0"
-                            y1="0"
-                            y2="1"
-                          >
-                            <stop
-                              offset="0%"
-                              stopColor="#4778f7"
-                              stopOpacity=".2"
-                            />
-                            <stop
-                              offset="100%"
-                              stopColor="#4778f7"
-                              stopOpacity="0"
-                            />
-                          </linearGradient>
-                        </defs>
-                        {[15, 55, 95, 135].map((y) => (
-                          <line
-                            key={y}
-                            x1="0"
-                            x2="650"
-                            y1={y}
-                            y2={y}
-                            stroke="var(--border)"
-                            strokeDasharray="3 6"
-                          />
-                        ))}
-                        <path
-                          d="M0 125 C25 130 36 88 65 95 S98 70 130 84 S166 50 196 72 S229 103 264 85 S298 30 328 46 S365 19 393 40 S427 86 460 60 S495 14 526 28 S567 4 588 19 S623 5 650 10 L650 150 L0 150Z"
-                          fill="url(#home-chart-fill)"
-                        />
-                        <path
-                          d="M0 125 C25 130 36 88 65 95 S98 70 130 84 S166 50 196 72 S229 103 264 85 S298 30 328 46 S365 19 393 40 S427 86 460 60 S495 14 526 28 S567 4 588 19 S623 5 650 10"
-                          fill="none"
-                          stroke="#4778f7"
-                          strokeWidth="2.5"
-                        />
-                      </svg>
-                    </div>
-                    <div className="xy-chart-days">
-                      {[
-                        "09.17",
-                        "09.18",
-                        "09.19",
-                        "09.20",
-                        "09.21",
-                        "09.22",
-                        "09.23",
-                      ].map((day) => (
-                        <span key={day}>{day}</span>
-                      ))}
-                    </div>
+                <div className="xy-preview-main">
+                  <div className="xy-preview-top">
+                    <strong>{c.overview}</strong>
+                    <span>
+                      <i />
+                      {c.preview}
+                    </span>
                   </div>
-                  <div className="xy-preview-wallet">
-                    <div>
-                      {c.balance}
-                      <ArrowUpRight size={15} />
+                  <div className="xy-preview-metrics">
+                    {[
+                      [c.expense, "$38.2045"],
+                      [c.requests, "24,892"],
+                      [c.success, "99.82%"],
+                    ].map(([label, value], i) => (
+                      <div key={label}>
+                        <span>
+                          {label}
+                          <ArrowUpRight size={13} />
+                        </span>
+                        <strong>{value}</strong>
+                        <small>
+                          {i === 0 ? c.date : i === 1 ? "5 " + c.model : c.done}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="xy-preview-bottom">
+                    <div className="xy-preview-chart">
+                      <div>
+                        <b>{c.trend}</b>
+                        <span>
+                          {c.date}
+                          <ChevronDown size={12} />
+                        </span>
+                      </div>
+                      <div className="xy-chart-container">
+                        <div className="xy-axis">
+                          <span>$12</span>
+                          <span>$8</span>
+                          <span>$4</span>
+                          <span>$0</span>
+                        </div>
+                        <svg
+                          viewBox="0 0 650 150"
+                          preserveAspectRatio="none"
+                          role="img"
+                          aria-label={c.trend}
+                        >
+                          <defs>
+                            <linearGradient
+                              id="home-chart-fill"
+                              x1="0"
+                              x2="0"
+                              y1="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="0%"
+                                stopColor="#4778f7"
+                                stopOpacity=".2"
+                              />
+                              <stop
+                                offset="100%"
+                                stopColor="#4778f7"
+                                stopOpacity="0"
+                              />
+                            </linearGradient>
+                          </defs>
+                          {[15, 55, 95, 135].map((y) => (
+                            <line
+                              key={y}
+                              x1="0"
+                              x2="650"
+                              y1={y}
+                              y2={y}
+                              stroke="var(--border)"
+                              strokeDasharray="3 6"
+                            />
+                          ))}
+                          <path
+                            d="M0 125 C25 130 36 88 65 95 S98 70 130 84 S166 50 196 72 S229 103 264 85 S298 30 328 46 S365 19 393 40 S427 86 460 60 S495 14 526 28 S567 4 588 19 S623 5 650 10 L650 150 L0 150Z"
+                            fill="url(#home-chart-fill)"
+                          />
+                          <path
+                            d="M0 125 C25 130 36 88 65 95 S98 70 130 84 S166 50 196 72 S229 103 264 85 S298 30 328 46 S365 19 393 40 S427 86 460 60 S495 14 526 28 S567 4 588 19 S623 5 650 10"
+                            fill="none"
+                            stroke="#4778f7"
+                            strokeWidth="2.5"
+                          />
+                        </svg>
+                      </div>
+                      <div className="xy-chart-days">
+                        {[
+                          "09.17",
+                          "09.18",
+                          "09.19",
+                          "09.20",
+                          "09.21",
+                          "09.22",
+                          "09.23",
+                        ].map((day) => (
+                          <span key={day}>{day}</span>
+                        ))}
+                      </div>
                     </div>
-                    <strong>$528.40</strong>
-                    <p>{c.wallet}</p>
-                    <Link to="/console/billing">
-                      {c.console}
-                      <ArrowRight size={15} />
-                    </Link>
-                    <BrandMark />
+                    <div className="xy-preview-wallet">
+                      <div>
+                        {c.balance}
+                        <ArrowUpRight size={15} />
+                      </div>
+                      <strong>$528.40</strong>
+                      <p>{c.wallet}</p>
+                      <Link to="/console/billing">
+                        {c.console}
+                        <ArrowRight size={15} />
+                      </Link>
+                      <BrandMark />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="xy-features">
-              {[Layers3, Zap, ShieldCheck].map((Icon, i) => (
-                <article key={i}>
-                  <span className="xy-feature-icon">
-                    <Icon size={20} />
-                  </span>
-                  <h3>{c.features[i]}</h3>
-                  <p>{c.featureBodies[i]}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-        <section className="xy-model-section xy-width" id="models">
-          <div className="xy-section-heading">
-            <div>
-              <span className="xy-section-kicker">{c.modelsEyebrow}</span>
-              <h2>{c.modelsTitle}</h2>
-            </div>
-            <Link className="xy-text-button" to="/models">
-              {c.allModels}
-              <ArrowUpRight size={16} />
-            </Link>
-          </div>
-          <div className="xy-model-grid">
-            {catalogModels.slice(0, 4).map((m, i) => {
-              const quotes = placeholders.tiers
-                .flatMap((tier) => {
-                  try {
-                    return [
-                      {
-                        tier: tier.id,
-                        ...quoteModelCharge(
-                          {
-                            modelId: m.id,
-                            tierId: tier.id,
-                            usage: {
-                              input_tokens: 1000,
-                              output_tokens: 300,
-                              cache_read_tokens: 0,
-                              cache_write_tokens: 0,
-                              requests: 1,
-                            },
-                          },
-                          pricing,
-                        ),
-                      },
-                    ];
-                  } catch {
-                    return [];
-                  }
-                })
-                .sort((a, b) =>
-                  BigInt(a.amountNano) < BigInt(b.amountNano) ? -1 : 1,
-                );
-              const quote = quotes[0];
-              return (
-                <Link
-                  className="xy-model-card"
-                  key={m.id}
-                  to={`/models/${m.id}`}
-                >
-                  <div className="xy-model-top">
-                    <span
-                      className="xy-model-symbol"
-                      style={
-                        {
-                          "--vendor-color": providers[i].color,
-                        } as CSSProperties
-                      }
-                    >
-                      {providers[i].short}
+              <div className="xy-features">
+                {[Layers3, Zap, ShieldCheck].map((Icon, i) => (
+                  <article key={i}>
+                    <span className="xy-feature-icon">
+                      <Icon size={20} />
                     </span>
-                    <ArrowUpRight size={18} />
-                  </div>
-                  <span className="xy-model-vendor">{m.vendor}</span>
-                  <h3>{m.name}</h3>
-                  <p>{m.description[language]}</p>
-                  <div className="xy-model-spec">
-                    <span>
-                      {c.context}
-                      <b>{m.contextDisplay}</b>
-                    </span>
-                    <span>
-                      {quote
-                        ? language === "zh"
-                          ? "示例费用 / 次起"
-                          : language === "ar"
-                            ? "تقدير لكل طلب من"
-                            : "Estimate / call from"
-                        : c.unavailable}
-                      <b>
-                        {quote ? formatMoney(quote.amountNano, "call") : "—"}
-                      </b>
-                      {quote && (
-                        <small className="xy-model-price-group">
-                          {serviceGroupLabel(quote.tier, language, pricing)}
-                        </small>
-                      )}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-          <p className="xy-section-note">
-            {language === "zh"
-              ? "模拟价格。按当前时刻、1,000 输入 + 300 输出词元、无缓存估算，已包含对应分组及时段系数；实际费用取决于用量与模型规则。"
-              : language === "ar"
-                ? "أسعار تجريبية: 1000 رمز إدخال و300 إخراج بلا تخزين، تشمل معامل المجموعة والفترة الحالية."
-                : "Sample prices: 1,000 input + 300 output tokens, no cache, current time and group multipliers included. Actual cost depends on usage and model rules."}
-          </p>
-        </section>
-        <section className="xy-integration xy-width">
-          <div>
-            <span className="xy-section-kicker">{c.integrateEyebrow}</span>
-            <h2>{c.integrateTitle}</h2>
-            <p>{c.integrateBody}</p>
-            <button
-              className="xy-btn xy-btn-dark"
-              onClick={() => setQuickstart(true)}
-            >
-              {c.quickstart}
-              <ArrowUpRight size={16} />
-            </button>
-          </div>
-          <div className="xy-code-card">
-            <div className="xy-code-toolbar">
-              <div role="tablist" aria-label={c.copy}>
-                {(["python", "curl"] as const).map((tab) => (
-                  <button
-                    role="tab"
-                    aria-selected={codeTab === tab}
-                    key={tab}
-                    onClick={() => setCodeTab(tab)}
-                  >
-                    {tab === "python"
-                      ? "Python" + (language === "zh" ? "（编程语言）" : "")
-                      : "cURL" + (language === "zh" ? "（命令行）" : "")}
-                  </button>
+                    <h3>{c.features[i]}</h3>
+                    <p>{c.featureBodies[i]}</p>
+                  </article>
                 ))}
               </div>
+            </div>
+          </section>
+          <section className="xy-model-section xy-width" id="models">
+            <div className="xy-section-heading">
+              <div>
+                <span className="xy-section-kicker">{c.modelsEyebrow}</span>
+                <h2>{c.modelsTitle}</h2>
+              </div>
+              <Link className="xy-text-button" to="/models">
+                {c.allModels}
+                <ArrowUpRight size={16} />
+              </Link>
+            </div>
+            <div className="xy-model-grid">
+              {catalogModels.slice(0, 4).map((m, i) => {
+                const quotes = placeholders.tiers
+                  .flatMap((tier) => {
+                    try {
+                      return [
+                        {
+                          tier: tier.id,
+                          ...quoteModelCharge(
+                            {
+                              modelId: m.id,
+                              tierId: tier.id,
+                              usage: {
+                                input_tokens: 1000,
+                                output_tokens: 300,
+                                cache_read_tokens: 0,
+                                cache_write_tokens: 0,
+                                requests: 1,
+                              },
+                            },
+                            pricing,
+                          ),
+                        },
+                      ];
+                    } catch {
+                      return [];
+                    }
+                  })
+                  .sort((a, b) =>
+                    BigInt(a.amountNano) < BigInt(b.amountNano) ? -1 : 1,
+                  );
+                const quote = quotes[0];
+                return (
+                  <Link
+                    className="xy-model-card"
+                    key={m.id}
+                    to={`/models/${m.id}`}
+                  >
+                    <div className="xy-model-top">
+                      <span
+                        className="xy-model-symbol"
+                        style={
+                          {
+                            "--vendor-color": providers[i].color,
+                          } as CSSProperties
+                        }
+                      >
+                        {providers[i].short}
+                      </span>
+                      <ArrowUpRight size={18} />
+                    </div>
+                    <span className="xy-model-vendor">{m.vendor}</span>
+                    <h3>{m.name}</h3>
+                    <p>{m.description[language]}</p>
+                    <div className="xy-model-spec">
+                      <span>
+                        {c.context}
+                        <b>{m.contextDisplay}</b>
+                      </span>
+                      <span>
+                        {quote
+                          ? language === "zh"
+                            ? "示例费用 / 次起"
+                            : language === "ar"
+                              ? "تقدير لكل طلب من"
+                              : "Estimate / call from"
+                          : c.unavailable}
+                        <b>
+                          {quote ? formatMoney(quote.amountNano, "call") : "—"}
+                        </b>
+                        {quote && (
+                          <small className="xy-model-price-group">
+                            {serviceGroupLabel(quote.tier, language, pricing)}
+                          </small>
+                        )}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+            <p className="xy-section-note">
+              {language === "zh"
+                ? "模拟价格。按当前时刻、1,000 输入 + 300 输出词元、无缓存估算，已包含对应分组及时段系数；实际费用取决于用量与模型规则。"
+                : language === "ar"
+                  ? "أسعار تجريبية: 1000 رمز إدخال و300 إخراج بلا تخزين، تشمل معامل المجموعة والفترة الحالية."
+                  : "Sample prices: 1,000 input + 300 output tokens, no cache, current time and group multipliers included. Actual cost depends on usage and model rules."}
+            </p>
+          </section>
+          <section className="xy-integration xy-width">
+            <div>
+              <span className="xy-section-kicker">{c.integrateEyebrow}</span>
+              <h2>{c.integrateTitle}</h2>
+              <p>{c.integrateBody}</p>
               <button
-                onClick={copyCode}
-                aria-label={copied ? c.copied : c.copy}
+                className="xy-btn xy-btn-dark"
+                onClick={() => setQuickstart(true)}
               >
-                {copied ? <CheckCheck size={15} /> : <Copy size={15} />}
+                {c.quickstart}
+                <ArrowUpRight size={16} />
               </button>
             </div>
-            <pre dir="ltr">
-              <code>
-                {code.split("\n").map((line, i) => (
-                  <span key={i}>
-                    <em>{i + 1}</em>
-                    <span
-                      className={
-                        line.includes('"')
-                          ? "code-string"
-                          : line.startsWith("from")
-                            ? "code-import"
-                            : ""
-                      }
+            <div className="xy-code-card">
+              <div className="xy-code-toolbar">
+                <div role="tablist" aria-label={c.copy}>
+                  {(["python", "curl"] as const).map((tab) => (
+                    <button
+                      role="tab"
+                      aria-selected={codeTab === tab}
+                      key={tab}
+                      onClick={() => setCodeTab(tab)}
                     >
-                      {line || " "}
+                      {tab === "python"
+                        ? "Python" + (language === "zh" ? "（编程语言）" : "")
+                        : "cURL" + (language === "zh" ? "（命令行）" : "")}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={copyCode}
+                  aria-label={copied ? c.copied : c.copy}
+                >
+                  {copied ? <CheckCheck size={15} /> : <Copy size={15} />}
+                </button>
+              </div>
+              <pre dir="ltr">
+                <code>
+                  {code.split("\n").map((line, i) => (
+                    <span key={i}>
+                      <em>{i + 1}</em>
+                      <span
+                        className={
+                          line.includes('"')
+                            ? "code-string"
+                            : line.startsWith("from")
+                              ? "code-import"
+                              : ""
+                        }
+                      >
+                        {line || " "}
+                      </span>
+                      {"\n"}
                     </span>
-                    {"\n"}
-                  </span>
-                ))}
-              </code>
-            </pre>
-            <div className="xy-code-note" role="status">
-              <i />
-              {copyFailed
-                ? language === "zh"
-                  ? "复制失败，请选中代码手动复制。"
-                  : language === "ar"
-                    ? "تعذر النسخ. حدد الرمز وانسخه يدوياً."
-                    : "Copy failed. Select the code and copy it manually."
-                : c.codeNote}
+                  ))}
+                </code>
+              </pre>
+              <div className="xy-code-note" role="status">
+                <i />
+                {copyFailed
+                  ? language === "zh"
+                    ? "复制失败，请选中代码手动复制。"
+                    : language === "ar"
+                      ? "تعذر النسخ. حدد الرمز وانسخه يدوياً."
+                      : "Copy failed. Select the code and copy it manually."
+                  : c.codeNote}
+              </div>
             </div>
-          </div>
-        </section>
-        <section className="xy-faq xy-width">
-          <h2>{c.faqTitle}</h2>
-          <div>
-            {c.faqs.map(([question, answer]) => (
-              <details key={question}>
-                <summary>
-                  {question}
-                  <span>+</span>
-                </summary>
-                <p>{answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-        <section className="xy-final-cta xy-width">
-          <div className="xy-cta-pixels" aria-hidden="true" />
-          <span className="xy-cta-star">
-            <BrandMark />
-          </span>
-          <h2>{c.cta}</h2>
-          <p>{c.ctaBody}</p>
-          <Link className="xy-btn xy-btn-blue" to="/console/connect">
-            {c.start}
-            <ArrowUpRight size={16} />
-          </Link>
-        </section>
+          </section>
+          <section className="xy-faq xy-width">
+            <h2>{c.faqTitle}</h2>
+            <div>
+              {c.faqs.map(([question, answer]) => (
+                <details key={question}>
+                  <summary>
+                    {question}
+                    <span>+</span>
+                  </summary>
+                  <p>{answer}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+          <section className="xy-final-cta xy-width">
+            <div className="xy-cta-pixels" aria-hidden="true" />
+            <span className="xy-cta-star">
+              <BrandMark />
+            </span>
+            <h2>{c.cta}</h2>
+            <p>{c.ctaBody}</p>
+            <Link className="xy-btn xy-btn-blue" to="/console/connect">
+              {c.start}
+              <ArrowUpRight size={16} />
+            </Link>
+          </section>
+        </HomePortal>
       </main>
       <footer className="xy-footer xy-width">
         <div>

@@ -14,6 +14,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:browser": "node tests/redesign-browser.mjs",
+    "test:browser:portal": "npm run build && node tests/home-portal-browser.mjs",
     "check:i18n": "node tests/i18n.mjs",
     "test:browser:keys": "node tests/key-refinement-browser.mjs",
     "test:browser:directory": "node tests/directory-refinement-browser.mjs",
