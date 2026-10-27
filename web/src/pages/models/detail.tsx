@@ -8,6 +8,8 @@ import {
   Sparkles,
   Terminal,
 } from "lucide-react";
+import { useModelPricing } from "../../lib/model-pricing";
+import { getOfficialReference } from "../../lib/official-reference";
 import { PublicHeader } from "../../components/product-shell";
 import { Button } from "../../components/ui/button";
 import { type DirectoryRate } from "../../config/model-directory";
@@ -17,7 +19,6 @@ import { ModelIdCopy } from "../../components/model-id-copy";
 import { DirectoryPrice } from "../../components/directory-price";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../lib/preferences";
-import { useModelPricing } from "../../lib/model-pricing";
 import { useProductPreview } from "../../lib/product-preview";
 import { useBackendKeys } from "../../lib/api/key-adapter";
 import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
@@ -723,6 +724,78 @@ export default function ModelDetail() {
                 )}
               </p>
             </section>
+            {(() => {
+              const ref = model ? getOfficialReference(model.id, useModelPricing.getState().config) : null;
+              if (!ref || ref.rate.mode !== "tokens" || !ref.rate.pricing) return null;
+              const p = ref.rate.pricing;
+              return (
+                <section className="access-panel">
+                  <h2>
+                    {text("厂商官方参考价", "Official provider reference", "سعر المزود الرسمي")}
+                  </h2>
+                  <p className="access-muted">
+                    {text(
+                      `以下为厂商官方定价参考（验证日期：${ref.verifiedAt ?? "—"}）。仅供参考，不构成平台报价承诺。`,
+                      `Official provider pricing reference (verified: ${ref.verifiedAt ?? "—"}). For reference only, not a platform price commitment.`,
+                      `سعر المزود الرسمي (تاريخ التحقق: ${ref.verifiedAt ?? "—"}). للاسترشاد فقط، وليس التزام سعر للمنصة.`,
+                    )}
+                  </p>
+                  <div className="access-table-wrap" tabIndex={0} role="region">
+                    <table className="access-table">
+                      <thead>
+                        <tr>
+                          <th>{text("计费项", "Billing item", "بند الفوترة")}</th>
+                          <th>{text("官方单价（美元/百万 Token）", "Official rate (USD/M tokens)", "السعر الرسمي (دولار/مليون رمز)")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {p.input_per_million_usd && (
+                          <tr>
+                            <td>{text("输入 Token", "Input tokens", "رموز الإدخال")}</td>
+                            <td className="mono">${p.input_per_million_usd}</td>
+                          </tr>
+                        )}
+                        {p.output_per_million_usd && (
+                          <tr>
+                            <td>{text("输出 Token", "Output tokens", "رموز الإخراج")}</td>
+                            <td className="mono">${p.output_per_million_usd}</td>
+                          </tr>
+                        )}
+                        {p.cache_read_per_million_usd && (
+                          <tr>
+                            <td>{text("缓存读取", "Cache read", "قراءة التخزين")}</td>
+                            <td className="mono">${p.cache_read_per_million_usd}</td>
+                          </tr>
+                        )}
+                        {p.cache_write_per_million_usd && (
+                          <tr>
+                            <td>{text("缓存写入", "Cache write", "كتابة التخزين")}</td>
+                            <td className="mono">${p.cache_write_per_million_usd}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {ref.scope && (
+                    <p className="access-muted">
+                      {ref.scope[lang === "zh" ? "zh" : lang === "ar" ? "ar" : "en"]}
+                    </p>
+                  )}
+                  {ref.sourceUrl && (
+                    <p className="access-muted">
+                      <a
+                        href={ref.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: "var(--brand)", textDecoration: "none" }}
+                      >
+                        {text("查看来源", "View source", "عرض المصدر")}
+                      </a>
+                    </p>
+                  )}
+                </section>
+              );
+            })()}
             {supportsClient && (
               <section className="access-panel">
                 <h2>
