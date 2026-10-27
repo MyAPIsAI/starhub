@@ -26,6 +26,7 @@ import {
 import { Button } from "../components/ui/button";
 import { Drawer, Modal } from "../components/ui/overlay";
 import { usePreferences } from "../lib/preferences";
+import { writtenLanguage } from "../lib/localize";
 import type { LedgerEntry, RechargeOrder } from "../lib/product-preview";
 import {
   useLedger,
@@ -262,8 +263,8 @@ export default function BillingCenter({
     if (!validRange || !count) return;
     downloadCsv(
       tab === "orders"
-        ? serializeRechargeCsv(filteredOrders, language)
-        : serializeLedgerCsv(filteredLedger, language),
+        ? serializeRechargeCsv(filteredOrders, writtenLanguage(language))
+        : serializeLedgerCsv(filteredLedger, writtenLanguage(language)),
       `veyra-${tab}-${from}-${to}.csv`,
     );
     setMessage(

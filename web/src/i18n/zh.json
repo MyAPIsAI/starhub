@@ -1,4 +1,4 @@
-﻿{
+{
   "brand": "MyAPIs",
   "workspace": "界面组件库",
   "version": "版本 0.1",
@@ -177,6 +177,7 @@
   "languageEnglish": "English（英文）",
   "languageChinese": "中文",
   "languageArabic": "العربية（阿拉伯文）",
+  "languageKorean": "한국어（韩文）",
   "healthy": "运行正常",
   "warning": "需要关注",
   "notEnough": "数据不足",

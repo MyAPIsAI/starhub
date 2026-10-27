@@ -7,6 +7,7 @@ import {
 } from "../lib/model-pricing";
 import { type TierId } from "../config/placeholders";
 import { usePreferences } from "../lib/preferences";
+import { writtenLanguage } from "../lib/localize";
 import { serviceGroupLabel } from "../lib/service-group-label";
 import "./tier-model-picker.css";
 import { useProductPreview } from "../lib/product-preview";
@@ -79,7 +80,7 @@ export function TierModelPicker({
   const pricingConfig = useModelPricing((state) => state.config);
   const accountId = useProductPreview((s) => s.user.id);
   const groups = visibleGroups(pricingConfig, accountId);
-  const text = copy[language];
+  const text = copy[writtenLanguage(language)];
   const tierName = (tier: (typeof groups)[number]) =>
     serviceGroupLabel(tier.id, language, pricingConfig);
   const id = useId();

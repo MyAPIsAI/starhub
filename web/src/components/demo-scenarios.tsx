@@ -1,6 +1,7 @@
 import { ArrowRight, KeyRound, CircleDollarSign, PlugZap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { usePreferences } from "../lib/preferences";
+import { writtenLanguage } from "../lib/localize";
 import { useProductPreview } from "../lib/product-preview";
 import { useSystemAccess, systemRoleForScenario } from "../lib/system-access";
 import "./demo-scenarios.css";
@@ -71,8 +72,8 @@ export function DemoScenarios({ onSelect }: { onSelect?: () => void }) {
         >
           <Icon size={22} />
           <span>
-            <strong>{title[language]}</strong>
-            <small>{body[language]}</small>
+            <strong>{title[writtenLanguage(language)]}</strong>
+            <small>{body[writtenLanguage(language)]}</small>
           </span>
           <ArrowRight size={18} className="directional" />
         </button>

@@ -237,6 +237,7 @@ export default function DesignSystem() {
                 { value: "en", label: t("languageEnglish") },
                 { value: "zh", label: t("languageChinese") },
                 { value: "ar", label: t("languageArabic") },
+                { value: "ko", label: t("languageKorean") },
               ]}
             />
             <Button

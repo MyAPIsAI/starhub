@@ -25,7 +25,7 @@ export const usePreferences = create<{
   setTheme: (theme: "light" | "dark") => void;
   setDataState: (state: DataState) => void;
 }>((set) => ({
-  language: ["en", "zh", "ar"].includes(initialLanguage)
+  language: ["en", "zh", "ar", "ko"].includes(initialLanguage)
     ? (initialLanguage as Language)
     : "en",
   theme: preference("theme") === "dark" ? "dark" : "light",

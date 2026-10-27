@@ -18,6 +18,7 @@ import { ModelIdCopy } from "../../components/model-id-copy";
 import { DirectoryPrice } from "../../components/directory-price";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../lib/preferences";
+import { writtenLanguage } from "../../lib/localize";
 import { placeholders } from "../../config/placeholders";
 import { useProductPreview } from "../../lib/product-preview";
 import { useBackendKeys } from "../../lib/api/key-adapter";
@@ -177,7 +178,7 @@ export default function ModelDetail() {
                     : ""}
                 </h1>
                 <ModelIdCopy id={model.id} />
-                <p>{model.description[lang]}</p>
+                <p>{model.description[writtenLanguage(lang)]}</p>
               </div>
               <div className="access-actions">
                 {canConnect ? (

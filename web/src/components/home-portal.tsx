@@ -9,6 +9,7 @@ import {
   Play,
 } from "lucide-react";
 import type { Language } from "../config/placeholders";
+import { writtenLanguage } from "../lib/localize";
 import { BrandMark } from "./brand";
 import "./home-portal.css";
 
@@ -158,7 +159,7 @@ export function HomePortal({
   onDemo: () => void;
   children: ReactNode;
 }) {
-  const c = copy[language];
+  const c = copy[writtenLanguage(language)];
   const root = useRef<HTMLDivElement>(null);
   const scene = useRef<HTMLElement>(null);
   const sticky = useRef<HTMLDivElement>(null);

@@ -6,6 +6,7 @@ import {
 } from "../lib/catalog-public-pricing";
 import { getOfficialReference } from "../lib/official-reference";
 import { usePreferences } from "../lib/preferences";
+import { writtenLanguage } from "../lib/localize";
 import { serviceGroupLabel } from "../lib/service-group-label";
 import { formatMoney } from "../lib/money";
 import { describeDirectoryRate } from "./directory-price";
@@ -333,7 +334,7 @@ export function CatalogPriceComparison({
         {reference &&
           "scope" in reference &&
           (detailed ? (
-            <p className="price-reference-scope">{reference.scope[lang]}</p>
+            <p className="price-reference-scope">{reference.scope[writtenLanguage(lang)]}</p>
           ) : (
             <details className="price-conditions">
               <summary>
@@ -343,7 +344,7 @@ export function CatalogPriceComparison({
                   "شروط السعر الرسمي",
                 )}
               </summary>
-              <p className="price-reference-scope">{reference.scope[lang]}</p>
+              <p className="price-reference-scope">{reference.scope[writtenLanguage(lang)]}</p>
             </details>
           ))}
         {model.kind === "smart" &&

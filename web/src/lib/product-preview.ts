@@ -1,6 +1,7 @@
 import type { PricingAttributes } from "../config/models";
 import { create } from "zustand";
 import { DEMO_ACCOUNT_PROFILE, accountIdForLegacy } from "./account-identity";
+import { writtenLanguage } from "./localize";
 import { demoAuth, type DemoIdentity } from "./demo-auth";
 import { getKeyModels, resolveKeyModelResult } from "./key-model-policy";
 import {
@@ -1669,7 +1670,10 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
         ? serializeRequestExport(rows, get().keys)
         : type === "usage"
           ? serializeUsageExport(rows)
-          : serializeLedgerCsv(ledgerRows, usePreferences.getState().language);
+          : serializeLedgerCsv(
+              ledgerRows,
+              writtenLanguage(usePreferences.getState().language),
+            );
     const newRecord: ExportRecord = {
       id,
       type,

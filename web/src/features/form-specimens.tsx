@@ -15,6 +15,7 @@ import {
 } from "../components/ui/primitives";
 import { placeholders } from "../config/placeholders";
 import { usePreferences } from "../lib/preferences";
+import { writtenLanguage } from "../lib/localize";
 
 export function FormSpecimens({ onConfirm }: { onConfirm: () => void }) {
   const { t } = useTranslation();
@@ -179,7 +180,7 @@ export function FormSpecimens({ onConfirm }: { onConfirm: () => void }) {
             label={t("selectTier")}
             options={placeholders.tiers.map((item) => ({
               value: item.id,
-              label: item.name[language],
+              label: item.name[writtenLanguage(language)],
             }))}
           />
         </Field>

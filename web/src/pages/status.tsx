@@ -5,6 +5,7 @@ import { PublicHeader } from "../components/product-shell";
 import { catalogModels } from "../config/models";
 import { useProductPreview } from "../lib/product-preview";
 import { usePreferences } from "../lib/preferences";
+import { writtenLanguage } from "../lib/localize";
 import { useServiceQuality } from "../lib/api/service-quality";
 
 export default function StatusPage() {
@@ -201,7 +202,7 @@ export default function StatusPage() {
                         fontSize: "var(--text-base)",
                       }}
                     >
-                      {incident.title[lang] || incident.title.en}
+                      {incident.title[writtenLanguage(lang)]}
                     </div>
                     <span
                       style={{
@@ -240,7 +241,7 @@ export default function StatusPage() {
                       lineHeight: "var(--leading-base)",
                     }}
                   >
-                    {incident.content[lang] || incident.content.en}
+                    {incident.content[writtenLanguage(lang)]}
                   </p>
                   <div
                     className="mono"

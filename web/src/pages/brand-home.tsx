@@ -25,6 +25,7 @@ import { useModelPricing, quoteModelCharge } from "../lib/model-pricing";
 import { serviceGroupLabel } from "../lib/service-group-label";
 import { formatMoney } from "../lib/money";
 import { usePreferences } from "../lib/preferences";
+import { writtenLanguage } from "../lib/localize";
 import "../components/home-redesign.css";
 import AuthDialog from "./auth/auth-dialog";
 import { HomePortal } from "../components/home-portal";
@@ -302,7 +303,7 @@ const providers = [
 export default function BrandHome() {
   const language = usePreferences((s) => s.language);
   const pricing = useModelPricing((s) => s.config);
-  const c = copy[language];
+  const c = copy[writtenLanguage(language)];
   const [active, setActive] = useState(0);
   const [quickstart, setQuickstart] = useState(false);
   const [scenariosOpen, setScenariosOpen] = useState(false);
@@ -574,7 +575,7 @@ export default function BrandHome() {
                     </div>
                     <span className="xy-model-vendor">{m.vendor}</span>
                     <h3>{m.name}</h3>
-                    <p>{m.description[language]}</p>
+                    <p>{m.description[writtenLanguage(language)]}</p>
                     <div className="xy-model-spec">
                       <span>
                         {c.context}

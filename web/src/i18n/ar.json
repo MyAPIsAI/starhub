@@ -1,4 +1,4 @@
-﻿{
+{
   "brand": "MyAPIs",
   "workspace": "مكتبة الواجهات",
   "version": "الإصدار 0.1",
@@ -177,6 +177,7 @@
   "languageEnglish": "English",
   "languageChinese": "中文",
   "languageArabic": "العربية",
+  "languageKorean": "한국어",
   "healthy": "تعمل بشكل طبيعي",
   "warning": "يحتاج إلى متابعة",
   "notEnough": "بيانات غير كافية",

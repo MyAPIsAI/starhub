@@ -97,4 +97,4 @@ export const placeholders = {
 } as const;
 
 export type TierId = string;
-export type Language = "en" | "zh" | "ar";
+export type Language = "en" | "zh" | "ar" | "ko";

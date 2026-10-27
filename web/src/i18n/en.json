@@ -1,4 +1,4 @@
-﻿{
+{
   "brand": "MyAPIs",
   "workspace": "Interface library",
   "version": "Version 0.1",
@@ -177,6 +177,7 @@
   "languageEnglish": "English",
   "languageChinese": "中文",
   "languageArabic": "العربية",
+  "languageKorean": "한국어",
   "healthy": "Operational",
   "warning": "Needs attention",
   "notEnough": "Insufficient data",

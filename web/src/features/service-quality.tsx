@@ -21,6 +21,7 @@ import {
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { usePreferences } from "../lib/preferences";
+import { writtenLanguage } from "../lib/localize";
 import {
   createQualityTrend,
   createQualityUnits,
@@ -440,7 +441,7 @@ export default function ServiceQuality({
       : text("非流式", "Non-streaming", "غير متدفق");
   const groupLabel = (value: string) => {
     const tier = placeholders.tiers.find((item) => item.id === value);
-    return tier?.name[language] ?? value;
+    return tier?.name[writtenLanguage(language)] ?? value;
   };
   const modelLabel = (value: string) =>
     catalogModels.find((item) => item.id === value)?.name ?? value;

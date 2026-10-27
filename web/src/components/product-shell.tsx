@@ -222,6 +222,7 @@ export function Preferences() {
           { value: "en", label: "English" },
           { value: "zh", label: "中文" },
           { value: "ar", label: "العربية" },
+          { value: "ko", label: "한국어" },
         ]}
       />
       <Button
