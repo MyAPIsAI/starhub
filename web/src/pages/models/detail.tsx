@@ -858,6 +858,60 @@ export default function ModelDetail() {
                 </p>
               </section>
             )}
+            {(() => {
+              const cfg = useModelPricing.getState().config;
+              const entry = cfg?.models?.[model.id];
+              const windows = entry?.rule?.timeWindows;
+              if (!windows || windows.length === 0) return null;
+              const dayNames = text("周日,周一,周二,周三,周四,周五,周六", "Sun,Mon,Tue,Wed,Thu,Fri,Sat", "أحد,إثنين,ثلاثاء,أربعاء,خميس,جمعة,سبت").split(",");
+              return (
+                <section className="access-panel">
+                  <h2>
+                    {text("分时定价", "Time-based pricing", "تسعير زمني")}
+                  </h2>
+                  <p className="access-muted">
+                    {text(
+                      "此模型配置了分时定价窗口，不同时段的费率倍率不同。下方为平台配置的分时窗口及其倍率。",
+                      "This model has time-based pricing windows with different rate multipliers. Below are the configured windows and their multipliers.",
+                      "يحتوي هذا النموذج على نوافذ تسعير زمنية بمضاعفات أسعار مختلفة. أدناه النوافذ المكونة ومضاعفاتها.",
+                    )}
+                  </p>
+                  <div className="access-table-wrap" tabIndex={0} role="region">
+                    <table className="access-table">
+                      <thead>
+                        <tr>
+                          <th>{text("时段名称", "Window label", "اسم النافذة")}</th>
+                          <th>{text("适用日", "Days", "الأيام")}</th>
+                          <th>{text("时间", "Time", "الوقت")}</th>
+                          <th>{text("时区", "Timezone", "المنطقة الزمنية")}</th>
+                          <th>{text("倍率", "Multiplier", "المضاعف")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {windows.map((w, i) => (
+                          <tr key={i}>
+                            <td>{w.label}</td>
+                            <td className="mono" style={{ fontSize: "var(--text-xs)" }}>
+                              {w.days.map((d) => dayNames[d] || d).join(", ")}
+                            </td>
+                            <td className="mono">{w.start} – {w.end}</td>
+                            <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{w.timezone}</td>
+                            <td className="mono">{w.multiplier}×</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="access-muted">
+                    {text(
+                      "分时定价仅在模型配置了 timeWindows 时生效。实际费率以平台配置为准。",
+                      "Time-based pricing applies only when the model has timeWindows configured. Actual rates are determined by platform configuration.",
+                      "يسري التسعير الزمني فقط عندما يكون للنموذج timeWindows مكونة. تحدد إعدادات المنصة الأسعار الفعلية.",
+                    )}
+                  </p>
+                </section>
+              );
+            })()}
             {model.pricing.mode === "per_request" && model.pricing.per_request !== null && model.pricing.per_request > 0 && (
               <section className="access-panel">
                 <h2>
