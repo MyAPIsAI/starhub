@@ -26,7 +26,7 @@ const samples: Record<string, string> = {
   node: `import OpenAI from "openai";\n\nconst client = new OpenAI({\n  baseURL: "${placeholders.apiBase}",\n  apiKey: process.env.VEYRA_API_KEY,\n});\n\nconst stream = await client.chat.completions.create({\n  model: "gpt-4.1",\n  messages: [{ role: "user", content: "Hello" }],\n  stream: true,\n});\nfor await (const chunk of stream) {\n  process.stdout.write(chunk.choices[0]?.delta.content || "");\n}`,
   "claude-code": `# Claude Code integration\nexport ANTHROPIC_BASE_URL="${placeholders.apiBase}"\nexport ANTHROPIC_AUTH_TOKEN="$VEYRA_API_KEY"\nexport ANTHROPIC_MODEL="claude-sonnet-4-20250514"\n\n# Then run Claude Code in your project directory\nclaude`,
   cursor: `# Cursor configuration\n# Settings → Models → OpenAI API Key\nOpenAI API Key: $VEYRA_API_KEY\nOpenAI Base URL: ${placeholders.apiBase}\n\n# Add authorized model identifiers in the Models tab:\n# gpt-4.1\n# claude-sonnet-4-20250514\n# gemini-2.5-pro`,
-  gemini: `# Gemini native API\ncurl "${placeholders.apiBase}/v1beta/models/gemini-2.5-pro:generateContent" \\\n  -H "x-goog-api-key: $VEYRA_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "contents": [{"parts": [{"text": "Hello"}]}]\n  }'`,
+  gemini: `# Gemini native API\ncurl "${placeholders.apiBase.replace(/\/v1\/?$/, "")}/v1beta/models/gemini-2.5-pro:generateContent" \\\n  -H "x-goog-api-key: $VEYRA_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "contents": [{"parts": [{"text": "Hello"}]}]\n  }'`,
 };
 function highlight(code: string) {
   const regex =
