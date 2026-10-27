@@ -43,11 +43,13 @@ export default function CreateKey({
   open,
   setOpen,
   initialModel,
+  initialGroup,
   onCreated,
 }: {
   open: boolean;
   setOpen: (v: boolean) => void;
   initialModel?: string;
+  initialGroup?: TierId;
   onCreated?: (keyId: string, plaintext: string) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -100,6 +102,13 @@ export default function CreateKey({
     )
       setTier(match.id);
   }, [initialModel]);
+  useEffect(() => {
+    if (
+      initialGroup &&
+      visibleGroups(config, accountId).some((group) => group.id === initialGroup)
+    )
+      setTier(initialGroup);
+  }, [initialGroup]);
   useEffect(() => {
     try {
       sessionStorage.setItem(

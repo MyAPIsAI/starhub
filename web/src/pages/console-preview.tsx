@@ -74,6 +74,7 @@ import { accountDisplayName } from "../lib/account-identity";
 import "../components/console-redesign.css";
 import "../components/key-task.css";
 import { useModelPricing } from "../lib/model-pricing";
+import { placeholders, type TierId } from "../config/placeholders";
 import EditKey from "../features/edit-key";
 import CreateKey from "../features/create-key";
 import Playground from "../features/request-playground";
@@ -286,6 +287,12 @@ export default function ConsolePreview() {
   )
     ? (requestedModel ?? undefined)
     : undefined;
+  const requestedGroup = new URLSearchParams(location.search).get("group");
+  const initialCreateGroup =
+    requestedGroup &&
+    placeholders.tiers.some((tier) => tier.id === requestedGroup)
+      ? (requestedGroup as TierId)
+      : undefined;
   const creationFromUrl = useRef(false);
   const creationPath = useRef(location.pathname);
   useEffect(() => {
@@ -2590,6 +2597,7 @@ export default function ConsolePreview() {
         open={createOpen}
         setOpen={changeCreateOpen}
         initialModel={initialCreateModel}
+        initialGroup={initialCreateGroup}
         onCreated={(keyId, plaintext) => {
           setPlaintextKeys((s) => ({ ...s, [keyId]: plaintext }));
         }}
