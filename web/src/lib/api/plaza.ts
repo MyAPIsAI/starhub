@@ -20,6 +20,7 @@ export interface PlazaPricing {
   cache_read_per_m: number | null;
   cache_write_per_m: number | null;
   per_request: number | null;
+  expression: string | null;
   official_input_per_m: number | null;
   official_output_per_m: number | null;
   official_cache_read_per_m: number | null;
@@ -92,7 +93,8 @@ export interface PlazaDetailResponse {
     score: number | null;
     sort_weight: number;
     created_at: number;
-    per_request: number | null;
+  per_request: number | null;
+  expression: string | null;
   } | null;
 }
 
