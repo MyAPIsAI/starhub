@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   KeyRound,
@@ -49,8 +49,7 @@ export default function DocsPage() {
   const lang = usePreferences((s) => s.language);
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
-  const [activeTab, setActiveTab] = useState<ArticleId>("quickstart");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
   const articles: { id: ArticleId; title: string; Icon: typeof Terminal }[] = [
     { id: "quickstart", title: t("docsQuickstart"), Icon: Terminal },
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
@@ -63,6 +62,14 @@ export default function DocsPage() {
     { id: "limits", title: text("配额与限流", "Limits & rate", "الحدود والمعدل"), Icon: BookOpen },
     { id: "faq", title: text("常见问题", "FAQ", "الأسئلة الشائعة"), Icon: ChevronRight },
   ];
+  const validIds = articles.map((article) => article.id);
+  const urlArticle = searchParams.get("article");
+  const initialArticle: ArticleId =
+    urlArticle && validIds.includes(urlArticle as ArticleId)
+      ? (urlArticle as ArticleId)
+      : "quickstart";
+  const [activeTab, setActiveTab] = useState<ArticleId>(initialArticle);
+  const [searchQuery, setSearchQuery] = useState("");
   const current = articles.find((article) => article.id === activeTab)!;
 
   // Article search: filter articles by title, keywords, and content tags.
@@ -96,6 +103,26 @@ export default function DocsPage() {
       setActiveTab(filteredArticles[0].id);
     }
   }, [searchQuery, filteredArticles]);
+
+  // Sync active article to the URL so links are shareable and refresh-safe.
+  useEffect(() => {
+    const current = searchParams.get("article");
+    if (current === activeTab) return;
+    const next = new URLSearchParams(searchParams);
+    if (activeTab === "quickstart") next.delete("article");
+    else next.set("article", activeTab);
+    setSearchParams(next, { replace: true });
+  }, [activeTab]);
+
+  // React to browser back/forward navigation.
+  useEffect(() => {
+    const urlArticle = searchParams.get("article");
+    const target: ArticleId =
+      urlArticle && validIds.includes(urlArticle as ArticleId)
+        ? (urlArticle as ArticleId)
+        : "quickstart";
+    if (target !== activeTab) setActiveTab(target);
+  }, [searchParams]);
   const CodeBlock = ({ title, code }: { title: string; code: string }) => (
     <div className="docs-code">
       <div>
@@ -331,7 +358,7 @@ export default function DocsPage() {
                   "إعداد الطرفية",
                 )}
                 code={
-                  'export ANTHROPIC_BASE_URL="https://api.veyra.example/v1"\nexport ANTHROPIC_API_KEY="YOUR_API_KEY"\n\nclaude'
+                  'export ANTHROPIC_BASE_URL="https://api.myapis.ai/v1"\nexport ANTHROPIC_API_KEY="YOUR_API_KEY"\n\nclaude'
                 }
               />
               <Link className="docs-next-link" to="/console/keys">
@@ -776,7 +803,7 @@ export default function DocsPage() {
             {text(
               "MyAPIs开发者文档 · 产品演示",
               "MyAPIs developer documentation · Product preview",
-              "وثائق مطوري Veyra · معاينة المنتج",
+              "وثائق مطوري MyAPIs · معاينة المنتج",
             )}
           </footer>
         </main>
