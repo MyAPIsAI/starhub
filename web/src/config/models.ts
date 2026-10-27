@@ -172,6 +172,23 @@ export const catalogModels: ModelItem[] = [
     tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
     online: true,
   },
+  {
+    id: "myapis-auto",
+    name: "MyAPIs Auto",
+    vendor: "MyAPIs",
+    capabilities: ["text", "code", "vision", "reasoning"],
+    contextLength: 0,
+    contextDisplay: "—",
+    pricing: { input_per_million_usd: "0", output_per_million_usd: "0" },
+    protocols: ["OpenAI", "Anthropic", "Gemini"],
+    description: {
+      zh: "智能路由模型。在密钥授权范围内自动选择成本最低的可用模型。填写 model 为 myapis-auto 即可；实际执行的模型在调用明细中记录。",
+      en: "Smart routing model. Automatically selects the lowest-cost available model within the key's authorized scope. Set model to myapis-auto; the actual model used is recorded in request logs.",
+      ar: "نموذج التوجيه الذكي. يختار تلقائيًا النموذج الأقل تكلفة المتاح ضمن نطاق المفتاح المصرّح به. اضبط model على myapis-auto؛ النموذج الفعلي يُسجّل في سجل الطلبات.",
+    },
+    tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
+    online: true,
+  },
 ];
 
 export interface PricingTimeWindow {
