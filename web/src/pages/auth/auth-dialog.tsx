@@ -53,9 +53,7 @@ export default function AuthDialog() {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneCode, setPhoneCode] = useState("");
-  const [registerPhone, setRegisterPhone] = useState("");
   const [username, setUsername] = useState("");
-  const [registerCode, setRegisterCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmError, setConfirmError] = useState(false);
@@ -63,12 +61,12 @@ export default function AuthDialog() {
   const [resetCode, setResetCode] = useState("");
   const [resetPassword, setResetPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
-  const [human, setHuman] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<
     Record<string, boolean>
   >({});
   const [error, setError] = useState("");
   const [resetDone, setResetDone] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const [busy, setBusy] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -132,6 +130,7 @@ export default function AuthDialog() {
   }
   function changeMode(next: AuthMode) {
     setResetDone(false);
+    setRegistered(false);
     navigate(
       next === "register"
         ? "/register"
@@ -214,16 +213,6 @@ export default function AuthDialog() {
       );
       return;
     }
-    if (mode === "register" && !human) {
-      setError(
-        c(
-          "请完成人机验证演示勾选。",
-          "Complete the demo verification checkbox.",
-          "أكمل خانة التحقق التجريبية.",
-        ),
-      );
-      return;
-    }
     if (mode === "register" && newPassword !== confirmPassword) {
       setConfirmError(true);
       setError(
@@ -252,10 +241,14 @@ export default function AuthDialog() {
       if (mode === "register") {
         const user = await registerUser(username, newPassword, "");
         if (ticket !== operation.current) return;
-        useProductPreview
-          .getState()
-          .register(user.email ?? "", user.username, authUserProfile(user));
-        useSystemAccess.getState().setRole(user.role);
+        setAccount(user.username);
+        setPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setRegistered(true);
+        // Registration creates an account but does not establish a server session.
+        navigate("/login", { replace: true });
+        return;
       } else {
         // Login: password method only (phone not supported by backend).
         const { user } = await loginUser(account, password);
@@ -270,8 +263,7 @@ export default function AuthDialog() {
       setNewPassword("");
       setConfirmPassword("");
       setPhoneCode("");
-      setRegisterCode("");
-      navigate(mode === "register" ? "/console/connect" : "/console", {
+      navigate("/console", {
         replace: true,
       });
     } catch (caught) {
@@ -341,7 +333,8 @@ export default function AuthDialog() {
               (id === "auth-confirm-password" && confirmError) || undefined
             }
             required
-            maxLength={128}
+            minLength={isNew ? 6 : undefined}
+            maxLength={64}
             placeholder={
               id === "auth-confirm-password"
                 ? c(
@@ -350,11 +343,7 @@ export default function AuthDialog() {
                     "أدخل كلمة المرور مجددًا",
                   )
                 : isNew
-                  ? c(
-                      "至少 8 位，含字母和数字",
-                      "8+ characters, letters and numbers",
-                      "8 أحرف أو أكثر، حروف وأرقام",
-                    )
+                  ? c("至少 6 位", "At least 6 characters", "6 أحرف على الأقل")
                   : c("请输入密码", "Enter your password", "أدخل كلمة المرور")
             }
           />
@@ -497,9 +486,6 @@ export default function AuthDialog() {
             <div className="auth-wordmark">
               <BrandMark />
               <span>MyAPIs</span>
-              <span className="auth-demo-badge">
-                {c("演示", "Demo", "عرض")}
-              </span>
             </div>
             <button
               type="button"
@@ -540,13 +526,13 @@ export default function AuthDialog() {
                 {policy === "terms" ? (
                   <>
                     <h3>
-                      {c("1. 演示范围", "1. Demo scope", "1. نطاق العرض")}
+                      {c("1. 当前范围", "1. Current scope", "1. النطاق الحالي")}
                     </h3>
                     <p>
                       {c(
-                        "本项目用于体验模型接入、权限和费用流程。登录、验证码、模型调用及支付均为本地模拟，不提供真实模型服务，不发送短信或邮件。",
-                        "This project demonstrates model access, permissions and costs. Authentication, codes, model calls and payments are simulated locally. No real model service, SMS or email is provided.",
-                        "يعرض المشروع الوصول للنماذج والصلاحيات والتكاليف. المصادقة والرموز والطلبات والمدفوعات محلية تجريبية؛ لا خدمات نماذج أو رسائل فعلية.",
+                        "用户名注册与密码登录使用服务器接口。模型调用取决于部署中的上游渠道、权限和配额；当前充值收银台仍为模拟流程，短信及验证邮件尚未接入。",
+                        "Username registration and password login use server APIs. Model calls depend on configured upstream channels, permissions and quota. The current recharge checkout is simulated; SMS and verification email are unavailable.",
+                        "يستخدم التسجيل والدخول واجهات الخادم. تعتمد طلبات النماذج على القنوات والصلاحيات والحصة. الدفع الحالي محاكاة؛ الرسائل النصية ورسائل التحقق غير متاحة.",
                       )}
                     </p>
                     <h3>
@@ -558,19 +544,19 @@ export default function AuthDialog() {
                     </h3>
                     <p>
                       {c(
-                        "注册会进入零余额的新账户演示，无免费额度。创建充值订单不代表到账。调用仍受分组权限、密钥额度及账户余额约束。",
-                        "Registration starts a zero-balance demo with no free credits. Creating an order does not add funds. Calls remain subject to group permissions, key limits and balance.",
-                        "يبدأ التسجيل برصيد تجريبي صفري دون ائتمان مجاني. إنشاء طلب شحن لا يضيف رصيدًا. تظل الطلبات خاضعة للصلاحيات وحدود المفتاح والرصيد.",
+                        "注册成功后仍需登录。当前新账号 API 配额默认是零；支付钱包与 API 配额分别记账。创建充值订单不代表付款确认，模拟充值不能兑换真实 API 配额。",
+                        "Registration must be followed by login. New accounts currently default to zero API quota; payment wallet and API quota are separate. Creating an order is not payment confirmation, and simulated recharge cannot be exchanged for live API quota.",
+                        "يلزم تسجيل الدخول بعد إنشاء الحساب. تبدأ الحصة الافتراضية للحسابات الجديدة بصفر؛ المحفظة والحصة منفصلتان. إنشاء طلب ليس تأكيد دفع ولا يتحول الشحن التجريبي إلى حصة فعلية.",
                       )}
                     </p>
                     <h3>
-                      {c("3. 演示数据", "3. Demo data", "3. بيانات العرض")}
+                      {c("3. 数据范围", "3. Data scope", "3. نطاق البيانات")}
                     </h3>
                     <p>
                       {c(
-                        "此设备共用一份演示工作台。注册新账户或重置场景会替换当前演示业务数据；请仅使用虚构资料。正式服务条款须在上线前另行确定。",
-                        "This device shares one demo console. Registering or resetting a scenario replaces its business data. Use fictional details only. Production terms must be defined separately before launch.",
-                        "يستخدم الجهاز لوحة تحكم تجريبية مشتركة. التسجيل أو إعادة السيناريو يستبدل بيانات الأعمال. استخدم بيانات خيالية فقط. يجب إعداد شروط الإنتاج قبل الإطلاق.",
+                        "服务器账户数据与浏览器中的演示场景数据分开。注册不会替换现有账本、密钥或演示场景；登录后的实际权限由服务器校验。此说明仍为界面草案。",
+                        "Server account data is separate from browser Demo scenarios. Registration does not replace existing ledgers, keys or scenarios. The server checks actual permissions after login. This notice remains a UI draft.",
+                        "بيانات حساب الخادم منفصلة عن سيناريوهات المتصفح. التسجيل لا يستبدل السجلات أو المفاتيح أو السيناريوهات. يتحقق الخادم من الصلاحيات الفعلية. يظل هذا الإشعار مسودة واجهة.",
                       )}
                     </p>
                   </>
@@ -585,9 +571,9 @@ export default function AuthDialog() {
                     </h3>
                     <p>
                       {c(
-                        "演示账户和加盐口令摘要保存在当前标签页的会话存储中；明文密码不会持久保存。账号资料（包括用户标识、用户名、手机号及绑定邮箱）、业务演示数据和偏好保存在此浏览器的本地存储中。关闭标签页会结束本轮注册账号的演示会话。",
-                        "Demo accounts and salted password hashes use this tab’s session storage; plain-text passwords are not persisted. Account profile details (including user ID, username, phone and linked email), business demo data and preferences use browser local storage. Closing the tab ends the registered-account demo session.",
-                        "تُحفظ الحسابات التجريبية وتجزئات كلمات المرور المملحة في جلسة علامة التبويب دون حفظ كلمة المرور النصية. تُحفظ بيانات ملف الحساب، ومنها اسم المستخدم والهاتف، وبيانات العرض والتفضيلات محليًا. إغلاق التبويب ينهي جلسة الحساب المسجل.",
+                        "服务器保存用户名与口令哈希；登录使用 HttpOnly Cookie 和服务器会话，不将会话密钥写入浏览器本地存储。浏览器仍保存账号显示资料、偏好和其余演示数据。当前注册表单不收集手机号。",
+                        "The server stores usernames and password hashes. Login uses an HttpOnly cookie and a server session; session keys are not saved to browser local storage. Display profiles, preferences and remaining Demo data are stored in the browser. This registration form collects no phone number.",
+                        "يحفظ الخادم أسماء المستخدمين وتجزئات كلمات المرور. يستخدم الدخول ملف ارتباط HttpOnly وجلسة خادم، دون حفظ مفتاح الجلسة في التخزين المحلي. تُحفظ ملفات العرض والتفضيلات وبيانات العرض المتبقية في المتصفح. لا يجمع النموذج رقم هاتف.",
                       )}
                     </p>
                     <h3>
@@ -599,9 +585,9 @@ export default function AuthDialog() {
                     </h3>
                     <p>
                       {c(
-                        "验证码只在浏览器中生成和比对，不向手机号或邮箱发送消息。请勿输入真实密码、个人敏感信息或支付资料。这里只演示阅读与同意状态，不生成正式的合规同意记录。",
-                        "Codes are generated and checked in the browser. No messages are sent to phones or email addresses. Do not enter real passwords, sensitive personal data or payment details. Consent here is a UI demonstration, not a production consent record.",
-                        "تُنشأ الرموز وتُفحص في المتصفح دون إرسال رسائل. لا تدخل كلمات مرور حقيقية أو بيانات حساسة أو دفع. الموافقة هنا عرض للواجهة وليست سجل موافقة للإنتاج.",
+                        "短信和验证邮件尚未接入，当前不提供手机号认证或验证码登录。阅读与勾选状态仍只在界面处理，服务器没有保存版本化的同意记录。",
+                        "SMS and verification email are unavailable; phone verification and code login are not supported. Reading and consent state are handled in the UI; the server does not retain a versioned consent record.",
+                        "الرسائل النصية ورسائل التحقق غير متاحة؛ لا يُدعم توثيق الهاتف أو الدخول برمز. تُعالج الموافقة في الواجهة ولا يحفظ الخادم سجل موافقة بإصدار محدد.",
                       )}
                     </p>
                     <h3>
@@ -609,9 +595,9 @@ export default function AuthDialog() {
                     </h3>
                     <p>
                       {c(
-                        "你可以关闭当前标签页结束认证演示会话，或在浏览器的网站数据设置中清除本地演示数据。正式隐私政策须在实际服务与数据处理方式确定后另行提供。",
-                        "Close this tab to end the auth demo session, or clear this site’s browser data to remove local demo data. A production privacy notice must be provided when the real service and data processing are defined.",
-                        "أغلق التبويب لإنهاء جلسة المصادقة التجريبية، أو امسح بيانات الموقع لإزالة العرض المحلي. تُعد سياسة الإنتاج عند تحديد الخدمة ومعالجة البيانات الفعلية.",
+                        "请使用退出登录来结束当前服务器会话；仅关闭标签页不会注销。清除浏览器网站数据不会删除服务器账户或账本。正式隐私政策仍需由部署方另行提供。",
+                        "Use Sign out to end the current server session; closing a tab does not log out. Clearing browser data does not delete server accounts or ledgers. The deployment operator must provide the final privacy policy separately.",
+                        "استخدم تسجيل الخروج لإنهاء جلسة الخادم؛ إغلاق التبويب لا ينهيها. مسح بيانات المتصفح لا يحذف حسابات الخادم أو السجلات. يقدّم مشغّل النشر سياسة الخصوصية النهائية بشكل منفصل.",
                       )}
                     </p>
                   </>
@@ -656,6 +642,15 @@ export default function AuthDialog() {
               </div>
             ) : (
               <>
+                {mode === "login" && registered && (
+                  <p className="auth-field-hint" role="status">
+                    {c(
+                      "账户已创建。请使用用户名和密码登录；尚未建立新会话。",
+                      "Account created. Sign in with your username and password; no new session has been established.",
+                      "أُنشئ الحساب. سجّل الدخول باسم المستخدم وكلمة المرور؛ لم تُنشأ جلسة جديدة بعد.",
+                    )}
+                  </p>
+                )}
                 {mode === "login" && (
                   <div
                     className="auth-methods"
@@ -719,11 +714,7 @@ export default function AuthDialog() {
                           }}
                           required
                           maxLength={254}
-                          placeholder={c(
-                            "用户名、手机号或已绑定邮箱",
-                            "Username, phone or linked email",
-                            "اسم المستخدم أو الهاتف أو البريد المرتبط",
-                          )}
+                          placeholder={c("用户名", "Username", "اسم المستخدم")}
                           dir="ltr"
                         />
                       </div>
@@ -828,14 +819,16 @@ export default function AuthDialog() {
                         </label>
                         <Input
                           id="auth-username"
+                          dir="ltr"
                           value={username}
                           onChange={(e) => {
                             setUsername(e.target.value);
                             setError("");
                           }}
                           required
-                          minLength={2}
-                          maxLength={24}
+                          minLength={3}
+                          maxLength={64}
+                          pattern="(?:[a-zA-Z0-9_.]|-){3,64}"
                           autoComplete="username"
                           placeholder={c(
                             "请输入用户名",
@@ -846,41 +839,12 @@ export default function AuthDialog() {
                         />
                         <p id="auth-username-hint" className="auth-field-hint">
                           {c(
-                            "2–24 位，以文字开头，可含数字、下划线或短横线",
-                            "2–24 characters, starting with a letter; letters, numbers, _ and -",
-                            "2–24 محرفًا تبدأ بحرف، مع أرقام أو شرطات سفلية أو قصيرة",
+                            "3–64 位英文字母、数字、下划线、短横线或点号",
+                            "3–64 ASCII letters, digits, underscores, hyphens or dots",
+                            "3–64 حرفًا لاتينيًا أو رقمًا أو شرطة سفلية أو شرطة أو نقطة",
                           )}
                         </p>
                       </div>
-                      <div className="auth-field">
-                        <label htmlFor="auth-register-phone">
-                          {c("手机号", "Phone number", "رقم الهاتف")}
-                        </label>
-                        <div className="auth-phone-input">
-                          <span dir="ltr">+86</span>
-                          <Input
-                            id="auth-register-phone"
-                            type="tel"
-                            inputMode="tel"
-                            value={registerPhone}
-                            onChange={(e) => {
-                              setRegisterPhone(e.target.value);
-                              setRegisterCode("");
-                              setError("");
-                            }}
-                            required
-                            maxLength={11}
-                            autoComplete="tel-national"
-                            placeholder={c(
-                              "请输入手机号",
-                              "Your phone number",
-                              "رقم هاتفك",
-                            )}
-                            dir="ltr"
-                          />
-                        </div>
-                      </div>
-                      {codeField(registerCode, setRegisterCode)}
                       {passwordField(
                         "auth-new-password",
                         c("设置密码", "Create password", "إنشاء كلمة مرور"),
@@ -895,28 +859,13 @@ export default function AuthDialog() {
                         setConfirmPassword,
                         true,
                       )}
-                      <label className="auth-human">
-                        <input
-                          type="checkbox"
-                          checked={human}
-                          onChange={(e) => {
-                            setHuman(e.target.checked);
-                            setError("");
-                          }}
-                        />
-                        <span>
-                          {c(
-                            "完成人机验证（模拟）",
-                            "Complete verification (simulated)",
-                            "إكمال التحقق (محاكاة)",
-                          )}
-                        </span>
-                        <Check
-                          size={16}
-                          aria-hidden="true"
-                          style={{ opacity: human ? 1 : 0.2 }}
-                        />
-                      </label>
+                      <p className="auth-field-hint">
+                        {c(
+                          "当前仅支持用户名与密码注册，不收集或验证手机号。短信验证尚未接入。",
+                          "Registration currently uses a username and password. Phone numbers are neither collected nor verified; SMS verification is unavailable.",
+                          "التسجيل حاليًا باسم مستخدم وكلمة مرور. لا تُجمع أرقام الهواتف ولا تُتحقق؛ التحقق بالرسائل غير متاح.",
+                        )}
+                      </p>
                     </>
                   )}
                   {mode === "reset" && (
@@ -963,9 +912,9 @@ export default function AuthDialog() {
                   {mode === "register" && (
                     <p className="auth-registration-note">
                       {c(
-                        "注册将替换当前演示业务数据，进入零余额的新账户；不会赠送额度。",
-                        "Registration replaces this console’s demo data with a new, zero-balance account. No free credits.",
-                        "يستبدل التسجيل بيانات لوحة التحكم التجريبية بحساب جديد برصيد صفري، دون ائتمان مجاني.",
+                        "创建账号不会清空当前演示数据；注册成功后需要登录。新账号 API 配额默认是零。",
+                        "Creating an account does not clear current Demo data. Sign in after registration; new accounts default to zero API quota.",
+                        "إنشاء الحساب لا يمسح بيانات العرض الحالية. سجّل الدخول بعد التسجيل؛ تبدأ حصة الحساب الجديد بصفر.",
                       )}
                     </p>
                   )}
@@ -981,11 +930,7 @@ export default function AuthDialog() {
                     }
                   >
                     {mode === "register"
-                      ? c(
-                          "创建演示账户",
-                          "Create demo account",
-                          "إنشاء حساب تجريبي",
-                        )
+                      ? c("创建账户", "Create account", "إنشاء حساب")
                       : mode === "reset"
                         ? c(
                             "更新演示密码",
@@ -1028,9 +973,9 @@ export default function AuthDialog() {
             <Info size={14} />
             <span>
               {c(
-                "本地演示，不发送短信或邮件。请使用虚构资料。",
-                "Local demo. No SMS or email is sent. Use fictional details.",
-                "عرض محلي بلا رسائل فعلية. استخدم بيانات خيالية.",
+                "账户由服务器保存，登录会话使用 Cookie。当前不发送短信或验证邮件。",
+                "Accounts are saved on the server; login sessions use cookies. SMS and verification email are unavailable.",
+                "تُحفظ الحسابات على الخادم وتستخدم الجلسات ملفات الارتباط. الرسائل النصية ورسائل التحقق غير متاحة.",
               )}
             </span>
           </div>

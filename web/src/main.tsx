@@ -128,7 +128,7 @@ function FinanceOnly({ children }: { children: React.ReactNode }) {
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status, retry } = useSessionRestore();
   const language = usePreferences((s) => s.language);
-  const isLoggedIn = useProductPreview((s) => s.user.isLoggedIn);
+  const isLoggedIn = useSystemAccess((s) => s.session.accountId !== null);
   if (status === "unavailable") {
     const message =
       language === "zh"
