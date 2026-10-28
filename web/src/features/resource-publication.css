@@ -132,6 +132,25 @@
   padding: 8px;
   min-width: 0;
 }
+.rp-publish-content {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.rp-publish-dialog p,
+.rp-publish-dialog li {
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.rp-publish-dialog h3 {
+  font-size: 16px;
+  margin-block: 0 12px;
+}
+.rp-publish-dialog ul {
+  max-height: 160px;
+  overflow: auto;
+  padding-inline-start: 24px;
+}
 @media (max-width: 600px) {
   .resource-publication {
     padding: 14px;

@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { apiGet, apiRequest } from "./http";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiPut, apiRequest } from "./http";
 import { useSessionQueryIdentity } from "../system-access";
 import {
   publicationRequest,
@@ -7,7 +7,14 @@ import {
   readPublicationPreview,
   type PublicationBinding,
   type PublicationContext,
+  type PublicationPreview,
 } from "../resource-publication";
+import {
+  acknowledgementMatchesReview,
+  publicationCommitRequest,
+  readPublicationAcknowledgement,
+  readPublicationReceipt,
+} from "../resource-publication-commit";
 
 export function usePublicationContext(enabled: boolean) {
   const identity = useSessionQueryIdentity();
@@ -20,6 +27,45 @@ export function usePublicationContext(enabled: boolean) {
         await apiGet<unknown>("/api/resource/publication-context", signal),
       ),
   });
+}
+
+export function usePublishResourceReview() {
+  const client = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async (review: PublicationPreview) => {
+      const acknowledgement = readPublicationAcknowledgement(
+        await apiPut<unknown>(
+          "/api/resource/publication",
+          publicationCommitRequest(review),
+        ),
+      );
+      if (!acknowledgementMatchesReview(acknowledgement, review))
+        throw Error("Publication acknowledgement does not match review");
+      return acknowledgement;
+    },
+    onSettled: async () => {
+      await Promise.allSettled(
+        [
+          "resource-catalog",
+          "resource-publication-context",
+          "resource-publication-state",
+          "admin-audit",
+          "plaza-models",
+          "plaza-model",
+          "plaza-filters",
+          "plaza-rank",
+        ].map((key) => client.invalidateQueries({ queryKey: [key] })),
+      );
+    },
+  });
+}
+
+export async function getPublicationReceipt(digest: string) {
+  if (!/^[0-9a-f]{64}$/.test(digest)) throw Error("Invalid review digest");
+  return readPublicationReceipt(
+    await apiGet<unknown>(`/api/resource/publication-receipt/${digest}`),
+  );
 }
 
 export async function previewResourcePublication(

@@ -16,6 +16,7 @@ import {
   useSystemAccess,
 } from "../lib/system-access";
 import { useSettingsText } from "./settings-text";
+import { PublicationCommit } from "./resource-publication-commit";
 import "./resource-publication.css";
 
 export function ResourcePublication(props: {
@@ -197,6 +198,12 @@ function PublicationPanel({
           "This binding has no supported pairs. Enable valid placements or remove this selection.",
           "لا يحتوي هذا الرابط على أزواج مدعومة. فعّل إعدادات نشر صالحة أو أزل هذا الاختيار.",
         );
+      case "publication_revision_exhausted":
+        return text(
+          "发布版本已达到安全上限，请联系管理员处理。",
+          "Publication revisions reached the safe limit. Contact an administrator.",
+          "بلغت إصدارات النشر الحد الآمن. تواصل مع المسؤول.",
+        );
       default:
         return text(
           "服务器返回了阻塞原因，请核对来源配置",
@@ -248,9 +255,9 @@ function PublicationPanel({
       </header>
       <aside>
         {text(
-          "当前仅生成服务器预览，不保存绑定或改变路由/调用权限。来源模型、标准模型和投放模型须同名；首期仅支持 OpenAI 类型的文本/代码资源。上游凭证仍在真实渠道中单独管理。",
-          "This generates a server preview only. Bindings are not saved and routing or API permissions do not change. Source, canonical and placement model IDs must match; this initial profile supports OpenAI-type text/code resources only. Manage upstream credentials separately in real channels.",
-          "يُنشئ هذا معاينة خادم فقط. لا تُحفظ الروابط ولا يتغير التوجيه أو صلاحيات الواجهة. يجب تطابق معرّفات المصدر والنموذج القياسي والنشر؛ يدعم النطاق الأولي النص والبرمجة من نوع OpenAI فقط. تُدار بيانات الاعتماد في القنوات الفعلية بشكل منفصل.",
+          "先生成服务器预览；只有明确确认发布后，才会保存绑定并替换所选渠道的路由授权。来源模型、标准模型和投放模型须同名。上游凭证仍在真实渠道中单独管理。",
+          "Generate a server preview first. Only explicit publication confirmation saves bindings and replaces routing grants on selected channels. Source, canonical and placement model IDs must match. Manage upstream credentials separately in real channels.",
+          "أنشئ معاينة الخادم أولًا. لا تُحفظ الروابط ولا تُستبدل صلاحيات التوجيه للقنوات المحددة إلا بعد تأكيد النشر صراحةً. يجب تطابق معرّفات المصدر والنموذج القياسي والنشر. تُدار بيانات الاعتماد في القنوات الفعلية بشكل منفصل.",
         )}
       </aside>
       <p className="rp-profile">
@@ -497,6 +504,41 @@ function PublicationPanel({
           )}
         </p>
       )}
+      {context && context.publish_available !== true && (
+        <p>
+          {text(
+            "此服务器仅提供预览，未开放发布。",
+            "This server provides previews only; publication is unavailable.",
+            "يوفر هذا الخادم المعاينة فقط؛ النشر غير متاح.",
+          )}
+        </p>
+      )}
+      <PublicationCommit
+        review={preview && !stale ? preview : undefined}
+        disabled={
+          !coherent ||
+          stale ||
+          busy ||
+          query.isFetching ||
+          context?.publish_available !== true
+        }
+        onCommitted={() => {
+          reset();
+          void Promise.allSettled([query.refetch(), refreshCatalog()]);
+        }}
+        renderRoutes={(review) => (
+          <PairTable
+            key={`confirmed-${review.review_digest}`}
+            title={text(
+              "确认发布组合",
+              "Confirmed publication pairs",
+              "أزواج النشر المؤكدة",
+            )}
+            rows={review.proposed_routes}
+            showConstraints
+          />
+        )}
+      />
     </section>
   );
 }

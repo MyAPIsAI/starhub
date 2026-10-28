@@ -65,6 +65,9 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 		state = publicationAPIData[model.ResourceCatalog](t, doRequest(env.base, "PUT", "/api/placement/res-"+item.model, env.session, map[string]any{"expected_revision": state.Revision, "placement": model.ResourcePlacement{ModelID: &item.model, GroupIDs: []string{item.group}, Enabled: true}}))
 	}
 	context := publicationAPIData[model.ResourcePublicationContext](t, doRequest(env.base, "GET", "/api/resource/publication-context", env.session, nil))
+	if !context.PublishAvailable {
+		t.Fatal("server did not declare its guarded publication capability")
+	}
 	bindings := []model.ResourceChannelBinding{{SourceChannelID: "inventory-source", GatewayChannelID: strconv.FormatInt(channelID, 10)}}
 	payload := map[string]any{"expected_resource_revision": context.ResourceRevision, "expected_channel_revision": context.ChannelRevision, "expected_option_version": context.OptionVersion, "bindings": bindings}
 	plan := publicationAPIData[model.ResourcePublicationPreview](t, doRequest(env.base, "POST", "/api/resource/publication-preview", env.session, payload))

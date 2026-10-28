@@ -15,6 +15,7 @@ export interface PublicationContext {
   option_version: number;
   channels: PublicationChannel[];
   preview_only: true;
+  publish_available?: boolean;
   affects_gateway_routing: false;
 }
 export interface PublicationBinding {
@@ -72,6 +73,8 @@ export function readPublicationContext(value: unknown): PublicationContext {
     JSON.stringify(value.supported_endpoints) !==
       JSON.stringify(["/v1/chat/completions", "/v1/messages"]) ||
     value.preview_only !== true ||
+    (value.publish_available !== undefined &&
+      typeof value.publish_available !== "boolean") ||
     value.affects_gateway_routing !== false ||
     !version(value.resource_revision) ||
     !version(value.channel_revision) ||
