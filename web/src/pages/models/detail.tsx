@@ -812,53 +812,7 @@ export default function ModelDetail() {
                 </div>
               </section>
             )}
-            {model.pricing.mode === "per_token" && model.pricing.per_request != null && model.pricing.per_request > 0 && (
-              <section className="access-panel">
-                <h2>
-                  {text("阶梯定价", "Tiered pricing", "تسعير متدرج")}
-                </h2>
-                <p className="access-muted">
-                  {text(
-                    "此模型支持阶梯定价：输入 Token 超过阈值时按更低费率计费。下方为平台配置的阶梯分界与对应单价。",
-                    "This model supports tiered pricing: input tokens beyond a threshold are billed at a lower rate. Below are the tier boundaries and corresponding rates.",
-                    "يدعم هذا النموذج التسعير المتدرج: الرموز التي تتجاوز الحد تُحاسب بسعر أقل. أدناه حدود المراحل والأسعار المقابلة.",
-                  )}
-                </p>
-                <div className="access-table-wrap" tabIndex={0} role="region">
-                  <table className="access-table">
-                    <thead>
-                      <tr>
-                        <th>{text("阶梯", "Tier", "المرحلة")}</th>
-                        <th>{text("输入阈值", "Input threshold", "حد الإدخال")}</th>
-                        <th>{text("单价（美元/百万 Token）", "Rate (USD/M tokens)", "السعر (دولار/مليون رمز)")}</th>
-                        <th>{text("说明", "Description", "الوصف")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>{text("标准", "Standard", "قياسي")}</td>
-                        <td className="mono" dir="ltr">0 – 32K</td>
-                        <td className="mono">${amounts?.input ?? "—"}</td>
-                        <td>{text("输入不超过 32K Token", "Input up to 32K tokens", "الإدخال حتى 32K رمز")}</td>
-                      </tr>
-                      <tr>
-                        <td>{text("超额", "Excess", "الفائض")}</td>
-                        <td className="mono" dir="ltr">&gt; 32K</td>
-                        <td className="mono">${model.pricing.per_request.toFixed(6)}</td>
-                        <td>{text("输入超过 32K Token 后按更低费率", "Reduced rate beyond 32K tokens", "سعر مخفض يتجاوز 32K رمز")}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <p className="access-muted">
-                  {text(
-                    "阶梯定价仅在模型配置了 per_request 价格时生效。实际阶梯阈值和费率以后端返回的定价配置为准。",
-                    "Tiered pricing applies only when the model has a per_request price configured. Actual thresholds and rates are determined by backend pricing configuration.",
-                    "يسري التسعير المتدرج فقط عندما يكون للنموذج سعر per_request مكون. تحدد إعدادات تسعير الخادم الحدود والأسعار الفعلية.",
-                  )}
-                </p>
-              </section>
-            )}
+
             {(() => {
               const cfg = useModelPricing.getState().config;
               const entry = cfg?.models?.[model.id];
