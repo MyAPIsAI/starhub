@@ -748,108 +748,110 @@ export default function ModelDetail() {
                 </details>
               )}
             </section>
-            <section className="access-panel">
-              <h2>
-                {text("定价详情", "Pricing details", "تفاصيل التسعير")}
-              </h2>
-              <p className="access-muted">
-                {text(
-                  "以下展示模型的定价结构与缓存折扣。实际费用取决于请求时的用量、缓存命中和分组倍率。",
-                  "The following shows the model's pricing structure and cache discounts. Actual cost depends on request usage, cache hits, and group multiplier.",
-                  "يعرض ما يلي هيكل تسعير النموذج وخصومات التخزين. التكلفة الفعلية تعتمد على الاستخدام وذاكرة التخزين المؤقتة ومعامل المجموعة.",
-                )}
-              </p>
-              <div className="access-table-wrap" tabIndex={0} role="region">
-                <table className="access-table">
-                  <thead>
-                    <tr>
-                      <th>{text("计费项", "Billing item", "بند الفوترة")}</th>
-                      <th>{text("单价（美元/百万 Token）", "Rate (USD/M tokens)", "السعر (دولار/مليون رمز)")}</th>
-                      <th>{text("说明", "Description", "الوصف")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>{text("输入 Token", "Input tokens", "رموز الإدخال")}</td>
-                      <td className="mono">
-                        ${amounts?.input ?? "—"}
-                      </td>
-                      <td>
-                        {text(
-                          "请求中的提示词和对话内容",
-                          "Prompt and conversation content in the request",
-                          "المحتوى التلقيني والمحادثة في الطلب",
-                        )}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td>{text("输出 Token", "Output tokens", "رموز الإخراج")}</td>
-                      <td className="mono">
-                        ${amounts?.output ?? "—"}
-                      </td>
-                      <td>
-                        {text(
-                          "模型生成的回复内容",
-                          "Model-generated response content",
-                          "محتوى الاستجابة المُنشأ بواسطة النموذج",
-                        )}
-                      </td>
-                    </tr>
-                    {amounts?.cacheRead !== undefined && (
+            {model.pricing.mode === "per_token" && (
+              <section className="access-panel">
+                <h2>
+                  {text("定价详情", "Pricing details", "تفاصيل التسعير")}
+                </h2>
+                <p className="access-muted">
+                  {text(
+                    "以下展示模型的定价结构与缓存折扣。实际费用取决于请求时的用量、缓存命中和分组倍率。",
+                    "The following shows the model's pricing structure and cache discounts. Actual cost depends on request usage, cache hits, and group multiplier.",
+                    "يعرض ما يلي هيكل تسعير النموذج وخصومات التخزين. التكلفة الفعلية تعتمد على الاستخدام وذاكرة التخزين المؤقتة ومعامل المجموعة.",
+                  )}
+                </p>
+                <div className="access-table-wrap" tabIndex={0} role="region">
+                  <table className="access-table">
+                    <thead>
                       <tr>
-                        <td>{text("缓存读取", "Cache read", "قراءة التخزين")}</td>
+                        <th>{text("计费项", "Billing item", "بند الفوترة")}</th>
+                        <th>{text("单价（美元/百万 Token）", "Rate (USD/M tokens)", "السعر (دولار/مليون رمز)")}</th>
+                        <th>{text("说明", "Description", "الوصف")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>{text("输入 Token", "Input tokens", "رموز الإدخال")}</td>
                         <td className="mono">
-                          ${amounts.cacheRead}
+                          ${amounts?.input ?? "—"}
                         </td>
                         <td>
                           {text(
-                            "命中缓存的输入按折扣价计费",
-                            "Cached input is billed at a discounted rate",
-                            "الإدخال المخزن يُحاسب بسعر مخفض",
+                            "请求中的提示词和对话内容",
+                            "Prompt and conversation content in the request",
+                            "المحتوى التلقيني والمحادثة في الطلب",
                           )}
                         </td>
                       </tr>
-                    )}
-                    {amounts?.cacheWrite !== undefined && (
                       <tr>
-                        <td>{text("缓存写入", "Cache write", "كتابة التخزين")}</td>
+                        <td>{text("输出 Token", "Output tokens", "رموز الإخراج")}</td>
                         <td className="mono">
-                          ${amounts.cacheWrite}
+                          ${amounts?.output ?? "—"}
                         </td>
                         <td>
                           {text(
-                            "首次写入缓存的输入内容",
-                            "Initial write of input to cache",
-                            "الكتابة الأولى للإدخال إلى التخزين",
+                            "模型生成的回复内容",
+                            "Model-generated response content",
+                            "محتوى الاستجابة المُنشأ بواسطة النموذج",
                           )}
                         </td>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="pricing-mobile-cards" style={{ display: "none" }}>
-                {[
-                  { label: text("输入 Token", "Input tokens", "رموز الإدخال"), value: amounts?.input },
-                  { label: text("输出 Token", "Output tokens", "رموز الإخراج"), value: amounts?.output },
-                  ...(amounts?.cacheRead !== undefined ? [{ label: text("缓存读取", "Cache read", "قراءة التخزين"), value: amounts.cacheRead }] : []),
-                  ...(amounts?.cacheWrite !== undefined ? [{ label: text("缓存写入", "Cache write", "كتابة التخزين"), value: amounts.cacheWrite }] : []),
-                ].map((item) => (
-                  <div key={item.label} className="pricing-mobile-card">
-                    <span className="pricing-mobile-label">{item.label}</span>
-                    <span className="mono pricing-mobile-value">${item.value ?? "—"}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="access-muted">
-                {text(
-                  `当前分组倍率：${model.pricing.group_ratio}×（已包含在上方售价中）。历史账单保留请求当时费率。`,
-                  `Current group multiplier: ${model.pricing.group_ratio}× (included above). Historical bills retain their original rates.`,
-                  `معامل المجموعة الحالي: ${model.pricing.group_ratio}× (مضمّن أعلاه). تحتفظ الفواتير السابقة بأسعارها الأصلية.`,
-                )}
-              </p>
-            </section>
-            {model.pricing.mode === "expression" && model.pricing.expression && (
+                      {amounts?.cacheRead !== undefined && (
+                        <tr>
+                          <td>{text("缓存读取", "Cache read", "قراءة التخزين")}</td>
+                          <td className="mono">
+                            ${amounts.cacheRead}
+                          </td>
+                          <td>
+                            {text(
+                              "命中缓存的输入按折扣价计费",
+                              "Cached input is billed at a discounted rate",
+                              "الإدخال المخزن يُحاسب بسعر مخفض",
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                      {amounts?.cacheWrite !== undefined && (
+                        <tr>
+                          <td>{text("缓存写入", "Cache write", "كتابة التخزين")}</td>
+                          <td className="mono">
+                            ${amounts.cacheWrite}
+                          </td>
+                          <td>
+                            {text(
+                              "首次写入缓存的输入内容",
+                              "Initial write of input to cache",
+                              "الكتابة الأولى للإدخال إلى التخزين",
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="pricing-mobile-cards" style={{ display: "none" }}>
+                  {[
+                    { label: text("输入 Token", "Input tokens", "رموز الإدخال"), value: amounts?.input },
+                    { label: text("输出 Token", "Output tokens", "رموز الإخراج"), value: amounts?.output },
+                    ...(amounts?.cacheRead !== undefined ? [{ label: text("缓存读取", "Cache read", "قراءة التخزين"), value: amounts.cacheRead }] : []),
+                    ...(amounts?.cacheWrite !== undefined ? [{ label: text("缓存写入", "Cache write", "كتابة التخزين"), value: amounts.cacheWrite }] : []),
+                  ].map((item) => (
+                    <div key={item.label} className="pricing-mobile-card">
+                      <span className="pricing-mobile-label">{item.label}</span>
+                      <span className="mono pricing-mobile-value">${item.value ?? "—"}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="access-muted">
+                  {text(
+                    `当前分组倍率：${model.pricing.group_ratio}×（已包含在上方售价中）。历史账单保留请求当时费率。`,
+                    `Current group multiplier: ${model.pricing.group_ratio}× (included above). Historical bills retain their original rates.`,
+                    `معامل المجموعة الحالي: ${model.pricing.group_ratio}× (مضمّن أعلاه). تحتفظ الفواتير السابقة بأسعارها الأصلية.`,
+                  )}
+                </p>
+              </section>
+            )}
+            {(model.pricing.mode === "tiered" || model.pricing.mode === "expression") && model.pricing.expression?.trim() && (
               <section className="access-panel">
                 <h2>
                   {text("表达式定价", "Expression pricing", "تسعير بالتعبير")}
@@ -870,7 +872,7 @@ export default function ModelDetail() {
                       {text("计价表达式", "Pricing expression", "تعبير التسعير")}
                     </span>
                   </div>
-                  <pre dir="ltr">
+                  <pre dir="ltr" tabIndex={0}>
                     <code className="mono">
                       {model.pricing.expression}
                     </code>
@@ -879,60 +881,6 @@ export default function ModelDetail() {
               </section>
             )}
 
-            {(() => {
-              const cfg = useModelPricing.getState().config;
-              const entry = cfg?.models?.[model.id];
-              const windows = entry?.rule?.timeWindows;
-              if (!windows || windows.length === 0) return null;
-              const dayNames = text("周日,周一,周二,周三,周四,周五,周六", "Sun,Mon,Tue,Wed,Thu,Fri,Sat", "أحد,إثنين,ثلاثاء,أربعاء,خميس,جمعة,سبت").split(",");
-              return (
-                <section className="access-panel">
-                  <h2>
-                    {text("分时定价", "Time-based pricing", "تسعير زمني")}
-                  </h2>
-                  <p className="access-muted">
-                    {text(
-                      "此模型配置了分时定价窗口，不同时段的费率倍率不同。下方为平台配置的分时窗口及其倍率。",
-                      "This model has time-based pricing windows with different rate multipliers. Below are the configured windows and their multipliers.",
-                      "يحتوي هذا النموذج على نوافذ تسعير زمنية بمضاعفات أسعار مختلفة. أدناه النوافذ المكونة ومضاعفاتها.",
-                    )}
-                  </p>
-                  <div className="access-table-wrap" tabIndex={0} role="region">
-                    <table className="access-table">
-                      <thead>
-                        <tr>
-                          <th>{text("时段名称", "Window label", "اسم النافذة")}</th>
-                          <th>{text("适用日", "Days", "الأيام")}</th>
-                          <th>{text("时间", "Time", "الوقت")}</th>
-                          <th>{text("时区", "Timezone", "المنطقة الزمنية")}</th>
-                          <th>{text("倍率", "Multiplier", "المضاعف")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {windows.map((w, i) => (
-                          <tr key={i}>
-                            <td>{w.label}</td>
-                            <td className="mono" style={{ fontSize: "var(--text-xs)" }}>
-                              {w.days.map((d) => dayNames[d] || d).join(", ")}
-                            </td>
-                            <td className="mono">{w.start} – {w.end}</td>
-                            <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{w.timezone}</td>
-                            <td className="mono">{w.multiplier}×</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="access-muted">
-                    {text(
-                      "分时定价仅在模型配置了 timeWindows 时生效。实际费率以平台配置为准。",
-                      "Time-based pricing applies only when the model has timeWindows configured. Actual rates are determined by platform configuration.",
-                      "يسري التسعير الزمني فقط عندما يكون للنموذج timeWindows مكونة. تحدد إعدادات المنصة الأسعار الفعلية.",
-                    )}
-                  </p>
-                </section>
-              );
-            })()}
             {model.pricing.mode === "per_request" && model.pricing.per_request !== null && model.pricing.per_request > 0 && (
               <section className="access-panel">
                 <h2>

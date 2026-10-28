@@ -14,6 +14,7 @@ import ModelSquare from "../src/pages/models/index";
 import ModelDetail from "../src/pages/models/detail";
 import { useProductPreview } from "../src/lib/product-preview";
 import { useSystemAccess, ROLE_USER } from "../src/lib/system-access";
+import { useModelPricing } from "../src/lib/model-pricing";
 
 vi.mock("../src/components/product-shell", () => ({
   PublicHeader: () => null,
@@ -342,6 +343,65 @@ describe("backend-only plaza catalog", () => {
     expect(html).not.toContain('value="ultra"');
     expect(html).not.toContain("undefined×");
     expect(html).not.toContain("示例费用");
+  });
+
+  it.each(["tiered", "expression"])(
+    "shows the backend expression for %s detail pricing",
+    (mode) => {
+      const expression = "prompt_tokens * 0.000001";
+      const html = renderPage({
+        route: "/models/gpt-4o",
+        items: [{ ...row, pricing: { ...row.pricing, mode, expression } }],
+      });
+      expect(html).toContain("表达式定价");
+      expect(html).toContain(expression);
+    },
+  );
+
+  it.each(["tiered", "expression", "per_request"])(
+    "does not show fallback token ratios as fixed detail prices for %s",
+    (mode) => {
+      const html = renderPage({
+        route: "/models/gpt-4o",
+        items: [
+          {
+            ...row,
+            pricing: {
+              ...row.pricing,
+              mode,
+              per_request: 0.04,
+              expression: "prompt_tokens * 0.000001",
+            },
+          },
+        ],
+      });
+      expect(html).not.toContain("单价（美元/百万 Token）");
+    },
+  );
+
+  it("does not present local demo time windows as backend billing rules", () => {
+    const original = useModelPricing.getState().config;
+    const config = structuredClone(original);
+    config.models["gpt-4.1"].rule.timeWindows = [
+      {
+        id: "local-only",
+        label: "Local-only schedule",
+        timezone: "UTC",
+        days: [1],
+        start: "00:00",
+        end: "23:59",
+        multiplier: "0.5",
+      },
+    ];
+    useModelPricing.setState({ config });
+    try {
+      const html = renderPage({ route: "/models/gpt-4.1" });
+      expect(html).not.toContain("Local-only schedule");
+      expect(html).not.toContain("分时定价");
+      expect(html).toContain("$2.5");
+    } finally {
+      useModelPricing.setState({ config: original });
+    }
   });
 
   it("reports missing backend prices without calling the model nonexistent", () => {
