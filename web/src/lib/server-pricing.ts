@@ -141,6 +141,27 @@ export function replaceServerModelRatios(
     },
   ];
 }
+export function validServerRequestPrice(value: string): boolean {
+  return validServerRatio(value) && Number(value) > 0 && Number(value) <= 10000;
+}
+export function replaceServerRequestPrice(
+  state: ServerPricing,
+  id: string,
+  price: string,
+): PricingOption[] {
+  if (
+    !id.trim() ||
+    !validServerRequestPrice(price) ||
+    serverPricingMode(state, id) !== "per_request"
+  )
+    throw Error("Invalid per-request pricing edit");
+  return [
+    {
+      key: "model_price",
+      value: JSON.stringify({ ...state.perRequest, [id]: Number(price) }),
+    },
+  ];
+}
 export function readPricingAcknowledgement(value: unknown): {
   version: number;
   loaded_version: number;

@@ -5,6 +5,8 @@ import {
   replaceServerModelRatios,
   serverPricingMode,
   validServerRatio,
+  validServerRequestPrice,
+  replaceServerRequestPrice,
 } from "../src/lib/server-pricing";
 const fixture = {
   version: 3,
@@ -46,6 +48,37 @@ describe("server token pricing", () => {
     for (const id of ["flat", "dynamic"])
       expect(() => replaceServerModelRatios(state, id, "1", "2")).toThrow();
   });
+  it("edits only an existing request price while preserving unrelated prices and inactive zero entries", () => {
+    const state = readServerPricing(fixture);
+    state.perRequest = { flat: 0.1, other: 0.0000001, inactive: 0 };
+    const before = structuredClone(state);
+    expect(replaceServerRequestPrice(state, "flat", "2.5e-4")).toEqual([
+      {
+        key: "model_price",
+        value: JSON.stringify({ flat: 0.00025, other: 0.0000001, inactive: 0 }),
+      },
+    ]);
+    expect(state).toEqual(before);
+    for (const id of ["actual", "dynamic", "missing", "inactive"])
+      expect(() => replaceServerRequestPrice(state, id, "1")).toThrow();
+    state.expressions.flat = "requests * 0.2";
+    expect(() => replaceServerRequestPrice(state, "flat", "1")).toThrow();
+  });
+  it.each(["0.000000001", "1e-7", "10000"])(
+    "accepts request price %s",
+    (value) => {
+      expect(validServerRequestPrice(value)).toBe(true);
+    },
+  );
+  it.each(["", "0", "-1", "1e-999", "NaN", "Infinity", "0x10", "10000.01"])(
+    "rejects request price or mode change %s",
+    (value) => {
+      expect(validServerRequestPrice(value)).toBe(false);
+      expect(() =>
+        replaceServerRequestPrice(readServerPricing(fixture), "flat", value),
+      ).toThrow();
+    },
+  );
   it("rejects missing, malformed and unsupported snapshots instead of inventing prices", () => {
     for (const value of [
       { ...fixture, atomic_batch: undefined },

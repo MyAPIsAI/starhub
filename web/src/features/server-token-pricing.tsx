@@ -13,6 +13,8 @@ import {
   serverPricingMode,
   validServerRatio,
   replaceServerModelRatios,
+  validServerRequestPrice,
+  replaceServerRequestPrice,
   type ServerPricing,
 } from "../lib/server-pricing";
 import { useSettingsText } from "./pricing-settings-shared";
@@ -24,6 +26,8 @@ type Draft = {
   locked: boolean;
   input: string;
   completion: string;
+  kind: "per_token" | "per_request";
+  request: string;
 };
 export function ServerTokenPricing() {
   const { text } = useSettingsText();
@@ -63,17 +67,14 @@ export function ServerTokenPricing() {
     draft.id.length <= 128 &&
     !/[\u0000-\u001f\u007f]/.test(draft.id) &&
     !["myapis-auto", "veyra-auto"].includes(draft.id) &&
-    validServerRatio(draft.input) &&
-    validServerRatio(draft.completion) &&
-    serverPricingMode(draft.base, draft.id) === "per_token";
+    serverPricingMode(draft.base, draft.id) === draft.kind &&
+    (draft.kind === "per_request"
+      ? validServerRequestPrice(draft.request)
+      : validServerRatio(draft.input) && validServerRatio(draft.completion));
   const mode = (state: ServerPricing, id: string) =>
     ({
       per_token: text("按词元", "Per token", "لكل رمز"),
-      per_request: text(
-        "按次；此处只读",
-        "Per request; read only here",
-        "لكل طلب؛ للقراءة فقط هنا",
-      ),
+      per_request: text("按次", "Per request", "لكل طلب"),
       expression: text(
         "表达式；此处只读",
         "Expression; read only here",
@@ -92,23 +93,32 @@ export function ServerTokenPricing() {
       locked: !!id,
       input: ownPrice(data.input, id)?.toString() ?? "",
       completion: ownPrice(data.completion, id)?.toString() ?? "",
+      kind:
+        serverPricingMode(data, id) === "per_request"
+          ? "per_request"
+          : "per_token",
+      request: ownPrice(data.perRequest, id)?.toString() ?? "",
     });
   };
   const save = async () => {
     if (!draft || !review || !valid || conflict || !writable) return;
     try {
+      const options =
+        draft.kind === "per_request"
+          ? replaceServerRequestPrice(draft.base, draft.id, draft.request)
+          : replaceServerModelRatios(
+              draft.base,
+              draft.id,
+              draft.input,
+              draft.completion,
+            );
       const result = await mutation.mutateAsync({
         expected_version: draft.base.version,
-        options: replaceServerModelRatios(
-          draft.base,
-          draft.id,
-          draft.input,
-          draft.completion,
-        ),
+        options,
       });
       if (
         result.version < draft.base.version ||
-        result.version > draft.base.version + 2
+        result.version > draft.base.version + options.length
       )
         throw Error("Unexpected pricing revision");
       setDraft(null);
@@ -147,9 +157,9 @@ export function ServerTokenPricing() {
         <div>
           <h2>
             {text(
-              "服务器词元定价",
-              "Server token pricing",
-              "تسعير الرموز في الخادم",
+              "服务器模型定价",
+              "Server model pricing",
+              "تسعير نماذج الخادم",
             )}
           </h2>
           <p>
@@ -181,9 +191,9 @@ export function ServerTokenPricing() {
       </header>
       <p>
         {text(
-          "保存一对倍率不会创建渠道、投放资源或授予密钥权限。按次和表达式优先的模型在此只读；完整分时规则管理仍待实现。",
-          "Saving a ratio pair does not create channels, publish resources or grant key permissions. Models with per-request or expression pricing are read only here; full time-rule management remains pending.",
-          "لا ينشئ حفظ المعاملين قنوات أو ينشر موارد أو يمنح صلاحيات للمفاتيح. نماذج التسعير لكل طلب أو بالتعبير للقراءة فقط هنا، ولا تزال إدارة قواعد الوقت الكاملة قيد التنفيذ.",
+          "可编辑按词元倍率或现有按次价格，不切换计价模式。价格变更不会创建渠道、投放资源或授予密钥权限。表达式此处只读；完整分时规则管理仍待实现。",
+          "Edit token ratios or existing per-request prices without changing pricing modes. Price changes do not create channels, publish resources or grant key permissions. Expressions are read only here; full time-rule management remains pending.",
+          "عدّل معاملات الرموز أو الأسعار الحالية لكل طلب دون تغيير نمط التسعير. لا تنشئ الأسعار قنوات أو تنشر موارد أو تمنح صلاحيات للمفاتيح. التعبيرات للقراءة فقط هنا؛ وإدارة قواعد الوقت الكاملة قيد التنفيذ.",
         )}
       </p>
       {query.isLoading && (
@@ -263,6 +273,13 @@ export function ServerTokenPricing() {
                       "معامل الإخراج/الإدخال",
                     )}
                   </th>
+                  <th>
+                    {text(
+                      "按次 USD/请求",
+                      "Per request USD/request",
+                      "لكل طلب دولار/طلب",
+                    )}
+                  </th>
                   <th>{text("操作", "Action", "الإجراء")}</th>
                 </tr>
               </thead>
@@ -276,25 +293,46 @@ export function ServerTokenPricing() {
                       </td>
                       <td>{mode(data, id)}</td>
                       <td>
-                        <bdi>{ownPrice(data.input, id) ?? "—"}</bdi>
+                        <bdi>
+                          {serverPricingMode(data, id) === "per_token"
+                            ? (ownPrice(data.input, id) ?? "—")
+                            : "—"}
+                        </bdi>
                       </td>
                       <td>
-                        <bdi>{ownPrice(data.completion, id) ?? "—"}</bdi>
+                        <bdi>
+                          {serverPricingMode(data, id) === "per_token"
+                            ? (ownPrice(data.completion, id) ?? "—")
+                            : "—"}
+                        </bdi>
+                      </td>
+                      <td>
+                        <bdi>
+                          {serverPricingMode(data, id) === "per_request"
+                            ? ownPrice(data.perRequest, id)
+                            : "—"}
+                        </bdi>
                       </td>
                       <td>
                         <Button
                           size="small"
                           disabled={
                             !writable ||
-                            serverPricingMode(data, id) !== "per_token"
+                            serverPricingMode(data, id) === "expression"
                           }
                           onClick={() => begin(id)}
                         >
-                          {text(
-                            "编辑服务器倍率",
-                            "Edit server ratios",
-                            "تحرير معاملات الخادم",
-                          )}
+                          {serverPricingMode(data, id) === "per_request"
+                            ? text(
+                                "编辑按次价格",
+                                "Edit request price",
+                                "تحرير سعر الطلب",
+                              )
+                            : text(
+                                "编辑服务器倍率",
+                                "Edit server ratios",
+                                "تحرير معاملات الخادم",
+                              )}
                         </Button>
                       </td>
                     </tr>
@@ -328,16 +366,32 @@ export function ServerTokenPricing() {
           if (!open && !mutation.isPending) setDraft(null);
         }}
         preventOutsideClose
-        title={text(
-          "修改真实服务器倍率",
-          "Change actual server ratios",
-          "تغيير معاملات الخادم الفعلية",
-        )}
-        description={text(
-          "输入和输出倍率按同一配置版本整体保存。取消仅放弃此草稿。",
-          "Input and output ratios are saved together against one configuration version. Cancel discards this draft.",
-          "يُحفظ معاملا الإدخال والإخراج معًا وفق إصدار إعدادات واحد. يلغي الإلغاء هذه المسودة.",
-        )}
+        title={
+          draft?.kind === "per_request"
+            ? text(
+                "修改真实按次价格",
+                "Change actual request price",
+                "تغيير سعر الطلب الفعلي",
+              )
+            : text(
+                "修改真实服务器倍率",
+                "Change actual server ratios",
+                "تغيير معاملات الخادم الفعلية",
+              )
+        }
+        description={
+          draft?.kind === "per_request"
+            ? text(
+                "按次价格使用美元/请求，保留现有计价模式。取消仅放弃此草稿。",
+                "Per-request prices use USD/request and retain the existing pricing mode. Cancel discards this draft.",
+                "الأسعار بالدولار لكل طلب مع الحفاظ على نمط التسعير الحالي. يلغي الإلغاء هذه المسودة.",
+              )
+            : text(
+                "输入和输出倍率按同一配置版本整体保存。取消仅放弃此草稿。",
+                "Input and output ratios are saved together against one configuration version. Cancel discards this draft.",
+                "يُحفظ معاملا الإدخال والإخراج معًا وفق إصدار إعدادات واحد. يلغي الإلغاء هذه المسودة.",
+              )
+        }
         footer={
           <>
             <Button
@@ -373,30 +427,47 @@ export function ServerTokenPricing() {
             </p>
             {review ? (
               <div className="stp-review">
-                <p>
-                  {text("输入基准", "Input base", "أساس الإدخال")}:{" "}
-                  <bdi>
-                    {ownPrice(draft.base.input, draft.id) ?? "—"} →{" "}
-                    {draft.input}
-                  </bdi>
-                </p>
+                {draft.kind === "per_request" ? (
+                  <p>
+                    {text(
+                      "按次 USD/请求",
+                      "Per request USD/request",
+                      "لكل طلب دولار/طلب",
+                    )}
+                    :{" "}
+                    <bdi>
+                      {ownPrice(draft.base.perRequest, draft.id)} →{" "}
+                      {draft.request}
+                    </bdi>
+                  </p>
+                ) : (
+                  <>
+                    <p>
+                      {text("输入基准", "Input base", "أساس الإدخال")}:{" "}
+                      <bdi>
+                        {ownPrice(draft.base.input, draft.id) ?? "—"} →{" "}
+                        {draft.input}
+                      </bdi>
+                    </p>
+                    <p>
+                      {text(
+                        "输出/输入倍率",
+                        "Output/input ratio",
+                        "معامل الإخراج/الإدخال",
+                      )}
+                      :{" "}
+                      <bdi>
+                        {ownPrice(draft.base.completion, draft.id) ?? "—"} →{" "}
+                        {draft.completion}
+                      </bdi>
+                    </p>
+                  </>
+                )}
                 <p>
                   {text(
-                    "输出/输入倍率",
-                    "Output/input ratio",
-                    "معامل الإخراج/الإدخال",
-                  )}
-                  :{" "}
-                  <bdi>
-                    {ownPrice(draft.base.completion, draft.id) ?? "—"} →{" "}
-                    {draft.completion}
-                  </bdi>
-                </p>
-                <p>
-                  {text(
-                    "此操作修改真实服务器后续计费的一对基础倍率，不重写历史账单；其他计费选项保持原值。数据库提交后响应进程单独重载，其他实例状态需另行确认。",
-                    "This changes a real server billing ratio pair for future requests and leaves historical bills unchanged. Other pricing options retain their values. The response process reloads after the database commit; check other instances separately.",
-                    "يغيّر هذا الإجراء معاملي فوترة الخادم للطلبات القادمة دون إعادة كتابة الفواتير السابقة. تحتفظ خيارات التسعير الأخرى بقيمها. تعيد العملية المستجيبة التحميل بعد الالتزام بقاعدة البيانات؛ تحقق من بقية العمليات منفصلة.",
+                    "此操作修改所选模型后续请求的真实服务器价格，不重写历史账单；其他模型、计价模式及计费选项保持原值。分组等规则仍会影响最终费用。数据库提交后响应进程单独重载，其他实例状态需另行确认。",
+                    "This changes the selected model's real server price for future requests and leaves historical bills unchanged. Other models, pricing modes and options retain their values. Group and other rules still affect final charges. The response process reloads after the database commit; check other instances separately.",
+                    "يغيّر هذا سعر النموذج المحدد للطلبات القادمة دون إعادة كتابة الفواتير السابقة. تحتفظ النماذج والأنماط والخيارات الأخرى بقيمها وتظل قواعد المجموعة وغيرها مؤثرة في الرسوم النهائية. تعيد العملية المستجيبة التحميل بعد الالتزام بقاعدة البيانات؛ تحقق من بقية العمليات منفصلة.",
                   )}
                 </p>
                 <Button
@@ -425,45 +496,75 @@ export function ServerTokenPricing() {
                     onChange={(e) => setDraft({ ...draft, id: e.target.value })}
                   />
                 </label>
-                <label>
-                  {text(
-                    "输入基准 USD/百万词元",
-                    "Input base USD/million tokens",
-                    "أساس الإدخال دولار/مليون رمز",
-                  )}
-                  <input
-                    dir="ltr"
-                    inputMode="decimal"
-                    maxLength={32}
-                    value={draft.input}
-                    onChange={(e) =>
-                      setDraft({ ...draft, input: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  {text(
-                    "输出/输入倍率",
-                    "Output/input ratio",
-                    "معامل الإخراج/الإدخال",
-                  )}
-                  <input
-                    dir="ltr"
-                    inputMode="decimal"
-                    maxLength={32}
-                    value={draft.completion}
-                    onChange={(e) =>
-                      setDraft({ ...draft, completion: e.target.value })
-                    }
-                  />
-                </label>
-                <small>
-                  {text(
-                    "两项均为 0–10 亿的有限非负数。未配置值保持空白；不从演示价格或其他模型推断。",
-                    "Both values must be finite numbers from 0 to one billion. Unconfigured values stay blank; no Demo or other-model fallback is used.",
-                    "يجب أن تكون القيمتان محدودتين وغير سالبتين من صفر إلى مليار. تبقى القيم غير المضبوطة فارغة دون الرجوع إلى أسعار تجريبية أو نماذج أخرى.",
-                  )}
-                </small>
+                {draft.kind === "per_request" ? (
+                  <>
+                    <label>
+                      {text(
+                        "按次 USD/请求",
+                        "Per request USD/request",
+                        "لكل طلب دولار/طلب",
+                      )}
+                      <input
+                        dir="ltr"
+                        inputMode="decimal"
+                        maxLength={32}
+                        value={draft.request}
+                        onChange={(e) =>
+                          setDraft({ ...draft, request: e.target.value })
+                        }
+                      />
+                    </label>
+                    <small>
+                      {text(
+                        "价格必须大于 0 且不超过 10000 美元/请求。零值会退出按次计价，此处不允许切换模式。",
+                        "Price must be greater than 0 and at most 10000 USD/request. Zero would leave per-request pricing; mode changes are not available here.",
+                        "يجب أن يكون السعر أكبر من صفر وألا يتجاوز 10000 دولار لكل طلب. الصفر يلغي التسعير لكل طلب؛ تغيير النمط غير متاح هنا.",
+                      )}
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <label>
+                      {text(
+                        "输入基准 USD/百万词元",
+                        "Input base USD/million tokens",
+                        "أساس الإدخال دولار/مليون رمز",
+                      )}
+                      <input
+                        dir="ltr"
+                        inputMode="decimal"
+                        maxLength={32}
+                        value={draft.input}
+                        onChange={(e) =>
+                          setDraft({ ...draft, input: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      {text(
+                        "输出/输入倍率",
+                        "Output/input ratio",
+                        "معامل الإخراج/الإدخال",
+                      )}
+                      <input
+                        dir="ltr"
+                        inputMode="decimal"
+                        maxLength={32}
+                        value={draft.completion}
+                        onChange={(e) =>
+                          setDraft({ ...draft, completion: e.target.value })
+                        }
+                      />
+                    </label>
+                    <small>
+                      {text(
+                        "两项均为 0–10 亿的有限非负数。未配置值保持空白；不从演示价格或其他模型推断。",
+                        "Both values must be finite numbers from 0 to one billion. Unconfigured values stay blank; no Demo or other-model fallback is used.",
+                        "يجب أن تكون القيمتان محدودتين وغير سالبتين من صفر إلى مليار. تبقى القيم غير المضبوطة فارغة دون الرجوع إلى أسعار تجريبية أو نماذج أخرى.",
+                      )}
+                    </small>
+                  </>
+                )}
               </div>
             )}
             {conflict && (
