@@ -127,6 +127,38 @@ func TestPlazaCachePriceMatchesRelayBilling(t *testing.T) {
 	}
 }
 
+func TestPlazaConfiguredCacheRatioIncludingZeroMatchesBilling(t *testing.T) {
+	setting.ResetAllToDefaults()
+	t.Cleanup(setting.ResetAllToDefaults)
+	if err := setting.UpdateRatio("model_ratio", `{"cache-fixture":2}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := setting.UpdateRatio("group_ratio", `{"default":1,"vip":0.6}`); err != nil {
+		t.Fatal(err)
+	}
+	for _, ratio := range []string{"0", "0.25", "1", "1000"} {
+		t.Run(ratio, func(t *testing.T) {
+			if err := setting.UpdatePricing("cache_ratio", ratio); err != nil {
+				t.Fatal(err)
+			}
+			for _, group := range []string{"default", "vip"} {
+				quoted := resolvePlazaPrice("cache-fixture", group, "")
+				pd := relay.NewPriceData("cache-fixture", group)
+				if quoted.CacheReadPerM == nil || *quoted.CacheReadPerM != *quoted.InputPerM*pd.CacheRatio {
+					t.Fatalf("%s cache quote does not retain configured ratio %s: %+v", group, ratio, quoted)
+				}
+				quota := relay.ComputeUsageQuota(pd, &relay.Usage{PromptTokens: 1_000_000, PromptTokensDetails: &relay.PromptTokensDetails{CachedTokens: 1_000_000}})
+				if ratio == "0" && quota != 1 {
+					t.Fatalf("zero-rate token billing must retain existing minimum: %d", quota)
+				}
+				if math.Abs(float64(quota)/float64(common.QuotaPerUSD)-*quoted.CacheReadPerM) > 1.0/float64(common.QuotaPerUSD) {
+					t.Fatalf("%s cached quote %g does not match quota %d", group, *quoted.CacheReadPerM, quota)
+				}
+			}
+		})
+	}
+}
+
 // TestPlazaPerCallPriceMatchesRelayBilling covers the per-call axis, where the
 // plaza must quote the same flat price the relay charges per request.
 func TestPlazaPerCallPriceMatchesRelayBilling(t *testing.T) {
@@ -175,9 +207,9 @@ func TestDiscountRatioThreshold(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			row := plazaRow{Pricing: plazaPricingJSON{
-				Mode:               "per_token",
-				InputPerM:          p(c.platform),
-				OfficialInputPerM:  p(c.official),
+				Mode:              "per_token",
+				InputPerM:         p(c.platform),
+				OfficialInputPerM: p(c.official),
 			}}
 			got := discountRatio(&row)
 			if math.Abs(got-c.want) > 1e-9 {

@@ -10,7 +10,44 @@ import (
 	"starhub/common"
 	"starhub/middleware"
 	"starhub/model"
+	"starhub/relay"
 )
+
+func TestSavedZeroCacheRatioRemainsZeroInActualPlazaQuote(t *testing.T) {
+	env := setupRelayApp(t)
+	if err := model.InsertChannel(&model.Channel{Name: "Zero cache quote fixture", Type: 1, Models: "gpt-4o", Group: "default", Status: common.ChannelStatusEnabled}); err != nil {
+		t.Fatal(err)
+	}
+	response := doRequest(env.base, "PUT", "/api/option/pricing", env.session, map[string]any{"expected_version": 0, "options": []model.Option{{Key: "cache_ratio", Value: "0"}, {Key: "audio_ratio", Value: "0"}}})
+	if response.Status != 200 {
+		t.Fatalf("save zero details: %d %s", response.Status, response.Body)
+	}
+	response = doRequest(env.base, "GET", "/api/plaza/models/gpt-4o", env.session, nil)
+	var detail struct {
+		Data struct {
+			Model struct {
+				Pricing struct {
+					CacheRead *float64 `json:"cache_read_per_m"`
+					Input     *float64 `json:"input_per_m"`
+				} `json:"pricing"`
+			} `json:"model"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(response.Body), &detail); err != nil || response.Status != 200 || detail.Data.Model.Pricing.CacheRead == nil || *detail.Data.Model.Pricing.CacheRead != 0 || detail.Data.Model.Pricing.Input == nil || *detail.Data.Model.Pricing.Input <= 0 {
+		t.Fatalf("zero cache quote: %d %s %v", response.Status, response.Body, err)
+	}
+	pd := relay.NewPriceData("gpt-4o", "default")
+	if pd.CacheRatio != 0 || pd.AudioRatio != 0 {
+		t.Fatal("zero detail multipliers were not loaded")
+	}
+	quota := relay.ComputeUsageQuota(pd, &relay.Usage{PromptTokens: 1_000_000, PromptTokensDetails: &relay.PromptTokensDetails{CachedTokens: 1_000_000}})
+	if quota != 1 {
+		t.Fatalf("zero cached unit price must retain token-billing minimum: %d", quota)
+	}
+	if root, err := model.GetUserByID(env.rootID); err != nil || root.Quota != 100_000_000 {
+		t.Fatal("quote or cost projection changed account quota")
+	}
+}
 
 func TestPricingOptionsRouteGuardsAtomicCommitAndReloadOutcome(t *testing.T) {
 	env := setupRelayApp(t)

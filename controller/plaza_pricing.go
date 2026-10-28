@@ -112,9 +112,6 @@ func resolvePlazaPrice(modelName, group, userGroup string) priceModel {
 		out.InputPerM = f64(in)
 		out.OutputPerM = f64(in * comp)
 		cache := inputs.CacheRatio
-		if cache <= 0 {
-			cache = setting.FallbackCacheRatio
-		}
 		out.CacheReadPerM = f64(in * cache)
 		out.CacheWritePerM = f64(in)
 		out.Explicit = inputs.HasModelRatio
