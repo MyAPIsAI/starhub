@@ -19,7 +19,6 @@ import { DirectoryPrice } from "../../components/directory-price";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../lib/preferences";
 import { writtenLanguage } from "../../lib/localize";
-import { placeholders } from "../../config/placeholders";
 import { useProductPreview } from "../../lib/product-preview";
 import { useBackendKeys } from "../../lib/api/key-adapter";
 import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
@@ -63,7 +62,7 @@ export default function ModelDetail() {
   const amounts = model ? plazaAmounts(model.pricing) : undefined;
   // Fetch service quality summary to show a per-model metric panel inline.
   // The backend returns per-model aggregates in by_model.
-  const qualityQuery = useServiceQuality(168);
+  const qualityQuery = useServiceQuality(168, id);
   const modelQuality = model
     ? qualityQuery.data?.by_model.find((m) => m.model === model.id)
     : undefined;
@@ -649,7 +648,7 @@ export default function ModelDetail() {
                               "السعر الفعلي الحالي",
                             )}
                           </th>
-                          <th>{text("成功率/延迟", "Success/P95", "النجاح/P95")}</th>
+                          <th>{text("模型7天成功率/P95", "Model success/P95 (7d)", "نجاح النموذج/P95 (7 أيام)")}</th>
                           <th>{text("SLA 目标", "SLA targets", "أهداف SLA")}</th>
                           <th>{text("辅助倍率", "Multiplier", "المعامل")}</th>
                         </tr>
@@ -686,36 +685,14 @@ export default function ModelDetail() {
                                 )}
                               </td>
                               <td>
-                                {(() => {
-                                  const sqKey = `sq-${model.id}`;
-                                  try {
-                                    const raw = localStorage.getItem(sqKey);
-                                    if (raw) {
-                                      const sq = JSON.parse(raw);
-                                      const success = sq.success != null ? `${(sq.success * 100).toFixed(1)}%` : "—";
-                                      const hasLatency =
-                                        Number.isFinite(sq.p95) && sq.p95 > 0;
-                                      return (
-                                        <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
-                                          {success} /{" "}
-                                          <span
-                                            style={{
-                                              color: hasLatency
-                                                ? undefined
-                                                : "var(--muted)",
-                                            }}
-                                          >
-                                            {hasLatency
-                                              ? `${sq.p95}ms`
-                                              : noLatencyData}
-                                          </span>
-                                        </span>
-                                      );
-                                    }
-                                  } catch { /* ignore */ }
-                                  return (
+                                {modelQuality && modelQuality.total_requests > 0 ? (
+                                  <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
+                                    {(modelQuality.success_rate * 100).toFixed(1)}% /{" "}
+                                    {measuredP95 === null ? noLatencyData : `${measuredP95}ms`}
+                                  </span>
+                                ) : (
                                     <Link
-                                      to={`/console/service-quality?model=${encodeURIComponent(model.id)}&group=${encodeURIComponent(group.id)}`}
+                                      to={`/console/service-quality?model=${encodeURIComponent(model.id)}`}
                                       style={{
                                         fontSize: "var(--text-xs)",
                                         color: "var(--brand)",
@@ -724,19 +701,10 @@ export default function ModelDetail() {
                                     >
                                       {text("查看", "View", "عرض")}
                                     </Link>
-                                  );
-                                })()}
+                                )}
                               </td>
                               <td>
-                                {(() => {
-                                  const tierDef = placeholders.tiers.find((t) => t.id === group.id);
-                                  if (!tierDef) return "—";
-                                  return (
-                                    <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
-                                      {tierDef.success}% / {tierDef.p95}ms
-                                    </span>
-                                  );
-                                })()}
+                                {text("目标未发布", "Not published", "لم تُنشر الأهداف")}
                               </td>
                               <td>{model.pricing.group_ratio}×</td>
                             </tr>

@@ -15,6 +15,7 @@ import ModelDetail from "../src/pages/models/detail";
 import { useProductPreview } from "../src/lib/product-preview";
 import { useSystemAccess, ROLE_USER } from "../src/lib/system-access";
 import { useModelPricing } from "../src/lib/model-pricing";
+import type { ServiceQualitySummary } from "../src/lib/api/service-quality";
 
 vi.mock("../src/components/product-shell", () => ({
   PublicHeader: () => null,
@@ -77,6 +78,7 @@ type RenderOptions = {
   error?: ApiError;
   group?: string;
   otherIdentityOnly?: boolean;
+  quality?: ServiceQualitySummary;
 };
 
 function renderPage({
@@ -86,6 +88,7 @@ function renderPage({
   error,
   group = "default",
   otherIdentityOnly = false,
+  quality,
 }: RenderOptions = {}) {
   const client = new QueryClient({
     defaultOptions: {
@@ -145,6 +148,16 @@ function renderPage({
             page_size: 200,
             group,
           },
+    );
+  }
+  if (quality && isDetail) {
+    client.setQueryData(
+      [
+        "service-quality",
+        168,
+        decodeURIComponent(url.pathname.slice("/models/".length)),
+      ],
+      quality,
     );
   }
   const html = renderToStaticMarkup(
@@ -402,6 +415,47 @@ describe("backend-only plaza catalog", () => {
     } finally {
       useModelPricing.setState({ config: original });
     }
+  });
+
+  it("uses scoped API model metrics instead of an unscoped local cache", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) =>
+        key === "sq-gpt-4o" ? JSON.stringify({ success: 1, p95: 99 }) : null,
+      setItem: () => {},
+    });
+    try {
+      const metric = {
+        model: "gpt-4o",
+        total_requests: 10,
+        success_count: 7,
+        failed_count: 3,
+        success_rate: 0.7,
+        avg_duration_ms: 400,
+        p95_duration_ms: 1234,
+        total_quota: 100,
+        error_rate: 0.3,
+      };
+      const quality = {
+        window_hours: 168,
+        overall: metric,
+        by_model: [metric],
+        by_day: [],
+      };
+      const html = renderPage({ route: "/models/gpt-4o", quality });
+      expect(html).toContain("70.0%");
+      expect(html).toContain("1234ms");
+      expect(html).not.toContain("99ms");
+      expect(html).toContain("模型7天成功率/P95");
+      const empty = renderPage({ route: "/models/gpt-4o" });
+      expect(empty).not.toContain("99ms");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not publish demo SLA targets for a real backend group", () => {
+    const html = renderPage({ route: "/models/gpt-4o", group: "pro" });
+    expect(html).toContain("目标未发布");
   });
 
   it("reports missing backend prices without calling the model nonexistent", () => {
