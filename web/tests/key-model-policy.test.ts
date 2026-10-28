@@ -10,6 +10,7 @@ import {
   useModelPricing,
 } from "../src/lib/model-pricing";
 import { useProductPreview, type PreviewKey } from "../src/lib/product-preview";
+import { defaultDemoRequest } from "../src/lib/request-contract";
 
 const GPT = "gpt-4.1",
   CLAUDE = "claude-sonnet-4-20250514",
@@ -59,6 +60,127 @@ describe("credential permissions, per-request routing and exact actual-model bil
   afterEach(() => {
     useProductPreview.setState(useProductPreview.getInitialState(), true);
     useModelPricing.setState({ config: createDefaultPricing() });
+  });
+  describe("default requests for legacy smart keys", () => {
+    function legacySmartKey(overrides: Partial<PreviewKey> = {}) {
+      const key: PreviewKey = {
+        ...createClientKey({ allowedModels: [GPT] }),
+        type: "smart",
+        smartAccess: undefined,
+        ...overrides,
+      };
+      useProductPreview.setState({ keys: [key] });
+      return key;
+    }
+    it("defaults to the canonical entry and charges the authorized actual model once", () => {
+      const key = legacySmartKey();
+      const historic = useProductPreview
+        .getState()
+        .recordCall(key.id, false, "veyra-auto")!;
+      const snapshot = structuredClone(historic);
+      const before = useProductPreview.getState();
+      const call = before.recordCall(key.id)!;
+      expect(call).toMatchObject({
+        status: "success",
+        requested_model: "myapis-auto",
+        actual_model: GPT,
+        billing_status: "charged",
+        input_rate_usd: "1",
+        output_rate_usd: "5",
+        request: { model: "myapis-auto" },
+      });
+      const after = useProductPreview.getState();
+      expect(BigInt(call.cost_nano)).toBeGreaterThan(0n);
+      expect(BigInt(after.balance)).toBe(
+        BigInt(before.balance) - BigInt(call.cost_nano),
+      );
+      expect(after.ledger).toHaveLength(before.ledger.length + 1);
+      expect(after.requests).toHaveLength(before.requests.length + 1);
+      expect(
+        after.ledger.filter((entry) => entry.trace_id === call.trace_id),
+      ).toHaveLength(1);
+      expect(after.keys[0]).toMatchObject({
+        model: key.model,
+        type: "smart",
+        smartAccess: undefined,
+        modelAccess: key.modelAccess,
+        allowedModels: key.allowedModels,
+      });
+      expect(BigInt(after.keys[0].totalUsed_nano!)).toBe(
+        BigInt(before.keys[0].totalUsed_nano!) + BigInt(call.cost_nano),
+      );
+      expect(
+        after.requests.find((row) => row.trace_id === historic.trace_id),
+      ).toEqual(snapshot);
+    });
+    it.each(["myapis-auto", "veyra-auto"])(
+      "preserves an explicit %s request",
+      (model) => {
+        const key = legacySmartKey();
+        expect(
+          useProductPreview.getState().recordCall(key.id, false, model),
+        ).toMatchObject({
+          status: "success",
+          requested_model: model,
+          actual_model: GPT,
+          request: { model },
+        });
+      },
+    );
+    it("preserves a submitted legacy request when the model argument is omitted", () => {
+      const key = legacySmartKey();
+      const request = defaultDemoRequest("veyra-auto");
+      const snapshot = structuredClone(request);
+      expect(
+        useProductPreview
+          .getState()
+          .recordCall(key.id, false, undefined, request),
+      ).toMatchObject({
+        status: "success",
+        requested_model: "veyra-auto",
+        actual_model: GPT,
+        request: { model: "veyra-auto" },
+      });
+      expect(request).toEqual(snapshot);
+    });
+    it("keeps a modern client key's default explicit model", () => {
+      const key = createClientKey({ allowedModels: [GPT] });
+      expect(useProductPreview.getState().recordCall(key.id)).toMatchObject({
+        status: "success",
+        requested_model: GPT,
+        actual_model: GPT,
+      });
+    });
+    it("respects an explicit smart-access override on a legacy key", () => {
+      const key = legacySmartKey({ smartAccess: false });
+      expect(useProductPreview.getState().recordCall(key.id)).toMatchObject({
+        status: "success",
+        requested_model: GPT,
+        actual_model: GPT,
+      });
+      rejectWithoutCharge(key.id, "myapis-auto");
+    });
+    it.each(["myapis-auto", "veyra-auto"])(
+      "does not expand a %s-only allowlist for default routing",
+      (entry) => {
+        const key = legacySmartKey({ allowedModels: [entry] });
+        const before = useProductPreview.getState();
+        expect(before.recordCall(key.id)).toMatchObject({
+          status: "failed",
+          requested_model: "myapis-auto",
+          actual_model: null,
+          error_code: "model_unauthorized",
+          cost_nano: "0",
+          billing_status: "not_charged",
+        });
+        const after = useProductPreview.getState();
+        expect(after.balance).toBe(before.balance);
+        expect(after.ledger).toBe(before.ledger);
+        expect(after.keys[0].totalUsed_nano).toBe(
+          before.keys[0].totalUsed_nano,
+        );
+      },
+    );
   });
   it("A: alternates two exact models and smart routing with the same unchanged key", () => {
     const key = createClientKey(),

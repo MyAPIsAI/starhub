@@ -1096,7 +1096,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
     const key = state.keys.find((k) => k.id === id);
     const fallbackModel =
       key?.type === "smart" && key.smartAccess === undefined
-        ? "veyra-auto"
+        ? "myapis-auto"
         : (key?.model ?? "gpt-4.1");
     const request = structuredClone(
       submittedRequest ?? defaultDemoRequest(requestedModel ?? fallbackModel),
