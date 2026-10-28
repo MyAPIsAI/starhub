@@ -178,6 +178,15 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				return
 			}
 
+			if autoModelSelected && isMultipart(contentType) {
+				body, err = rewriteMultipartModel(contentType, body, modelName)
+				if err != nil {
+					fail(http.StatusBadRequest, "invalid_multipart", "failed to update the routed multipart model")
+					return
+				}
+				r.Body = io.NopCloser(bytes.NewReader(body))
+				r.ContentLength = int64(len(body))
+			}
 			if autoModelSelected && !isMultipart(contentType) {
 				// Keep passthrough bodies and parsed IR aligned with routing.
 				// Raw fields preserve extension data and numeric precision.
