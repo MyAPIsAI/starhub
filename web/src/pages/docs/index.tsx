@@ -20,7 +20,10 @@ import { usePreferences } from "../../lib/preferences";
 import { placeholders } from "../../config/placeholders";
 
 type ArticleId =
-  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
+  "quickstart" | "auth" | "tiers" | "claudeCode" | "cursor" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
+const cursorSettings = `OpenAI API Key: <YOUR_MYAPIS_API_KEY>
+Override OpenAI Base URL: ${placeholders.apiBase}
+Custom Model: gpt-4.1`;
 const geminiExample = `curl --fail --silent --show-error ${placeholders.apiBase}/chat/completions \\
   -H "Authorization: Bearer $MYAPIS_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -123,6 +126,7 @@ export default function DocsPage() {
     { id: "gemini", title: text("Gemini 兼容接入", "Gemini compatibility", "الوصول المتوافق إلى Gemini"), Icon: Terminal },
     { id: "models", title: text("模型列表", "Model list", "قائمة النماذج"), Icon: Cpu },
     { id: "claudeCode", title: t("docsClaudeCode"), Icon: Sparkles },
+    { id: "cursor", title: text("Cursor 接入指南", "Cursor setup", "إعداد Cursor"), Icon: Terminal },
     { id: "errors", title: t("docsErrors"), Icon: ShieldCheck },
     { id: "billing", title: t("docsBilling"), Icon: Coins },
     { id: "routing", title: text("路由与权限", "Routing & authz", "التوجيه والصلاحيات"), Icon: ArrowUpRight },
@@ -138,6 +142,38 @@ export default function DocsPage() {
   const [activeTab, setActiveTab] = useState<ArticleId>(initialArticle);
   const [searchQuery, setSearchQuery] = useState("");
   const current = articles.find((article) => article.id === activeTab)!;
+  const cursorLead = text(
+    "在 Cursor 中使用自己的网关密钥接入兼容 Chat Completions 的聊天模型。请先创建具有目标模型权限的密钥，并确认该模型在所选服务分组中有可用渠道。",
+    "Use your gateway key in Cursor with a Chat Completions-compatible chat model. First create a key authorized for the target model and confirm an available channel in the selected service group.",
+    "استخدم مفتاح البوابة في Cursor مع نموذج محادثة متوافق مع Chat Completions. أنشئ أولًا مفتاحًا مصرحًا له بالنموذج المطلوب وتأكد من وجود قناة متاحة في مجموعة الخدمة المختارة.",
+  );
+  const cursorSteps = [
+    text(
+      "打开 Cursor Settings → Models，在 API Keys 中将自己的网关密钥填入 OpenAI API Key 并保存；下方占位符不能用于认证。",
+      "Open Cursor Settings → Models. Under API Keys, enter your gateway key in OpenAI API Key and save it; the placeholder below is not a credential.",
+      "افتح Cursor Settings → Models. ضمن API Keys أدخل مفتاح البوابة في OpenAI API Key واحفظه؛ العنصر النائب أدناه ليس مفتاحًا صالحًا.",
+    ),
+    text(
+      `启用 Override OpenAI Base URL，填写 ${placeholders.apiBase}。保留末尾 /v1，不要追加 /chat/completions。若没有该选项，请核对 Cursor 版本、套餐及团队的自带密钥设置。`,
+      `Enable Override OpenAI Base URL and enter ${placeholders.apiBase}. Keep the trailing /v1; do not append /chat/completions. If the option is missing, check your Cursor version, plan, and team settings for custom keys.`,
+      `فعّل Override OpenAI Base URL وأدخل ${placeholders.apiBase}. احتفظ باللاحقة /v1 ولا تضف /chat/completions. إن غاب الخيار فتحقق من إصدار Cursor والخطة وإعدادات الفريق للمفاتيح الخاصة.`,
+    ),
+    text(
+      "使用 Add Custom Model 添加并启用已授权的准确模型标识（下方 gpt-4.1 仅为示例），然后在聊天模型选择器中选中它，发送一条简短消息。",
+      "Use Add Custom Model to add and enable the exact authorized model ID (gpt-4.1 below is an example), then select it in the chat model picker and send a short message.",
+      "استخدم Add Custom Model لإضافة معرّف النموذج المصرح به بدقة وتفعيله (gpt-4.1 أدناه مثال)، ثم اختره من قائمة نماذج المحادثة وأرسل رسالة قصيرة.",
+    ),
+  ];
+  const cursorBoundary = text(
+    "该指南仅覆盖兼容聊天配置，不代表 Cursor Agent 或 Tab 补全已可用。当前网关没有 /v1/responses 入口，依赖 Responses 的模式无法通过此配置接入；Tab 补全使用 Cursor 自带模型。Cursor 请求经其服务器转发，网关地址须可从公网访问。",
+    "This guide covers compatible chat configuration, without guaranteeing Cursor Agent or Tab completion support. The gateway has no /v1/responses endpoint, so modes that require Responses cannot use this configuration. Tab completion uses Cursor's own models. Cursor routes requests through its servers, so the gateway must be publicly reachable.",
+    "يغطي الدليل إعداد المحادثة المتوافقة دون ضمان دعم Cursor Agent أو إكمال Tab. لا توفر البوابة نقطة /v1/responses، لذا لا تعمل الأوضاع التي تتطلب Responses بهذا الإعداد. يستخدم إكمال Tab نماذج Cursor الخاصة. تمر الطلبات عبر خوادم Cursor، ولذلك يجب أن تكون البوابة متاحة عبر الإنترنت.",
+  );
+  const cursorTroubleshooting = text(
+    "连接失败时先用 Chat Completions 指南的 cURL 验证同一密钥、地址和模型：401 检查密钥，403 检查授权或额度，503 检查渠道。cURL 成功但 Cursor 失败时，再核对自带密钥开关、自定义地址和所选模式。",
+    "If connection fails, first test the same key, base URL, and model with the Chat Completions guide's cURL: check the key for 401, authorization or quota for 403, and channels for 503. If cURL succeeds but Cursor fails, check the custom-key toggle, base URL override, and selected mode.",
+    "إذا فشل الاتصال فاختبر أولًا المفتاح والعنوان والنموذج نفسيهما باستخدام cURL في دليل Chat Completions: تحقق من المفتاح عند 401، والتفويض أو الحصة عند 403، والقنوات عند 503. إذا نجح cURL وفشل Cursor فتحقق من تفعيل المفتاح الخاص وتجاوز العنوان والوضع المختار.",
+  );
   const geminiLead = text(
     "调用 Gemini 文本模型时，可使用网关的 POST /v1/chat/completions 兼容入口。示例使用 Bearer 密钥、gemini-2.5-pro 模型和 messages；实际调用仍要求密钥授权及匹配的可用渠道。",
     "Call Gemini text models through the gateway's compatible POST /v1/chat/completions endpoint. The example uses a Bearer key, gemini-2.5-pro, and messages; calls still require key authorization and a matching available channel.",
@@ -210,6 +246,7 @@ export default function DocsPage() {
     auth: ["authentication", "authorization", "bearer", "token", "api key", "认证", "授权", "密钥", "bearer"],
     tiers: ["service tier", "group", "ultra", "pro", "standard", "lite", "分组", "等级", "服务"],
     claudeCode: ["claude", "anthropic", "codex", "cursor", "gemini", "工具集成", "claude code", "编程工具"],
+    cursor: ["cursor setup", "Cursor 接入指南", "إعداد Cursor"],
     errors: ["error", "400", "401", "403", "429", "502", "503", "错误", "错误码", "故障排除"],
     billing: ["billing", "quota", "cost", "charge", "balance", "top-up", "计费", "费用", "余额", "充值"],
     protocols: ["protocol", "endpoint", "api", "curl", "url", "path", "协议", "端点", "路径", "接口"],
@@ -228,6 +265,7 @@ export default function DocsPage() {
     auth: "keys access boundaries usage quotas store securely project restrict access IP allowlist source control environment variables review request logs",
     tiers: "service level workload Ultra 1.00 99.5% 800ms Pro 0.80 99.0% 1500ms Standard 0.60 97.5% 3000ms Lite 0.40 price multiplier target latency demo configuration",
     claudeCode: "Claude Code Anthropic endpoint key environment variables ANTHROPIC_BASE_URL ANTHROPIC_API_KEY terminal configuration demo compatibility",
+    cursor: [cursorLead, ...cursorSteps, cursorSettings, cursorBoundary, cursorTroubleshooting].join(" "),
     errors: "401 invalid_api_key token_disabled token_expired 403 insufficient_quota token_quota_exhausted auto_group_empty group_not_available 400 invalid_request_body invalid_json invalid_multipart model_required 429 rate_limit_exceeded 502 upstream_unavailable retry_budget_exhausted upstream_result_uncertain 503 no_available_channel 500 pre_consume_failed channel_selection_failed Authorization Bearer JSON multipart",
     billing: "balance precision usage totals request logs export details account balance 2 4 6 9 display reconciliation",
     protocols: "Chat Completions OpenAI Messages Anthropic Embeddings Images generations Audio TTS speech STT transcriptions translations Video submit poll Realtime WebSocket Models list Bearer token base URL path auth",
@@ -430,6 +468,21 @@ export default function DocsPage() {
                 title={text("Python（编程语言）", "Python", "Python")}
                 code={pythonExample}
               />
+            </>
+          )}
+          {activeTab === "cursor" && (
+            <>
+              <p className="docs-lead">{cursorLead}</p>
+              <ol className="docs-steps">{cursorSteps.map((step) => <li key={step}>{step}</li>)}</ol>
+              <CodeBlock title="Cursor Settings → Models" code={cursorSettings} />
+              <div className="docs-callout"><p>{cursorBoundary}</p></div>
+              <p>{cursorTroubleshooting}</p>
+              <p><Link to="/docs?article=chat-completions">{text("查看 Chat Completions 请求示例", "Read the Chat Completions request example", "اقرأ مثال طلب Chat Completions")}</Link></p>
+              <p>
+                <a href="https://cursor.com/help/models-and-usage/api-keys" target="_blank" rel="noreferrer">{text("Cursor 官方密钥说明", "Cursor API key documentation", "وثائق مفاتيح Cursor")}</a>
+                {" · "}
+                <a href="https://developers.cloudflare.com/ai-gateway/integrations/coding-agents/cursor/" target="_blank" rel="noreferrer">{text("自定义地址与模式兼容说明", "Custom base URL and mode compatibility", "توافق العنوان المخصص والأوضاع")}</a>
+              </p>
             </>
           )}
           {activeTab === "gemini" && (

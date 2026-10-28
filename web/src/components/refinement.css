@@ -586,6 +586,17 @@
   color: var(--secondary);
   margin-bottom: 18px;
 }
+.docs-steps {
+  padding-inline-start: 24px;
+  margin-bottom: 24px;
+  list-style: decimal;
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--secondary);
+}
+.docs-steps li + li {
+  margin-top: 12px;
+}
 .docs-callout {
   display: flex;
   align-items: flex-start;
