@@ -20,7 +20,30 @@ import { usePreferences } from "../../lib/preferences";
 import { placeholders } from "../../config/placeholders";
 
 type ArticleId =
-  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "routing" | "limits" | "faq";
+  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "anthropic" | "routing" | "limits" | "faq";
+const anthropicExample = `curl --fail --silent --show-error ${placeholders.apiBase}/messages \\
+  -H "x-api-key: $MYAPIS_API_KEY" \\
+  -H "anthropic-version: 2023-06-01" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "claude-sonnet-4-20250514",
+    "system": "Reply concisely.",
+    "messages": [{"role": "user", "content": "Say hello"}],
+    "max_tokens": 64,
+    "stream": false
+  }'`;
+const anthropicResponse = JSON.stringify(
+  {
+    id: "msg_example",
+    type: "message",
+    role: "assistant",
+    model: "claude-sonnet-4-20250514",
+    content: [{ type: "text", text: "Hello!" }],
+    stop_reason: "end_turn",
+  },
+  null,
+  2,
+);
 const chatExample = `curl --fail --silent --show-error ${placeholders.apiBase}/chat/completions \\
   -H "Authorization: Bearer $MYAPIS_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -87,6 +110,7 @@ export default function DocsPage() {
     { id: "tiers", title: t("docsTiers"), Icon: Cpu },
     { id: "protocols", title: text("协议", "Protocols", "البروتوكولات"), Icon: ArrowUpRight },
     { id: "chat-completions", title: text("Chat Completions（聊天补全）", "Chat Completions", "إكمال المحادثات"), Icon: Terminal },
+    { id: "anthropic", title: text("Anthropic Messages（消息）", "Anthropic Messages", "رسائل Anthropic"), Icon: Terminal },
     { id: "models", title: text("模型列表", "Model list", "قائمة النماذج"), Icon: Cpu },
     { id: "claudeCode", title: t("docsClaudeCode"), Icon: Sparkles },
     { id: "errors", title: t("docsErrors"), Icon: ShieldCheck },
@@ -104,6 +128,26 @@ export default function DocsPage() {
   const [activeTab, setActiveTab] = useState<ArticleId>(initialArticle);
   const [searchQuery, setSearchQuery] = useState("");
   const current = articles.find((article) => article.id === activeTab)!;
+  const anthropicLead = text(
+    "POST /v1/messages 使用 Anthropic 消息格式。示例提供 model、messages、max_tokens 和 stream: false；system 放在顶层，用户消息放在 messages 数组中。请选择密钥已授权且支持该协议的模型。",
+    "POST /v1/messages uses the Anthropic message format. The example provides model, messages, max_tokens, and stream: false, with a top-level system field and user messages in the messages array. Choose an authorized model that supports this protocol.",
+    "يستخدم POST /v1/messages صيغة رسائل Anthropic. يوفر المثال model وmessages وmax_tokens وstream: false، مع حقل system في المستوى الأعلى ورسائل المستخدم في مصفوفة messages. اختر نموذجًا مصرحًا به يدعم هذا البروتوكول.",
+  );
+  const anthropicAuth = text(
+    "示例使用 x-api-key，并携带 anthropic-version。网关也接受 Authorization: Bearer 认证，选择一种认证方式即可；密钥的模型范围、分组及额度限制仍然生效。",
+    "The example uses x-api-key and includes anthropic-version. The gateway also accepts Authorization: Bearer; use one authentication style. Key model scope, service group, and quota limits still apply.",
+    "يستخدم المثال x-api-key ويتضمن anthropic-version. تقبل البوابة أيضًا Authorization: Bearer؛ استخدم طريقة مصادقة واحدة. تظل قيود النماذج ومجموعة الخدمة والحصة سارية.",
+  );
+  const anthropicResponseNote = text(
+    "非流式响应的文本位于 content 数组中 type 为 text 的块的 text 字段，stop_reason 表示结束原因。下方仅为格式示例；这不是 Chat Completions 的 choices 结构。",
+    "In a non-streaming response, read text from the text field of content blocks whose type is text. stop_reason describes why generation ended. The example below illustrates the format; it is not the Chat Completions choices structure.",
+    "في الاستجابة غير المتدفقة اقرأ النص من حقل text في كتل content التي يكون نوعها text. يوضح stop_reason سبب انتهاء التوليد. المثال أدناه يوضح الصيغة؛ وهي تختلف عن بنية choices في Chat Completions.",
+  );
+  const anthropicStreaming = text(
+    "设置 stream: true 后按 SSE 事件处理：在 content_block_delta 中读取 delta.text，以 message_stop 结束。不要按 Chat Completions 的 choices[].delta.content 或 [DONE] 标记解析该协议。",
+    "With stream: true, handle SSE events: read delta.text from content_block_delta and finish at message_stop. Do not parse this protocol using Chat Completions choices[].delta.content or the [DONE] marker.",
+    "مع stream: true عالج أحداث SSE: اقرأ delta.text من content_block_delta وانتهِ عند message_stop. لا تستخدم choices[].delta.content أو علامة [DONE] الخاصة بـ Chat Completions لتحليل هذا البروتوكول.",
+  );
   const chatLead = text(
     "POST /v1/chat/completions 接收 model 与 messages。下方使用已授权的文本模型、用户消息和 max_tokens 输出上限，发送一个非流式请求。",
     "POST /v1/chat/completions accepts model and messages. The example sends a non-streaming request using an authorized text model, a user message, and a max_tokens output limit.",
@@ -146,6 +190,7 @@ export default function DocsPage() {
     protocols: ["protocol", "endpoint", "api", "curl", "url", "path", "协议", "端点", "路径", "接口"],
     models: ["model list", "/v1/models", "模型列表", "قائمة النماذج"],
     "chat-completions": ["chat completions", "/v1/chat/completions", "聊天补全", "إكمال المحادثات"],
+    anthropic: ["anthropic messages", "/v1/messages", "消息协议", "رسائل Anthropic"],
     routing: ["routing", "authorization", "group", "model", "allowlist", "auto", "路由", "授权", "分组", "白名单"],
     limits: ["limit", "rate", "quota", "concurrency", "throttle", "配额", "限流", "并发", "额度"],
     faq: ["faq", "question", "answer", "常见问题", "问题", "解答"],
@@ -162,6 +207,7 @@ export default function DocsPage() {
     protocols: "Chat Completions OpenAI Messages Anthropic Embeddings Images generations Audio TTS speech STT transcriptions translations Video submit poll Realtime WebSocket Models list Bearer token base URL path auth",
     models: [modelsLead, modelsScope, modelsResponseNote, modelsExample, modelsResponse].join(" "),
     "chat-completions": [chatLead, chatResponseNote, chatStreaming, chatExample, chatResponse].join(" "),
+    anthropic: [anthropicLead, anthropicAuth, anthropicResponseNote, anthropicStreaming, anthropicExample, anthropicResponse].join(" "),
     routing: "routing flow key auth user quota check channel selection group model match pre-charge upstream call settle refund group model_limit allowed_ips remain_quota CIDR IP allowlist authorized model list",
     limits: "user rate limit 100 req/min key 50 model 500 per-request cap 2000000 quota pre-charge malicious large requests 429 rate_limit_exceeded 403 insufficient_quota",
     faq: "plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field top-up credited immediately balance",
@@ -357,6 +403,23 @@ export default function DocsPage() {
                 title={text("Python（编程语言）", "Python", "Python")}
                 code={pythonExample}
               />
+            </>
+          )}
+          {activeTab === "anthropic" && (
+            <>
+              <p className="docs-lead">{anthropicLead}</p>
+              <CodeBlock title="POST /v1/messages" code={anthropicExample} />
+              <div className="docs-callout">
+                <p>{anthropicAuth}</p>
+              </div>
+              <p>{anthropicResponseNote}</p>
+              <CodeBlock
+                title={text("响应格式示例", "Example response", "مثال على الاستجابة")}
+                code={anthropicResponse}
+              />
+              <div className="docs-callout">
+                <p>{anthropicStreaming}</p>
+              </div>
             </>
           )}
           {activeTab === "chat-completions" && (
