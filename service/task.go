@@ -137,9 +137,13 @@ func settleTask(ch *model.Channel, task *model.Task, adaptor channel.TaskAdaptor
 	}
 	pricing := adaptor.AdjustBillingOnComplete(task.Model, task.Group, &req, result, accepted)
 	actual := relay.TaskPricingQuotaWithPriceData(priceData, pricing)
-	if err := relay.PostConsumeQuotaAmount(task.UserID, task.TokenID, task.TokenName,
+	status := 1
+	if result.Status == dto.TaskStatusFailed && actual == 0 {
+		status = 2
+	}
+	if err := relay.PostConsumeQuotaAmountWithStatus(task.UserID, task.TokenID, task.TokenName,
 		task.TokenUnlimited, ch.ID, task.Model, actual, task.Quota,
-		strconv.FormatInt(ch.ID, 10), 0, task.RequestedModel); err != nil {
+		strconv.FormatInt(ch.ID, 10), 0, status, task.RequestedModel); err != nil {
 		log.Printf("settle task %d quota failed: %v", task.ID, err)
 		return
 	}

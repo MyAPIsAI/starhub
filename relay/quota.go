@@ -261,6 +261,20 @@ func applyAffiliateRebate(userID, actual int64) {
 // An optional requestedModel preserves the client model in the usage log.
 func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimited bool,
 	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, requestedModel ...string) error {
+	return PostConsumeQuotaAmountWithStatus(userID, tokenID, tokenName, tokenUnlimited,
+		channelID, modelName, actual, preQuota, usedChannels, durationMs, 1, requestedModel...)
+}
+
+// PostConsumeQuotaAmountWithStatus keeps the outcome and quota settlement in
+// the same transaction. Status 2 is reserved for failures with no charge.
+func PostConsumeQuotaAmountWithStatus(userID, tokenID int64, tokenName string, tokenUnlimited bool,
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, requestedModel ...string) error {
+	if status != 1 && status != 2 {
+		return errors.New("unsupported settlement log status")
+	}
+	if status == 2 && actual != 0 {
+		return errors.New("failed settlement log requires zero charge")
+	}
 	delta := actual - preQuota
 	originalModel := modelName
 	if len(requestedModel) > 0 && requestedModel[0] != "" {
@@ -276,7 +290,7 @@ func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimi
 		Quota:          actual,
 		UsedChannels:   usedChannels,
 		DurationMs:     durationMs,
-		Status:         1, // success
+		Status:         status,
 	}
 	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
 		return err
