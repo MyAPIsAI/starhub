@@ -71,3 +71,31 @@ func TestLogMigrationPreservesHistoricalCharges(t *testing.T) {
 		t.Fatalf("migration changed historical charge: %+v", got)
 	}
 }
+
+func TestLogRequestedModelMigrationPreservesHistory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy-model.db")
+	if err := InitDB(path); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = CloseDB() })
+	entry := &Log{Model: "gpt-4o", Quota: 123}
+	if err := InsertLog(entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Migrator().DropColumn(&Log{}, "RequestedModel"); err != nil {
+		t.Fatal(err)
+	}
+	if err := CloseDB(); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitDB(path); err != nil {
+		t.Fatal(err)
+	}
+	var got Log
+	if err := DB.First(&got, entry.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.Model != "gpt-4o" || got.RequestedModel != "" || got.Quota != 123 {
+		t.Fatalf("migration changed historical attribution or charge: %+v", got)
+	}
+}

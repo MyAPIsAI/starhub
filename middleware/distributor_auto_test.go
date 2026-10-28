@@ -124,6 +124,9 @@ func TestDistributeAutoModelGroupCandidates(t *testing.T) {
 				if got := r.Context().Value(common.CtxRequestModel); got != tc.selected {
 					t.Errorf("selected model = %v, want %s", got, tc.selected)
 				}
+				if got := r.Context().Value(common.CtxRequestedModel); got != tc.requested {
+					t.Errorf("original model = %v, want %s", got, tc.requested)
+				}
 				cached := r.Context().Value(common.CtxRequestBody).([]byte)
 				if tc.requested != "myapis-auto" && string(cached) != body {
 					t.Errorf("explicit-model request body was rewritten: %s", cached)

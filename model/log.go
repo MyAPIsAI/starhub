@@ -7,6 +7,7 @@ type Log struct {
 	TokenName        string `gorm:"size:64;not null;default:''" json:"token_name"`
 	ChannelID        int64  `gorm:"index;not null;default:0" json:"channel_id"`
 	Model            string `gorm:"size:128;not null;default:''" json:"model"`
+	RequestedModel   string `gorm:"size:128;not null;default:''" json:"requested_model"`
 	PromptTokens     int64  `gorm:"not null;default:0" json:"prompt_tokens"`
 	CompletionTokens int64  `gorm:"not null;default:0" json:"completion_tokens"`
 	Quota            int64  `gorm:"not null;default:0" json:"quota"`
@@ -16,11 +17,11 @@ type Log struct {
 	UsedChannels  string `gorm:"size:256;not null;default:''" json:"used_channels"`
 	// DurationMs is the upstream response time in milliseconds. Zero
 	// when not measured (legacy logs, or fast-path responses).
-	DurationMs int64  `gorm:"not null;default:0" json:"duration_ms"`
+	DurationMs int64 `gorm:"not null;default:0" json:"duration_ms"`
 	// Status is 1=success (billed), 2=failed (unbilled). Defaults to
 	// 1 so existing log insertion code that omits the field is correct.
-	Status     int    `gorm:"not null;default:1" json:"status"`
-	CreatedAt  int64  `gorm:"index;autoCreateTime" json:"created_at"`
+	Status    int   `gorm:"not null;default:1" json:"status"`
+	CreatedAt int64 `gorm:"index;autoCreateTime" json:"created_at"`
 }
 
 func InsertLog(l *Log) error {

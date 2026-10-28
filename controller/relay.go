@@ -115,6 +115,7 @@ type relayRequest struct {
 	userGroup      string
 	autoGroups     []string
 	modelName      string
+	requestedModel string
 	body           []byte
 	contentType    string
 	stream         bool
@@ -131,11 +132,15 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 		group:          ctxValueString(ctx, common.CtxUsingGroup),
 		userGroup:      ctxValueString(ctx, common.CtxUserGroup),
 		modelName:      ctxValueString(ctx, common.CtxRequestModel),
+		requestedModel: ctxValueString(ctx, common.CtxRequestedModel),
 		contentType:    ctxValueString(ctx, common.CtxRequestContentType),
 		stream:         ctxValueBool(ctx, common.CtxRequestStream),
 		prefixHash:     ctxValueString(ctx, common.CtxRequestPrefixHash),
 	}
 	req.autoGroups, _ = ctx.Value(common.CtxAutoGroups).([]string)
+	if req.requestedModel == "" {
+		req.requestedModel = req.modelName
+	}
 	req.body, _ = ctx.Value(common.CtxRequestBody).([]byte)
 	return req
 }
@@ -165,11 +170,11 @@ type relayFlow struct {
 	trail        []string
 	lastErr      error
 	unsupported  int
-	sent         int    // actual upstream send attempts (unsupported skips excluded)
-	uncertain    bool   // a side-effecting attempt may have executed upstream
-	budgetStop   bool   // stopped because the total attempt budget was exhausted
-	currentGroup string // group of the current attempt (for auto-group walk)
-	groupIdx     int    // cursor into req.autoGroups (auto-group mode)
+	sent         int       // actual upstream send attempts (unsupported skips excluded)
+	uncertain    bool      // a side-effecting attempt may have executed upstream
+	budgetStop   bool      // stopped because the total attempt budget was exhausted
+	currentGroup string    // group of the current attempt (for auto-group walk)
+	groupIdx     int       // cursor into req.autoGroups (auto-group mode)
 	startTime    time.Time // request start for duration_ms logging
 	// Observability (P5): the request-level span and the current attempt
 	// span. The attempt span is set by runChannels before each attempt
@@ -464,7 +469,7 @@ func (f *relayFlow) refundUnlessSettled() {
 			TokenID:      f.req.tokenID,
 			TokenName:    f.req.tokenName,
 			Model:        f.req.modelName,
-			UsedChannels:  f.trailString(),
+			UsedChannels: f.trailString(),
 			DurationMs:   time.Since(f.startTime).Milliseconds(),
 		})
 	}
@@ -894,7 +899,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	}
 	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
-		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds()); err != nil {
+		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
 		log.Printf("post consume quota failed: %v", err)
 	}
 	flow.settled = true

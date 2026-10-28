@@ -121,6 +121,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				return
 			}
 
+			requestedModel := modelName
 			autoModelSelected := false
 			// Auto-routing: when the client sends model "myapis-auto", replace
 			// it with the lowest-cost available model within the token's
@@ -202,6 +203,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			// replay it.
 			ctx := common.WithValues(r.Context(),
 				common.CtxRequestModel, modelName,
+				common.CtxRequestedModel, requestedModel,
 				common.CtxRequestBody, body,
 				common.CtxRequestContentType, contentType,
 				common.CtxRequestStream, stream,

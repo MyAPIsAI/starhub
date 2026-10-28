@@ -113,6 +113,9 @@ func TestRelayRequestFromContext(t *testing.T) {
 	if req.modelName != "gpt-4o" || !req.stream || req.contentType != "application/json" {
 		t.Fatalf("request fields = %+v", req)
 	}
+	if req.requestedModel != "gpt-4o" {
+		t.Fatalf("legacy context requested model = %q, want gpt-4o", req.requestedModel)
+	}
 }
 
 // A missing context value must degrade to the zero value rather than panic:

@@ -54,14 +54,16 @@ func TestRelayAutoModelWithoutCandidatesDoesNotCharge(t *testing.T) {
 
 func TestRelayAutoModelReachesUpstream(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		inbound dto.InboundFormat
-		kind    int
+		name      string
+		inbound   dto.InboundFormat
+		kind      int
+		requested string
 	}{
-		{"openai passthrough", dto.InboundOpenAI, channel.ChannelTypeOpenAI},
-		{"claude passthrough", dto.InboundClaude, channel.ChannelTypeClaude},
-		{"openai to claude", dto.InboundOpenAI, channel.ChannelTypeClaude},
-		{"claude to openai", dto.InboundClaude, channel.ChannelTypeOpenAI},
+		{"openai passthrough", dto.InboundOpenAI, channel.ChannelTypeOpenAI, "myapis-auto"},
+		{"claude passthrough", dto.InboundClaude, channel.ChannelTypeClaude, "myapis-auto"},
+		{"openai to claude", dto.InboundOpenAI, channel.ChannelTypeClaude, "myapis-auto"},
+		{"claude to openai", dto.InboundClaude, channel.ChannelTypeOpenAI, "myapis-auto"},
+		{"explicit model", dto.InboundOpenAI, channel.ChannelTypeOpenAI, "gpt-4o"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			newTestDB(t)
@@ -91,7 +93,7 @@ func TestRelayAutoModelReachesUpstream(t *testing.T) {
 				path, relayHandler = "/v1/messages", RelayClaudeChat
 			}
 			handler := middleware.TokenAuth(middleware.Distribute(tc.inbound)(relayHandler))
-			body := `{"model":"myapis-auto","messages":[{"role":"user","content":"Hello"}],"max_tokens":64,"stream":false}`
+			body := `{"model":"` + tc.requested + `","messages":[{"role":"user","content":"Hello"}],"max_tokens":64,"stream":false}`
 			r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
 			r.Header.Set("Authorization", "Bearer "+token.Key)
@@ -99,6 +101,23 @@ func TestRelayAutoModelReachesUpstream(t *testing.T) {
 			handler.ServeHTTP(rec, r)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("relay failed: %d %s", rec.Code, rec.Body)
+			}
+			entries, total, err := model.ListLogs(user.ID, 1, 10, "gpt-4o")
+			if err != nil || total != 1 || len(entries) != 1 {
+				t.Fatalf("success log not persisted: total %d, entries %d, error %v", total, len(entries), err)
+			}
+			if entries[0].RequestedModel != tc.requested || entries[0].Model != "gpt-4o" || entries[0].Status != 1 {
+				t.Fatalf("requested/actual model attribution lost: %+v", entries[0])
+			}
+			var page struct {
+				Items []struct {
+					RequestedModel string `json:"requested_model"`
+					Model          string `json:"model"`
+				} `json:"items"`
+			}
+			decodeData(t, call(ListLogs, testRequest{target: "/api/log", userID: user.ID, role: common.RoleUser}), &page)
+			if len(page.Items) != 1 || page.Items[0].RequestedModel != tc.requested || page.Items[0].Model != "gpt-4o" {
+				t.Fatalf("log API lost model attribution: %+v", page)
 			}
 			select {
 			case sent := <-captured:

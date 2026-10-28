@@ -185,10 +185,11 @@ func PostConsumeQuota(userID, tokenID int64, tokenName string, tokenUnlimited bo
 
 // PostConsumeQuotaWithUserGroup is PostConsumeQuota with the user's own group
 // for the group x group matrix multiplier.
+// An optional requestedModel preserves the client model in the usage log.
 func PostConsumeQuotaWithUserGroup(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName, group, userGroup string, usage *Usage, preQuota int64, usedChannels string, durationMs int64) error {
+	channelID int64, modelName, group, userGroup string, usage *Usage, preQuota int64, usedChannels string, durationMs int64, requestedModel ...string) error {
 	return PostConsumeQuotaWithPrice(NewPriceDataWithUserGroup(modelName, group, userGroup), userID, tokenID, tokenName,
-		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels, durationMs)
+		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels, durationMs, requestedModel...)
 }
 
 // PostConsumeQuotaWithPrice is the settlement entry for relay modes that
@@ -196,18 +197,23 @@ func PostConsumeQuotaWithUserGroup(userID, tokenID int64, tokenName string, toke
 // the caller resolves its own PriceData and this function only balances
 // the books.
 func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, usage *Usage, preQuota int64, usedChannels string, durationMs int64) error {
+	channelID int64, modelName string, usage *Usage, preQuota int64, usedChannels string, durationMs int64, requestedModel ...string) error {
 	if usage == nil {
 		usage = &Usage{}
 	}
 	actual := ComputeUsageQuota(pd, usage)
 	delta := actual - preQuota
+	originalModel := modelName
+	if len(requestedModel) > 0 && requestedModel[0] != "" {
+		originalModel = requestedModel[0]
+	}
 	entry := &model.Log{
 		UserID:           userID,
 		TokenID:          tokenID,
 		TokenName:        tokenName,
 		ChannelID:        channelID,
 		Model:            modelName,
+		RequestedModel:   originalModel,
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
 		Quota:            actual,

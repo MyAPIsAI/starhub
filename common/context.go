@@ -5,8 +5,10 @@ import "context"
 type ctxKey string
 
 const (
-	CtxUsingGroup         ctxKey = "using_group"
-	CtxRequestModel       ctxKey = "request_model"
+	CtxUsingGroup   ctxKey = "using_group"
+	CtxRequestModel ctxKey = "request_model"
+	// CtxRequestedModel retains the client model before routing rewrites it.
+	CtxRequestedModel     ctxKey = "requested_model"
 	CtxRequestBody        ctxKey = "request_body"
 	CtxRequestStream      ctxKey = "request_stream"
 	CtxRequestContentType ctxKey = "request_content_type"
