@@ -8,7 +8,7 @@ import {
   validServerRatio,
   type ServerPricing,
 } from "../lib/server-pricing";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 
 type Draft = { base: ServerPricing; cache: string; audio: string };
 export function ServerDetailPricing({

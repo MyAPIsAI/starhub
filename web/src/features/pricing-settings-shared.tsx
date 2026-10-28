@@ -1,22 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useSettingsText } from "./settings-text";
+export { useSettingsText } from "./settings-text";
 import { useModelPricing, validatePricing } from "../lib/model-pricing";
 import { isAdmin } from "../lib/system-access";
 import type { PricingCatalogConfig } from "../config/models";
-
-export function useSettingsText() {
-  const { i18n } = useTranslation();
-  const lang: "zh" | "ar" | "en" = i18n.language.startsWith("zh")
-    ? "zh"
-    : i18n.language.startsWith("ar")
-      ? "ar"
-      : "en";
-  return {
-    lang,
-    text: (zh: string, en: string, ar: string) =>
-      lang === "zh" ? zh : lang === "ar" ? ar : en,
-  };
-}
 
 /** Separate recoverable drafts for the two settings modules. Published revisions remain authoritative. */
 export function usePricingDraft(

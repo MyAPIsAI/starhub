@@ -13,7 +13,7 @@ import {
   successPercent,
 } from "../lib/service-level";
 import { ROLE_ADMIN, ROLE_ROOT, useSystemAccess } from "../lib/system-access";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 import "./service-group-targets.css";
 
 type Draft = {

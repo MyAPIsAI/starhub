@@ -8,7 +8,7 @@ import {
   getOfficialReference,
   officialReferenceError,
 } from "../lib/official-reference";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 import "../components/official-reference-editor.css";
 
 export function OfficialReferenceEditor({

@@ -21,7 +21,7 @@ import {
   type ChannelViewMode,
   type ResourceStatusFilter,
 } from "../lib/channel-browser";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 import { Button } from "../components/ui/button";
 import "../components/channel-workspace.css";
 

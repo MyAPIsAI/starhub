@@ -17,7 +17,7 @@ import {
   type ManagedServiceGroup,
 } from "../lib/service-group-config";
 import { isAdmin, useSystemAccess } from "../lib/system-access";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 import { ServiceGroupTargets } from "./service-group-targets";
 import "../components/catalog-management.css";
 import "./service-groups.css";

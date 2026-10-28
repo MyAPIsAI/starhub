@@ -4,7 +4,7 @@ import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { useResourceCatalog, useRegionMutation } from "../lib/api/resource";
 import { ROLE_ADMIN, ROLE_ROOT, useSystemAccess } from "../lib/system-access";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 import "./resource-regions.css";
 
 type Draft = {

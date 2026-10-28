@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
@@ -11,10 +11,15 @@ import {
 import { emptyModelMetadata } from "../lib/model-metadata";
 import { isAdmin, useSystemAccess } from "../lib/system-access";
 import { ApiError } from "../lib/api/http";
-import { ModelPricingAdmin } from "./model-pricing-admin";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 import "../components/catalog-management.css";
 import "./standard-models.css";
+
+const DemoModelPricing = lazy(() =>
+  import("./model-pricing-admin").then((module) => ({
+    default: module.ModelPricingAdmin,
+  })),
+);
 
 type Draft = {
   original: ModelMeta | null;
@@ -39,6 +44,13 @@ export function StandardModels({ role: _role }: { role: number }) {
     [review, setReview] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
+  const selectModel = (id?: string) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (id) next.set("model", id);
+      else next.delete("model");
+      return next;
+    });
   if (!allowed)
     return (
       <p role="alert">
@@ -61,7 +73,19 @@ export function StandardModels({ role: _role }: { role: number }) {
             )}
           </Link>
         </p>
-        <ModelPricingAdmin role={role} modelId={selected ?? undefined} />
+        <Suspense
+          fallback={
+            <p role="status">
+              {text(
+                "正在加载浏览器演示编辑器…",
+                "Loading browser Demo editor…",
+                "جارٍ تحميل المحرر التجريبي للمتصفح…",
+              )}
+            </p>
+          }
+        >
+          <DemoModelPricing role={role} modelId={selected ?? undefined} />
+        </Suspense>
       </>
     );
   const data = query.isError ? undefined : query.data;
@@ -124,7 +148,7 @@ export function StandardModels({ role: _role }: { role: number }) {
           result.revision > draft.revision + 1
         )
           throw Error("Invalid metadata deletion acknowledgement");
-        setParams({});
+        selectModel();
       } else {
         const result = await upsert.mutateAsync({
           meta: draft.row,
@@ -135,7 +159,7 @@ export function StandardModels({ role: _role }: { role: number }) {
           result.revision !== draft.revision + 1
         )
           throw Error("Invalid metadata save acknowledgement");
-        setParams({ model: result.meta.model });
+        selectModel(result.meta.model);
       }
       setDraft(null);
       setNotice(
@@ -345,7 +369,7 @@ export function StandardModels({ role: _role }: { role: number }) {
         (selected ? (
           <section className="pricing-panel">
             <div className="cm-actions">
-              <Button onClick={() => setParams({})}>
+              <Button onClick={() => selectModel()}>
                 {text(
                   "返回服务器模型列表",
                   "Back to server model list",
@@ -461,7 +485,7 @@ export function StandardModels({ role: _role }: { role: number }) {
                         <td>
                           <button
                             className="cm-text-button"
-                            onClick={() => setParams({ model: row.model })}
+                            onClick={() => selectModel(row.model)}
                           >
                             <bdi>{row.model}</bdi>
                           </button>

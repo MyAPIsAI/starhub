@@ -5,7 +5,6 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut, apiRequest } from "./http";
-import type { ModelItem } from "../../config/models";
 import { useSessionQueryIdentity } from "../system-access";
 import {
   readModelMetadataCatalog,
@@ -107,96 +106,4 @@ export function useDeleteModelMeta() {
         void queryClient.invalidateQueries({ queryKey: [key] });
     },
   });
-}
-
-// --- Adapter: ModelMeta <-> ModelItem ---
-
-const KNOWN_TAGS = ["text", "code", "vision", "reasoning", "image", "video"];
-
-function formatContextDisplay(length: number): string {
-  if (length <= 0) return "—";
-  if (length >= 1_000_000) return `${(length / 1_000_000).toFixed(0)}M`;
-  if (length >= 1000) return `${Math.round(length / 1000)}K`;
-  return String(length);
-}
-
-/** Convert a backend ModelMeta to the frontend ModelItem shape. */
-export function metaToModelItem(meta: ModelMeta): ModelItem {
-  const tags = meta.tags
-    ? meta.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter((t): t is ModelItem["capabilities"][number] =>
-          KNOWN_TAGS.includes(t),
-        )
-    : [];
-  return {
-    id: meta.model,
-    name: meta.vendor_display || meta.model,
-    vendor: meta.vendor || meta.vendor_display || meta.model,
-    capabilities: tags.length ? tags : ["text"],
-    contextLength: meta.context_length,
-    contextDisplay: formatContextDisplay(meta.context_length),
-    pricing: {
-      input_per_million_usd: meta.official_input_per_m?.toFixed(6) ?? "0",
-      output_per_million_usd: meta.official_output_per_m?.toFixed(6) ?? "0",
-      ...(meta.official_cache_read_per_m != null
-        ? {
-            cache_read_per_million_usd:
-              meta.official_cache_read_per_m.toFixed(6),
-          }
-        : {}),
-      ...(meta.official_cache_write_per_m != null
-        ? {
-            cache_write_per_million_usd:
-              meta.official_cache_write_per_m.toFixed(6),
-          }
-        : {}),
-    },
-    protocols: [],
-    description: {
-      en: meta.description || "",
-      zh: meta.description || "",
-      ar: meta.description || "",
-    },
-    tierAvailability: {
-      ultra: true,
-      pro: true,
-      standard: true,
-      lite: true,
-    },
-    online: true,
-  };
-}
-
-/** Convert a frontend ModelItem to a backend ModelMeta for upsert. */
-export function modelItemToMeta(model: ModelItem): ModelMeta {
-  const toFloat = (s: string | undefined): number | null => {
-    if (!s) return null;
-    const n = Number(s);
-    return Number.isFinite(n) && n >= 0 ? n : null;
-  };
-  return {
-    model: model.id,
-    vendor: model.vendor,
-    vendor_display: model.name,
-    description: model.description.en || model.description.zh || "",
-    tags: model.capabilities.join(","),
-    context_length: model.contextLength,
-    max_output: 0,
-    official_input_per_m: toFloat(model.pricing.input_per_million_usd),
-    official_output_per_m: toFloat(model.pricing.output_per_million_usd),
-    official_cache_read_per_m: toFloat(
-      model.pricing.cache_read_per_million_usd,
-    ),
-    official_cache_write_per_m: toFloat(
-      model.pricing.cache_write_per_million_usd,
-    ),
-    official_per_request: null,
-    per_request_usd: null,
-    score: null,
-    compatible_groups: "",
-    sort_weight: 0,
-    created_at: 0,
-  };
 }

@@ -19,7 +19,7 @@ import {
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/primitives";
 import { Modal } from "../../components/ui/overlay";
-import { ModelPricingAdmin } from "../../features/model-pricing-admin";
+import { StandardModels } from "../../features/standard-models";
 import { useSystemAccess, isAdmin, canReadFinance, ROLE_ROOT, ROLE_FINANCE } from "../../lib/system-access";
 import { FinanceOverview } from "../../features/finance-overview";
 import { ConfigurationSync } from "../../features/configuration-sync";
@@ -72,6 +72,10 @@ export default function AdminPortal() {
     const urlTab = searchParams.get("tab");
     return validTabs.includes(urlTab as AdminTab) ? (urlTab as AdminTab) : "customers";
   });
+  const [modelCatalogVisited, setModelCatalogVisited] = useState(tab === "models");
+  useEffect(() => {
+    if (tab === "models") setModelCatalogVisited(true);
+  }, [tab]);
   // Sync tab changes to the URL so admin sections are shareable and refresh-safe.
   useEffect(() => {
     const urlTab = searchParams.get("tab");
@@ -708,9 +712,9 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {/* Keep drafts mounted when switching admin sections. */}
+        {/* Load the real catalog on first visit and preserve its draft across tabs. */}
         <div hidden={tab !== "models"}>
-          <ModelPricingAdmin role={authRole} />
+          {modelCatalogVisited && <StandardModels role={authRole} />}
         </div>
 
         {/* Tab 3: Analytics */}

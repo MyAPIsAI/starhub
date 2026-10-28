@@ -17,7 +17,7 @@ import {
   replaceServerModelPricing,
   type ServerPricing,
 } from "../lib/server-pricing";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 import "./server-token-pricing.css";
 import { ServerDetailPricing } from "./server-detail-pricing";
 

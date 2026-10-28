@@ -11,7 +11,7 @@ import type { PricingCatalogConfig, ResourceSnapshot } from "../config/models";
 import { nextDemoSnapshot } from "../lib/platform-catalog";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 
 export function ChannelSourceControls({
   config,

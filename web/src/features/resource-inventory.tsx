@@ -9,7 +9,7 @@ import {
   resourceImportDiff,
 } from "../lib/resource-catalog";
 import type { ResourceSnapshot } from "../config/models";
-import { useSettingsText } from "./pricing-settings-shared";
+import { useSettingsText } from "./settings-text";
 import "./resource-inventory.css";
 
 type Draft =
