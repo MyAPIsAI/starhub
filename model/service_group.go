@@ -23,6 +23,7 @@ type ServiceGroupConfig struct {
 	Visibility    string `gorm:"size:16;not null;default:'common'" json:"visibility"` // common | custom
 	AccountIDs    string `gorm:"size:1024;not null;default:''" json:"account_ids"`    // comma-separated
 	Multiplier    string `gorm:"size:32;not null;default:'1'" json:"multiplier"`      // decimal string, synced to group_ratio
+	Revision      int64  `gorm:"not null;default:0" json:"revision"`
 	SLASuccessPPM *int64 `json:"-"`
 	SLAP95MS      *int64 `json:"-"`
 	SLARevision   int64  `gorm:"not null;default:0" json:"-"`
@@ -49,7 +50,7 @@ func upsertServiceGroup(db *gorm.DB, sgc *ServiceGroupConfig) error {
 	}
 	// Try update first; if no row matches, create.
 	res := db.Model(&ServiceGroupConfig{}).
-		Where("group_id = ?", sgc.GroupID).
+		Where("group_id = ? AND revision >= 0 AND revision < ?", sgc.GroupID, maxServiceGroupRevision).
 		Updates(map[string]any{
 			"name":        sgc.Name,
 			"description": sgc.Description,
@@ -57,6 +58,7 @@ func upsertServiceGroup(db *gorm.DB, sgc *ServiceGroupConfig) error {
 			"visibility":  sgc.Visibility,
 			"account_ids": sgc.AccountIDs,
 			"multiplier":  sgc.Multiplier,
+			"revision":    gorm.Expr("revision + 1"),
 		})
 	if res.Error != nil {
 		return res.Error
@@ -74,6 +76,7 @@ func upsertServiceGroup(db *gorm.DB, sgc *ServiceGroupConfig) error {
 		"visibility":  sgc.Visibility,
 		"account_ids": sgc.AccountIDs,
 		"multiplier":  sgc.Multiplier,
+		"revision":    int64(1),
 	}).Error; err != nil {
 		return err
 	}

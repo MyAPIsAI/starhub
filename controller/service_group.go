@@ -14,13 +14,15 @@ import (
 )
 
 type serviceGroupRequest struct {
-	GroupID     string   `json:"group_id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Enabled     *bool    `json:"enabled"`
-	Visibility  string   `json:"visibility"`
-	AccountIDs  []string `json:"account_ids"`
-	Multiplier  string   `json:"multiplier"`
+	GroupID          string          `json:"group_id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Enabled          *bool           `json:"enabled"`
+	Visibility       string          `json:"visibility"`
+	AccountIDs       []string        `json:"account_ids"`
+	Multiplier       string          `json:"multiplier"`
+	ExpectedGroupID  json.RawMessage `json:"expected_group_id"`
+	ExpectedRevision json.RawMessage `json:"expected_revision"`
 }
 
 // ListServiceGroups returns all service group configs.
@@ -43,6 +45,13 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 	var req serviceGroupRequest
 	if !decodeJSONBody(w, r, &req) {
 		return
+	}
+	var expectedID, expectedRevision *int64
+	if len(req.ExpectedGroupID) != 0 || len(req.ExpectedRevision) != 0 {
+		if json.Unmarshal(req.ExpectedGroupID, &expectedID) != nil || json.Unmarshal(req.ExpectedRevision, &expectedRevision) != nil || expectedID == nil || expectedRevision == nil {
+			common.ApiError(w, http.StatusBadRequest, "expected_group_id and expected_revision must be supplied together as integers")
+			return
+		}
 	}
 	req.GroupID = strings.TrimSpace(req.GroupID)
 	if !validGroupID(req.GroupID) {
@@ -88,8 +97,14 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 		Multiplier:  multiplier,
 	}
 	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
-	if err := model.SaveServiceGroupAndRatio(r.Context(), sgc, actorID); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, "service group configuration could not be saved")
+	// Legacy callers may omit guards; their writes still advance the metadata revision.
+	if expectedID != nil {
+		err = model.SaveServiceGroupAndRatioIfRevision(r.Context(), sgc, actorID, *expectedID, *expectedRevision)
+	} else {
+		err = model.SaveServiceGroupAndRatio(r.Context(), sgc, actorID)
+	}
+	if err != nil {
+		serviceGroupConfigurationError(w, err)
 		return
 	}
 	if err := model.LoadOptionsToSettings(); err != nil {
@@ -107,12 +122,25 @@ func DeleteServiceGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
-	if err := model.DeleteServiceGroupAndRatio(r.Context(), groupID, actorID); err != nil {
-		if errors.Is(err, model.ErrServiceGroupNotFound) {
-			common.ApiError(w, http.StatusNotFound, "service group not found")
-		} else {
-			common.ApiError(w, http.StatusInternalServerError, "service group configuration could not be deleted")
+	var err error
+	if r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 {
+		var expected struct {
+			GroupID  *int64 `json:"expected_group_id"`
+			Revision *int64 `json:"expected_revision"`
 		}
+		if !decodeResourceBody(w, r, &expected) {
+			return
+		}
+		if expected.GroupID == nil || expected.Revision == nil {
+			common.ApiError(w, http.StatusBadRequest, "expected_group_id and expected_revision are required in a delete body")
+			return
+		}
+		err = model.DeleteServiceGroupAndRatioIfRevision(r.Context(), groupID, actorID, *expected.GroupID, *expected.Revision)
+	} else {
+		err = model.DeleteServiceGroupAndRatio(r.Context(), groupID, actorID)
+	}
+	if err != nil {
+		serviceGroupConfigurationError(w, err)
 		return
 	}
 	if err := model.LoadOptionsToSettings(); err != nil {
@@ -120,6 +148,19 @@ func DeleteServiceGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.ApiSuccess(w, nil)
+}
+
+func serviceGroupConfigurationError(w http.ResponseWriter, err error) {
+	status, message := http.StatusInternalServerError, "service group configuration could not be changed"
+	switch {
+	case errors.Is(err, model.ErrServiceGroupConflict):
+		status, message = http.StatusConflict, err.Error()
+	case errors.Is(err, model.ErrServiceGroupNotFound):
+		status, message = http.StatusNotFound, err.Error()
+	case errors.Is(err, model.ErrInvalidServiceGroupPrecondition):
+		status, message = http.StatusBadRequest, err.Error()
+	}
+	common.ApiError(w, status, message)
 }
 
 // --- helpers ---
@@ -156,6 +197,7 @@ func serviceGroupJSON(sgc *model.ServiceGroupConfig) map[string]any {
 		"visibility":  sgc.Visibility,
 		"account_ids": accountIDs,
 		"multiplier":  sgc.Multiplier,
+		"revision":    sgc.Revision,
 		"created_at":  sgc.CreatedAt,
 		"updated_at":  sgc.UpdatedAt,
 		"sla":         sgc.ServiceLevel(),
