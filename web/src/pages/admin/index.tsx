@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Users,
@@ -52,6 +52,7 @@ import { ApiError } from "../../lib/api/http";
 export default function AdminPortal() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const lang = i18n.language.startsWith("zh")
     ? "zh"
     : i18n.language.startsWith("ar")
@@ -141,6 +142,29 @@ export default function AdminPortal() {
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpTarget, setTopUpTarget] = useState<AdminUser | null>(null);
   const [detailUser, setDetailUser] = useState<AdminUser | null>(null);
+  // Sync the account detail modal to the ?user= URL param so the detail view
+  // is shareable and survives a refresh. Resolve the id against the loaded
+  // users list; an invalid or missing id closes the modal.
+  const users = usersQuery.data;
+  useEffect(() => {
+    const userId = searchParams.get("user");
+    if (!userId) {
+      setDetailUser(null);
+      return;
+    }
+    const match = users?.find((u) => String(u.id) === userId);
+    setDetailUser(match ?? null);
+  }, [searchParams, users]);
+  const openDetailUser = (u: AdminUser) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("user", String(u.id));
+    setSearchParams(next, { replace: true });
+  };
+  const closeDetailUser = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("user");
+    setSearchParams(next, { replace: true });
+  };
   const [topUpAmount, setTopUpAmount] = useState("1200");
   const [topUpType, setTopUpType] = useState<
     "gift" | "compensation" | "offline_payment" | "clawback"
@@ -698,7 +722,7 @@ export default function AdminPortal() {
                             size="small"
                             variant="secondary"
                             onClick={() => {
-                              setDetailUser(u);
+                              openDetailUser(u);
                             }}
                           >
                             {text("详情", "Details", "التفاصيل")}
@@ -2378,7 +2402,7 @@ export default function AdminPortal() {
       <Modal
         size="default"
         open={!!detailUser}
-        onOpenChange={(open) => { if (!open) setDetailUser(null); }}
+        onOpenChange={(open) => { if (!open) closeDetailUser(); }}
         title={text("账户详情", "Account details", "تفاصيل الحساب")}
         description={detailUser ? detailUser.username : ""}
         footer={
@@ -2389,22 +2413,22 @@ export default function AdminPortal() {
                 setTopUpAmount("");
                 setTopUpReason("");
                 setTopUpOpen(true);
-                setDetailUser(null);
+                closeDetailUser();
               }
             }}>
               {t("manualTopUp")}
             </Button>
             <Button variant={detailUser && userIsActive(detailUser.status) ? "danger" : "primary"}
               onClick={() => {
-                if (detailUser) {
+                 if (detailUser) {
                   handleToggleStatus(detailUser);
-                  setDetailUser(null);
+                  closeDetailUser();
                 }
               }}
             >
               {detailUser && userIsActive(detailUser.status) ? t("disableAccount") : t("enableAccount")}
             </Button>
-            <Button variant="secondary" onClick={() => setDetailUser(null)}>
+            <Button variant="secondary" onClick={closeDetailUser}>
               {text("关闭", "Close", "إغلاق")}
             </Button>
           </>
