@@ -43,6 +43,7 @@ const (
 	ResourceAudit      Resource = "audit"
 	ResourceRedemption Resource = "redemption"
 	ResourceFinance    Resource = "finance"
+	ResourceInventory  Resource = "inventory"
 )
 
 // policy maps role -> resource -> allowed actions. An empty action set means
@@ -58,6 +59,7 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceAudit:      {}, // all actions
 		ResourceRedemption: {}, // all actions
 		ResourceFinance:    {ActionRead: true},
+		ResourceInventory:  {ActionRead: true, ActionWrite: true},
 	},
 	common.RoleAdmin: {
 		ResourceUser:       {ActionRead: true},
@@ -68,6 +70,7 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceAudit:      {ActionRead: true},
 		ResourceRedemption: {ActionRead: true, ActionWrite: true, ActionDelete: true},
 		ResourceFinance:    {ActionRead: true},
+		ResourceInventory:  {ActionRead: true, ActionWrite: true},
 	},
 	common.RoleFinance: {
 		ResourceFinance: {ActionRead: true},
@@ -132,6 +135,8 @@ func pathResource(path string) (Resource, bool) {
 		return ResourceRedemption, true
 	case path == "/api/finance" || strings.HasPrefix(path, "/api/finance/"):
 		return ResourceFinance, true
+	case path == "/api/resource" || strings.HasPrefix(path, "/api/resource/"), path == "/api/placement" || strings.HasPrefix(path, "/api/placement/"):
+		return ResourceInventory, true
 	}
 	return "", false
 }

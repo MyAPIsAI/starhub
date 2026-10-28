@@ -54,6 +54,11 @@ func New() http.Handler {
 	mux.Handle("PUT /api/channel/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateChannel))))
 	mux.Handle("DELETE /api/channel/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteChannel))))
 
+	mux.Handle("GET /api/resource", middleware.AdminAuth(http.HandlerFunc(controller.ListResources)))
+	mux.Handle("PUT /api/resource", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateResources))))
+	mux.Handle("GET /api/placement", middleware.AdminAuth(http.HandlerFunc(controller.ListResources)))
+	mux.Handle("PUT /api/placement/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdatePlacement))))
+
 	mux.Handle("POST /api/token", middleware.UserAuth(http.HandlerFunc(controller.CreateToken)))
 	mux.Handle("POST /api/token/", middleware.UserAuth(http.HandlerFunc(controller.CreateToken)))
 	mux.Handle("GET /api/token", middleware.UserAuth(http.HandlerFunc(controller.ListTokens)))
