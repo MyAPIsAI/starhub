@@ -400,7 +400,7 @@ var (
 // computed by ImageBill with the count/usage guards).
 func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64) {
 	if err := relay.PostConsumeQuotaAmount(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
-		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, actual, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds()); err != nil {
+		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, actual, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
 		log.Printf("post consume image quota failed: %v", err)
 	}
 	flow.settled = true

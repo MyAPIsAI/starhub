@@ -84,14 +84,18 @@ func TestAffiliateRebateUsesCollectedQuota(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-		if explicit {
-			err = PostConsumeQuotaAmount(user.ID, token.ID, "", false, 0, "m", 130, 80, "", 0)
-		} else {
-			pd := &PriceData{GroupRatio: 1, OtherRatio: 1, ModelPriceUSD: 0.00026}
-			err = PostConsumeQuotaWithPrice(pd, user.ID, token.ID, "", false, 0, "m", &Usage{}, 80, "", 0)
-		}
+			if explicit {
+				err = PostConsumeQuotaAmount(user.ID, token.ID, "", false, 0, "m", 130, 80, "", 0)
+			} else {
+				pd := &PriceData{GroupRatio: 1, OtherRatio: 1, ModelPriceUSD: 0.00026}
+				err = PostConsumeQuotaWithPrice(pd, user.ID, token.ID, "", false, 0, "m", &Usage{}, 80, "", 0)
+			}
 			if err != nil {
 				t.Fatal(err)
+			}
+			entries, total, err := model.ListLogs(user.ID, 1, 10, "m")
+			if err != nil || total != 1 || len(entries) != 1 || entries[0].RequestedModel != "m" {
+				t.Fatalf("legacy settlement lost model attribution: total=%d entries=%+v err=%v", total, entries, err)
 			}
 			after, err := model.GetUserByID(inviter.ID)
 			if err != nil || after.Quota-before.Quota != 10 {

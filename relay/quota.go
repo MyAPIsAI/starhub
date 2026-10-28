@@ -258,19 +258,25 @@ func applyAffiliateRebate(userID, actual int64) {
 // PostConsumeQuotaAmount settles an explicit actual amount (unit-based
 // bills such as tasks, where the actual is computed from platform pricing
 // rather than a usage report).
+// An optional requestedModel preserves the client model in the usage log.
 func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64) error {
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, requestedModel ...string) error {
 	delta := actual - preQuota
+	originalModel := modelName
+	if len(requestedModel) > 0 && requestedModel[0] != "" {
+		originalModel = requestedModel[0]
+	}
 	entry := &model.Log{
-		UserID:       userID,
-		TokenID:      tokenID,
-		TokenName:    tokenName,
-		ChannelID:    channelID,
-		Model:        modelName,
-		Quota:        actual,
-		UsedChannels: usedChannels,
-		DurationMs:   durationMs,
-		Status:       1, // success
+		UserID:         userID,
+		TokenID:        tokenID,
+		TokenName:      tokenName,
+		ChannelID:      channelID,
+		Model:          modelName,
+		RequestedModel: originalModel,
+		Quota:          actual,
+		UsedChannels:   usedChannels,
+		DurationMs:     durationMs,
+		Status:         1, // success
 	}
 	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
 		return err
