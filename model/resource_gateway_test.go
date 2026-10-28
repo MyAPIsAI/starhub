@@ -12,7 +12,7 @@ import (
 
 func managedGatewayFixture(t *testing.T, ch *Channel, active bool, pairs ...ResourceGatewayRoute) {
 	t.Helper()
-	if err := DB.Create(&ResourceGatewayManagedChannel{ChannelID: ch.ID, SourceChannelID: "source", Active: active, Profile: ResourceGatewayTextProfile}).Error; err != nil {
+	if err := DB.Create(&ResourceGatewayManagedChannel{ChannelID: ch.ID, SourceChannelID: fmt.Sprintf("source-%d", ch.ID), Active: active, Profile: ResourceGatewayTextProfile}).Error; err != nil {
 		t.Fatal(err)
 	}
 	for i := range pairs {

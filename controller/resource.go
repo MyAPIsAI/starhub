@@ -46,6 +46,43 @@ func PreviewResourcePublication(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, preview)
 }
 
+func PublishResourceGateway(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		ResourceRevision *int64                         `json:"expected_resource_revision"`
+		ChannelRevision  *int64                         `json:"expected_channel_revision"`
+		OptionVersion    *int64                         `json:"expected_option_version"`
+		Bindings         []model.ResourceChannelBinding `json:"bindings"`
+		ReviewDigest     string                         `json:"review_digest"`
+	}
+	if !decodeResourceBody(w, r, &request) {
+		return
+	}
+	if request.ResourceRevision == nil || request.ChannelRevision == nil || request.OptionVersion == nil {
+		common.ApiError(w, http.StatusBadRequest, "resource, channel and option versions are required")
+		return
+	}
+	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
+	ack, err := model.PublishResourceGateway(r.Context(), model.ResourcePublicationPrecondition{ResourceRevision: *request.ResourceRevision, ChannelRevision: *request.ChannelRevision, OptionVersion: *request.OptionVersion}, request.Bindings, request.ReviewDigest, actorID)
+	if err != nil {
+		writeResourceResult(w, nil, err)
+		return
+	}
+	common.ApiSuccess(w, ack)
+}
+
+func GetResourcePublicationReceipt(w http.ResponseWriter, r *http.Request) {
+	receipt, err := model.ReadResourcePublicationReceipt(r.Context(), r.PathValue("digest"))
+	if errors.Is(err, model.ErrResourcePublicationNotFound) {
+		common.ApiError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if err != nil {
+		writeResourceResult(w, nil, err)
+		return
+	}
+	common.ApiSuccess(w, receipt)
+}
+
 func writeResourceResult(w http.ResponseWriter, catalog *model.ResourceCatalog, err error) {
 	if err == nil {
 		common.ApiSuccess(w, catalog)

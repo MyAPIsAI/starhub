@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"testing"
 
+	"gorm.io/gorm"
+
 	"starhub/common"
 )
 
@@ -20,6 +22,25 @@ func publicationPlan(t *testing.T, bindings []ResourceChannelBinding) *ResourceP
 		t.Fatal(err)
 	}
 	return plan
+}
+
+func TestResourcePublicationCancelledReadDoesNotReturnAPlan(t *testing.T) {
+	_, expected, bindings := publicationFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	const callback = "cancel_resource_review_after_query"
+	if err := DB.Callback().Query().After("gorm:after_query").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement.Table == "abilities" {
+			cancel()
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { DB.Callback().Query().Remove(callback) })
+	plan, err := PreviewResourcePublication(ctx, expected, bindings)
+	if err == nil || plan != nil {
+		t.Fatalf("cancelled read returned a usable plan: plan=%t error=%v", plan != nil, err)
+	}
 }
 
 func TestResourcePublicationReviewBlocksImplicitBindingTransfersAndEmptyBindings(t *testing.T) {

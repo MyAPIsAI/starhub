@@ -51,3 +51,12 @@ func TestResourcePublicationBodyRequiresAllVersionsAndStrictBindings(t *testing.
 		expectStatus(t, call(PreviewResourcePublication, testRequest{method: "POST", target: "/api/resource/publication-preview", body: body}), http.StatusBadRequest)
 	}
 }
+
+func TestResourcePublishBodyRejectsMissingGuardsAndClientSuppliedFacts(t *testing.T) {
+	newTestDB(t)
+	for _, body := range []string{`{}`, `null`, `{"expected_resource_revision":0,"expected_channel_revision":0,"bindings":[]}`, `{"expected_resource_revision":0,"expected_channel_revision":0,"expected_option_version":0,"bindings":[],"review_digest":"bad"}`, `{"expected_resource_revision":0,"expected_channel_revision":0,"expected_option_version":0,"review_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","bindings":[{"source_channel_id":"source","gateway_channel_id":1}]}`, `{"expected_resource_revision":0,"expected_channel_revision":0,"expected_option_version":0,"review_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","bindings":[],"actor_id":1}`, `{"expected_resource_revision":0,"expected_channel_revision":0,"expected_option_version":0,"review_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","bindings":[],"proposed_routes":[]}`} {
+		expectStatus(t, call(PublishResourceGateway, testRequest{method: "PUT", target: "/api/resource/publication", body: body}), http.StatusBadRequest)
+	}
+	expectStatus(t, call(GetResourcePublicationReceipt, testRequest{target: "/api/resource/publication-receipt/bad", path: map[string]string{"digest": "bad"}}), http.StatusBadRequest)
+	expectStatus(t, call(GetResourcePublicationReceipt, testRequest{target: "/api/resource/publication-receipt/" + strings.Repeat("0", 64), path: map[string]string{"digest": strings.Repeat("0", 64)}}), http.StatusNotFound)
+}

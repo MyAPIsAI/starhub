@@ -57,6 +57,8 @@ func New() http.Handler {
 	mux.Handle("GET /api/resource", middleware.AdminAuth(http.HandlerFunc(controller.ListResources)))
 	mux.Handle("GET /api/resource/publication-context", middleware.AdminAuth(http.HandlerFunc(controller.GetResourcePublicationContext)))
 	mux.Handle("POST /api/resource/publication-preview", middleware.AdminAuth(http.HandlerFunc(controller.PreviewResourcePublication)))
+	mux.Handle("PUT /api/resource/publication", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.PublishResourceGateway))))
+	mux.Handle("GET /api/resource/publication-receipt/{digest}", middleware.AdminAuth(http.HandlerFunc(controller.GetResourcePublicationReceipt)))
 	mux.Handle("PUT /api/resource", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateResources))))
 	mux.Handle("GET /api/placement", middleware.AdminAuth(http.HandlerFunc(controller.ListResources)))
 	mux.Handle("PUT /api/placement/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdatePlacement))))

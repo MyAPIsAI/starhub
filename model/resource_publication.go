@@ -167,6 +167,19 @@ func ReadResourcePublicationContext(ctx context.Context) (*ResourcePublicationCo
 // PreviewResourcePublication is read-only and is not an authorization token for a later publish.
 // A publisher must revalidate all dependencies and replace exact pairs atomically.
 func PreviewResourcePublication(ctx context.Context, expected ResourcePublicationPrecondition, bindings []ResourceChannelBinding) (*ResourcePublicationPreview, error) {
+	var preview *ResourcePublicationPreview
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		preview, err = previewResourcePublicationInTransaction(tx, expected, bindings)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return preview, err
+}
+
+func previewResourcePublicationInTransaction(tx *gorm.DB, expected ResourcePublicationPrecondition, bindings []ResourceChannelBinding) (*ResourcePublicationPreview, error) {
 	for _, version := range []int64{expected.ResourceRevision, expected.ChannelRevision, expected.OptionVersion} {
 		if version < 0 || version > maxResourceRevision {
 			return nil, ErrInvalidResource
@@ -185,7 +198,7 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 		bound[binding.SourceChannelID], targets[id] = id, true
 	}
 	var result *ResourcePublicationPreview
-	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := func() error {
 		state, err := readResourcePublicationState(tx)
 		if err != nil {
 			return err
@@ -194,6 +207,9 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 			return ErrResourceConflict
 		}
 		result = &ResourcePublicationPreview{ResourcePublicationContext: state.context, Bindings: append([]ResourceChannelBinding{}, bindings...), ProposedPairs: []ResourcePublicationPair{}, ProposedRoutes: []ResourcePublicationRoute{}, ExistingPairs: []ResourcePublicationExistingPair{}, Issues: []ResourcePublicationIssue{}}
+		if state.context.ResourceRevision >= maxResourceRevision || state.context.ChannelRevision >= maxResourceRevision {
+			result.Issues = append(result.Issues, ResourcePublicationIssue{Code: "publication_revision_exhausted"})
+		}
 		sort.Slice(result.Bindings, func(i, j int) bool { return result.Bindings[i].SourceChannelID < result.Bindings[j].SourceChannelID })
 		gateway := map[string]ResourceGatewayChannel{}
 		for _, ch := range state.context.Channels {
@@ -366,7 +382,7 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 		})
 		result.Ready = len(result.Issues) == 0
 		return sealResourcePublicationPreview(state, result, owners)
-	})
+	}()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("publication context is unavailable")
 	}

@@ -17,6 +17,7 @@ type ResourceGatewayManagedChannel struct {
 	SourceChannelID string `gorm:"size:128;not null"`
 	Active          bool   `gorm:"not null;default:false"`
 	Profile         string `gorm:"size:64;not null;default:''"`
+	PublicationID   int64  `gorm:"not null;default:0"`
 }
 
 type ResourceGatewayRoute struct {

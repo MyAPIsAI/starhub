@@ -32,7 +32,7 @@ func mergeResourcePublicationRoute(first, second ResourcePublicationRoute) Resou
 }
 
 // The digest identifies the complete review snapshot, not a bearer credential.
-// A future publisher must recompute this under its writer before changing grants.
+// The publisher recomputes this under its writer before changing grants.
 func readResourcePublicationOwners(tx *gorm.DB, bindings []ResourceChannelBinding) ([]ResourceGatewayManagedChannel, error) {
 	targets := make([]int64, 0, len(bindings))
 	sources := make([]string, 0, len(bindings))
