@@ -7,6 +7,8 @@ import {
   validServerRatio,
   validServerRequestPrice,
   replaceServerRequestPrice,
+  replaceServerExpression,
+  validServerExpression,
 } from "../src/lib/server-pricing";
 const fixture = {
   version: 3,
@@ -79,6 +81,35 @@ describe("server token pricing", () => {
       ).toThrow();
     },
   );
+  it("preserves expression maps and fallback prices while editing only the selected existing rule", () => {
+    const state = readServerPricing(fixture);
+    state.expressions.other = "0";
+    const before = structuredClone(state),
+      expression = "total_tokens <= 1000 ? 0 : 0.001";
+    expect(replaceServerExpression(state, "dynamic", expression)).toEqual([
+      {
+        key: "model_price_expr",
+        value: JSON.stringify({ dynamic: expression, other: "0" }),
+      },
+    ]);
+    expect(state).toEqual(before);
+    for (const id of ["flat", "actual", "missing"])
+      expect(() => replaceServerExpression(state, id, expression)).toThrow();
+  });
+  it("matches the engine byte limit and prevents empty mode changes without duplicating server grammar", () => {
+    expect(validServerExpression("0")).toBe(true);
+    expect(validServerExpression("1".repeat(512))).toBe(true);
+    for (const expression of ["", " \n ", "1".repeat(513), "界".repeat(171)]) {
+      expect(validServerExpression(expression)).toBe(false);
+      expect(() =>
+        replaceServerExpression(
+          readServerPricing(fixture),
+          "dynamic",
+          expression,
+        ),
+      ).toThrow();
+    }
+  });
   it("rejects missing, malformed and unsupported snapshots instead of inventing prices", () => {
     for (const value of [
       { ...fixture, atomic_batch: undefined },

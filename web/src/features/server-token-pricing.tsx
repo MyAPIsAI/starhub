@@ -15,6 +15,8 @@ import {
   replaceServerModelRatios,
   validServerRequestPrice,
   replaceServerRequestPrice,
+  validServerExpression,
+  replaceServerExpression,
   type ServerPricing,
 } from "../lib/server-pricing";
 import { useSettingsText } from "./pricing-settings-shared";
@@ -26,8 +28,9 @@ type Draft = {
   locked: boolean;
   input: string;
   completion: string;
-  kind: "per_token" | "per_request";
+  kind: ReturnType<typeof serverPricingMode>;
   request: string;
+  expression: string;
 };
 export function ServerTokenPricing() {
   const { text } = useSettingsText();
@@ -68,18 +71,16 @@ export function ServerTokenPricing() {
     !/[\u0000-\u001f\u007f]/.test(draft.id) &&
     !["myapis-auto", "veyra-auto"].includes(draft.id) &&
     serverPricingMode(draft.base, draft.id) === draft.kind &&
-    (draft.kind === "per_request"
-      ? validServerRequestPrice(draft.request)
-      : validServerRatio(draft.input) && validServerRatio(draft.completion));
+    (draft.kind === "expression"
+      ? validServerExpression(draft.expression)
+      : draft.kind === "per_request"
+        ? validServerRequestPrice(draft.request)
+        : validServerRatio(draft.input) && validServerRatio(draft.completion));
   const mode = (state: ServerPricing, id: string) =>
     ({
       per_token: text("按词元", "Per token", "لكل رمز"),
       per_request: text("按次", "Per request", "لكل طلب"),
-      expression: text(
-        "表达式；此处只读",
-        "Expression; read only here",
-        "تعبير؛ للقراءة فقط هنا",
-      ),
+      expression: text("表达式", "Expression", "تعبير"),
     })[serverPricingMode(state, id)];
   const begin = (id = "") => {
     if (!data) return;
@@ -93,25 +94,25 @@ export function ServerTokenPricing() {
       locked: !!id,
       input: ownPrice(data.input, id)?.toString() ?? "",
       completion: ownPrice(data.completion, id)?.toString() ?? "",
-      kind:
-        serverPricingMode(data, id) === "per_request"
-          ? "per_request"
-          : "per_token",
+      kind: serverPricingMode(data, id),
       request: ownPrice(data.perRequest, id)?.toString() ?? "",
+      expression: ownPrice(data.expressions, id) ?? "",
     });
   };
   const save = async () => {
     if (!draft || !review || !valid || conflict || !writable) return;
     try {
       const options =
-        draft.kind === "per_request"
-          ? replaceServerRequestPrice(draft.base, draft.id, draft.request)
-          : replaceServerModelRatios(
-              draft.base,
-              draft.id,
-              draft.input,
-              draft.completion,
-            );
+        draft.kind === "expression"
+          ? replaceServerExpression(draft.base, draft.id, draft.expression)
+          : draft.kind === "per_request"
+            ? replaceServerRequestPrice(draft.base, draft.id, draft.request)
+            : replaceServerModelRatios(
+                draft.base,
+                draft.id,
+                draft.input,
+                draft.completion,
+              );
       const result = await mutation.mutateAsync({
         expected_version: draft.base.version,
         options,
@@ -191,9 +192,9 @@ export function ServerTokenPricing() {
       </header>
       <p>
         {text(
-          "可编辑按词元倍率或现有按次价格，不切换计价模式。价格变更不会创建渠道、投放资源或授予密钥权限。表达式此处只读；完整分时规则管理仍待实现。",
-          "Edit token ratios or existing per-request prices without changing pricing modes. Price changes do not create channels, publish resources or grant key permissions. Expressions are read only here; full time-rule management remains pending.",
-          "عدّل معاملات الرموز أو الأسعار الحالية لكل طلب دون تغيير نمط التسعير. لا تنشئ الأسعار قنوات أو تنشر موارد أو تمنح صلاحيات للمفاتيح. التعبيرات للقراءة فقط هنا؛ وإدارة قواعد الوقت الكاملة قيد التنفيذ.",
+          "可编辑按词元倍率、现有按次价格或现有表达式，不切换计价模式。价格变更不会创建渠道、投放资源或授予密钥权限。完整分时规则管理仍待实现。",
+          "Edit token ratios, existing per-request prices or existing expressions without changing pricing modes. Price changes do not create channels, publish resources or grant key permissions. Full time-rule management remains pending.",
+          "عدّل معاملات الرموز أو الأسعار والتعبيرات الحالية دون تغيير نمط التسعير. لا تنشئ الأسعار قنوات أو تنشر موارد أو تمنح صلاحيات للمفاتيح. لا تزال إدارة قواعد الوقت الكاملة قيد التنفيذ.",
         )}
       </p>
       {query.isLoading && (
@@ -316,23 +317,26 @@ export function ServerTokenPricing() {
                       <td>
                         <Button
                           size="small"
-                          disabled={
-                            !writable ||
-                            serverPricingMode(data, id) === "expression"
-                          }
+                          disabled={!writable}
                           onClick={() => begin(id)}
                         >
-                          {serverPricingMode(data, id) === "per_request"
+                          {serverPricingMode(data, id) === "expression"
                             ? text(
-                                "编辑按次价格",
-                                "Edit request price",
-                                "تحرير سعر الطلب",
+                                "编辑计费表达式",
+                                "Edit billing expression",
+                                "تحرير تعبير الفوترة",
                               )
-                            : text(
-                                "编辑服务器倍率",
-                                "Edit server ratios",
-                                "تحرير معاملات الخادم",
-                              )}
+                            : serverPricingMode(data, id) === "per_request"
+                              ? text(
+                                  "编辑按次价格",
+                                  "Edit request price",
+                                  "تحرير سعر الطلب",
+                                )
+                              : text(
+                                  "编辑服务器倍率",
+                                  "Edit server ratios",
+                                  "تحرير معاملات الخادم",
+                                )}
                         </Button>
                       </td>
                     </tr>
@@ -367,30 +371,42 @@ export function ServerTokenPricing() {
         }}
         preventOutsideClose
         title={
-          draft?.kind === "per_request"
+          draft?.kind === "expression"
             ? text(
-                "修改真实按次价格",
-                "Change actual request price",
-                "تغيير سعر الطلب الفعلي",
+                "修改真实计费表达式",
+                "Change actual billing expression",
+                "تغيير تعبير الفوترة الفعلي",
               )
-            : text(
-                "修改真实服务器倍率",
-                "Change actual server ratios",
-                "تغيير معاملات الخادم الفعلية",
-              )
+            : draft?.kind === "per_request"
+              ? text(
+                  "修改真实按次价格",
+                  "Change actual request price",
+                  "تغيير سعر الطلب الفعلي",
+                )
+              : text(
+                  "修改真实服务器倍率",
+                  "Change actual server ratios",
+                  "تغيير معاملات الخادم الفعلية",
+                )
         }
         description={
-          draft?.kind === "per_request"
+          draft?.kind === "expression"
             ? text(
-                "按次价格使用美元/请求，保留现有计价模式。取消仅放弃此草稿。",
-                "Per-request prices use USD/request and retain the existing pricing mode. Cancel discards this draft.",
-                "الأسعار بالدولار لكل طلب مع الحفاظ على نمط التسعير الحالي. يلغي الإلغاء هذه المسودة.",
+                "表达式求值结果为基础美元金额，分组等倍率仍适用。后端校验语法后保存，取消仅放弃草稿。",
+                "The expression result is a base USD amount; group and other multipliers still apply. The server validates syntax before saving. Cancel discards this draft.",
+                "نتيجة التعبير مبلغ أساسي بالدولار وتظل معاملات المجموعة وغيرها مطبقة. يتحقق الخادم من الصياغة قبل الحفظ. يلغي الإلغاء هذه المسودة.",
               )
-            : text(
-                "输入和输出倍率按同一配置版本整体保存。取消仅放弃此草稿。",
-                "Input and output ratios are saved together against one configuration version. Cancel discards this draft.",
-                "يُحفظ معاملا الإدخال والإخراج معًا وفق إصدار إعدادات واحد. يلغي الإلغاء هذه المسودة.",
-              )
+            : draft?.kind === "per_request"
+              ? text(
+                  "按次价格使用美元/请求，保留现有计价模式。取消仅放弃此草稿。",
+                  "Per-request prices use USD/request and retain the existing pricing mode. Cancel discards this draft.",
+                  "الأسعار بالدولار لكل طلب مع الحفاظ على نمط التسعير الحالي. يلغي الإلغاء هذه المسودة.",
+                )
+              : text(
+                  "输入和输出倍率按同一配置版本整体保存。取消仅放弃此草稿。",
+                  "Input and output ratios are saved together against one configuration version. Cancel discards this draft.",
+                  "يُحفظ معاملا الإدخال والإخراج معًا وفق إصدار إعدادات واحد. يلغي الإلغاء هذه المسودة.",
+                )
         }
         footer={
           <>
@@ -427,7 +443,28 @@ export function ServerTokenPricing() {
             </p>
             {review ? (
               <div className="stp-review">
-                {draft.kind === "per_request" ? (
+                {draft.kind === "expression" ? (
+                  <>
+                    <p>
+                      {text(
+                        "原表达式",
+                        "Previous expression",
+                        "التعبير السابق",
+                      )}
+                    </p>
+                    <code className="stp-expression">
+                      {ownPrice(draft.base.expressions, draft.id)}
+                    </code>
+                    <p>
+                      {text(
+                        "新表达式（基础美元金额）",
+                        "New expression (base USD)",
+                        "التعبير الجديد (دولار أساسي)",
+                      )}
+                    </p>
+                    <code className="stp-expression">{draft.expression}</code>
+                  </>
+                ) : draft.kind === "per_request" ? (
                   <p>
                     {text(
                       "按次 USD/请求",
@@ -496,7 +533,38 @@ export function ServerTokenPricing() {
                     onChange={(e) => setDraft({ ...draft, id: e.target.value })}
                   />
                 </label>
-                {draft.kind === "per_request" ? (
+                {draft.kind === "expression" ? (
+                  <>
+                    <label>
+                      {text(
+                        "计费表达式（基础美元金额）",
+                        "Billing expression (base USD)",
+                        "تعبير الفوترة (دولار أساسي)",
+                      )}
+                      <textarea
+                        dir="ltr"
+                        rows={5}
+                        maxLength={512}
+                        aria-label={text(
+                          "计费表达式（基础美元金额）",
+                          "Billing expression (base USD)",
+                          "تعبير الفوترة (دولار أساسي)",
+                        )}
+                        value={draft.expression}
+                        onChange={(e) =>
+                          setDraft({ ...draft, expression: e.target.value })
+                        }
+                      />
+                    </label>
+                    <small>
+                      {text(
+                        "非空且不超过 512 个 UTF-8 字节。支持十进制数、算术/比较、三元条件及 min/max/floor/ceil/round/abs。通用变量为 prompt_tokens、completion_tokens、total_tokens；图片/视频变量仅在相应计费路径提供。语法通过不保证所有用量下求值成功；未知变量或除零会回退到原有按次/词元计费。",
+                        "Use a nonempty expression of at most 512 UTF-8 bytes. Supports decimal numbers, arithmetic/comparisons, ternary conditions and min/max/floor/ceil/round/abs. Common variables: prompt_tokens, completion_tokens, total_tokens; image/video variables exist only on their billing paths. Valid syntax does not guarantee evaluation for every usage; unknown variables or division by zero fall back to existing per-request/token pricing.",
+                        "استخدم تعبيرًا غير فارغ لا يتجاوز 512 بايت UTF-8. يدعم الأعداد العشرية والحساب والمقارنة والشرط الثلاثي والدوال min/max/floor/ceil/round/abs. المتغيرات العامة prompt_tokens وcompletion_tokens وtotal_tokens؛ ومتغيرات الصور والفيديو خاصة بمساراتها. صحة الصياغة لا تضمن نجاح كل تقييم؛ المتغير المجهول أو القسمة على صفر يعيدان التسعير السابق لكل طلب أو رمز.",
+                      )}
+                    </small>
+                  </>
+                ) : draft.kind === "per_request" ? (
                   <>
                     <label>
                       {text(

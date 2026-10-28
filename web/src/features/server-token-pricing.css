@@ -40,7 +40,8 @@
   max-width: 400px;
 }
 .stp-search input,
-.stp-fields input {
+.stp-fields input,
+.stp-fields textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border);
@@ -49,6 +50,20 @@
   background: var(--surface);
   color: var(--text);
   font: inherit;
+}
+.stp-fields textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+.stp-expression {
+  display: block;
+  direction: ltr;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 .stp-table {
   overflow: auto;

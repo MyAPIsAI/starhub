@@ -162,6 +162,29 @@ export function replaceServerRequestPrice(
     },
   ];
 }
+export function validServerExpression(value: string): boolean {
+  return (
+    value.trim().length > 0 && new TextEncoder().encode(value).length <= 512
+  );
+}
+export function replaceServerExpression(
+  state: ServerPricing,
+  id: string,
+  expression: string,
+): PricingOption[] {
+  if (
+    !id.trim() ||
+    !validServerExpression(expression) ||
+    serverPricingMode(state, id) !== "expression"
+  )
+    throw Error("Invalid expression pricing edit");
+  return [
+    {
+      key: "model_price_expr",
+      value: JSON.stringify({ ...state.expressions, [id]: expression }),
+    },
+  ];
+}
 export function readPricingAcknowledgement(value: unknown): {
   version: number;
   loaded_version: number;
