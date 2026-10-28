@@ -17,6 +17,7 @@ import {
 } from "../lib/system-access";
 import { useSettingsText } from "./settings-text";
 import { PublicationCommit } from "./resource-publication-commit";
+import { ResourceBindingList } from "./resource-binding-state";
 import "./resource-publication.css";
 
 export function ResourcePublication(props: {
@@ -539,6 +540,7 @@ function PublicationPanel({
           />
         )}
       />
+      <ResourceBindingList enabled={enabled} />
     </section>
   );
 }

@@ -49,6 +49,7 @@ export function useResourceMutation() {
       for (const key of [
         "resource-catalog",
         "resource-publication-context",
+        "resource-publication-state",
         "admin-audit",
       ])
         void client.invalidateQueries({ queryKey: [key] });
@@ -87,6 +88,7 @@ export function useRegionMutation() {
       for (const key of [
         "resource-catalog",
         "resource-publication-context",
+        "resource-publication-state",
         "admin-audit",
       ])
         void client.invalidateQueries({ queryKey: [key] });

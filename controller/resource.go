@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	"starhub/common"
 	"starhub/model"
@@ -13,6 +14,33 @@ import (
 func ListResources(w http.ResponseWriter, r *http.Request) {
 	catalog, err := model.ReadResourceCatalog(r.Context())
 	writeResourceResult(w, catalog, err)
+}
+
+func GetResourceBindingState(w http.ResponseWriter, r *http.Request) {
+	page, pageSize := 1, 20
+	values := r.URL.Query()
+	for key, entries := range values {
+		if (key != "page" && key != "page_size") || len(entries) != 1 {
+			common.ApiError(w, http.StatusBadRequest, "invalid binding pagination")
+			return
+		}
+		value, err := strconv.Atoi(entries[0])
+		if err != nil || strconv.Itoa(value) != entries[0] {
+			common.ApiError(w, http.StatusBadRequest, "invalid binding pagination")
+			return
+		}
+		if key == "page" {
+			page = value
+		} else {
+			pageSize = value
+		}
+	}
+	state, err := model.ReadResourceBindingState(r.Context(), page, pageSize)
+	if err != nil {
+		writeResourceResult(w, nil, err)
+		return
+	}
+	common.ApiSuccess(w, state)
 }
 
 func GetResourcePublicationContext(w http.ResponseWriter, r *http.Request) {

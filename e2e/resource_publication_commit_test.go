@@ -89,7 +89,7 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 		for _, request := range []struct {
 			method, path string
 			body         any
-		}{{"PUT", "/api/resource/publication", payload}, {"GET", receiptPath, nil}} {
+		}{{"PUT", "/api/resource/publication", payload}, {"GET", receiptPath, nil}, {"GET", "/api/resource/publication-state", nil}} {
 			if res := doRequest(env.base, request.method, request.path, session, request.body); res.Status != 403 {
 				t.Fatalf("role%d reached publication: %d %s", role, res.Status, res.Body)
 			}
@@ -100,6 +100,9 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 	}
 	if res := doRequest(env.base, "GET", receiptPath, "", nil); res.Status != 401 {
 		t.Fatalf("anonymous receipt: %d %s", res.Status, res.Body)
+	}
+	if res := doRequest(env.base, "GET", "/api/resource/publication-state", "", nil); res.Status != 401 {
+		t.Fatalf("anonymous binding state: %d %s", res.Status, res.Body)
 	}
 	admin := &model.User{Username: "publication-admin", Role: common.RoleAdmin, Status: common.StatusEnabled, AffCode: common.GenerateAffCode()}
 	if err := model.CreateUser(admin); err != nil {
@@ -122,6 +125,16 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 	ack := publicationAPIData[model.ResourcePublicationAcknowledgement](t, doRequest(env.base, "PUT", "/api/resource/publication", adminSession, payload))
 	if !ack.Published || ack.Operation != "publish" || ack.RouteCount != 2 || ack.ResourceRevision != context.ResourceRevision+1 || ack.ChannelRevision != context.ChannelRevision+1 {
 		t.Fatalf("publication ack: %+v", ack)
+	}
+	for _, session := range []string{adminSession, env.session} {
+		result := doRequest(env.base, "GET", "/api/resource/publication-state?page=1&page_size=10", session, nil)
+		bindings := publicationAPIData[model.ResourceBindingState](t, result)
+		if !bindings.ReadOnly || bindings.Total != 1 || len(bindings.Bindings) != 1 || bindings.ResourceRevision != ack.ResourceRevision || bindings.ChannelRevision != ack.ChannelRevision || bindings.Bindings[0].PublicationID != ack.PublicationID || !bindings.Bindings[0].ConfiguredActive || bindings.Bindings[0].StoredPairCount != 2 || bindings.Bindings[0].RouteEligiblePairCount != 2 {
+			t.Fatalf("current published binding state: %+v", bindings)
+		}
+		if strings.Contains(result.Body, upstream.URL) || strings.Contains(result.Body, "synthetic-publication-key") {
+			t.Fatal("binding state exposed upstream credentials")
+		}
 	}
 	after, err := model.GetUserByID(env.rootID)
 	if err != nil || after.Quota != before.Quota || calls.Load() != 0 {
@@ -195,6 +208,10 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 	publicationAPIData[model.ResourceCatalog](t, doRequest(env.base, "PUT", "/api/placement/res-alpha", env.session, map[string]any{"expected_revision": state.Revision, "placement": placement}))
 	deny(env.apiKey, "alpha")
 	deny(vipToken.Key, "beta")
+	currentBindings := publicationAPIData[model.ResourceBindingState](t, doRequest(env.base, "GET", "/api/resource/publication-state", env.session, nil))
+	if len(currentBindings.Bindings) != 1 || currentBindings.Bindings[0].ConfiguredActive || currentBindings.Bindings[0].StoredPairCount != 0 || currentBindings.Bindings[0].RouteEligiblePairCount != 0 || currentBindings.Bindings[0].SourceChannelID != "inventory-source" || currentBindings.Bindings[0].PublicationID != ack.PublicationID {
+		t.Fatalf("revoked ownership state lost: %+v", currentBindings)
+	}
 	if again := publicationAPIData[model.ResourcePublicationReceipt](t, doRequest(env.base, "GET", receiptPath, env.session, nil)); !reflect.DeepEqual(receipt, again) {
 		t.Fatal("revocation rewrote the publication receipt")
 	}
@@ -203,6 +220,9 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 	}
 	if res := doRequest(env.base, "GET", receiptPath, adminSession, nil); res.Status != 403 {
 		t.Fatalf("revoked admin retained receipt access: %d %s", res.Status, res.Body)
+	}
+	if res := doRequest(env.base, "GET", "/api/resource/publication-state", adminSession, nil); res.Status != 403 {
+		t.Fatalf("revoked admin retained binding state access: %d %s", res.Status, res.Body)
 	}
 	if res := doRequest(env.base, "PUT", "/api/resource/publication", adminSession, payload); res.Status != 403 {
 		t.Fatalf("revoked admin retained publication access: %d %s", res.Status, res.Body)

@@ -43,6 +43,8 @@ export function useUpdateOption() {
       for (const key of [
         "server-pricing",
         "time-pricing",
+        "resource-publication-context",
+        "resource-publication-state",
         "service-group-configuration",
         "plaza-models",
         "plaza-model",
@@ -126,6 +128,8 @@ export function useRollbackOption() {
       for (const key of [
         "server-pricing",
         "time-pricing",
+        "resource-publication-context",
+        "resource-publication-state",
         "service-group-configuration",
         "plaza-models",
         "plaza-model",

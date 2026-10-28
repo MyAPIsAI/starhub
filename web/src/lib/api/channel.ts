@@ -26,13 +26,27 @@ export interface ChannelUpdateInput extends ChannelInput {
 
 const CHANNELS_KEY = ["admin-channels"] as const;
 
+function invalidateChannelConfiguration(
+  client: ReturnType<typeof useQueryClient>,
+) {
+  for (const key of [
+    CHANNELS_KEY,
+    ["resource-publication-context"],
+    ["resource-publication-state"],
+    ["resource-catalog"],
+    ["plaza-models"],
+    ["plaza-model"],
+    ["plaza-filters"],
+    ["plaza-rank"],
+  ])
+    void client.invalidateQueries({ queryKey: key });
+}
+
 export function useCreateChannel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: ChannelInput) => apiPost("/api/channel", input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
-    },
+    onSettled: () => invalidateChannelConfiguration(queryClient),
   });
 }
 
@@ -40,9 +54,7 @@ export function useUpdateChannel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: ChannelUpdateInput) => apiPut("/api/channel", input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
-    },
+    onSettled: () => invalidateChannelConfiguration(queryClient),
   });
 }
 
@@ -50,8 +62,6 @@ export function useDeleteChannel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/api/channel/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
-    },
+    onSettled: () => invalidateChannelConfiguration(queryClient),
   });
 }

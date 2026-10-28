@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut, apiRequest } from "./http";
 import { useSessionQueryIdentity } from "../system-access";
+import { readResourceBindingState } from "../resource-binding-state";
 import {
   publicationRequest,
   readPublicationContext,
@@ -25,6 +26,24 @@ export function usePublicationContext(enabled: boolean) {
     queryFn: async ({ signal }) =>
       readPublicationContext(
         await apiGet<unknown>("/api/resource/publication-context", signal),
+      ),
+  });
+}
+
+export function useResourceBindingState(enabled: boolean, page: number) {
+  const identity = useSessionQueryIdentity();
+  return useQuery({
+    queryKey: ["resource-publication-state", identity, page],
+    enabled,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      readResourceBindingState(
+        await apiGet<unknown>(
+          `/api/resource/publication-state?page=${page}&page_size=20`,
+          signal,
+        ),
+        page,
+        20,
       ),
   });
 }

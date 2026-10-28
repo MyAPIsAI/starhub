@@ -36,6 +36,13 @@ func TestResourceReadFailureDoesNotExposeDatabaseDetails(t *testing.T) {
 	if strings.Contains(rr.Body.String(), "resource_catalog_records") {
 		t.Fatal("database detail exposed")
 	}
+	expectError(t, call(GetResourceBindingState, testRequest{target: "/api/resource/publication-state"}), http.StatusInternalServerError, "resource catalog is unavailable")
+}
+
+func TestResourceBindingStateStrictPagination(t *testing.T) {
+	for _, query := range []string{"page=0", "page=-1", "page=1000001", "page=01", "page=1.5", "page=", "page=1&page=2", "page_size=0", "page_size=101", "page_size=abc", "key=secret"} {
+		expectStatus(t, call(GetResourceBindingState, testRequest{target: "/api/resource/publication-state?" + query}), http.StatusBadRequest)
+	}
 }
 
 func TestResourcePublicationBodyRequiresAllVersionsAndStrictBindings(t *testing.T) {
