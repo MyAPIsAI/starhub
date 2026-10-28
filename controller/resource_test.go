@@ -37,3 +37,17 @@ func TestResourceReadFailureDoesNotExposeDatabaseDetails(t *testing.T) {
 		t.Fatal("database detail exposed")
 	}
 }
+
+func TestResourcePublicationBodyRequiresAllVersionsAndStrictBindings(t *testing.T) {
+	newTestDB(t)
+	for _, body := range []string{
+		`{}`, `null`,
+		`{"expected_resource_revision":0,"expected_channel_revision":0,"bindings":[]}`,
+		`{"expected_resource_revision":0,"expected_channel_revision":0,"expected_option_version":0,"bindings":null}`,
+		`{"expected_resource_revision":0,"expected_channel_revision":0,"expected_option_version":0,"bindings":[{"source_channel_id":"source","gateway_channel_id":1}]}`,
+		`{"expected_resource_revision":0,"expected_channel_revision":0,"expected_option_version":0,"bindings":[{"source_channel_id":"source","gateway_channel_id":"1","key":"secret"}]}`,
+		`{"expected_resource_revision":0,"expected_channel_revision":0,"expected_option_version":0,"bindings":[{"source_channel_id":"source","gateway_channel_id":"1"}]} {}`,
+	} {
+		expectStatus(t, call(PreviewResourcePublication, testRequest{method: "POST", target: "/api/resource/publication-preview", body: body}), http.StatusBadRequest)
+	}
+}

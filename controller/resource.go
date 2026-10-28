@@ -15,6 +15,37 @@ func ListResources(w http.ResponseWriter, r *http.Request) {
 	writeResourceResult(w, catalog, err)
 }
 
+func GetResourcePublicationContext(w http.ResponseWriter, r *http.Request) {
+	context, err := model.ReadResourcePublicationContext(r.Context())
+	if err != nil {
+		writeResourceResult(w, nil, err)
+		return
+	}
+	common.ApiSuccess(w, context)
+}
+
+func PreviewResourcePublication(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		ResourceRevision *int64                         `json:"expected_resource_revision"`
+		ChannelRevision  *int64                         `json:"expected_channel_revision"`
+		OptionVersion    *int64                         `json:"expected_option_version"`
+		Bindings         []model.ResourceChannelBinding `json:"bindings"`
+	}
+	if !decodeResourceBody(w, r, &request) {
+		return
+	}
+	if request.ResourceRevision == nil || request.ChannelRevision == nil || request.OptionVersion == nil {
+		common.ApiError(w, http.StatusBadRequest, "resource, channel and option versions are required")
+		return
+	}
+	preview, err := model.PreviewResourcePublication(r.Context(), model.ResourcePublicationPrecondition{ResourceRevision: *request.ResourceRevision, ChannelRevision: *request.ChannelRevision, OptionVersion: *request.OptionVersion}, request.Bindings)
+	if err != nil {
+		writeResourceResult(w, nil, err)
+		return
+	}
+	common.ApiSuccess(w, preview)
+}
+
 func writeResourceResult(w http.ResponseWriter, catalog *model.ResourceCatalog, err error) {
 	if err == nil {
 		common.ApiSuccess(w, catalog)
@@ -22,7 +53,7 @@ func writeResourceResult(w http.ResponseWriter, catalog *model.ResourceCatalog, 
 	}
 	switch {
 	case errors.Is(err, model.ErrResourceConflict):
-		common.ApiError(w, http.StatusConflict, "resource catalog changed; reload before saving")
+		common.ApiError(w, http.StatusConflict, "resource publication or catalog context changed; reload before continuing")
 	case errors.Is(err, model.ErrResourceRegionInUse):
 		common.ApiError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, model.ErrInvalidResource):
