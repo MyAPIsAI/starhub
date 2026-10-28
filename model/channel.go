@@ -41,7 +41,7 @@ type Channel struct {
 }
 
 func InsertChannel(c *Channel) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		if err := tx.Create(c).Error; err != nil {
 			return err
 		}
@@ -50,7 +50,7 @@ func InsertChannel(c *Channel) error {
 }
 
 func UpdateChannel(c *Channel) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		if err := tx.Save(c).Error; err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func UpdateChannel(c *Channel) error {
 }
 
 func DeleteChannel(id int64) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		res := tx.Delete(&Channel{}, "id = ?", id)
 		if res.Error != nil {
 			return res.Error
@@ -93,7 +93,7 @@ func ListChannels() ([]Channel, error) {
 }
 
 func UpdateChannelStatus(id int64, status int) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		res := tx.Model(&Channel{}).Where("id = ?", id).Updates(map[string]any{"status": status})
 		if res.Error != nil {
 			return res.Error
@@ -241,28 +241,31 @@ func (c *Channel) SelectKey() (string, int) {
 // reports whether every key is now disabled, in which case the caller should
 // disable the whole channel.
 func DisableChannelKey(channelID int64, keyIdx int) (allDisabled bool, err error) {
-	ch, err := GetChannelByID(channelID)
-	if err != nil {
-		return false, err
-	}
-	statuses := ch.KeyStatuses()
-	if keyIdx < 0 || keyIdx >= len(statuses) {
-		return false, nil
-	}
-	statuses[keyIdx] = common.StatusDisabled
-	allDisabled = true
-	for _, s := range statuses {
-		if s == common.StatusEnabled {
-			allDisabled = false
-			break
+	err = mutateChannelConfiguration(func(tx *gorm.DB) error {
+		var ch Channel
+		if err := tx.First(&ch, "id = ?", channelID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrChannelNotFound
+			}
+			return err
 		}
-	}
-	statusList := make([]string, len(statuses))
-	for i, s := range statuses {
-		statusList[i] = strconv.Itoa(s)
-	}
-	if err := DB.Model(&Channel{}).Where("id = ?", channelID).
-		Update("multi_key_status", strings.Join(statusList, ",")).Error; err != nil {
+		statuses := ch.KeyStatuses()
+		if keyIdx < 0 || keyIdx >= len(statuses) {
+			return nil
+		}
+		statuses[keyIdx] = common.StatusDisabled
+		allDisabled = true
+		statusList := make([]string, len(statuses))
+		for i, status := range statuses {
+			statusList[i] = strconv.Itoa(status)
+			if status == common.StatusEnabled {
+				allDisabled = false
+			}
+		}
+		return tx.Model(&Channel{}).Where("id = ?", channelID).
+			Update("multi_key_status", strings.Join(statusList, ",")).Error
+	})
+	if err != nil {
 		return false, err
 	}
 	return allDisabled, nil

@@ -24,7 +24,7 @@ type Ability struct {
 }
 
 func RebuildAbilities(c *Channel) error {
-	return DB.Transaction(func(tx *gorm.DB) error { return rebuildAbilities(tx, c) })
+	return mutateChannelConfiguration(func(tx *gorm.DB) error { return rebuildAbilities(tx, c) })
 }
 
 func rebuildAbilities(tx *gorm.DB, c *Channel) error {
@@ -35,7 +35,7 @@ func rebuildAbilities(tx *gorm.DB, c *Channel) error {
 }
 
 func AddAbilities(c *Channel) error {
-	return addAbilities(DB, c)
+	return mutateChannelConfiguration(func(tx *gorm.DB) error { return addAbilities(tx, c) })
 }
 
 func addAbilities(tx *gorm.DB, c *Channel) error {
@@ -62,12 +62,16 @@ func addAbilities(tx *gorm.DB, c *Channel) error {
 }
 
 func DeleteAbilitiesByChannel(channelID int64) error {
-	return DB.Where("channel_id = ?", channelID).Delete(&Ability{}).Error
+	return mutateChannelConfiguration(func(tx *gorm.DB) error {
+		return tx.Where("channel_id = ?", channelID).Delete(&Ability{}).Error
+	})
 }
 
 func SetAbilitiesEnabledByChannel(channelID int64, enabled bool) error {
-	return DB.Model(&Ability{}).Where("channel_id = ?", channelID).
-		Updates(map[string]any{"enabled": enabled}).Error
+	return mutateChannelConfiguration(func(tx *gorm.DB) error {
+		return tx.Model(&Ability{}).Where("channel_id = ?", channelID).
+			Updates(map[string]any{"enabled": enabled}).Error
+	})
 }
 
 func GetSatisfiedChannel(group, model string) (*Channel, error) {
