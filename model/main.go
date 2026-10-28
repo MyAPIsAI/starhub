@@ -33,7 +33,7 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&ChannelConfigurationState{}); err != nil {
 		return fmt.Errorf("migrate channel configuration revision: %w", err)
 	}
-	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}); err != nil {
+	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
 	}
 	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels (source_channel_id) WHERE source_channel_id <> ''`).Error; err != nil {

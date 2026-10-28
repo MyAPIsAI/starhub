@@ -43,6 +43,44 @@ func GetResourceBindingState(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, state)
 }
 
+func ChangeResourceBinding(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		ResourceRevision *int64 `json:"expected_resource_revision"`
+		ChannelRevision  *int64 `json:"expected_channel_revision"`
+		SourceChannelID  string `json:"expected_source_channel_id"`
+		PublicationID    string `json:"expected_publication_id"`
+		Operation        string `json:"operation"`
+		RequestID        string `json:"request_id"`
+	}
+	if !decodeResourceBody(w, r, &request) {
+		return
+	}
+	if request.ResourceRevision == nil || request.ChannelRevision == nil {
+		common.ApiError(w, http.StatusBadRequest, "resource and channel versions are required")
+		return
+	}
+	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
+	receipt, err := model.ChangeResourceBinding(r.Context(), r.PathValue("id"), model.ResourceBindingChangeRequest{ResourceRevision: *request.ResourceRevision, ChannelRevision: *request.ChannelRevision, SourceChannelID: request.SourceChannelID, PublicationID: request.PublicationID, Operation: request.Operation, RequestID: request.RequestID}, actorID)
+	if err != nil {
+		writeResourceResult(w, nil, err)
+		return
+	}
+	common.ApiSuccess(w, receipt)
+}
+
+func GetResourceBindingChange(w http.ResponseWriter, r *http.Request) {
+	receipt, err := model.ReadResourceBindingChange(r.Context(), r.PathValue("request_id"))
+	if errors.Is(err, model.ErrResourceBindingChangeNotFound) {
+		common.ApiError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if err != nil {
+		writeResourceResult(w, nil, err)
+		return
+	}
+	common.ApiSuccess(w, receipt)
+}
+
 func GetResourcePublicationContext(w http.ResponseWriter, r *http.Request) {
 	context, err := model.ReadResourcePublicationContext(r.Context())
 	if err != nil {

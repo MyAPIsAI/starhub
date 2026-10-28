@@ -45,6 +45,15 @@ func TestResourceBindingStateStrictPagination(t *testing.T) {
 	}
 }
 
+func TestResourceBindingChangeStrictBodyAndReceiptIdentifiers(t *testing.T) {
+	newTestDB(t)
+	for _, body := range []string{`{}`, `null`, `{} {}`, `{"expected_resource_revision":0,"operation":"release"}`, `{"expected_resource_revision":0,"expected_channel_revision":0,"expected_source_channel_id":"source","expected_publication_id":1,"operation":"revoke","request_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`, `{"expected_resource_revision":0,"expected_channel_revision":0,"expected_source_channel_id":"source","expected_publication_id":"0","operation":"delete","request_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`, `{"expected_resource_revision":0,"expected_channel_revision":0,"actor_id":1}`} {
+		expectStatus(t, call(ChangeResourceBinding, testRequest{method: "PUT", target: "/api/resource/bindings/1", path: map[string]string{"id": "1"}, body: body}), http.StatusBadRequest)
+	}
+	expectStatus(t, call(GetResourceBindingChange, testRequest{target: "/api/resource/binding-changes/bad", path: map[string]string{"request_id": "bad"}}), http.StatusBadRequest)
+	expectStatus(t, call(GetResourceBindingChange, testRequest{target: "/api/resource/binding-changes/" + strings.Repeat("a", 32), path: map[string]string{"request_id": strings.Repeat("a", 32)}}), http.StatusNotFound)
+}
+
 func TestResourcePublicationBodyRequiresAllVersionsAndStrictBindings(t *testing.T) {
 	newTestDB(t)
 	for _, body := range []string{

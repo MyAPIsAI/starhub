@@ -22,6 +22,7 @@ type publicationDatabaseState struct {
 	Owners          []ResourceGatewayManagedChannel
 	Routes          []ResourceGatewayRoute
 	Receipts        []ResourceGatewayPublication
+	BindingChanges  []ResourceGatewayBindingChange
 	ChannelRevision int64
 }
 
@@ -35,7 +36,7 @@ func publicationDatabaseSnapshot(t *testing.T) publicationDatabaseState {
 	for _, query := range []struct {
 		value any
 		order string
-	}{{&state.Channels, "id"}, {&state.Abilities, "channel_id,model,\"group\""}, {&state.Owners, "channel_id"}, {&state.Routes, "channel_id,model,\"group\""}, {&state.Receipts, "id"}} {
+	}{{&state.Channels, "id"}, {&state.Abilities, "channel_id,model,\"group\""}, {&state.Owners, "channel_id"}, {&state.Routes, "channel_id,model,\"group\""}, {&state.Receipts, "id"}, {&state.BindingChanges, "id"}} {
 		if err := DB.Order(query.order).Find(query.value).Error; err != nil {
 			t.Fatal(err)
 		}
