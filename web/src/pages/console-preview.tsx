@@ -87,7 +87,7 @@ import SmartRouting from "../features/resource-routing";
 import { StandardModels } from "../features/standard-models";
 import { Channels } from "../features/channels";
 import { ServiceGroups } from "../features/service-groups";
-import { useSystemAccess, isAdmin } from "../lib/system-access";
+import { useSystemAccess, isAdmin, canReadFinance } from "../lib/system-access";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import {
   useDeleteToken,
@@ -668,6 +668,7 @@ export default function ConsolePreview() {
               </Link>
             </div>
           ))}
+          {canReadFinance(role) && <Link to="/finance" className="xy-nav-link" onClick={()=>setMobileNavOpen(false)}><CircleDollarSign size={18}/><span>{c("财务概览","Finance overview","نظرة مالية")}</span></Link>}
           {isSystemAdmin && (
             <>
               <span className="xy-nav-label xy-nav-divider">

@@ -26,7 +26,7 @@ import { CodeExample } from "../features/code-example";
 import { type Language } from "../config/placeholders";
 import { useFocusReturn } from "./ui/focus-return";
 import "./public-header.css";
-import { useSystemAccess, isAdmin } from "../lib/system-access";
+import { useSystemAccess, isAdmin, canReadFinance } from "../lib/system-access";
 
 export function ProductBrand({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
@@ -397,6 +397,7 @@ export function ProductSearch() {
                     </Command.Item>
                   </Command.Group>
                 )}
+                {canReadFinance(role) && <Command.Group heading={text("财务","Finance","المالية")}><Command.Item onSelect={()=>go("/finance")}>{text("财务概览","Finance overview","نظرة مالية")}</Command.Item></Command.Group>}
                 <Command.Group heading={t("pModels")}>
                   {modelIds.map((m) => (
                     <Command.Item

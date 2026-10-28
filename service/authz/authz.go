@@ -3,11 +3,12 @@
 // dependency: policies are defined in code (role -> resource -> action ->
 // allow/deny), and the middleware checks the request against the policy.
 //
-// The three roles from common (User -> Admin -> Root) map to policy sets:
+// The four roles from common map to policy sets:
 //
 //	Root  — every admin action plus user-role management (promote/demote).
 //	Admin — channel/token/option/audit management (the day-to-day ops set).
 //	User  — own-token management only (create/list/update/delete own tokens).
+//	Finance — read-only financial summaries plus own-token/log service.
 //
 // A deny entry wins over an allow entry (deny-by-default for unlisted
 // resources). The policy is static and compiled at init time; runtime

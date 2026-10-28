@@ -24,7 +24,7 @@ import "./components/refinement.css";
 import "./components/select-controls.css";
 import i18n from "./i18n";
 import { usePreferences } from "./lib/preferences";
-import { useSystemAccess, isAdmin, ROLE_USER } from "./lib/system-access";
+import { useSystemAccess, isAdmin, canReadFinance, ROLE_USER } from "./lib/system-access";
 import { useProductPreview } from "./lib/product-preview";
 import { onAuthLoss, ApiError } from "./lib/api/http";
 import {
@@ -42,6 +42,7 @@ const DocsPage = lazy(() => import("./pages/docs/index"));
 const LegalPage = lazy(() => import("./pages/legal/index"));
 const ConsolePreview = lazy(() => import("./pages/console-preview"));
 const AdminPortal = lazy(() => import("./pages/admin"));
+const FinancePortal = lazy(() => import("./pages/finance"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,6 +76,7 @@ function RouteContext() {
     else if (pathname.includes("status")) key = "navStatus";
     else if (pathname.includes("docs")) key = "navDocs";
     else if (pathname.includes("admin")) key = "navAdmin";
+    else if (pathname === "/finance") key = "roleFinance";
     else if (pathname.includes("login")) key = "navLogin";
     else if (pathname.includes("register")) key = "navRegister";
     else if (pathname.includes("forgot-password")) key = "resetPassword";
@@ -109,6 +111,12 @@ function RouteContext() {
 function AdminOnly({ children }: { children: React.ReactNode }) {
   const role = useSystemAccess((s) => s.role);
   if (!isAdmin(role)) return <Navigate to="/console" replace />;
+  return <>{children}</>;
+}
+
+function FinanceOnly({ children }: { children: React.ReactNode }) {
+  const role = useSystemAccess((s) => s.role);
+  if (!canReadFinance(role)) return <Navigate to="/console" replace />;
   return <>{children}</>;
 }
 
@@ -243,6 +251,7 @@ function App() {
                 />
 
                 {/* Operations back office (M9): reachable only as the system admin. */}
+                <Route path="/finance" element={<RequireAuth><FinanceOnly><FinancePortal /></FinanceOnly></RequireAuth>} />
                 <Route
                   path="/admin/*"
                   element={

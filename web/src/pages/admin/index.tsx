@@ -21,7 +21,9 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/primitives";
 import { Modal } from "../../components/ui/overlay";
 import { ModelPricingAdmin } from "../../features/model-pricing-admin";
-import { useSystemAccess } from "../../lib/system-access";
+import { useSystemAccess, isAdmin, canReadFinance, ROLE_ROOT, ROLE_FINANCE } from "../../lib/system-access";
+import { FinanceOverview } from "../../features/finance-overview";
+import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
   useUpdateUser,
@@ -60,10 +62,8 @@ export default function AdminPortal() {
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
 
-  const [role, setRole] = useState<"superAdmin" | "finance" | "ops" | "tech">(
-    "superAdmin",
-  );
   const authRole = useSystemAccess((s) => s.role);
+  const isRoot = authRole === ROLE_ROOT;
   const validTabs = ["customers", "models", "analytics", "resources", "incidents", "audit", "redemption", "finance"] as const;
   type AdminTab = (typeof validTabs)[number];
   const [tab, setTab] = useState<AdminTab>(() => {
@@ -329,26 +329,7 @@ export default function AdminPortal() {
               fontSize: "var(--text-xs)",
             }}
           >
-            <span style={{ color: "var(--muted)" }}>{t("switchRole")}:</span>
-            <select
-              aria-label={t("switchRole")}
-              value={role}
-              onChange={(e) => setRole(e.target.value as any)}
-              className="select-trigger"
-              style={{
-                height: 28,
-                background: "var(--surface)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
-                fontSize: 11,
-                borderRadius: "var(--radius-sm)",
-              }}
-            >
-              <option value="superAdmin">{t("roleSuperAdmin")}</option>
-              <option value="finance">{t("roleFinance")}</option>
-              <option value="ops">{t("roleOps")}</option>
-              <option value="tech">{t("roleTech")}</option>
-            </select>
+            <span>{isRoot ? "Root" : "Admin"}</span>
           </div>
 
           <Preferences />
@@ -383,15 +364,15 @@ export default function AdminPortal() {
           }}
         >
           {[
-            { id: "customers", label: t("adminCustomers"), Icon: Users, roles: ["superAdmin", "finance", "ops"] },
-            { id: "models", label: t("adminModels"), Icon: Cpu, roles: ["superAdmin", "tech"] },
-            { id: "finance", label: text("财务", "Finance", "المالية"), Icon: CircleDollarSign, roles: ["superAdmin", "finance"] },
-            { id: "analytics", label: t("adminAnalytics"), Icon: BarChart3, roles: ["superAdmin", "finance", "tech"] },
-            { id: "resources", label: t("adminResources"), Icon: RefreshCw, roles: ["superAdmin", "tech"] },
-            { id: "incidents", label: t("adminIncidents"), Icon: Radio, roles: ["superAdmin", "ops"] },
-            { id: "audit", label: t("adminAudit"), Icon: History, roles: ["superAdmin", "finance", "ops", "tech"] },
-            { id: "redemption", label: text("兑换码", "Redemption", "استرداد"), Icon: CircleDollarSign, roles: ["superAdmin"] },
-          ].filter(({ roles }) => roles.includes(role)).map(({ id, label, Icon }) => {
+            { id: "customers", label: t("adminCustomers"), Icon: Users },
+            { id: "models", label: t("adminModels"), Icon: Cpu },
+            { id: "finance", label: text("财务", "Finance", "المالية"), Icon: CircleDollarSign },
+            { id: "analytics", label: t("adminAnalytics"), Icon: BarChart3 },
+            { id: "resources", label: t("adminResources"), Icon: RefreshCw },
+            { id: "incidents", label: t("adminIncidents"), Icon: Radio },
+            { id: "audit", label: t("adminAudit"), Icon: History },
+            { id: "redemption", label: text("兑换码", "Redemption", "استرداد"), Icon: CircleDollarSign },
+          ].filter(({ id }) => id !== "finance" || canReadFinance(authRole)).map(({ id, label, Icon }) => {
             const active = tab === id;
             return (
               <button
@@ -499,7 +480,7 @@ export default function AdminPortal() {
                 </p>
               </div>
 
-              {(role === "finance" || role === "superAdmin") && (
+              {isRoot && (
                 <Button
                   variant="primary"
                   onClick={() => {
@@ -1015,7 +996,7 @@ export default function AdminPortal() {
                 </p>
               </div>
 
-              {(role === "tech" || role === "superAdmin") && (
+              {isAdmin(authRole) && (
                 <Button
                   variant="primary"
                   onClick={handleForceSync}
@@ -1382,7 +1363,7 @@ export default function AdminPortal() {
                 </p>
               </div>
 
-              {(role === "ops" || role === "superAdmin") && (
+              {isAdmin(authRole) && (
                 <Button variant="primary" onClick={() => setIncidentOpen(true)}>
                   <Plus size={15} style={{ marginInlineEnd: 4 }} />
                   {t("publishIncident")}
@@ -1629,179 +1610,7 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {/* Tab: Finance — billing overview for finance role */}
-        {tab === "finance" && (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "var(--space-6)",
-              }}
-            >
-              <div>
-                <h1 style={{ fontSize: "var(--text-xl)", fontWeight: "var(--weight-bold)", margin: 0 }}>
-                  {text("财务概览", "Finance overview", "نظرة مالية")}
-                </h1>
-                <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)", margin: "4px 0 0 0" }}>
-                  {text(
-                    "查看平台充值、消费与流水汇总。",
-                    "View platform top-ups, consumption and ledger summary.",
-                    "عرض شحن المنصة والاستهلاك وسجل الأستاذ.",
-                  )}
-                </p>
-              </div>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  const first = usersQuery.data?.[0];
-                  if (first) {
-                    setTopUpTarget(first);
-                    setTopUpAmount("");
-                    setTopUpReason("");
-                    setTopUpOpen(true);
-                  }
-                }}
-              >
-                <Plus size={15} style={{ marginInlineEnd: 4 }} />
-                {t("manualTopUp")}
-              </Button>
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "var(--space-4)",
-                marginBottom: "var(--space-6)",
-              }}
-            >
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginBottom: 4 }}>
-                  {text("活跃用户", "Active users", "المستخدمون النشطون")}
-                </div>
-                <div className="mono" style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--weight-bold)" }}>
-                  {(usersQuery.data?.filter((u: AdminUser) => userIsActive(u.status)).length ?? 0).toLocaleString()}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginBottom: 4 }}>
-                  {text("总用户", "Total users", "إجمالي المستخدمين")}
-                </div>
-                <div className="mono" style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--weight-bold)" }}>
-                  {(usersQuery.data?.length ?? 0).toLocaleString()}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginBottom: 4 }}>
-                  {text("兑换码", "Redemption codes", "أكواد الاسترداد")}
-                </div>
-                <div className="mono" style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--weight-bold)" }}>
-                  {(redemptionsQuery.data?.length ?? 0).toLocaleString()}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginBottom: 4 }}>
-                  {text("渠道数", "Channels", "القنوات")}
-                </div>
-                <div className="mono" style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--weight-bold)" }}>
-                  {(channelsQuery.data?.length ?? 0).toLocaleString()}
-                </div>
-              </div>
-            </div>
-            <section
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                overflowX: "auto",
-              }}
-            >
-              <div
-                style={{
-                  padding: "var(--space-4)",
-                  borderBottom: "1px solid var(--border)",
-                  background: "var(--subtle)",
-                }}
-              >
-                <h3 style={{ margin: 0, fontSize: "var(--text-base)", fontWeight: 600 }}>
-                  {text("用户额度汇总", "User quota summary", "ملخص حصص المستخدمين")}
-                </h3>
-              </div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-sm)" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--subtle)" }}>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("用户名", "Username", "اسم المستخدم")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{t("status")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "end" }}>{text("余额", "Balance", "الرصيد")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "end" }}>{text("已用", "Used", "المستخدم")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("分组", "Group", "المجموعة")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usersQuery.data?.map((u: AdminUser) => (
-                    <tr key={u.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                      <td style={{ padding: "10px 14px", fontWeight: 500 }}>{u.username}</td>
-                      <td style={{ padding: "10px 14px" }}>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                            fontWeight: 600,
-                            background: userIsActive(u.status) ? "var(--success-soft)" : "var(--danger-soft)",
-                            color: userIsActive(u.status) ? "var(--success)" : "var(--danger)",
-                          }}
-                        >
-                          {userStatusText(u.status)}
-                        </span>
-                      </td>
-                      <td className="mono" style={{ padding: "10px 14px", textAlign: "end", color: "var(--brand)", fontWeight: 600 }}>
-                        ${quotaToUsd(u.quota)}
-                      </td>
-                      <td className="mono" style={{ padding: "10px 14px", textAlign: "end", fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-                        ${quotaToUsd(u.used_quota)}
-                      </td>
-                      <td style={{ padding: "10px 14px" }}>
-                        <span style={{ fontSize: 11, padding: "2px 6px", background: "var(--subtle)", borderRadius: 3 }}>
-                          {u.group || "default"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          </div>
-        )}
+        {tab === "finance" && <FinanceOverview />}
 
         {/* Tab: Redemption codes */}
         {tab === "redemption" && (
@@ -2412,6 +2221,7 @@ export default function AdminPortal() {
         description={detailUser ? detailUser.username : ""}
         footer={
           <>
+            {isRoot && <>
             <Button onClick={() => {
               if (detailUser) {
                 setTopUpTarget(detailUser);
@@ -2433,6 +2243,7 @@ export default function AdminPortal() {
             >
               {detailUser && userIsActive(detailUser.status) ? t("disableAccount") : t("enableAccount")}
             </Button>
+            </>}
             <Button variant="secondary" onClick={closeDetailUser}>
               {text("关闭", "Close", "إغلاق")}
             </Button>
@@ -2441,6 +2252,7 @@ export default function AdminPortal() {
       >
         {detailUser && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <FinanceRoleControl user={detailUser} onUpdated={role=>setDetailUser(current=>current?{...current,role}:current)} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
               <div>
                 <small style={{ color: "var(--muted)" }}>{text("用户名", "Username", "اسم المستخدم")}</small>
@@ -2454,7 +2266,7 @@ export default function AdminPortal() {
                 <small style={{ color: "var(--muted)" }}>{text("角色", "Role", "الدور")}</small>
                 <div>
                   <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600, background: "var(--subtle)" }}>
-                    {detailUser.role >= 100 ? "Root" : detailUser.role >= 10 ? "Admin" : "User"}
+                    {detailUser.role >= 100 ? "Root" : detailUser.role >= 10 ? "Admin" : detailUser.role === ROLE_FINANCE ? text("财务（只读）", "Finance (read-only)", "المالية (للقراءة فقط)") : "User"}
                   </span>
                 </div>
               </div>
