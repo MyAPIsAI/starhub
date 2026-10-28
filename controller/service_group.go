@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -59,7 +60,7 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 		multiplier = "1"
 	}
 	mult, err := strconv.ParseFloat(multiplier, 64)
-	if err != nil || mult <= 0 || mult > 100 {
+	if err != nil || math.IsNaN(mult) || math.IsInf(mult, 0) || mult <= 0 || mult > 100 {
 		common.ApiError(w, http.StatusBadRequest, "multiplier must be a number > 0 and <= 100")
 		return
 	}
