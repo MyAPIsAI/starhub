@@ -137,6 +137,15 @@
   gap: 16px;
   min-width: 0;
 }
+.rp-binding-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 170px;
+}
+#gateway-bindings table {
+  min-width: 980px;
+}
 .rp-publish-dialog p,
 .rp-publish-dialog li {
   overflow-wrap: anywhere;

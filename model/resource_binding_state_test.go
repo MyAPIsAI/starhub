@@ -75,7 +75,7 @@ func TestResourceBindingStateTracksCurrentRouteGatesWithoutMutation(t *testing.T
 		t.Fatalf("state: %+v %v", state, err)
 	}
 	row := state.Bindings[0]
-	if state.Schema != ResourceBindingStateSchema || !state.ReadOnly || state.ResourceRevision != ack.ResourceRevision || state.ChannelRevision != ack.ChannelRevision || state.OptionVersion != ack.OptionVersion || state.Total != 1 || state.Page != 1 || state.PageSize != 20 || row.GatewayChannelID != strconv.FormatInt(ch.ID, 10) || row.GatewayName != ch.Name || !row.GatewayPresent || !row.SourcePresent || !row.SourceEnabled || row.SourceChannelID != bindings[0].SourceChannelID || !row.ConfiguredActive || row.Profile != ResourceGatewayTextProfile || row.PublicationID != ack.PublicationID || row.StoredPairCount != 2 || row.RouteEligiblePairCount != 2 {
+	if state.Schema != ResourceBindingStateSchema || !state.ReadOnly || !state.BindingChangesAvailable || state.ResourceRevision != ack.ResourceRevision || state.ChannelRevision != ack.ChannelRevision || state.OptionVersion != ack.OptionVersion || state.Total != 1 || state.Page != 1 || state.PageSize != 20 || row.GatewayChannelID != strconv.FormatInt(ch.ID, 10) || row.GatewayName != ch.Name || !row.GatewayPresent || !row.SourcePresent || !row.SourceEnabled || row.SourceChannelID != bindings[0].SourceChannelID || !row.ConfiguredActive || row.Profile != ResourceGatewayTextProfile || row.PublicationID != ack.PublicationID || row.StoredPairCount != 2 || row.RouteEligiblePairCount != 2 {
 		t.Fatalf("lost binding state: %+v", state)
 	}
 	encoded, _ := json.Marshal(state)

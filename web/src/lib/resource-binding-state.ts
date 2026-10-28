@@ -23,6 +23,7 @@ export interface ResourceBindingState {
   total: number;
   bindings: ResourceBindingStatus[];
   read_only: true;
+  binding_changes_available?: boolean;
 }
 const object = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -44,6 +45,8 @@ export function readResourceBindingState(
     !object(value) ||
     value.schema !== "managed_gateway_bindings_v1" ||
     value.read_only !== true ||
+    (value.binding_changes_available !== undefined &&
+      typeof value.binding_changes_available !== "boolean") ||
     !integer(value.resource_revision) ||
     !integer(value.channel_revision) ||
     !integer(value.option_version) ||

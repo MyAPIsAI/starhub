@@ -11,15 +11,16 @@ import (
 const ResourceBindingStateSchema = "managed_gateway_bindings_v1"
 
 type ResourceBindingState struct {
-	Schema           string                  `json:"schema"`
-	ResourceRevision int64                   `json:"resource_revision"`
-	ChannelRevision  int64                   `json:"channel_revision"`
-	OptionVersion    int64                   `json:"option_version"`
-	Page             int                     `json:"page"`
-	PageSize         int                     `json:"page_size"`
-	Total            int64                   `json:"total"`
-	Bindings         []ResourceBindingStatus `json:"bindings"`
-	ReadOnly         bool                    `json:"read_only"`
+	Schema                  string                  `json:"schema"`
+	ResourceRevision        int64                   `json:"resource_revision"`
+	ChannelRevision         int64                   `json:"channel_revision"`
+	OptionVersion           int64                   `json:"option_version"`
+	Page                    int                     `json:"page"`
+	PageSize                int                     `json:"page_size"`
+	Total                   int64                   `json:"total"`
+	Bindings                []ResourceBindingStatus `json:"bindings"`
+	ReadOnly                bool                    `json:"read_only"`
+	BindingChangesAvailable bool                    `json:"binding_changes_available"`
 }
 
 type ResourceBindingStatus struct {
@@ -50,7 +51,7 @@ func ReadResourceBindingState(ctx context.Context, page, pageSize int) (*Resourc
 		if err != nil {
 			return err
 		}
-		value := &ResourceBindingState{Schema: ResourceBindingStateSchema, ResourceRevision: state.context.ResourceRevision, ChannelRevision: state.context.ChannelRevision, OptionVersion: state.context.OptionVersion, Page: page, PageSize: pageSize, Bindings: []ResourceBindingStatus{}, ReadOnly: true}
+		value := &ResourceBindingState{Schema: ResourceBindingStateSchema, ResourceRevision: state.context.ResourceRevision, ChannelRevision: state.context.ChannelRevision, OptionVersion: state.context.OptionVersion, Page: page, PageSize: pageSize, Bindings: []ResourceBindingStatus{}, ReadOnly: true, BindingChangesAvailable: true}
 		if err := tx.Model(&ResourceGatewayManagedChannel{}).Count(&value.Total).Error; err != nil {
 			return err
 		}

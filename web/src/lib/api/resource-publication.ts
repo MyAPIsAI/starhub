@@ -3,6 +3,12 @@ import { apiGet, apiPut, apiRequest } from "./http";
 import { useSessionQueryIdentity } from "../system-access";
 import { readResourceBindingState } from "../resource-binding-state";
 import {
+  bindingChangeRequest,
+  bindingReceiptMatchesReview,
+  readBindingChangeReceipt,
+  type BindingChangeReview,
+} from "../resource-binding-change";
+import {
   publicationRequest,
   readPublicationContext,
   readPublicationPreview,
@@ -63,21 +69,52 @@ export function usePublishResourceReview() {
         throw Error("Publication acknowledgement does not match review");
       return acknowledgement;
     },
-    onSettled: async () => {
-      await Promise.allSettled(
-        [
-          "resource-catalog",
-          "resource-publication-context",
-          "resource-publication-state",
-          "admin-audit",
-          "plaza-models",
-          "plaza-model",
-          "plaza-filters",
-          "plaza-rank",
-        ].map((key) => client.invalidateQueries({ queryKey: [key] })),
-      );
-    },
+    onSettled: () => refreshPublicationQueries(client),
   });
+}
+
+export async function refreshPublicationQueries(
+  client: ReturnType<typeof useQueryClient>,
+) {
+  await Promise.allSettled(
+    [
+      "resource-catalog",
+      "resource-publication-context",
+      "resource-publication-state",
+      "admin-audit",
+      "plaza-models",
+      "plaza-model",
+      "plaza-filters",
+      "plaza-rank",
+    ].map((key) => client.invalidateQueries({ queryKey: [key] })),
+  );
+}
+
+export function useChangeResourceBinding() {
+  const client = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async (review: BindingChangeReview) => {
+      const receipt = readBindingChangeReceipt(
+        await apiPut<unknown>(
+          `/api/resource/bindings/${review.row.gateway_channel_id}`,
+          bindingChangeRequest(review),
+        ),
+      );
+      if (!bindingReceiptMatchesReview(receipt, review))
+        throw Error("Binding receipt does not match captured review");
+      return receipt;
+    },
+    onSettled: () => refreshPublicationQueries(client),
+  });
+}
+
+export async function getBindingChangeReceipt(requestID: string) {
+  if (!/^[0-9a-f]{32}$/.test(requestID))
+    throw Error("Invalid binding change request identifier");
+  return readBindingChangeReceipt(
+    await apiGet<unknown>(`/api/resource/binding-changes/${requestID}`),
+  );
 }
 
 export async function getPublicationReceipt(digest: string) {
