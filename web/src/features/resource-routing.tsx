@@ -8,15 +8,21 @@ import { getKeyModels, resolveKeyModelResult } from "../lib/key-model-policy";
 import { groupResources } from "../lib/platform-catalog";
 import { useSystemAccess, isAdmin } from "../lib/system-access";
 import { Button } from "../components/ui/button";
+import { formatMoney } from "../lib/money";
 import "../components/catalog-management.css";
 export default function ResourceRouting() {
   const config = useModelPricing((s) => s.config),
     keys = useBackendKeys().keys,
-    requests = useBackendRequests(20).rows as any[],
+    requests = useBackendRequests(20).rows,
     role = useSystemAccess((s) => s.role);
   const [keyId, setKeyId] = useState("");
   const key = keys.find((k) => k.id === keyId) ?? keys.find((k) => k.active);
   const models = key ? getKeyModels(key, config) : [];
+  const smartRequests = requests.filter(
+    (request) =>
+      request.requested_model === "myapis-auto" ||
+      request.requested_model === "veyra-auto",
+  );
   const resolved = key
     ? resolveKeyModelResult(key, "veyra-auto", config, {
         protocol: "OpenAI",
@@ -35,8 +41,8 @@ export default function ResourceRouting() {
           </span>
           <h1>路由候选与调用追踪</h1>
           <p>
-            请求模型为
-            veyra-auto（智能路由）时，在分组、账号、密钥白名单与能力约束内选取实际模型；再选择该标准模型的可用资源实例。
+            请求模型为 myapis-auto（智能路由，兼容旧标识
+            veyra-auto）时，在分组、账号、密钥白名单与能力约束内选取实际模型；再选择该标准模型的可用资源实例。
           </p>
         </div>
         <Button asChild>
@@ -109,22 +115,19 @@ export default function ResourceRouting() {
         )}
       </div>
       <section className="cm-callout">
-        <h3>真实操作产生的演示调用</h3>
-        {requests
-          .filter((r) => r.requested_model === "veyra-auto")
-          .slice(0, 8)
-          .map((r) => (
-            <p key={r.trace_id}>
-              <Link
-                to={`/console/requests?trace=${encodeURIComponent(r.trace_id)}`}
-              >
-                {r.trace_id}
-              </Link>{" "}
-              · {r.actual_model ?? r.error_message} ·{" "}
-              {r.billing_status === "charged" ? "已计费" : "未计费"}
-            </p>
-          ))}
-        {!requests.some((r) => r.requested_model === "veyra-auto") && (
+        <h3>最近智能路由调用</h3>
+        {smartRequests.slice(0, 8).map((r) => (
+          <p key={r.trace_id}>
+            <Link
+              to={`/console/requests?trace=${encodeURIComponent(r.trace_id)}`}
+            >
+              {r.trace_id}
+            </Link>{" "}
+            · {r.actual_model ?? r.error_message} ·{" "}
+            {formatMoney(r.cost_nano, "call")}
+          </p>
+        ))}
+        {!smartRequests.length && (
           <p>
             还没有智能路由请求。可在客户端配置或可选调试台使用同一把密钥验证。
           </p>

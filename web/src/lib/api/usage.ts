@@ -5,6 +5,7 @@
 // requests table with real backend data instead of the demo store.
 
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { apiGet } from "./http";
 import { catalogModels } from "../../config/models";
 
@@ -188,6 +189,10 @@ export interface PreviewRequestLike {
  */
 export function useBackendRequests(pageSize: number = 100) {
   const { data, isLoading, error } = useLogs(1, pageSize);
-  const rows = (data?.items ?? []).map(adaptLogRow);
+  // Stable rows keep URL-selected detail effects from reopening on each render.
+  const rows = useMemo(
+    () => (data?.items ?? []).map(adaptLogRow),
+    [data?.items],
+  );
   return { rows, total: data?.total ?? 0, loading: isLoading, error };
 }
