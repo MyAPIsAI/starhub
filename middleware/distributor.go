@@ -141,7 +141,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				}
 				best, bestQuota := "", int64(1<<62)
 				for _, m := range checkModels {
-					if m == "myapis-auto" {
+					if m == "myapis-auto" || m == "veyra-auto" {
 						continue
 					}
 					ch, err := model.GetSatisfiedChannel(usingGroup, m)
@@ -168,6 +168,13 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 						"the model is not in the token's model whitelist")
 					return
 				}
+			}
+
+			// Never use the virtual entry as an upstream fallback model.
+			if modelName == "myapis-auto" {
+				dto.WriteRelayError(w, http.StatusServiceUnavailable, inbound, "server_error", "no_available_channel",
+					"no available candidate model for smart routing")
+				return
 			}
 
 			if autoModelSelected && !isMultipart(contentType) {

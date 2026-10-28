@@ -91,7 +91,7 @@ func setupAutoRoutingDB(t *testing.T) {
 func TestDistributeAutoModelGroupCandidates(t *testing.T) {
 	setupAutoRoutingDB(t)
 	for _, channel := range []model.Channel{
-		{Name: "default", Models: "gpt-4o,gpt-4o-mini,myapis-auto", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1},
+		{Name: "default", Models: "gpt-4o,gpt-4o-mini,myapis-auto,veyra-auto", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1},
 		{Name: "other", Models: "gemini-1.5-flash", Group: "other", Status: common.ChannelStatusEnabled, Weight: 1},
 		{Name: "disabled", Models: "deepseek-chat", Group: "default", Status: common.ChannelStatusManuallyDisabled, Weight: 1},
 	} {
@@ -106,6 +106,7 @@ func TestDistributeAutoModelGroupCandidates(t *testing.T) {
 		{"unrestricted current group", "default", "", "myapis-auto", "gpt-4o-mini", http.StatusNoContent},
 		{"isolated other group", "other", "", "myapis-auto", "gemini-1.5-flash", http.StatusNoContent},
 		{"explicit allowlist stays narrow", "default", "gpt-4o", "myapis-auto", "gpt-4o", http.StatusNoContent},
+		{"legacy entry is not an actual candidate", "default", "veyra-auto,gpt-4o", "myapis-auto", "gpt-4o", http.StatusNoContent},
 		{"cross-group allowlist cannot expand", "default", "gemini-1.5-flash", "myapis-auto", "", http.StatusForbidden},
 		{"unavailable allowlist cannot expand", "default", "deepseek-chat", "myapis-auto", "", http.StatusForbidden},
 		{"nonempty blank allowlist cannot expand", "default", " , ", "myapis-auto", "", http.StatusForbidden},
@@ -141,6 +142,57 @@ func TestDistributeAutoModelGroupCandidates(t *testing.T) {
 				t.Fatalf("status = %d, handler called = %v, want status %d; body = %s", rec.Code, called, tc.status, rec.Body)
 			}
 		})
+	}
+}
+
+func TestDistributeAutoModelWithoutCandidates(t *testing.T) {
+	setupAutoRoutingDB(t)
+	for _, channel := range []model.Channel{
+		{Name: "virtual", Models: "myapis-auto,veyra-auto", Group: "virtual", Status: common.ChannelStatusEnabled, Weight: 1},
+		{Name: "disabled", Models: "gpt-4o", Group: "disabled", Status: common.ChannelStatusManuallyDisabled, Weight: 1},
+		{Name: "other", Models: "gpt-4o", Group: "other", Status: common.ChannelStatusEnabled, Weight: 1},
+	} {
+		if err := model.InsertChannel(&channel); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ name, group, limits string }{
+		{"empty group", "empty", ""},
+		{"disabled channels", "disabled", ""},
+		{"virtual entries only", "virtual", ""},
+		{"explicit virtual allowlist", "virtual", "myapis-auto"},
+		{"unavailable allowed candidate", "virtual", "myapis-auto,missing"},
+	} {
+		for _, inbound := range []dto.InboundFormat{dto.InboundOpenAI, dto.InboundClaude} {
+			t.Run(tc.name+"/"+string(inbound), func(t *testing.T) {
+				r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"myapis-auto"}`))
+				r = r.WithContext(common.WithValues(r.Context(), common.CtxUsingGroup, tc.group, common.CtxTokenModelLimits, tc.limits))
+				handler := Distribute(inbound)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+					t.Fatal("an unresolved virtual model must not reach the relay")
+				}))
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, r)
+				var response struct {
+					Type  string `json:"type"`
+					Error struct {
+						Type string `json:"type"`
+						Code string `json:"code"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+					t.Fatal(err)
+				}
+				if rec.Code != http.StatusServiceUnavailable || response.Error.Type != "server_error" {
+					t.Fatalf("unexpected response: %d %s", rec.Code, rec.Body)
+				}
+				if inbound == dto.InboundOpenAI && response.Error.Code != "no_available_channel" {
+					t.Fatalf("OpenAI error code = %q, want no_available_channel", response.Error.Code)
+				}
+				if inbound == dto.InboundClaude && response.Type != "error" {
+					t.Fatalf("Claude error envelope type = %q, want error", response.Type)
+				}
+			})
+		}
 	}
 }
 
