@@ -20,11 +20,12 @@ type ResourceGatewayManagedChannel struct {
 }
 
 type ResourceGatewayRoute struct {
-	ChannelID     int64  `gorm:"primaryKey;autoIncrement:false"`
-	Model         string `gorm:"primaryKey;size:128"`
-	Group         string `gorm:"column:group;primaryKey;size:64"`
-	Capabilities  string `gorm:"type:text;not null;default:'[]'"`
-	ContextLength int64  `gorm:"not null;default:0"`
+	ChannelID         int64  `gorm:"primaryKey;autoIncrement:false"`
+	Model             string `gorm:"primaryKey;size:128"`
+	Group             string `gorm:"column:group;primaryKey;size:64"`
+	Capabilities      string `gorm:"type:text;not null;default:'[]'"`
+	ContextLength     int64  `gorm:"not null;default:0"`
+	GroupDefinitionID int64  `gorm:"not null;default:0"`
 }
 
 // resourceGatewayAbilityCondition is applied in SQL before candidate limits.
@@ -40,7 +41,22 @@ func resourceGatewayAbilityCondition(alias string) string {
 		AND rgr.capabilities IN ('["text"]', '["code"]', '["code","text"]')
 		AND rgr.context_length BETWEEN 0 AND 9007199254740991
 		AND EXISTS (SELECT 1 FROM channels rgc WHERE rgc.id = rgm.channel_id AND rgc.type = 1)
+		AND `+resourceGatewayGroupCondition("rgr")+`
 		AND rgr.model = %[1]s.model AND rgr."group" = %[1]s."group"
+	))`, alias)
+}
+
+func resourceGatewayGroupCondition(alias string) string {
+	return fmt.Sprintf(`(NOT EXISTS (
+		SELECT 1 FROM service_group_deletions rgd WHERE rgd.group_id = %[1]s."group"
+	) AND (
+		(%[1]s.group_definition_id = 0 AND NOT EXISTS (
+			SELECT 1 FROM service_group_configs rgs WHERE rgs.group_id = %[1]s."group"
+		)) OR EXISTS (
+			SELECT 1 FROM service_group_configs rgs
+			WHERE rgs.group_id = %[1]s."group" AND rgs.id = %[1]s.group_definition_id
+			AND rgs.id > 0 AND rgs.enabled = 1 AND rgs.visibility IN ('common', 'custom')
+		)
 	))`, alias)
 }
 
@@ -57,7 +73,7 @@ func addResourceGatewayAbilities(tx *gorm.DB, channel *Channel) (bool, error) {
 		return true, nil
 	}
 	var routes []ResourceGatewayRoute
-	if err := tx.Where("channel_id = ?", channel.ID).Find(&routes).Error; err != nil {
+	if err := tx.Where("channel_id = ?", channel.ID).Where(resourceGatewayGroupCondition("resource_gateway_routes")).Find(&routes).Error; err != nil {
 		return true, err
 	}
 	abilities := make([]Ability, 0, len(routes))

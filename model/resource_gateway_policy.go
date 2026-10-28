@@ -18,7 +18,7 @@ type ResourceGatewayPolicy struct {
 }
 
 func resourceGatewayPolicyForRoute(route ResourceGatewayRoute) *ResourceGatewayPolicy {
-	if route.ContextLength < 0 || route.ContextLength > maxResourceRevision {
+	if route.ContextLength < 0 || route.ContextLength > maxResourceRevision || route.GroupDefinitionID < 0 {
 		return nil
 	}
 	switch route.Capabilities {
@@ -78,7 +78,7 @@ func ReadResourceGatewayPolicy(ctx context.Context, channelID int64, group, mode
 			return nil
 		}
 		var route ResourceGatewayRoute
-		if err := tx.Where("channel_id = ? AND model = ? AND \"group\" = ?", channelID, model, group).First(&route).Error; err != nil {
+		if err := tx.Where("channel_id = ? AND model = ? AND \"group\" = ?", channelID, model, group).Where(resourceGatewayGroupCondition("resource_gateway_routes")).First(&route).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil
 			}
