@@ -23,6 +23,7 @@ import { ModelPricingAdmin } from "../../features/model-pricing-admin";
 import { useSystemAccess, isAdmin, canReadFinance, ROLE_ROOT, ROLE_FINANCE } from "../../lib/system-access";
 import { FinanceOverview } from "../../features/finance-overview";
 import { ConfigurationSync } from "../../features/configuration-sync";
+import { ServerTokenPricing } from "../../features/server-token-pricing";
 import { ResourceRegions } from "../../features/resource-regions";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
@@ -761,7 +762,7 @@ export default function AdminPortal() {
                     color: "var(--brand)",
                   }}
                 >
-                  {(metricsQuery.data?.requests.reduce(
+                  {(metricsQuery.data?.requests?.reduce(
                     (sum, r) => sum + r.count,
                     0,
                   ) ?? 0).toLocaleString()}
@@ -862,7 +863,7 @@ export default function AdminPortal() {
             </div>
 
             {/* Request breakdown by class */}
-            {metricsQuery.data && metricsQuery.data.requests.length > 0 && (
+            {metricsQuery.data && (metricsQuery.data.requests?.length ?? 0) > 0 && (
               <section
                 style={{
                   background: "var(--surface)",
@@ -915,7 +916,7 @@ export default function AdminPortal() {
                     </tr>
                   </thead>
                   <tbody>
-                    {metricsQuery.data.requests.map((r) => (
+                    {(metricsQuery.data.requests ?? []).map((r) => (
                       <tr
                         key={r.class}
                         style={{ borderBottom: "1px solid var(--border)" }}
@@ -982,6 +983,7 @@ export default function AdminPortal() {
 
             </div>
 
+            <ServerTokenPricing />
             <ConfigurationSync />
             <ResourceRegions />
 
@@ -1093,7 +1095,7 @@ export default function AdminPortal() {
                     </tr>
                   )}
                   {channelsQuery.data?.map((ch) => {
-                    const stat = metricsQuery.data?.channel_stats.find(
+                    const stat = metricsQuery.data?.channel_stats?.find(
                       (s) => s.channel_id === ch.id,
                     );
                     return (

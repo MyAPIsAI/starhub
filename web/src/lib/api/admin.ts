@@ -71,8 +71,8 @@ export interface ChannelStat {
 }
 
 export interface MetricsSnapshot {
-  requests: RequestCounter[];
-  channel_stats: ChannelStat[];
+  requests: RequestCounter[] | null;
+  channel_stats: ChannelStat[] | null;
   window: number;
   affinity: unknown[];
   generated_at: number; // unix seconds
