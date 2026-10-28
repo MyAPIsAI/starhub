@@ -26,6 +26,7 @@ import {
 import { Button } from "../components/ui/button";
 import { Drawer, Modal } from "../components/ui/overlay";
 import { usePreferences } from "../lib/preferences";
+import { useSessionQueryIdentity } from "../lib/system-access";
 import { writtenLanguage } from "../lib/localize";
 import type { LedgerEntry, RechargeOrder } from "../lib/product-preview";
 import {
@@ -97,7 +98,14 @@ function downloadCsv(csv: string, filename: string) {
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-export default function BillingCenter({
+export default function BillingCenter(props: {
+  onRecharge: (orderId?: string) => void;
+}) {
+  const identity = useSessionQueryIdentity();
+  return <BillingCenterView key={JSON.stringify(identity)} {...props} />;
+}
+
+function BillingCenterView({
   onRecharge,
 }: {
   onRecharge: (orderId?: string) => void;

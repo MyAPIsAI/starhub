@@ -25,6 +25,7 @@ import { Button } from "../components/ui/button";
 import { usePreferences } from "../lib/preferences";
 import { useProductPreview } from "../lib/product-preview";
 import { accountDisplayName } from "../lib/account-identity";
+import { useSessionQueryIdentity } from "../lib/system-access";
 import { validateRechargeAmount } from "../lib/billing";
 import { formatMoney } from "../lib/money";
 import { placeholders } from "../config/placeholders";
@@ -329,17 +330,24 @@ function RechargePageLayout({
   );
 }
 
-export default function RechargeFlow({
-  onExit,
-  onOrderChange,
-  orderId,
-  onViewRecords,
-}: {
+type RechargeFlowProps = {
   onExit: () => void;
   onOrderChange?: (id?: string) => void;
   orderId?: string;
   onViewRecords?: (orderId?: string) => void;
-}) {
+};
+
+export default function RechargeFlow(props: RechargeFlowProps) {
+  const identity = useSessionQueryIdentity();
+  return <RechargeFlowView key={JSON.stringify(identity)} {...props} />;
+}
+
+function RechargeFlowView({
+  onExit,
+  onOrderChange,
+  orderId,
+  onViewRecords,
+}: RechargeFlowProps) {
   const language = usePreferences((state) => state.language);
   const t = (key: keyof typeof messages) =>
     messages[key][language === "zh" ? 0 : language === "ar" ? 2 : 1];

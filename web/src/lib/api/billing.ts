@@ -13,8 +13,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./http";
 import { billingNano } from "./billing-money";
-import { useProductPreview } from "../product-preview";
-import { useSystemAccess } from "../system-access";
+import {
+  sessionQueryIdentity,
+  useSessionQueryIdentity,
+  useSystemAccess,
+} from "../system-access";
 
 // --- Types ---
 
@@ -66,9 +69,33 @@ const LEDGER_KEY = ["ledger"] as const;
 const RECHARGE_KEY = ["recharge"] as const;
 
 function useBillingScope() {
-  const account = useProductPreview((state) => state.user.id);
-  const role = useSystemAccess((state) => state.role);
-  return [account, role] as const;
+  return useSessionQueryIdentity();
+}
+
+function currentBillingScope(scope: ReturnType<typeof sessionQueryIdentity>) {
+  return (
+    scope[1] !== null &&
+    JSON.stringify(scope) ===
+      JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()))
+  );
+}
+
+async function billingRequest<T>(
+  scope: ReturnType<typeof sessionQueryIdentity>,
+  request: () => Promise<T>,
+): Promise<T> {
+  if (!currentBillingScope(scope))
+    throw Error("A confirmed unchanged server session is required for billing");
+  const result = await request();
+  if (!currentBillingScope(scope))
+    throw Error("The billing session changed before the result was confirmed");
+  return result;
+}
+
+function rechargeID(id: number | undefined): number {
+  if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0)
+    throw Error("Invalid recharge order identifier");
+  return id;
 }
 
 export function normalizeWallet(
@@ -98,9 +125,13 @@ export function normalizeLedger(
 export function useWallet() {
   const scope = useBillingScope();
   return useQuery({
-    queryKey: [...WALLET_KEY, ...scope],
+    queryKey: [...WALLET_KEY, scope],
+    enabled: scope[1] !== null,
+    retry: false,
     queryFn: async ({ signal }) =>
-      normalizeWallet(await apiGet<Wallet>("/api/wallet", signal)),
+      billingRequest(scope, async () =>
+        normalizeWallet(await apiGet<Wallet>("/api/wallet", signal)),
+      ),
   });
 }
 
@@ -109,9 +140,15 @@ export function useWallet() {
 export function useLedger() {
   const scope = useBillingScope();
   return useQuery({
-    queryKey: [...LEDGER_KEY, ...scope],
+    queryKey: [...LEDGER_KEY, scope],
+    enabled: scope[1] !== null,
+    retry: false,
     queryFn: async ({ signal }) =>
-      (await apiGet<LedgerEntry[]>("/api/ledger", signal)).map(normalizeLedger),
+      billingRequest(scope, async () =>
+        (await apiGet<LedgerEntry[]>("/api/ledger", signal)).map(
+          normalizeLedger,
+        ),
+      ),
   });
 }
 
@@ -120,8 +157,13 @@ export function useLedger() {
 export function useRechargeOrders() {
   const scope = useBillingScope();
   return useQuery({
-    queryKey: [...RECHARGE_KEY, ...scope],
-    queryFn: ({ signal }) => apiGet<RechargeOrder[]>("/api/recharge", signal),
+    queryKey: [...RECHARGE_KEY, scope],
+    enabled: scope[1] !== null,
+    retry: false,
+    queryFn: ({ signal }) =>
+      billingRequest(scope, () =>
+        apiGet<RechargeOrder[]>("/api/recharge", signal),
+      ),
   });
 }
 
@@ -130,24 +172,35 @@ export function useRechargeOrders() {
 export function useRechargeOrder(id?: number) {
   const scope = useBillingScope();
   return useQuery({
-    queryKey: [...RECHARGE_KEY, ...scope, "single", id] as const,
+    queryKey: [...RECHARGE_KEY, scope, "single", id] as const,
     queryFn: ({ signal }) =>
-      apiGet<RechargeOrder>(`/api/recharge/${id}`, signal),
-    enabled: id != null && id > 0,
+      billingRequest(scope, () =>
+        apiGet<RechargeOrder>(`/api/recharge/${rechargeID(id)}`, signal),
+      ),
+    enabled:
+      scope[1] !== null && id != null && Number.isSafeInteger(id) && id > 0,
+    retry: false,
     refetchInterval: (query) => {
       // Auto-poll while the order is still pending/processing.
       const status = query.state.data?.status;
-      return status === "pending" || status === "processing" ? 5000 : false;
+      return currentBillingScope(scope) &&
+        (status === "pending" || status === "processing")
+        ? 5000
+        : false;
     },
   });
 }
 
 export function useCreateRechargeOrder() {
   const queryClient = useQueryClient();
+  const scope = useBillingScope();
   return useMutation({
+    retry: false,
     mutationFn: (input: { amount_usd: string; channel?: string }) =>
-      apiPost<RechargeOrder>("/api/recharge", input),
-    onSuccess: () => {
+      billingRequest(scope, () =>
+        apiPost<RechargeOrder>("/api/recharge", input),
+      ),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: RECHARGE_KEY });
     },
   });
@@ -155,10 +208,14 @@ export function useCreateRechargeOrder() {
 
 export function useBeginRechargePayment() {
   const queryClient = useQueryClient();
+  const scope = useBillingScope();
   return useMutation({
+    retry: false,
     mutationFn: (id: number) =>
-      apiPost<RechargeOrder>(`/api/recharge/${id}/begin`),
-    onSuccess: () => {
+      billingRequest(scope, () =>
+        apiPost<RechargeOrder>(`/api/recharge/${rechargeID(id)}/begin`),
+      ),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: RECHARGE_KEY });
     },
   });
@@ -166,15 +223,22 @@ export function useBeginRechargePayment() {
 
 export function useResolveRechargeOrder() {
   const queryClient = useQueryClient();
+  const scope = useBillingScope();
   return useMutation({
+    retry: false,
     mutationFn: ({
       id,
       outcome,
     }: {
       id: number;
       outcome: "success" | "failed" | "cancelled";
-    }) => apiPost<RechargeOrder>(`/api/recharge/${id}/resolve`, { outcome }),
-    onSuccess: () => {
+    }) =>
+      billingRequest(scope, () =>
+        apiPost<RechargeOrder>(`/api/recharge/${rechargeID(id)}/resolve`, {
+          outcome,
+        }),
+      ),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: RECHARGE_KEY });
       queryClient.invalidateQueries({ queryKey: WALLET_KEY });
       queryClient.invalidateQueries({ queryKey: LEDGER_KEY });
