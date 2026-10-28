@@ -184,6 +184,11 @@ func TestPassthroughModelAttribution(t *testing.T) {
 				if err := model.InsertChannel(ch); err != nil {
 					t.Fatal(err)
 				}
+				if tc.path == "/v1/embeddings" {
+					if err := model.UpsertModelMeta(&model.ModelMeta{Model: tc.actual, Tags: "embedding"}); err != nil {
+						t.Fatal(err)
+					}
+				}
 				user := newUser(t, "passthrough-review", common.RoleUser, 1000000)
 				token := mustToken(t, user.ID, 1000000)
 				handler := middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(tc.handler))
