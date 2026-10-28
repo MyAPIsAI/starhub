@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Users,
@@ -51,7 +51,6 @@ import { ApiError } from "../../lib/api/http";
 
 export default function AdminPortal() {
   const { t, i18n } = useTranslation();
-  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const lang = i18n.language.startsWith("zh")
     ? "zh"
@@ -65,24 +64,30 @@ export default function AdminPortal() {
     "superAdmin",
   );
   const authRole = useSystemAccess((s) => s.role);
-  const [tab, setTab] = useState<
-    | "customers"
-    | "models"
-    | "analytics"
-    | "resources"
-    | "incidents"
-    | "audit"
-    | "redemption"
-    | "finance"
-  >(() =>
-    new URLSearchParams(location.search).get("tab") === "models"
-      ? "models"
-      : "customers",
-  );
+  const validTabs = ["customers", "models", "analytics", "resources", "incidents", "audit", "redemption", "finance"] as const;
+  type AdminTab = (typeof validTabs)[number];
+  const [tab, setTab] = useState<AdminTab>(() => {
+    const urlTab = searchParams.get("tab");
+    return validTabs.includes(urlTab as AdminTab) ? (urlTab as AdminTab) : "customers";
+  });
+  // Sync tab changes to the URL so admin sections are shareable and refresh-safe.
   useEffect(() => {
-    if (new URLSearchParams(location.search).get("tab") === "models")
-      setTab("models");
-  }, [location.search]);
+    const urlTab = searchParams.get("tab");
+    const current = tab === "customers" ? null : tab;
+    if (urlTab === current) return;
+    const next = new URLSearchParams(searchParams);
+    if (tab === "customers") next.delete("tab");
+    else next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  }, [tab]);
+  // React to browser back/forward navigation.
+  useEffect(() => {
+    const urlTab = searchParams.get("tab");
+    const target: AdminTab = validTabs.includes(urlTab as AdminTab)
+      ? (urlTab as AdminTab)
+      : "customers";
+    if (target !== tab) setTab(target);
+  }, [searchParams]);
 
   // Backend API hooks.
   const usersQuery = useAdminUsers();
