@@ -31,6 +31,7 @@ const catalog = () => ({
   revision: 1,
   snapshot: snapshot(),
   placements: { resource: { modelId: null, groupIds: [], enabled: false } },
+  regions: {},
   updated_at: 1793145601,
   affects_gateway_routing: false,
 });
@@ -42,6 +43,7 @@ describe("server resource inventory boundaries", () => {
         revision: 0,
         snapshot: null,
         placements: {},
+        regions: {},
         updated_at: 0,
         affects_gateway_routing: false,
       }).snapshot,
@@ -138,5 +140,29 @@ describe("server resource inventory boundaries", () => {
       changed: 1,
       removed: 1,
     });
+  });
+  it("keeps registered region labels distinct from observed inventory identifiers", () => {
+    const value = {
+      ...catalog(),
+      regions: {
+        region: {
+          id: "region",
+          name: "Display name",
+          description: "Inventory metadata",
+          updated_at: 1793145601,
+        },
+      },
+    };
+    expect(parseResourceCatalog(value).regions.region.name).toBe(
+      "Display name",
+    );
+    expect(parseResourceCatalog(value).snapshot?.instances[0].region).toBe("");
+  });
+  it.each([
+    { region: { id: "other", name: "Name", description: "", updated_at: 0 } },
+    { region: { id: "region", name: "", description: "", updated_at: 0 } },
+    { region: { id: "region", name: "Name", description: "", updated_at: -1 } },
+  ])("rejects malformed region definitions %#", (regions) => {
+    expect(() => parseResourceCatalog({ ...catalog(), regions })).toThrow();
   });
 });

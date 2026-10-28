@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPut } from "./http";
+import { apiGet, apiPut, apiRequest } from "./http";
 import type { ResourcePlacement, ResourceSnapshot } from "../../config/models";
 import {
   parseResourceCatalog,
@@ -41,6 +41,46 @@ export function useResourceMutation() {
                 expected_revision: input.expected_revision,
                 placement: input.placement,
               },
+        ),
+      ),
+    onSuccess: (data: ResourceCatalog) => {
+      client.setQueryData(["resource-catalog", account], data);
+      client.invalidateQueries({ queryKey: ["admin-audit"] });
+    },
+    onError: () => {
+      void client.invalidateQueries({
+        queryKey: ["resource-catalog", account],
+      });
+    },
+  });
+}
+
+export function useRegionMutation() {
+  const client = useQueryClient();
+  const account = useProductPreview((s) => s.user.id);
+  return useMutation({
+    retry: false,
+    mutationFn: async (
+      input: { id: string; expected_revision: number } & (
+        | { operation: "save"; name: string; description: string }
+        | { operation: "delete" }
+      ),
+    ) =>
+      parseResourceCatalog(
+        await apiRequest<unknown>(
+          `/api/region/${encodeURIComponent(input.id)}`,
+          {
+            method: input.operation === "delete" ? "DELETE" : "PUT",
+            body: JSON.stringify(
+              input.operation === "delete"
+                ? { expected_revision: input.expected_revision }
+                : {
+                    expected_revision: input.expected_revision,
+                    name: input.name,
+                    description: input.description,
+                  },
+            ),
+          },
         ),
       ),
     onSuccess: (data: ResourceCatalog) => {

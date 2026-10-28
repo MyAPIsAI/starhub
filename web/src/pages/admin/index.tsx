@@ -23,6 +23,7 @@ import { ModelPricingAdmin } from "../../features/model-pricing-admin";
 import { useSystemAccess, isAdmin, canReadFinance, ROLE_ROOT, ROLE_FINANCE } from "../../lib/system-access";
 import { FinanceOverview } from "../../features/finance-overview";
 import { ConfigurationSync } from "../../features/configuration-sync";
+import { ResourceRegions } from "../../features/resource-regions";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
@@ -982,6 +983,7 @@ export default function AdminPortal() {
             </div>
 
             <ConfigurationSync />
+            <ResourceRegions />
 
             {/* Channel list from backend */}
             <section

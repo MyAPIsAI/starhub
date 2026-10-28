@@ -212,6 +212,11 @@ export function ResourceInventory() {
           >
             {text("导入快照", "Import snapshot", "استيراد لقطة")}
           </Button>
+          <Button asChild>
+            <Link to="/admin?tab=resources#regions">
+              {text("区域目录", "Region directory", "دليل المناطق")}
+            </Link>
+          </Button>
         </div>
       </header>
       <aside className="ri-boundary">
@@ -325,7 +330,7 @@ export function ResourceInventory() {
                       .sort()
                       .map((value) => (
                         <option key={value} value={JSON.stringify(value)}>
-                          {value || unknown}
+                          {data.regions[value]?.name ?? (value || unknown)}
                         </option>
                       ))}
                   </select>
@@ -398,7 +403,10 @@ export function ResourceInventory() {
                               </small>
                             </td>
                             <td>
-                              <span>{row.region || unknown}</span>
+                              <span>
+                                {data.regions[row.region]?.name ??
+                                  (row.region || unknown)}
+                              </span>
                               <span>{statusLabel(row.status)}</span>
                               <small>
                                 {row.latencyMs} ms ·{" "}

@@ -4,8 +4,16 @@ export interface ResourceCatalog {
   revision: number;
   snapshot: ResourceSnapshot | null;
   placements: Record<string, ResourcePlacement>;
+  regions: Record<string, ResourceRegion>;
   updated_at: number;
   affects_gateway_routing: false;
+}
+
+export interface ResourceRegion {
+  id: string;
+  name: string;
+  description: string;
+  updated_at: number;
 }
 
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -97,11 +105,24 @@ export function parseResourceCatalog(value: unknown): ResourceCatalog {
     !integer(value.revision) ||
     !integer(value.updated_at) ||
     value.affects_gateway_routing !== false ||
-    !object(value.placements)
+    !object(value.placements) ||
+    !object(value.regions) ||
+    Object.keys(value.regions).length > 1000
   )
     throw new Error("Invalid resource catalog");
   const snapshot =
     value.snapshot === null ? null : parseResourceSnapshot(value.snapshot);
+  for (const [id, region] of Object.entries(value.regions)) {
+    if (
+      !text(id, 128) ||
+      !object(region) ||
+      region.id !== id ||
+      !text(region.name, 128) ||
+      !text(region.description, 512, false) ||
+      !integer(region.updated_at)
+    )
+      throw new Error("Invalid resource region");
+  }
   if (
     snapshot &&
     (typeof snapshot.receivedAt !== "string" ||
