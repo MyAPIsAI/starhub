@@ -24,9 +24,8 @@ export interface KeyModelPolicy {
   smartStrategy?: "cost" | "latency" | "stability";
 }
 
-export const SMART_MODEL_ID = "myapis-auto";
-export const isSmartModelId = (id: string) =>
-  id === SMART_MODEL_ID || id === "veyra-auto";
+import { SMART_MODEL_ID, isSmartModelId } from "./smart-model";
+export { SMART_MODEL_ID, isSmartModelId } from "./smart-model";
 export const allowsSmartModel = (key: KeyModelPolicy) =>
   key.smartAccess ?? key.type === "smart";
 export const allowsSpecifiedModels = (key: KeyModelPolicy) =>
@@ -70,7 +69,7 @@ export function getKeyModelOptions(
   if (allowsSmartModel(key) && candidates.length)
     options.push({
       id: SMART_MODEL_ID,
-      name: "Veyra Auto（智能路由）",
+      name: "MyAPIs Auto（智能路由）",
       kind: "smart",
     });
   return options;

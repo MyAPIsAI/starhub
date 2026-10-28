@@ -76,7 +76,9 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	common.ApiSuccess(w, token)
+	out := maskedToken(token)
+	out["key"] = token.Key
+	common.ApiSuccess(w, out)
 }
 
 func ListTokens(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +113,7 @@ func maskedToken(t *model.Token) map[string]any {
 		"model_limits":    t.ModelLimits,
 		"allow_ips":       t.AllowIps,
 		"auto_groups":     t.AutoGroups,
+		"smart_access":    t.AllowsSmartRouting(),
 		"created_at":      t.CreatedAt,
 	}
 }

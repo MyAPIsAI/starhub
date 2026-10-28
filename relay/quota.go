@@ -214,6 +214,7 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		ChannelID:        channelID,
 		Model:            modelName,
 		RequestedModel:   originalModel,
+		Protocol:         usage.RequestProtocol,
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
 		Quota:            actual,
@@ -266,20 +267,24 @@ func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimi
 }
 
 // PostConsumeQuotaAmountWithStatus keeps the outcome and quota settlement in
-// the same transaction. Status 2 is reserved for failures with no charge.
+// the same transaction. Outcome is independent of the collected amount.
 func PostConsumeQuotaAmountWithStatus(userID, tokenID int64, tokenName string, tokenUnlimited bool,
 	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, requestedModel ...string) error {
-	if status != 1 && status != 2 {
-		return errors.New("unsupported settlement log status")
-	}
-	if status == 2 && actual != 0 {
-		return errors.New("failed settlement log requires zero charge")
-	}
-	delta := actual - preQuota
 	originalModel := modelName
 	if len(requestedModel) > 0 && requestedModel[0] != "" {
 		originalModel = requestedModel[0]
 	}
+	return PostConsumeQuotaAmountWithMetadata(userID, tokenID, tokenName, tokenUnlimited,
+		channelID, modelName, actual, preQuota, usedChannels, durationMs, status, originalModel, "")
+}
+
+// PostConsumeQuotaAmountWithMetadata records gateway-owned request metadata.
+func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string, tokenUnlimited bool,
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol string) error {
+	if status < 1 || status > 3 {
+		return errors.New("unsupported settlement log status")
+	}
+	delta := actual - preQuota
 	entry := &model.Log{
 		UserID:         userID,
 		TokenID:        tokenID,
@@ -287,6 +292,7 @@ func PostConsumeQuotaAmountWithStatus(userID, tokenID int64, tokenName string, t
 		ChannelID:      channelID,
 		Model:          modelName,
 		RequestedModel: originalModel,
+		Protocol:       protocol,
 		Quota:          actual,
 		UsedChannels:   usedChannels,
 		DurationMs:     durationMs,

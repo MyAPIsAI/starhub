@@ -30,7 +30,7 @@ const csvCell = (value: unknown) => {
 const csv = (rows: unknown[][]) =>
   "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
 const billedUsage = (row: PreviewRequest): MeteredUsage =>
-  row.status === "success"
+  row.status === "success" || BigInt(row.cost_nano) > 0n
     ? (row.metered_usage ??
       row.pricing_snapshot?.usage ?? {
         input_tokens: row.input_tokens,
@@ -117,9 +117,11 @@ export function serializeRequestExport(
       keys.find((key) => key.id === row.key_id)?.name ?? "",
       row.requested_model ?? row.model,
       row.actual_model ?? (row.status === "success" ? row.model : ""),
-      row.status,
+      row.outcome ?? row.status,
       row.billing_status ??
-        (row.status === "success" ? "charged" : "not_charged"),
+        (row.status === "success" || BigInt(row.cost_nano) > 0n
+          ? "charged"
+          : "not_charged"),
       row.error_code ?? "",
       row.pricing_snapshot ? JSON.stringify(row.pricing_snapshot.rule) : "",
       JSON.stringify(

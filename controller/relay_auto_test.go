@@ -114,6 +114,13 @@ func TestRelayAutoModelReachesUpstream(t *testing.T) {
 			if err != nil || total != 1 || len(entries) != 1 {
 				t.Fatalf("success log not persisted: total %d, entries %d, error %v", total, len(entries), err)
 			}
+			expectedProtocol := "OpenAI"
+			if tc.inbound == dto.InboundClaude {
+				expectedProtocol = "Anthropic"
+			}
+			if entries[0].Protocol != expectedProtocol {
+				t.Fatalf("protocol attribution lost: %+v", entries[0])
+			}
 			if entries[0].RequestedModel != tc.requested || entries[0].Model != "gpt-4o" || entries[0].Status != 1 {
 				t.Fatalf("requested/actual model attribution lost: %+v", entries[0])
 			}

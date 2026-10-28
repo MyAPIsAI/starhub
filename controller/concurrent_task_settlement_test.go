@@ -28,9 +28,9 @@ func TestConcurrentTaskSettlement(t *testing.T) {
 	}{
 		{"completed", "completed", 80000, 1, ""},
 		{"failed", "failed", 0, 2, ""},
-		{"cancelled", "cancelled", 40000, 1, ""},
+		{"cancelled", "cancelled", 40000, 3, ""},
 		{"free success", "completed", 0, 1, `{"sora-2":"0"}`},
-		{"charged failure", "failed", 20000, 1, `{"sora-2":"task_status == 1 ? seconds * 0.01 * n : 0.04"}`},
+		{"charged failure", "failed", 20000, 2, `{"sora-2":"task_status == 1 ? seconds * 0.01 * n : 0.04"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			newTestDB(t)
@@ -120,7 +120,7 @@ func TestConcurrentTaskSettlement(t *testing.T) {
 			}
 			days, err := model.SummarizeLogsByDay(user.ID, 0)
 			var successes, failures int64
-			if tc.logStatus == 2 {
+			if tc.logStatus != 1 {
 				failures = 1
 			} else {
 				successes = 1
@@ -165,8 +165,8 @@ func TestInvalidSettlementLogStatusPreservesQuota(t *testing.T) {
 		actual int64
 	}{
 		{0, 0},
-		{3, 0},
-		{2, 1000},
+		{4, 0},
+		{-1, 1000},
 	} {
 		if err := relay.PostConsumeQuotaAmountWithStatus(user.ID, token.ID, "review", false,
 			0, "sora-2", tc.actual, 80000, "", 0, tc.status, "myapis-auto"); err == nil {

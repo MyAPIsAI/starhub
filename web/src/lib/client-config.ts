@@ -39,23 +39,24 @@ export function shellQuote(value: string) {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 export function validDemoSecret(value?: string) {
-  return Boolean(value && value.startsWith("sk-") && !/[•*\s]/.test(value));
+  return Boolean(value && value.startsWith("sk-") && !/[•●*\s]/.test(value));
 }
 export function buildClientConfiguration(input: {
   target: ClientTarget;
   model: string;
   secret?: string;
+  apiBase?: string;
 }) {
   if (input.target === "codex") return null;
   if (!input.model) return null;
   if (input.secret && !validDemoSecret(input.secret))
     throw new Error("A masked key is not a credential");
   const model = isSmartModelId(input.model) ? SMART_MODEL_ID : input.model;
-  const secret = input.secret ? shellQuote(input.secret) : '"$VEYRA_API_KEY"';
+  const secret = input.secret ? shellQuote(input.secret) : '"$MYAPIS_API_KEY"';
   const baseUrl =
     input.target === "claude-code"
-      ? placeholders.apiBase.replace(/\/v1$/, "")
-      : placeholders.apiBase;
+      ? (input.apiBase ?? placeholders.apiBase).replace(/\/v1\/?$/, "")
+      : (input.apiBase ?? placeholders.apiBase);
   const protocol = clientProtocols[input.target]!;
   const mapping =
     input.target === "claude-code"
@@ -74,10 +75,10 @@ export function buildClientConfiguration(input: {
   const secretName =
     input.target === "claude-code" ? "ANTHROPIC_AUTH_TOKEN" : "OPENAI_API_KEY";
   const snippet = [
-    "# Veyra Demo: simulated credential and example endpoint only.",
+    "# MyAPIs gateway configuration; verify connectivity in your client.",
     ...(!input.secret
       ? [
-          "# Set VEYRA_API_KEY to your revealed demo credential before using these values.",
+          "# Set MYAPIS_API_KEY to your full gateway credential before using these values.",
         ]
       : []),
     `export ${secretName}=${secret}`,
@@ -90,7 +91,7 @@ export function buildClientConfiguration(input: {
     protocol,
     model,
     secretName,
-    credential: input.secret ?? "$VEYRA_API_KEY",
+    credential: input.secret ?? "$MYAPIS_API_KEY",
     mapping,
     snippet,
   };

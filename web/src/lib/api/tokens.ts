@@ -27,6 +27,7 @@ export interface Token {
   model_limits: string;
   allow_ips: string;
   auto_groups: string;
+  smart_access?: boolean;
   created_at: number;
 }
 

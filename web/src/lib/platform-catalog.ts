@@ -6,14 +6,18 @@ import {
   type ResourceInstance,
 } from "../config/models";
 import { placeholders } from "../config/placeholders";
+import {
+  SMART_MODEL_ID,
+  LEGACY_SMART_MODEL_ID,
+  isSmartModelId,
+} from "./smart-model";
+export { isSmartModelId } from "./smart-model";
 
 export const demoAccounts = [
   { id: "account-demo", name: "当前演示账号" },
   { id: "account-partner", name: "定制客户 · 星河科技" },
 ];
 /** Routing entry IDs are reserved; neither is a physical upstream model. */
-export const isSmartModelId = (id: string) =>
-  id === "myapis-auto" || id === "veyra-auto";
 
 export function modelCatalog(config?: PricingCatalogConfig): ModelItem[] {
   const models = config?.catalog
@@ -107,6 +111,39 @@ export function upgradePlatform(
       .filter((model) => next.models[model.id])
       .map((model) => [model.id, structuredClone(model)]),
   );
+  const legacy = next.catalog[LEGACY_SMART_MODEL_ID];
+  if (legacy) {
+    next.catalog[SMART_MODEL_ID] ??= { ...legacy, id: SMART_MODEL_ID };
+    delete next.catalog[LEGACY_SMART_MODEL_ID];
+  }
+  if (next.models[LEGACY_SMART_MODEL_ID]) {
+    next.models[SMART_MODEL_ID] ??= next.models[LEGACY_SMART_MODEL_ID];
+    delete next.models[LEGACY_SMART_MODEL_ID];
+  }
+  // Virtual entries never represent upstream resources or placements.
+  if (next.resources) {
+    const virtualIds = new Set(
+      next.resources.instances
+        .filter(
+          (resource) =>
+            isSmartModelId(resource.canonicalModel) ||
+            isSmartModelId(resource.upstreamModel),
+        )
+        .map((resource) => resource.id),
+    );
+    next.resources.instances = next.resources.instances.filter(
+      (resource) => !virtualIds.has(resource.id),
+    );
+    if (next.placements)
+      for (const id of virtualIds) delete next.placements[id];
+  }
+  if (next.placements)
+    for (const placement of Object.values(next.placements)) {
+      if (placement.modelId && isSmartModelId(placement.modelId)) {
+        placement.modelId = null;
+        placement.enabled = false;
+      }
+    }
   for (const group of Object.values(next.groups)) {
     group.visibility ??= "common";
     group.accountIds ??= [];

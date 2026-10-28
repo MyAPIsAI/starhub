@@ -21,11 +21,13 @@ import {
   buildClientConfiguration,
   clientProtocols,
   findClientModel,
+  validDemoSecret,
   getClientModels,
   type ClientTarget,
   type ConnectionTool,
 } from "../lib/client-config";
 import { getKeyModelOptions } from "../lib/key-model-policy";
+import { canonicalModelId } from "../lib/smart-model";
 import { copyText } from "./code-example";
 import "../components/access-center.css";
 
@@ -49,17 +51,27 @@ const isTool = (v: unknown): v is ConnectionTool =>
 const isTarget = (v: unknown): v is ClientTarget =>
   ["openai", "claude-code", "codex"].includes(String(v));
 
-export default function AccessCenter() {
+export default function AccessCenter({
+  plaintextKeys,
+  revealedKeys,
+  onReveal,
+}: {
+  plaintextKeys?: Record<string, string>;
+  revealedKeys?: Record<string, number>;
+  onReveal?: (keyId: string, password: string) => Promise<boolean>;
+}) {
   const [params] = useSearchParams();
   const lang = usePreferences((s) => s.language);
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
-  const { keys } = useBackendKeys();
+  const { keys } = useBackendKeys(plaintextKeys);
   const selectedKey = useProductPreview((s) => s.selectedKey);
-  const requests = useBackendRequests(20).rows as any[];
-  const revealed = useProductPreview((s) => s.revealedKeyIds);
+  const requests = useBackendRequests(100).rows;
+  const demoRevealed = useProductPreview((s) => s.revealedKeyIds);
+  const revealed = revealedKeys ?? demoRevealed;
   const chooseKey = useProductPreview((s) => s.chooseKey);
-  const unlock = useProductPreview((s) => s.verifyPasswordAndRevealKey);
+  const demoUnlock = useProductPreview((s) => s.verifyPasswordAndRevealKey);
+  const unlock = onReveal ?? demoUnlock;
   const pricing = useModelPricing((s) => s.config);
   const [draft, setDraft] = useState<Draft>(() => {
     const saved = readDraft();
@@ -107,21 +119,31 @@ export default function AccessCenter() {
     [key, draft.target, pricing],
   );
   const selectedModel = findClientModel(models, draft.model);
-  const unlocked = Boolean(key && (revealed[key.id] ?? 0) > clock);
+  const unlocked = Boolean(
+    key && validDemoSecret(key.keySecret) && (revealed[key.id] ?? 0) > clock,
+  );
   const config =
     key?.active && selectedModel
       ? buildClientConfiguration({
           target: draft.target,
           model: selectedModel.id,
+          apiBase:
+            typeof window !== "undefined"
+              ? `${window.location.origin}/v1`
+              : undefined,
           secret: includeSecret && unlocked ? key.keySecret : undefined,
         })
       : null;
-  const latestRequest = requests.find(
-    (row) =>
-      row.key_id === key?.id &&
-      row.requested_model === draft.model &&
-      (row.protocol ?? row.request?.protocol) === protocol,
-  );
+  const latestRequest =
+    key?.active && selectedModel && protocol
+      ? requests.find(
+          (row) =>
+            row.key_id === key?.id &&
+            canonicalModelId(row.requested_model) ===
+              canonicalModelId(draft.model) &&
+            row.protocol === protocol,
+        )
+      : undefined;
   const verified =
     latestRequest?.status === "success" ? latestRequest : undefined;
   const failed =
@@ -164,11 +186,7 @@ export default function AccessCenter() {
       <header className="access-heading">
         <span className="access-demo-label">
           <Link2 size={14} />
-          {text(
-            "接入中心 · 本地交互演示",
-            "Connection center · Local demo",
-            "مركز الاتصال · عرض محلي",
-          )}
+          {text("接入中心", "Connection center", "مركز الاتصال")}
         </span>
         <h1>
           {text(
@@ -179,9 +197,9 @@ export default function AccessCenter() {
         </h1>
         <p>
           {text(
-            "复用一把 Key（密钥），获取配置，再在客户端切换指定模型与智能路由。所有地址、凭证和验证调用均为演示，不连接真实模型服务。",
-            "Reuse one key, get configuration, then switch between specific models and smart routing in your client. Endpoints, credentials, and validation calls are simulated; no live model service is connected.",
-            "استخدم مفتاحًا واحدًا ثم بدّل النماذج في عميلك. العناوين والمفاتيح وطلبات التحقق محاكاة بلا اتصال بخدمة فعلية.",
+            "复用一把 Key（密钥），获取当前网关配置，再在客户端切换指定模型与智能路由。使用完整密钥的验证请求会实际转发并按用量计费。",
+            "Reuse one key, get this gateway’s configuration, then choose specific models or smart routing in your client. Verification with a full key sends a real request and incurs usage charges.",
+            "استخدم مفتاحًا واحدًا لإعداد هذه البوابة واختيار النماذج في عميلك. التحقق بمفتاح كامل يرسل طلبًا فعليًا ويُحاسب حسب الاستخدام.",
           )}
         </p>
       </header>
@@ -375,7 +393,7 @@ export default function AccessCenter() {
                 </option>
                 {models.map((model) => (
                   <option value={model.id} key={model.id}>
-                    {model.kind === "smart" ? "Veyra Auto" : model.name} ·{" "}
+                    {model.kind === "smart" ? "MyAPIs Auto" : model.name} ·{" "}
                     {model.kind === "smart"
                       ? text("智能路由", "Smart routing", "توجيه ذكي")
                       : text("指定模型", "Specific model", "نموذج محدد")}
@@ -490,9 +508,9 @@ export default function AccessCenter() {
             <>
               <div className="access-notice">
                 {text(
-                  "示例域名不会接入真实服务。下方配置用于演示接入关系；真实工具连通性尚未验证。",
-                  "The example domain does not reach a live service. Configuration demonstrates the integration; real client connectivity is not verified.",
-                  "النطاق مثال ولا يصل إلى خدمة فعلية. الإعداد يوضح التكامل ولم يتحقق الاتصال الفعلي.",
+                  "下方使用当前网关地址；请确认客户端能访问此地址。页面内验证不能代替目标客户端的实际连通性测试。",
+                  "Configuration uses this gateway’s address. Confirm your client can reach it; in-page verification does not prove connectivity from that client.",
+                  "يستخدم الإعداد عنوان هذه البوابة. تأكد أن عميلك يستطيع الوصول إليه؛ تحقق الصفحة لا يثبت اتصال العميل.",
                 )}
               </div>
               <dl className="access-config-fields">
@@ -530,14 +548,14 @@ export default function AccessCenter() {
                   <dd>
                     {includeSecret && unlocked
                       ? text(
-                          "已解锁的模拟密钥",
-                          "Revealed demo credential",
-                          "مفتاح تجريبي مكشوف",
+                          "已解锁的完整密钥",
+                          "Revealed full credential",
+                          "مفتاح كامل مكشوف",
                         )
                       : text(
-                          "环境变量 VEYRA_API_KEY（密钥占位）",
-                          "Environment variable VEYRA_API_KEY",
-                          "متغير البيئة VEYRA_API_KEY",
+                          "环境变量 MYAPIS_API_KEY（密钥占位）",
+                          "Environment variable MYAPIS_API_KEY",
+                          "متغير البيئة MYAPIS_API_KEY",
                         )}
                   </dd>
                 </div>
@@ -546,9 +564,9 @@ export default function AccessCenter() {
                 <details className="access-details">
                   <summary>
                     {text(
-                      "需要完整模拟密钥？解锁后加入配置",
-                      "Need the demo credential? Unlock to include it",
-                      "تحتاج المفتاح التجريبي؟ افتحه لإضافته",
+                      "需要完整密钥？解锁后加入配置",
+                      "Need the full credential? Unlock to include it",
+                      "تحتاج المفتاح الكامل؟ افتحه لإضافته",
                     )}
                   </summary>
                   <div className="access-field">
@@ -571,9 +589,9 @@ export default function AccessCenter() {
                     />
                     <small>
                       {text(
-                        "使用当前演示账号密码；若已修改，请输入新密码。不要输入真实服务口令。",
-                        "Use the current password of your demo account, including any changes. Do not use real credentials.",
-                        "استخدم كلمة مرور حساب العرض الحالية بعد أي تعديل. لا تستخدم بيانات حقيقية.",
+                        "使用当前平台账号密码。仅本次创建或重置后仍在内存中的密钥可解锁；旧密钥请使用已保存的原文，或返回密钥页重置。",
+                        "Use your current account password. Only a key created or reset in this session can be revealed; use your saved original key or reset it on the keys page.",
+                        "استخدم كلمة مرور حسابك الحالية. يمكن كشف مفتاح أُنشئ أو أُعيد تعيينه في هذه الجلسة فقط؛ استخدم نسختك المحفوظة أو أعد تعيينه.",
                       )}
                     </small>
                     {unlockError && (
@@ -588,7 +606,7 @@ export default function AccessCenter() {
                     <Button
                       size="small"
                       variant="secondary"
-                      disabled={unlocking}
+                      disabled={unlocking || !validDemoSecret(key.keySecret)}
                       onClick={async () => {
                         setUnlocking(true);
                         const ok = await unlock(key.id, password);
@@ -602,9 +620,9 @@ export default function AccessCenter() {
                       }}
                     >
                       {text(
-                        "解锁模拟密钥",
-                        "Reveal demo key",
-                        "إظهار المفتاح التجريبي",
+                        "解锁完整密钥",
+                        "Reveal full key",
+                        "إظهار المفتاح الكامل",
                       )}
                     </Button>
                   </div>
@@ -619,9 +637,9 @@ export default function AccessCenter() {
                   />
                   <span>
                     {text(
-                      "在导出配置中包含已解锁的完整模拟密钥",
-                      "Include the revealed demo credential in exported configuration",
-                      "تضمين المفتاح التجريبي المكشوف في الإعداد",
+                      "在导出配置中包含已解锁的完整密钥",
+                      "Include the revealed full credential in exported configuration",
+                      "تضمين المفتاح الكامل المكشوف في الإعداد",
                     )}
                   </span>
                 </label>
@@ -631,8 +649,8 @@ export default function AccessCenter() {
               </pre>
               <p className="access-muted">
                 {text(
-                  "未解锁时仅引用环境变量；请先赋予它完整模拟密钥。通用工具的模型环境变量只是配置提示，应在工具的模型输入框中填写上方标识。",
-                  "When locked, the snippet references an environment variable; set it to the complete demo credential first. Generic model environment variables are guidance; enter the model ID in your tool’s model field.",
+                  "未解锁时仅引用环境变量；请先赋予它完整密钥。通用工具的模型环境变量只是配置提示，应在工具的模型输入框中填写上方标识。",
+                  "When locked, the snippet references an environment variable; set it to the full credential first. Generic model environment variables are guidance; enter the model ID in your tool’s model field.",
                   "عند القفل يُستخدم متغير بيئة؛ عيّنه إلى المفتاح الكامل أولًا. أدخل معرف النموذج في حقل النموذج بالأداة.",
                 )}
               </p>
@@ -711,8 +729,8 @@ export default function AccessCenter() {
                   </li>
                   <li>
                     {text(
-                      "填写基础地址、完整模拟密钥和模型标识。不要填写掩码或把环境变量占位当作密钥原文。",
-                      "Enter the base URL, full demo credential, and model ID. Do not enter a masked key or a literal environment placeholder.",
+                      "填写基础地址、完整密钥和模型标识。不要填写掩码或把环境变量占位当作密钥原文。",
+                      "Enter the base URL, full credential, and model ID. Do not enter a masked key or a literal environment placeholder.",
                       "أدخل العنوان والمفتاح الكامل ومعرف النموذج. لا تستخدم مفتاحًا مخفيًا أو نص متغير البيئة.",
                     )}
                   </li>
@@ -731,9 +749,9 @@ export default function AccessCenter() {
                   </li>
                   <li>
                     {text(
-                      "回到平台做本地模拟验证；真实客户端需要另行接入真实网关才能完成连通性验证。",
-                      "Use local demo validation here. Real client connectivity requires a separately implemented real gateway.",
-                      "استخدم التحقق التجريبي المحلي هنا. يتطلب الاتصال الفعلي بوابة حقيقية منفصلة.",
+                      "回到平台使用完整密钥验证网关，再在目标客户端发起请求并核对调用日志。",
+                      "Verify the gateway here with a full key, then send a request from your target client and check the request logs.",
+                      "تحقق من البوابة هنا بمفتاح كامل، ثم أرسل طلبًا من عميلك وراجع سجل الطلبات.",
                     )}
                   </li>
                 </ol>
@@ -761,15 +779,15 @@ export default function AccessCenter() {
           <strong>
             {verified
               ? text(
-                  "已有对应的模拟成功请求",
-                  "A matching simulated request succeeded",
-                  "نجح طلب تجريبي مطابق",
+                  "已有同协议成功调用",
+                  "A matching API request succeeded",
+                  "نجح طلب واجهة مطابق",
                 )
               : failed
                 ? text(
-                    "最近一次模拟验证失败",
-                    "Latest simulated validation failed",
-                    "فشل التحقق التجريبي الأخير",
+                    "最近一次对应调用未成功",
+                    "Latest matching request did not succeed",
+                    "لم ينجح آخر طلب مطابق",
                   )
                 : text(
                     "等待对应请求验证",
@@ -780,22 +798,22 @@ export default function AccessCenter() {
           <p>
             {verified
               ? text(
-                  `请求 ${verified.trace_id} 已在本地完成模拟验证。真实客户端连通性未验证。`,
-                  `Request ${verified.trace_id} passed local simulation. Real client connectivity is unverified.`,
-                  `نجح الطلب ${verified.trace_id} في المحاكاة المحلية. الاتصال الفعلي غير متحقق.`,
+                  `最近 100 条日志中，请求 ${verified.trace_id} 已通过同密钥、模型和协议检查；此记录不证明所选客户端已接通。`,
+                  `Within the latest 100 logs, request ${verified.trace_id} matches this key, model and protocol. It does not prove connectivity of the selected client.`,
+                  `ضمن آخر 100 سجل، يطابق الطلب ${verified.trace_id} المفتاح والنموذج والبروتوكول. لا يثبت اتصال العميل المحدد.`,
                 )
               : text(
-                  "复制配置、保存设置和打开工具均不会被标记为接入成功。只有同一密钥、模型和协议的成功记录才计为模拟验证通过。",
-                  "Copying, saving, and opening a tool never count as connected. Only a successful record for this key, model, and protocol counts as simulated validation.",
-                  "النسخ والحفظ وفتح الأداة لا تعني الاتصال. يلزم سجل ناجح لهذا المفتاح والنموذج والبروتوكول للتحقق التجريبي.",
+                  "仅检查最近 100 条日志。复制配置、保存设置和打开工具不算调用成功；缺少协议信息的历史日志不会被推断为验证通过。",
+                  "Checks only the latest 100 logs. Copying or saving does not count as success. Historical logs without protocol metadata cannot verify this configuration.",
+                  "يفحص آخر 100 سجل فقط. النسخ والحفظ لا يعنيان النجاح، ولا تؤكد السجلات القديمة دون بروتوكول هذا الإعداد.",
                 )}
           </p>
           {failed && !verified && (
             <p>
               {text(
-                "最近一次模拟验证失败且未计费；请进入明细查看原因，配置选择已保留。",
-                "The latest simulation failed without charge. Inspect the details; your configuration is retained.",
-                "فشلت المحاكاة الأخيرة بلا رسوم. راجع التفاصيل؛ إعدادك محفوظ.",
+                "最近一次对应调用失败或取消；请在明细中查看原因与实际费用，配置选择已保留。",
+                "The latest matching call failed or was cancelled. Inspect its details and actual charge; your configuration is retained.",
+                "فشل آخر طلب مطابق أو أُلغي. راجع التفاصيل والرسوم الفعلية؛ إعدادك محفوظ.",
               )}
             </p>
           )}

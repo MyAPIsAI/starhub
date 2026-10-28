@@ -87,17 +87,17 @@ describe("canonical request, recovery, persisted scenarios", () => {
     const argv = execFileSync(
       "/bin/sh",
       ["-c", `curl() { printf '%s\\0' "$@"; }; ${code}`],
-      { env: { VEYRA_API_KEY: "test-demo-credential" } },
+      { env: { MYAPIS_API_KEY: "test-demo-credential" } },
     )
       .toString()
       .split("\0");
     expect(JSON.parse(argv[argv.indexOf("--data-raw") + 1])).toEqual(payload);
-    expect(argv).toContain("X-Veyra-Capability: code");
-    expect(argv).toContain("X-Veyra-Chain-Id: tool-quoted");
+    expect(argv).toContain("X-MyAPIs-Capability: code");
+    expect(argv).toContain("X-MyAPIs-Chain-Id: tool-quoted");
     expect(argv).toContain("Authorization: Bearer test-demo-credential");
     expect(code).toContain("'\"'\"'");
     expect(code).toContain("\\n");
-    expect(code).toContain('"Authorization: Bearer $VEYRA_API_KEY"');
+    expect(code).toContain('"Authorization: Bearer $MYAPIS_API_KEY"');
     expect(buildCurlRequest(data, undefined, "sk-••••mask")).not.toContain(
       "••••",
     );

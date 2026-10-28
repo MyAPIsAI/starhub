@@ -18,6 +18,9 @@ import (
 
 func TestDistributeAutoModelPreservesJSONFields(t *testing.T) {
 	setupAutoRoutingDB(t)
+	if err := model.UpsertModelMeta(&model.ModelMeta{Model: "gpt-4o", Tags: "text,function_call"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := model.InsertChannel(&model.Channel{Name: "json", Models: "gpt-4o", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1}); err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +36,8 @@ func TestDistributeAutoModelPreservesJSONFields(t *testing.T) {
 	}
 	r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
-	r = r.WithContext(common.WithValues(r.Context(), common.CtxUsingGroup, "default"))
+	r.Header.Set("X-MyAPIs-Chain-Id", "json-preservation")
+	r = r.WithContext(common.WithValues(r.Context(), common.CtxUsingGroup, "default", common.CtxTokenID, int64(1)))
 	called := false
 	handler := Distribute(dto.InboundOpenAI)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -235,7 +239,7 @@ func TestDistributeAutoModelListFailure(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 				t.Fatal(err)
 			}
-			if rec.Code != http.StatusInternalServerError || response.Error.Type != "server_error" || response.Error.Message != "failed to list models for the current group" {
+			if rec.Code != http.StatusInternalServerError || response.Error.Type != "server_error" || response.Error.Message != "failed to evaluate smart routing candidates" {
 				t.Fatalf("unexpected error response: status %d, body %s", rec.Code, rec.Body)
 			}
 			if inbound == dto.InboundOpenAI && response.Error.Code != "internal_error" {

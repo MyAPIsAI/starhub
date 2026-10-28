@@ -51,7 +51,7 @@ describe("vendor directory navigation", () => {
     const vendors = getCatalogVendors([...models, added]);
     expect(vendors.find((vendor) => vendor.id === "Veyra")).toEqual({
       id: "Veyra",
-      count: 3,
+      count: 2,
     });
     expect(vendors.find((vendor) => vendor.id === "New Provider")).toEqual({
       id: "New Provider",
@@ -65,17 +65,21 @@ describe("vendor directory navigation", () => {
     ).toBe(false);
   });
 
-  it("places routing and Veyra sample models together without a model-kind filter", () => {
+  it("attributes routing to the platform while keeping sample providers unchanged", () => {
     const models = getDirectoryModels(createDefaultPricing());
     const matches = filterCatalogModels(models, { vendor: "Veyra" });
     expect(matches.map((model) => model.id)).toEqual([
-      "veyra-auto",
       "veyra-demo-image",
       "veyra-demo-video",
     ]);
     expect(new Set(matches.map((model) => model.kind))).toEqual(
-      new Set(["smart", "specified"]),
+      new Set(["specified"]),
     );
+    expect(
+      filterCatalogModels(models, { vendor: "MyAPIs" }).map(
+        (model) => model.id,
+      ),
+    ).toEqual(["myapis-auto"]);
     expect(filterCatalogModels(models, {})).toEqual(models);
   });
 
@@ -87,17 +91,17 @@ describe("vendor directory navigation", () => {
       vendor: "Candidate Provider",
     };
     const models = [routing];
-    expect(catalogVendor(routing)).toBe("Veyra");
+    expect(catalogVendor(routing)).toBe("MyAPIs");
     for (const query of [
       " ADAPTIVE ",
       " ROUTE-NEXT ",
       " candidate PROVIDER ",
-      " VEYRA ",
+      " MYAPIS ",
     ])
-      expect(filterCatalogModels(models, { vendor: "Veyra", query })).toEqual(
+      expect(filterCatalogModels(models, { vendor: "MyAPIs", query })).toEqual(
         models,
       );
-    expect(getCatalogVendors(models)).toEqual([{ id: "Veyra", count: 1 }]);
+    expect(getCatalogVendors(models)).toEqual([{ id: "MyAPIs", count: 1 }]);
   });
 
   it("keeps unknown vendor and empty search results empty instead of falling back", () => {

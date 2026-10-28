@@ -438,7 +438,7 @@
   "stepTestPlayground": "4. اختبار استدعاء متدفق",
   "dismissOnboarding": "إخفاء الدليل",
   "balanceWarning": "تنبيه انخفاض الرصيد (أقل من 5.00$). اشحن رصيدك لتجنب انقطاع الخدمة.",
-  "balanceDepletedWarning": "تم استنفاد الرصيد (0.00$). جميع طلبات واجهة برمجة التطبيقات متوقفة حاليًا.",
+  "balanceDepletedWarning": "رصيد محفظة الدفع هو $0.00. راجع الحساب لمعرفة رصيد API المتاح.",
   "quotaAlertKeys": "مفاتيح تتطلب الاهتمام (≥90% من الحصة أو نفدت)",
   "quotaUsedPercent": "تم استهلاك {{percent}}% من الحصة",
   "todayRequests": "طلبات اليوم",

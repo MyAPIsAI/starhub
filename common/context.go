@@ -29,6 +29,8 @@ const (
 	// prefix-cache affinity can keep a conversation on the same upstream.
 	// Empty when prefix affinity is disabled or no prefix could be derived.
 	CtxRequestPrefixHash ctxKey = "request_prefix_hash"
+	// CtxSmartChannelCheck carries trusted routing constraints into every retry.
+	CtxSmartChannelCheck ctxKey = "smart_channel_check"
 )
 
 func WithValues(ctx context.Context, kv ...any) context.Context {

@@ -438,7 +438,7 @@
   "stepTestPlayground": "4. 在调试台发起验证",
   "dismissOnboarding": "稍后探索",
   "balanceWarning": "余额偏低提醒（已低于 $5.00），请及时充值以避免流量拦截。",
-  "balanceDepletedWarning": "余额不足，API 服务已暂停。请充值后恢复调用。",
+  "balanceDepletedWarning": "支付钱包余额为 $0.00。API 可用额度请以账户信息为准。",
   "quotaAlertKeys": "额度预警（用量 ≥90% 或已耗尽的 Key）",
   "quotaUsedPercent": "已消耗 {{percent}}% 额度",
   "todayRequests": "今日调用次数",

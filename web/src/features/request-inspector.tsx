@@ -234,26 +234,48 @@ export default function RequestInspector({
           <div className={`request-outcome ${failed ? "is-failed" : ""}`}>
             {failed ? <CircleAlert size={20} /> : <CheckCircle2 size={20} />}
             <h3>
-              {failed
-                ? text(
-                    "模拟请求未完成",
-                    "Simulated request incomplete",
-                    "الطلب المحاكى غير مكتمل",
-                  )
-                : text(
-                    "模拟请求已完成",
-                    "Simulated request completed",
-                    "اكتمل الطلب المحاكى",
-                  )}
+              {record.source === "api"
+                ? record.outcome === "cancelled"
+                  ? text("请求已取消", "Request cancelled", "أُلغي الطلب")
+                  : failed
+                    ? text(
+                        "接口调用失败",
+                        "API request failed",
+                        "فشل طلب الواجهة",
+                      )
+                    : text(
+                        "接口调用成功",
+                        "API request succeeded",
+                        "نجح طلب الواجهة",
+                      )
+                : record.outcome === "cancelled"
+                  ? text("请求已取消", "Request cancelled", "أُلغي الطلب")
+                  : failed
+                    ? text(
+                        "请求未完成",
+                        "Request incomplete",
+                        "الطلب غير مكتمل",
+                      )
+                    : text(
+                        "模拟请求已完成",
+                        "Simulated request completed",
+                        "اكتمل الطلب المحاكى",
+                      )}
             </h3>
             <p>
-              {failed
-                ? reason
-                : text(
-                    "结果由本地演示生成，可用于核对接入、权限与计费流程。",
-                    "This local demo result verifies configuration, access and billing flows.",
-                    "النتيجة محاكاة محلية للتحقق من الاتصال والصلاحيات والفوترة.",
-                  )}
+              {record.source === "api"
+                ? text(
+                    "此记录来自网关调用日志，费用与实际模型以记录为准。",
+                    "This record comes from gateway logs and shows the recorded charge and actual model.",
+                    "هذا السجل من البوابة ويعرض الرسوم والنموذج الفعلي المسجلين.",
+                  )
+                : failed
+                  ? reason
+                  : text(
+                      "结果由本地演示生成，可用于核对接入、权限与计费流程。",
+                      "This local demo result verifies configuration, access and billing flows.",
+                      "النتيجة محاكاة محلية للتحقق من الاتصال والصلاحيات والفوترة.",
+                    )}
             </p>
             {failed && (
               <div className="request-inspector-actions">

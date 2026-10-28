@@ -15,7 +15,7 @@ export interface DemoRequest {
 export function defaultDemoRequest(model = "gpt-4.1"): DemoRequest {
   return {
     model,
-    messages: [{ role: "user", content: "请简要说明如何开始使用 Veyra。" }],
+    messages: [{ role: "user", content: "请简要说明如何开始使用 MyAPIs。" }],
     temperature: 0.7,
     max_tokens: 512,
     protocol: "OpenAI",
@@ -121,8 +121,8 @@ export function serializeRequest(request: DemoRequest): string {
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
 export function buildCurlRequest(
   request: DemoRequest,
-  baseUrl = "https://api.veyra.example/v1",
-  key = "$VEYRA_API_KEY",
+  baseUrl = "https://api.myapis.example/v1",
+  key = "$MYAPIS_API_KEY",
 ) {
   const protocol = request.protocol;
   const endpoint =
@@ -167,7 +167,7 @@ export function buildCurlRequest(
           }
         : {}),
     };
-  const safeKey = /[•●*]/.test(key) ? "$VEYRA_API_KEY" : key;
+  const safeKey = /[•●*]/.test(key) ? "$MYAPIS_API_KEY" : key;
   const header =
     protocol === "Anthropic"
       ? `x-api-key: ${safeKey}`
@@ -175,16 +175,16 @@ export function buildCurlRequest(
         ? `x-goog-api-key: ${safeKey}`
         : `Authorization: Bearer ${safeKey}`;
   const authorization =
-    safeKey === "$VEYRA_API_KEY" ? `"${header}"` : shellQuote(header);
+    safeKey === "$MYAPIS_API_KEY" ? `"${header}"` : shellQuote(header);
   const routingHeaders = [
     request.capability
-      ? `X-Veyra-Capability: ${request.capability}`
+      ? `X-MyAPIs-Capability: ${request.capability}`
       : undefined,
-    request.chainId ? `X-Veyra-Chain-Id: ${request.chainId}` : undefined,
+    request.chainId ? `X-MyAPIs-Chain-Id: ${request.chainId}` : undefined,
   ]
     .filter((header): header is string => Boolean(header))
-    .map((header) => " \\" + "\n  -H " + shellQuote(header))
+    .map((header) => " \\\n  -H " + shellQuote(header))
     .join("");
-  return `# 本地演示配置；example（示例）地址不可用于真实服务
-# X-Veyra 请求头为演示路由元数据，不是厂商原生参数\ncurl ${shellQuote(endpoint)} \\\n  -H ${authorization} \\\n  -H 'Content-Type: application/json'${protocol === "Anthropic" ? " \\\n  -H 'anthropic-version: 2023-06-01'" : ""} \\\n  --data-raw ${shellQuote(JSON.stringify(body, null, 2))}${routingHeaders}`;
+  return `# MyAPIs gateway request; set the full credential before running.
+# X-MyAPIs headers are gateway routing metadata.\ncurl ${shellQuote(endpoint)} \\\n  -H ${authorization} \\\n  -H 'Content-Type: application/json'${protocol === "Anthropic" ? " \\\n  -H 'anthropic-version: 2023-06-01'" : ""} \\\n  --data-raw ${shellQuote(JSON.stringify(body, null, 2))}${routingHeaders}`;
 }

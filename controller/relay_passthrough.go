@@ -324,6 +324,7 @@ func settleModeAttempt(flow *relayFlow, ch *model.Channel, usage *relay.Usage) a
 	if usage == nil {
 		usage = &relay.Usage{}
 	}
+	usage.RequestProtocol = flow.req.protocol
 	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {

@@ -17,7 +17,8 @@ import { useProductPreview, type PreviewRequest } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import { resolveVendor } from "../lib/api/usage";
 import { getKeyModelOptions } from "../lib/key-model-policy";
-import { findClientModel } from "../lib/client-config";
+import { findClientModel, validDemoSecret } from "../lib/client-config";
+import { buildGatewayRequest } from "../lib/gateway-request";
 import { useModelPricing } from "../lib/model-pricing";
 import {
   buildCurlRequest,
@@ -39,10 +40,14 @@ function readDraft() {
 export default function Playground({
   onRecord,
   onCreate,
+  plaintextKeys,
+  onRelayComplete,
 }: {
   onRecord: (r: PreviewRequest) => void;
   onCreate: () => void;
   initialModel?: string;
+  plaintextKeys?: Record<string, string>;
+  onRelayComplete?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const c = (zh: string, en: string, ar: string) =>
@@ -50,7 +55,7 @@ export default function Playground({
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const [draft] = useState(readDraft);
-  const { keys } = useBackendKeys();
+  const { keys } = useBackendKeys(plaintextKeys);
   const selected = useProductPreview((s) => s.selectedKey);
   const choose = useProductPreview((s) => s.chooseKey);
   const recordCall = useProductPreview((s) => s.recordCall);
@@ -101,7 +106,10 @@ export default function Playground({
     capability,
     ...(chainId ? { chainId } : {}),
   };
-  const code = buildCurlRequest(request);
+  const code = buildCurlRequest(
+    request,
+    typeof window !== "undefined" ? `${window.location.origin}/v1` : undefined,
+  );
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     setCopied(false);
@@ -146,12 +154,13 @@ export default function Playground({
     if (!currentKey || !prompt.trim() || busy) return;
     setBusy(true);
     setRelayResult(null);
+    setLastId(null);
     const snapshot = structuredClone(request);
     const credential = currentKey.id;
     // If the key has a plaintext secret (not masked), try a real relay
     // call. Otherwise, fall back to the demo simulation.
     const secret = currentKey.keySecret;
-    const isMasked = !secret || secret.includes("******");
+    const isMasked = !validDemoSecret(secret);
     if (isMasked) {
       // No plaintext key available — simulate as before.
       timer.current = setTimeout(() => {
@@ -162,23 +171,13 @@ export default function Playground({
       return;
     }
     try {
-      const res = await fetch("/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${secret}`,
-        },
-        body: JSON.stringify({
-          model: snapshot.model,
-          messages: snapshot.messages,
-          temperature: snapshot.temperature,
-          max_tokens: snapshot.max_tokens,
-        }),
-      });
+      const call = buildGatewayRequest(snapshot, secret);
+      const res = await fetch(call.endpoint, call.init);
       const data = await res.json();
       if (!res.ok) {
         const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
         setRelayResult({
+          source: "api",
           trace_id: `relay_${Date.now()}`,
           time: new Date().toISOString(),
           model: snapshot.model,
@@ -198,10 +197,19 @@ export default function Playground({
         setBusy(false);
         return;
       }
-      const content = data?.choices?.[0]?.message?.content ?? "";
-      const inputTokens = data?.usage?.prompt_tokens ?? 0;
-      const outputTokens = data?.usage?.completion_tokens ?? 0;
+      const content =
+        snapshot.protocol === "Anthropic"
+          ? (data?.content ?? [])
+              .filter((block: { type: string }) => block.type === "text")
+              .map((block: { text: string }) => block.text)
+              .join("")
+          : (data?.choices?.[0]?.message?.content ?? "");
+      const inputTokens =
+        data?.usage?.prompt_tokens ?? data?.usage?.input_tokens ?? 0;
+      const outputTokens =
+        data?.usage?.completion_tokens ?? data?.usage?.output_tokens ?? 0;
       setRelayResult({
+        source: "api",
         trace_id: `relay_${Date.now()}`,
         time: new Date().toISOString(),
         model: snapshot.model,
@@ -220,14 +228,29 @@ export default function Playground({
       } as any);
       setLastId(`relay_${Date.now()}`);
     } catch {
-      // Network error — fall back to simulation. Keep busy=true
-      // until the simulation completes so the user can't double-click.
-      timer.current = setTimeout(() => {
-        const row = recordCall(credential, outage, snapshot.model, snapshot);
-        if (row) setLastId(row.trace_id);
-        setBusy(false);
-      }, 420);
-      return;
+      // A real request may have executed; never retry it as a simulation.
+      setRelayResult({
+        source: "api",
+        trace_id: `relay_${Date.now()}`,
+        time: new Date().toISOString(),
+        model: snapshot.model,
+        requested_model: snapshot.model,
+        status: "failed",
+        cost_nano: "0",
+        key_id: credential,
+        vendor: resolveVendor(snapshot.model),
+        duration_ms: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        error_code: "network_error",
+        error_message: c(
+          "调用结果未知，请先查看调用日志再决定是否重试。",
+          "Request outcome unknown. Check request logs before retrying.",
+          "نتيجة الطلب غير معروفة. راجع السجلات قبل إعادة المحاولة.",
+        ),
+      } as PreviewRequest);
+    } finally {
+      onRelayComplete?.();
     }
     setBusy(false);
   };
@@ -246,9 +269,9 @@ export default function Playground({
           </strong>
           <p>
             {c(
-              "模拟请求只验证配置、授权和费用闭环，不代表客户端已接通或真实模型效果。输入会保留在当前标签页的草稿中。",
-              "Simulated calls verify configuration, permissions and billing. They do not prove a live client connection or real model quality. Drafts stay in this tab.",
-              "تتحقق المحاكاة من الإعداد والصلاحيات والفوترة ولا تثبت اتصال العميل أو جودة نموذج حقيقي.",
+              "完整密钥会发起实际网关请求并按用量计费；缺少密钥明文时仅模拟。结果不能代替目标客户端的连通性测试。输入会保留在当前标签页草稿中。",
+              "A full key sends a real gateway request with usage charges; without it, only simulation runs. Results do not prove connectivity from your target client. Drafts stay in this tab.",
+              "المفتاح الكامل يرسل طلبًا فعليًا مدفوعًا حسب الاستخدام؛ بدونه تُستخدم المحاكاة فقط. النتيجة لا تثبت اتصال عميلك.",
             )}
           </p>
         </div>
@@ -517,21 +540,35 @@ export default function Playground({
               </details>
               <div className="verify-send">
                 <span>
-                  {currentKey?.keySecret?.includes("******")
+                  {protocol === "Gemini" &&
+                  validDemoSecret(currentKey?.keySecret)
                     ? c(
-                        "密钥明文不可用 · 将模拟请求",
-                        "Key secret unavailable · will simulate",
-                        "سر المفتاح غير متاح · محاكاة",
+                        "尚不支持 Gemini 原生调用",
+                        "Gemini native calls are unsupported",
+                        "طلبات Gemini الأصلية غير مدعومة",
                       )
-                    : c(
-                        "将通过真实接口调用",
-                        "Sends a real API request",
-                        "يرسل طلبًا حقيقيًا",
-                      )}
+                    : !validDemoSecret(currentKey?.keySecret)
+                      ? c(
+                          "密钥明文不可用 · 将模拟请求",
+                          "Key secret unavailable · will simulate",
+                          "سر المفتاح غير متاح · محاكاة",
+                        )
+                      : c(
+                          "将通过真实接口调用",
+                          "Sends a real API request",
+                          "يرسل طلبًا حقيقيًا",
+                        )}
                 </span>
                 <Button
                   variant="primary"
-                  disabled={busy || !currentKey || !prompt.trim()}
+                  disabled={
+                    busy ||
+                    !currentKey ||
+                    !currentKey.active ||
+                    !prompt.trim() ||
+                    (protocol === "Gemini" &&
+                      validDemoSecret(currentKey.keySecret))
+                  }
                   onClick={send}
                 >
                   <Play size={14} />
@@ -561,32 +598,52 @@ export default function Playground({
                 {error ? <CircleAlert size={21} /> : <CheckCircle2 size={21} />}
                 <div>
                   <strong>
-                    {error
-                      ? c(
-                          "请求被拒绝 · 未计费",
-                          "Request rejected · Not charged",
-                          "تم رفض الطلب · بلا رسوم",
-                        )
-                      : c(
-                          "模拟验证通过 · 已计费",
-                          "Simulation verified · Charged",
-                          "نجحت المحاكاة · احتسبت الرسوم",
-                        )}
-                  </strong>
-                  <p>
-                    {error
-                      ? last.error_message
-                      : last.cost_nano === "0"
+                    {relayResult
+                      ? error
                         ? c(
-                            "已结算零费用，未扣减余额。",
-                            "Settled at zero cost; balance unchanged.",
-                            "تمت التسوية دون تكلفة أو خصم.",
+                            "接口调用未成功",
+                            "API call did not succeed",
+                            "لم ينجح استدعاء الواجهة",
                           )
                         : c(
-                            "已生成一笔调用记录和一笔扣费流水。",
-                            "One request and one charge were recorded.",
-                            "سُجل طلب واحد وقيد مالي واحد.",
+                            "接口调用成功 · 费用以调用日志为准",
+                            "API call succeeded · see logs for charges",
+                            "نجح الاستدعاء · راجع الرسوم في السجلات",
+                          )
+                      : error
+                        ? c(
+                            "请求被拒绝 · 未计费",
+                            "Request rejected · Not charged",
+                            "تم رفض الطلب · بلا رسوم",
+                          )
+                        : c(
+                            "模拟验证通过 · 已计费",
+                            "Simulation verified · Charged",
+                            "نجحت المحاكاة · احتسبت الرسوم",
                           )}
+                  </strong>
+                  <p>
+                    {relayResult
+                      ? error
+                        ? last.error_message
+                        : c(
+                            "此处仅显示接口响应。实际结算状态和费用请查看调用日志。",
+                            "This shows the API response only. Check request logs for settlement and charges.",
+                            "تظهر هنا استجابة الواجهة فقط. راجع السجلات للتسوية والرسوم.",
+                          )
+                      : error
+                        ? last.error_message
+                        : last.cost_nano === "0"
+                          ? c(
+                              "已结算零费用，未扣减余额。",
+                              "Settled at zero cost; balance unchanged.",
+                              "تمت التسوية دون تكلفة أو خصم.",
+                            )
+                          : c(
+                              "已生成一笔调用记录和一笔扣费流水。",
+                              "One request and one charge were recorded.",
+                              "سُجل طلب واحد وقيد مالي واحد.",
+                            )}
                   </p>
                   {error && <p>{last.recovery_action}</p>}
                 </div>
@@ -614,7 +671,19 @@ export default function Playground({
                 </div>
                 <div>
                   <dt>{c("本次费用", "Charge", "الرسوم")}</dt>
-                  <dd>{formatMoney(last.cost_nano, "call")}</dd>
+                  <dd>
+                    {relayResult ? (
+                      <Link to="/console/requests">
+                        {c(
+                          "查看调用日志",
+                          "View request logs",
+                          "عرض سجلات الطلبات",
+                        )}
+                      </Link>
+                    ) : (
+                      formatMoney(last.cost_nano, "call")
+                    )}
+                  </dd>
                 </div>
               </dl>
               {last.response_text && (
@@ -630,10 +699,23 @@ export default function Playground({
                 </p>
               )}
               <div className="verify-result-actions">
-                <Button onClick={() => onRecord(last)}>
-                  {c("查看本次明细", "View request details", "تفاصيل الطلب")}
-                  <ArrowRight size={14} />
-                </Button>
+                {relayResult ? (
+                  <Button asChild>
+                    <Link to="/console/requests">
+                      {c(
+                        "查看调用日志",
+                        "View request logs",
+                        "عرض سجلات الطلبات",
+                      )}
+                      <ArrowRight size={14} />
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button onClick={() => onRecord(last)}>
+                    {c("查看本次明细", "View request details", "تفاصيل الطلب")}
+                    <ArrowRight size={14} />
+                  </Button>
+                )}
                 {error && (
                   <>
                     <Link to="/console/billing/recharge">
@@ -687,9 +769,9 @@ export default function Playground({
             </summary>
             <p className="verify-hint">
               {c(
-                "使用环境变量 VEYRA_API_KEY（平台密钥）；示例域名不可用于真实调用。",
-                "Uses VEYRA_API_KEY. The example domain cannot serve live calls.",
-                "يستخدم متغير البيئة VEYRA_API_KEY. النطاق تجريبي.",
+                "使用当前网关地址与环境变量 MYAPIS_API_KEY（平台密钥）；执行会产生实际调用费用。Gemini 原生接口尚未支持。",
+                "Uses this gateway and MYAPIS_API_KEY. Running it incurs usage charges. Gemini native requests are not supported yet.",
+                "يستخدم هذه البوابة ومتغير MYAPIS_API_KEY. التنفيذ يُحاسب حسب الاستخدام. واجهة Gemini الأصلية غير مدعومة بعد.",
               )}
             </p>
             <Button

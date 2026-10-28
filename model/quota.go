@@ -76,6 +76,10 @@ func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) erro
 // the uncollected cost separately. The caller's log is updated only after
 // commit so downstream rebates can use the amount actually collected.
 func SettleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64, entry *Log) error {
+	return settleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry, nil)
+}
+
+func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64, entry *Log, claim func(*gorm.DB) error) error {
 	if actual < 0 || delta > actual {
 		return errors.New("invalid quota settlement amounts")
 	}
@@ -95,9 +99,25 @@ func SettleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 		if res.RowsAffected == 0 {
 			return ErrUserNotFound
 		}
+		if claim != nil {
+			if err := claim(tx); err != nil {
+				return err
+			}
+		}
 		var token Token
 		if err := tx.Where("id = ? AND user_id = ?", tokenID, userID).First(&token).Error; err != nil {
-			return err
+			if claim == nil || !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			// An accepted task outlives deletion of its key. Refund the owner,
+			// but do not collect extra limited-key quota from an absent key.
+			var exists int64
+			if queryErr := tx.Model(&Token{}).Where("id = ?", tokenID).Count(&exists).Error; queryErr != nil {
+				return queryErr
+			}
+			if exists != 0 {
+				return err
+			}
 		}
 		if delta > 0 {
 			var user User

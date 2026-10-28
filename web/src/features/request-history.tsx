@@ -23,7 +23,12 @@ import {
 import "./request-history.css";
 
 const ranges: RequestTimeRange[] = ["today", "7d", "30d", "custom", "all"];
-const statuses: RequestHistoryStatus[] = ["all", "success", "failed"];
+const statuses: RequestHistoryStatus[] = [
+  "all",
+  "success",
+  "failed",
+  "cancelled",
+];
 const PAGE_SIZE = 20;
 export default function RequestHistory({
   requests,
@@ -185,8 +190,9 @@ export default function RequestHistory({
                 {c("全部状态", "All statuses", "كل الحالات")}
               </option>
               <option value="success">{c("成功", "Success", "نجاح")}</option>
-              <option value="failed">
-                {c("失败 · 未计费", "Failed · No charge", "فشل · بلا رسوم")}
+              <option value="failed">{c("失败", "Failed", "فشل")}</option>
+              <option value="cancelled">
+                {c("已取消", "Cancelled", "ملغى")}
               </option>
             </select>
           </label>
@@ -338,7 +344,13 @@ export default function RequestHistory({
                         ) : (
                           <Check size={13} />
                         )}
-                        {t(row.status === "failed" ? "pFailed" : "pSucceeded")}
+                        {row.outcome === "cancelled"
+                          ? c("已取消", "Cancelled", "ملغى")
+                          : t(
+                              row.status === "failed"
+                                ? "pFailed"
+                                : "pSucceeded",
+                            )}
                       </span>
                     </td>
                     <td className="mono request-number">

@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"starhub/model"
@@ -21,27 +20,31 @@ import (
 var taskHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // PollTask fetches the upstream state of one task and applies the P3.3
-// lifecycle tail: refresh progress, and on a terminal status claim the
-// finalize (exactly once, even when the poll endpoint and the background
-// reaper race) and settle the bill with AdjustBillingOnComplete.
+// lifecycle tail: refresh progress, persist a terminal settlement intent, and
+// commit the terminal state and bill together. Pending intents recover without
+// polling the upstream again.
 // It returns the task after the update.
 func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
+	if dto.IsTerminalTaskStatus(task.Status) {
+		return task, nil
+	}
+	if task.PendingStatus != "" {
+		return settlePendingTask(task)
+	}
 	ch, err := model.GetChannelByID(task.ChannelID)
 	if err != nil {
 		// The channel is gone: the task can never complete, refund it.
-		claimTerminalTask(task, &dto.TaskResult{
+		return recordAndSettleTask(task, &dto.TaskResult{
 			Status:     dto.TaskStatusFailed,
 			FailReason: fmt.Sprintf("channel %d no longer exists", task.ChannelID),
-		}, "")
-		return task, nil
+		}, "", 0)
 	}
 	adaptor, err := relay.GetTaskAdaptor(ch.Type)
 	if err != nil {
-		claimTerminalTask(task, &dto.TaskResult{
+		return recordAndSettleTask(task, &dto.TaskResult{
 			Status:     dto.TaskStatusFailed,
 			FailReason: fmt.Sprintf("channel %d lost task platform support", task.ChannelID),
-		}, "")
-		return task, nil
+		}, "", 0)
 	}
 
 	upstreamKey, _ := ch.SelectKey()
@@ -64,11 +67,11 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 		// A 4xx on poll proves the upstream task is dead (unknown id,
 		// expired, ...); 5xx is transient.
 		if resp.StatusCode < http.StatusInternalServerError {
-			claimTerminalTask(task, &dto.TaskResult{
+			return recordAndSettleTask(task, &dto.TaskResult{
 				Status: dto.TaskStatusFailed,
 				FailReason: fmt.Sprintf("upstream poll returned %d: %s",
 					resp.StatusCode, string(body)),
-			}, "")
+			}, "", 0)
 		}
 		return task, nil
 	}
@@ -79,10 +82,7 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 
 	resultMeta, _ := json.Marshal(result)
 	if dto.IsTerminalTaskStatus(result.Status) {
-		if claimTerminalTask(task, result, string(resultMeta)) {
-			settleTask(ch, task, adaptor, result)
-		}
-		return task, nil
+		return recordAndSettleTask(task, result, string(resultMeta), taskFinalQuota(task, adaptor, result))
 	}
 	if err := model.UpdateTaskProgress(task.ID, result.Status, result.Progress, string(resultMeta)); err != nil {
 		log.Printf("update task %d progress failed: %v", task.ID, err)
@@ -93,35 +93,14 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 	return task, nil
 }
 
-// claimTerminalTask flips the task to a terminal status exactly once and
-// mirrors the final state onto the in-memory task for the caller's view.
-// Only the caller that wins the claim may settle the task.
-func claimTerminalTask(task *model.Task, result *dto.TaskResult, resultMeta string) bool {
-	claimed, err := model.ClaimTaskFinalize(task.ID, result.Status, result.FailReason, resultMeta)
-	if err != nil {
-		log.Printf("finalize task %d failed: %v", task.ID, err)
-		return false
-	}
-	if claimed {
-		task.Status = result.Status
-		task.Progress = result.Progress
-		task.FailReason = result.FailReason
-		if resultMeta != "" {
-			task.ResultMeta = resultMeta
-		}
-		task.CompleteTime = time.Now().Unix()
-	}
-	return claimed
-}
-
-// settleTask prices the terminal task (AdjustBillingOnComplete) and
+// taskFinalQuota prices the terminal task (AdjustBillingOnComplete) and
 // balances the pre-payment: failed tasks refund fully, cancellations
 // partially, successes keep (or adjust to) the request-based bill.
-func settleTask(ch *model.Channel, task *model.Task, adaptor channel.TaskAdaptor, result *dto.TaskResult) {
+func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.TaskResult) int64 {
 	var req dto.TaskRequest
 	if err := json.Unmarshal([]byte(task.RequestMeta), &req); err != nil {
 		log.Printf("task %d has an unreadable request meta, refunding: %v", task.ID, err)
-		req = dto.TaskRequest{}
+		return 0
 	}
 	accepted := adaptor.EstimateBilling(task.Model, task.Group, &req)
 	priceData := relay.NewPriceDataWithUserGroup(task.Model, task.Group, task.UserGroup)
@@ -129,7 +108,7 @@ func settleTask(ch *model.Channel, task *model.Task, adaptor channel.TaskAdaptor
 		var snapshot relay.TaskBillingSnapshot
 		if err := json.Unmarshal([]byte(task.PricingMeta), &snapshot); err != nil {
 			log.Printf("task %d has an unreadable pricing snapshot, refunding: %v", task.ID, err)
-			accepted = channel.TaskPricing{}
+			return 0
 		} else {
 			priceData = &snapshot.PriceData
 			accepted = snapshot.Estimate
@@ -137,18 +116,30 @@ func settleTask(ch *model.Channel, task *model.Task, adaptor channel.TaskAdaptor
 	}
 	pricing := adaptor.AdjustBillingOnComplete(task.Model, task.Group, &req, result, accepted)
 	actual := relay.TaskPricingQuotaWithPriceData(priceData, pricing)
-	status := 1
-	if result.Status == dto.TaskStatusFailed && actual == 0 {
-		status = 2
+	return actual
+}
+
+func recordAndSettleTask(task *model.Task, result *dto.TaskResult, meta string, actual int64) (*model.Task, error) {
+	stored, err := model.RecordTaskSettlement(task.ID, result.Status, result.FailReason, meta, actual, result.Progress)
+	if err != nil {
+		return task, err
 	}
-	if err := relay.PostConsumeQuotaAmountWithStatus(task.UserID, task.TokenID, task.TokenName,
-		task.TokenUnlimited, ch.ID, task.Model, actual, task.Quota,
-		strconv.FormatInt(ch.ID, 10), 0, status, task.RequestedModel); err != nil {
-		log.Printf("settle task %d quota failed: %v", task.ID, err)
-		return
+	*task = *stored
+	return settlePendingTask(task)
+}
+
+func settlePendingTask(task *model.Task) (*model.Task, error) {
+	if dto.IsTerminalTaskStatus(task.Status) {
+		return task, nil
 	}
-	log.Printf("task %d (%s/%s) settled: pre %d actual %d status %s",
-		task.ID, task.Platform, task.Action, task.Quota, actual, result.Status)
+	if _, err := relay.FinalizeTaskQuota(task); err != nil {
+		return task, err
+	}
+	stored, err := model.GetTaskByID(task.ID)
+	if err == nil {
+		*task = *stored
+	}
+	return task, err
 }
 
 // RunTaskPollLoop is the background reaper: clients that never poll their

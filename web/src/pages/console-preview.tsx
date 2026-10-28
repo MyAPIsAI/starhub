@@ -79,6 +79,7 @@ import EditKey from "../features/edit-key";
 import CreateKey from "../features/create-key";
 import Playground from "../features/request-playground";
 import AccessCenter from "../features/access-center";
+import { isSmartModelId } from "../lib/smart-model";
 import RequestDetails from "../features/request-inspector";
 import RequestHistory from "../features/request-history";
 import ServiceQuality from "../features/service-quality";
@@ -214,7 +215,8 @@ export default function ConsolePreview() {
   const logsQuery = useLogs(1, 5);
   const backendLogs: LogRow[] = logsQuery.data?.items ?? [];
   // Backend logs for the requests page (larger page size).
-  const { rows: backendRequests } = useBackendRequests(100);
+  const { rows: backendRequests, refetch: refreshRequests } =
+    useBackendRequests(100);
   // Admin metrics for the health card; gracefully degrades to null
   // when the current user is not an admin.
   const metricsQuery = useAdminMetrics();
@@ -282,11 +284,12 @@ export default function ConsolePreview() {
   }, [location.search, section, backendRequests]);
   const [createOpen, setCreateOpen] = useState(false);
   const requestedModel = new URLSearchParams(location.search).get("model");
-  const initialCreateModel = catalogModels.some(
-    (model) => model.id === requestedModel,
-  )
-    ? (requestedModel ?? undefined)
-    : undefined;
+  const initialCreateModel =
+    requestedModel &&
+    (isSmartModelId(requestedModel) ||
+      catalogModels.some((model) => model.id === requestedModel))
+      ? requestedModel
+      : undefined;
   const requestedGroup = new URLSearchParams(location.search).get("group");
   const initialCreateGroup =
     requestedGroup &&
@@ -822,7 +825,14 @@ export default function ConsolePreview() {
           {isSystemAdmin && section === "service-groups" && (
             <ServiceGroups role={role} />
           )}
-          {section === "connect" && <AccessCenter key={location.key} />}
+          {section === "connect" && (
+            <AccessCenter
+              key={location.key}
+              plaintextKeys={plaintextKeys}
+              revealedKeys={revealedKeyIds}
+              onReveal={verifyAndReveal}
+            />
+          )}
           {section === "service-quality" && <ServiceQuality />}
           {section === "smart-routing" && <SmartRouting />}
           {(section === "" || section === "console") && (
@@ -1660,6 +1670,11 @@ export default function ConsolePreview() {
               </div>
 
               <Playground
+                plaintextKeys={plaintextKeys}
+                onRelayComplete={() => {
+                  void refreshRequests();
+                  void walletQuery.refetch();
+                }}
                 key={location.key}
                 initialModel={initialCreateModel}
                 onRecord={setSelected}

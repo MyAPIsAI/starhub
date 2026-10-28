@@ -11,6 +11,20 @@ import (
 
 var ErrTokenNotFound = errors.New("token not found")
 
+// AllowsSmartRouting describes existing routing semantics, not an extra grant.
+// Virtual-only allowlists cannot authorize any actual upstream model.
+func (t *Token) AllowsSmartRouting() bool {
+	if t.ModelLimits == "" {
+		return true
+	}
+	for _, name := range t.ModelLimitList() {
+		if name != "myapis-auto" && name != "veyra-auto" {
+			return true
+		}
+	}
+	return false
+}
+
 type Token struct {
 	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID         int64  `gorm:"index;not null" json:"user_id"`

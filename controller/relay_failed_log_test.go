@@ -87,6 +87,13 @@ func TestFailedRelayModelAttribution(t *testing.T) {
 				t.Fatalf("failed log missing: total=%d entries=%d err=%v", total, len(entries), err)
 			}
 			entry := entries[0]
+			expectedProtocol := "OpenAI"
+			if tc.inbound == dto.InboundClaude {
+				expectedProtocol = "Anthropic"
+			}
+			if entry.Protocol != expectedProtocol {
+				t.Fatalf("failed protocol attribution lost: %+v", entry)
+			}
 			if entry.RequestedModel != tc.requested || entry.Model != "gpt-4o" || entry.ChannelID != channels[len(channels)-1].ID || entry.Status != 2 || entry.Quota != 0 || entry.UnfundedQuota != 0 || entry.UsedChannels != strings.Join(trail, "->") {
 				t.Fatalf("failed log attribution or charge is wrong: %+v", entry)
 			}

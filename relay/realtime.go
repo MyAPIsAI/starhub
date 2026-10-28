@@ -158,6 +158,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			CompletionTokens: EstimateTokens(outputText),
 		}
 	}
+	actualUsage.RequestProtocol = "OpenAI"
 	if err := PostConsumeQuotaWithUserGroup(userID, tokenID, tokenName, tokenUnlimited,
 		upstreamChannel.ID, modelName, group, userGroup, actualUsage, pre,
 		fmt.Sprintf("%d", upstreamChannel.ID), 0); err != nil {

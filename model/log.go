@@ -8,6 +8,7 @@ type Log struct {
 	ChannelID        int64  `gorm:"index;not null;default:0" json:"channel_id"`
 	Model            string `gorm:"size:128;not null;default:''" json:"model"`
 	RequestedModel   string `gorm:"size:128;not null;default:''" json:"requested_model"`
+	Protocol         string `gorm:"size:16;not null;default:''" json:"protocol"`
 	PromptTokens     int64  `gorm:"not null;default:0" json:"prompt_tokens"`
 	CompletionTokens int64  `gorm:"not null;default:0" json:"completion_tokens"`
 	Quota            int64  `gorm:"not null;default:0" json:"quota"`
@@ -18,7 +19,7 @@ type Log struct {
 	// DurationMs is the upstream response time in milliseconds. Zero
 	// when not measured (legacy logs, or fast-path responses).
 	DurationMs int64 `gorm:"not null;default:0" json:"duration_ms"`
-	// Status is 1=success (billed), 2=failed (unbilled). Defaults to
+	// Status is 1=success, 2=failed, 3=cancelled, independent of charge. Defaults to
 	// 1 so existing log insertion code that omits the field is correct.
 	Status    int   `gorm:"not null;default:1" json:"status"`
 	CreatedAt int64 `gorm:"index;autoCreateTime" json:"created_at"`
@@ -69,7 +70,7 @@ func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
 			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, "+
 			"SUM(completion_tokens) AS completion_tokens, "+
 			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, "+
-			"SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS failed_count").
+			"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed_count").
 		Where("created_at >= ?", since)
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)

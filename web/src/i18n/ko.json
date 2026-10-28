@@ -438,7 +438,7 @@
   "stepTestPlayground": "4. Test streaming call",
   "dismissOnboarding": "Dismiss guide",
   "balanceWarning": "Low balance warning (<$5.00). Top up soon to prevent service interruption.",
-  "balanceDepletedWarning": "Balance exhausted ($0.00). All API requests are currently paused.",
+  "balanceDepletedWarning": "결제 지갑 잔액은 $0.00입니다. 사용 가능한 API 크레딧은 계정에서 확인하세요.",
   "quotaAlertKeys": "Keys requiring attention (≥90% quota or exhausted)",
   "quotaUsedPercent": "{{percent}}% of quota used",
   "todayRequests": "Today calls",

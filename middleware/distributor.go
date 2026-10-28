@@ -13,7 +13,6 @@ import (
 
 	"starhub/common"
 	"starhub/model"
-	"starhub/relay"
 	"starhub/relay/dto"
 	"starhub/setting"
 )
@@ -123,41 +122,28 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 
 			requestedModel := modelName
 			autoModelSelected := false
+			var channelCheck func(*model.Channel, string) (bool, error)
 			// Auto-routing: for the canonical entry or its legacy alias, replace
 			// it with the lowest-cost available model within the token's
 			// authorized scope (group + model whitelist), so the relay can
 			// proceed as if the user had chosen that model explicitly.
 			if isAutoModel(modelName) {
-				usingGroup, _ := r.Context().Value(common.CtxUsingGroup).(string)
-				var checkModels []string
-				if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
-					checkModels = model.SplitList(limits)
-				} else {
-					checkModels, err = model.ListModelsByGroup(usingGroup)
-					if err != nil {
-						dto.WriteRelayError(w, http.StatusInternalServerError, inbound, "server_error", "internal_error",
-							"failed to list models for the current group")
-						return
-					}
+				requirements, err := readSmartRequirements(r, body, isMultipart(contentType))
+				if err != nil {
+					fail(http.StatusBadRequest, "invalid_routing_requirements", err.Error())
+					return
 				}
-				best, bestQuota := "", int64(1<<62)
-				for _, m := range checkModels {
-					if isAutoModel(m) {
-						continue
-					}
-					ch, err := model.GetSatisfiedChannel(usingGroup, m)
-					if err != nil || ch == nil {
-						continue
-					}
-					q := relay.ComputeQuota(m, usingGroup, 1, 1)
-					if q < bestQuota {
-						best = m
-						bestQuota = q
-					}
+				best, err := chooseSmartModel(r, requirements)
+				if err != nil {
+					dto.WriteRelayError(w, http.StatusInternalServerError, inbound, "server_error", "internal_error", "failed to evaluate smart routing candidates")
+					return
 				}
 				if best != "" {
 					modelName = best
 					autoModelSelected = true
+					channelCheck = func(ch *model.Channel, group string) (bool, error) {
+						return requirements.compatible(best, group, ch)
+					}
 				}
 			}
 
@@ -217,6 +203,9 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				common.CtxRequestContentType, contentType,
 				common.CtxRequestStream, stream,
 				common.CtxRequestPrefixHash, prefixHash)
+			if channelCheck != nil {
+				ctx = common.WithValues(ctx, common.CtxSmartChannelCheck, channelCheck)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

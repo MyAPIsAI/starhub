@@ -1,7 +1,7 @@
 import type { PreviewRequest } from "./product-preview";
 
 export type RequestTimeRange = "today" | "7d" | "30d" | "custom" | "all";
-export type RequestHistoryStatus = "all" | "success" | "failed";
+export type RequestHistoryStatus = "all" | "success" | "failed" | "cancelled";
 export type RequestHistoryFilters = {
   range: RequestTimeRange;
   start: string;
@@ -61,7 +61,8 @@ export function filterRequestHistory(
           Number.isFinite(timestamp) &&
           timestamp >= bounds.from &&
           timestamp < bounds.until &&
-          (filters.status === "all" || row.status === filters.status) &&
+          (filters.status === "all" ||
+            (row.outcome ?? row.status) === filters.status) &&
           [
             row.trace_id,
             row.requested_model,

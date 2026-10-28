@@ -6,6 +6,7 @@ import {
 } from "../lib/platform-catalog";
 import type { ModelItem, PricingCatalogConfig } from "./models";
 import type { TierId } from "./placeholders";
+import { SMART_MODEL_ID, canonicalModelId } from "../lib/smart-model";
 import {
   getPricingSnapshot,
   quoteModelCharge,
@@ -13,15 +14,15 @@ import {
 } from "../lib/model-pricing";
 
 export type DirectoryModel = Omit<ModelItem, "vendor" | "pricing"> & {
-  vendor: ModelItem["vendor"] | "Veyra";
+  vendor: ModelItem["vendor"] | "MyAPIs";
   kind: "specified" | "smart";
   candidateIds?: string[];
 };
 
 export const smartDirectoryModel: DirectoryModel = {
-  id: "veyra-auto",
-  name: "Veyra Auto",
-  vendor: "Veyra",
+  id: SMART_MODEL_ID,
+  name: "MyAPIs Auto",
+  vendor: "MyAPIs",
   kind: "smart",
   capabilities: ["text", "code", "vision", "reasoning"],
   contextLength: 0,
@@ -57,7 +58,9 @@ export function getDirectoryModels(
   ];
 }
 export function getDirectoryModel(id?: string, config = getPricingSnapshot()) {
-  return getDirectoryModels(config).find((model) => model.id === id);
+  return getDirectoryModels(config).find(
+    (model) => model.id === canonicalModelId(id ?? ""),
+  );
 }
 
 export function directoryCandidates(

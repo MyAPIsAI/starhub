@@ -79,6 +79,7 @@ export type PreviewRequest = Omit<RequestRecord, "source"> & {
   error_message?: string;
   recovery_action?: string;
   protocol?: DemoRequest["protocol"];
+  outcome?: "success" | "failed" | "cancelled";
   chain_id?: string;
 };
 

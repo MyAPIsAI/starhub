@@ -80,7 +80,7 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 	err := DB.Model(&Log{}).
 		Select("model AS model, COUNT(*) AS total, "+
 			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success, "+
-			"SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS failed, "+
+			"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed, "+
 			"COALESCE(AVG(duration_ms), 0) AS avg_duration, "+
 			"COALESCE(SUM(quota), 0) AS total_quota").
 		Where(baseWhere, args...).
@@ -149,7 +149,7 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 			"strftime('%%Y-%%m-%%d', datetime(created_at, 'unixepoch')) AS date_str, "+
 				"COUNT(*) AS total, "+
 				"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success, "+
-				"SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS failed, "+
+				"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed, "+
 				"COALESCE(AVG(duration_ms), 0) AS avg_dur")).
 		Where(baseWhere, args...).
 		Group("date_str").

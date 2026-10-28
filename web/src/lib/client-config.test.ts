@@ -110,7 +110,7 @@ describe("client configuration respects model and credential boundaries", () => 
             );
           }
           expect(config.snippet).not.toContain("veyra-auto");
-          expect(config.credential).toBe("$VEYRA_API_KEY");
+          expect(config.credential).toBe("$MYAPIS_API_KEY");
           expect(input.model).toBe(model);
         },
       );
@@ -161,6 +161,23 @@ describe("client configuration respects model and credential boundaries", () => 
       "myapis-auto",
     ]);
   });
+  it("uses the supplied gateway address for both supported clients", () => {
+    for (const target of ["openai", "claude-code"] as const) {
+      const config = buildClientConfiguration({
+        target,
+        model: "veyra-auto",
+        apiBase: "http://127.0.0.1:8090/v1",
+      })!;
+      expect(config.baseUrl).toBe(
+        target === "openai"
+          ? "http://127.0.0.1:8090/v1"
+          : "http://127.0.0.1:8090",
+      );
+      expect(config.model).toBe("myapis-auto");
+      expect(config.snippet).toContain("MYAPIS_API_KEY");
+      expect(config.snippet).not.toContain("simulated");
+    }
+  });
   itUnix("rejects a mask and uses an environment variable while locked", () => {
     expect(() =>
       buildClientConfiguration({
@@ -173,11 +190,11 @@ describe("client configuration respects model and credential boundaries", () => 
       target: "openai",
       model: "gpt-4.1",
     })!;
-    expect(config.credential).toBe("$VEYRA_API_KEY");
+    expect(config.credential).toBe("$MYAPIS_API_KEY");
     const credential = execFileSync(
       "/bin/sh",
       ["-c", `${config.snippet}\nprintf '%s' "$OPENAI_API_KEY"`],
-      { env: { VEYRA_API_KEY: "sk-demo-valid-value" } },
+      { env: { MYAPIS_API_KEY: "sk-demo-valid-value" } },
     ).toString();
     expect(credential).toBe("sk-demo-valid-value");
   });
@@ -199,7 +216,7 @@ describe("client configuration respects model and credential boundaries", () => 
       expect(
         Object.values(config.mapping).every((value) => value === model),
       ).toBe(true);
-      expect(config.baseUrl).toBe("https://api.veyra.example");
+      expect(config.baseUrl).toBe("https://api.myapis.example");
     },
   );
   it("returns no substituted detail for unknown model IDs", () => {

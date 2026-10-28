@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { adaptLogRow, type LogRow } from "./usage";
 import { filterRequestHistory } from "../request-history";
 import type { PreviewRequest } from "../product-preview";
+import { serializeRequestExport } from "../request-export";
 
 const log: LogRow = {
   id: 42,
@@ -22,6 +23,43 @@ const log: LogRow = {
 };
 
 describe("backend log model attribution", () => {
+  it.each(["OpenAI", "Anthropic", undefined, "", "unknown"])(
+    "does not infer the protocol of %s logs",
+    (protocol) => {
+      expect(adaptLogRow({ ...log, protocol }).protocol).toBe(
+        protocol === "OpenAI" || protocol === "Anthropic"
+          ? protocol
+          : undefined,
+      );
+    },
+  );
+  it.each([2, 3])("preserves charged non-success outcome %s", (status) => {
+    const row = adaptLogRow({ ...log, status });
+    expect(row).toMatchObject({
+      status: "failed",
+      outcome: status === 3 ? "cancelled" : "failed",
+      cost_nano: "246000",
+    });
+    expect(serializeRequestExport([row as PreviewRequest], [])).toContain(
+      `"${status === 3 ? "cancelled" : "failed"}","charged"`,
+    );
+    const filter = {
+      range: "all" as const,
+      start: "",
+      end: "",
+      query: "",
+      status: status === 3 ? ("cancelled" as const) : ("failed" as const),
+    };
+    expect(filterRequestHistory([row as PreviewRequest], filter).rows).toEqual([
+      row,
+    ]);
+    expect(
+      filterRequestHistory([row as PreviewRequest], {
+        ...filter,
+        status: "success",
+      }).rows,
+    ).toEqual([]);
+  });
   it("keeps the original routing entry while pricing and vendor use the actual model", () => {
     const row = adaptLogRow(log);
     expect(row).toMatchObject({

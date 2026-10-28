@@ -4,9 +4,9 @@ import type { TierId } from "../config/placeholders";
 import { accountCanUseGroup, visibleGroups } from "./platform-catalog";
 import type { PreviewKey } from "./product-preview";
 
-/** Routing is a Veyra platform entry, even if its candidate vendors change. */
+/** Routing belongs to the platform, regardless of the candidate vendors. */
 export function catalogVendor(model: DirectoryModel): string {
-  return model.kind === "smart" ? "Veyra" : model.vendor.trim();
+  return model.kind === "smart" ? "MyAPIs" : model.vendor.trim();
 }
 
 /** Counts come from the whole live directory, independently of search results. */

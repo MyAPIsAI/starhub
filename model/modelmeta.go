@@ -12,7 +12,7 @@ import (
 )
 
 // ModelMeta is the display metadata layer behind the model plaza. It carries
-// everything the relay never needs to know about a model: who publishes it,
+// display information and optional smart-routing constraints: who publishes it,
 // what it can do, how long its context is, and the upstream list price the
 // platform price is compared against.
 //

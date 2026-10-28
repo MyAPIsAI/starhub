@@ -116,10 +116,12 @@ type relayRequest struct {
 	autoGroups     []string
 	modelName      string
 	requestedModel string
+	protocol       string
 	body           []byte
 	contentType    string
 	stream         bool
 	prefixHash     string // prompt-prefix scope for prefix-cache affinity
+	channelCheck   func(*model.Channel, string) (bool, error)
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
@@ -138,6 +140,11 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 		prefixHash:     ctxValueString(ctx, common.CtxRequestPrefixHash),
 	}
 	req.autoGroups, _ = ctx.Value(common.CtxAutoGroups).([]string)
+	req.channelCheck, _ = ctx.Value(common.CtxSmartChannelCheck).(func(*model.Channel, string) (bool, error))
+	req.protocol = "OpenAI"
+	if r.URL.Path == "/v1/messages" {
+		req.protocol = "Anthropic"
+	}
 	if req.requestedModel == "" {
 		req.requestedModel = req.modelName
 	}
@@ -272,6 +279,16 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			ch, err = model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred)
 		}
 		if err == nil {
+			if f.req.channelCheck != nil {
+				allowed, checkErr := f.req.channelCheck(ch, f.currentGroup)
+				if checkErr != nil {
+					return nil, checkErr
+				}
+				if !allowed {
+					f.tried[ch.ID] = true
+					continue
+				}
+			}
 			f.affinityPreferred = 0
 			if preferred != 0 && ch.ID == preferred {
 				f.affinityPreferred = ch.ID
@@ -475,6 +492,7 @@ func (f *relayFlow) refundUnlessSettled() {
 			ChannelID:      f.lastChannelID,
 			Model:          f.req.modelName,
 			RequestedModel: f.req.requestedModel,
+			Protocol:       f.req.protocol,
 			UsedChannels:   f.trailString(),
 			DurationMs:     time.Since(f.startTime).Milliseconds(),
 		})
@@ -903,6 +921,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	if usage == nil || usage.TotalTokens() == 0 {
 		usage = relay.EstimateIRUsage(ir, content)
 	}
+	usage.RequestProtocol = flow.req.protocol
 	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {

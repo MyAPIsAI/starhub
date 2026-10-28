@@ -106,10 +106,13 @@ export function tokenToPreviewKey(
     // key-model-policy falls back to the group's model list.
     model: "",
     tier: groupToTier(token.group),
-    active: token.status === STATUS_ENABLED,
+    active:
+      token.status === STATUS_ENABLED &&
+      (token.expired_time <= 0 || token.expired_time * 1000 > Date.now()),
     keyMasked: token.key,
     keySecret: plaintextKey ?? token.key,
     type: "client",
+    smartAccess: token.smart_access === true,
     modelAccess: token.model_limits ? "custom" : "all",
     allowedModels: token.model_limits
       ? splitList(token.model_limits)
@@ -144,9 +147,7 @@ export function tokenToPreviewKey(
  *                       caller from create/regenerate mutation results.
  *                       Keys not in this map use the masked value.
  */
-export function useBackendKeys(
-  plaintextKeys: Record<string, string> = {},
-): {
+export function useBackendKeys(plaintextKeys: Record<string, string> = {}): {
   keys: PreviewKey[];
   loading: boolean;
   error: Error | null;

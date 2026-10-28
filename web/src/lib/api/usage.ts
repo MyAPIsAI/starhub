@@ -47,6 +47,7 @@ export interface LogRow {
   channel_id: number;
   model: string;
   requested_model?: string;
+  protocol?: string;
   prompt_tokens: number;
   completion_tokens: number;
   quota: number;
@@ -150,12 +151,19 @@ export function resolveVendor(modelId: string): string {
 export function adaptLogRow(log: LogRow): PreviewRequestLike {
   return {
     trace_id: `log_${log.id}`,
+    source: "api",
     time: new Date(log.created_at * 1000).toISOString(),
     model: log.model,
     requested_model: log.requested_model || log.model,
     actual_model: log.model,
+    protocol:
+      log.protocol === "OpenAI" || log.protocol === "Anthropic"
+        ? log.protocol
+        : undefined,
     vendor: resolveVendor(log.model),
-    status: log.status === 2 ? "failed" : "success",
+    status: log.status === 1 ? "success" : "failed",
+    outcome:
+      log.status === 3 ? "cancelled" : log.status === 1 ? "success" : "failed",
     cost_nano: quotaToNanoUsd(log.quota),
     duration_ms: log.duration_ms,
     key_id: log.token_id ? String(log.token_id) : "",
@@ -167,11 +175,14 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
 }
 
 export interface PreviewRequestLike {
+  source?: "api";
   trace_id: string;
   time: string;
   model: string;
   requested_model: string;
   actual_model: string;
+  protocol?: "OpenAI" | "Anthropic";
+  outcome?: "success" | "failed" | "cancelled";
   vendor: string;
   status: "success" | "failed";
   cost_nano: string;
@@ -188,11 +199,11 @@ export interface PreviewRequestLike {
  * Returns adapted PreviewRequest-compatible objects.
  */
 export function useBackendRequests(pageSize: number = 100) {
-  const { data, isLoading, error } = useLogs(1, pageSize);
+  const { data, isLoading, error, refetch } = useLogs(1, pageSize);
   // Stable rows keep URL-selected detail effects from reopening on each render.
   const rows = useMemo(
     () => (data?.items ?? []).map(adaptLogRow),
     [data?.items],
   );
-  return { rows, total: data?.total ?? 0, loading: isLoading, error };
+  return { rows, total: data?.total ?? 0, loading: isLoading, error, refetch };
 }
