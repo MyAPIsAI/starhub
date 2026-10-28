@@ -17,6 +17,7 @@ import (
 const ResourcePublicationPreviewSchema = "exact_model_pairs_preview_v1"
 
 const maxResourcePublicationPairs = 10000
+const maxResourcePublicationIssues = 10000
 
 type ResourceGatewayChannel struct {
 	ID     string `json:"id"`
@@ -202,13 +203,22 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 			}
 		}
 		pairs := map[ResourcePublicationPair]bool{}
+		tooManyIssues := false
+		issueLimitError := fmt.Errorf("%w: publication preview exceeds 10000 blocking issues", ErrInvalidResource)
 		if state.catalog.Snapshot != nil {
 			for _, resource := range state.catalog.Snapshot.Instances {
+				if tooManyIssues {
+					return issueLimitError
+				}
 				placement := state.catalog.Placements[resource.ID]
 				if !placement.Enabled {
 					continue
 				}
 				issue := func(code, group string) {
+					if len(result.Issues) >= maxResourcePublicationIssues {
+						tooManyIssues = true
+						return
+					}
 					result.Issues = append(result.Issues, ResourcePublicationIssue{ResourceID: resource.ID, SourceChannelID: resource.ChannelID, Group: group, Code: code})
 				}
 				id, exists := bound[resource.ChannelID]
@@ -249,10 +259,16 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 				}
 			}
 		}
+		if tooManyIssues {
+			return issueLimitError
+		}
 		for pair := range pairs {
 			result.ProposedPairs = append(result.ProposedPairs, pair)
 		}
 		if len(result.ProposedPairs) == 0 {
+			if len(result.Issues) >= maxResourcePublicationIssues {
+				return issueLimitError
+			}
 			result.Issues = append(result.Issues, ResourcePublicationIssue{Code: "no_supported_pairs"})
 		}
 		ids := make([]int64, 0, len(targets))

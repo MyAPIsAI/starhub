@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -271,5 +272,111 @@ func TestResourcePublicationPreviewValidatesBindingsAndMissingState(t *testing.T
 	}
 	if _, err := ReadResourcePublicationContext(context.Background()); err == nil {
 		t.Fatal("missing authoritative ratios invented a default")
+	}
+}
+
+func TestResourcePublicationPreviewBoundsInvalidGroupDiagnostics(t *testing.T) {
+	_, _, bindings := publicationFixture(t)
+	ctx := context.Background()
+	catalog, err := ReadResourceCatalog(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := *catalog.Snapshot
+	snapshot.Sequence++
+	snapshot.Instances = nil
+	groups := make([]string, 100)
+	for i := range groups {
+		groups[i] = fmt.Sprintf("unpriced-%03d", i)
+	}
+	for i := 0; i < 101; i++ {
+		snapshot.Instances = append(snapshot.Instances, ResourceInstance{ID: fmt.Sprintf("blocked-%03d", i), ChannelID: bindings[0].SourceChannelID, CanonicalModel: "alpha", UpstreamModel: "alpha", Protocols: []string{"OpenAI"}, Capabilities: []string{"text"}, Status: "available"})
+	}
+	catalog, err = SaveResourceSnapshot(ctx, catalog.Revision, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, resource := range snapshot.Instances {
+		catalog, err = SaveResourcePlacement(ctx, catalog.Revision, resource.ID, ResourcePlacement{ModelID: &resource.CanonicalModel, GroupIDs: groups, Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	current, err := ReadResourcePublicationContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := PreviewResourcePublication(ctx, publicationExpected(current), bindings)
+	if !errors.Is(err, ErrInvalidResource) {
+		count := 0
+		if preview != nil {
+			count = len(preview.Issues)
+		}
+		t.Fatalf("unbounded diagnostics accepted: issues=%d error=%v", count, err)
+	}
+	after, err := ReadResourceCatalog(ctx)
+	if err != nil || !reflect.DeepEqual(catalog, after) || channelRevision(t) != current.ChannelRevision {
+		t.Fatal("oversized preview changed configuration")
+	}
+}
+
+func TestResourcePublicationPreviewBoundsExistingAbilityPairs(t *testing.T) {
+	ch, _, bindings := publicationFixture(t)
+	abilities := make([]Ability, maxResourcePublicationPairs+1)
+	for i := range abilities {
+		abilities[i] = Ability{ChannelID: ch.ID, Model: fmt.Sprintf("large-%05d", i), Group: "default", Enabled: true}
+	}
+	if err := DB.CreateInBatches(abilities, 100).Error; err != nil {
+		t.Fatal(err)
+	}
+	current, err := ReadResourcePublicationContext(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PreviewResourcePublication(context.Background(), publicationExpected(current), bindings); !errors.Is(err, ErrInvalidResource) {
+		t.Fatalf("unbounded current abilities accepted: %v", err)
+	}
+}
+
+func TestResourcePublicationPreviewBoundsProposedPairs(t *testing.T) {
+	_, _, bindings := publicationFixture(t)
+	ctx := context.Background()
+	groups := make([]string, 100)
+	ratios := map[string]float64{}
+	for i := range groups {
+		groups[i] = fmt.Sprintf("priced-%03d", i)
+		ratios[groups[i]] = 1
+	}
+	encoded, _ := json.Marshal(ratios)
+	if _, err := SaveOption(setting.OptionKeyGroupRatio, string(encoded), 0); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := ReadResourceCatalog(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := *catalog.Snapshot
+	snapshot.Sequence++
+	snapshot.Instances = nil
+	for i := 0; i < 101; i++ {
+		name := fmt.Sprintf("large-model-%03d", i)
+		snapshot.Instances = append(snapshot.Instances, ResourceInstance{ID: name, ChannelID: bindings[0].SourceChannelID, CanonicalModel: name, UpstreamModel: name, Protocols: []string{"OpenAI"}, Capabilities: []string{"text"}, Status: "available"})
+	}
+	catalog, err = SaveResourceSnapshot(ctx, catalog.Revision, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, resource := range snapshot.Instances {
+		catalog, err = SaveResourcePlacement(ctx, catalog.Revision, resource.ID, ResourcePlacement{ModelID: &resource.CanonicalModel, GroupIDs: groups, Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	current, err := ReadResourcePublicationContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PreviewResourcePublication(ctx, publicationExpected(current), bindings); !errors.Is(err, ErrInvalidResource) {
+		t.Fatalf("unbounded proposed pairs accepted: %v", err)
 	}
 }
