@@ -21,6 +21,7 @@ import { placeholders } from "../../config/placeholders";
 import { responsesGuide } from "./responses-guide";
 import { geminiNativeGuide } from "./gemini-guide";
 import { gatewayPolicyGuide } from "./gateway-policy-guide";
+import { claudeCodeGuide } from "./claude-code-guide";
 
 type ArticleId =
   "quickstart" | "auth" | "tiers" | "claudeCode" | "cursor" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "responses" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
@@ -125,6 +126,7 @@ export default function DocsPage() {
   const responses = responsesGuide(text);
   const nativeGemini = geminiNativeGuide(text);
   const policy = gatewayPolicyGuide(text);
+  const claudeCode = claudeCodeGuide(text);
   const articles: { id: ArticleId; title: string; Icon: typeof Terminal }[] = [
     { id: "quickstart", title: t("docsQuickstart"), Icon: Terminal },
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
@@ -275,7 +277,7 @@ export default function DocsPage() {
     quickstart: "first request endpoint key curl python streaming demo domain environment variable chat request terminal connect application consistent interface",
     auth: policy.quota + " keys access boundaries usage quotas store securely project restrict access IP allowlist source control environment variables review request logs",
     tiers: "service level workload Ultra 1.00 99.5% 800ms Pro 0.80 99.0% 1500ms Standard 0.60 97.5% 3000ms Lite 0.40 price multiplier target latency demo configuration",
-    claudeCode: "Claude Code Anthropic endpoint key environment variables ANTHROPIC_BASE_URL ANTHROPIC_API_KEY terminal configuration demo compatibility",
+    claudeCode: Object.values(claudeCode).join(" "),
     cursor: [cursorLead, ...cursorSteps, cursorSettings, cursorBoundary, cursorTroubleshooting].join(" "),
     errors: "401 invalid_api_key token_disabled token_expired 403 insufficient_quota token_quota_exhausted auto_group_empty group_not_available 400 invalid_request_body invalid_json invalid_multipart model_required 429 rate_limit_exceeded 502 upstream_unavailable retry_budget_exhausted upstream_result_uncertain 503 no_available_channel 500 pre_consume_failed channel_selection_failed Authorization Bearer JSON multipart",
     billing: policy.wallet + " balance precision usage totals request logs export details account balance 2 4 6 9 display reconciliation",
@@ -630,21 +632,11 @@ export default function DocsPage() {
           )}
           {activeTab === "claudeCode" && (
             <>
-              <p className="docs-lead">
-                {text(
-                  "为 Claude Code（编程助手）配置兼容的服务地址和密钥。",
-                  "Configure a compatible endpoint and key for Claude Code.",
-                  "اضبط عنوان خدمة متوافقًا ومفتاحًا لأداة Claude Code.",
-                )}
-              </p>
+              <p className="docs-lead">{claudeCode.lead}</p>
               <div className="docs-callout">
                 <BookOpen size={18} />
                 <span>
-                  {text(
-                    "以下是演示配置，使用前请核对正式服务的兼容性与地址。",
-                    "This is a demo configuration. Verify production compatibility and endpoints before use.",
-                    "هذا إعداد تجريبي. تحقق من توافق الخدمة وعنوانها قبل الاستخدام.",
-                  )}
+                  {claudeCode.endpoint}
                 </span>
               </div>
               <h2>
@@ -657,9 +649,13 @@ export default function DocsPage() {
                   "إعداد الطرفية",
                 )}
                 code={
-                  'export ANTHROPIC_BASE_URL="https://api.myapis.ai/v1"\nexport ANTHROPIC_API_KEY="YOUR_API_KEY"\n\nclaude'
+                  claudeCode.bash
                 }
               />
+              <CodeBlock title="PowerShell" code={claudeCode.powershell} />
+              <CodeBlock title="POST /v1/messages · cURL" code={claudeCode.request} />
+              <div className="docs-callout"><p>{claudeCode.boundary}</p></div>
+              <p><a href="https://code.claude.com/docs/en/llm-gateway-connect" target="_blank" rel="noreferrer">{text("Claude Code 官方网关配置", "Official Claude Code gateway setup", "إعداد بوابة Claude Code الرسمي")}</a>{" · "}<a href="https://code.claude.com/docs/en/llm-gateway-protocol" target="_blank" rel="noreferrer">{text("官方协议与能力要求", "Official protocol and capability requirements", "متطلبات البروتوكول والقدرات الرسمية")}</a></p>
               <Link className="docs-next-link" to="/console/keys">
                 {t("createKeyWithModel")}
                 <ArrowUpRight size={15} />
@@ -1084,7 +1080,7 @@ export default function DocsPage() {
                 },
                 {
                   q: text("如何切换模型？", "How do I switch models?", "كيف أبدل النماذج؟"),
-                  a: text("在请求中将 model 字段改为目标模型标识即可。前提是密钥授权范围内包含该模型。", "Change the model field in your request to the target model ID. Requires the model to be in your key's authorized scope.", "غيّر حقل model في طلبك إلى معرف النموذج المستهدف. يتطلب أن يكون النموذج ضمن نطاق تفويض مفتاحك."),
+                  a: text("OpenAI/Anthropic 请求修改正文的 model；Gemini 原生请求修改路径中的模型标识。模型须已获密钥授权，并有匹配协议与能力的可用渠道。", "For OpenAI/Anthropic, change the body model field. For native Gemini, change the model ID in the path. The key must authorize it and a channel must support the protocol and capabilities.", "غيّر model في جسم طلبات OpenAI/Anthropic، ومعرّف النموذج في مسار Gemini الأصلي. يجب أن يصرّح المفتاح بالنموذج وأن تتوفر قناة تدعم البروتوكول والقدرات."),
                 },
                 {
                   q: text("充值后多久到账？", "How long does top-up take?", "كم يستغرق الشحن؟"),
