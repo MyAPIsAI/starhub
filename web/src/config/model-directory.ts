@@ -4,11 +4,7 @@ import {
   groupResources,
   accountCanUseGroup,
 } from "../lib/platform-catalog";
-import {
-  catalogModels,
-  type ModelItem,
-  type PricingCatalogConfig,
-} from "./models";
+import type { ModelItem, PricingCatalogConfig } from "./models";
 import type { TierId } from "./placeholders";
 import {
   getPricingSnapshot,
@@ -33,7 +29,7 @@ export const smartDirectoryModel: DirectoryModel = {
   protocols: ["OpenAI", "Anthropic", "Gemini"],
   tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
   online: true,
-  candidateIds: catalogModels
+  candidateIds: modelCatalog()
     .filter(
       (model) =>
         model.capabilities.includes("text") && model.protocols.length > 0,
@@ -47,7 +43,7 @@ export const smartDirectoryModel: DirectoryModel = {
 };
 export const directoryModels: DirectoryModel[] = [
   smartDirectoryModel,
-  ...catalogModels.map((model) => ({ ...model, kind: "specified" as const })),
+  ...modelCatalog().map((model) => ({ ...model, kind: "specified" as const })),
 ];
 export function getDirectoryModels(
   config = getPricingSnapshot(),

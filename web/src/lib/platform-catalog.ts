@@ -11,8 +11,15 @@ export const demoAccounts = [
   { id: "account-demo", name: "当前演示账号" },
   { id: "account-partner", name: "定制客户 · 星河科技" },
 ];
+/** Routing entry IDs are reserved; neither is a physical upstream model. */
+export const isSmartModelId = (id: string) =>
+  id === "myapis-auto" || id === "veyra-auto";
+
 export function modelCatalog(config?: PricingCatalogConfig): ModelItem[] {
-  return config?.catalog ? Object.values(config.catalog) : catalogModels;
+  const models = config?.catalog
+    ? Object.values(config.catalog)
+    : catalogModels;
+  return models.filter((model) => !isSmartModelId(model.id));
 }
 export function serviceGroups(config: PricingCatalogConfig) {
   return Object.entries(config.groups).map(([id, group]) => {
@@ -71,6 +78,7 @@ export function initialResources(): ResourceSnapshot {
       },
     ],
     instances: catalogModels.flatMap((model, index) => {
+      if (isSmartModelId(model.id)) return [];
       const create = (suffix: string, channelId: string): ResourceInstance => ({
         id: `resource-${index + 1}-${suffix}`,
         channelId,

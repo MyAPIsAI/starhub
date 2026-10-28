@@ -16,6 +16,7 @@ import {
   groupResources,
   resourceSnapshotError,
   upgradePlatform,
+  modelCatalog,
 } from "../src/lib/platform-catalog";
 import {
   addStandardModel,
@@ -24,6 +25,7 @@ import {
 } from "../src/lib/catalog-mutations";
 import {
   getKeyModels,
+  getKeyModelOptions,
   resolveKeyModelResult,
 } from "../src/lib/key-model-policy";
 import { useProductPreview } from "../src/lib/product-preview";
@@ -31,6 +33,7 @@ import { readBillingStorage } from "../src/lib/billing";
 import {
   directoryPrices,
   getDirectoryModel,
+  getDirectoryModels,
 } from "../src/config/model-directory";
 import { quotePricingRule, pricingRuleError } from "../src/lib/pricing-rules";
 let storage: Map<string, string>;
@@ -63,6 +66,56 @@ function commit(config: ReturnType<typeof createDefaultPricing>) {
   return useModelPricing.getState().config;
 }
 describe("standard catalog and mapped resource ownership", () => {
+  it("excludes virtual routing entries from physical models and resources, including saved catalogs", () => {
+    const config = createDefaultPricing();
+    config.catalog!["veyra-auto"] = {
+      ...structuredClone(config.catalog!["myapis-auto"]),
+      id: "veyra-auto",
+    };
+    const original = structuredClone(config);
+    for (const models of [modelCatalog(), modelCatalog(config)]) {
+      expect(
+        models.some((model) => /^(myapis|veyra)-auto$/.test(model.id)),
+      ).toBe(false);
+    }
+    expect(
+      config.resources!.instances.some(
+        (resource) => resource.canonicalModel === "myapis-auto",
+      ),
+    ).toBe(false);
+    const directory = getDirectoryModels(config);
+    expect(directory.filter((model) => model.kind === "smart")).toHaveLength(1);
+    expect(getDirectoryModel("veyra-auto", config)!.candidateIds).not.toContain(
+      "myapis-auto",
+    );
+    expect(
+      getKeyModels(keyPolicy, config).map((model) => model.id),
+    ).not.toContain("myapis-auto");
+    expect(
+      getKeyModelOptions(keyPolicy, "Anthropic", config).map(
+        (model) => model.id,
+      ),
+    ).toEqual(["claude-sonnet-4-20250514", "veyra-auto"]);
+    expect(
+      resolveKeyModelResult(
+        { ...keyPolicy, modelAccess: "custom", allowedModels: ["myapis-auto"] },
+        "veyra-auto",
+        config,
+      ),
+    ).toEqual({ error: "model_unauthorized" });
+    expect(config).toEqual(original);
+  });
+  it.each(["myapis-auto", "veyra-auto"])(
+    "reserves %s against standard-model creation",
+    (id) => {
+      const config = createDefaultPricing();
+      const original = structuredClone(config);
+      expect(() =>
+        addStandardModel(config, { ...catalogModels[0], id }, "0"),
+      ).toThrow("智能入口");
+      expect(config).toEqual(original);
+    },
+  );
   it("creates a standard identity with price but no automatic resource or authorization", () => {
     const base = createDefaultPricing();
     const model = {

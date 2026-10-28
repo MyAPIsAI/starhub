@@ -1,6 +1,6 @@
 import type { ModelItem, PricingCatalogConfig } from "../config/models";
 import type { PreviewKey, PreviewRequest } from "./product-preview";
-import { materializeAvailability } from "./platform-catalog";
+import { isSmartModelId, materializeAvailability } from "./platform-catalog";
 
 export function addStandardModel(
   config: PricingCatalogConfig,
@@ -9,7 +9,7 @@ export function addStandardModel(
 ): PricingCatalogConfig {
   if (
     !/^[a-z0-9][a-z0-9._:/-]{1,99}$/.test(model.id) ||
-    model.id === "veyra-auto"
+    isSmartModelId(model.id)
   )
     throw new Error(
       "调用标识须为 2–100 位小写英文、数字或 . _ : / -，且不能占用智能入口",
