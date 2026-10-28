@@ -27,6 +27,7 @@ import { Button } from "../components/ui/button";
 import { Drawer, Modal } from "../components/ui/overlay";
 import { usePreferences } from "../lib/preferences";
 import { useSessionQueryIdentity } from "../lib/system-access";
+import { fundingSourceLabel } from "../lib/funding-source";
 import { writtenLanguage } from "../lib/localize";
 import type { LedgerEntry, RechargeOrder } from "../lib/product-preview";
 import {
@@ -899,6 +900,9 @@ function BillingCenterView({
                               <CreditCard size={15} />
                               {c("银行卡", "Card", "بطاقة")}
                             </span>
+                            <small className="bc-funding-source">
+                              {fundingSourceLabel(order.funding_source, c)}
+                            </small>
                           </td>
                           <td className="bc-amount">
                             <bdi>{formatMoney(order.amount_nano)}</bdi>
@@ -934,6 +938,9 @@ function BillingCenterView({
                             <span className={`bc-entry-type is-${item.type}`}>
                               {entryType(item.type, c)}
                             </span>
+                            <small className="bc-funding-source">
+                              {fundingSourceLabel(item.funding_source, c)}
+                            </small>
                           </td>
                           <td>
                             <span>{description(item)}</span>
@@ -1193,6 +1200,14 @@ function BillingCenterView({
                   formatMoney(entry.balance_after_nano, "detail"),
                 ],
                 [c("说明", "Description", "الوصف"), description(entry)],
+                [
+                  c("资金来源", "Funding source", "مصدر الأموال"),
+                  fundingSourceLabel(entry.funding_source, c),
+                ],
+                [
+                  c("API 配额兑换", "API quota conversion", "تحويل رصيد API"),
+                  c("当前不可兑换", "Currently unavailable", "غير متاح حاليًا"),
+                ],
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt>{label}</dt>

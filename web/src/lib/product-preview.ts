@@ -127,6 +127,8 @@ export interface LedgerEntry {
   order_id?: string;
   trace_id?: string;
   idempotency_key?: string;
+  funding_source?: string;
+  api_quota_eligible?: boolean;
 }
 
 export interface ExportRecord {

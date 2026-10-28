@@ -190,8 +190,8 @@ describe("billing CSV exports", () => {
       "en",
     );
     expect(output).toBe(
-      '\uFEFF"Ledger ID","Time (UTC+04:00)","Type","Amount (USD)","Amount (nano-USD)","Balance after (USD)","Balance after (nano-USD)","Description","Order ID","Trace ID"\r\n' +
-        '"tx_1","2026-09-01T00:01:02.345+04:00","call_summary","-0.000000296","-296","10000000000.000000296","10000000000000000296","A ""quoted"", multiline\ndescription","ord_9","tr_9"\r\n',
+      '\uFEFF"Ledger ID","Time (UTC+04:00)","Type","Amount (USD)","Amount (nano-USD)","Balance after (USD)","Balance after (nano-USD)","Description","Order ID","Trace ID","Funding Source","API Quota Eligible"\r\n' +
+        '"tx_1","2026-09-01T00:01:02.345+04:00","call_summary","-0.000000296","-296","10000000000.000000296","10000000000000000296","A ""quoted"", multiline\ndescription","ord_9","tr_9","legacy_unverified","false"\r\n',
     );
     expect(output).not.toContain("$");
   });
@@ -240,14 +240,16 @@ describe("billing CSV exports", () => {
       "zh",
     );
     expect(output).toBe(
-      '\uFEFF"订单编号","创建时间（UTC+04:00）","状态","金额（美元）","金额（纳美元）","到账时间（UTC+04:00）","过期时间（UTC+04:00）","晚到标记"\r\n' +
-        '"ord_1","2026-09-02T00:00:00.000+04:00","paid","12345678.123456789","12345678123456789","2026-09-02T00:31:00.000+04:00","2026-09-02T00:30:00.000+04:00","true"\r\n',
+      '\uFEFF"订单编号","创建时间（UTC+04:00）","状态","金额（美元）","金额（纳美元）","到账时间（UTC+04:00）","过期时间（UTC+04:00）","晚到标记","资金来源","可兑换API配额"\r\n' +
+        '"ord_1","2026-09-02T00:00:00.000+04:00","paid","12345678.123456789","12345678123456789","2026-09-02T00:31:00.000+04:00","2026-09-02T00:30:00.000+04:00","true","legacy_unverified","false"\r\n',
     );
     expect(
       serializeRechargeCsv([order({ late_payment: false })], "en"),
-    ).toContain(',"","2026-09-01T09:30:00.000+04:00","false"\r\n');
+    ).toContain(
+      ',"","2026-09-01T09:30:00.000+04:00","false","legacy_unverified","false"\r\n',
+    );
     expect(serializeRechargeCsv([order()], "en")).toContain(
-      ',"","2026-09-01T09:30:00.000+04:00",""\r\n',
+      ',"","2026-09-01T09:30:00.000+04:00","","legacy_unverified","false"\r\n',
     );
   });
 

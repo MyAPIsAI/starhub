@@ -26,6 +26,7 @@ import { usePreferences } from "../lib/preferences";
 import { useProductPreview } from "../lib/product-preview";
 import { accountDisplayName } from "../lib/account-identity";
 import { useSessionQueryIdentity } from "../lib/system-access";
+import { fundingSourceLabel } from "../lib/funding-source";
 import { validateRechargeAmount } from "../lib/billing";
 import { formatMoney } from "../lib/money";
 import { placeholders } from "../config/placeholders";
@@ -42,6 +43,13 @@ import type { RechargeOrder } from "../lib/billing";
 import "../components/recharge-flow.css";
 
 const messages = {
+  fundingSource: ["资金来源", "Funding source", "مصدر الأموال"],
+  quotaConversion: ["API 配额兑换", "API quota conversion", "تحويل رصيد API"],
+  conversionUnavailable: [
+    "当前不可兑换",
+    "Currently unavailable",
+    "غير متاح حاليًا",
+  ],
   title: ["账户充值", "Add account credit", "شحن الحساب"],
   intro: [
     "为当前账号的预付费余额充值。",
@@ -958,6 +966,20 @@ function RechargeFlowView({
                     </dd>
                   </div>
                 )}
+              </dl>
+              <dl className="rf-order-details" data-funding-source>
+                <div>
+                  <dt>{t("fundingSource")}</dt>
+                  <dd>
+                    {fundingSourceLabel(order.funding_source, (zh, en, ar) =>
+                      language === "zh" ? zh : language === "ar" ? ar : en,
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t("quotaConversion")}</dt>
+                  <dd>{t("conversionUnavailable")}</dd>
+                </div>
               </dl>
               {isWaiting && (
                 <p className="rf-safe-note">

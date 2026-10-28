@@ -1,4 +1,5 @@
 import type { LedgerEntry, RechargeOrder } from "./product-preview";
+import { fundingSource } from "./funding-source";
 
 type BillingLanguage = "zh" | "en" | "ar";
 type DateRange = { from: string; to: string; query?: string };
@@ -189,6 +190,8 @@ const ledgerHeaders: Record<BillingLanguage, string[]> = {
     "说明",
     "订单编号",
     "追踪编号",
+    "资金来源",
+    "可兑换API配额",
   ],
   en: [
     "Ledger ID",
@@ -201,6 +204,8 @@ const ledgerHeaders: Record<BillingLanguage, string[]> = {
     "Description",
     "Order ID",
     "Trace ID",
+    "Funding Source",
+    "API Quota Eligible",
   ],
   ar: [
     "معرّف الحركة",
@@ -213,6 +218,8 @@ const ledgerHeaders: Record<BillingLanguage, string[]> = {
     "الوصف",
     "معرّف الطلب",
     "معرّف التتبّع",
+    "مصدر الأموال",
+    "مؤهلة لرصيد API",
   ],
 };
 
@@ -226,6 +233,8 @@ const rechargeHeaders: Record<BillingLanguage, string[]> = {
     "到账时间（UTC+04:00）",
     "过期时间（UTC+04:00）",
     "晚到标记",
+    "资金来源",
+    "可兑换API配额",
   ],
   en: [
     "Order ID",
@@ -236,6 +245,8 @@ const rechargeHeaders: Record<BillingLanguage, string[]> = {
     "Paid at (UTC+04:00)",
     "Expires at (UTC+04:00)",
     "Late payment",
+    "Funding Source",
+    "API Quota Eligible",
   ],
   ar: [
     "معرّف الطلب",
@@ -246,6 +257,8 @@ const rechargeHeaders: Record<BillingLanguage, string[]> = {
     "وقت وصول الدفع (UTC+04:00)",
     "وقت انتهاء الصلاحية (UTC+04:00)",
     "علامة الدفع المتأخر",
+    "مصدر الأموال",
+    "مؤهلة لرصيد API",
   ],
 };
 
@@ -269,6 +282,8 @@ export function serializeLedgerCsv(
         entry.description,
         entry.order_id ?? "",
         entry.trace_id ?? "",
+        fundingSource(entry.funding_source),
+        "false",
       ];
     }),
     [3, 4, 5, 6],
@@ -292,6 +307,8 @@ export function serializeRechargeCsv(
         order.paid_at ? dubaiIso(order.paid_at) : "",
         order.expires_at ? dubaiIso(order.expires_at) : "",
         order.late_payment === undefined ? "" : String(order.late_payment),
+        fundingSource(order.funding_source),
+        "false",
       ];
     }),
     [3, 4],

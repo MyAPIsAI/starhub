@@ -29,6 +29,8 @@ export interface RechargeOrder {
   paid_at?: string;
   late_payment?: boolean;
   failure_reason?: "payment_failed" | "payment_cancelled" | "payment_expired";
+  funding_source?: string;
+  api_quota_eligible?: boolean;
 }
 
 export type RechargeResult =

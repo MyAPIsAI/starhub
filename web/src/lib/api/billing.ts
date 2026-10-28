@@ -13,6 +13,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./http";
 import { billingNano } from "./billing-money";
+import { fundingSource, type FundingSource } from "../funding-source";
 import {
   sessionQueryIdentity,
   useSessionQueryIdentity,
@@ -41,6 +42,8 @@ export interface LedgerEntry {
   order_id: string;
   trace_id: string;
   created_at: number; // unix seconds
+  funding_source?: string;
+  api_quota_eligible?: boolean;
 }
 
 export type RechargeStatus =
@@ -60,6 +63,8 @@ export interface RechargeOrder {
   created_at: string; // ISO string
   expires_at: string; // ISO string
   paid_at: string | null; // ISO string or null
+  funding_source?: string;
+  api_quota_eligible?: boolean;
 }
 
 // --- Query keys ---
@@ -267,6 +272,8 @@ export function adaptRechargeOrder(o: RechargeOrder): FrontendRechargeOrder {
     paid_at: o.paid_at ?? undefined,
     late_payment: o.late_payment || undefined,
     failure_reason: (o.failure_reason as any) || undefined,
+    funding_source: fundingSource(o.funding_source),
+    api_quota_eligible: false,
   };
 }
 
@@ -283,6 +290,8 @@ export interface FrontendRechargeOrder {
   paid_at?: string;
   late_payment?: boolean;
   failure_reason?: "payment_failed" | "payment_cancelled" | "payment_expired";
+  funding_source: FundingSource;
+  api_quota_eligible: false;
 }
 
 /**
@@ -299,6 +308,8 @@ export function adaptLedgerEntry(e: LedgerEntry): FrontendLedgerEntry {
     description: e.description,
     order_id: e.order_id || undefined,
     trace_id: e.trace_id || undefined,
+    funding_source: fundingSource(e.funding_source),
+    api_quota_eligible: false,
   };
 }
 
@@ -311,4 +322,6 @@ export interface FrontendLedgerEntry {
   description: string;
   order_id?: string;
   trace_id?: string;
+  funding_source: FundingSource;
+  api_quota_eligible: false;
 }
