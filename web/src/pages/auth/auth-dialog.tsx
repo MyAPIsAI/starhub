@@ -496,7 +496,7 @@ export default function AuthDialog() {
           <div className="auth-dialog-header">
             <div className="auth-wordmark">
               <BrandMark />
-              <span>Veyra</span>
+              <span>MyAPIs</span>
               <span className="auth-demo-badge">
                 {c("演示", "Demo", "عرض")}
               </span>
@@ -999,7 +999,7 @@ export default function AuthDialog() {
                 <div className="auth-switch">
                   {mode === "login" ? (
                     <>
-                      {c("还没有账户？", "New to Veyra?", "ليس لديك حساب؟")}
+                      {c("还没有账户？", "New to MyAPIs?", "ليس لديك حساب؟")}
                       <button
                         type="button"
                         onClick={() => changeMode("register")}

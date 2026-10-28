@@ -1562,9 +1562,9 @@ export default function ConsolePreview() {
                 <span>
                   © 2026{" "}
                   {c(
-                    "Veyra · 让智能触手可及",
-                    "Veyra · Intelligence, within reach",
-                    "Veyra · الذكاء بين يديك",
+                    "MyAPIs · 让智能触手可及",
+                    "MyAPIs · Intelligence, within reach",
+                    "MyAPIs · الذكاء بين يديك",
                   )}
                 </span>
                 <span>
