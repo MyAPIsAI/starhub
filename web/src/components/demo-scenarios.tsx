@@ -39,9 +39,9 @@ export const demoScenarios = [
     Icon: CircleDollarSign,
     title: { zh: "运营改价", en: "Pricing operations", ar: "إدارة الأسعار" },
     body: {
-      zh: "管理员定价入口。保存会同步服务器倍率；演示场景不授予管理权限。",
-      en: "Administrator pricing entry. Saving syncs server ratios; Demo scenarios do not grant management access.",
-      ar: "مدخل تسعير المسؤول. يُزامن الحفظ معاملات الخادم؛ لا تمنح السيناريوهات صلاحيات إدارية.",
+      zh: "管理员演示定价入口。保存仅影响此浏览器的模拟价格；场景不授予管理权限。",
+      en: "Administrator Demo pricing entry. Saving affects simulated prices in this browser; scenarios do not grant management access.",
+      ar: "مدخل تسعير تجريبي للمسؤول. يؤثر الحفظ في أسعار المحاكاة بهذا المتصفح؛ ولا تمنح السيناريوهات صلاحيات إدارية.",
     },
   },
 ] as const;

@@ -19,10 +19,6 @@ import {
   validatePricingRule,
   type MeteredUsage,
 } from "./pricing-rules";
-import {
-  buildModelRatioJson,
-  buildCompletionRatioJson,
-} from "./api/option";
 export { pricingRuleError, validatePricingRule } from "./pricing-rules";
 export type { MeteredUsage } from "./pricing-rules";
 
@@ -333,7 +329,7 @@ export const useModelPricing = create<{
 }>((set, get) => ({
   config: readPricing(),
   save: (draft, role, expectedRevision) => {
-    // Demo role guard only. A production service must authorize and validate server-side.
+    // This store manages browser-local simulation; server configuration uses separate APIs.
     if (!isAdmin(role)) return { ok: false, reason: "forbidden" };
     if (
       !validatePricing(draft) ||
@@ -370,11 +366,6 @@ export const useModelPricing = create<{
       return { ok: false, reason: "storage" };
     }
     set({ config });
-    // Best-effort sync of model pricing ratios to the backend so they
-    // survive across sessions and instances. A failure is logged but
-    // does not fail the local save (localStorage is the primary store
-    // for the full config; the backend only gets the ratios).
-    syncRatiosToBackend(config.models);
     return { ok: true, config };
   },
 }));
@@ -383,40 +374,6 @@ if (typeof window !== "undefined") {
     if (event.key === PRICING_STORAGE_KEY || event.key === null)
       useModelPricing.setState({ config: readPricing() });
   });
-}
-
-// syncRatiosToBackend pushes the model pricing ratios to the backend's
-// option store (PUT /api/option) so relay billing and other instances
-// see the same prices. Best-effort: failures are logged and never
-// affect the local save flow.
-function syncRatiosToBackend(models: Record<string, ModelPricingEntry>) {
-  try {
-    const modelRatio = buildModelRatioJson(models);
-    const completionRatio = buildCompletionRatioJson(models);
-    const headers = {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
-    // Fire-and-forget with basic error logging.
-    fetch("/api/option", {
-      method: "PUT",
-      credentials: "same-origin",
-      headers,
-      body: JSON.stringify({ key: "model_ratio", value: modelRatio }),
-    }).catch((err) =>
-      console.warn("model_ratio sync to backend failed:", err),
-    );
-    fetch("/api/option", {
-      method: "PUT",
-      credentials: "same-origin",
-      headers,
-      body: JSON.stringify({ key: "completion_ratio", value: completionRatio }),
-    }).catch((err) =>
-      console.warn("completion_ratio sync to backend failed:", err),
-    );
-  } catch (err) {
-    console.warn("pricing ratio sync failed:", err);
-  }
 }
 
 export function getPricingSnapshot() {

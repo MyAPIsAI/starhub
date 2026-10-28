@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { catalogModels, getModelLowestPrice, getModelTierPrices } from "../src/config/models";
 import { createDefaultPricing, estimateModelCharge, getModelRate, getModelsForTier, isValidMultiplier, isValidPrice, PRICING_STORAGE_KEY, useModelPricing, validatePricing } from "../src/lib/model-pricing";
 import { ROLE_ADMIN } from "../src/lib/system-access";
 
 let storage: Map<string, string>;
+afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => {
   storage = new Map();
   vi.stubGlobal("localStorage", {
@@ -14,6 +15,17 @@ beforeEach(() => {
 });
 
 describe("published platform pricing", () => {
+  it("keeps Demo publication local without issuing any server configuration write", () => {
+    const request = vi.fn().mockResolvedValue({ ok: false, status: 403 });
+    vi.stubGlobal("fetch", request);
+    const draft = createDefaultPricing();
+    draft.models["gpt-4.1"].pricing.input_per_million_usd = "9.123456";
+    draft.models["gpt-4.1"].pricing.output_per_million_usd = "12.654321";
+    const result = useModelPricing.getState().save(draft, ROLE_ADMIN, "sample-1");
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(storage.get(PRICING_STORAGE_KEY)!).models["gpt-4.1"].pricing.input_per_million_usd).toBe("9.123456");
+    expect(request).not.toHaveBeenCalled();
+  });
   it("validates exact decimal limits and keeps an omitted cache rate distinct from free", () => {
     for (const invalid of ["-1", "1e2", "NaN", "Infinity", " 1", ".5", "1.", "1.0000001", "1000000.000001", "", 1]) expect(isValidPrice(invalid)).toBe(false);
     expect(isValidPrice("0")).toBe(true);

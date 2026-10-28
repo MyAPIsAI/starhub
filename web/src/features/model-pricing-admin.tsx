@@ -483,9 +483,9 @@ export function ModelPricingAdmin({
           <h1>{text("模型定价", "Model pricing", "تسعير النماذج")}</h1>
           <p>
             {text(
-              "维护模型参考基准、计费单位与分时规则，发布前查看影响。",
-              "Manage model reference prices, billing units and time rules; review before publishing.",
-              "أدر الأسعار المرجعية ووحدات الفوترة وقواعد الوقت وراجع الأثر قبل النشر.",
+              "维护此浏览器的演示定价与分时规则，确认前查看模拟影响。服务器完整定价管理仍待接入。",
+              "Manage this browser’s Demo pricing and time rules, reviewing simulated impact before saving. Complete server pricing management is still pending.",
+              "أدر التسعير التجريبي وقواعد الوقت في هذا المتصفح وراجع أثر المحاكاة قبل الحفظ. لا تزال إدارة تسعير الخادم الكاملة قيد التنفيذ.",
             )}
           </p>
         </div>
@@ -512,9 +512,9 @@ export function ModelPricingAdmin({
           </strong>
           <p>
             {text(
-              "上方维护平台计费基准，乘分组倍率用于后续模拟请求；初始基准是演示样例。下方“厂商官方参考价”独立维护，仅供模型广场对照，修改它不改变任何请求费用。",
-              "The platform billing base below is multiplied by the group rate for future simulated requests; initial rates are demo samples. The separate official provider reference is for catalog comparison only and does not change charges.",
-              "يضرب أساس فوترة المنصة في معامل المجموعة للطلبات المحاكاة القادمة والقيم الأولية أمثلة. المرجع الرسمي المنفصل للمقارنة فقط ولا يغير الرسوم.",
+              "此处规则保存在本浏览器，仅用于演示模拟，不发布到服务器计费。分组管理和下方服务器配置历史使用独立的真实接口；厂商官方参考价也单独维护。",
+              "Rules here are stored in this browser for Demo simulations and are not published to server billing. Group management and the server configuration history below use separate real APIs; official provider references are managed separately.",
+              "تُحفظ هذه القواعد في المتصفح للمحاكاة التجريبية ولا تُنشر لفوترة الخادم. تستخدم إدارة المجموعات وسجل إعدادات الخادم أدناه واجهات فعلية مستقلة، وتُدار المراجع الرسمية منفصلة.",
             )}
           </p>
         </div>
@@ -1362,9 +1362,9 @@ export function ModelPricingAdmin({
                   `${changedModels.length} نماذج بتغييرات غير منشورة`,
                 )
               : text(
-                  "所有配置已保存",
-                  "All settings saved",
-                  "تم حفظ جميع الإعدادات",
+                  "浏览器演示定价已保存",
+                  "Browser Demo pricing saved",
+                  "حُفظ التسعير التجريبي في المتصفح",
                 )}
           </strong>
           <small>
@@ -1409,14 +1409,14 @@ export function ModelPricingAdmin({
           }}>
             <div>
               <strong>
-                {text("配置版本", "Config version", "إصدار الإعداد")}
+                {text("服务器配置版本（独立于演示）", "Server config version (separate from Demo)", "إصدار إعدادات الخادم (مستقل عن العرض)")}
               </strong>
               {optionStatusQuery.data && (
                 <span style={{ marginInlineStart: 8, fontSize: "var(--text-sm)" }}>
                   v{optionStatusQuery.data.database_version}
                   {optionStatusQuery.data.in_sync
-                    ? text(" · 已同步", " · in sync", " · متزامن")
-                    : text(" · 未同步", " · out of sync", " · غير متزامن")}
+                    ? text(" · 响应进程已加载", " · loaded by response process", " · محمّل في العملية المستجيبة")
+                    : text(" · 响应进程版本滞后", " · response process behind", " · العملية المستجيبة متأخرة")}
                 </span>
               )}
             </div>
@@ -1428,7 +1428,7 @@ export function ModelPricingAdmin({
               }}
             >
               <Clock3 size={15} style={{ marginInlineEnd: 4 }} />
-              {text("历史与回滚", "History & rollback", "السجل والتراجع")}
+              {text("服务器历史与回滚", "Server history & rollback", "سجل الخادم والتراجع")}
             </Button>
           </div>
           {rollbackNotice && (
@@ -1443,14 +1443,14 @@ export function ModelPricingAdmin({
         open={reviewOpen}
         onOpenChange={setReviewOpen}
         title={text(
-          "发布模型定价规则",
-          "Publish model billing rules",
-          "نشر قواعد فوترة النماذج",
+          "保存浏览器演示定价",
+          "Save browser Demo pricing",
+          "حفظ التسعير التجريبي في المتصفح",
         )}
         description={text(
-          "新请求使用新规则；历史用量、费率快照和余额不重新计算。",
-          "New requests use the new rules; historical usage, rate snapshots and balances are not recalculated.",
-          "تستخدم الطلبات الجديدة القواعد الجديدة؛ لا يعاد حساب الاستخدام أو الأسعار أو الأرصدة السابقة.",
+          "仅影响此浏览器的后续模拟。不会更新服务器模型倍率、分组或真实密钥权限。",
+          "Affects future simulations in this browser. Server model ratios, groups and actual key permissions are unchanged.",
+          "يؤثر في المحاكاة القادمة بهذا المتصفح. لا تتغير معاملات نماذج الخادم أو المجموعات أو صلاحيات المفاتيح الفعلية.",
         )}
         size="wide"
         preventOutsideClose
@@ -1557,11 +1557,11 @@ export function ModelPricingAdmin({
       <Modal
         open={historyOpen}
         onOpenChange={setHistoryOpen}
-        title={text("配置变更历史", "Config change history", "سجل تغييرات الإعداد")}
+        title={text("服务器配置变更历史", "Server config change history", "سجل تغييرات إعدادات الخادم")}
         description={text(
-          "回滚将恢复某次变更前的值，需指定当前版本号。",
-          "Rollback restores the pre-change value; current version required.",
-          "يستعيد التراجع القيمة السابقة مع تحديد الإصدار الحالي.",
+          "此处操作真实服务器配置，与浏览器演示定价独立。回滚恢复所选变更前的配置值，并校验当前服务器版本。",
+          "These actions change real server configuration independently of browser Demo pricing. Rollback restores the selected pre-change value and checks the current server version.",
+          "تغيّر هذه الإجراءات إعدادات الخادم الفعلية مستقلة عن التسعير التجريبي. يستعيد التراجع القيمة السابقة المحددة ويتحقق من إصدار الخادم الحالي.",
         )}
         size="wide"
       >

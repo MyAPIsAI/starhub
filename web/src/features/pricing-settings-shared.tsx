@@ -116,9 +116,9 @@ export function usePricingDraft(
     setReviewOpen(false);
     setNotice(
       text(
-        "已发布并生效。后续演示调用使用新配置，历史调用与账单保留原费率。",
-        "Published. Future demo calls use the new configuration; historical requests and bills retain their rates.",
-        "تم النشر. تستخدم الطلبات القادمة الإعداد الجديد وتحتفظ الفواتير السابقة بأسعارها.",
+        "已保存到此浏览器的演示定价。后续模拟使用新配置；服务器计费配置未变更。",
+        "Saved to this browser’s Demo pricing. Future simulations use the new configuration; server billing configuration is unchanged.",
+        "حُفظ التسعير التجريبي في هذا المتصفح. تستخدم المحاكاة القادمة الإعداد الجديد؛ ولم تتغير إعدادات فوترة الخادم.",
       ),
     );
     return true;
