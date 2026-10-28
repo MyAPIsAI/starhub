@@ -25,6 +25,8 @@ export interface KeyModelPolicy {
 }
 
 export const SMART_MODEL_ID = "veyra-auto";
+export const isSmartModelId = (id: string) =>
+  id === "myapis-auto" || id === SMART_MODEL_ID;
 export const allowsSmartModel = (key: KeyModelPolicy) =>
   key.smartAccess ?? key.type === "smart";
 export const allowsSpecifiedModels = (key: KeyModelPolicy) =>
@@ -106,7 +108,7 @@ export function resolveKeyModelResult(
     (key.type === "smart" && key.smartAccess === undefined
       ? SMART_MODEL_ID
       : key.model);
-  const smart = requested === SMART_MODEL_ID;
+  const smart = isSmartModelId(requested);
   const existing = modelCatalog(config).find((model) => model.id === requested);
   if (!smart && !existing) return { error: "unknown_model" };
   if (!smart && !existing!.online) return { error: "model_unavailable" };

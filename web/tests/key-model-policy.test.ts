@@ -3,6 +3,7 @@ import {
   getKeyModels,
   getKeyModelOptions,
   resolveKeyModel,
+  resolveKeyModelResult,
 } from "../src/lib/key-model-policy";
 import {
   createDefaultPricing,
@@ -14,16 +15,14 @@ const GPT = "gpt-4.1",
   CLAUDE = "claude-sonnet-4-20250514",
   DEEPSEEK = "deepseek-chat";
 function createClientKey(overrides: Partial<PreviewKey> = {}) {
-  return useProductPreview
-    .getState()
-    .createKeyDetailed({
-      name: "客户端多模型测试",
-      tier: "pro",
-      model: GPT,
-      modelAccess: "custom",
-      allowedModels: [GPT, CLAUDE],
-      ...overrides,
-    });
+  return useProductPreview.getState().createKeyDetailed({
+    name: "客户端多模型测试",
+    tier: "pro",
+    model: GPT,
+    modelAccess: "custom",
+    allowedModels: [GPT, CLAUDE],
+    ...overrides,
+  });
 }
 function rejectWithoutCharge(
   keyId: string,
@@ -176,6 +175,76 @@ describe("credential permissions, per-request routing and exact actual-model bil
     expect(
       useProductPreview.getState().recordCall(key.id, false, "veyra-auto"),
     ).toMatchObject({ status: "success", actual_model: GPT });
+  });
+  describe.each(["myapis-auto", "veyra-auto"])("smart entry %s", (entry) => {
+    it("preserves the requested entry and charges the allowed actual model once", () => {
+      const key = createClientKey({ allowedModels: [GPT] });
+      const before = useProductPreview.getState();
+      const call = before.recordCall(key.id, false, entry)!;
+      expect(call).toMatchObject({
+        status: "success",
+        requested_model: entry,
+        actual_model: GPT,
+        billing_status: "charged",
+        input_rate_usd: "1",
+        output_rate_usd: "5",
+      });
+      const after = useProductPreview.getState();
+      expect(BigInt(call.cost_nano)).toBeGreaterThan(0n);
+      expect(BigInt(after.balance)).toBe(
+        BigInt(before.balance) - BigInt(call.cost_nano),
+      );
+      expect(
+        after.keys.find((item) => item.id === key.id)?.totalUsed_nano,
+      ).toBe(call.cost_nano);
+      expect(after.requests).toHaveLength(before.requests.length + 1);
+      expect(after.ledger).toHaveLength(before.ledger.length + 1);
+    });
+    it("requires explicit smart access", () => {
+      const key = createClientKey({ smartAccess: false, allowedModels: [GPT] });
+      rejectWithoutCharge(key.id, entry);
+    });
+    it("does not turn an entry-only allowlist into actual-model authorization", () => {
+      const key = createClientKey({ allowedModels: [GPT] });
+      useProductPreview.setState({
+        keys: [{ ...key, allowedModels: [entry] }],
+      });
+      rejectWithoutCharge(key.id, entry);
+    });
+    it("keeps protocol, context and tool-chain constraints", () => {
+      const key = createClientKey({ allowedModels: [GPT] });
+      const config = useModelPricing.getState().config;
+      expect(
+        resolveKeyModelResult(key, entry, config, { protocol: "Anthropic" }),
+      ).toEqual({ error: "protocol_incompatible" });
+      expect(
+        resolveKeyModelResult(key, entry, config, { inputTokens: 2_000_000 }),
+      ).toEqual({ error: "capability_incompatible" });
+      expect(
+        resolveKeyModelResult(key, entry, config, { chainModel: CLAUDE }),
+      ).toEqual({ error: "tool_chain_incompatible" });
+    });
+    it("rejects metered verification without request capabilities and leaves funds unchanged", () => {
+      const key = createClientKey({ allowedModels: [GPT] });
+      const before = useProductPreview.getState();
+      expect(
+        before.recordMeteredCall(key.id, entry, {
+          input_tokens: 1000,
+          output_tokens: 100,
+        }),
+      ).toMatchObject({
+        status: "failed",
+        error_code: "capability_incompatible",
+        billing_status: "not_charged",
+        cost_nano: "0",
+      });
+      const after = useProductPreview.getState();
+      expect(after.balance).toBe(before.balance);
+      expect(after.ledger).toBe(before.ledger);
+      expect(
+        after.keys.find((item) => item.id === key.id)?.totalUsed_nano,
+      ).toBe("0");
+    });
   });
   it("E: a published price affects only subsequent calls, with no repeated group multiplier", () => {
     const key = createClientKey({ allowedModels: [GPT] });

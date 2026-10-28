@@ -3,7 +3,11 @@ import { create } from "zustand";
 import { DEMO_ACCOUNT_PROFILE, accountIdForLegacy } from "./account-identity";
 import { writtenLanguage } from "./localize";
 import { demoAuth, type DemoIdentity } from "./demo-auth";
-import { getKeyModels, resolveKeyModelResult } from "./key-model-policy";
+import {
+  getKeyModels,
+  isSmartModelId,
+  resolveKeyModelResult,
+} from "./key-model-policy";
 import {
   defaultDemoRequest,
   validateDemoRequest,
@@ -1311,7 +1315,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
       key && !error ? resolveKeyModelResult(key, modelId, pricing) : undefined;
     error ??= resolution?.error;
     // This explicit settlement verifier never silently performs smart routing with missing capabilities.
-    if (!error && modelId === "veyra-auto") error = "capability_incompatible";
+    if (!error && isSmartModelId(modelId)) error = "capability_incompatible";
     const chosen = resolution?.model;
     let quote: ReturnType<typeof quoteModelCharge> | undefined,
       pricingError: string | undefined;
