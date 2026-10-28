@@ -1,15 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as Dialog from "@radix-ui/react-dialog";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Eye,
-  EyeOff,
-  Info,
-  X,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Info, X } from "lucide-react";
 import { BrandMark } from "../../components/brand";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/primitives";
@@ -51,21 +43,15 @@ export default function AuthDialog() {
       : "password";
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [phoneCode, setPhoneCode] = useState("");
   const [username, setUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmError, setConfirmError] = useState(false);
-  const [resetPhone, setResetPhone] = useState("");
-  const [resetCode, setResetCode] = useState("");
-  const [resetPassword, setResetPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<
     Record<string, boolean>
   >({});
   const [error, setError] = useState("");
-  const [resetDone, setResetDone] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [busy, setBusy] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -75,8 +61,6 @@ export default function AuthDialog() {
   const policyTrigger = useRef<Policy | null>(null);
   const formScroll = useRef(0);
   const operation = useRef(0);
-  const resendSeconds = 0;
-  const lockSeconds = 0;
 
   useEffect(() => {
     operation.current += 1;
@@ -129,7 +113,6 @@ export default function AuthDialog() {
     );
   }
   function changeMode(next: AuthMode) {
-    setResetDone(false);
     setRegistered(false);
     navigate(
       next === "register"
@@ -190,20 +173,15 @@ export default function AuthDialog() {
       "تعذر المتابعة. تم الاحتفاظ بالمدخلات؛ حاول مجددًا.",
     );
   }
-  function sendCode() {
-    setError(
-      c(
-        "验证码功能暂未接入后端，请使用密码登录。",
-        "Verification codes are not available yet. Use password login.",
-        "رموز التحقق غير متاحة بعد. استخدم تسجيل الدخول بكلمة المرور.",
-      ),
-    );
-  }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (
+      busy ||
+      (mode !== "register" && (mode !== "login" || method !== "password"))
+    )
+      return;
     setError("");
-    if (mode !== "reset" && !agreed) {
+    if (!agreed) {
       setError(
         c(
           "请阅读并勾选服务协议与隐私政策后继续。",
@@ -228,16 +206,6 @@ export default function AuthDialog() {
     const ticket = ++operation.current;
     setBusy(true);
     try {
-      if (mode === "reset") {
-        setError(
-          c(
-            "密码重置暂未接入后端，请联系管理员。",
-            "Password reset is not available yet. Contact the administrator.",
-            "إعادة تعيين كلمة المرور غير متاحة بعد. اتصل بالمسؤول.",
-          ),
-        );
-        return;
-      }
       if (mode === "register") {
         const user = await registerUser(username, newPassword, "");
         if (ticket !== operation.current) return;
@@ -262,7 +230,6 @@ export default function AuthDialog() {
       setPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setPhoneCode("");
       navigate("/console", {
         replace: true,
       });
@@ -298,9 +265,9 @@ export default function AuthDialog() {
         )
       : mode === "reset"
         ? c(
-            "验证注册手机号后，设置新的演示密码。",
-            "Verify your registered phone to set a new demo password.",
-            "تحقق من هاتفك المسجل لتعيين كلمة مرور تجريبية جديدة.",
+            "密码找回暂不可用，请联系管理员。",
+            "Password recovery is unavailable. Contact the administrator.",
+            "استعادة كلمة المرور غير متاحة. تواصل مع المسؤول.",
           )
         : c(
             "登录后，在熟悉的工具中自由切换模型。",
@@ -365,41 +332,6 @@ export default function AuthDialog() {
           >
             {visiblePasswords[id] ? <EyeOff size={17} /> : <Eye size={17} />}
           </button>
-        </div>
-      </div>
-    );
-  }
-  function codeField(value: string, update: (v: string) => void) {
-    return (
-      <div className="auth-field">
-        <label htmlFor="auth-code">
-          {c("验证码", "Verification code", "رمز التحقق")}
-        </label>
-        <div className="auth-code-input">
-          <Input
-            id="auth-code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={value}
-            onChange={(e) => {
-              update(e.target.value.replace(/\D/g, "").slice(0, 6));
-              setError("");
-            }}
-            required
-            pattern="[0-9]{6}"
-            maxLength={6}
-            placeholder={c("6 位验证码", "6-digit code", "رمز من 6 أرقام")}
-            dir="ltr"
-          />
-          <Button disabled={busy || resendSeconds > 0} onClick={sendCode}>
-            {resendSeconds > 0
-              ? c(
-                  `${resendSeconds} 秒后重试`,
-                  `Retry in ${resendSeconds}s`,
-                  `إعادة بعد ${resendSeconds}ث`,
-                )
-              : c("获取验证码", "Get code", "الحصول على رمز")}
-          </Button>
         </div>
       </div>
     );
@@ -610,36 +542,6 @@ export default function AuthDialog() {
                   )}
                 </Button>
               </article>
-            ) : mode === "reset" && resetDone ? (
-              <div className="auth-reset-success" role="status">
-                <span>
-                  <Check size={24} />
-                </span>
-                <h3>
-                  {c(
-                    "演示密码已更新",
-                    "Demo password updated",
-                    "تم تحديث كلمة المرور التجريبية",
-                  )}
-                </h3>
-                <p>
-                  {c(
-                    "可以使用用户名、手机号或已绑定邮箱配合新密码登录。没有发送真实短信。",
-                    "Use your username, phone or linked email with the new password. No SMS was sent.",
-                    "ادخل باسم المستخدم أو الهاتف وكلمة المرور الجديدة. لم تُرسل رسالة فعلية.",
-                  )}
-                </p>
-                <Button
-                  variant="primary"
-                  className="auth-submit"
-                  onClick={() => {
-                    setMethod("password");
-                    changeMode("login");
-                  }}
-                >
-                  {c("返回登录", "Back to login", "العودة للدخول")}
-                </Button>
-              </div>
             ) : (
               <>
                 {mode === "login" && registered && (
@@ -675,297 +577,226 @@ export default function AuthDialog() {
                     </button>
                   </div>
                 )}
-                <form onSubmit={submit} className="auth-form">
-                  {error && (
-                    <div
-                      className="auth-error"
-                      role="alert"
-                      tabIndex={-1}
-                      ref={errorRef}
+                {mode === "reset" ||
+                (mode === "login" && method === "phone") ? (
+                  <div className="auth-unavailable" role="status">
+                    <span>
+                      <Info size={24} />
+                    </span>
+                    <p>
+                      {mode === "reset"
+                        ? c(
+                            "密码找回尚未接入，请联系管理员协助恢复。当前页面不会收集手机号、发送验证码或修改密码。",
+                            "Password recovery is unavailable. Contact the administrator for help. This page does not collect phone numbers, send codes or change passwords.",
+                            "استعادة كلمة المرور غير متاحة. تواصل مع المسؤول للمساعدة. لا تجمع هذه الصفحة أرقام هواتف ولا ترسل رموزًا ولا تغيّر كلمات المرور.",
+                          )
+                        : c(
+                            "手机号验证码登录尚未接入。请使用用户名和密码登录；当前页面不会发送或校验验证码。",
+                            "Phone-code login is unavailable. Use your username and password; this page does not send or verify codes.",
+                            "الدخول برمز الهاتف غير متاح. استخدم اسم المستخدم وكلمة المرور؛ لا ترسل هذه الصفحة رموزًا ولا تتحقق منها.",
+                          )}
+                    </p>
+                    <Button
+                      variant="primary"
+                      onClick={() => changeMode("login")}
                     >
-                      {error}
-                    </div>
-                  )}
-                  {mode === "login" &&
-                    method === "password" &&
-                    lockSeconds > 0 && (
-                      <p className="auth-lock" role="status">
-                        {c(
-                          `密码登录锁定还剩 ${Math.floor(lockSeconds / 60)} 分 ${lockSeconds % 60} 秒；可切换手机号验证码，或重置密码。`,
-                          `Password login locked for ${Math.floor(lockSeconds / 60)}m ${lockSeconds % 60}s. Use a phone code or reset your password.`,
-                          `أعد المحاولة بعد ${Math.floor(lockSeconds / 60)}د ${lockSeconds % 60}ث`,
-                        )}
-                      </p>
+                      {c(
+                        "使用账号密码登录",
+                        "Use password login",
+                        "الدخول بكلمة المرور",
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <form onSubmit={submit} className="auth-form">
+                    {error && (
+                      <div
+                        className="auth-error"
+                        role="alert"
+                        tabIndex={-1}
+                        ref={errorRef}
+                      >
+                        {error}
+                      </div>
                     )}
-                  {mode === "login" && method === "password" && (
-                    <>
-                      <div className="auth-field">
-                        <label htmlFor="auth-account">
-                          {c("账号", "Account", "الحساب")}
-                        </label>
-                        <Input
-                          id="auth-account"
-                          type="text"
-                          autoComplete="username"
-                          value={account}
-                          onChange={(e) => {
-                            setAccount(e.target.value);
-                            setError("");
-                          }}
-                          required
-                          maxLength={254}
-                          placeholder={c("用户名", "Username", "اسم المستخدم")}
-                          dir="ltr"
-                        />
-                      </div>
-                      {passwordField(
-                        "auth-password",
-                        c("密码", "Password", "كلمة المرور"),
-                        password,
-                        setPassword,
-                      )}
-                      <div className="auth-helper-row">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAccount("root");
-                            setPassword("123456");
-                            setError("");
-                          }}
-                        >
-                          {c(
-                            "填入管理员账号",
-                            "Use admin account",
-                            "استخدم حساب المسؤول",
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setResetPhone(
-                              /^1[3-9]\d{9}$/.test(account.trim())
-                                ? account.trim()
-                                : "",
-                            );
-                            changeMode("reset");
-                          }}
-                        >
-                          {c(
-                            "忘记密码？",
-                            "Forgot password?",
-                            "نسيت كلمة المرور؟",
-                          )}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  {mode === "login" && method === "phone" && (
-                    <>
-                      <div className="auth-field">
-                        <label htmlFor="auth-phone">
-                          {c("手机号", "Phone number", "رقم الهاتف")}
-                        </label>
-                        <div className="auth-phone-input">
-                          <span dir="ltr">+86</span>
+                    {mode === "login" && method === "password" && (
+                      <>
+                        <div className="auth-field">
+                          <label htmlFor="auth-account">
+                            {c("账号", "Account", "الحساب")}
+                          </label>
                           <Input
-                            id="auth-phone"
-                            type="tel"
-                            inputMode="tel"
-                            autoComplete="tel-national"
-                            value={phone}
+                            id="auth-account"
+                            type="text"
+                            autoComplete="username"
+                            value={account}
                             onChange={(e) => {
-                              setPhone(e.target.value);
-                              setPhoneCode("");
+                              setAccount(e.target.value);
                               setError("");
                             }}
                             required
-                            maxLength={11}
-                            placeholder="13800138000"
-                            dir="ltr"
-                          />
-                        </div>
-                      </div>
-                      {codeField(phoneCode, setPhoneCode)}
-                      <div className="auth-helper-row">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPhone("13800138000");
-                            setPhoneCode("");
-                            setError("");
-                          }}
-                        >
-                          {c(
-                            "填入演示手机号",
-                            "Use demo phone",
-                            "استخدم هاتف العرض",
-                          )}
-                        </button>
-                        <span>
-                          {c(
-                            "支持本地已注册手机号",
-                            "Registered demo phones supported",
-                            "يدعم الهواتف التجريبية المسجلة",
-                          )}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                  {mode === "register" && (
-                    <>
-                      <div className="auth-field">
-                        <label htmlFor="auth-username">
-                          {c("用户名", "Username", "اسم المستخدم")}
-                        </label>
-                        <Input
-                          id="auth-username"
-                          dir="ltr"
-                          value={username}
-                          onChange={(e) => {
-                            setUsername(e.target.value);
-                            setError("");
-                          }}
-                          required
-                          minLength={3}
-                          maxLength={64}
-                          pattern="(?:[a-zA-Z0-9_.]|-){3,64}"
-                          autoComplete="username"
-                          placeholder={c(
-                            "请输入用户名",
-                            "Choose a username",
-                            "اختر اسم مستخدم",
-                          )}
-                          aria-describedby="auth-username-hint"
-                        />
-                        <p id="auth-username-hint" className="auth-field-hint">
-                          {c(
-                            "3–64 位英文字母、数字、下划线、短横线或点号",
-                            "3–64 ASCII letters, digits, underscores, hyphens or dots",
-                            "3–64 حرفًا لاتينيًا أو رقمًا أو شرطة سفلية أو شرطة أو نقطة",
-                          )}
-                        </p>
-                      </div>
-                      {passwordField(
-                        "auth-new-password",
-                        c("设置密码", "Create password", "إنشاء كلمة مرور"),
-                        newPassword,
-                        setNewPassword,
-                        true,
-                      )}
-                      {passwordField(
-                        "auth-confirm-password",
-                        c("确认密码", "Confirm password", "تأكيد كلمة المرور"),
-                        confirmPassword,
-                        setConfirmPassword,
-                        true,
-                      )}
-                      <p className="auth-field-hint">
-                        {c(
-                          "当前仅支持用户名与密码注册，不收集或验证手机号。短信验证尚未接入。",
-                          "Registration currently uses a username and password. Phone numbers are neither collected nor verified; SMS verification is unavailable.",
-                          "التسجيل حاليًا باسم مستخدم وكلمة مرور. لا تُجمع أرقام الهواتف ولا تُتحقق؛ التحقق بالرسائل غير متاح.",
-                        )}
-                      </p>
-                    </>
-                  )}
-                  {mode === "reset" && (
-                    <>
-                      <div className="auth-field">
-                        <label htmlFor="auth-reset-phone">
-                          {c("注册手机号", "Registered phone", "الهاتف المسجل")}
-                        </label>
-                        <div className="auth-phone-input">
-                          <span dir="ltr">+86</span>
-                          <Input
-                            id="auth-reset-phone"
-                            type="tel"
-                            inputMode="tel"
-                            value={resetPhone}
-                            onChange={(e) => {
-                              setResetPhone(e.target.value);
-                              setResetCode("");
-                              setError("");
-                            }}
-                            required
-                            maxLength={11}
-                            autoComplete="tel-national"
+                            maxLength={254}
                             placeholder={c(
-                              "请输入注册手机号",
-                              "Your registered phone",
-                              "رقم هاتفك المسجل",
+                              "用户名",
+                              "Username",
+                              "اسم المستخدم",
                             )}
                             dir="ltr"
                           />
                         </div>
-                      </div>
-                      {codeField(resetCode, setResetCode)}
-                      {passwordField(
-                        "auth-reset-password",
-                        c("新密码", "New password", "كلمة المرور الجديدة"),
-                        resetPassword,
-                        setResetPassword,
-                        true,
-                      )}
-                    </>
-                  )}
-                  {mode !== "reset" && consent}
-                  {mode === "register" && (
-                    <p className="auth-registration-note">
-                      {c(
-                        "创建账号不会清空当前演示数据；注册成功后需要登录。新账号 API 配额默认是零。",
-                        "Creating an account does not clear current Demo data. Sign in after registration; new accounts default to zero API quota.",
-                        "إنشاء الحساب لا يمسح بيانات العرض الحالية. سجّل الدخول بعد التسجيل؛ تبدأ حصة الحساب الجديد بصفر.",
-                      )}
-                    </p>
-                  )}
-                  <Button
-                    variant="primary"
-                    type="submit"
-                    className="auth-submit"
-                    loading={busy}
-                    disabled={
-                      mode === "login" &&
-                      method === "password" &&
-                      lockSeconds > 0
-                    }
-                  >
-                    {mode === "register"
-                      ? c("创建账户", "Create account", "إنشاء حساب")
-                      : mode === "reset"
-                        ? c(
-                            "更新演示密码",
-                            "Update demo password",
-                            "تحديث كلمة المرور التجريبية",
-                          )
-                        : c("登录", "Log in", "تسجيل الدخول")}
-                    <ArrowRight size={16} className="directional" />
-                  </Button>
-                </form>
-                <div className="auth-switch">
-                  {mode === "login" ? (
-                    <>
-                      {c("还没有账户？", "New to MyAPIs?", "ليس لديك حساب؟")}
-                      <button
-                        type="button"
-                        onClick={() => changeMode("register")}
-                      >
-                        {c("立即注册", "Sign up", "إنشاء حساب")}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {mode === "register" &&
-                        c(
-                          "已有账户？",
-                          "Already have an account?",
-                          "لديك حساب؟",
+                        {passwordField(
+                          "auth-password",
+                          c("密码", "Password", "كلمة المرور"),
+                          password,
+                          setPassword,
                         )}
-                      <button type="button" onClick={() => changeMode("login")}>
-                        {c("返回登录", "Back to login", "العودة للدخول")}
-                      </button>
-                    </>
-                  )}
-                </div>
+                        <div className="auth-helper-row">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAccount("root");
+                              setPassword("123456");
+                              setError("");
+                            }}
+                          >
+                            {c(
+                              "填入管理员账号",
+                              "Use admin account",
+                              "استخدم حساب المسؤول",
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              changeMode("reset");
+                            }}
+                          >
+                            {c(
+                              "忘记密码？",
+                              "Forgot password?",
+                              "نسيت كلمة المرور؟",
+                            )}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    {mode === "register" && (
+                      <>
+                        <div className="auth-field">
+                          <label htmlFor="auth-username">
+                            {c("用户名", "Username", "اسم المستخدم")}
+                          </label>
+                          <Input
+                            id="auth-username"
+                            dir="ltr"
+                            value={username}
+                            onChange={(e) => {
+                              setUsername(e.target.value);
+                              setError("");
+                            }}
+                            required
+                            minLength={3}
+                            maxLength={64}
+                            pattern="(?:[a-zA-Z0-9_.]|-){3,64}"
+                            autoComplete="username"
+                            placeholder={c(
+                              "请输入用户名",
+                              "Choose a username",
+                              "اختر اسم مستخدم",
+                            )}
+                            aria-describedby="auth-username-hint"
+                          />
+                          <p
+                            id="auth-username-hint"
+                            className="auth-field-hint"
+                          >
+                            {c(
+                              "3–64 位英文字母、数字、下划线、短横线或点号",
+                              "3–64 ASCII letters, digits, underscores, hyphens or dots",
+                              "3–64 حرفًا لاتينيًا أو رقمًا أو شرطة سفلية أو شرطة أو نقطة",
+                            )}
+                          </p>
+                        </div>
+                        {passwordField(
+                          "auth-new-password",
+                          c("设置密码", "Create password", "إنشاء كلمة مرور"),
+                          newPassword,
+                          setNewPassword,
+                          true,
+                        )}
+                        {passwordField(
+                          "auth-confirm-password",
+                          c(
+                            "确认密码",
+                            "Confirm password",
+                            "تأكيد كلمة المرور",
+                          ),
+                          confirmPassword,
+                          setConfirmPassword,
+                          true,
+                        )}
+                        <p className="auth-field-hint">
+                          {c(
+                            "当前仅支持用户名与密码注册，不收集或验证手机号。短信验证尚未接入。",
+                            "Registration currently uses a username and password. Phone numbers are neither collected nor verified; SMS verification is unavailable.",
+                            "التسجيل حاليًا باسم مستخدم وكلمة مرور. لا تُجمع أرقام الهواتف ولا تُتحقق؛ التحقق بالرسائل غير متاح.",
+                          )}
+                        </p>
+                      </>
+                    )}
+                    {consent}
+                    {mode === "register" && (
+                      <p className="auth-registration-note">
+                        {c(
+                          "创建账号不会清空当前演示数据；注册成功后需要登录。新账号 API 配额默认是零。",
+                          "Creating an account does not clear current Demo data. Sign in after registration; new accounts default to zero API quota.",
+                          "إنشاء الحساب لا يمسح بيانات العرض الحالية. سجّل الدخول بعد التسجيل؛ تبدأ حصة الحساب الجديد بصفر.",
+                        )}
+                      </p>
+                    )}
+                    <Button
+                      variant="primary"
+                      type="submit"
+                      className="auth-submit"
+                      loading={busy}
+                    >
+                      {mode === "register"
+                        ? c("创建账户", "Create account", "إنشاء حساب")
+                        : c("登录", "Log in", "تسجيل الدخول")}
+                      <ArrowRight size={16} className="directional" />
+                    </Button>
+                  </form>
+                )}
+                {mode !== "reset" && (
+                  <div className="auth-switch">
+                    {mode === "login" ? (
+                      <>
+                        {c("还没有账户？", "New to MyAPIs?", "ليس لديك حساب؟")}
+                        <button
+                          type="button"
+                          onClick={() => changeMode("register")}
+                        >
+                          {c("立即注册", "Sign up", "إنشاء حساب")}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {mode === "register" &&
+                          c(
+                            "已有账户？",
+                            "Already have an account?",
+                            "لديك حساب؟",
+                          )}
+                        <button
+                          type="button"
+                          onClick={() => changeMode("login")}
+                        >
+                          {c("返回登录", "Back to login", "العودة للدخول")}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

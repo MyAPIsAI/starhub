@@ -382,24 +382,21 @@
 .auth-policy .auth-submit {
   margin-top: 24px;
 }
-.auth-reset-success {
+.auth-unavailable {
   text-align: center;
   padding: 12px 0;
 }
-.auth-reset-success > span {
+.auth-unavailable > span {
   display: inline-grid;
   place-items: center;
   border-radius: 50%;
   width: 52px;
   height: 52px;
-  background: var(--success-soft);
-  color: var(--success);
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  color: var(--brand);
+  margin-bottom: 12px;
 }
-.auth-reset-success h3 {
-  font-size: 17px;
-  margin: 18px 0 10px;
-}
-.auth-reset-success p {
+.auth-unavailable p {
   font-size: 12px;
   line-height: 1.8;
   color: var(--auth-muted);
