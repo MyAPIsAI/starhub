@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,12 +13,23 @@ import (
 	"starhub/common"
 	"starhub/middleware"
 	"starhub/model"
+	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
 	"starhub/setting"
 )
 
 func TestSmartEmbeddingCapabilityAdmission(t *testing.T) {
+	testSmartCapabilityAdmission(t, "/v1/embeddings", "embedding", `"input":"review"`, RelayEmbeddings)
+}
+
+func TestSmartRerankCapabilityAdmission(t *testing.T) {
+	testSmartCapabilityAdmission(t, "/v1/rerank", "rerank", `"query":"review","documents":["review document"]`, RelayRerank)
+}
+
+func testSmartCapabilityAdmission(t *testing.T, path, capability, fields string, relayHandler http.HandlerFunc) {
+	t.Helper()
+	verifiedModel := "verified-" + capability
 	for _, tc := range []struct {
 		name, requested, limits string
 		known                   bool
@@ -41,25 +53,37 @@ func TestSmartEmbeddingCapabilityAdmission(t *testing.T) {
 					t.Error(err)
 				}
 				var payload struct {
-					Model string `json:"model"`
+					Model     string   `json:"model"`
+					Query     string   `json:"query"`
+					Documents []string `json:"documents"`
 				}
 				if err := json.Unmarshal(body, &payload); err != nil {
 					t.Error(err)
 				}
 				received.Store(payload.Model)
+				if r.URL.Path != path || r.Method != "POST" {
+					t.Errorf("unexpected relay endpoint: %s %s", r.Method, r.URL.Path)
+				}
+				if capability == "rerank" && (payload.Query != "review" || len(payload.Documents) != 1 || payload.Documents[0] != "review document") {
+					t.Errorf("rerank input was changed: %s", body)
+				}
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"object":"list","data":[],"usage":{"prompt_tokens":12,"total_tokens":12}}`))
+				response := `{"object":"list","data":[],"usage":{"prompt_tokens":12,"total_tokens":12}}`
+				if capability == "rerank" {
+					response = `{"results":[{"index":0,"relevance_score":0.9}],"usage":{"input_tokens":12,"output_tokens":0}}`
+				}
+				_, _ = w.Write([]byte(response))
 			}))
 			defer upstream.Close()
-			if err := model.InsertChannel(&model.Channel{Name: "embedding-admission", Type: channel.ChannelTypeOpenAI, Models: "unverified,verified-embedding", Group: "default", Status: common.ChannelStatusEnabled, BaseURL: upstream.URL, Key: "local-review"}); err != nil {
+			if err := model.InsertChannel(&model.Channel{Name: "capability-admission", Type: channel.ChannelTypeOpenAI, Models: "unverified," + verifiedModel, Group: "default", Status: common.ChannelStatusEnabled, BaseURL: upstream.URL, Key: "local-review"}); err != nil {
 				t.Fatal(err)
 			}
 			if tc.known {
-				if err := model.UpsertModelMeta(&model.ModelMeta{Model: "verified-embedding", Tags: "embedding"}); err != nil {
+				if err := model.UpsertModelMeta(&model.ModelMeta{Model: verifiedModel, Tags: capability}); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if err := setting.UpdateRatio(setting.OptionKeyModelRatio, `{"unverified":0.01,"verified-embedding":1}`); err != nil {
+			if err := setting.UpdateRatio(setting.OptionKeyModelRatio, fmt.Sprintf(`{"unverified":0.01,%q:1}`, verifiedModel)); err != nil {
 				t.Fatal(err)
 			}
 			u := newUser(t, "embedding-admission", common.RoleUser, 1000000)
@@ -69,11 +93,11 @@ func TestSmartEmbeddingCapabilityAdmission(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			r := httptest.NewRequest("POST", "/v1/embeddings", strings.NewReader(`{"model":"`+tc.requested+`","input":"review"}`))
+			r := httptest.NewRequest("POST", path, strings.NewReader(`{"model":"`+tc.requested+`",`+fields+`}`))
 			r.Header.Set("Content-Type", "application/json")
 			r.Header.Set("Authorization", "Bearer "+tk.Key)
 			rec := httptest.NewRecorder()
-			middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayEmbeddings))).ServeHTTP(rec, r)
+			middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(relayHandler)).ServeHTTP(rec, r)
 			if rec.Code != tc.want {
 				t.Fatalf("status=%d want=%d body=%s", rec.Code, tc.want, rec.Body)
 			}
@@ -95,11 +119,11 @@ func TestSmartEmbeddingCapabilityAdmission(t *testing.T) {
 				}
 				return
 			}
-			wantModel := "verified-embedding"
+			wantModel := verifiedModel
 			if tc.requested == "unverified" {
 				wantModel = "unverified"
 			}
-			if calls.Load() != 1 || received.Load() != wantModel || total != 1 || len(logs) != 1 || logs[0].Model != wantModel || logs[0].RequestedModel != tc.requested || logs[0].Quota <= 0 || after.Quota != u.Quota-logs[0].Quota || keyAfter.RemainQuota != tk.RemainQuota-logs[0].Quota {
+			if calls.Load() != 1 || received.Load() != wantModel || total != 1 || len(logs) != 1 || logs[0].Model != wantModel || logs[0].RequestedModel != tc.requested || logs[0].Quota != relay.ComputeQuota(wantModel, "default", 12, 0) || logs[0].PromptTokens != 12 || logs[0].CompletionTokens != 0 || after.Quota != u.Quota-logs[0].Quota || keyAfter.RemainQuota != tk.RemainQuota-logs[0].Quota {
 				t.Fatalf("incorrect admitted request: model=%v logs=%+v calls=%d", received.Load(), logs, calls.Load())
 			}
 		})

@@ -107,9 +107,9 @@ func (req smartRequirements) compatible(name, group string, ch *model.Channel) (
 	if err != nil {
 		return false, err
 	}
-	// Embedding candidates need explicit capability metadata; the basic-text
-	// fallback cannot establish support for this endpoint.
-	if req.path == "/v1/embeddings" && (!found || len(meta.TagList()) == 0) {
+	// Embedding and rerank candidates need explicit capability metadata; the
+	// basic-text fallback cannot establish support for these endpoints.
+	if (req.path == "/v1/embeddings" || req.path == "/v1/rerank") && (!found || len(meta.TagList()) == 0) {
 		return false, nil
 	}
 	if found {

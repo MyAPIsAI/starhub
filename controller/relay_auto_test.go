@@ -184,8 +184,12 @@ func TestPassthroughModelAttribution(t *testing.T) {
 				if err := model.InsertChannel(ch); err != nil {
 					t.Fatal(err)
 				}
-				if tc.path == "/v1/embeddings" {
-					if err := model.UpsertModelMeta(&model.ModelMeta{Model: tc.actual, Tags: "embedding"}); err != nil {
+				if tc.path == "/v1/embeddings" || tc.path == "/v1/rerank" {
+					tag := "embedding"
+					if tc.path == "/v1/rerank" {
+						tag = "rerank"
+					}
+					if err := model.UpsertModelMeta(&model.ModelMeta{Model: tc.actual, Tags: tag}); err != nil {
 						t.Fatal(err)
 					}
 				}
