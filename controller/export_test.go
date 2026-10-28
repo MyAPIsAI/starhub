@@ -141,12 +141,12 @@ func TestBuildLogExportStartTimeBoundary(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("CSV rows = %q, want a header and 2 data rows", rows)
 	}
-	if want := []string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"}; !reflect.DeepEqual(rows[0], want) {
+	if want := []string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"}; !reflect.DeepEqual(rows[0], want) {
 		t.Fatalf("CSV header = %q, want %q", rows[0], want)
 	}
 	wantByID := map[string][]string{
-		itoa(logs[1].ID): {itoa(logs[1].ID), "2026-10-20T00:00:00Z", itoa(u.ID), "0", "key", "at-start", "100", "50", "23"},
-		itoa(logs[2].ID): {itoa(logs[2].ID), "2026-10-20T00:00:01Z", itoa(u.ID), "0", "key", "after-start", "100", "50", "23"},
+		itoa(logs[1].ID): {itoa(logs[1].ID), "2026-10-20T00:00:00Z", itoa(u.ID), "0", "key", "at-start", "100", "50", "23", ""},
+		itoa(logs[2].ID): {itoa(logs[2].ID), "2026-10-20T00:00:01Z", itoa(u.ID), "0", "key", "after-start", "100", "50", "23", ""},
 	}
 	for _, row := range rows[1:] {
 		want, ok := wantByID[row[0]]
@@ -157,6 +157,71 @@ func TestBuildLogExportStartTimeBoundary(t *testing.T) {
 	}
 	if count, err := model.CountLogs(u.ID); err != nil || count != 3 {
 		t.Fatalf("source log count = %d, err = %v, want 3 unchanged logs", count, err)
+	}
+}
+
+func TestRequestExportModelAttribution(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 1000)
+	other := newUser(t, "bob", common.RoleUser, 1000)
+	logs := []model.Log{
+		{UserID: u.ID, Model: "gpt-4o", RequestedModel: "myapis-auto", Quota: 23},
+		{UserID: u.ID, Model: "gpt-4o-mini", RequestedModel: "gpt-4o-mini", Quota: 7},
+		{UserID: u.ID, Model: "legacy-model", Quota: 2},
+		{UserID: other.ID, Model: "private-model", RequestedModel: "private-entry", Quota: 99},
+	}
+	for i := range logs {
+		if err := model.InsertLog(&logs[i]); err != nil {
+			t.Fatalf("InsertLog(%d) failed: %v", i, err)
+		}
+	}
+	rr := call(CreateExport, testRequest{
+		method: http.MethodPost,
+		target: "/api/export",
+		body:   `{"type":"requests","range_days":7}`,
+		userID: u.ID,
+		role:   common.RoleUser,
+	})
+	var exp model.ExportRecord
+	decodeData(t, rr, &exp)
+	if exp.RowCount != 3 || exp.Status != "completed" {
+		t.Fatalf("export metadata = %+v, want 3 completed rows", exp)
+	}
+	stored, err := model.GetExport(exp.ID)
+	if err != nil {
+		t.Fatalf("GetExport failed: %v", err)
+	}
+	rr = call(DownloadExport, testRequest{
+		method: http.MethodGet,
+		target: "/api/export/" + itoa(exp.ID) + "/download",
+		userID: u.ID,
+		role:   common.RoleUser,
+		path:   map[string]string{"id": itoa(exp.ID)},
+	})
+	if rr.Code != http.StatusOK || rr.Body.String() != string(stored.Content) {
+		t.Fatalf("download status = %d, body differs from persisted export = %t", rr.Code, rr.Body.String() != string(stored.Content))
+	}
+	rows, err := csv.NewReader(strings.NewReader(rr.Body.String())).ReadAll()
+	if err != nil || len(rows) != 4 {
+		t.Fatalf("CSV rows = %q, err = %v, want a header and 3 user rows", rows, err)
+	}
+	want := [][]string{{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"}}
+	for i := 2; i >= 0; i-- {
+		l := logs[i]
+		want = append(want, []string{
+			itoa(l.ID), time.Unix(l.CreatedAt, 0).UTC().Format(time.RFC3339),
+			itoa(u.ID), "0", "", l.Model, "0", "0", itoa(l.Quota), l.RequestedModel,
+		})
+	}
+	if !reflect.DeepEqual(rows, want) {
+		t.Fatalf("CSV rows = %q, want %q", rows, want)
+	}
+	var after []model.Log
+	if err := model.DB.Order("id ASC").Find(&after).Error; err != nil {
+		t.Fatalf("read source logs failed: %v", err)
+	}
+	if !reflect.DeepEqual(after, logs) {
+		t.Fatalf("export changed source logs: got %+v, want %+v", after, logs)
 	}
 }
 
@@ -324,7 +389,7 @@ func TestEmptyExportContainsOnlyHeader(t *testing.T) {
 		typ    string
 		header []string
 	}{
-		{"requests", []string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"}},
+		{"requests", []string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"}},
 		{"usage", []string{"Date", "Requests", "Prompt Tokens", "Completion Tokens", "Quota"}},
 		{"ledger", []string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID"}},
 	}
@@ -470,11 +535,13 @@ func TestDownloadExportRequestsCSVEscaping(t *testing.T) {
 	createdAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
 	const tokenName = "key,\"quoted\"\nsecond line"
 	const modelName = "model,\"variant\"\nnext line"
+	const requestedModel = "entry,\"alias\"\nnext line"
 	l := &model.Log{
 		UserID:           u.ID,
 		TokenID:          42,
 		TokenName:        tokenName,
 		Model:            modelName,
+		RequestedModel:   requestedModel,
 		PromptTokens:     100,
 		CompletionTokens: 50,
 		Quota:            23,
@@ -522,8 +589,8 @@ func TestDownloadExportRequestsCSVEscaping(t *testing.T) {
 		t.Fatalf("invalid CSV: %v (body %q)", err, rr.Body.String())
 	}
 	want := [][]string{
-		{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"},
-		{itoa(l.ID), createdAt.Format(time.RFC3339), itoa(u.ID), "42", tokenName, modelName, "100", "50", "23"},
+		{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"},
+		{itoa(l.ID), createdAt.Format(time.RFC3339), itoa(u.ID), "42", tokenName, modelName, "100", "50", "23", requestedModel},
 	}
 	if !reflect.DeepEqual(rows, want) {
 		t.Fatalf("CSV rows = %q, want %q", rows, want)

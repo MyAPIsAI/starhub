@@ -168,7 +168,7 @@ func buildLogExport(typ string, userID int64, from time.Time) ([]byte, int, erro
 		writer.Flush()
 		return []byte(buf.String()), len(order), nil
 	}
-	writer.Write([]string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"})
+	writer.Write([]string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"})
 	for _, l := range logs {
 		writer.Write([]string{
 			strconv.FormatInt(l.ID, 10),
@@ -180,6 +180,7 @@ func buildLogExport(typ string, userID int64, from time.Time) ([]byte, int, erro
 			strconv.FormatInt(l.PromptTokens, 10),
 			strconv.FormatInt(l.CompletionTokens, 10),
 			strconv.FormatInt(l.Quota, 10),
+			l.RequestedModel,
 		})
 	}
 	writer.Flush()

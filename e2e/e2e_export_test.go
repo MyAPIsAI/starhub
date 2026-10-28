@@ -169,8 +169,8 @@ func TestExportRequestsContentUserIsolation(t *testing.T) {
 	t.Cleanup(func() { middleware.Sessions.Remove(env.session) })
 	aliceID, aliceSession := exportTestUser(t, env.base, "export-alice")
 	bobID, bobSession := exportTestUser(t, env.base, "export-bob")
-	aliceLog := &model.Log{UserID: aliceID, TokenName: "alice-private-key", Model: "model-alice", PromptTokens: 100, CompletionTokens: 50, Quota: 23}
-	bobLog := &model.Log{UserID: bobID, TokenName: "bob-private-key", Model: "model-bob", PromptTokens: 900, CompletionTokens: 400, Quota: 99}
+	aliceLog := &model.Log{UserID: aliceID, TokenName: "alice-private-key", Model: "model-alice", RequestedModel: "myapis-auto", PromptTokens: 100, CompletionTokens: 50, Quota: 23}
+	bobLog := &model.Log{UserID: bobID, TokenName: "bob-private-key", Model: "model-bob", RequestedModel: "model-bob", PromptTokens: 900, CompletionTokens: 400, Quota: 99}
 	for _, log := range []*model.Log{aliceLog, bobLog} {
 		if err := model.InsertLog(log); err != nil {
 			t.Fatal(err)
@@ -186,8 +186,8 @@ func TestExportRequestsContentUserIsolation(t *testing.T) {
 		session string
 		row     []string
 	}{
-		{"alice", aliceID, aliceSession, []string{fmt.Sprint(aliceLog.ID), time.Unix(aliceLog.CreatedAt, 0).UTC().Format(time.RFC3339), fmt.Sprint(aliceID), "0", "alice-private-key", "model-alice", "100", "50", "23"}},
-		{"bob", bobID, bobSession, []string{fmt.Sprint(bobLog.ID), time.Unix(bobLog.CreatedAt, 0).UTC().Format(time.RFC3339), fmt.Sprint(bobID), "0", "bob-private-key", "model-bob", "900", "400", "99"}},
+		{"alice", aliceID, aliceSession, []string{fmt.Sprint(aliceLog.ID), time.Unix(aliceLog.CreatedAt, 0).UTC().Format(time.RFC3339), fmt.Sprint(aliceID), "0", "alice-private-key", "model-alice", "100", "50", "23", "myapis-auto"}},
+		{"bob", bobID, bobSession, []string{fmt.Sprint(bobLog.ID), time.Unix(bobLog.CreatedAt, 0).UTC().Format(time.RFC3339), fmt.Sprint(bobID), "0", "bob-private-key", "model-bob", "900", "400", "99", "model-bob"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -216,7 +216,7 @@ func TestExportRequestsContentUserIsolation(t *testing.T) {
 				t.Fatalf("invalid CSV: %v", err)
 			}
 			want := [][]string{
-				{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota"},
+				{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"},
 				tc.row,
 			}
 			if !reflect.DeepEqual(rows, want) {
