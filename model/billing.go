@@ -1,6 +1,7 @@
 package model
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"time"
@@ -13,10 +14,10 @@ var ErrRechargeOrderNotFound = errors.New("recharge order not found")
 // Wallet stores a user's prepaid balance in nano-USD (1 USD = 1e9 nano).
 // One row per user, created lazily on first recharge.
 type Wallet struct {
-	UserID    int64  `gorm:"primaryKey" json:"user_id"`
-	Balance   int64  `gorm:"not null;default:0" json:"balance"` // nano-USD
-	CreatedAt int64  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt int64  `gorm:"autoUpdateTime" json:"updated_at"`
+	UserID    int64 `gorm:"primaryKey" json:"user_id"`
+	Balance   int64 `gorm:"not null;default:0" json:"balance"` // nano-USD
+	CreatedAt int64 `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt int64 `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 // LedgerEntry records every balance-changing event (recharge, consumption,
@@ -25,9 +26,9 @@ type Wallet struct {
 type LedgerEntry struct {
 	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID       int64  `gorm:"index;not null" json:"user_id"`
-	Type         string `gorm:"size:32;not null;default:''" json:"type"`         // recharge | call_summary | adjustment | refund
-	Amount       int64  `gorm:"not null;default:0" json:"amount"`               // signed nano-USD
-	BalanceAfter int64  `gorm:"not null;default:0" json:"balance_after"`        // nano-USD
+	Type         string `gorm:"size:32;not null;default:''" json:"type"` // recharge | call_summary | adjustment | refund
+	Amount       int64  `gorm:"not null;default:0" json:"amount"`        // signed nano-USD
+	BalanceAfter int64  `gorm:"not null;default:0" json:"balance_after"` // nano-USD
 	Description  string `gorm:"size:256;not null;default:''" json:"description"`
 	OrderID      string `gorm:"size:64;not null;default:''" json:"order_id"`
 	TraceID      string `gorm:"size:64;not null;default:''" json:"trace_id"`
@@ -55,7 +56,7 @@ const RechargeOrderExpirySeconds = 30 * 60
 
 // RechargeStatus constants mirror the frontend RechargeStatus union.
 const (
-	RechargePending   = "pending"
+	RechargePending    = "pending"
 	RechargeProcessing = "processing"
 	RechargePaid       = "paid"
 	RechargeFailed     = "failed"
@@ -299,5 +300,9 @@ func BeginRechargePayment(id int64) (*RechargeOrder, error) {
 
 // GenerateRechargeOrderNumber returns a human-readable order number.
 func GenerateRechargeOrderNumber() string {
-	return fmt.Sprintf("ord_%d_%d", time.Now().Unix(), time.Now().UnixNano()%100000)
+	return generateRechargeOrderNumberAt(time.Now())
+}
+
+func generateRechargeOrderNumberAt(now time.Time) string {
+	return fmt.Sprintf("ord_%d_%s", now.Unix(), rand.Text())
 }
