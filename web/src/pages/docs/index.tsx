@@ -20,7 +20,16 @@ import { usePreferences } from "../../lib/preferences";
 import { placeholders } from "../../config/placeholders";
 
 type ArticleId =
-  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "anthropic" | "routing" | "limits" | "faq";
+  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
+const geminiExample = `curl --fail --silent --show-error ${placeholders.apiBase}/chat/completions \\
+  -H "Authorization: Bearer $MYAPIS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "gemini-2.5-pro",
+    "messages": [{"role": "user", "content": "Say hello"}],
+    "max_tokens": 64,
+    "stream": false
+  }'`;
 const anthropicExample = `curl --fail --silent --show-error ${placeholders.apiBase}/messages \\
   -H "x-api-key: $MYAPIS_API_KEY" \\
   -H "anthropic-version: 2023-06-01" \\
@@ -111,6 +120,7 @@ export default function DocsPage() {
     { id: "protocols", title: text("协议", "Protocols", "البروتوكولات"), Icon: ArrowUpRight },
     { id: "chat-completions", title: text("Chat Completions（聊天补全）", "Chat Completions", "إكمال المحادثات"), Icon: Terminal },
     { id: "anthropic", title: text("Anthropic Messages（消息）", "Anthropic Messages", "رسائل Anthropic"), Icon: Terminal },
+    { id: "gemini", title: text("Gemini 兼容接入", "Gemini compatibility", "الوصول المتوافق إلى Gemini"), Icon: Terminal },
     { id: "models", title: text("模型列表", "Model list", "قائمة النماذج"), Icon: Cpu },
     { id: "claudeCode", title: t("docsClaudeCode"), Icon: Sparkles },
     { id: "errors", title: t("docsErrors"), Icon: ShieldCheck },
@@ -128,6 +138,21 @@ export default function DocsPage() {
   const [activeTab, setActiveTab] = useState<ArticleId>(initialArticle);
   const [searchQuery, setSearchQuery] = useState("");
   const current = articles.find((article) => article.id === activeTab)!;
+  const geminiLead = text(
+    "调用 Gemini 文本模型时，可使用网关的 POST /v1/chat/completions 兼容入口。示例使用 Bearer 密钥、gemini-2.5-pro 模型和 messages；实际调用仍要求密钥授权及匹配的可用渠道。",
+    "Call Gemini text models through the gateway's compatible POST /v1/chat/completions endpoint. The example uses a Bearer key, gemini-2.5-pro, and messages; calls still require key authorization and a matching available channel.",
+    "استدعِ نماذج Gemini النصية عبر نقطة POST /v1/chat/completions المتوافقة في البوابة. يستخدم المثال مفتاح Bearer ونموذج gemini-2.5-pro وحقل messages؛ وتظل المكالمات بحاجة إلى تفويض المفتاح وقناة متاحة مطابقة.",
+  );
+  const geminiBoundary = text(
+    "当前网关未开放 /v1beta/models/{model}:generateContent 原生入口。请使用上方兼容格式，不要将原生 contents 请求或 x-goog-api-key 认证直接套用到该入口；供应商侧的原生请求由网关适配器处理。",
+    "The gateway does not expose the native /v1beta/models/{model}:generateContent endpoint. Use the compatible format above, rather than a native contents body or x-goog-api-key authentication. The gateway adapter handles provider-side native requests.",
+    "لا توفر البوابة نقطة /v1beta/models/{model}:generateContent الأصلية. استخدم الصيغة المتوافقة أعلاه بدلًا من جسم contents الأصلي أو مصادقة x-goog-api-key. يتولى محول البوابة الطلبات الأصلية إلى المزود.",
+  );
+  const geminiResponseNote = text(
+    "stream: false 按 Chat Completions 的 choices[].message.content 读取文本，而非 Gemini 原生 candidates 结构。设置 stream: true 时同样按 Chat Completions 的 SSE 格式读取增量内容。",
+    "With stream: false, read text from Chat Completions choices[].message.content, not the native Gemini candidates structure. With stream: true, read incremental content using the Chat Completions SSE format as well.",
+    "مع stream: false اقرأ النص من choices[].message.content في Chat Completions وليس من بنية candidates الأصلية لـ Gemini. ومع stream: true اقرأ المحتوى التدريجي بصيغة SSE الخاصة بـ Chat Completions أيضًا.",
+  );
   const anthropicLead = text(
     "POST /v1/messages 使用 Anthropic 消息格式。示例提供 model、messages、max_tokens 和 stream: false；system 放在顶层，用户消息放在 messages 数组中。请选择密钥已授权且支持该协议的模型。",
     "POST /v1/messages uses the Anthropic message format. The example provides model, messages, max_tokens, and stream: false, with a top-level system field and user messages in the messages array. Choose an authorized model that supports this protocol.",
@@ -191,6 +216,7 @@ export default function DocsPage() {
     models: ["model list", "/v1/models", "模型列表", "قائمة النماذج"],
     "chat-completions": ["chat completions", "/v1/chat/completions", "聊天补全", "إكمال المحادثات"],
     anthropic: ["anthropic messages", "/v1/messages", "消息协议", "رسائل Anthropic"],
+    gemini: ["gemini compatibility", "Gemini 兼容接入", "الوصول المتوافق إلى Gemini"],
     routing: ["routing", "authorization", "group", "model", "allowlist", "auto", "路由", "授权", "分组", "白名单"],
     limits: ["limit", "rate", "quota", "concurrency", "throttle", "配额", "限流", "并发", "额度"],
     faq: ["faq", "question", "answer", "常见问题", "问题", "解答"],
@@ -208,6 +234,7 @@ export default function DocsPage() {
     models: [modelsLead, modelsScope, modelsResponseNote, modelsExample, modelsResponse].join(" "),
     "chat-completions": [chatLead, chatResponseNote, chatStreaming, chatExample, chatResponse].join(" "),
     anthropic: [anthropicLead, anthropicAuth, anthropicResponseNote, anthropicStreaming, anthropicExample, anthropicResponse].join(" "),
+    gemini: [geminiLead, geminiBoundary, geminiResponseNote, geminiExample].join(" "),
     routing: "routing flow key auth user quota check channel selection group model match pre-charge upstream call settle refund group model_limit allowed_ips remain_quota CIDR IP allowlist authorized model list",
     limits: "user rate limit 100 req/min key 50 model 500 per-request cap 2000000 quota pre-charge malicious large requests 429 rate_limit_exceeded 403 insufficient_quota",
     faq: "plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field top-up credited immediately balance",
@@ -403,6 +430,19 @@ export default function DocsPage() {
                 title={text("Python（编程语言）", "Python", "Python")}
                 code={pythonExample}
               />
+            </>
+          )}
+          {activeTab === "gemini" && (
+            <>
+              <p className="docs-lead">{geminiLead}</p>
+              <CodeBlock title="POST /v1/chat/completions" code={geminiExample} />
+              <div className="docs-callout">
+                <p>{geminiBoundary}</p>
+              </div>
+              <p>{geminiResponseNote}</p>
+              <Link to="/docs?article=chat-completions">
+                {text("查看 Chat Completions 格式", "Read the Chat Completions format", "اقرأ صيغة Chat Completions")}
+              </Link>
             </>
           )}
           {activeTab === "anthropic" && (
