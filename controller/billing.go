@@ -25,10 +25,11 @@ func GetWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.ApiSuccess(w, map[string]any{
-		"user_id":    wallet.UserID,
-		"balance":    wallet.Balance, // nano-USD
-		"created_at": wallet.CreatedAt,
-		"updated_at": wallet.UpdatedAt,
+		"user_id":      wallet.UserID,
+		"balance":      wallet.Balance, // nano-USD
+		"balance_nano": strconv.FormatInt(wallet.Balance, 10),
+		"created_at":   wallet.CreatedAt,
+		"updated_at":   wallet.UpdatedAt,
 	})
 }
 
@@ -51,15 +52,17 @@ func ListLedger(w http.ResponseWriter, r *http.Request) {
 	for i := range entries {
 		e := &entries[i]
 		data = append(data, map[string]any{
-			"id":            e.ID,
-			"user_id":       e.UserID,
-			"type":          e.Type,
-			"amount":        e.Amount,
-			"balance_after": e.BalanceAfter,
-			"description":   e.Description,
-			"order_id":      e.OrderID,
-			"trace_id":      e.TraceID,
-			"created_at":    e.CreatedAt,
+			"id":                 e.ID,
+			"user_id":            e.UserID,
+			"type":               e.Type,
+			"amount":             e.Amount,
+			"balance_after":      e.BalanceAfter,
+			"amount_nano":        strconv.FormatInt(e.Amount, 10),
+			"balance_after_nano": strconv.FormatInt(e.BalanceAfter, 10),
+			"description":        e.Description,
+			"order_id":           e.OrderID,
+			"trace_id":           e.TraceID,
+			"created_at":         e.CreatedAt,
 		})
 	}
 	common.ApiSuccess(w, data)
