@@ -35,16 +35,17 @@ const (
 type Resource string
 
 const (
-	ResourceUser       Resource = "user"
-	ResourceChannel    Resource = "channel"
-	ResourceToken      Resource = "token"
-	ResourceOption     Resource = "option"
-	ResourceLog        Resource = "log"
-	ResourceAudit      Resource = "audit"
-	ResourceRedemption Resource = "redemption"
-	ResourceFinance    Resource = "finance"
-	ResourceInventory  Resource = "inventory"
-	ResourceRegion     Resource = "region"
+	ResourceUser         Resource = "user"
+	ResourceChannel      Resource = "channel"
+	ResourceToken        Resource = "token"
+	ResourceOption       Resource = "option"
+	ResourceLog          Resource = "log"
+	ResourceAudit        Resource = "audit"
+	ResourceRedemption   Resource = "redemption"
+	ResourceFinance      Resource = "finance"
+	ResourceInventory    Resource = "inventory"
+	ResourceRegion       Resource = "region"
+	ResourceServiceGroup Resource = "service_group"
 )
 
 // policy maps role -> resource -> allowed actions. An empty action set means
@@ -52,28 +53,30 @@ const (
 // denied.
 var policy = map[int]map[Resource]map[Action]bool{
 	common.RoleRoot: {
-		ResourceUser:       {}, // all actions
-		ResourceChannel:    {}, // all actions
-		ResourceToken:      {}, // all actions
-		ResourceOption:     {}, // all actions
-		ResourceLog:        {}, // all actions
-		ResourceAudit:      {}, // all actions
-		ResourceRedemption: {}, // all actions
-		ResourceFinance:    {ActionRead: true},
-		ResourceInventory:  {ActionRead: true, ActionWrite: true},
-		ResourceRegion:     {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceUser:         {}, // all actions
+		ResourceChannel:      {}, // all actions
+		ResourceToken:        {}, // all actions
+		ResourceOption:       {}, // all actions
+		ResourceLog:          {}, // all actions
+		ResourceAudit:        {}, // all actions
+		ResourceRedemption:   {}, // all actions
+		ResourceFinance:      {ActionRead: true},
+		ResourceInventory:    {ActionRead: true, ActionWrite: true},
+		ResourceRegion:       {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceServiceGroup: {ActionRead: true, ActionWrite: true, ActionDelete: true},
 	},
 	common.RoleAdmin: {
-		ResourceUser:       {ActionRead: true},
-		ResourceChannel:    {ActionRead: true, ActionWrite: true, ActionDelete: true},
-		ResourceToken:      {ActionRead: true, ActionWrite: true, ActionDelete: true},
-		ResourceOption:     {ActionRead: true, ActionWrite: true},
-		ResourceLog:        {ActionRead: true},
-		ResourceAudit:      {ActionRead: true},
-		ResourceRedemption: {ActionRead: true, ActionWrite: true, ActionDelete: true},
-		ResourceFinance:    {ActionRead: true},
-		ResourceInventory:  {ActionRead: true, ActionWrite: true},
-		ResourceRegion:     {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceUser:         {ActionRead: true},
+		ResourceChannel:      {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceToken:        {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceOption:       {ActionRead: true, ActionWrite: true},
+		ResourceLog:          {ActionRead: true},
+		ResourceAudit:        {ActionRead: true},
+		ResourceRedemption:   {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceFinance:      {ActionRead: true},
+		ResourceInventory:    {ActionRead: true, ActionWrite: true},
+		ResourceRegion:       {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceServiceGroup: {ActionRead: true, ActionWrite: true, ActionDelete: true},
 	},
 	common.RoleFinance: {
 		ResourceFinance: {ActionRead: true},
@@ -142,6 +145,8 @@ func pathResource(path string) (Resource, bool) {
 		return ResourceInventory, true
 	case path == "/api/region" || strings.HasPrefix(path, "/api/region/"):
 		return ResourceRegion, true
+	case path == "/api/service-group" || strings.HasPrefix(path, "/api/service-group/"):
+		return ResourceServiceGroup, true
 	}
 	return "", false
 }

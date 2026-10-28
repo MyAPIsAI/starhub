@@ -15,16 +15,20 @@ var ErrServiceGroupNotFound = errors.New("service group not found")
 // (billing ratio) remains in the group_ratio option; this table is
 // synced alongside it by the controller.
 type ServiceGroupConfig struct {
-	ID          int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	GroupID     string `gorm:"uniqueIndex;size:64;not null" json:"group_id"`
-	Name        string `gorm:"size:128;not null;default:''" json:"name"`
-	Description string `gorm:"size:512;not null;default:''" json:"description"`
-	Enabled     bool   `gorm:"not null;default:true" json:"enabled"`
-	Visibility  string `gorm:"size:16;not null;default:'common'" json:"visibility"` // common | custom
-	AccountIDs  string `gorm:"size:1024;not null;default:''" json:"account_ids"`   // comma-separated
-	Multiplier  string `gorm:"size:32;not null;default:'1'" json:"multiplier"`     // decimal string, synced to group_ratio
-	CreatedAt   int64  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt   int64  `gorm:"autoUpdateTime" json:"updated_at"`
+	ID            int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	GroupID       string `gorm:"uniqueIndex;size:64;not null" json:"group_id"`
+	Name          string `gorm:"size:128;not null;default:''" json:"name"`
+	Description   string `gorm:"size:512;not null;default:''" json:"description"`
+	Enabled       bool   `gorm:"not null;default:true" json:"enabled"`
+	Visibility    string `gorm:"size:16;not null;default:'common'" json:"visibility"` // common | custom
+	AccountIDs    string `gorm:"size:1024;not null;default:''" json:"account_ids"`    // comma-separated
+	Multiplier    string `gorm:"size:32;not null;default:'1'" json:"multiplier"`      // decimal string, synced to group_ratio
+	SLASuccessPPM *int64 `json:"-"`
+	SLAP95MS      *int64 `json:"-"`
+	SLARevision   int64  `gorm:"not null;default:0" json:"-"`
+	SLAUpdatedAt  int64  `gorm:"not null;default:0" json:"-"`
+	CreatedAt     int64  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     int64  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 // UpsertServiceGroup creates or updates a service group config row.
@@ -43,30 +47,42 @@ func UpsertServiceGroup(sgc *ServiceGroupConfig) error {
 	res := DB.Model(&ServiceGroupConfig{}).
 		Where("group_id = ?", sgc.GroupID).
 		Updates(map[string]any{
-			"name":         sgc.Name,
-			"description":  sgc.Description,
-			"enabled":      sgc.Enabled,
-			"visibility":   sgc.Visibility,
-			"account_ids":  sgc.AccountIDs,
-			"multiplier":   sgc.Multiplier,
+			"name":        sgc.Name,
+			"description": sgc.Description,
+			"enabled":     sgc.Enabled,
+			"visibility":  sgc.Visibility,
+			"account_ids": sgc.AccountIDs,
+			"multiplier":  sgc.Multiplier,
 		})
 	if res.Error != nil {
 		return res.Error
 	}
 	if res.RowsAffected > 0 {
-		return nil
+		return reloadServiceGroup(sgc)
 	}
 	// On the create path, use a map so zero-value fields (Enabled=false)
 	// are persisted — GORM's struct Create skips zero values.
-	return DB.Model(&ServiceGroupConfig{}).Create(map[string]any{
-		"group_id":     sgc.GroupID,
-		"name":         sgc.Name,
-		"description":  sgc.Description,
-		"enabled":      sgc.Enabled,
-		"visibility":   sgc.Visibility,
-		"account_ids":  sgc.AccountIDs,
-		"multiplier":   sgc.Multiplier,
-	}).Error
+	if err := DB.Model(&ServiceGroupConfig{}).Create(map[string]any{
+		"group_id":    sgc.GroupID,
+		"name":        sgc.Name,
+		"description": sgc.Description,
+		"enabled":     sgc.Enabled,
+		"visibility":  sgc.Visibility,
+		"account_ids": sgc.AccountIDs,
+		"multiplier":  sgc.Multiplier,
+	}).Error; err != nil {
+		return err
+	}
+	return reloadServiceGroup(sgc)
+}
+
+func reloadServiceGroup(sgc *ServiceGroupConfig) error {
+	var stored ServiceGroupConfig
+	if err := DB.Where("group_id = ?", sgc.GroupID).First(&stored).Error; err != nil {
+		return err
+	}
+	*sgc = stored
+	return nil
 }
 
 // GetServiceGroup returns a service group config by its group_id.

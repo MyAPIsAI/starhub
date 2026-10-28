@@ -144,6 +144,7 @@ func New() http.Handler {
 	mux.Handle("GET /api/service-group/", middleware.AdminAuth(http.HandlerFunc(controller.ListServiceGroups)))
 	mux.Handle("PUT /api/service-group", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertServiceGroup))))
 	mux.Handle("PUT /api/service-group/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertServiceGroup))))
+	mux.Handle("PUT /api/service-group/{id}/sla", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateServiceGroupSLA))))
 	mux.Handle("DELETE /api/service-group/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteServiceGroup))))
 
 	// Service quality: per-model SLA metrics aggregated from logs.

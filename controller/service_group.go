@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -141,17 +143,57 @@ func serviceGroupJSON(sgc *model.ServiceGroupConfig) map[string]any {
 		accountIDs = []string{}
 	}
 	return map[string]any{
-		"id":           sgc.ID,
-		"group_id":     sgc.GroupID,
-		"name":         sgc.Name,
-		"description":  sgc.Description,
-		"enabled":      sgc.Enabled,
-		"visibility":   sgc.Visibility,
-		"account_ids":  accountIDs,
-		"multiplier":   sgc.Multiplier,
-		"created_at":   sgc.CreatedAt,
-		"updated_at":   sgc.UpdatedAt,
+		"id":          sgc.ID,
+		"group_id":    sgc.GroupID,
+		"name":        sgc.Name,
+		"description": sgc.Description,
+		"enabled":     sgc.Enabled,
+		"visibility":  sgc.Visibility,
+		"account_ids": accountIDs,
+		"multiplier":  sgc.Multiplier,
+		"created_at":  sgc.CreatedAt,
+		"updated_at":  sgc.UpdatedAt,
+		"sla":         sgc.ServiceLevel(),
 	}
+}
+
+func UpdateServiceGroupSLA(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		ExpectedGroupID  *int64          `json:"expected_group_id"`
+		ExpectedRevision *int64          `json:"expected_revision"`
+		Targets          json.RawMessage `json:"targets"`
+	}
+	if !decodeResourceBody(w, r, &request) {
+		return
+	}
+	groupID := r.PathValue("id")
+	if !validGroupID(groupID) || request.ExpectedGroupID == nil || request.ExpectedRevision == nil || len(request.Targets) == 0 {
+		common.ApiError(w, http.StatusBadRequest, "group identity, expected_revision and explicit targets are required")
+		return
+	}
+	var target *model.ServiceGroupSLATarget
+	decoder := json.NewDecoder(bytes.NewReader(request.Targets))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&target); err != nil {
+		common.ApiError(w, http.StatusBadRequest, "invalid service-level targets")
+		return
+	}
+	group, err := model.UpdateServiceGroupSLA(r.Context(), groupID, *request.ExpectedGroupID, *request.ExpectedRevision, target)
+	if err != nil {
+		status := http.StatusInternalServerError
+		message := "service-level targets are unavailable"
+		switch {
+		case errors.Is(err, model.ErrInvalidSLATarget):
+			status, message = http.StatusBadRequest, "success_rate_ppm must be 0..1000000 and p95_latency_ms 1..86400000; use null to unpublish"
+		case errors.Is(err, model.ErrSLATargetConflict):
+			status, message = http.StatusConflict, err.Error()
+		case errors.Is(err, model.ErrServiceGroupNotFound):
+			status, message = http.StatusNotFound, err.Error()
+		}
+		common.ApiError(w, status, message)
+		return
+	}
+	common.ApiSuccess(w, serviceGroupJSON(group))
 }
 
 // syncGroupRatio rebuilds the group_ratio option JSON from all
