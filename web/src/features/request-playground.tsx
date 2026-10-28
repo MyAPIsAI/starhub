@@ -19,6 +19,7 @@ import { resolveVendor } from "../lib/api/usage";
 import { getKeyModelOptions } from "../lib/key-model-policy";
 import { findClientModel, validDemoSecret } from "../lib/client-config";
 import { buildGatewayRequest } from "../lib/gateway-request";
+import { readGeminiGatewayResponse } from "../lib/gemini-response";
 import { useModelPricing } from "../lib/model-pricing";
 import {
   buildCurlRequest,
@@ -197,33 +198,39 @@ export default function Playground({
         setBusy(false);
         return;
       }
-      const content =
-        snapshot.protocol === "Anthropic"
+      const gemini =
+        snapshot.protocol === "Gemini"
+          ? readGeminiGatewayResponse(data)
+          : undefined;
+      const content = gemini
+        ? gemini.content
+        : snapshot.protocol === "Anthropic"
           ? (data?.content ?? [])
               .filter((block: { type: string }) => block.type === "text")
               .map((block: { text: string }) => block.text)
               .join("")
           : (data?.choices?.[0]?.message?.content ?? "");
       const inputTokens =
-        data?.usage?.prompt_tokens ?? data?.usage?.input_tokens ?? 0;
+        gemini?.inputTokens ?? data?.usage?.prompt_tokens ?? data?.usage?.input_tokens ?? 0;
       const outputTokens =
-        data?.usage?.completion_tokens ?? data?.usage?.output_tokens ?? 0;
+        gemini?.outputTokens ?? data?.usage?.completion_tokens ?? data?.usage?.output_tokens ?? 0;
       setRelayResult({
         source: "api",
         trace_id: `relay_${Date.now()}`,
         time: new Date().toISOString(),
         model: snapshot.model,
         vendor: resolveVendor(snapshot.model),
-        status: "success",
+        status: gemini?.status ?? "success",
         cost_nano: "0",
         duration_ms: 0,
         key_id: credential,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
-        error_code: "",
-        error_message: "",
+        error_code: gemini?.errorCode ?? "",
+        error_message: gemini?.errorCode ? `Gemini: ${gemini.errorCode}` : "",
         requested_model: snapshot.model,
-        actual_model: data?.model ?? snapshot.model,
+        actual_model: gemini ? gemini.actualModel : data?.model ?? snapshot.model,
+        protocol: snapshot.protocol,
         response_text: content,
       } as any);
       setLastId(`relay_${Date.now()}`);
@@ -348,7 +355,7 @@ export default function Playground({
                   >
                     <option value="OpenAI">OpenAI（对话协议）</option>
                     <option value="Anthropic">Anthropic（消息协议）</option>
-                    <option value="Gemini">Gemini（生成协议）</option>
+                    <option value="Gemini">{c("Gemini（内容生成）", "Gemini (content generation)", "Gemini (إنشاء المحتوى)")}</option>
                   </select>
                 </Field>
                 <Field
@@ -540,24 +547,17 @@ export default function Playground({
               </details>
               <div className="verify-send">
                 <span>
-                  {protocol === "Gemini" &&
-                  validDemoSecret(currentKey?.keySecret)
+                  {!validDemoSecret(currentKey?.keySecret)
                     ? c(
-                        "尚不支持 Gemini 原生调用",
-                        "Gemini native calls are unsupported",
-                        "طلبات Gemini الأصلية غير مدعومة",
+                        "密钥明文不可用 · 将模拟请求",
+                        "Key secret unavailable · will simulate",
+                        "سر المفتاح غير متاح · محاكاة",
                       )
-                    : !validDemoSecret(currentKey?.keySecret)
-                      ? c(
-                          "密钥明文不可用 · 将模拟请求",
-                          "Key secret unavailable · will simulate",
-                          "سر المفتاح غير متاح · محاكاة",
-                        )
-                      : c(
-                          "将通过真实接口调用",
-                          "Sends a real API request",
-                          "يرسل طلبًا حقيقيًا",
-                        )}
+                    : c(
+                        "将通过真实接口调用",
+                        "Sends a real API request",
+                        "يرسل طلبًا حقيقيًا",
+                      )}
                 </span>
                 <Button
                   variant="primary"
@@ -565,9 +565,7 @@ export default function Playground({
                     busy ||
                     !currentKey ||
                     !currentKey.active ||
-                    !prompt.trim() ||
-                    (protocol === "Gemini" &&
-                      validDemoSecret(currentKey.keySecret))
+                    !prompt.trim()
                   }
                   onClick={send}
                 >
@@ -769,9 +767,9 @@ export default function Playground({
             </summary>
             <p className="verify-hint">
               {c(
-                "使用当前网关地址与环境变量 MYAPIS_API_KEY（平台密钥）；执行会产生实际调用费用。Gemini 原生接口尚未支持。",
-                "Uses this gateway and MYAPIS_API_KEY. Running it incurs usage charges. Gemini native requests are not supported yet.",
-                "يستخدم هذه البوابة ومتغير MYAPIS_API_KEY. التنفيذ يُحاسب حسب الاستخدام. واجهة Gemini الأصلية غير مدعومة بعد.",
+                "使用当前网关地址与环境变量 MYAPIS_API_KEY（平台密钥）；执行会产生实际调用费用。Gemini 使用原生 generateContent（内容生成）接口。",
+                "Uses this gateway and MYAPIS_API_KEY. Running it incurs usage charges. Gemini uses native generateContent.",
+                "يستخدم هذه البوابة ومتغير MYAPIS_API_KEY. التنفيذ يُحاسب حسب الاستخدام. يستخدم Gemini واجهة generateContent الأصلية.",
               )}
             </p>
             <Button

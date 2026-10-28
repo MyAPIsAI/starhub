@@ -19,6 +19,7 @@ import { copyText } from "../../features/code-example";
 import { usePreferences } from "../../lib/preferences";
 import { placeholders } from "../../config/placeholders";
 import { responsesGuide } from "./responses-guide";
+import { geminiNativeGuide } from "./gemini-guide";
 
 type ArticleId =
   "quickstart" | "auth" | "tiers" | "claudeCode" | "cursor" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "responses" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
@@ -118,6 +119,7 @@ export default function DocsPage() {
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const [searchParams, setSearchParams] = useSearchParams();
   const responses = responsesGuide(text);
+  const nativeGemini = geminiNativeGuide(text);
   const articles: { id: ArticleId; title: string; Icon: typeof Terminal }[] = [
     { id: "quickstart", title: t("docsQuickstart"), Icon: Terminal },
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
@@ -126,7 +128,7 @@ export default function DocsPage() {
     { id: "chat-completions", title: text("Chat Completions（聊天补全）", "Chat Completions", "إكمال المحادثات"), Icon: Terminal },
     { id: "responses", title: text("Responses（响应接口）与 Codex", "Responses and Codex", "Responses وCodex"), Icon: Terminal },
     { id: "anthropic", title: text("Anthropic Messages（消息）", "Anthropic Messages", "رسائل Anthropic"), Icon: Terminal },
-    { id: "gemini", title: text("Gemini 兼容接入", "Gemini compatibility", "الوصول المتوافق إلى Gemini"), Icon: Terminal },
+    { id: "gemini", title: text("Gemini（原生与兼容）", "Gemini native and compatible APIs", "Gemini الأصلي والمتوافق"), Icon: Terminal },
     { id: "models", title: text("模型列表", "Model list", "قائمة النماذج"), Icon: Cpu },
     { id: "claudeCode", title: t("docsClaudeCode"), Icon: Sparkles },
     { id: "cursor", title: text("Cursor 接入指南", "Cursor setup", "إعداد Cursor"), Icon: Terminal },
@@ -183,9 +185,9 @@ export default function DocsPage() {
     "استدعِ نماذج Gemini النصية عبر نقطة POST /v1/chat/completions المتوافقة في البوابة. يستخدم المثال مفتاح Bearer ونموذج gemini-2.5-pro وحقل messages؛ وتظل المكالمات بحاجة إلى تفويض المفتاح وقناة متاحة مطابقة.",
   );
   const geminiBoundary = text(
-    "当前网关未开放 /v1beta/models/{model}:generateContent 原生入口。请使用上方兼容格式，不要将原生 contents 请求或 x-goog-api-key 认证直接套用到该入口；供应商侧的原生请求由网关适配器处理。",
-    "The gateway does not expose the native /v1beta/models/{model}:generateContent endpoint. Use the compatible format above, rather than a native contents body or x-goog-api-key authentication. The gateway adapter handles provider-side native requests.",
-    "لا توفر البوابة نقطة /v1beta/models/{model}:generateContent الأصلية. استخدم الصيغة المتوافقة أعلاه بدلًا من جسم contents الأصلي أو مصادقة x-goog-api-key. يتولى محول البوابة الطلبات الأصلية إلى المزود.",
+    "兼容聊天入口继续使用 messages 与 Bearer 密钥；原生 contents 和 x-goog-api-key 用于上方 /v1beta/models 路径。请选择与请求格式匹配的入口。",
+    "The compatible chat endpoint uses messages and a Bearer key. Native contents and x-goog-api-key use the /v1beta/models path above. Choose the endpoint that matches your request format.",
+    "تستخدم نقطة المحادثة المتوافقة messages ومفتاح Bearer. يستخدم contents الأصلي وx-goog-api-key مسار /v1beta/models أعلاه. اختر النقطة المطابقة لصيغة طلبك.",
   );
   const geminiResponseNote = text(
     "stream: false 按 Chat Completions 的 choices[].message.content 读取文本，而非 Gemini 原生 candidates 结构。设置 stream: true 时同样按 Chat Completions 的 SSE 格式读取增量内容。",
@@ -277,7 +279,7 @@ export default function DocsPage() {
     "chat-completions": [chatLead, chatResponseNote, chatStreaming, chatExample, chatResponse].join(" "),
     responses: Object.values(responses).join(" "),
     anthropic: [anthropicLead, anthropicAuth, anthropicResponseNote, anthropicStreaming, anthropicExample, anthropicResponse].join(" "),
-    gemini: [geminiLead, geminiBoundary, geminiResponseNote, geminiExample].join(" "),
+    gemini: [geminiLead, geminiBoundary, geminiResponseNote, geminiExample, ...Object.values(nativeGemini)].join(" "),
     routing: "routing flow key auth user quota check channel selection group model match pre-charge upstream call settle refund group model_limit allowed_ips remain_quota CIDR IP allowlist authorized model list",
     limits: "user rate limit 100 req/min key 50 model 500 per-request cap 2000000 quota pre-charge malicious large requests 429 rate_limit_exceeded 403 insufficient_quota",
     faq: "plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field top-up credited immediately balance",
@@ -492,6 +494,13 @@ export default function DocsPage() {
           )}
           {activeTab === "gemini" && (
             <>
+              <p className="docs-lead">{nativeGemini.lead}</p>
+              <CodeBlock title="Gemini REST" code={nativeGemini.example} />
+              <p>{nativeGemini.response}</p>
+              <div className="docs-callout"><p>{nativeGemini.streaming}</p></div>
+              <div className="docs-callout"><p>{nativeGemini.boundary}</p></div>
+              <p><a href="https://ai.google.dev/api/generate-content" target="_blank" rel="noreferrer">{text("Gemini 官方接口参考", "Official Gemini API reference", "مرجع Gemini الرسمي")}</a></p>
+              <h2>{text("兼容聊天接入", "Compatible chat API", "واجهة المحادثة المتوافقة")}</h2>
               <p className="docs-lead">{geminiLead}</p>
               <CodeBlock title="POST /v1/chat/completions" code={geminiExample} />
               <div className="docs-callout">
@@ -959,6 +968,7 @@ export default function DocsPage() {
                     {[
                       [text("Chat Completions（OpenAI 兼容）", "Chat Completions (OpenAI)", "Chat Completions (OpenAI)"), "https://api.myapis.ai/v1", "/chat/completions", "Bearer token"],
                       ["Responses", placeholders.apiBase, "/responses", "Bearer token"],
+                      ["Gemini", placeholders.apiBase.replace(/\/v1\/?$/, ""), "/v1beta/models/{model}:generateContent", "x-goog-api-key / Bearer"],
                       [text("Messages（Anthropic 兼容）", "Messages (Anthropic)", "Messages (Anthropic)"), "https://api.myapis.ai/v1", "/messages", "Bearer token"],
                       [text("Embeddings（OpenAI 兼容）", "Embeddings (OpenAI)", "Embeddings (OpenAI)"), "https://api.myapis.ai/v1", "/embeddings", "Bearer token"],
                       [text("Images（OpenAI 兼容）", "Images (OpenAI)", "Images (OpenAI)"), "https://api.myapis.ai/v1", "/images/generations", "Bearer token"],

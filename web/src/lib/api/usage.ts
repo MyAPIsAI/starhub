@@ -157,7 +157,9 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     requested_model: log.requested_model || log.model,
     actual_model: log.model,
     protocol:
-      log.protocol === "OpenAI" || log.protocol === "Anthropic"
+      log.protocol === "OpenAI" ||
+      log.protocol === "Anthropic" ||
+      log.protocol === "Gemini"
         ? log.protocol
         : undefined,
     vendor: resolveVendor(log.model),
@@ -181,7 +183,7 @@ export interface PreviewRequestLike {
   model: string;
   requested_model: string;
   actual_model: string;
-  protocol?: "OpenAI" | "Anthropic";
+  protocol?: "OpenAI" | "Anthropic" | "Gemini";
   outcome?: "success" | "failed" | "cancelled";
   vendor: string;
   status: "success" | "failed";

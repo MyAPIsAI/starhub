@@ -116,7 +116,37 @@ export function requestPayload(request: DemoRequest) {
   };
 }
 export function serializeRequest(request: DemoRequest): string {
-  return JSON.stringify(requestPayload(request), null, 2);
+  return JSON.stringify(
+    request.protocol === "Gemini"
+      ? geminiRequestPayload(request)
+      : requestPayload(request),
+    null,
+    2,
+  );
+}
+
+export function geminiRequestPayload(request: DemoRequest) {
+  return {
+    contents: request.messages
+      .filter((message) => message.role !== "system")
+      .map((message) => ({
+        role: message.role === "assistant" ? "model" : "user",
+        parts: [{ text: message.content }],
+      })),
+    generationConfig: {
+      temperature: request.temperature,
+      maxOutputTokens: request.max_tokens,
+    },
+    ...(request.messages.some((message) => message.role === "system")
+      ? {
+          systemInstruction: {
+            parts: request.messages
+              .filter((message) => message.role === "system")
+              .map((message) => ({ text: message.content })),
+          },
+        }
+      : {}),
+  };
 }
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
 export function buildCurlRequest(
@@ -145,28 +175,7 @@ export function buildCurlRequest(
           }
         : {}),
     };
-  if (protocol === "Gemini")
-    body = {
-      contents: request.messages
-        .filter((message) => message.role !== "system")
-        .map((message) => ({
-          role: message.role === "assistant" ? "model" : "user",
-          parts: [{ text: message.content }],
-        })),
-      generationConfig: {
-        temperature: request.temperature,
-        maxOutputTokens: request.max_tokens,
-      },
-      ...(request.messages.some((message) => message.role === "system")
-        ? {
-            systemInstruction: {
-              parts: request.messages
-                .filter((message) => message.role === "system")
-                .map((message) => ({ text: message.content })),
-            },
-          }
-        : {}),
-    };
+  if (protocol === "Gemini") body = geminiRequestPayload(request);
   const safeKey = /[•●*]/.test(key) ? "$MYAPIS_API_KEY" : key;
   const header =
     protocol === "Anthropic"

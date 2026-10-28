@@ -23,11 +23,13 @@ const log: LogRow = {
 };
 
 describe("backend log model attribution", () => {
-  it.each(["OpenAI", "Anthropic", undefined, "", "unknown"])(
+  it.each(["OpenAI", "Anthropic", "Gemini", undefined, "", "unknown"])(
     "does not infer the protocol of %s logs",
     (protocol) => {
       expect(adaptLogRow({ ...log, protocol }).protocol).toBe(
-        protocol === "OpenAI" || protocol === "Anthropic"
+        protocol === "OpenAI" ||
+          protocol === "Anthropic" ||
+          protocol === "Gemini"
           ? protocol
           : undefined,
       );

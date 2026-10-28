@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildGatewayRequest } from "./gateway-request";
-import { defaultDemoRequest } from "./request-contract";
+import {
+  defaultDemoRequest,
+  geminiRequestPayload,
+  serializeRequest,
+} from "./request-contract";
 
 describe("real gateway protocol requests", () => {
   it.each(["sk-review******mask", "sk-●●●", "sk-••••", ""])(
@@ -47,12 +51,32 @@ describe("real gateway protocol requests", () => {
       }
     },
   );
-  it("does not send unsupported native Gemini requests to the chat endpoint", () => {
-    expect(() =>
-      buildGatewayRequest(
-        { ...defaultDemoRequest(), protocol: "Gemini" },
-        "sk-review-valid",
-      ),
-    ).toThrow("not supported");
-  });
+  it.each(["gemini-2.5-pro", "myapis-auto", "veyra-auto"])(
+    "sends native Gemini %s with the same body as JSON export",
+    (model) => {
+      const request = {
+        ...defaultDemoRequest(model),
+        protocol: "Gemini" as const,
+        messages: [
+          { role: "system" as const, content: "System" },
+          { role: "user" as const, content: "Hello" },
+          { role: "assistant" as const, content: "Hi" },
+        ],
+      };
+      const call = buildGatewayRequest(request, "sk-review-valid");
+      expect(call.endpoint).toBe(`/v1beta/models/${model}:generateContent`);
+      expect(call.init.headers["x-goog-api-key"]).toBe("sk-review-valid");
+      expect(call.init.headers.Authorization).toBeUndefined();
+      const body = JSON.parse(call.init.body);
+      expect(body).toEqual(JSON.parse(serializeRequest(request)));
+      expect(body).toEqual(geminiRequestPayload(request));
+      expect(body.contents).toEqual([
+        { role: "user", parts: [{ text: "Hello" }] },
+        { role: "model", parts: [{ text: "Hi" }] },
+      ]);
+      expect(body.systemInstruction).toEqual({ parts: [{ text: "System" }] });
+      expect(body.model).toBeUndefined();
+      expect(body.generationConfig.maxOutputTokens).toBe(request.max_tokens);
+    },
+  );
 });

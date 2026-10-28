@@ -17,7 +17,7 @@ import (
 func serveConsole(api http.Handler, root fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/api" || strings.HasPrefix(p, "/api/") || p == "/v1" || strings.HasPrefix(p, "/v1/") {
+		if p == "/api" || strings.HasPrefix(p, "/api/") || p == "/v1" || strings.HasPrefix(p, "/v1/") || p == "/v1beta" || strings.HasPrefix(p, "/v1beta/") {
 			api.ServeHTTP(w, r)
 			return
 		}
