@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"hash/fnv"
 	"io"
 	"mime"
@@ -135,6 +136,10 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				}
 				best, err := chooseSmartModel(r, requirements)
 				if err != nil {
+					if errors.Is(err, errSmartChainHistory) {
+						fail(http.StatusBadRequest, "routing_chain_history_required", err.Error())
+						return
+					}
 					dto.WriteRelayError(w, http.StatusInternalServerError, inbound, "server_error", "internal_error", "failed to evaluate smart routing candidates")
 					return
 				}

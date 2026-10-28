@@ -17,6 +17,8 @@ type smartRequirements struct {
 	capabilities  []string
 	input, output int64
 	chain         string
+	inferredChain bool
+	continuation  bool
 }
 
 var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,100}$`)
@@ -72,13 +74,8 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 		if req.output <= 0 {
 			req.output = common.DefaultCompletionBudgetTokens
 		}
-		if len(fields.Tools) > 0 || len(fields.Functions) > 0 {
-			req.capabilities = append(req.capabilities, "function_call")
-			if req.chain == "" {
-				return req, errors.New("smart tool requests require X-MyAPIs-Chain-Id from the first turn")
-			}
-		}
 		continuation := false
+		var firstUser json.RawMessage
 		for _, message := range fields.Messages {
 			continuation = continuation || message.Role == "tool" || message.Role == "function" || len(message.ToolCalls) > 0 || (len(message.FunctionCall) > 0 && string(message.FunctionCall) != "null")
 			var blocks []struct {
@@ -94,11 +91,20 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 					}
 				}
 			}
+			if firstUser == nil && message.Role == "user" && !continuation {
+				firstUser = message.Content
+			}
 		}
-		if continuation {
+		if len(fields.Tools) > 0 || len(fields.Functions) > 0 || continuation {
 			req.capabilities = append(req.capabilities, "function_call")
 			if req.chain == "" {
-				return req, errors.New("smart tool continuations require X-MyAPIs-Chain-Id")
+				var err error
+				req.chain, err = inferToolChain(r.URL.Path, firstUser)
+				if err != nil {
+					return req, err
+				}
+				req.inferredChain = true
+				req.continuation = continuation
 			}
 		}
 	}
@@ -198,6 +204,9 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 		pinned, err = model.FindRoutingChain(tokenID, group, requirements.chain)
 		if err != nil {
 			return "", err
+		}
+		if pinned == "" && requirements.inferredChain && requirements.continuation {
+			return "", errSmartChainHistory
 		}
 	}
 	groups := []string{group}

@@ -220,9 +220,8 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 			Mode:    mode,
 		}),
 	}
-	// Auto-group mode: start walking from the first group. The pre-charge
-	// used billingGroup() (the first / cheapest group); the settlement uses
-	// currentGroup, which advances when a group is exhausted.
+	// Auto-group mode starts at the first configured group. Admission may
+	// advance the cursor before pre-charge; settlement uses the serving group.
 	if req.group == common.AutoGroup && len(req.autoGroups) > 0 {
 		flow.currentGroup = req.autoGroups[0]
 		flow.groupIdx = 0
@@ -707,25 +706,25 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 		return
 	}
 
-	// The first selection doubles as the availability check: fail with 503
-	// before any quota is touched.
-	billingGroup := req.billingGroup()
-	if _, err := model.GetSatisfiedChannel(billingGroup, req.modelName); err != nil {
+	// Use the same constrained group walk for admission and later attempts.
+	// The first eligible group supplies the pre-charge price.
+	flow := newRelayFlow(r.Context(), w, req, inbound, "chat")
+	defer flow.finish()
+	if _, err := flow.pick(); err != nil {
 		if errors.Is(err, model.ErrNoChannel) {
-			dto.WriteRelayError(w, http.StatusServiceUnavailable, inbound,
-				"server_error", "no_available_channel",
-				"no available channel for model "+req.modelName+" in group "+billingGroup)
+			flow.errorOut(http.StatusServiceUnavailable, "server_error", "no_available_channel",
+				"no available channel for model "+req.modelName+" in the authorized groups")
 			return
 		}
-		dto.WriteRelayError(w, http.StatusInternalServerError, inbound,
-			"server_error", "channel_selection_failed", err.Error())
+		flow.errorOut(http.StatusInternalServerError, "server_error", "channel_selection_failed", err.Error())
 		return
 	}
+	billingGroup := flow.settleGroup()
 
 	// Pre-charge: the prompt estimate comes from the IR (protocol
 	// independent), the completion budget from the native multiplier fields.
-	// The pre-charge uses the first auto group (cheapest); the settlement
-	// uses the actual serving group.
+	// The pre-charge uses the first eligible group; the settlement uses the
+	// actual serving group if a later attempt fails over.
 	var preQuota int64
 	var preErr error
 	if inbound == dto.InboundClaude {
@@ -736,14 +735,12 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 			req.modelName, billingGroup, req.userGroup, req.body)
 	}
 	if preErr != nil {
-		writePreConsumeError(w, inbound, preErr)
+		writePreConsumeError(flow.w, inbound, preErr)
 		return
 	}
 
-	flow := newRelayFlow(r.Context(), w, req, inbound, "chat")
 	flow.preQuota = preQuota
 	defer flow.refundUnlessSettled()
-	defer flow.finish()
 
 	flow.runChannels(func(ch *model.Channel) attemptResult {
 		return chatAttempt(flow, ch, ir, inbound)

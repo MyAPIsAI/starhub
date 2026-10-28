@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -33,6 +34,9 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 	}
 	ch, err := model.GetChannelByID(task.ChannelID)
 	if err != nil {
+		if !errors.Is(err, model.ErrChannelNotFound) {
+			return task, fmt.Errorf("load task channel: %w", err)
+		}
 		// The channel is gone: the task can never complete, refund it.
 		return recordAndSettleTask(task, &dto.TaskResult{
 			Status:     dto.TaskStatusFailed,
@@ -64,16 +68,16 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= http.StatusBadRequest {
-		// A 4xx on poll proves the upstream task is dead (unknown id,
-		// expired, ...); 5xx is transient.
-		if resp.StatusCode < http.StatusInternalServerError {
+		// Only an explicit missing/expired result ends the task. Rate limits,
+		// authentication failures and server errors do not prove execution failed.
+		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
 			return recordAndSettleTask(task, &dto.TaskResult{
 				Status: dto.TaskStatusFailed,
 				FailReason: fmt.Sprintf("upstream poll returned %d: %s",
 					resp.StatusCode, string(body)),
 			}, "", 0)
 		}
-		return task, nil
+		return task, fmt.Errorf("upstream task poll returned HTTP %d; task remains pending", resp.StatusCode)
 	}
 	result, err := adaptor.ParseTaskResult(resp.StatusCode, body)
 	if err != nil {
