@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Bar,
   BarChart,
@@ -15,14 +16,26 @@ export function ModelRequestTrend({ model }: { model: string }) {
   const language = usePreferences((state) => state.language);
   const text = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
+  const [metric, setMetric] = useState<"requests" | "success">("requests");
   const query = useServiceQuality(720, model);
-  const title = text(
-    "最近 30 天每日请求数",
-    "Daily requests over the last 30 days",
-    "الطلبات اليومية خلال آخر 30 يومًا",
-  );
+  const title =
+    metric === "success"
+      ? text(
+          "最近 30 天每日成功率",
+          "Daily success rate over the last 30 days",
+          "معدل النجاح اليومي خلال آخر 30 يومًا",
+        )
+      : text(
+          "最近 30 天每日请求数",
+          "Daily requests over the last 30 days",
+          "الطلبات اليومية خلال آخر 30 يومًا",
+        );
   const requests = text("请求数", "Requests", "الطلبات");
-  const rows = query.data?.by_day ?? [];
+  const successRate = text("成功率", "Success rate", "معدل النجاح");
+  const rows = (query.data?.by_day ?? []).map((day) => ({
+    ...day,
+    success_percent: day.success_rate * 100,
+  }));
 
   return (
     <section className="access-panel model-request-trend" aria-label={title}>
@@ -34,6 +47,18 @@ export function ModelRequestTrend({ model }: { model: string }) {
           "للنموذج الحالي فقط؛ تُعرض تواريخ الطلبات المسجلة بتوقيت UTC.",
         )}
       </p>
+      <label className="access-inline-label">
+        {text("指标", "Metric", "المقياس")}
+        <select
+          value={metric}
+          onChange={(event) =>
+            setMetric(event.target.value === "success" ? "success" : "requests")
+          }
+        >
+          <option value="requests">{requests}</option>
+          <option value="success">{successRate}</option>
+        </select>
+      </label>
       {query.isPending ? (
         <p className="access-muted" role="status">
           {text("正在加载趋势…", "Loading trend…", "جارٍ تحميل الاتجاه…")}
@@ -82,10 +107,21 @@ export function ModelRequestTrend({ model }: { model: string }) {
                 <YAxis
                   allowDecimals={false}
                   width={44}
+                  domain={metric === "success" ? [0, 100] : [0, "auto"]}
+                  tickFormatter={
+                    metric === "success"
+                      ? (value: number) => `${value}%`
+                      : undefined
+                  }
                   tick={{ fill: "var(--muted)", fontSize: 11 }}
                 />
                 <Tooltip
                   labelFormatter={(date) => `${date} (UTC)`}
+                  formatter={
+                    metric === "success"
+                      ? (value) => `${Number(value).toFixed(1)}%`
+                      : undefined
+                  }
                   contentStyle={{
                     background: "var(--surface)",
                     borderColor: "var(--border)",
@@ -94,8 +130,10 @@ export function ModelRequestTrend({ model }: { model: string }) {
                   cursor={{ fill: "var(--border)" }}
                 />
                 <Bar
-                  dataKey="total_requests"
-                  name={requests}
+                  dataKey={
+                    metric === "success" ? "success_percent" : "total_requests"
+                  }
+                  name={metric === "success" ? successRate : requests}
                   fill="var(--brand)"
                   maxBarSize={36}
                   isAnimationActive={false}
@@ -120,6 +158,7 @@ export function ModelRequestTrend({ model }: { model: string }) {
                       {text("日期（UTC）", "Date (UTC)", "التاريخ (UTC)")}
                     </th>
                     <th>{requests}</th>
+                    <th>{successRate}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -129,6 +168,7 @@ export function ModelRequestTrend({ model }: { model: string }) {
                         {day.date}
                       </th>
                       <td>{day.total_requests}</td>
+                      <td>{day.success_percent.toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
