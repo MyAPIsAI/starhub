@@ -6,23 +6,23 @@ type Log struct {
 	TokenID          int64  `gorm:"index;not null;default:0" json:"token_id"`
 	TokenName        string `gorm:"size:64;not null;default:''" json:"token_name"`
 	ChannelID        int64  `gorm:"index;not null;default:0" json:"channel_id"`
-	Model            string `gorm:"size:128;not null;default:''" json:"model"`
+	Model            string `gorm:"size:128;not null;default:'';index:idx_logs_quality_window,priority:2;index:idx_logs_quality_model,priority:1" json:"model"`
 	RequestedModel   string `gorm:"size:128;not null;default:''" json:"requested_model"`
 	Protocol         string `gorm:"size:16;not null;default:''" json:"protocol"`
 	PromptTokens     int64  `gorm:"not null;default:0" json:"prompt_tokens"`
 	CompletionTokens int64  `gorm:"not null;default:0" json:"completion_tokens"`
-	Quota            int64  `gorm:"not null;default:0" json:"quota"`
+	Quota            int64  `gorm:"not null;default:0;index:idx_logs_quality_window,priority:5" json:"quota"`
 	// UnfundedQuota is the priced usage that could not be collected. Quota
 	// records the actual charge; their sum is the full priced usage.
 	UnfundedQuota int64  `gorm:"not null;default:0" json:"unfunded_quota"`
 	UsedChannels  string `gorm:"size:256;not null;default:''" json:"used_channels"`
 	// DurationMs is the upstream response time in milliseconds. Zero
 	// when not measured (legacy logs, or fast-path responses).
-	DurationMs int64 `gorm:"not null;default:0" json:"duration_ms"`
+	DurationMs int64 `gorm:"not null;default:0;index:idx_logs_quality_window,priority:3" json:"duration_ms"`
 	// Status is 1=success, 2=failed, 3=cancelled, independent of charge. Defaults to
 	// 1 so existing log insertion code that omits the field is correct.
-	Status    int   `gorm:"not null;default:1" json:"status"`
-	CreatedAt int64 `gorm:"index;autoCreateTime" json:"created_at"`
+	Status    int   `gorm:"not null;default:1;index:idx_logs_quality_window,priority:4" json:"status"`
+	CreatedAt int64 `gorm:"index;autoCreateTime;index:idx_logs_quality_window,priority:1;index:idx_logs_quality_model,priority:2" json:"created_at"`
 }
 
 func InsertLog(l *Log) error {

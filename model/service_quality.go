@@ -135,7 +135,7 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 		overall.AvgDurationMs = int64(overallDurationSum / float64(overallTotal))
 	}
 
-	// Daily breakdown for trend charts.
+	// Bucket recent Unix timestamps as UTC days and format only grouped rows.
 	type dayRow struct {
 		DateStr string
 		Total   int64
@@ -146,13 +146,13 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 	var dayRows []dayRow
 	err = DB.Model(&Log{}).
 		Select(fmt.Sprintf(
-			"strftime('%%Y-%%m-%%d', datetime(created_at, 'unixepoch')) AS date_str, "+
+			"strftime('%%Y-%%m-%%d', (created_at / 86400) * 86400, 'unixepoch') AS date_str, "+
 				"COUNT(*) AS total, "+
 				"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success, "+
 				"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed, "+
 				"COALESCE(AVG(duration_ms), 0) AS avg_dur")).
 		Where(baseWhere, args...).
-		Group("date_str").
+		Group("created_at / 86400").
 		Order("date_str ASC").
 		Scan(&dayRows).Error
 	if err != nil {
@@ -185,6 +185,8 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 
 // serviceQualityP95 uses the nearest rank ceil(0.95 * n). Non-positive
 // durations have no measured latency and do not participate in the rank.
+// Equal latencies are counted once before window evaluation; cumulative
+// frequencies preserve the exact rank without expanding every sample again.
 func serviceQualityP95(where string, args ...any) (serviceQualityPercentiles, error) {
 	var ranks []struct {
 		Scope      int
@@ -193,22 +195,30 @@ func serviceQualityP95(where string, args ...any) (serviceQualityPercentiles, er
 	}
 	err := DB.Raw(`WITH samples AS (
 		SELECT model, duration_ms,
-			strftime('%Y-%m-%d', created_at, 'unixepoch') AS day
+			created_at / 86400 AS day
 		FROM logs WHERE `+where+` AND duration_ms > 0
-	), scopes AS (
+	), expanded AS (
 		SELECT 0 AS scope, model AS metric_key, duration_ms FROM samples
 		UNION ALL
 		SELECT 1 AS scope, '' AS metric_key, duration_ms FROM samples
 		UNION ALL
 		SELECT 2 AS scope, day AS metric_key, duration_ms FROM samples
+	), scopes AS (
+		SELECT scope, metric_key, duration_ms, COUNT(*) AS frequency
+		FROM expanded GROUP BY scope, metric_key, duration_ms
 	), ranked AS (
 		SELECT scope, metric_key, duration_ms,
-			ROW_NUMBER() OVER (PARTITION BY scope, metric_key ORDER BY duration_ms) AS sample_rank,
-			COUNT(*) OVER (PARTITION BY scope, metric_key) AS sample_count
+			SUM(frequency) OVER (PARTITION BY scope, metric_key ORDER BY duration_ms
+				ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS sample_rank,
+			SUM(frequency) OVER (PARTITION BY scope, metric_key ORDER BY duration_ms
+				ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS sample_count
 		FROM scopes
 	)
-	SELECT scope, metric_key, duration_ms FROM ranked
-	WHERE sample_rank = (sample_count * 95 + 99) / 100`, args...).Scan(&ranks).Error
+	SELECT scope,
+		CASE WHEN scope = 2 THEN strftime('%Y-%m-%d', metric_key * 86400, 'unixepoch') ELSE metric_key END AS metric_key,
+		MIN(duration_ms) AS duration_ms FROM ranked
+	WHERE sample_rank >= (sample_count * 95 + 99) / 100
+	GROUP BY scope, metric_key`, args...).Scan(&ranks).Error
 	if err != nil {
 		return serviceQualityPercentiles{}, err
 	}
