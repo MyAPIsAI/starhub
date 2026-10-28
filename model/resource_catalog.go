@@ -76,6 +76,7 @@ type ResourceCatalog struct {
 	Revision              int64                        `json:"revision"`
 	Snapshot              *ResourceSnapshot            `json:"snapshot"`
 	Placements            map[string]ResourcePlacement `json:"placements"`
+	Regions               map[string]ResourceRegion    `json:"regions"`
 	UpdatedAt             int64                        `json:"updated_at"`
 	AffectsGatewayRouting bool                         `json:"affects_gateway_routing"`
 }
@@ -151,7 +152,7 @@ func readResourceCatalog(tx *gorm.DB) (*ResourceCatalog, error) {
 	if err := tx.First(&record, 1).Error; err != nil {
 		return nil, err
 	}
-	result := &ResourceCatalog{Revision: record.Revision, UpdatedAt: record.UpdatedAt, Placements: map[string]ResourcePlacement{}}
+	result := &ResourceCatalog{Revision: record.Revision, UpdatedAt: record.UpdatedAt, Placements: map[string]ResourcePlacement{}, Regions: map[string]ResourceRegion{}}
 	if record.Snapshot != "" {
 		if err := json.Unmarshal([]byte(record.Snapshot), &result.Snapshot); err != nil {
 			return nil, err
@@ -167,6 +168,13 @@ func readResourceCatalog(tx *gorm.DB) (*ResourceCatalog, error) {
 			return nil, err
 		}
 		result.Placements[row.ResourceID] = ResourcePlacement{ModelID: row.ModelID, GroupIDs: groups, Enabled: row.Enabled}
+	}
+	var regions []ResourceRegion
+	if err := tx.Order("id").Find(&regions).Error; err != nil {
+		return nil, err
+	}
+	for _, region := range regions {
+		result.Regions[region.ID] = region
 	}
 	return result, nil
 }

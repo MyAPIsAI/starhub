@@ -58,6 +58,9 @@ func New() http.Handler {
 	mux.Handle("PUT /api/resource", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateResources))))
 	mux.Handle("GET /api/placement", middleware.AdminAuth(http.HandlerFunc(controller.ListResources)))
 	mux.Handle("PUT /api/placement/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdatePlacement))))
+	mux.Handle("GET /api/region", middleware.AdminAuth(http.HandlerFunc(controller.ListResources)))
+	mux.Handle("PUT /api/region/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateResourceRegion))))
+	mux.Handle("DELETE /api/region/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteResourceRegion))))
 
 	mux.Handle("POST /api/token", middleware.UserAuth(http.HandlerFunc(controller.CreateToken)))
 	mux.Handle("POST /api/token/", middleware.UserAuth(http.HandlerFunc(controller.CreateToken)))

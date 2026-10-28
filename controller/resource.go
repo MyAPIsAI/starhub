@@ -23,6 +23,8 @@ func writeResourceResult(w http.ResponseWriter, catalog *model.ResourceCatalog, 
 	switch {
 	case errors.Is(err, model.ErrResourceConflict):
 		common.ApiError(w, http.StatusConflict, "resource catalog changed; reload before saving")
+	case errors.Is(err, model.ErrResourceRegionInUse):
+		common.ApiError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, model.ErrInvalidResource):
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 	default:
@@ -82,5 +84,37 @@ func UpdatePlacement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	catalog, err := model.SaveResourcePlacement(r.Context(), *request.ExpectedRevision, r.PathValue("id"), *request.Placement)
+	writeResourceResult(w, catalog, err)
+}
+
+func UpdateResourceRegion(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		ExpectedRevision *int64 `json:"expected_revision"`
+		Name             string `json:"name"`
+		Description      string `json:"description"`
+	}
+	if !decodeResourceBody(w, r, &request) {
+		return
+	}
+	if request.ExpectedRevision == nil {
+		common.ApiError(w, http.StatusBadRequest, "expected_revision is required")
+		return
+	}
+	catalog, err := model.SaveResourceRegion(r.Context(), *request.ExpectedRevision, model.ResourceRegion{ID: r.PathValue("id"), Name: request.Name, Description: request.Description})
+	writeResourceResult(w, catalog, err)
+}
+
+func DeleteResourceRegion(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		ExpectedRevision *int64 `json:"expected_revision"`
+	}
+	if !decodeResourceBody(w, r, &request) {
+		return
+	}
+	if request.ExpectedRevision == nil {
+		common.ApiError(w, http.StatusBadRequest, "expected_revision is required")
+		return
+	}
+	catalog, err := model.DeleteResourceRegion(r.Context(), *request.ExpectedRevision, r.PathValue("id"))
 	writeResourceResult(w, catalog, err)
 }
