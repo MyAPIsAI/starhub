@@ -17,6 +17,7 @@ import { useProductPreview, type PreviewRequest } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import { resolveVendor } from "../lib/api/usage";
 import { getKeyModelOptions } from "../lib/key-model-policy";
+import { findClientModel } from "../lib/client-config";
 import { useModelPricing } from "../lib/model-pricing";
 import {
   buildCurlRequest,
@@ -87,6 +88,7 @@ export default function Playground({
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const currentKey = keys.find((k) => k.id === keyId);
   const options = currentKey ? getKeyModelOptions(currentKey, protocol) : [];
+  const selectedModel = findClientModel(options, model);
   const request: DemoRequest = {
     model,
     messages: [
@@ -175,8 +177,7 @@ export default function Playground({
       });
       const data = await res.json();
       if (!res.ok) {
-        const errMsg =
-          data?.error?.message ?? `HTTP ${res.status}`;
+        const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
         setRelayResult({
           trace_id: `relay_${Date.now()}`,
           time: new Date().toISOString(),
@@ -197,8 +198,7 @@ export default function Playground({
         setBusy(false);
         return;
       }
-      const content =
-        data?.choices?.[0]?.message?.content ?? "";
+      const content = data?.choices?.[0]?.message?.content ?? "";
       const inputTokens = data?.usage?.prompt_tokens ?? 0;
       const outputTokens = data?.usage?.completion_tokens ?? 0;
       setRelayResult({
@@ -335,10 +335,10 @@ export default function Playground({
                   <select
                     id="verify-model"
                     className="select-trigger"
-                    value={model}
+                    value={selectedModel?.id ?? model}
                     onChange={(e) => setModel(e.target.value)}
                   >
-                    {!options.some((m) => m.id === model) && (
+                    {!selectedModel && (
                       <option value={model}>
                         {model} · {c("当前不可用", "Unavailable", "غير متاح")}
                       </option>
@@ -354,7 +354,7 @@ export default function Playground({
                   </select>
                 </Field>
               </div>
-              {model === "veyra-auto" && (
+              {selectedModel?.kind === "smart" && (
                 <p className="verify-hint">
                   {c(
                     "智能路由按成本从已授权且兼容的候选中选择，按实际模型计费。分组倍率只计算一次。",
