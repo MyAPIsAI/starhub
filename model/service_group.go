@@ -33,6 +33,10 @@ type ServiceGroupConfig struct {
 
 // UpsertServiceGroup creates or updates a service group config row.
 func UpsertServiceGroup(sgc *ServiceGroupConfig) error {
+	return upsertServiceGroup(DB, sgc)
+}
+
+func upsertServiceGroup(db *gorm.DB, sgc *ServiceGroupConfig) error {
 	sgc.GroupID = strings.TrimSpace(sgc.GroupID)
 	if sgc.GroupID == "" {
 		return errors.New("group_id is required")
@@ -44,7 +48,7 @@ func UpsertServiceGroup(sgc *ServiceGroupConfig) error {
 		sgc.Multiplier = "1"
 	}
 	// Try update first; if no row matches, create.
-	res := DB.Model(&ServiceGroupConfig{}).
+	res := db.Model(&ServiceGroupConfig{}).
 		Where("group_id = ?", sgc.GroupID).
 		Updates(map[string]any{
 			"name":        sgc.Name,
@@ -58,11 +62,11 @@ func UpsertServiceGroup(sgc *ServiceGroupConfig) error {
 		return res.Error
 	}
 	if res.RowsAffected > 0 {
-		return reloadServiceGroup(sgc)
+		return reloadServiceGroup(db, sgc)
 	}
 	// On the create path, use a map so zero-value fields (Enabled=false)
 	// are persisted — GORM's struct Create skips zero values.
-	if err := DB.Model(&ServiceGroupConfig{}).Create(map[string]any{
+	if err := db.Model(&ServiceGroupConfig{}).Create(map[string]any{
 		"group_id":    sgc.GroupID,
 		"name":        sgc.Name,
 		"description": sgc.Description,
@@ -73,12 +77,12 @@ func UpsertServiceGroup(sgc *ServiceGroupConfig) error {
 	}).Error; err != nil {
 		return err
 	}
-	return reloadServiceGroup(sgc)
+	return reloadServiceGroup(db, sgc)
 }
 
-func reloadServiceGroup(sgc *ServiceGroupConfig) error {
+func reloadServiceGroup(db *gorm.DB, sgc *ServiceGroupConfig) error {
 	var stored ServiceGroupConfig
-	if err := DB.Where("group_id = ?", sgc.GroupID).First(&stored).Error; err != nil {
+	if err := db.Where("group_id = ?", sgc.GroupID).First(&stored).Error; err != nil {
 		return err
 	}
 	*sgc = stored
@@ -107,7 +111,11 @@ func ListServiceGroups() ([]ServiceGroupConfig, error) {
 
 // DeleteServiceGroup removes a service group config by group_id.
 func DeleteServiceGroup(groupID string) error {
-	res := DB.Where("group_id = ?", groupID).Delete(&ServiceGroupConfig{})
+	return deleteServiceGroup(DB, groupID)
+}
+
+func deleteServiceGroup(db *gorm.DB, groupID string) error {
+	res := db.Where("group_id = ?", groupID).Delete(&ServiceGroupConfig{})
 	if res.Error != nil {
 		return res.Error
 	}

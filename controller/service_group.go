@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 
 	"starhub/common"
 	"starhub/model"
-	"starhub/setting"
 )
 
 type serviceGroupRequest struct {
@@ -89,12 +87,13 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 		AccountIDs:  strings.Join(req.AccountIDs, ","),
 		Multiplier:  multiplier,
 	}
-	if err := model.UpsertServiceGroup(sgc); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
+	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
+	if err := model.SaveServiceGroupAndRatio(r.Context(), sgc, actorID); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "service group configuration could not be saved")
 		return
 	}
-	if err := syncGroupRatio(); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
+	if err := model.LoadOptionsToSettings(); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "group saved, but serving settings could not be reloaded")
 		return
 	}
 	common.ApiSuccess(w, serviceGroupJSON(sgc))
@@ -107,12 +106,17 @@ func DeleteServiceGroup(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "group id is required")
 		return
 	}
-	if err := model.DeleteServiceGroup(groupID); err != nil {
-		common.ApiError(w, http.StatusNotFound, "service group not found")
+	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
+	if err := model.DeleteServiceGroupAndRatio(r.Context(), groupID, actorID); err != nil {
+		if errors.Is(err, model.ErrServiceGroupNotFound) {
+			common.ApiError(w, http.StatusNotFound, "service group not found")
+		} else {
+			common.ApiError(w, http.StatusInternalServerError, "service group configuration could not be deleted")
+		}
 		return
 	}
-	if err := syncGroupRatio(); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
+	if err := model.LoadOptionsToSettings(); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "group deleted, but serving settings could not be reloaded")
 		return
 	}
 	common.ApiSuccess(w, nil)
@@ -195,37 +199,4 @@ func UpdateServiceGroupSLA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.ApiSuccess(w, serviceGroupJSON(group))
-}
-
-// syncGroupRatio rebuilds the group_ratio option JSON from all
-// ServiceGroupConfig rows, persists it via model.SaveOption, and
-// reloads settings so relay billing picks up the change.
-func syncGroupRatio() error {
-	groups, err := model.ListServiceGroups()
-	if err != nil {
-		return err
-	}
-	ratioMap := make(map[string]float64, len(groups))
-	for i := range groups {
-		if !groups[i].Enabled {
-			continue
-		}
-		mult, err := strconv.ParseFloat(groups[i].Multiplier, 64)
-		if err != nil || mult <= 0 {
-			continue
-		}
-		ratioMap[groups[i].GroupID] = mult
-	}
-	// Always include "default" so the system has a fallback.
-	if _, ok := ratioMap["default"]; !ok {
-		ratioMap["default"] = 1
-	}
-	jsonBytes, err := json.Marshal(ratioMap)
-	if err != nil {
-		return fmt.Errorf("marshal group_ratio: %w", err)
-	}
-	if _, err := model.SaveOption(setting.OptionKeyGroupRatio, string(jsonBytes), 0); err != nil {
-		return fmt.Errorf("save group_ratio option: %w", err)
-	}
-	return model.LoadOptionsToSettings()
 }

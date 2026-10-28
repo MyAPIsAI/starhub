@@ -128,54 +128,61 @@ func SaveOptionIfVersion(key, value string, actorID, expectedVersion int64) (int
 }
 
 func saveOption(key, value string, actorID, expectedVersion int64) (int64, error) {
+	var version int64
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var err error
+		version, err = saveOptionTx(tx, key, value, actorID, expectedVersion)
+		return err
+	})
+	return version, err
+}
+
+// saveOptionTx lets coupled metadata share the option value, revision and history transaction.
+func saveOptionTx(tx *gorm.DB, key, value string, actorID, expectedVersion int64) (int64, error) {
 	normalized, err := setting.NormalizeOption(key, value)
 	if err != nil {
 		return 0, err
 	}
 	value = normalized
-	var version int64
-	err = DB.Transaction(func(tx *gorm.DB) error {
-		if expectedVersion >= 0 {
-			var revision OptionRevision
-			if err := tx.First(&revision, 1).Error; err != nil {
-				return err
-			}
-			if revision.Version != expectedVersion {
-				return fmt.Errorf("%w: current %d", ErrOptionVersionConflict, revision.Version)
-			}
-		}
-		var old Option
-		err := tx.Where("`key` = ?", key).First(&old).Error
-		if err != nil && err != gorm.ErrRecordNotFound {
-			return err
-		}
-		if err == nil && old.Value == value {
-			var revision OptionRevision
-			if err := tx.First(&revision, 1).Error; err != nil {
-				return err
-			}
-			version = revision.Version
-			return nil
-		}
-		if err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&Option{Key: key, Value: value}).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&OptionRevision{}).Where("id = 1").
-			Update("version", gorm.Expr("version + 1")).Error; err != nil {
-			return err
-		}
+	if expectedVersion >= 0 {
 		var revision OptionRevision
 		if err := tx.First(&revision, 1).Error; err != nil {
-			return err
+			return 0, err
 		}
-		version = revision.Version
-		before, after := old.Value, value
-		if key == setting.OptionKeyAlertWebhookURL {
-			before, after = "[redacted]", "[redacted]"
+		if revision.Version != expectedVersion {
+			return 0, fmt.Errorf("%w: current %d", ErrOptionVersionConflict, revision.Version)
 		}
-		return tx.Create(&OptionChange{Version: version, Key: key, OldValue: before,
-			NewValue: after, ActorID: actorID, CreatedAt: time.Now().Unix()}).Error
-	})
+	}
+	var old Option
+	err = tx.Where("`key` = ?", key).First(&old).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return 0, err
+	}
+	if err == nil && old.Value == value {
+		var revision OptionRevision
+		if err := tx.First(&revision, 1).Error; err != nil {
+			return 0, err
+		}
+		return revision.Version, nil
+	}
+	if err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&Option{Key: key, Value: value}).Error; err != nil {
+		return 0, err
+	}
+	if err := tx.Model(&OptionRevision{}).Where("id = 1").
+		Update("version", gorm.Expr("version + 1")).Error; err != nil {
+		return 0, err
+	}
+	var revision OptionRevision
+	if err := tx.First(&revision, 1).Error; err != nil {
+		return 0, err
+	}
+	version := revision.Version
+	before, after := old.Value, value
+	if key == setting.OptionKeyAlertWebhookURL {
+		before, after = "[redacted]", "[redacted]"
+	}
+	err = tx.Create(&OptionChange{Version: version, Key: key, OldValue: before,
+		NewValue: after, ActorID: actorID, CreatedAt: time.Now().Unix()}).Error
 	return version, err
 }
 
