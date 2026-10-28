@@ -26,6 +26,7 @@ export interface ServiceQualityDailyMetric {
   failed_count: number;
   success_rate: number; // 0.0–1.0
   avg_duration_ms: number;
+  p95_duration_ms: number; // 0 when no positive duration samples exist.
 }
 
 export interface ServiceQualitySummary {

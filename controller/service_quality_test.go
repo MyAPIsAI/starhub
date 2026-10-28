@@ -262,3 +262,80 @@ func TestGetServiceQualityP95(t *testing.T) {
 		})
 	}
 }
+
+func TestGetServiceQualityDailyP95(t *testing.T) {
+	newTestDB(t)
+	alice := newUser(t, "daily-p95-alice", common.RoleUser, 1000)
+	bob := newUser(t, "daily-p95-bob", common.RoleUser, 1000)
+	now := time.Now().UTC()
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
+	previous := midnight.Add(-time.Second)
+	unmeasured := midnight.AddDate(0, 0, -2)
+	older := midnight.AddDate(0, 0, -20)
+	var logs []model.Log
+	for i := int64(1); i <= 20; i++ {
+		status := 1
+		if i == 20 {
+			status = 2
+		}
+		logs = append(logs,
+			model.Log{UserID: alice.ID, Model: "daily-a", DurationMs: i * 100, Status: status, CreatedAt: previous.Unix()},
+			model.Log{UserID: alice.ID, Model: "daily-a", DurationMs: 0, Status: 1, CreatedAt: previous.Unix()},
+			model.Log{UserID: alice.ID, Model: "daily-b", DurationMs: 10000, Status: 1, CreatedAt: previous.Unix()},
+		)
+	}
+	logs = append(logs,
+		model.Log{UserID: alice.ID, Model: "daily-a", DurationMs: -5, Status: 1, CreatedAt: previous.Unix()},
+		model.Log{UserID: alice.ID, Model: "daily-a", DurationMs: 9000, Status: 1, CreatedAt: midnight.Unix()},
+		model.Log{UserID: alice.ID, Model: "daily-a", DurationMs: 4321, Status: 1, CreatedAt: older.Unix()},
+		model.Log{UserID: alice.ID, Model: "daily-a", DurationMs: 1000000, Status: 1, CreatedAt: midnight.AddDate(0, 0, -31).Unix()},
+		model.Log{UserID: bob.ID, Model: "daily-a", DurationMs: 40000, Status: 1, CreatedAt: previous.Unix()},
+		model.Log{UserID: alice.ID, Model: "unmeasured", DurationMs: 0, Status: 1, CreatedAt: unmeasured.Unix()},
+		model.Log{UserID: alice.ID, Model: "unmeasured", DurationMs: -5, Status: 2, CreatedAt: unmeasured.Unix()},
+	)
+	if err := model.DB.Create(&logs).Error; err != nil {
+		t.Fatal(err)
+	}
+	type expectedDay struct {
+		date  time.Time
+		total int64
+		p95   int64
+	}
+	for _, tc := range []struct {
+		name  string
+		model string
+		hours int
+		role  int
+		days  []expectedDay
+	}{
+		{"all models", "", 168, common.RoleUser, []expectedDay{{unmeasured, 2, 0}, {previous, 61, 10000}, {midnight, 1, 9000}}},
+		{"one model", "daily-a", 168, common.RoleUser, []expectedDay{{previous, 41, 1900}, {midnight, 1, 9000}}},
+		{"thirty days", "daily-a", 720, common.RoleUser, []expectedDay{{older, 1, 4321}, {previous, 41, 1900}, {midnight, 1, 9000}}},
+		{"admin scope", "daily-a", 168, common.RoleAdmin, []expectedDay{{previous, 42, 2000}, {midnight, 1, 9000}}},
+		{"no measurements", "unmeasured", 168, common.RoleUser, []expectedDay{{unmeasured, 2, 0}}},
+		{"empty result", "missing", 168, common.RoleUser, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			query := url.Values{"hours": {strconv.Itoa(tc.hours)}, "model": {tc.model}, "user_id": {"0"}}
+			rr := call(GetServiceQuality, testRequest{method: http.MethodGet, target: "/api/service-quality?" + query.Encode(), userID: alice.ID, role: tc.role})
+			var got map[string]any
+			decodeData(t, rr, &got)
+			days := got["by_day"].([]any)
+			if len(days) != len(tc.days) {
+				t.Fatalf("daily rows = %+v, want %+v", days, tc.days)
+			}
+			var total int64
+			for i, want := range tc.days {
+				day := days[i].(map[string]any)
+				// Check the wire field even when the measured value is zero.
+				if day["date"] != want.date.Format("2006-01-02") || day["p95_duration_ms"] != float64(want.p95) || day["total_requests"] != float64(want.total) {
+					t.Fatalf("daily metric = %+v, want %+v", day, want)
+				}
+				total += want.total
+			}
+			if got["overall"].(map[string]any)["total_requests"] != float64(total) {
+				t.Fatalf("daily counts disagree with overall: %+v", got)
+			}
+		})
+	}
+}
