@@ -338,9 +338,7 @@ export default function RequestInspector({
             </div>
             <div>
               <dt>{text("服务分组", "Service group", "مجموعة الخدمة")}</dt>
-              <dd>
-                <TierBadge id={record.tier} />
-              </dd>
+              <dd>{record.tier ? <TierBadge id={record.tier} /> : "—"}</dd>
             </div>
             {record.pricing_snapshot ? (
               <PricingSnapshot snapshot={record.pricing_snapshot} />
@@ -386,9 +384,13 @@ export default function RequestInspector({
                     )}
                   </dt>
                   <dd>
-                    {record.input_rate_usd !== undefined
+                    {record.input_rate_usd !== undefined &&
+                    record.output_rate_usd !== undefined
                       ? `$${record.input_rate_usd} / $${record.output_rate_usd}`
-                      : `${formatMoney(record.input_price_nano, "detail")} / ${formatMoney(record.output_price_nano, "detail")}`}
+                      : record.input_price_nano !== undefined &&
+                          record.output_price_nano !== undefined
+                        ? `${formatMoney(record.input_price_nano, "detail")} / ${formatMoney(record.output_price_nano, "detail")}`
+                        : text("未记录", "Not recorded", "غير مسجل")}
                     <small className="request-rate-note">
                       {text(
                         "美元 / 百万词元，已包含分组倍率",

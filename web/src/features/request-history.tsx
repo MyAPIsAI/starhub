@@ -328,9 +328,7 @@ export default function RequestHistory({
                       </small>
                     </td>
                     <td>{row.vendor}</td>
-                    <td>
-                      <TierBadge id={row.tier} />
-                    </td>
+                    <td>{row.tier ? <TierBadge id={row.tier} /> : "—"}</td>
                     <td>
                       <span
                         className={`result-pill ${row.status === "failed" ? "is-failed" : ""}`}

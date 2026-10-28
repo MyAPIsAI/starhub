@@ -45,6 +45,7 @@ export interface LogRow {
   token_name: string;
   channel_id: number;
   model: string;
+  requested_model?: string;
   prompt_tokens: number;
   completion_tokens: number;
   quota: number;
@@ -68,10 +69,7 @@ export function useUserUsage(days: number = 7) {
   return useQuery({
     queryKey: ["user-usage", days] as const,
     queryFn: ({ signal }) =>
-      apiGet<UsageResponse>(
-        `/api/user/usage?days=${days}`,
-        signal,
-      ),
+      apiGet<UsageResponse>(`/api/user/usage?days=${days}`, signal),
   });
 }
 
@@ -79,10 +77,7 @@ export function useLogs(page: number = 1, pageSize: number = 20) {
   return useQuery({
     queryKey: ["logs", page, pageSize] as const,
     queryFn: ({ signal }) =>
-      apiGet<LogsResponse>(
-        `/api/log?p=${page}&page_size=${pageSize}`,
-        signal,
-      ),
+      apiGet<LogsResponse>(`/api/log?p=${page}&page_size=${pageSize}`, signal),
   });
 }
 
@@ -156,6 +151,8 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     trace_id: `log_${log.id}`,
     time: new Date(log.created_at * 1000).toISOString(),
     model: log.model,
+    requested_model: log.requested_model || log.model,
+    actual_model: log.model,
     vendor: resolveVendor(log.model),
     status: log.status === 2 ? "failed" : "success",
     cost_nano: quotaToNanoUsd(log.quota),
@@ -172,6 +169,8 @@ export interface PreviewRequestLike {
   trace_id: string;
   time: string;
   model: string;
+  requested_model: string;
+  actual_model: string;
   vendor: string;
   status: "success" | "failed";
   cost_nano: string;
