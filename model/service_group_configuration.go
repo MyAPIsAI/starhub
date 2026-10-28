@@ -124,6 +124,9 @@ func mutateServiceGroupAndRatio(ctx context.Context, group *ServiceGroupConfig, 
 			}
 		}
 		if group != nil {
+			if err := validateServiceGroupAccounts(tx, group); err != nil {
+				return err
+			}
 			if err := upsertServiceGroup(tx, group); err != nil {
 				return err
 			}

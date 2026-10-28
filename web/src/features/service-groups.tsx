@@ -13,6 +13,7 @@ import {
   configuredGroupRatio,
   validGroupDefinitionID,
   validGroupMultiplier,
+  parseGroupAccountIDs,
   type ManagedServiceGroup,
 } from "../lib/service-group-config";
 import { isAdmin, useSystemAccess } from "../lib/system-access";
@@ -29,6 +30,9 @@ type Draft = {
   description: string;
   multiplier: string;
   enabled: boolean;
+  visibility: "common" | "custom";
+  accountText: string;
+  replaceAccounts: boolean;
   optionVersion: number;
   ratios: Readonly<Record<string, number>>;
   remove: boolean;
@@ -83,6 +87,12 @@ export function ServiceGroups({ role: _role }: { role: number }) {
         ? current?.id !== draft.original.id ||
           current?.revision !== draft.original.revision
         : !!current));
+  const draftAccounts =
+    draft?.visibility === "custom"
+      ? draft.original?.visibility === "custom" && !draft.replaceAccounts
+        ? draft.original.account_ids
+        : parseGroupAccountIDs(draft.accountText)
+      : [];
   const valid =
     !!draft &&
     (draft.remove ||
@@ -90,7 +100,8 @@ export function ServiceGroups({ role: _role }: { role: number }) {
         draft.name.trim().length > 0 &&
         draft.name.trim().length <= 128 &&
         draft.description.length <= 512 &&
-        validGroupMultiplier(draft.multiplier)));
+        validGroupMultiplier(draft.multiplier) &&
+        draftAccounts !== null));
   const begin = (id = "", deleting = false) => {
     if (!data) return;
     const original = groups.get(id) ?? null;
@@ -114,6 +125,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
             ? ""
             : "1"),
       enabled: original?.enabled ?? true,
+      visibility: original?.visibility ?? "common",
+      accountText: original?.account_ids.join("\n") ?? "",
+      replaceAccounts: false,
       optionVersion: data.option_version,
       ratios: data.group_ratios,
       remove: deleting,
@@ -147,8 +161,8 @@ export function ServiceGroups({ role: _role }: { role: number }) {
           description: draft.description.trim(),
           enabled: draft.enabled,
           multiplier: draft.multiplier.trim(),
-          visibility: draft.original?.visibility ?? "common",
-          account_ids: draft.original?.account_ids ?? [],
+          visibility: draft.visibility,
+          account_ids: draftAccounts ?? [],
           ...identity,
         });
         if (
@@ -180,11 +194,17 @@ export function ServiceGroups({ role: _role }: { role: number }) {
               "The group or configuration version changed. This operation did not overwrite it. Refresh and reopen the editor.",
               "تغيّرت المجموعة أو إصدار الإعدادات. لم تستبدل هذه العملية التغيير. حدّث وأعد فتح المحرر.",
             )
-          : text(
-              "无法确认保存或重载结果。请刷新核对配置与同步状态；版本变化后须重新打开编辑。",
-              "The save or reload outcome is unconfirmed. Refresh and check configuration sync; reopen after a version change.",
-              "تعذر تأكيد الحفظ أو إعادة التحميل. حدّث وتحقق من المزامنة وأعد فتح المحرر عند تغير الإصدار.",
-            ),
+          : caught instanceof ApiError && caught.status === 400
+            ? text(
+                "服务器拒绝了此配置，草稿已保留。请检查账号 ID 是否真实存在、名单格式与数量是否正确。",
+                "The server rejected this configuration; the draft is retained. Check that account IDs exist and that the list format and size are valid.",
+                "رفض الخادم هذا الإعداد واحتُفظ بالمسودة. تحقق من وجود معرّفات الحسابات وصحة تنسيق القائمة وحجمها.",
+              )
+            : text(
+                "无法确认保存或重载结果。请刷新核对配置与同步状态；版本变化后须重新打开编辑。",
+                "The save or reload outcome is unconfirmed. Refresh and check configuration sync; reopen after a version change.",
+                "تعذر تأكيد الحفظ أو إعادة التحميل. حدّث وتحقق من المزامنة وأعد فتح المحرر عند تغير الإصدار.",
+              ),
       );
     }
   };
@@ -529,11 +549,11 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                         "After removing the ratio, this group no longer passes gateway group admission. Ledgers are unchanged.",
                         "بعد إزالة المعامل لا تجتاز المجموعة تحقق الدخول في البوابة. لا تتغير السجلات المالية.",
                       )
-                    : draft.original?.visibility === "custom"
+                    : draft.visibility === "custom"
                       ? text(
-                          "保存会发布该倍率并保留原账号范围。名单中匹配的服务器用户 ID 仍需通过模型、渠道与额度检查。",
-                          "Saving publishes this ratio and retains the stored account scope. Matching server user IDs still require model, channel and quota checks.",
-                          "ينشر الحفظ المعامل ويحتفظ بنطاق الحسابات السابق. تظل معرّفات المستخدمين المطابقة خاضعة لفحوص النموذج والقناة والحصة.",
+                          "保存会发布该倍率与下方账号范围。名单中匹配的服务器用户 ID 仍需通过模型、渠道与额度检查。",
+                          "Saving publishes this ratio and the account scope below. Matching server user IDs still require model, channel and quota checks.",
+                          "ينشر الحفظ المعامل ونطاق الحسابات أدناه. تظل معرّفات المستخدمين المطابقة خاضعة لفحوص النموذج والقناة والحصة.",
                         )
                       : text(
                           "公共账号范围：保存会发布该倍率，所有账号仍需通过密钥、模型、渠道与额度检查。",
@@ -541,20 +561,49 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                           "نطاق حسابات عام: ينشر الحفظ هذا المعامل. تظل كل الحسابات خاضعة لفحوص المفتاح والنموذج والقناة والحصة.",
                         )}
                 </p>
+                {!draft.remove && draft.visibility === "custom" && (
+                  <div className="sgm-legacy">
+                    <strong>
+                      {text(
+                        "确认账号名单",
+                        "Confirm account list",
+                        "تأكيد قائمة الحسابات",
+                      )}
+                    </strong>
+                    <p
+                      dir="ltr"
+                      role="region"
+                      tabIndex={0}
+                      aria-label={text(
+                        "待保存账号标识",
+                        "Account identifiers to save",
+                        "معرّفات الحسابات للحفظ",
+                      )}
+                    >
+                      {draftAccounts?.join(", ")}
+                    </p>
+                  </div>
+                )}
                 {!draft.remove && (
-                  <Button disabled={pending} onClick={() => setReview(false)}>
+                  <Button
+                    disabled={pending}
+                    onClick={() => {
+                      setReview(false);
+                      setError("");
+                    }}
+                  >
                     {text("返回编辑", "Back to edit", "العودة للتحرير")}
                   </Button>
                 )}
               </div>
             ) : (
               <div className="sgm-fields">
-                {draft.original?.visibility !== "custom" && (
-                  <p className="sgm-wide">
+                {draft.visibility !== "custom" && (
+                  <p className="cm-wide">
                     {text(
-                      "此定义使用公共账号范围，仍需通过密钥、模型、渠道及额度检查。此处暂不编辑自定义名单。",
-                      "This definition uses common account scope, subject to key, model, channel and quota checks. Custom account lists cannot be edited here yet.",
-                      "يستخدم هذا التعريف نطاق حسابات عامًا مع فحوص المفتاح والنموذج والقناة والحصة. لا يمكن تعديل قوائم الحسابات المخصصة هنا بعد.",
+                      "公共范围向所有账号开放，仍需通过密钥、模型、渠道及额度检查。可改为自定义范围并填写真实服务器用户 ID。",
+                      "Common scope is open to all accounts, subject to key, model, channel and quota checks. Choose custom scope to specify server user IDs.",
+                      "النطاق العام متاح لكل الحسابات مع فحوص المفتاح والنموذج والقناة والحصة. اختر نطاقًا مخصصًا لتحديد معرّفات مستخدمي الخادم.",
                     )}
                   </p>
                 )}
@@ -627,36 +676,131 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                     }
                   />
                 </label>
-                {draft.original?.visibility === "custom" && (
-                  <div className="cm-wide sgm-legacy">
-                    <strong>
+                <label className="cm-wide">
+                  {text("账号范围", "Account scope", "نطاق الحسابات")}
+                  <select
+                    aria-label={text(
+                      "账号范围",
+                      "Account scope",
+                      "نطاق الحسابات",
+                    )}
+                    value={draft.visibility}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        visibility: e.target.value as "common" | "custom",
+                      })
+                    }
+                  >
+                    <option value="common">
                       {text(
-                        "保留的定制元数据",
-                        "Retained custom metadata",
-                        "البيانات المخصصة المحفوظة",
+                        "公共：所有账号",
+                        "Common: all accounts",
+                        "عام: كل الحسابات",
                       )}
-                    </strong>
-                    <p
-                      dir="ltr"
-                      tabIndex={0}
-                      role="region"
-                      aria-label={text(
-                        "保留的账号标识",
-                        "Retained account identifiers",
-                        "معرّفات الحسابات المحفوظة",
-                      )}
-                    >
-                      {draft.original.account_ids.join(", ")}
-                    </p>
-                    <small>
+                    </option>
+                    <option value="custom">
                       {text(
-                        "本次保留原账号名单。网关只接受名单中匹配的服务器用户 ID，仍需满足模型、渠道及额度限制。",
-                        "This edit retains the stored account list. The gateway requires a matching server user ID, with model, channel and quota checks still applying.",
-                        "يُحفظ كشف الحسابات السابق. تشترط البوابة معرّف مستخدم خادم مطابقًا، وتظل قيود النموذج والقناة والحصة سارية.",
+                        "自定义：指定服务器用户 ID",
+                        "Custom: specified server user IDs",
+                        "مخصص: معرّفات مستخدمي خادم محددة",
                       )}
-                    </small>
-                  </div>
-                )}
+                    </option>
+                  </select>
+                </label>
+                {draft.visibility === "custom" &&
+                  draft.original?.visibility === "custom" && (
+                    <label className="cm-wide cm-check">
+                      <input
+                        type="checkbox"
+                        checked={draft.replaceAccounts}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            replaceAccounts: e.target.checked,
+                          })
+                        }
+                      />
+                      {text(
+                        "替换账号名单",
+                        "Replace account list",
+                        "استبدال قائمة الحسابات",
+                      )}
+                    </label>
+                  )}
+                {draft.visibility === "custom" &&
+                  (draft.original?.visibility !== "custom" ||
+                    draft.replaceAccounts) && (
+                    <label className="cm-wide">
+                      {text(
+                        "服务器用户 ID",
+                        "Server user IDs",
+                        "معرّفات مستخدمي الخادم",
+                      )}
+                      <textarea
+                        dir="ltr"
+                        aria-label={text(
+                          "服务器用户 ID",
+                          "Server user IDs",
+                          "معرّفات مستخدمي الخادم",
+                        )}
+                        maxLength={4096}
+                        value={draft.accountText}
+                        onChange={(e) =>
+                          setDraft({ ...draft, accountText: e.target.value })
+                        }
+                        aria-describedby="group-account-help"
+                      />
+                      <small id="group-account-help">
+                        {text(
+                          "填写 1–100 个不同的正整数 ID，以空格、逗号或换行分隔。保存时验证账号存在；名单总长度不超过 1024 字符。",
+                          "Enter 1–100 distinct positive integer IDs, separated by spaces, commas or newlines. The server verifies that accounts exist. The joined list must fit 1024 characters.",
+                          "أدخل من 1 إلى 100 معرّف صحيح موجب ومختلف، وافصل بمسافات أو فواصل أو أسطر. يتحقق الخادم من وجود الحسابات. الحد الأقصى للقائمة الموصولة 1024 حرفًا.",
+                        )}
+                      </small>
+                      {draft.accountText.trim() && !draftAccounts && (
+                        <small role="alert">
+                          {text(
+                            "名单格式或数量无效，请使用真实服务器用户 ID。",
+                            "Invalid list format or size. Use server user IDs.",
+                            "تنسيق القائمة أو حجمها غير صالح. استخدم معرّفات مستخدمي الخادم.",
+                          )}
+                        </small>
+                      )}
+                    </label>
+                  )}
+                {draft.visibility === "custom" &&
+                  draft.original?.visibility === "custom" &&
+                  !draft.replaceAccounts && (
+                    <div className="cm-wide sgm-legacy">
+                      <strong>
+                        {text(
+                          "保留的定制元数据",
+                          "Retained custom metadata",
+                          "البيانات المخصصة المحفوظة",
+                        )}
+                      </strong>
+                      <p
+                        dir="ltr"
+                        tabIndex={0}
+                        role="region"
+                        aria-label={text(
+                          "保留的账号标识",
+                          "Retained account identifiers",
+                          "معرّفات الحسابات المحفوظة",
+                        )}
+                      >
+                        {draft.original.account_ids.join(", ")}
+                      </p>
+                      <small>
+                        {text(
+                          "本次保留原账号名单。网关只接受名单中匹配的服务器用户 ID，仍需满足模型、渠道及额度限制。",
+                          "This edit retains the stored account list. The gateway requires a matching server user ID, with model, channel and quota checks still applying.",
+                          "يُحفظ كشف الحسابات السابق. تشترط البوابة معرّف مستخدم خادم مطابقًا، وتظل قيود النموذج والقناة والحصة سارية.",
+                        )}
+                      </small>
+                    </div>
+                  )}
               </div>
             )}
             {conflict && (

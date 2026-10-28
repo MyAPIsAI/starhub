@@ -4,6 +4,7 @@ import {
   readManagedServiceGroup,
   readServiceGroupCatalog,
   validGroupMultiplier,
+  parseGroupAccountIDs,
 } from "../src/lib/service-group-config";
 
 const group = {
@@ -27,9 +28,42 @@ const catalog = {
   revision_guards: true,
   option_version_guard: true,
   account_access_guard: true,
+  account_list_validation: true,
 };
 
 describe("authoritative group configuration", () => {
+  it("keeps exact int64 identities and validates replacement list boundaries", () => {
+    expect(parseGroupAccountIDs("1, 2\n9223372036854775807")).toEqual([
+      "1",
+      "2",
+      "9223372036854775807",
+    ]);
+    expect(parseGroupAccountIDs("9007199254740993")).toEqual([
+      "9007199254740993",
+    ]);
+    expect(
+      parseGroupAccountIDs(
+        Array.from({ length: 100 }, (_, i) => String(i + 1)).join("\n"),
+      ),
+    ).toHaveLength(100);
+    for (const value of [
+      "",
+      "01",
+      "+1",
+      "0",
+      "-1",
+      "1.0",
+      "1e0",
+      "acct-1",
+      "1 1",
+      "9223372036854775808",
+      Array.from({ length: 101 }, (_, i) => String(i + 1)).join(","),
+      Array.from({ length: 100 }, (_, i) =>
+        String(9007199254740000n + BigInt(i)),
+      ).join(","),
+    ])
+      expect(parseGroupAccountIDs(value)).toBeNull();
+  });
   it("keeps stored metadata and independently configured prices separate", () => {
     const parsed = readServiceGroupCatalog(catalog);
     expect(parsed.groups[0].multiplier).toBe("0.8");
@@ -48,6 +82,7 @@ describe("authoritative group configuration", () => {
       { ...catalog, option_version_guard: false },
       { ...catalog, account_access_guard: false },
       { ...catalog, groups: [], account_access_guard: undefined },
+      { ...catalog, account_list_validation: undefined },
       { ...catalog, groups: undefined },
     ])
       expect(() => readServiceGroupCatalog(data)).toThrow();

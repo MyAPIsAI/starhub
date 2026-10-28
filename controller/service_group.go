@@ -52,7 +52,7 @@ func GetServiceGroupCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	common.ApiSuccess(w, map[string]any{"groups": groups, "group_ratios": catalog.GroupRatios, "option_version": catalog.OptionVersion,
 		"loaded_option_version": model.LoadedOptionVersion(), "revision_guards": true, "option_version_guard": true,
-		"account_access_guard": true})
+		"account_access_guard": true, "account_list_validation": true})
 }
 
 // UpsertServiceGroup creates or updates a service group. It also syncs
@@ -102,9 +102,13 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "visibility must be common or custom")
 		return
 	}
-	if visibility == "custom" && len(req.AccountIDs) == 0 {
-		common.ApiError(w, http.StatusBadRequest, "custom visibility requires at least one account_id")
-		return
+	if visibility == "custom" {
+		for _, account := range req.AccountIDs {
+			if strings.ContainsAny(account, ",\r\n") {
+				common.ApiError(w, http.StatusBadRequest, "each account_ids entry must identify one server user")
+				return
+			}
+		}
 	}
 	enabled := true
 	if req.Enabled != nil {
@@ -195,6 +199,8 @@ func serviceGroupConfigurationError(w http.ResponseWriter, err error) {
 	case errors.Is(err, model.ErrServiceGroupNotFound):
 		status, message = http.StatusNotFound, err.Error()
 	case errors.Is(err, model.ErrInvalidServiceGroupPrecondition):
+		status, message = http.StatusBadRequest, err.Error()
+	case errors.Is(err, model.ErrInvalidServiceGroupAccounts):
 		status, message = http.StatusBadRequest, err.Error()
 	}
 	common.ApiError(w, status, message)

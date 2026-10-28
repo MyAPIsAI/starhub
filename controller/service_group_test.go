@@ -198,7 +198,7 @@ func TestUpsertServiceGroupCustomVisibility(t *testing.T) {
 	rr := call(UpsertServiceGroup, testRequest{
 		method: http.MethodPut,
 		target: "/api/service-group",
-		body:   `{"group_id":"enterprise","name":"Enterprise","multiplier":"0.4","visibility":"custom","account_ids":["acct-1","acct-2"],"enabled":true}`,
+		body:   `{"group_id":"enterprise","name":"Enterprise","multiplier":"0.4","visibility":"custom","account_ids":["1","` + itoa(admin.ID) + `"],"enabled":true}`,
 		userID: admin.ID,
 		role:   common.RoleAdmin,
 	})

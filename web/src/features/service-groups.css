@@ -55,6 +55,7 @@
   font-size: var(--text-sm);
 }
 .sgm-fields input,
+.sgm-fields select,
 .sgm-fields textarea {
   width: 100%;
   min-width: 0;

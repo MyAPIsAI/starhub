@@ -12,6 +12,7 @@ export interface ServiceGroupCatalog {
   revision_guards: true;
   option_version_guard: true;
   account_access_guard: true;
+  account_list_validation: true;
 }
 
 const integer = (value: unknown, min = 0): value is number =>
@@ -62,6 +63,7 @@ export function readServiceGroupCatalog(value: unknown): ServiceGroupCatalog {
     c.revision_guards !== true ||
     c.option_version_guard !== true ||
     c.account_access_guard !== true ||
+    c.account_list_validation !== true ||
     !integer(c.option_version) ||
     !integer(c.loaded_option_version) ||
     !Array.isArray(c.groups) ||
@@ -96,6 +98,7 @@ export function readServiceGroupCatalog(value: unknown): ServiceGroupCatalog {
     revision_guards: true,
     option_version_guard: true,
     account_access_guard: true,
+    account_list_validation: true,
   };
 }
 
@@ -110,6 +113,19 @@ export function configuredGroupRatio(
 
 export function validGroupDefinitionID(id: string): boolean {
   return /^[a-z0-9][a-z0-9_-]{1,63}$/.test(id);
+}
+
+// Keep IDs as strings so int64 account identities never pass through Number.
+export function parseGroupAccountIDs(value: string): string[] | null {
+  const ids = value.trim().split(/[\s,]+/);
+  if (
+    ids.length > 100 ||
+    new Set(ids).size !== ids.length ||
+    ids.join(",").length > 1024 ||
+    ids.some((id) => !/^[1-9][0-9]{0,18}$/.test(id))
+  )
+    return null;
+  return ids.every((id) => BigInt(id) <= 9223372036854775807n) ? ids : null;
 }
 
 export function validGroupMultiplier(value: string): boolean {

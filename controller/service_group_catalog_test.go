@@ -16,10 +16,11 @@ func TestGroupCatalogAndCombinedGuardRequests(t *testing.T) {
 		RevisionGuards bool               `json:"revision_guards"`
 		OptionGuard    bool               `json:"option_version_guard"`
 		AccountGuard   bool               `json:"account_access_guard"`
+		AccountLists   bool               `json:"account_list_validation"`
 		Ratios         map[string]float64 `json:"group_ratios"`
 	}
 	decodeData(t, call(GetServiceGroupCatalog, testRequest{method: "GET", target: "/api/service-group/configuration"}), &catalog)
-	if catalog.Groups == nil || len(catalog.Groups) != 0 || !catalog.RevisionGuards || !catalog.OptionGuard || !catalog.AccountGuard || catalog.Ratios["default"] != 1 {
+	if catalog.Groups == nil || len(catalog.Groups) != 0 || !catalog.RevisionGuards || !catalog.OptionGuard || !catalog.AccountGuard || !catalog.AccountLists || catalog.Ratios["default"] != 1 {
 		t.Fatal("empty catalog lacks explicit supported guards")
 	}
 	for _, fields := range []string{`"expected_option_version":0`, `"expected_group_id":0,"expected_revision":0,"expected_option_version":null`, `"expected_group_id":0,"expected_revision":0,"expected_option_version":0.5`, `"expected_group_id":0,"expected_revision":0,"expected_option_version":-1`} {

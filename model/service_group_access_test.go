@@ -54,6 +54,9 @@ func TestServiceGroupAccessUsesExactServerIdentityAndFailsClosed(t *testing.T) {
 func TestDeletedGroupCannotReopenThroughStaleRatiosAndRecreationIsAtomic(t *testing.T) {
 	path := groupConfigurationDB(t)
 	ctx := context.Background()
+	if err := CreateUser(&User{ID: 42, Username: "scoped-user"}); err != nil {
+		t.Fatal(err)
+	}
 	group := &ServiceGroupConfig{GroupID: "private", Name: "Private", Enabled: true, Visibility: "custom", AccountIDs: "42", Multiplier: "0.5"}
 	if err := SaveServiceGroupAndRatio(ctx, group, 1); err != nil {
 		t.Fatal(err)
