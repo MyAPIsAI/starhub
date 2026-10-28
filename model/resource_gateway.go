@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"gorm.io/gorm"
 
@@ -67,4 +68,72 @@ func revokeResourceGatewayChannel(tx *gorm.DB, channelID int64) error {
 		return err
 	}
 	return tx.Where("channel_id = ?", channelID).Delete(&ResourceGatewayRoute{}).Error
+}
+
+func invalidateResourceGatewaySources(tx *gorm.DB, sources map[string]bool) error {
+	if len(sources) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(sources))
+	for id := range sources {
+		ids = append(ids, id)
+	}
+	var managed []ResourceGatewayManagedChannel
+	if err := tx.Where("source_channel_id IN ? AND active = ?", ids, true).Find(&managed).Error; err != nil {
+		return err
+	}
+	if len(managed) == 0 {
+		return nil
+	}
+	if err := advanceChannelConfigurationRevision(tx); err != nil {
+		return err
+	}
+	for _, entry := range managed {
+		if err := revokeResourceGatewayChannel(tx, entry.ChannelID); err != nil {
+			return err
+		}
+		if err := tx.Where("channel_id = ?", entry.ChannelID).Delete(&Ability{}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func sameResourceSet(a, b []string) bool {
+	first, second := slices.Clone(a), slices.Clone(b)
+	slices.Sort(first)
+	slices.Sort(second)
+	return slices.Equal(first, second)
+}
+
+func sameResourceGatewayIdentity(a, b ResourceInstance) bool {
+	return a.ID == b.ID && a.ChannelID == b.ChannelID && a.CanonicalModel == b.CanonicalModel && a.UpstreamModel == b.UpstreamModel && a.Status == b.Status && a.ContextLength == b.ContextLength && sameResourceSet(a.Protocols, b.Protocols) && sameResourceSet(a.Capabilities, b.Capabilities)
+}
+
+func invalidatedResourceGatewaySources(previous *ResourceSnapshot, next ResourceSnapshot) map[string]bool {
+	changed := map[string]bool{}
+	if previous == nil {
+		return changed
+	}
+	channels := map[string]ResourceChannel{}
+	resources := map[string]ResourceInstance{}
+	for _, channel := range next.Channels {
+		channels[channel.ID] = channel
+	}
+	for _, resource := range next.Instances {
+		resources[resource.ID] = resource
+	}
+	for _, prior := range previous.Channels {
+		current, exists := channels[prior.ID]
+		if !exists || prior.Enabled != current.Enabled || prior.Provider != current.Provider {
+			changed[prior.ID] = true
+		}
+	}
+	for _, prior := range previous.Instances {
+		current, exists := resources[prior.ID]
+		if !exists || !sameResourceGatewayIdentity(prior, current) {
+			changed[prior.ChannelID] = true
+		}
+	}
+	return changed
 }

@@ -61,12 +61,18 @@ describe("server resource inventory boundaries", () => {
       enabled: false,
     });
   });
+  it("retains the server-declared managed-routing effect", () => {
+    expect(
+      parseResourceCatalog({ ...catalog(), affects_gateway_routing: true })
+        .affects_gateway_routing,
+    ).toBe(true);
+  });
   it.each([
     null,
     [],
     {},
     { ...catalog(), revision: Number.MAX_SAFE_INTEGER + 1 },
-    { ...catalog(), affects_gateway_routing: true },
+    { ...catalog(), affects_gateway_routing: "true" },
     { ...catalog(), placements: {} },
     {
       ...catalog(),

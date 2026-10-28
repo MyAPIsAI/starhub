@@ -240,11 +240,17 @@ function ResourceInventoryView() {
         </div>
       </header>
       <aside className="ri-boundary">
-        {text(
-          "此清单暂不改变网关实际路由或调用授权。上游密钥与真实渠道在后台单独管理；区域及延迟来自导入数据，并非实测或服务承诺。",
-          "This inventory does not yet change gateway routing or API authorization. Manage credentials and live channels separately in Admin. Imported regions and latency are metadata, not measurements or service commitments.",
-          "لا يغيّر هذا المخزون توجيه البوابة أو صلاحيات الواجهة بعد. تُدار بيانات الاعتماد والقنوات الفعلية في الإدارة. المناطق وزمن الاستجابة بيانات مستوردة وليست قياسات أو ضمانات.",
-        )}{" "}
+        {data?.affects_gateway_routing
+          ? text(
+              "此清单已关联托管网关渠道。修改投放，或改变资源身份、能力、上下文及可用状态，将撤销相关渠道的全部托管组合，须重新预览发布。凭证另行管理；区域和延迟仍为来源元数据。",
+              "This inventory has managed gateway channels. Placement changes or resource identity, capability, context or availability changes revoke all managed pairs on affected channels until reviewed and published again. Credentials are managed separately; regions and latency remain source metadata.",
+              "يرتبط هذا المخزون بقنوات بوابة مُدارة. تؤدي تغييرات النشر أو هوية المورد أو قدراته أو سياقه أو توفره إلى إلغاء جميع أزواج القنوات المتأثرة حتى مراجعتها ونشرها مجددًا. تُدار بيانات الاعتماد منفصلة؛ المناطق وزمن الاستجابة بيانات مصدر.",
+            )
+          : text(
+              "此清单暂不改变网关实际路由或调用授权。上游密钥与真实渠道在后台单独管理；区域及延迟来自导入数据，并非实测或服务承诺。",
+              "This inventory does not yet change gateway routing or API authorization. Manage credentials and live channels separately in Admin. Imported regions and latency are metadata, not measurements or service commitments.",
+              "لا يغيّر هذا المخزون توجيه البوابة أو صلاحيات الواجهة بعد. تُدار بيانات الاعتماد والقنوات الفعلية في الإدارة. المناطق وزمن الاستجابة بيانات مستوردة وليست قياسات أو ضمانات.",
+            )}{" "}
         <Link to="/admin?tab=resources">
           {text("打开后台渠道", "Open live channels", "فتح القنوات الفعلية")}
         </Link>
@@ -547,11 +553,19 @@ function ResourceInventoryView() {
                   "استيراد لقطة المخزون",
                 )
         }
-        description={text(
-          "保存到服务器清单。此操作暂不改变实际网关路由。",
-          "Save to server inventory. Live gateway routing is unchanged by this operation.",
-          "الحفظ في مخزون الخادم؛ لا يغيّر هذا الإجراء توجيه البوابة الفعلي.",
-        )}
+        description={
+          data?.affects_gateway_routing
+            ? text(
+                "保存资源/投放变更可能撤销相关托管渠道的全部组合；不会自动重新发布或扩权。",
+                "Saving resource or placement changes may revoke all pairs on affected managed channels. It never republishes or grants access automatically.",
+                "قد يؤدي حفظ تغييرات الموارد أو النشر إلى إلغاء جميع أزواج القنوات المُدارة المتأثرة. لا يحدث نشر جديد أو منح صلاحيات تلقائيًا.",
+              )
+            : text(
+                "保存到服务器清单。此操作暂不改变实际网关路由。",
+                "Save to server inventory. Live gateway routing is unchanged by this operation.",
+                "الحفظ في مخزون الخادم؛ لا يغيّر هذا الإجراء توجيه البوابة الفعلي.",
+              )
+        }
         footer={
           <>
             <Button disabled={mutation.isPending} onClick={close}>
@@ -651,7 +665,11 @@ function ResourceInventoryView() {
                   </dt>
                   <dd>{draft.groups || "—"}</dd>
                   <dt>{text("清单状态", "Inventory state", "حالة المخزون")}</dt>
-                  <dd>{String(draft.enabled)}</dd>
+                  <dd>
+                    {draft.enabled
+                      ? text("已启用", "Enabled", "مفعّل")
+                      : text("已停用", "Disabled", "معطّل")}
+                  </dd>
                 </dl>
               ) : (
                 <>

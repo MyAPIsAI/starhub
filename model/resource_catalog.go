@@ -21,7 +21,8 @@ var (
 const maxResourceRevision int64 = 1<<53 - 1
 
 // ResourceCatalogRecord stores imported inventory, separate from gateway credentials.
-// Inventory and placements do not change Channel/Ability routing or grant API access.
+// Inventory never grants API access automatically. Changes to published resources
+// revoke their managed channel until an explicit publication is reviewed again.
 type ResourceCatalogRecord struct {
 	ID        int    `gorm:"primaryKey"`
 	Revision  int64  `gorm:"not null;default:0"`
@@ -176,6 +177,11 @@ func readResourceCatalog(tx *gorm.DB) (*ResourceCatalog, error) {
 	for _, region := range regions {
 		result.Regions[region.ID] = region
 	}
+	var managed int64
+	if err := tx.Model(&ResourceGatewayManagedChannel{}).Count(&managed).Error; err != nil {
+		return nil, err
+	}
+	result.AffectsGatewayRouting = managed > 0
 	return result, nil
 }
 
@@ -234,6 +240,9 @@ func SaveResourceSnapshot(ctx context.Context, expected int64, snapshot Resource
 	return mutateResourceCatalog(ctx, expected, func(tx *gorm.DB, previous *ResourceCatalog) error {
 		if previous.Snapshot != nil && snapshot.Sequence <= previous.Snapshot.Sequence {
 			return ErrResourceConflict
+		}
+		if err := invalidateResourceGatewaySources(tx, invalidatedResourceGatewaySources(previous.Snapshot, snapshot)); err != nil {
+			return err
 		}
 		old := map[string]ResourceInstance{}
 		if previous.Snapshot != nil {
@@ -306,6 +315,13 @@ func SaveResourcePlacement(ctx context.Context, expected int64, id string, place
 			}
 		}
 		groups, _ := json.Marshal(placement.GroupIDs)
+		prior := catalog.Placements[id]
+		sameModel := (prior.ModelID == nil && placement.ModelID == nil) || (prior.ModelID != nil && placement.ModelID != nil && *prior.ModelID == *placement.ModelID)
+		if prior.Enabled != placement.Enabled || !sameModel || !sameResourceSet(prior.GroupIDs, placement.GroupIDs) {
+			if err := invalidateResourceGatewaySources(tx, map[string]bool{resource.ChannelID: true}); err != nil {
+				return err
+			}
+		}
 		return tx.Model(&ResourcePlacementRecord{}).Where("resource_id = ?", id).Updates(map[string]any{"model_id": placement.ModelID, "group_ids": string(groups), "enabled": placement.Enabled}).Error
 	})
 }

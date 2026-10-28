@@ -6,7 +6,7 @@ export interface ResourceCatalog {
   placements: Record<string, ResourcePlacement>;
   regions: Record<string, ResourceRegion>;
   updated_at: number;
-  affects_gateway_routing: false;
+  affects_gateway_routing: boolean;
 }
 
 export interface ResourceRegion {
@@ -104,7 +104,7 @@ export function parseResourceCatalog(value: unknown): ResourceCatalog {
     !object(value) ||
     !integer(value.revision) ||
     !integer(value.updated_at) ||
-    value.affects_gateway_routing !== false ||
+    typeof value.affects_gateway_routing !== "boolean" ||
     !object(value.placements) ||
     !object(value.regions) ||
     Object.keys(value.regions).length > 1000
