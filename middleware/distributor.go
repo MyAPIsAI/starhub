@@ -112,46 +112,53 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 					prefixHash = chatPrefixHashFromBody(body)
 				}
 			}
-		if modelName == "" && defaultModel != "" {
-			modelName = defaultModel
-		}
-		if modelName == "" {
-			fail(http.StatusBadRequest, "model_required",
-				"the \"model\" field is required")
-			return
-		}
+			if modelName == "" && defaultModel != "" {
+				modelName = defaultModel
+			}
+			if modelName == "" {
+				fail(http.StatusBadRequest, "model_required",
+					"the \"model\" field is required")
+				return
+			}
 
-		// Auto-routing: when the client sends model "myapis-auto", replace
-		// it with the lowest-cost available model within the token's
-		// authorized scope (group + model whitelist), so the relay can
-		// proceed as if the user had chosen that model explicitly.
-		if modelName == "myapis-auto" {
-			usingGroup, _ := r.Context().Value(common.CtxUsingGroup).(string)
-			var checkModels []string
-			if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
-				checkModels = model.SplitList(limits)
-			}
-			best, bestQuota := "", int64(1<<62)
-			for _, m := range checkModels {
-				if m == "myapis-auto" {
-					continue
+			// Auto-routing: when the client sends model "myapis-auto", replace
+			// it with the lowest-cost available model within the token's
+			// authorized scope (group + model whitelist), so the relay can
+			// proceed as if the user had chosen that model explicitly.
+			if modelName == "myapis-auto" {
+				usingGroup, _ := r.Context().Value(common.CtxUsingGroup).(string)
+				var checkModels []string
+				if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
+					checkModels = model.SplitList(limits)
+				} else {
+					checkModels, err = model.ListModelsByGroup(usingGroup)
+					if err != nil {
+						dto.WriteRelayError(w, http.StatusInternalServerError, inbound, "server_error", "internal_error",
+							"failed to list models for the current group")
+						return
+					}
 				}
-				ch, err := model.GetSatisfiedChannel(usingGroup, m)
-				if err != nil || ch == nil {
-					continue
+				best, bestQuota := "", int64(1<<62)
+				for _, m := range checkModels {
+					if m == "myapis-auto" {
+						continue
+					}
+					ch, err := model.GetSatisfiedChannel(usingGroup, m)
+					if err != nil || ch == nil {
+						continue
+					}
+					q := relay.ComputeQuota(m, usingGroup, 1, 1)
+					if q < bestQuota {
+						best = m
+						bestQuota = q
+					}
 				}
-				q := relay.ComputeQuota(m, usingGroup, 1, 1)
-				if q < bestQuota {
-					best = m
-					bestQuota = q
+				if best != "" {
+					modelName = best
 				}
 			}
-			if best != "" {
-				modelName = best
-			}
-		}
 
-		// Token model whitelist: a sub-key can be restricted to a subset of
+			// Token model whitelist: a sub-key can be restricted to a subset of
 			// models. The limits string is set by TokenAuth; empty means no limit.
 			if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
 				if !modelInList(modelName, model.SplitList(limits)) {
