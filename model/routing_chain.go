@@ -8,6 +8,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+var ErrRoutingChainConflict = errors.New("routing chain was concurrently pinned to another model; retry the request")
+
 // RoutingChain pins a tool conversation within one token and service group.
 // Only the identifier hash is stored; prompts and tool output are excluded.
 type RoutingChain struct {

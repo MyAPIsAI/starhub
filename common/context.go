@@ -31,6 +31,8 @@ const (
 	CtxRequestPrefixHash ctxKey = "request_prefix_hash"
 	// CtxSmartChannelCheck carries trusted routing constraints into every retry.
 	CtxSmartChannelCheck ctxKey = "smart_channel_check"
+	// CtxSmartChainAdmission persists a selected chain only after quota admission.
+	CtxSmartChainAdmission ctxKey = "smart_chain_admission"
 )
 
 func WithValues(ctx context.Context, kv ...any) context.Context {

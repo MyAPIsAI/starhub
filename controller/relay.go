@@ -122,6 +122,7 @@ type relayRequest struct {
 	stream         bool
 	prefixHash     string // prompt-prefix scope for prefix-cache affinity
 	channelCheck   func(*model.Channel, string) (bool, error)
+	chainAdmission func() error
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
@@ -141,6 +142,7 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 	}
 	req.autoGroups, _ = ctx.Value(common.CtxAutoGroups).([]string)
 	req.channelCheck, _ = ctx.Value(common.CtxSmartChannelCheck).(func(*model.Channel, string) (bool, error))
+	req.chainAdmission, _ = ctx.Value(common.CtxSmartChainAdmission).(func() error)
 	req.protocol = "OpenAI"
 	if r.URL.Path == "/v1/messages" {
 		req.protocol = "Anthropic"
@@ -593,6 +595,16 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor channel.ChatAdaptor,
 // and a response-committed safety boundary. Unsupported skips do not
 // consume the attempt budget.
 func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
+	if f.req.chainAdmission != nil {
+		if err := f.req.chainAdmission(); err != nil {
+			status, code, message := http.StatusInternalServerError, "routing_chain_admission_failed", "failed to admit the routing chain"
+			if errors.Is(err, model.ErrRoutingChainConflict) {
+				status, code, message = http.StatusConflict, "routing_chain_conflict", err.Error()
+			}
+			f.errorOut(status, "server_error", code, message)
+			return
+		}
+	}
 loop:
 	for {
 		if f.ctx.Err() != nil || f.sw.wrote {

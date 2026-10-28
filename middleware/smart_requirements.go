@@ -261,20 +261,6 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 			}
 		}
 		if best != "" {
-			if requirements.chain != "" && pinned == "" {
-				winner, err := model.PinRoutingChain(tokenID, group, requirements.chain, best)
-				if err != nil {
-					return "", err
-				}
-				if !modelInList(winner, candidates) {
-					return "", nil
-				}
-				ok, err := requirements.available(winner, candidateGroup)
-				if err != nil || !ok {
-					return "", err
-				}
-				best = winner
-			}
 			return best, nil
 		}
 	}

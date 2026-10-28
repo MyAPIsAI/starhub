@@ -124,6 +124,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			requestedModel := modelName
 			autoModelSelected := false
 			var channelCheck func(*model.Channel, string) (bool, error)
+			var chainAdmission func() error
 			// Auto-routing: for the canonical entry or its legacy alias, replace
 			// it with the lowest-cost available model within the token's
 			// authorized scope (group + model whitelist), so the relay can
@@ -148,6 +149,17 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 					autoModelSelected = true
 					channelCheck = func(ch *model.Channel, group string) (bool, error) {
 						return requirements.compatible(best, group, ch)
+					}
+					if requirements.chain != "" {
+						tokenID, _ := r.Context().Value(common.CtxTokenID).(int64)
+						group, _ := r.Context().Value(common.CtxUsingGroup).(string)
+						chainAdmission = func() error {
+							winner, err := model.PinRoutingChain(tokenID, group, requirements.chain, best)
+							if err == nil && winner != best {
+								return model.ErrRoutingChainConflict
+							}
+							return err
+						}
 					}
 				}
 			}
@@ -210,6 +222,9 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				common.CtxRequestPrefixHash, prefixHash)
 			if channelCheck != nil {
 				ctx = common.WithValues(ctx, common.CtxSmartChannelCheck, channelCheck)
+			}
+			if chainAdmission != nil {
+				ctx = common.WithValues(ctx, common.CtxSmartChainAdmission, chainAdmission)
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

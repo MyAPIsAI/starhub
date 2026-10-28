@@ -47,6 +47,11 @@ func routeSmart(t *testing.T, body, path, header, value string, tokenID int64, l
 	selected := ""
 	rec := httptest.NewRecorder()
 	Distribute(dto.InboundOpenAI)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if admit, ok := r.Context().Value(common.CtxSmartChainAdmission).(func() error); ok {
+			if err := admit(); err != nil {
+				t.Fatal(err)
+			}
+		}
 		selected, _ = r.Context().Value(common.CtxRequestModel).(string)
 		w.WriteHeader(204)
 	})).ServeHTTP(rec, r)
