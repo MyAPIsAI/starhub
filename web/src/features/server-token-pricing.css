@@ -41,6 +41,7 @@
 }
 .stp-search input,
 .stp-fields input,
+.stp-fields select,
 .stp-fields textarea {
   width: 100%;
   min-width: 0;

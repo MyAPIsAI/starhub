@@ -167,6 +167,71 @@ export function validServerExpression(value: string): boolean {
     value.trim().length > 0 && new TextEncoder().encode(value).length <= 512
   );
 }
+export type ServerPricingEdit =
+  | { mode: "per_token"; input: string; completion: string }
+  | { mode: "per_request"; price: string }
+  | { mode: "expression"; expression: string };
+export function replaceServerModelPricing(
+  state: ServerPricing,
+  id: string,
+  edit: ServerPricingEdit,
+): PricingOption[] {
+  if (!id.trim()) throw Error("Invalid model ID");
+  const remove = <T>(
+    values: Record<string, T>,
+    key: PricingKey,
+  ): PricingOption[] => {
+    if (ownPrice(values, id) === undefined) return [];
+    const remaining = { ...values };
+    delete remaining[id];
+    return [{ key, value: JSON.stringify(remaining) }];
+  };
+  switch (edit.mode) {
+    case "expression":
+      if (!validServerExpression(edit.expression))
+        throw Error("Invalid expression");
+      return [
+        {
+          key: "model_price_expr",
+          value: JSON.stringify({
+            ...state.expressions,
+            [id]: edit.expression,
+          }),
+        },
+      ];
+    case "per_request":
+      if (!validServerRequestPrice(edit.price))
+        throw Error("Invalid request price");
+      return [
+        ...remove(state.expressions, "model_price_expr"),
+        {
+          key: "model_price",
+          value: JSON.stringify({
+            ...state.perRequest,
+            [id]: Number(edit.price),
+          }),
+        },
+      ];
+    case "per_token":
+      if (!validServerRatio(edit.input) || !validServerRatio(edit.completion))
+        throw Error("Invalid token pricing");
+      return [
+        ...remove(state.expressions, "model_price_expr"),
+        ...remove(state.perRequest, "model_price"),
+        {
+          key: "model_ratio",
+          value: JSON.stringify({ ...state.input, [id]: Number(edit.input) }),
+        },
+        {
+          key: "completion_ratio",
+          value: JSON.stringify({
+            ...state.completion,
+            [id]: Number(edit.completion),
+          }),
+        },
+      ];
+  }
+}
 export function replaceServerExpression(
   state: ServerPricing,
   id: string,

@@ -9,6 +9,7 @@ import {
   replaceServerRequestPrice,
   replaceServerExpression,
   validServerExpression,
+  replaceServerModelPricing,
 } from "../src/lib/server-pricing";
 const fixture = {
   version: 3,
@@ -109,6 +110,68 @@ describe("server token pricing", () => {
         ),
       ).toThrow();
     }
+  });
+  it("atomically removes higher-priority overrides when selecting token pricing and preserves every other model", () => {
+    const state = readServerPricing(fixture);
+    state.expressions.actual = "0.005";
+    state.perRequest.actual = 0.1;
+    const before = structuredClone(state),
+      options = replaceServerModelPricing(state, "actual", {
+        mode: "per_token",
+        input: "0",
+        completion: "2",
+      });
+    expect(
+      Object.fromEntries(options.map((o) => [o.key, JSON.parse(o.value)])),
+    ).toEqual({
+      model_price_expr: { dynamic: "requests * 0.1" },
+      model_price: { flat: 0.1 },
+      model_ratio: { actual: 0, unrelated: 0 },
+      completion_ratio: { actual: 2, unrelated: 0 },
+    });
+    expect(state).toEqual(before);
+  });
+  it("switches expression to per-request by removing only that expression and retaining fallback ratios", () => {
+    const state = readServerPricing(fixture);
+    const options = replaceServerModelPricing(state, "dynamic", {
+      mode: "per_request",
+      price: "0.005",
+    });
+    expect(options).toEqual([
+      { key: "model_price_expr", value: "{}" },
+      {
+        key: "model_price",
+        value: JSON.stringify({ flat: 0.1, dynamic: 0.005 }),
+      },
+    ]);
+    expect(
+      replaceServerModelPricing(state, "new", {
+        mode: "expression",
+        expression: "0",
+      }),
+    ).toEqual([
+      {
+        key: "model_price_expr",
+        value: JSON.stringify({ ...state.expressions, new: "0" }),
+      },
+    ]);
+    expect(() =>
+      replaceServerModelPricing(state, "dynamic", {
+        mode: "per_request",
+        price: "0",
+      }),
+    ).toThrow();
+  });
+  it("removes prototype-like model overrides without affecting unrelated keys", () => {
+    const state = readServerPricing(fixture);
+    state.perRequest = JSON.parse('{"__proto__":0.1,"flat":0.2}');
+    const options = replaceServerModelPricing(state, "__proto__", {
+      mode: "per_token",
+      input: "1",
+      completion: "2",
+    });
+    expect(JSON.parse(options[0].value)).toEqual({ flat: 0.2 });
+    expect(Object.hasOwn(JSON.parse(options[1].value), "__proto__")).toBe(true);
   });
   it("rejects missing, malformed and unsupported snapshots instead of inventing prices", () => {
     for (const value of [

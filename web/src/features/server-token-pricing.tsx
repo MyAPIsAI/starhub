@@ -12,11 +12,9 @@ import {
   ownPrice,
   serverPricingMode,
   validServerRatio,
-  replaceServerModelRatios,
   validServerRequestPrice,
-  replaceServerRequestPrice,
   validServerExpression,
-  replaceServerExpression,
+  replaceServerModelPricing,
   type ServerPricing,
 } from "../lib/server-pricing";
 import { useSettingsText } from "./pricing-settings-shared";
@@ -61,7 +59,7 @@ export function ServerTokenPricing() {
     : [];
   const pages = Math.max(1, Math.ceil(ids.length / 20)),
     currentPage = Math.min(page, pages - 1);
-  const writable = !!data && data.version <= Number.MAX_SAFE_INTEGER - 2;
+  const writable = !!data && data.version <= Number.MAX_SAFE_INTEGER - 4;
   const conflict = !!draft && (!data || data.version !== draft.base.version);
   const valid =
     !!draft &&
@@ -70,7 +68,15 @@ export function ServerTokenPricing() {
     draft.id.length <= 128 &&
     !/[\u0000-\u001f\u007f]/.test(draft.id) &&
     !["myapis-auto", "veyra-auto"].includes(draft.id) &&
-    serverPricingMode(draft.base, draft.id) === draft.kind &&
+    (draft.locked ||
+      ![
+        draft.base.input,
+        draft.base.completion,
+        draft.base.perRequest,
+        draft.base.expressions,
+      ].some(
+        (values) => ownPrice<string | number>(values, draft.id) !== undefined,
+      )) &&
     (draft.kind === "expression"
       ? validServerExpression(draft.expression)
       : draft.kind === "per_request"
@@ -102,17 +108,19 @@ export function ServerTokenPricing() {
   const save = async () => {
     if (!draft || !review || !valid || conflict || !writable) return;
     try {
-      const options =
+      const options = replaceServerModelPricing(
+        draft.base,
+        draft.id,
         draft.kind === "expression"
-          ? replaceServerExpression(draft.base, draft.id, draft.expression)
+          ? { mode: draft.kind, expression: draft.expression }
           : draft.kind === "per_request"
-            ? replaceServerRequestPrice(draft.base, draft.id, draft.request)
-            : replaceServerModelRatios(
-                draft.base,
-                draft.id,
-                draft.input,
-                draft.completion,
-              );
+            ? { mode: draft.kind, price: draft.request }
+            : {
+                mode: draft.kind,
+                input: draft.input,
+                completion: draft.completion,
+              },
+      );
       const result = await mutation.mutateAsync({
         expected_version: draft.base.version,
         options,
@@ -183,18 +191,18 @@ export function ServerTokenPricing() {
           </Button>
           <Button disabled={!writable} onClick={() => begin()}>
             {text(
-              "登记模型倍率",
-              "Configure model ratios",
-              "تعيين معاملات نموذج",
+              "登记模型定价",
+              "Configure model pricing",
+              "تعيين تسعير نموذج",
             )}
           </Button>
         </div>
       </header>
       <p>
         {text(
-          "可编辑按词元倍率、现有按次价格或现有表达式，不切换计价模式。价格变更不会创建渠道、投放资源或授予密钥权限。完整分时规则管理仍待实现。",
-          "Edit token ratios, existing per-request prices or existing expressions without changing pricing modes. Price changes do not create channels, publish resources or grant key permissions. Full time-rule management remains pending.",
-          "عدّل معاملات الرموز أو الأسعار والتعبيرات الحالية دون تغيير نمط التسعير. لا تنشئ الأسعار قنوات أو تنشر موارد أو تمنح صلاحيات للمفاتيح. لا تزال إدارة قواعد الوقت الكاملة قيد التنفيذ.",
+          "可登记、编辑或明确切换按词元、按次及表达式计价。所选模型的模式与价格同事务保存；变更不会创建渠道、投放资源或授予密钥权限。完整分时规则管理仍待实现。",
+          "Configure, edit or explicitly switch token, per-request and expression pricing. The selected model's mode and prices are saved atomically; changes do not create channels, publish resources or grant key permissions. Full time-rule management remains pending.",
+          "اضبط أو عدّل أو بدّل صراحةً التسعير لكل رمز أو طلب أو بالتعبير. يُحفظ نمط النموذج وأسعاره ذريًا دون إنشاء قنوات أو نشر موارد أو منح صلاحيات للمفاتيح. إدارة قواعد الوقت الكاملة قيد التنفيذ.",
         )}
       </p>
       {query.isLoading && (
@@ -398,9 +406,9 @@ export function ServerTokenPricing() {
               )
             : draft?.kind === "per_request"
               ? text(
-                  "按次价格使用美元/请求，保留现有计价模式。取消仅放弃此草稿。",
-                  "Per-request prices use USD/request and retain the existing pricing mode. Cancel discards this draft.",
-                  "الأسعار بالدولار لكل طلب مع الحفاظ على نمط التسعير الحالي. يلغي الإلغاء هذه المسودة.",
+                  "按次价格使用美元/请求，模式与价格变更整体保存。取消仅放弃此草稿。",
+                  "Per-request prices use USD/request. Mode and price changes are saved together. Cancel discards this draft.",
+                  "الأسعار بالدولار لكل طلب. يُحفظ تغيير النمط والسعر معًا. يلغي الإلغاء هذه المسودة.",
                 )
               : text(
                   "输入和输出倍率按同一配置版本整体保存。取消仅放弃此草稿。",
@@ -443,6 +451,20 @@ export function ServerTokenPricing() {
             </p>
             {review ? (
               <div className="stp-review">
+                <p>
+                  {text("计价方式", "Pricing mode", "نمط التسعير")}:{" "}
+                  {draft.locked
+                    ? mode(draft.base, draft.id)
+                    : text("未配置", "Unconfigured", "غير مضبوط")}{" "}
+                  →{" "}
+                  {
+                    {
+                      per_token: text("按词元", "Per token", "لكل رمز"),
+                      per_request: text("按次", "Per request", "لكل طلب"),
+                      expression: text("表达式", "Expression", "تعبير"),
+                    }[draft.kind]
+                  }
+                </p>
                 {draft.kind === "expression" ? (
                   <>
                     <p>
@@ -502,9 +524,16 @@ export function ServerTokenPricing() {
                 )}
                 <p>
                   {text(
-                    "此操作修改所选模型后续请求的真实服务器价格，不重写历史账单；其他模型、计价模式及计费选项保持原值。分组等规则仍会影响最终费用。数据库提交后响应进程单独重载，其他实例状态需另行确认。",
-                    "This changes the selected model's real server price for future requests and leaves historical bills unchanged. Other models, pricing modes and options retain their values. Group and other rules still affect final charges. The response process reloads after the database commit; check other instances separately.",
-                    "يغيّر هذا سعر النموذج المحدد للطلبات القادمة دون إعادة كتابة الفواتير السابقة. تحتفظ النماذج والأنماط والخيارات الأخرى بقيمها وتظل قواعد المجموعة وغيرها مؤثرة في الرسوم النهائية. تعيد العملية المستجيبة التحميل بعد الالتزام بقاعدة البيانات؛ تحقق من بقية العمليات منفصلة.",
+                    "此操作修改所选模型后续请求的真实服务器价格，不重写历史账单；其他模型和无关计费选项保持原值。分组等规则仍会影响最终费用。数据库提交后响应进程单独重载，其他实例状态需另行确认。",
+                    "This changes the selected model's real server price for future requests and leaves historical bills unchanged. Other models and unrelated pricing options retain their values. Group and other rules still affect final charges. The response process reloads after the database commit; check other instances separately.",
+                    "يغيّر هذا سعر النموذج المحدد للطلبات القادمة دون إعادة كتابة الفواتير السابقة. تحتفظ النماذج والخيارات الأخرى بقيمها وتظل قواعد المجموعة وغيرها مؤثرة في الرسوم النهائية. تعيد العملية المستجيبة التحميل بعد الالتزام بقاعدة البيانات؛ تحقق من بقية العمليات منفصلة.",
+                  )}
+                </p>
+                <p>
+                  {text(
+                    "切换到按词元将移除所选模型的表达式及按次价格；切换到按次将移除所选模型的表达式。按次或表达式模式保留较低优先级价格作为现有回退。所有相关键按同一版本整体保存。",
+                    "Switching to per-token removes this model's expression and per-request override; switching to per-request removes its expression. Lower-priority prices are retained for existing fallback in per-request or expression mode. All affected keys are saved together against one version.",
+                    "الانتقال إلى التسعير لكل رمز يزيل تعبير النموذج وسعره لكل طلب؛ والانتقال إلى التسعير لكل طلب يزيل تعبيره. تُحفظ الأسعار الأقل أولوية للرجوع إليها في النمطين الآخرين. تُحفظ المفاتيح المتأثرة معًا وفق إصدار واحد.",
                   )}
                 </p>
                 <Button
@@ -532,6 +561,29 @@ export function ServerTokenPricing() {
                     value={draft.id}
                     onChange={(e) => setDraft({ ...draft, id: e.target.value })}
                   />
+                </label>
+                <label>
+                  {text("计价方式", "Pricing mode", "نمط التسعير")}
+                  <select
+                    aria-label={text("计价方式", "Pricing mode", "نمط التسعير")}
+                    value={draft.kind}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        kind: e.target.value as Draft["kind"],
+                      })
+                    }
+                  >
+                    <option value="per_token">
+                      {text("按词元", "Per token", "لكل رمز")}
+                    </option>
+                    <option value="per_request">
+                      {text("按次", "Per request", "لكل طلب")}
+                    </option>
+                    <option value="expression">
+                      {text("表达式", "Expression", "تعبير")}
+                    </option>
+                  </select>
                 </label>
                 {draft.kind === "expression" ? (
                   <>
@@ -584,9 +636,9 @@ export function ServerTokenPricing() {
                     </label>
                     <small>
                       {text(
-                        "价格必须大于 0 且不超过 10000 美元/请求。零值会退出按次计价，此处不允许切换模式。",
-                        "Price must be greater than 0 and at most 10000 USD/request. Zero would leave per-request pricing; mode changes are not available here.",
-                        "يجب أن يكون السعر أكبر من صفر وألا يتجاوز 10000 دولار لكل طلب. الصفر يلغي التسعير لكل طلب؛ تغيير النمط غير متاح هنا.",
+                        "价格必须大于 0 且不超过 10000 美元/请求。零值会退出按次计价；如需其他模式，请明确选择计价方式。",
+                        "Price must be greater than 0 and at most 10000 USD/request. Zero would leave per-request pricing; select another mode explicitly when needed.",
+                        "يجب أن يكون السعر أكبر من صفر وألا يتجاوز 10000 دولار لكل طلب. الصفر يلغي التسعير لكل طلب؛ اختر نمطًا آخر صراحةً عند الحاجة.",
                       )}
                     </small>
                   </>
