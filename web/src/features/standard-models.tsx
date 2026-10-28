@@ -16,7 +16,12 @@ import { useSettingsText } from "./pricing-settings-shared";
 import "../components/catalog-management.css";
 import "./standard-models.css";
 
-type Draft = { original: ModelMeta | null; row: ModelMeta; remove: boolean };
+type Draft = {
+  original: ModelMeta | null;
+  row: ModelMeta;
+  remove: boolean;
+  revision: number;
+};
 export function StandardModels({ role: _role }: { role: number }) {
   const { text } = useSettingsText(),
     role = useSystemAccess((s) => s.role),
@@ -59,7 +64,8 @@ export function StandardModels({ role: _role }: { role: number }) {
         <ModelPricingAdmin role={role} modelId={selected ?? undefined} />
       </>
     );
-  const rows = query.isError ? [] : (query.data ?? []),
+  const data = query.isError ? undefined : query.data;
+  const rows = data?.models ?? [],
     current = rows.find((row) => row.model === selected),
     filtered = rows.filter((row) =>
       `${row.model} ${row.vendor} ${row.vendor_display}`
@@ -68,8 +74,11 @@ export function StandardModels({ role: _role }: { role: number }) {
     );
   const pages = Math.max(1, Math.ceil(filtered.length / 20)),
     currentPage = Math.min(page, pages - 1),
-    readable = query.isSuccess && !query.isError,
+    readable = !!data && query.isSuccess && !query.isError,
     pending = upsert.isPending || remove.isPending;
+  const writable =
+    !!data && readable && data.revision < Number.MAX_SAFE_INTEGER;
+  const conflict = !!draft && (!data || draft.revision !== data.revision);
   const valid =
     !!draft &&
     (draft.remove ||
@@ -80,9 +89,11 @@ export function StandardModels({ role: _role }: { role: number }) {
         [draft.row.context_length, draft.row.max_output].every(
           (v) => Number.isSafeInteger(v) && v >= 0,
         ) &&
-        Number.isSafeInteger(draft.row.sort_weight)));
+        Number.isSafeInteger(draft.row.sort_weight) &&
+        (!!draft.original ||
+          !rows.some((row) => row.model === draft.row.model))));
   const begin = (row: ModelMeta | null = null, deleting = false) => {
-    if (!readable) return;
+    if (!data || !writable) return;
     upsert.reset();
     remove.reset();
     setError("");
@@ -92,6 +103,7 @@ export function StandardModels({ role: _role }: { role: number }) {
       original: row,
       row: row ? structuredClone(row) : emptyModelMetadata(),
       remove: deleting,
+      revision: data.revision,
     });
   };
   const patch = (value: Partial<ModelMeta>) =>
@@ -99,18 +111,31 @@ export function StandardModels({ role: _role }: { role: number }) {
       previous ? { ...previous, row: { ...previous.row, ...value } } : previous,
     );
   const save = async () => {
-    if (!draft || !review || !valid || !readable) return;
+    if (!draft || !review || !valid || !writable || conflict) return;
     try {
       if (draft.remove) {
-        const result = await remove.mutateAsync(draft.row.model);
-        if (result.model !== draft.row.model)
+        const result = await remove.mutateAsync({
+          model: draft.row.model,
+          expected_catalog_revision: draft.revision,
+        });
+        if (
+          result.model !== draft.row.model ||
+          result.revision < draft.revision ||
+          result.revision > draft.revision + 1
+        )
           throw Error("Invalid metadata deletion acknowledgement");
         setParams({});
       } else {
-        const result = await upsert.mutateAsync(draft.row);
-        if (result.model !== draft.row.model)
+        const result = await upsert.mutateAsync({
+          meta: draft.row,
+          expected_catalog_revision: draft.revision,
+        });
+        if (
+          result.meta.model !== draft.row.model ||
+          result.revision !== draft.revision + 1
+        )
           throw Error("Invalid metadata save acknowledgement");
-        setParams({ model: result.model });
+        setParams({ model: result.meta.model });
       }
       setDraft(null);
       setNotice(
@@ -122,17 +147,23 @@ export function StandardModels({ role: _role }: { role: number }) {
       );
     } catch (caught) {
       setError(
-        caught instanceof ApiError && caught.status === 400
+        caught instanceof ApiError && caught.status === 409
           ? text(
-              "服务器拒绝此元数据，草稿已保留，请检查字段。",
-              "The server rejected this metadata; the draft is retained. Check the fields.",
-              "رفض الخادم هذه البيانات واحتُفظ بالمسودة. تحقق من الحقول.",
+              "模型目录已变化，本次未覆盖。请刷新并重新打开编辑。",
+              "The model catalog changed and was not overwritten. Refresh and reopen the editor.",
+              "تغيّر فهرس النماذج ولم يُستبدل. حدّث وأعد فتح المحرر.",
             )
-          : text(
-              "无法确认保存结果，草稿已保留。请刷新核对服务器数据后再操作。",
-              "The save result is unconfirmed and the draft is retained. Refresh and check server data before trying again.",
-              "تعذر تأكيد الحفظ واحتُفظ بالمسودة. حدّث وتحقق من بيانات الخادم قبل المحاولة مجددًا.",
-            ),
+          : caught instanceof ApiError && caught.status === 400
+            ? text(
+                "服务器拒绝此元数据，草稿已保留，请检查字段。",
+                "The server rejected this metadata; the draft is retained. Check the fields.",
+                "رفض الخادم هذه البيانات واحتُفظ بالمسودة. تحقق من الحقول.",
+              )
+            : text(
+                "无法确认保存结果，草稿已保留。请刷新核对服务器数据后再操作。",
+                "The save result is unconfirmed and the draft is retained. Refresh and check server data before trying again.",
+                "تعذر تأكيد الحفظ واحتُفظ بالمسودة. حدّث وتحقق من بيانات الخادم قبل المحاولة مجددًا.",
+              ),
       );
     }
   };
@@ -251,7 +282,7 @@ export function StandardModels({ role: _role }: { role: number }) {
           </Button>
           <Button
             variant="primary"
-            disabled={!readable}
+            disabled={!writable}
             onClick={() => begin()}
           >
             {text(
@@ -297,13 +328,19 @@ export function StandardModels({ role: _role }: { role: number }) {
       {query.isError && (
         <p role="alert">
           {text(
-            "无法读取服务器模型元数据，已隐藏缓存并暂停编辑。",
-            "Server model metadata is unavailable. Cached data is hidden and editing is paused.",
-            "تعذر تحميل بيانات نماذج الخادم. أُخفيت البيانات السابقة وأُوقف التحرير.",
+            "无法确认服务器模型元数据或版本保护能力，已隐藏缓存并暂停编辑。",
+            "Cannot verify server model metadata or revision-guard support. Cached data is hidden and editing is paused.",
+            "تعذر التحقق من بيانات نماذج الخادم أو حماية الإصدار. أُخفيت البيانات السابقة وأُوقف التحرير.",
           )}
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
+      {data && (
+        <p>
+          {text("模型目录版本", "Model catalog version", "إصدار فهرس النماذج")}:{" "}
+          <bdi>v{data.revision}</bdi>
+        </p>
+      )}
       {readable &&
         (selected ? (
           <section className="pricing-panel">
@@ -317,10 +354,13 @@ export function StandardModels({ role: _role }: { role: number }) {
               </Button>
               {current && (
                 <>
-                  <Button onClick={() => begin(current)}>
+                  <Button disabled={!writable} onClick={() => begin(current)}>
                     {text("编辑元数据", "Edit metadata", "تحرير البيانات")}
                   </Button>
-                  <Button onClick={() => begin(current, true)}>
+                  <Button
+                    disabled={!writable}
+                    onClick={() => begin(current, true)}
+                  >
                     {text("删除元数据", "Delete metadata", "حذف البيانات")}
                   </Button>
                 </>
@@ -438,7 +478,11 @@ export function StandardModels({ role: _role }: { role: number }) {
                         </td>
                         <td>
                           <div className="cm-actions">
-                            <Button size="small" onClick={() => begin(row)}>
+                            <Button
+                              size="small"
+                              disabled={!writable}
+                              onClick={() => begin(row)}
+                            >
                               {text(
                                 "编辑元数据",
                                 "Edit metadata",
@@ -447,6 +491,7 @@ export function StandardModels({ role: _role }: { role: number }) {
                             </Button>
                             <Button
                               size="small"
+                              disabled={!writable}
                               onClick={() => begin(row, true)}
                             >
                               {text(
@@ -522,7 +567,7 @@ export function StandardModels({ role: _role }: { role: number }) {
             </Button>
             <Button
               variant="primary"
-              disabled={!valid || !readable || pending}
+              disabled={!valid || !writable || conflict || pending}
               onClick={() => (review ? void save() : setReview(true))}
             >
               {review
@@ -540,6 +585,16 @@ export function StandardModels({ role: _role }: { role: number }) {
           </>
         }
       >
+        {draft && (
+          <p>
+            {text(
+              "草稿目录版本",
+              "Draft catalog version",
+              "إصدار فهرس المسودة",
+            )}
+            : <bdi>v{draft.revision}</bdi>
+          </p>
+        )}
         {draft &&
           (review ? (
             <div className="sm-review">
@@ -685,6 +740,15 @@ export function StandardModels({ role: _role }: { role: number }) {
               <div className="cm-wide">{reference(draft.row)}</div>
             </div>
           ))}
+        {conflict && draft && (
+          <p role="alert">
+            {text(
+              "目录版本已变化或读取不可用，请刷新并重新打开编辑。",
+              "The catalog changed or cannot be read. Refresh and reopen the editor.",
+              "تغيّر الفهرس أو تعذرت قراءته. حدّث وأعد فتح المحرر.",
+            )}
+          </p>
+        )}
         {!readable && draft && (
           <p role="alert">
             {text(

@@ -34,7 +34,7 @@ func UserAuth(next http.Handler) http.Handler {
 func AdminAuth(next http.Handler) http.Handler {
 	return UserAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		role, _ := r.Context().Value(common.CtxRole).(int)
-		if role < common.RoleAdmin {
+		if role != common.RoleAdmin && role != common.RoleRoot {
 			common.ApiError(w, http.StatusForbidden, "admin privilege required")
 			return
 		}

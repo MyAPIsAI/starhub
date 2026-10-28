@@ -46,6 +46,7 @@ const (
 	ResourceInventory    Resource = "inventory"
 	ResourceRegion       Resource = "region"
 	ResourceServiceGroup Resource = "service_group"
+	ResourceModelMeta    Resource = "model_metadata"
 )
 
 // policy maps role -> resource -> allowed actions. An empty action set means
@@ -64,6 +65,7 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceInventory:    {ActionRead: true, ActionWrite: true},
 		ResourceRegion:       {ActionRead: true, ActionWrite: true, ActionDelete: true},
 		ResourceServiceGroup: {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceModelMeta:    {ActionRead: true, ActionWrite: true, ActionDelete: true},
 	},
 	common.RoleAdmin: {
 		ResourceUser:         {ActionRead: true},
@@ -77,6 +79,7 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceInventory:    {ActionRead: true, ActionWrite: true},
 		ResourceRegion:       {ActionRead: true, ActionWrite: true, ActionDelete: true},
 		ResourceServiceGroup: {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceModelMeta:    {ActionRead: true, ActionWrite: true, ActionDelete: true},
 	},
 	common.RoleFinance: {
 		ResourceFinance: {ActionRead: true},
@@ -147,6 +150,8 @@ func pathResource(path string) (Resource, bool) {
 		return ResourceRegion, true
 	case path == "/api/service-group" || strings.HasPrefix(path, "/api/service-group/"):
 		return ResourceServiceGroup, true
+	case path == "/api/plaza/meta" || strings.HasPrefix(path, "/api/plaza/meta/"):
+		return ResourceModelMeta, true
 	}
 	return "", false
 }

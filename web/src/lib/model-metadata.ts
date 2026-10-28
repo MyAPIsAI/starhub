@@ -55,6 +55,51 @@ export function readModelMetadataList(value: unknown): ModelMeta[] {
     throw Error("Duplicate model metadata");
   return rows.sort((a, b) => a.model.localeCompare(b.model));
 }
+export interface ModelMetadataCatalog {
+  revision: number;
+  revision_guards: true;
+  models: ModelMeta[];
+}
+const revision = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+export function readModelMetadataCatalog(value: unknown): ModelMetadataCatalog {
+  if (!value || typeof value !== "object")
+    throw Error("Invalid model metadata catalog");
+  const state = value as Record<string, unknown>;
+  if (state.revision_guards !== true || !revision(state.revision))
+    throw Error("Unsupported model metadata catalog");
+  return {
+    revision: state.revision,
+    revision_guards: true,
+    models: readModelMetadataList(state.models),
+  };
+}
+export function readMetadataSave(value: unknown): {
+  meta: ModelMeta;
+  revision: number;
+} {
+  if (!value || typeof value !== "object")
+    throw Error("Invalid metadata acknowledgement");
+  const result = value as Record<string, unknown>;
+  if (!revision(result.revision))
+    throw Error("Invalid metadata acknowledgement");
+  return { meta: readModelMetadata(result.meta), revision: result.revision };
+}
+export function readMetadataDelete(value: unknown): {
+  model: string;
+  revision: number;
+} {
+  if (!value || typeof value !== "object")
+    throw Error("Invalid deletion acknowledgement");
+  const result = value as Record<string, unknown>;
+  if (
+    typeof result.model !== "string" ||
+    !result.model ||
+    !revision(result.revision)
+  )
+    throw Error("Invalid deletion acknowledgement");
+  return { model: result.model, revision: result.revision };
+}
 export function emptyModelMetadata(): ModelMeta {
   return {
     model: "",

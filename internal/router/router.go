@@ -108,6 +108,7 @@ func New() http.Handler {
 	// Metadata administration. Operators fill the catalog in; the plaza
 	// degrades gracefully for any model that has none.
 	mux.Handle("GET /api/plaza/meta", middleware.AdminAuth(http.HandlerFunc(controller.ListModelMeta)))
+	mux.Handle("GET /api/plaza/meta/configuration", middleware.AdminAuth(http.HandlerFunc(controller.GetModelMetadataCatalog)))
 	mux.Handle("PUT /api/plaza/meta", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertModelMeta))))
 	mux.Handle("DELETE /api/plaza/meta/{model...}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteModelMeta))))
 

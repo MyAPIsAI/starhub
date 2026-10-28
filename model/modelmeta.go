@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -95,7 +96,8 @@ func (m *ModelMeta) Groups() []string {
 
 // UpsertModelMeta inserts or replaces a metadata row.
 func UpsertModelMeta(m *ModelMeta) error {
-	return DB.Save(m).Error
+	_, err := saveModelMetadata(context.Background(), m, nil)
+	return err
 }
 
 // GetModelMeta returns the metadata row for a model name. A missing row is not
@@ -129,7 +131,8 @@ func ListModelMeta() (map[string]*ModelMeta, error) {
 
 // DeleteModelMeta removes a metadata row.
 func DeleteModelMeta(name string) error {
-	return DB.Where("model = ?", name).Delete(&ModelMeta{}).Error
+	_, err := mutateModelMetadata(context.Background(), nil, name, nil)
+	return err
 }
 
 /* --- plaza projection -------------------------------------------------- */

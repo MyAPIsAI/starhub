@@ -3,8 +3,29 @@ import {
   emptyModelMetadata,
   readModelMetadata,
   readModelMetadataList,
+  readModelMetadataCatalog,
 } from "../src/lib/model-metadata";
 describe("actual model metadata", () => {
+  it("requires explicit catalog guard support even when the server has no models", () => {
+    expect(
+      readModelMetadataCatalog({
+        models: [],
+        revision: 0,
+        revision_guards: true,
+      }).models,
+    ).toEqual([]);
+    for (const value of [
+      { models: [], revision: 0 },
+      { models: [], revision: -1, revision_guards: true },
+      {
+        models: [],
+        revision: Number.MAX_SAFE_INTEGER + 1,
+        revision_guards: true,
+      },
+      { models: [], revision: 0, revision_guards: false },
+    ])
+      expect(() => readModelMetadataCatalog(value)).toThrow();
+  });
   it("keeps unknown references distinct from zero and retains unedited metadata", () => {
     const original = {
       ...emptyModelMetadata(),

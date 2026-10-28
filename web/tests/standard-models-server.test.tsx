@@ -37,9 +37,10 @@ function render(role = 100, error = false, empty = false) {
     },
   });
   const key = ["plaza-meta", sessionQueryIdentity(useSystemAccess.getState())];
-  client.setQueryData(
-    key,
-    empty
+  client.setQueryData(key, {
+    revision: 0,
+    revision_guards: true,
+    models: empty
       ? []
       : [
           {
@@ -50,7 +51,7 @@ function render(role = 100, error = false, empty = false) {
             max_output: 2048,
           },
         ],
-  );
+  });
   if (error)
     client
       .getQueryCache()

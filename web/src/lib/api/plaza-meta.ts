@@ -4,10 +4,14 @@
 // prices (which live in /api/option).
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPut, apiDelete } from "./http";
+import { apiGet, apiPut, apiRequest } from "./http";
 import type { ModelItem } from "../../config/models";
 import { useSessionQueryIdentity } from "../system-access";
-import { readModelMetadataList, readModelMetadata } from "../model-metadata";
+import {
+  readModelMetadataCatalog,
+  readMetadataSave,
+  readMetadataDelete,
+} from "../model-metadata";
 
 // --- Backend response type (mirrors model/modelmeta.go:27-73) ---
 
@@ -40,15 +44,25 @@ export function usePlazaModelMeta(enabled = true) {
     enabled,
     retry: false,
     queryFn: async ({ signal }) =>
-      readModelMetadataList(await apiGet<unknown>("/api/plaza/meta", signal)),
+      readModelMetadataCatalog(
+        await apiGet<unknown>("/api/plaza/meta/configuration", signal),
+      ),
   });
 }
 
 export function useUpsertModelMeta() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (meta: ModelMeta) =>
-      readModelMetadata(await apiPut<unknown>("/api/plaza/meta", meta)),
+    mutationFn: async (input: {
+      meta: ModelMeta;
+      expected_catalog_revision: number;
+    }) =>
+      readMetadataSave(
+        await apiPut<unknown>("/api/plaza/meta", {
+          ...input.meta,
+          expected_catalog_revision: input.expected_catalog_revision,
+        }),
+      ),
     retry: false,
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: META_KEY });
@@ -66,9 +80,20 @@ export function useUpsertModelMeta() {
 export function useDeleteModelMeta() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (model: string) =>
-      apiDelete<{ model: string }>(
-        `/api/plaza/meta/${encodeURIComponent(model)}`,
+    mutationFn: async (input: {
+      model: string;
+      expected_catalog_revision: number;
+    }) =>
+      readMetadataDelete(
+        await apiRequest<unknown>(
+          `/api/plaza/meta/${encodeURIComponent(input.model)}`,
+          {
+            method: "DELETE",
+            body: JSON.stringify({
+              expected_catalog_revision: input.expected_catalog_revision,
+            }),
+          },
+        ),
       ),
     retry: false,
     onSettled: () => {
