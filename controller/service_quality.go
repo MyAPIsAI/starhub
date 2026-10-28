@@ -20,7 +20,7 @@ func GetServiceQuality(w http.ResponseWriter, r *http.Request) {
 	if requestRole(r) < common.RoleAdmin {
 		userID = requestUserID(r)
 	}
-	summary, err := model.SummarizeServiceQuality(userID, int(hours))
+	summary, err := model.SummarizeServiceQuality(userID, int(hours), q.Get("model"))
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return

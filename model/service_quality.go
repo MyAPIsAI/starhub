@@ -10,21 +10,21 @@ import (
 // project's Metric15m / ModelMetric15m models, simplified to what the
 // StarHub Log table can provide.
 type ServiceQualityMetric struct {
-	Model            string  `json:"model"`
-	TotalRequests    int64   `json:"total_requests"`
-	SuccessCount     int64   `json:"success_count"`
-	FailedCount      int64   `json:"failed_count"`
-	SuccessRate      float64 `json:"success_rate"`       // 0.0–1.0
-	AvgDurationMs    int64   `json:"avg_duration_ms"`
-	P95DurationMs    int64   `json:"p95_duration_ms"`
-	TotalQuota       int64   `json:"total_quota"`
-	ErrorRate        float64 `json:"error_rate"`         // 0.0–1.0
+	Model         string  `json:"model"`
+	TotalRequests int64   `json:"total_requests"`
+	SuccessCount  int64   `json:"success_count"`
+	FailedCount   int64   `json:"failed_count"`
+	SuccessRate   float64 `json:"success_rate"` // 0.0–1.0
+	AvgDurationMs int64   `json:"avg_duration_ms"`
+	P95DurationMs int64   `json:"p95_duration_ms"`
+	TotalQuota    int64   `json:"total_quota"`
+	ErrorRate     float64 `json:"error_rate"` // 0.0–1.0
 }
 
 // ServiceQualityDailyMetric is one day's quality summary for a single
 // model (or the overall aggregate when Model is empty).
 type ServiceQualityDailyMetric struct {
-	Date          string  `json:"date"`           // "2006-01-02"
+	Date          string  `json:"date"` // "2006-01-02"
 	Model         string  `json:"model"`
 	TotalRequests int64   `json:"total_requests"`
 	SuccessCount  int64   `json:"success_count"`
@@ -36,16 +36,17 @@ type ServiceQualityDailyMetric struct {
 // ServiceQualitySummary is the top-level response: overall metrics plus
 // per-model breakdown and optional per-day trends.
 type ServiceQualitySummary struct {
-	WindowHours int                        `json:"window_hours"`
-	Overall     ServiceQualityMetric       `json:"overall"`
-	ByModel     []ServiceQualityMetric     `json:"by_model"`
+	WindowHours int                         `json:"window_hours"`
+	Overall     ServiceQualityMetric        `json:"overall"`
+	ByModel     []ServiceQualityMetric      `json:"by_model"`
 	ByDay       []ServiceQualityDailyMetric `json:"by_day"`
 }
 
 // SummarizeServiceQuality aggregates the Log table into per-model
 // quality metrics for the given time window. When userID > 0, only
 // that user's logs are included; 0 means all (admin view).
-func SummarizeServiceQuality(userID int64, windowHours int) (*ServiceQualitySummary, error) {
+// An optional model filter applies to both totals and daily trends.
+func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...string) (*ServiceQualitySummary, error) {
 	if windowHours < 1 {
 		windowHours = 24
 	}
@@ -60,15 +61,19 @@ func SummarizeServiceQuality(userID int64, windowHours int) (*ServiceQualitySumm
 		baseWhere += " AND user_id = ?"
 		args = append(args, userID)
 	}
+	if len(modelFilter) > 0 && modelFilter[0] != "" {
+		baseWhere += " AND model = ?"
+		args = append(args, modelFilter[0])
+	}
 
 	// Aggregate per model.
 	type row struct {
-		Model         string
-		Total         int64
-		Success       int64
-		Failed        int64
-		AvgDuration   int64
-		TotalQuota    int64
+		Model       string
+		Total       int64
+		Success     int64
+		Failed      int64
+		AvgDuration float64
+		TotalQuota  int64
 	}
 	var rows []row
 	err := DB.Model(&Log{}).
@@ -87,7 +92,7 @@ func SummarizeServiceQuality(userID int64, windowHours int) (*ServiceQualitySumm
 
 	byModel := make([]ServiceQualityMetric, 0, len(rows))
 	var overallTotal, overallSuccess, overallFailed, overallQuota int64
-	var overallDurationSum int64
+	var overallDurationSum float64
 	for _, r := range rows {
 		successRate := 0.0
 		if r.Total > 0 {
@@ -108,7 +113,7 @@ func SummarizeServiceQuality(userID int64, windowHours int) (*ServiceQualitySumm
 		overallSuccess += r.Success
 		overallFailed += r.Failed
 		overallQuota += r.TotalQuota
-		overallDurationSum += r.AvgDuration * r.Total
+		overallDurationSum += r.AvgDuration * float64(r.Total)
 	}
 
 	overall := ServiceQualityMetric{
@@ -120,16 +125,16 @@ func SummarizeServiceQuality(userID int64, windowHours int) (*ServiceQualitySumm
 	if overallTotal > 0 {
 		overall.SuccessRate = float64(overallSuccess) / float64(overallTotal)
 		overall.ErrorRate = 1.0 - overall.SuccessRate
-	overall.AvgDurationMs = overallDurationSum / overallTotal
+		overall.AvgDurationMs = int64(overallDurationSum / float64(overallTotal))
 	}
 
 	// Daily breakdown for trend charts.
 	type dayRow struct {
-		DateStr    string
-		Total      int64
-		Success    int64
-		Failed     int64
-		AvgDur     int64
+		DateStr string
+		Total   int64
+		Success int64
+		Failed  int64
+		AvgDur  float64
 	}
 	var dayRows []dayRow
 	err = DB.Model(&Log{}).
@@ -158,7 +163,7 @@ func SummarizeServiceQuality(userID int64, windowHours int) (*ServiceQualitySumm
 			SuccessCount:  dr.Success,
 			FailedCount:   dr.Failed,
 			SuccessRate:   sr,
-			AvgDurationMs: dr.AvgDur,
+			AvgDurationMs: int64(dr.AvgDur),
 		})
 	}
 

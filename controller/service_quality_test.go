@@ -2,7 +2,10 @@ package controller
 
 import (
 	"net/http"
+	"net/url"
+	"strconv"
 	"testing"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
@@ -104,5 +107,93 @@ func TestGetServiceQualityEmpty(t *testing.T) {
 	byModel := got["by_model"].([]any)
 	if len(byModel) != 0 {
 		t.Fatalf("by_model length = %d, want 0", len(byModel))
+	}
+}
+
+func TestGetServiceQualityModelFilter(t *testing.T) {
+	newTestDB(t)
+	alice := newUser(t, "quality-alice", common.RoleUser, 1000)
+	bob := newUser(t, "quality-bob", common.RoleUser, 1000)
+	now := time.Now().UTC()
+	const literalModel = "model' OR 1=1 --"
+	entries := []model.Log{
+		{UserID: alice.ID, Model: "gpt-4o", Status: 1, Quota: 23, DurationMs: 300, CreatedAt: now.AddDate(0, 0, -20).Unix()},
+		{UserID: alice.ID, Model: "gpt-4o", Status: 2, DurationMs: 500, CreatedAt: now.Unix()},
+		{UserID: alice.ID, Model: "gpt-4o", Status: 1, Quota: 50, DurationMs: 10, CreatedAt: now.AddDate(0, 0, -31).Unix()},
+		{UserID: alice.ID, Model: "gpt-4.1", Status: 1, Quota: 11, DurationMs: 200, CreatedAt: now.Unix()},
+		{UserID: alice.ID, Model: literalModel, Status: 1, Quota: 7, DurationMs: 100, CreatedAt: now.Unix()},
+		{UserID: bob.ID, Model: "gpt-4o", Status: 1, Quota: 99, DurationMs: 900, CreatedAt: now.Unix()},
+	}
+	for i := range entries {
+		if err := model.InsertLog(&entries[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name     string
+		model    string
+		hours    int
+		role     int
+		total    int64
+		success  int64
+		failed   int64
+		quota    int64
+		duration int64
+		days     int
+	}{
+		{"user thirty days", "gpt-4o", 720, common.RoleUser, 2, 1, 1, 23, 400, 2},
+		{"user seven days", "gpt-4o", 168, common.RoleUser, 1, 0, 1, 0, 500, 1},
+		{"admin thirty days", "gpt-4o", 720, common.RoleAdmin, 3, 2, 1, 122, 566, 2},
+		{"literal model", literalModel, 720, common.RoleUser, 1, 1, 0, 7, 100, 1},
+		{"unknown model", "missing-model", 720, common.RoleUser, 0, 0, 0, 0, 0, 0},
+		{"unfiltered compatibility", "", 720, common.RoleUser, 4, 3, 1, 41, 275, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			query := url.Values{"hours": {strconv.Itoa(tc.hours)}}
+			if tc.model != "" {
+				query.Set("model", tc.model)
+			}
+			// A user-controlled scope parameter must not widen normal-user access.
+			query.Set("user_id", "0")
+			rr := call(GetServiceQuality, testRequest{
+				method: http.MethodGet, target: "/api/service-quality?" + query.Encode(),
+				userID: alice.ID, role: tc.role,
+			})
+			var got model.ServiceQualitySummary
+			decodeData(t, rr, &got)
+			overall := got.Overall
+			if got.WindowHours != tc.hours || overall.TotalRequests != tc.total || overall.SuccessCount != tc.success || overall.FailedCount != tc.failed || overall.TotalQuota != tc.quota || overall.AvgDurationMs != tc.duration {
+				t.Fatalf("filtered summary = %+v, want %+v", got, tc)
+			}
+			if tc.total > 0 {
+				if overall.SuccessRate != float64(tc.success)/float64(tc.total) || overall.ErrorRate != 1-overall.SuccessRate {
+					t.Fatalf("filtered success/error rates are wrong: %+v", overall)
+				}
+			}
+			if tc.model != "" {
+				wantModels := 1
+				if tc.total == 0 {
+					wantModels = 0
+				}
+				if len(got.ByModel) != wantModels || (wantModels == 1 && got.ByModel[0].Model != tc.model) {
+					t.Fatalf("other models leaked into filtered metrics: %+v", got.ByModel)
+				}
+				if wantModels == 1 && (got.ByModel[0].AvgDurationMs != tc.duration || got.ByModel[0].TotalRequests != tc.total || got.ByModel[0].TotalQuota != tc.quota) {
+					t.Fatalf("per-model metrics disagree with filtered totals: %+v", got.ByModel)
+				}
+			}
+			var requests, successes, failures int64
+			for _, day := range got.ByDay {
+				if day.SuccessRate != float64(day.SuccessCount)/float64(day.TotalRequests) {
+					t.Fatalf("daily success rate is wrong: %+v", day)
+				}
+				requests += day.TotalRequests
+				successes += day.SuccessCount
+				failures += day.FailedCount
+			}
+			if len(got.ByDay) != tc.days || requests != tc.total || successes != tc.success || failures != tc.failed {
+				t.Fatalf("daily trend disagrees with filtered totals: %+v", got.ByDay)
+			}
+		})
 	}
 }
