@@ -72,7 +72,7 @@ export default function DocsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const current = articles.find((article) => article.id === activeTab)!;
 
-  // Article search: filter articles by title, keywords, and content tags.
+  // Article search: full-text match against title, keywords, and article body.
   const articleKeywords: Record<ArticleId, string[]> = {
     quickstart: ["curl", "python", "node", "api key", "base url", "getting started", "快速开始", "入门", "创建密钥"],
     auth: ["authentication", "authorization", "bearer", "token", "api key", "认证", "授权", "密钥", "bearer"],
@@ -85,13 +85,29 @@ export default function DocsPage() {
     limits: ["limit", "rate", "quota", "concurrency", "throttle", "配额", "限流", "并发", "额度"],
     faq: ["faq", "question", "answer", "常见问题", "问题", "解答"],
   };
+  // Searchable body text for each article, built from the article content so
+  // the search covers the full text, not just preset keywords.
+  const articleBody: Record<ArticleId, string> = {
+    quickstart: "first request endpoint key curl python streaming demo domain environment variable chat request terminal connect application consistent interface",
+    auth: "keys access boundaries usage quotas store securely project restrict access IP allowlist source control environment variables review request logs",
+    tiers: "service level workload Ultra 1.00 99.5% 800ms Pro 0.80 99.0% 1500ms Standard 0.60 97.5% 3000ms Lite 0.40 price multiplier target latency demo configuration",
+    claudeCode: "Claude Code Anthropic endpoint key environment variables ANTHROPIC_BASE_URL ANTHROPIC_API_KEY terminal configuration demo compatibility",
+    errors: "401 invalid_api_key token_disabled token_expired 403 insufficient_quota token_quota_exhausted auto_group_empty group_not_available 400 invalid_request_body invalid_json invalid_multipart model_required 429 rate_limit_exceeded 502 upstream_unavailable retry_budget_exhausted upstream_result_uncertain 503 no_available_channel 500 pre_consume_failed channel_selection_failed Authorization Bearer JSON multipart",
+    billing: "balance precision usage totals request logs export details account balance 2 4 6 9 display reconciliation",
+    protocols: "Chat Completions OpenAI Messages Anthropic Embeddings Images generations Audio TTS speech STT transcriptions translations Video submit poll Realtime WebSocket Models list Bearer token base URL path auth",
+    routing: "routing flow key auth user quota check channel selection group model match pre-charge upstream call settle refund group model_limit allowed_ips remain_quota CIDR IP allowlist authorized model list",
+    limits: "user rate limit 100 req/min key 50 model 500 per-request cap 2000000 quota pre-charge malicious large requests 429 rate_limit_exceeded 403 insufficient_quota",
+    faq: "plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field top-up credited immediately balance",
+  };
   const filteredArticles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return articles;
     return articles.filter(({ id, title }) => {
       const keywords = articleKeywords[id] || [];
+      const body = articleBody[id] || "";
       return (
         title.toLowerCase().includes(q) ||
+        body.toLowerCase().includes(q) ||
         keywords.some((kw) => kw.toLowerCase().includes(q) || q.includes(kw.toLowerCase()))
       );
     });
