@@ -25,6 +25,7 @@ import { useBackendKeys } from "../../lib/api/key-adapter";
 import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
 import { getKeyModelOptions } from "../../lib/key-model-policy";
 import { usePlazaModel, plazaToDirectoryModel } from "../../lib/api/plaza";
+import { useServiceQuality } from "../../lib/api/service-quality";
 import { ApiError } from "../../lib/api/http";
 import "../../components/model-pricing.css";
 import "../../components/access-center.css";
@@ -58,6 +59,12 @@ export default function ModelDetail() {
     ? selectedTier
     : quoteGroup;
   const amounts = model ? plazaAmounts(model.pricing) : undefined;
+  // Fetch service quality summary to show a per-model metric panel inline.
+  // The backend returns per-model aggregates in by_model.
+  const qualityQuery = useServiceQuality(168);
+  const modelQuality = model
+    ? qualityQuery.data?.by_model.find((m) => m.model === model.id)
+    : undefined;
   const isLoading = plazaDetail.isPending;
   const hasLoadError =
     plazaDetail.isError &&
@@ -298,24 +305,45 @@ export default function ModelDetail() {
               </div>
               <div>
                 <small>{text("服务质量", "Service quality", "جودة الخدمة")}</small>
-                <Link
-                  to={`/console/service-quality?model=${encodeURIComponent(model.id)}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    color: "var(--brand)",
-                    fontSize: "var(--text-sm)",
-                    textDecoration: "none",
-                  }}
-                >
-                  <ShieldCheck size={14} />
-                  {text(
-                    "查看成功率与延迟",
-                    "View success rate & latency",
-                    "عرض النجاح والاستجابة",
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center", marginTop: 4 }}>
+                  {modelQuality && modelQuality.total_requests > 0 ? (
+                    <>
+                      <span className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }} dir="ltr">
+                        {text("成功率", "Success", "النجاح")}:{" "}
+                        <strong style={{ color: modelQuality.success_rate >= 0.99 ? "var(--success)" : modelQuality.success_rate >= 0.97 ? "var(--warning, #e0a030)" : "var(--danger)" }}>
+                          {(modelQuality.success_rate * 100).toFixed(1)}%
+                        </strong>
+                      </span>
+                      <span className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }} dir="ltr">
+                        {text("P95 延迟", "P95 latency", "زمن P95")}:{" "}
+                        <strong style={{ color: modelQuality.p95_duration_ms > 0 && modelQuality.p95_duration_ms < 3000 ? "var(--success)" : "var(--danger)" }}>
+                          {modelQuality.p95_duration_ms > 0 ? `${modelQuality.p95_duration_ms}ms` : "—"}
+                        </strong>
+                      </span>
+                      <span className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }} dir="ltr">
+                        {text("请求数", "Requests", "الطلبات")}: <strong>{modelQuality.total_requests}</strong>
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+                      {text("暂无请求数据", "No request data yet", "لا توجد بيانات طلبات بعد")}
+                    </span>
                   )}
-                </Link>
+                  <Link
+                    to={`/console/service-quality?model=${encodeURIComponent(model.id)}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "var(--brand)",
+                      fontSize: "var(--text-xs)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <ShieldCheck size={13} />
+                    {text("查看趋势", "View trends", "عرض الاتجاهات")}
+                  </Link>
+                </div>
               </div>
             </section>
             {model.kind === "smart" && (
