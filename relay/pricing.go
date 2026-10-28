@@ -225,6 +225,7 @@ func tokenUsageQuota(p *PriceData, usage *Usage) int64 {
 
 	cached := usage.CachedTokens()
 	inputAudio := usage.InputAudioTokens()
+	// Cache writes are included once at the normal platform input rate.
 	textInput := promptTokens - cached - inputAudio
 	if textInput < 0 {
 		textInput = 0

@@ -150,30 +150,24 @@ type claudeStreamEmitter struct {
 }
 
 func (e *claudeStreamEmitter) Emit(ev *dto.ChatStreamEvent) error {
+	if ev.Usage != nil {
+		e.usage = ev.Usage.Clone()
+	}
 	if !e.started {
 		e.started = true
+		usage := dto.ClaudeUsageFromIR(e.usage)
+		usage.OutputTokens = 0
 		message := map[string]any{
 			"id":    "msg_starhub",
 			"type":  "message",
 			"role":  "assistant",
 			"model": e.model,
-			"usage": map[string]any{
-				"input_tokens":  e.usage.PromptTokens,
-				"output_tokens": 0,
-			},
+			"usage": usage,
 		}
 		if err := writeSSE(e.w, "event: message_start\ndata: "+mustMarshalString(map[string]any{
 			"type": "message_start", "message": message,
 		})); err != nil {
 			return err
-		}
-	}
-	if ev.Usage != nil {
-		if ev.Usage.PromptTokens > 0 {
-			e.usage.PromptTokens = ev.Usage.PromptTokens
-		}
-		if ev.Usage.CompletionTokens > 0 {
-			e.usage.CompletionTokens = ev.Usage.CompletionTokens
 		}
 	}
 	if ev.TextDelta == "" {
@@ -195,6 +189,9 @@ func (e *claudeStreamEmitter) Emit(ev *dto.ChatStreamEvent) error {
 }
 
 func (e *claudeStreamEmitter) Finish(usage *Usage, finishReason string) error {
+	if usage != nil {
+		e.usage = usage.Clone()
+	}
 	if !e.started {
 		// Empty upstream stream: still emit a well-formed (empty) message.
 		if err := e.Emit(&dto.ChatStreamEvent{}); err != nil {
@@ -208,22 +205,11 @@ func (e *claudeStreamEmitter) Finish(usage *Usage, finishReason string) error {
 			return err
 		}
 	}
-	if usage != nil {
-		if usage.PromptTokens > 0 {
-			e.usage.PromptTokens = usage.PromptTokens
-		}
-		if usage.CompletionTokens > 0 {
-			e.usage.CompletionTokens = usage.CompletionTokens
-		}
-	}
 	stopReason := claudeStopReason(finishReason)
 	if err := writeSSE(e.w, "event: message_delta\ndata: "+mustMarshalString(map[string]any{
 		"type":  "message_delta",
 		"delta": map[string]any{"stop_reason": stopReason, "stop_sequence": nil},
-		"usage": map[string]any{
-			"input_tokens":  e.usage.PromptTokens,
-			"output_tokens": e.usage.CompletionTokens,
-		},
+		"usage": dto.ClaudeUsageFromIR(e.usage),
 	})); err != nil {
 		return err
 	}

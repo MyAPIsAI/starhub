@@ -343,23 +343,21 @@ func convertToolChoiceToClaude(raw json.RawMessage) json.RawMessage {
 // ParseClaudeChatResponse parses a Claude message response into IR.
 func ParseClaudeChatResponse(body []byte) (*ChatResponse, error) {
 	var resp struct {
-		ID         string            `json:"id"`
-		Model      string            `json:"model"`
-		Content    []claudeWireBlock `json:"content"`
-		StopReason string            `json:"stop_reason"`
-		Usage      *struct {
-			InputTokens  int64 `json:"input_tokens"`
-			OutputTokens int64 `json:"output_tokens"`
-		} `json:"usage"`
+		ID         string             `json:"id"`
+		Model      string             `json:"model"`
+		Content    []claudeWireBlock  `json:"content"`
+		StopReason string             `json:"stop_reason"`
+		Usage      *ClaudeUsageFields `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}
 	ir := &ChatResponse{ID: resp.ID, Model: resp.Model}
 	if resp.Usage != nil {
-		ir.Usage = &Usage{
-			PromptTokens:     resp.Usage.InputTokens,
-			CompletionTokens: resp.Usage.OutputTokens,
+		var err error
+		ir.Usage, err = resp.Usage.normalized()
+		if err != nil {
+			return nil, err
 		}
 	}
 	switch resp.StopReason {
@@ -393,10 +391,11 @@ func ParseClaudeChatResponse(body []byte) (*ChatResponse, error) {
 type ClaudeStreamEvent struct {
 	Type string // message_start, content_block_delta, message_delta, message_stop, ...
 	// Filled per type:
-	Message    *claudeStreamMessage `json:"message,omitempty"`
-	TextDelta  string               // content_block_delta.delta.text
-	StopReason string               // message_delta.delta.stop_reason
-	Usage      *Usage               // message_start.message.usage / message_delta.usage
+	Message     *claudeStreamMessage `json:"message,omitempty"`
+	TextDelta   string               // content_block_delta.delta.text
+	StopReason  string               // message_delta.delta.stop_reason
+	Usage       *Usage               // message_start.message.usage / message_delta.usage
+	UsageFields *ClaudeUsageFields
 }
 
 type claudeStreamMessage struct {
@@ -410,22 +409,16 @@ func ParseClaudeStreamEvent(payload []byte) (*ClaudeStreamEvent, error) {
 	var ev struct {
 		Type    string `json:"type"`
 		Message *struct {
-			ID    string `json:"id"`
-			Model string `json:"model"`
-			Usage *struct {
-				InputTokens  int64 `json:"input_tokens"`
-				OutputTokens int64 `json:"output_tokens"`
-			} `json:"usage"`
+			ID    string             `json:"id"`
+			Model string             `json:"model"`
+			Usage *ClaudeUsageFields `json:"usage"`
 		} `json:"message"`
 		Delta *struct {
 			Type       string `json:"type"`
 			Text       string `json:"text"`
 			StopReason string `json:"stop_reason"`
 		} `json:"delta"`
-		Usage *struct {
-			InputTokens  int64 `json:"input_tokens"`
-			OutputTokens int64 `json:"output_tokens"`
-		} `json:"usage"`
+		Usage *ClaudeUsageFields `json:"usage"`
 	}
 	if err := json.Unmarshal(payload, &ev); err != nil {
 		return nil, err
@@ -436,10 +429,7 @@ func ParseClaudeStreamEvent(payload []byte) (*ClaudeStreamEvent, error) {
 		if ev.Message != nil {
 			out.Message = &claudeStreamMessage{ID: ev.Message.ID, Model: ev.Message.Model}
 			if ev.Message.Usage != nil {
-				out.Usage = &Usage{
-					PromptTokens:     ev.Message.Usage.InputTokens,
-					CompletionTokens: ev.Message.Usage.OutputTokens,
-				}
+				out.UsageFields = ev.Message.Usage
 			}
 		}
 	case "content_block_delta":
@@ -451,11 +441,13 @@ func ParseClaudeStreamEvent(payload []byte) (*ClaudeStreamEvent, error) {
 			out.StopReason = ev.Delta.StopReason
 		}
 		if ev.Usage != nil {
-			out.Usage = &Usage{
-				PromptTokens:     ev.Usage.InputTokens,
-				CompletionTokens: ev.Usage.OutputTokens,
-			}
+			out.UsageFields = ev.Usage
 		}
+	}
+	var err error
+	out.Usage, err = out.UsageFields.normalized()
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -502,18 +494,13 @@ func BuildClaudeChatResponse(ir *ChatResponse) ([]byte, error) {
 		out.Content = []map[string]any{{"type": "text", "text": ""}}
 	}
 	if ir.Usage != nil {
-		out.Usage = &claudeUsage{
-			InputTokens:  ir.Usage.PromptTokens,
-			OutputTokens: ir.Usage.CompletionTokens,
-		}
+		usage := ClaudeUsageFromIR(ir.Usage)
+		out.Usage = &usage
 	}
 	return json.Marshal(out)
 }
 
-type claudeUsage struct {
-	InputTokens  int64 `json:"input_tokens"`
-	OutputTokens int64 `json:"output_tokens"`
-}
+type claudeUsage = ClaudeUsageResponse
 
 func claudeStopReason(finish string) string {
 	switch finish {

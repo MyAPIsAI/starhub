@@ -25,7 +25,17 @@ type Usage struct {
 // PromptTokens).
 type PromptTokensDetails struct {
 	CachedTokens int64 `json:"cached_tokens"`
-	AudioTokens  int64 `json:"audio_tokens"`
+	// Cache writes are an optional gateway extension for native providers.
+	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
+	AudioTokens      int64 `json:"audio_tokens"`
+}
+
+// CacheWriteTokens is disjoint from cache reads and bounded by the prompt total.
+func (u *Usage) CacheWriteTokens() int64 {
+	if u == nil || u.PromptTokensDetails == nil {
+		return 0
+	}
+	return clampNonNegative(u.PromptTokensDetails.CacheWriteTokens, u.PromptTokens-u.CachedTokens())
 }
 
 // CompletionTokensDetails breaks down completion tokens (all subsets of
@@ -43,13 +53,13 @@ func (u *Usage) CachedTokens() int64 {
 	return clampNonNegative(u.PromptTokensDetails.CachedTokens, u.PromptTokens)
 }
 
-// InputAudioTokens returns the audio prompt token count, clamped so that
-// cached + audio never exceeds the prompt total.
+// InputAudioTokens is clamped after cache reads and writes, so the disjoint
+// input classes never exceed the prompt total.
 func (u *Usage) InputAudioTokens() int64 {
 	if u == nil || u.PromptTokensDetails == nil {
 		return 0
 	}
-	remaining := u.PromptTokens - clampNonNegative(u.PromptTokensDetails.CachedTokens, u.PromptTokens)
+	remaining := u.PromptTokens - u.CachedTokens() - u.CacheWriteTokens()
 	return clampNonNegative(u.PromptTokensDetails.AudioTokens, remaining)
 }
 
@@ -68,6 +78,23 @@ func (u *Usage) TotalTokens() int64 {
 		return 0
 	}
 	return u.PromptTokens + u.CompletionTokens
+}
+
+// Clone detaches all mutable detail objects for frozen stream snapshots.
+func (u *Usage) Clone() *Usage {
+	if u == nil {
+		return nil
+	}
+	copied := *u
+	if u.PromptTokensDetails != nil {
+		details := *u.PromptTokensDetails
+		copied.PromptTokensDetails = &details
+	}
+	if u.CompletionTokensDetails != nil {
+		details := *u.CompletionTokensDetails
+		copied.CompletionTokensDetails = &details
+	}
+	return &copied
 }
 
 func clampNonNegative(v, upper int64) int64 {

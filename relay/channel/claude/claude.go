@@ -79,8 +79,7 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 	flusher, canFlush := w.(http.Flusher)
 
 	reader := channel.NewSSEReader(resp.Body)
-	var usage *dto.Usage
-	var inputTokens int64
+	var accounting dto.ClaudeUsageAccumulator
 	var content strings.Builder
 	for {
 		line, err := reader.Next()
@@ -88,7 +87,7 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 			if err == io.EOF {
 				break
 			}
-			return usage, content.String(), err
+			return accounting.Snapshot(), content.String(), err
 		}
 		if line.Event != "" {
 			fmt.Fprintf(w, "event: %s\n", line.Event)
@@ -107,36 +106,15 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 		if perr != nil {
 			continue
 		}
+		if _, err := accounting.Merge(ev.UsageFields); err != nil {
+			return accounting.Snapshot(), content.String(), err
+		}
 		switch ev.Type {
-		case "message_start":
-			if ev.Usage != nil {
-				inputTokens = ev.Usage.PromptTokens
-			}
 		case "content_block_delta":
 			content.WriteString(ev.TextDelta)
-		case "message_delta", "message_stop":
-			if ev.Usage != nil {
-				// message_delta usage reports the output side only: merge
-				// with the message_start input count instead of dropping it.
-				if usage == nil {
-					usage = ev.Usage
-				} else {
-					if ev.Usage.PromptTokens > 0 {
-						usage.PromptTokens = ev.Usage.PromptTokens
-					}
-					if ev.Usage.CompletionTokens > 0 {
-						usage.CompletionTokens = ev.Usage.CompletionTokens
-					}
-				}
-			}
 		}
 	}
-	if usage == nil && inputTokens > 0 {
-		usage = &dto.Usage{PromptTokens: inputTokens}
-	} else if usage != nil && usage.PromptTokens == 0 {
-		usage.PromptTokens = inputTokens
-	}
-	return usage, content.String(), nil
+	return accounting.Snapshot(), content.String(), nil
 }
 
 // ParseChatResponse reads a non-stream Claude response into IR.
@@ -154,17 +132,22 @@ func (Adaptor) StreamChatEvents(resp *http.Response) (channel.ChatStreamReader, 
 }
 
 type streamReader struct {
-	reader *channel.SSEReader
-	closer io.Closer
-	// pendingInput holds the message_start usage until the final
-	// message_delta completes the report.
-	pendingInput *dto.Usage
+	reader     *channel.SSEReader
+	closer     io.Closer
+	accounting dto.ClaudeUsageAccumulator
+	usageSent  bool
 }
 
 func (s *streamReader) Next() (*dto.ChatStreamEvent, error) {
 	for {
 		line, err := s.reader.Next()
 		if err != nil {
+			if err == io.EOF && !s.usageSent {
+				if snapshot := s.accounting.Snapshot(); snapshot != nil {
+					s.usageSent = true
+					return &dto.ChatStreamEvent{Usage: snapshot}, nil
+				}
+			}
 			return nil, err
 		}
 		if line.Data == "" {
@@ -174,11 +157,12 @@ func (s *streamReader) Next() (*dto.ChatStreamEvent, error) {
 		if perr != nil {
 			continue
 		}
+		snapshot, err := s.accounting.Merge(ev.UsageFields)
+		if err != nil {
+			return nil, err
+		}
 		switch ev.Type {
 		case "message_start":
-			// The input usage arrives here; hold it until the final
-			// message_delta completes the report.
-			s.pendingInput = ev.Usage
 			continue
 		case "content_block_delta", "message_delta", "message_stop":
 		default:
@@ -188,12 +172,9 @@ func (s *streamReader) Next() (*dto.ChatStreamEvent, error) {
 			TextDelta:    ev.TextDelta,
 			FinishReason: openAIFinishReason(ev.StopReason),
 		}
-		if ev.Usage != nil {
-			if s.pendingInput != nil && ev.Usage.PromptTokens == 0 {
-				ev.Usage.PromptTokens = s.pendingInput.PromptTokens
-			}
-			out.Usage = ev.Usage
-			s.pendingInput = nil
+		if ev.UsageFields != nil || ev.Type == "message_stop" {
+			out.Usage = snapshot
+			s.usageSent = snapshot != nil
 		}
 		return out, nil
 	}
