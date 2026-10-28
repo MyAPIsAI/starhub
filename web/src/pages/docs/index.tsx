@@ -18,9 +18,10 @@ import { PublicHeader } from "../../components/product-shell";
 import { copyText } from "../../features/code-example";
 import { usePreferences } from "../../lib/preferences";
 import { placeholders } from "../../config/placeholders";
+import { responsesGuide } from "./responses-guide";
 
 type ArticleId =
-  "quickstart" | "auth" | "tiers" | "claudeCode" | "cursor" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
+  "quickstart" | "auth" | "tiers" | "claudeCode" | "cursor" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "responses" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
 const cursorSettings = `OpenAI API Key: <YOUR_MYAPIS_API_KEY>
 Override OpenAI Base URL: ${placeholders.apiBase}
 Custom Model: gpt-4.1`;
@@ -116,12 +117,14 @@ export default function DocsPage() {
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const [searchParams, setSearchParams] = useSearchParams();
+  const responses = responsesGuide(text);
   const articles: { id: ArticleId; title: string; Icon: typeof Terminal }[] = [
     { id: "quickstart", title: t("docsQuickstart"), Icon: Terminal },
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
     { id: "tiers", title: t("docsTiers"), Icon: Cpu },
     { id: "protocols", title: text("协议", "Protocols", "البروتوكولات"), Icon: ArrowUpRight },
     { id: "chat-completions", title: text("Chat Completions（聊天补全）", "Chat Completions", "إكمال المحادثات"), Icon: Terminal },
+    { id: "responses", title: text("Responses（响应接口）与 Codex", "Responses and Codex", "Responses وCodex"), Icon: Terminal },
     { id: "anthropic", title: text("Anthropic Messages（消息）", "Anthropic Messages", "رسائل Anthropic"), Icon: Terminal },
     { id: "gemini", title: text("Gemini 兼容接入", "Gemini compatibility", "الوصول المتوافق إلى Gemini"), Icon: Terminal },
     { id: "models", title: text("模型列表", "Model list", "قائمة النماذج"), Icon: Cpu },
@@ -165,9 +168,9 @@ export default function DocsPage() {
     ),
   ];
   const cursorBoundary = text(
-    "该指南仅覆盖兼容聊天配置，不代表 Cursor Agent 或 Tab 补全已可用。当前网关没有 /v1/responses 入口，依赖 Responses 的模式无法通过此配置接入；Tab 补全使用 Cursor 自带模型。Cursor 请求经其服务器转发，网关地址须可从公网访问。",
-    "This guide covers compatible chat configuration, without guaranteeing Cursor Agent or Tab completion support. The gateway has no /v1/responses endpoint, so modes that require Responses cannot use this configuration. Tab completion uses Cursor's own models. Cursor routes requests through its servers, so the gateway must be publicly reachable.",
-    "يغطي الدليل إعداد المحادثة المتوافقة دون ضمان دعم Cursor Agent أو إكمال Tab. لا توفر البوابة نقطة /v1/responses، لذا لا تعمل الأوضاع التي تتطلب Responses بهذا الإعداد. يستخدم إكمال Tab نماذج Cursor الخاصة. تمر الطلبات عبر خوادم Cursor، ولذلك يجب أن تكون البوابة متاحة عبر الإنترنت.",
+    "该指南覆盖兼容聊天配置；网关已有前台 Responses（响应接口），其支持范围见对应指南，Cursor Agent 尚待真实客户端验收。Tab 补全使用 Cursor 自带模型。Cursor 请求经其服务器转发，网关地址须可从公网访问。",
+    "This guide covers compatible chat configuration. The gateway also supports foreground Responses; see its guide for supported features. Cursor Agent still requires real-client verification. Tab completion uses Cursor's own models. Cursor routes requests through its servers, so the gateway must be publicly reachable.",
+    "يغطي الدليل إعداد المحادثة المتوافقة. تدعم البوابة أيضًا Responses الأمامية؛ راجع دليلها للقدرات المتاحة. لا يزال Cursor Agent بحاجة إلى التحقق بالعميل الفعلي. يستخدم إكمال Tab نماذج Cursor الخاصة. تمر الطلبات عبر خوادم Cursor، ولذلك يجب أن تكون البوابة متاحة عبر الإنترنت.",
   );
   const cursorTroubleshooting = text(
     "连接失败时先用 Chat Completions 指南的 cURL 验证同一密钥、地址和模型：401 检查密钥，403 检查授权或额度，503 检查渠道。cURL 成功但 Cursor 失败时，再核对自带密钥开关、自定义地址和所选模式。",
@@ -252,6 +255,7 @@ export default function DocsPage() {
     protocols: ["protocol", "endpoint", "api", "curl", "url", "path", "协议", "端点", "路径", "接口"],
     models: ["model list", "/v1/models", "模型列表", "قائمة النماذج"],
     "chat-completions": ["chat completions", "/v1/chat/completions", "聊天补全", "إكمال المحادثات"],
+    responses: ["responses", "codex", "/v1/responses", "响应接口"],
     anthropic: ["anthropic messages", "/v1/messages", "消息协议", "رسائل Anthropic"],
     gemini: ["gemini compatibility", "Gemini 兼容接入", "الوصول المتوافق إلى Gemini"],
     routing: ["routing", "authorization", "group", "model", "allowlist", "auto", "路由", "授权", "分组", "白名单"],
@@ -271,6 +275,7 @@ export default function DocsPage() {
     protocols: "Chat Completions OpenAI Messages Anthropic Embeddings Images generations Audio TTS speech STT transcriptions translations Video submit poll Realtime WebSocket Models list Bearer token base URL path auth",
     models: [modelsLead, modelsScope, modelsResponseNote, modelsExample, modelsResponse].join(" "),
     "chat-completions": [chatLead, chatResponseNote, chatStreaming, chatExample, chatResponse].join(" "),
+    responses: Object.values(responses).join(" "),
     anthropic: [anthropicLead, anthropicAuth, anthropicResponseNote, anthropicStreaming, anthropicExample, anthropicResponse].join(" "),
     gemini: [geminiLead, geminiBoundary, geminiResponseNote, geminiExample].join(" "),
     routing: "routing flow key auth user quota check channel selection group model match pre-charge upstream call settle refund group model_limit allowed_ips remain_quota CIDR IP allowlist authorized model list",
@@ -329,7 +334,7 @@ export default function DocsPage() {
           {t("copy")}
         </button>
       </div>
-      <pre dir="ltr">
+      <pre dir="ltr" tabIndex={0}>
         <code>{code}</code>
       </pre>
     </div>
@@ -496,6 +501,23 @@ export default function DocsPage() {
               <Link to="/docs?article=chat-completions">
                 {text("查看 Chat Completions 格式", "Read the Chat Completions format", "اقرأ صيغة Chat Completions")}
               </Link>
+            </>
+          )}
+          {activeTab === "responses" && (
+            <>
+              <p className="docs-lead">{responses.lead}</p>
+              <CodeBlock title="POST /v1/responses" code={responses.request} />
+              <p>{responses.response}</p>
+              <div className="docs-callout"><p>{responses.streaming}</p></div>
+              <div className="docs-callout"><p>{responses.boundary}</p></div>
+              <h2>Codex</h2>
+              <p>{responses.codex}</p>
+              <CodeBlock title="config.toml" code={responses.config} />
+              <p>
+                <a href="https://developers.openai.com/api/docs/guides/streaming-responses" target="_blank" rel="noreferrer">{text("Responses 官方事件说明", "Official Responses event guide", "دليل أحداث Responses الرسمي")}</a>
+                {" · "}
+                <a href="https://learn.chatgpt.com/docs/config-file/config-advanced" target="_blank" rel="noreferrer">{text("Codex 官方配置说明", "Official Codex configuration", "إعداد Codex الرسمي")}</a>
+              </p>
             </>
           )}
           {activeTab === "anthropic" && (
@@ -936,6 +958,7 @@ export default function DocsPage() {
                   <tbody>
                     {[
                       [text("Chat Completions（OpenAI 兼容）", "Chat Completions (OpenAI)", "Chat Completions (OpenAI)"), "https://api.myapis.ai/v1", "/chat/completions", "Bearer token"],
+                      ["Responses", placeholders.apiBase, "/responses", "Bearer token"],
                       [text("Messages（Anthropic 兼容）", "Messages (Anthropic)", "Messages (Anthropic)"), "https://api.myapis.ai/v1", "/messages", "Bearer token"],
                       [text("Embeddings（OpenAI 兼容）", "Embeddings (OpenAI)", "Embeddings (OpenAI)"), "https://api.myapis.ai/v1", "/embeddings", "Bearer token"],
                       [text("Images（OpenAI 兼容）", "Images (OpenAI)", "Images (OpenAI)"), "https://api.myapis.ai/v1", "/images/generations", "Bearer token"],
@@ -1048,7 +1071,7 @@ export default function DocsPage() {
                 },
                 {
                   q: text("失败请求会扣费吗？", "Are failed requests charged?", "هل تُحاسب الطلبات الفاشلة؟"),
-                  a: text("不会。失败请求不扣费。预扣额度在失败时全额退还。", "No. Failed requests are not charged. Pre-charged quota is fully refunded on failure.", "لا. لا تُحاسب الطلبات الفاشلة. تُسترد الحصة المخصومة مسبقًا بالكامل عند الفشل."),
+                  a: text("请求在准入前被拒绝不扣费。已开始执行的请求可能按已产生的用量结算，包括 Responses 失败、取消或流中断；未使用的预扣差额会退还。请以调用日志为准。", "Requests rejected before admission are not charged. Requests that started execution may settle incurred usage, including failed, cancelled, or interrupted Responses. Unused reservations are refunded. Check request logs for the final bill.", "لا تُحاسب الطلبات المرفوضة قبل القبول. قد تُحاسب الطلبات التي بدأ تنفيذها حسب الاستخدام، بما فيها Responses الفاشلة أو الملغاة أو المنقطعة. تُسترد الحصة المحجوزة غير المستخدمة. راجع سجلات الطلبات للفاتورة النهائية."),
                 },
                 {
                   q: text("如何切换模型？", "How do I switch models?", "كيف أبدل النماذج؟"),
