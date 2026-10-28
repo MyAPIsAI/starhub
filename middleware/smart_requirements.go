@@ -77,8 +77,17 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 		continuation := false
 		var firstUser json.RawMessage
 		for _, message := range fields.Messages {
+			for _, call := range message.ToolCalls {
+				req.input += dto.EstimateTokens(string(call))
+			}
+			if len(message.FunctionCall) > 0 && string(message.FunctionCall) != "null" {
+				req.input += dto.EstimateTokens(string(message.FunctionCall))
+			}
 			continuation = continuation || message.Role == "tool" || message.Role == "function" || len(message.ToolCalls) > 0 || (len(message.FunctionCall) > 0 && string(message.FunctionCall) != "null")
 			vision, toolBlocks := smartContentCapabilities(message.Content)
+			if toolBlocks {
+				req.input += smartToolBlockTokens(message.Content)
+			}
 			if vision {
 				req.capabilities = append(req.capabilities, "vision")
 			}
