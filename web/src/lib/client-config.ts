@@ -2,6 +2,7 @@ import { placeholders } from "../config/placeholders";
 import {
   getKeyModelOptions,
   isSmartModelId,
+  SMART_MODEL_ID,
   type KeyModelPolicy,
 } from "./key-model-policy";
 import type { PricingCatalogConfig } from "../config/models";
@@ -49,7 +50,7 @@ export function buildClientConfiguration(input: {
   if (!input.model) return null;
   if (input.secret && !validDemoSecret(input.secret))
     throw new Error("A masked key is not a credential");
-  const model = isSmartModelId(input.model) ? "myapis-auto" : input.model;
+  const model = isSmartModelId(input.model) ? SMART_MODEL_ID : input.model;
   const secret = input.secret ? shellQuote(input.secret) : '"$VEYRA_API_KEY"';
   const baseUrl =
     input.target === "claude-code"

@@ -61,6 +61,24 @@ describe("credential permissions, per-request routing and exact actual-model bil
     useProductPreview.setState(useProductPreview.getInitialState(), true);
     useModelPricing.setState({ config: createDefaultPricing() });
   });
+  it.each([undefined, "OpenAI", "Anthropic", "Gemini"] as const)(
+    "offers one canonical smart option for protocol %s without changing authorization",
+    (protocol) => {
+      const key = createClientKey({ modelAccess: "all" });
+      const saved = structuredClone(key);
+      const options = getKeyModelOptions(key, protocol);
+      expect(
+        options
+          .filter((option) => option.kind === "smart")
+          .map((option) => option.id),
+      ).toEqual(["myapis-auto"]);
+      expect(options.some((option) => option.id === "veyra-auto")).toBe(false);
+      expect(
+        options.filter((option) => option.kind === "specified").length,
+      ).toBeGreaterThan(0);
+      expect(key).toEqual(saved);
+    },
+  );
   describe("default requests for legacy smart keys", () => {
     function legacySmartKey(overrides: Partial<PreviewKey> = {}) {
       const key: PreviewKey = {
@@ -236,7 +254,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
     });
     expect(key.allowedModels).toBeUndefined();
     expect(getKeyModelOptions(key).map((model) => model.id)).toEqual(
-      expect.arrayContaining([GPT, CLAUDE, DEEPSEEK, "veyra-auto"]),
+      expect.arrayContaining([GPT, CLAUDE, DEEPSEEK, "myapis-auto"]),
     );
   });
   it("records unknown and unauthorized failures without substitution or charge", () => {

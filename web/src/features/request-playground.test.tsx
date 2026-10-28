@@ -62,7 +62,7 @@ describe("playground smart entry matching", () => {
       "selects the authorized smart option while preserving %s in the request",
       (model) => {
         const html = render(model, protocol);
-        expect(modelOptions(html)).toContain('value="veyra-auto" selected=""');
+        expect(modelOptions(html)).toContain('value="myapis-auto" selected=""');
         expect(modelOptions(html)).not.toContain("Unavailable");
         expect(html).toContain(routingHint);
         expect(html).toContain(`&quot;model&quot;: &quot;${model}&quot;`);
@@ -83,7 +83,7 @@ describe("playground smart entry matching", () => {
       const setItem = vi.fn();
       vi.stubGlobal("sessionStorage", { getItem: () => draft, setItem });
       const html = render();
-      expect(modelOptions(html)).toContain('value="veyra-auto" selected=""');
+      expect(modelOptions(html)).toContain('value="myapis-auto" selected=""');
       expect(modelOptions(html)).not.toContain("Unavailable");
       expect(html).toContain(`&quot;model&quot;: &quot;${model}&quot;`);
       expect(setItem).not.toHaveBeenCalled();

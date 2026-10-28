@@ -17,7 +17,12 @@ import {
 } from "../components/key-model-access";
 import { useModelPricing } from "../lib/model-pricing";
 import { useProductPreview, type PreviewKey } from "../lib/product-preview";
-import { getKeyModels, getKeyModelOptions } from "../lib/key-model-policy";
+import {
+  getKeyModels,
+  getKeyModelOptions,
+  isSmartModelId,
+} from "../lib/key-model-policy";
+import { findClientModel } from "../lib/client-config";
 import { type TierId } from "../config/placeholders";
 import { copyText } from "./code-example";
 import { useCreateToken } from "../lib/api/tokens";
@@ -86,13 +91,14 @@ export default function CreateKey({
     ? keys.find(
         (k) =>
           k.active &&
-          getKeyModelOptions(k, undefined, config).some(
-            (m) => m.id === initialModel,
+          findClientModel(
+            getKeyModelOptions(k, undefined, config),
+            initialModel,
           ),
       )
     : undefined;
   useEffect(() => {
-    if (!initialModel || initialModel === "veyra-auto") return;
+    if (!initialModel || isSmartModelId(initialModel)) return;
     const match = visibleGroups(config, accountId).find((t) =>
       getTierModels(t.id, config).some((m) => m.id === initialModel),
     );
@@ -105,7 +111,9 @@ export default function CreateKey({
   useEffect(() => {
     if (
       initialGroup &&
-      visibleGroups(config, accountId).some((group) => group.id === initialGroup)
+      visibleGroups(config, accountId).some(
+        (group) => group.id === initialGroup,
+      )
     )
       setTier(initialGroup);
   }, [initialGroup]);

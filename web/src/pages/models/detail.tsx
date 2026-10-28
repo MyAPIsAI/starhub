@@ -24,6 +24,7 @@ import { useProductPreview } from "../../lib/product-preview";
 import { useBackendKeys } from "../../lib/api/key-adapter";
 import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
 import { getKeyModelOptions } from "../../lib/key-model-policy";
+import { findClientModel } from "../../lib/client-config";
 import { usePlazaModel, plazaToDirectoryModel } from "../../lib/api/plaza";
 import { useServiceQuality } from "../../lib/api/service-quality";
 import { ModelRequestTrend } from "../../components/model-request-trend";
@@ -93,8 +94,9 @@ export default function ModelDetail() {
         (key) =>
           resolveCatalogPricingContext(pricing, accountId, [key], key.id)
             .source === "key" &&
-          getKeyModelOptions(key, undefined, pricing).some(
-            (option) => option.id === model.id,
+          findClientModel(
+            getKeyModelOptions(key, undefined, pricing),
+            model.id,
           ),
       );
   const connectUrl = model

@@ -5,6 +5,7 @@ import { writtenLanguage } from "./localize";
 import { demoAuth, type DemoIdentity } from "./demo-auth";
 import {
   getKeyModels,
+  SMART_MODEL_ID,
   isSmartModelId,
   resolveKeyModelResult,
 } from "./key-model-policy";
@@ -1096,7 +1097,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
     const key = state.keys.find((k) => k.id === id);
     const fallbackModel =
       key?.type === "smart" && key.smartAccess === undefined
-        ? "myapis-auto"
+        ? SMART_MODEL_ID
         : (key?.model ?? "gpt-4.1");
     const request = structuredClone(
       submittedRequest ?? defaultDemoRequest(requestedModel ?? fallbackModel),

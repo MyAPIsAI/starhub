@@ -44,7 +44,7 @@ describe("connection links respect authorized smart options", () => {
     (model) => {
       const html = render(model);
       expect(html).toContain('value="review" selected=""');
-      expect(html).toContain('value="veyra-auto" selected=""');
+      expect(html).toContain('value="myapis-auto" selected=""');
       expect(html).toContain("export OPENAI_MODEL=&#x27;myapis-auto&#x27;");
       expect(html).toContain(
         `/console/playground?key=review&amp;model=${model}&amp;protocol=OpenAI`,

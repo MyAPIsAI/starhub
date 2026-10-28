@@ -24,9 +24,9 @@ export interface KeyModelPolicy {
   smartStrategy?: "cost" | "latency" | "stability";
 }
 
-export const SMART_MODEL_ID = "veyra-auto";
+export const SMART_MODEL_ID = "myapis-auto";
 export const isSmartModelId = (id: string) =>
-  id === "myapis-auto" || id === SMART_MODEL_ID;
+  id === SMART_MODEL_ID || id === "veyra-auto";
 export const allowsSmartModel = (key: KeyModelPolicy) =>
   key.smartAccess ?? key.type === "smart";
 export const allowsSpecifiedModels = (key: KeyModelPolicy) =>

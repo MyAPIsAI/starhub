@@ -35,14 +35,17 @@ describe("client configuration respects model and credential boundaries", () => 
         }
       },
     );
-    it("supports canonical options and legacy drafts without changing either", () => {
-      const options = [
-        { id: "myapis-auto", name: "Auto", kind: "smart" as const },
-      ];
-      const snapshot = structuredClone(options);
-      expect(findClientModel(options, "veyra-auto")).toBe(options[0]);
-      expect(options).toEqual(snapshot);
-    });
+    it.each(["myapis-auto", "veyra-auto"])(
+      "matches either entry against %s options without changing them",
+      (id) => {
+        const options = [{ id, name: "Auto", kind: "smart" as const }];
+        const snapshot = structuredClone(options);
+        for (const requested of ["myapis-auto", "veyra-auto"]) {
+          expect(findClientModel(options, requested)).toBe(options[0]);
+        }
+        expect(options).toEqual(snapshot);
+      },
+    );
     it.each(["myapis-auto", "veyra-auto"])(
       "does not grant smart access for %s through alias matching",
       (requested) => {
@@ -139,7 +142,7 @@ describe("client configuration respects model and credential boundaries", () => 
   it("only presents Anthropic candidates to Claude Code and never treats chat as Responses", () => {
     expect(getClientModels(key, "claude-code").map((item) => item.id)).toEqual([
       "claude-sonnet-4-20250514",
-      "veyra-auto",
+      "myapis-auto",
     ]);
     expect(getClientModels(key, "codex")).toEqual([]);
     expect(
@@ -155,7 +158,7 @@ describe("client configuration respects model and credential boundaries", () => 
     expect(getClientModels(limited, "claude-code")).toEqual([]);
     expect(getClientModels(limited, "openai").map((item) => item.id)).toEqual([
       "deepseek-chat",
-      "veyra-auto",
+      "myapis-auto",
     ]);
   });
   itUnix("rejects a mask and uses an environment variable while locked", () => {

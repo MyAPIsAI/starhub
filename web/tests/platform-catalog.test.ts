@@ -95,7 +95,7 @@ describe("standard catalog and mapped resource ownership", () => {
       getKeyModelOptions(keyPolicy, "Anthropic", config).map(
         (model) => model.id,
       ),
-    ).toEqual(["claude-sonnet-4-20250514", "veyra-auto"]);
+    ).toEqual(["claude-sonnet-4-20250514", "myapis-auto"]);
     expect(
       resolveKeyModelResult(
         { ...keyPolicy, modelAccess: "custom", allowedModels: ["myapis-auto"] },
