@@ -164,6 +164,7 @@ func ListModelCoverage() (map[string]*ModelCoverage, error) {
 		Select("a.model AS model, a.\"group\" AS \"group\", GROUP_CONCAT(DISTINCT c.type) AS channel_types, COUNT(DISTINCT a.channel_id) AS channel_cnt").
 		Joins("JOIN channels AS c ON c.id = a.channel_id").
 		Where("a.enabled = ? AND c.status = ?", true, common.ChannelStatusEnabled).
+		Where(resourceGatewayAbilityCondition("a")).
 		Group("a.model, a.\"group\"").
 		Scan(&rows).Error
 	if err != nil {
@@ -207,7 +208,7 @@ func AllPlazaModels() ([]string, error) {
 			SELECT DISTINCT a.model AS model
 			FROM abilities a
 			JOIN channels c ON c.id = a.channel_id
-			WHERE a.enabled = ? AND c.status = ?
+			WHERE a.enabled = ? AND c.status = ? AND `+resourceGatewayAbilityCondition("a")+`
 			UNION
 			SELECT model AS model FROM model_metas
 		) ORDER BY name ASC`, true, common.ChannelStatusEnabled).Scan(&rows).Error

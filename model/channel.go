@@ -67,6 +67,9 @@ func DeleteChannel(id int64) error {
 		if res.RowsAffected == 0 {
 			return ErrChannelNotFound
 		}
+		if err := revokeResourceGatewayChannel(tx, id); err != nil {
+			return err
+		}
 		return tx.Where("channel_id = ?", id).Delete(&Ability{}).Error
 	})
 }

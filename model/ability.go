@@ -39,6 +39,9 @@ func AddAbilities(c *Channel) error {
 }
 
 func addAbilities(tx *gorm.DB, c *Channel) error {
+	if managed, err := addResourceGatewayAbilities(tx, c); managed || err != nil {
+		return err
+	}
 	models := SplitList(c.Models)
 	groups := ChannelGroups(c)
 	if len(models) == 0 {
@@ -110,6 +113,7 @@ func GetSatisfiedChannelHashed(group, model string, exclude map[int64]bool, hash
 func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred int64, hashKey string) (*Channel, error) {
 	var rows []Ability
 	query := DB.Where("\"group\" = ? AND model = ? AND enabled = ?", group, model, true)
+	query = query.Where(resourceGatewayAbilityCondition("abilities"))
 	// Exclude already-attempted channels in SQL, BEFORE the window limit:
 	// filtering in Go after LIMIT 64 hides every candidate beyond the
 	// window when the first 64 are all already tried or disabled.
@@ -230,8 +234,9 @@ func weightedRendezvousScore(hashKey string, channelID, weight int64) float64 {
 
 func ListModelsByGroup(group string) ([]string, error) {
 	var models []string
-	err := DB.Model(&Ability{}).Where("\"group\" = ? AND enabled = ?", group, true).
-		Distinct().Order("model ASC").Pluck("model", &models).Error
+	err := DB.Table("abilities AS a").Joins("JOIN channels c ON c.id = a.channel_id").
+		Where("a.\"group\" = ? AND a.enabled = ? AND c.status = ?", group, true, common.ChannelStatusEnabled).
+		Where(resourceGatewayAbilityCondition("a")).Distinct().Order("a.model ASC").Pluck("a.model", &models).Error
 	if err == gorm.ErrRecordNotFound {
 		return models, nil
 	}
