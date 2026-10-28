@@ -12,6 +12,7 @@ import (
 	"starhub/common"
 	"starhub/middleware"
 	"starhub/model"
+	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
 )
@@ -134,5 +135,95 @@ func TestRelayAutoModelReachesUpstream(t *testing.T) {
 				t.Fatal("relay returned without reaching the local upstream")
 			}
 		})
+	}
+}
+
+func TestPassthroughModelAttribution(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		path       string
+		handler    http.HandlerFunc
+		actual     string
+		fields     string
+		response   string
+		completion int64
+	}{
+		{"embeddings", "/v1/embeddings", RelayEmbeddings, "text-embedding-3-small", `"input":"Hello"`, `{"object":"list","data":[{"object":"embedding","embedding":[0.1],"index":0}],"usage":{"prompt_tokens":12,"total_tokens":12}}`, 0},
+		{"rerank", "/v1/rerank", RelayRerank, "rerank-review", `"query":"Hello","documents":["Hello world"]`, `{"results":[{"index":0,"relevance_score":0.9}],"usage":{"input_tokens":12,"output_tokens":2,"total_tokens":14}}`, 2},
+	} {
+		for _, requested := range []string{"myapis-auto", tc.actual} {
+			t.Run(tc.name+"/"+requested, func(t *testing.T) {
+				newTestDB(t)
+				captured := make(chan []byte, common.RetryTimes+1)
+				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					body, err := io.ReadAll(r.Body)
+					if err != nil || r.URL.Path != tc.path || r.Method != http.MethodPost {
+						http.Error(w, "invalid upstream request", http.StatusBadRequest)
+						return
+					}
+					captured <- body
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = io.WriteString(w, tc.response)
+				}))
+				defer upstream.Close()
+				ch := &model.Channel{Name: "passthrough-review", Type: channel.ChannelTypeOpenAI, Key: "review-key", BaseURL: upstream.URL, Models: tc.actual, Group: "default", Status: common.ChannelStatusEnabled, Weight: 1}
+				if err := model.InsertChannel(ch); err != nil {
+					t.Fatal(err)
+				}
+				user := newUser(t, "passthrough-review", common.RoleUser, 1000000)
+				token := mustToken(t, user.ID, 1000000)
+				handler := middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(tc.handler))
+				body := `{"model":"` + requested + `",` + tc.fields + `}`
+				r := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(body))
+				r.Header.Set("Content-Type", "application/json")
+				r.Header.Set("Authorization", "Bearer "+token.Key)
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, r)
+				if rec.Code != http.StatusOK || rec.Body.String() != tc.response {
+					t.Fatalf("passthrough response = %d %s", rec.Code, rec.Body)
+				}
+				select {
+				case sent := <-captured:
+					var payload struct {
+						Model string `json:"model"`
+					}
+					if err := json.Unmarshal(sent, &payload); err != nil || payload.Model != tc.actual {
+						t.Fatalf("upstream model = %q, err = %v, want %q", payload.Model, err, tc.actual)
+					}
+				default:
+					t.Fatal("request did not reach upstream")
+				}
+				entries, total, err := model.ListLogs(user.ID, 1, 10, tc.actual)
+				if err != nil || total != 1 || len(entries) != 1 {
+					t.Fatalf("success log missing: total=%d entries=%d err=%v", total, len(entries), err)
+				}
+				entry := entries[0]
+				if entry.RequestedModel != requested || entry.Model != tc.actual || entry.ChannelID != ch.ID || entry.Status != 1 {
+					t.Fatalf("model attribution lost: %+v", entry)
+				}
+				charge := relay.ComputeQuota(tc.actual, "default", 12, tc.completion)
+				if entry.Quota != charge || entry.PromptTokens != 12 || entry.CompletionTokens != tc.completion {
+					t.Fatalf("usage changed: %+v, want charge=%d tokens=12/%d", entry, charge, tc.completion)
+				}
+				afterUser, err := model.GetUserByID(user.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				afterToken, err := model.GetTokenByID(token.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if afterUser.Quota != user.Quota-charge || afterUser.UsedQuota != user.UsedQuota+charge || afterToken.RemainQuota != token.RemainQuota-charge || afterToken.UsedQuota != token.UsedQuota+charge {
+					t.Fatal("settlement did not charge the actual model exactly once")
+				}
+				var page struct {
+					Items []model.Log `json:"items"`
+				}
+				decodeData(t, call(ListLogs, testRequest{target: "/api/log", userID: user.ID, role: common.RoleUser}), &page)
+				if len(page.Items) != 1 || page.Items[0].RequestedModel != requested || page.Items[0].Model != tc.actual {
+					t.Fatalf("log API lost attribution: %+v", page)
+				}
+			})
+		}
 	}
 }
