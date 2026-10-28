@@ -11,6 +11,7 @@ import { useSessionQueryIdentity } from "../system-access";
 import type { DirectoryModel } from "../../config/model-directory";
 import type { TierId } from "../../config/placeholders";
 import type { ServiceLevel } from "../service-level";
+import { timeQuoteRefreshDelay, type TimeQuote } from "../time-quote";
 
 // --- Backend response types (mirror controller/plaza_pricing.go) ---
 
@@ -30,6 +31,7 @@ export interface PlazaPricing {
   group_ratio: number;
   explicit: boolean;
   currency: string;
+  time_pricing?: TimeQuote;
 }
 
 export interface PlazaRow {
@@ -132,9 +134,13 @@ function buildQueryString(query: PlazaQuery): string {
 
 export function usePlazaModels(query: PlazaQuery = {}, enabled = true) {
   const identity = usePlazaIdentity();
-  return useQuery({
+  return useQuery<PlazaListResponse>({
     queryKey: ["plaza-models", identity, query],
     enabled,
+    refetchInterval: (state) =>
+      timeQuoteRefreshDelay(
+        state.state.data?.items.map((row) => row.pricing.time_pricing) ?? [],
+      ),
     queryFn: ({ signal }) =>
       apiGet<PlazaListResponse>(
         `/api/plaza/models${buildQueryString(query)}`,
@@ -145,9 +151,11 @@ export function usePlazaModels(query: PlazaQuery = {}, enabled = true) {
 
 export function usePlazaModel(id: string | undefined) {
   const identity = usePlazaIdentity();
-  return useQuery({
+  return useQuery<PlazaDetailResponse>({
     queryKey: ["plaza-model", identity, id],
     enabled: Boolean(id),
+    refetchInterval: (state) =>
+      timeQuoteRefreshDelay([state.state.data?.model.pricing.time_pricing]),
     queryFn: ({ signal }) =>
       apiGet<PlazaDetailResponse>(
         `/api/plaza/models/${encodeURIComponent(id!)}`,
@@ -160,6 +168,7 @@ export function usePlazaFilters() {
   const identity = usePlazaIdentity();
   return useQuery({
     queryKey: ["plaza-filters", identity],
+    refetchInterval: 60_000,
     queryFn: ({ signal }) =>
       apiGet<PlazaFiltersResponse>("/api/plaza/filters", signal),
   });
@@ -183,8 +192,13 @@ export interface PlazaRankResponse {
 
 export function usePlazaRank(rankType: PlazaRankType = "value") {
   const identity = usePlazaIdentity();
-  return useQuery({
+  return useQuery<PlazaRankResponse>({
     queryKey: ["plaza-rank", identity, rankType] as const,
+    refetchInterval: (state) =>
+      timeQuoteRefreshDelay(
+        state.state.data?.items.map((row) => row.model.pricing.time_pricing) ??
+          [],
+      ),
     queryFn: ({ signal }) =>
       apiGet<PlazaRankResponse>(`/api/plaza/rank?type=${rankType}`, signal),
   });

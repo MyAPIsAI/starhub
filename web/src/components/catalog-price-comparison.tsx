@@ -12,6 +12,7 @@ import { formatMoney } from "../lib/money";
 import { describeDirectoryRate } from "./directory-price";
 import { ExternalLink } from "lucide-react";
 import "./catalog-price-comparison.css";
+import { TimePricingNote } from "./time-pricing-note";
 import {
   describePlazaPrice,
   plazaAmounts,
@@ -334,7 +335,9 @@ export function CatalogPriceComparison({
         {reference &&
           "scope" in reference &&
           (detailed ? (
-            <p className="price-reference-scope">{reference.scope[writtenLanguage(lang)]}</p>
+            <p className="price-reference-scope">
+              {reference.scope[writtenLanguage(lang)]}
+            </p>
           ) : (
             <details className="price-conditions">
               <summary>
@@ -344,7 +347,9 @@ export function CatalogPriceComparison({
                   "شروط السعر الرسمي",
                 )}
               </summary>
-              <p className="price-reference-scope">{reference.scope[writtenLanguage(lang)]}</p>
+              <p className="price-reference-scope">
+                {reference.scope[writtenLanguage(lang)]}
+              </p>
             </details>
           ))}
         {model.kind === "smart" &&
@@ -429,6 +434,12 @@ export function CatalogPriceComparison({
                 : "— تعني عدم وجود سعر وليست مجانية. أسعار المنصة من مجموعة عامة واحدة ومعامل واحد؛ لا تتغير مجموعة مفتاحك.",
             )}
           </p>
+        )}
+        {plazaQuote && (
+          <TimePricingNote
+            value={plazaQuote.model.pricing.time_pricing}
+            compact={!detailed}
+          />
         )}
       </div>
     </div>

@@ -5,6 +5,7 @@ import { getOfficialReference } from "../lib/official-reference";
 import { usePreferences } from "../lib/preferences";
 import { describeDirectoryRate } from "./directory-price";
 import "./catalog-price-summary.css";
+import { TimePricingNote } from "./time-pricing-note";
 import {
   describePlazaPrice,
   plazaAmounts,
@@ -235,6 +236,12 @@ export function CatalogPriceSummary({
             )}
           </div>
         </div>
+      )}
+      {plazaQuote && (
+        <TimePricingNote
+          value={plazaQuote.model.pricing.time_pricing}
+          compact
+        />
       )}
     </div>
   );

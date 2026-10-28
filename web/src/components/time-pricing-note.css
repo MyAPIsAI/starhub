@@ -1,0 +1,26 @@
+.time-pricing-note {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.time-pricing-note p {
+  margin: 0;
+}
+.time-pricing-note.is-compact {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  gap: 2px;
+  font-size: 11px;
+}
+.time-pricing-note[role="alert"] {
+  color: var(--danger);
+}
