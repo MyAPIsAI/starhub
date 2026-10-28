@@ -18,7 +18,6 @@ type smartRequirements struct {
 	capabilities  []string
 	input, output int64
 	chain         string
-	inferredChain bool
 	continuation  bool
 }
 
@@ -112,9 +111,8 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 				if err != nil {
 					return req, err
 				}
-				req.inferredChain = true
-				req.continuation = continuation
 			}
+			req.continuation = continuation
 		}
 	}
 	return req, nil
@@ -225,7 +223,7 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 		if err != nil {
 			return "", err
 		}
-		if pinned == "" && requirements.inferredChain && requirements.continuation {
+		if pinned == "" && requirements.continuation {
 			return "", errSmartChainHistory
 		}
 	}

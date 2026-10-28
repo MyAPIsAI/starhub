@@ -52,6 +52,7 @@ func main() {
 	go model.WatchOptions(context.Background(), time.Second)
 	startChannelTestTask()
 	startTaskPollTask()
+	go service.RunRoutingChainCleanup(context.Background(), 15*time.Minute)
 	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, bootstrap.Port, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
 	// security, and IP rate limiting around the route table.

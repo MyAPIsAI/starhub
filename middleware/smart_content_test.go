@@ -30,7 +30,23 @@ func TestSmartRoutingNestedContentCapabilities(t *testing.T) {
 		} {
 			t.Run(alias+"/"+tc.name, func(t *testing.T) {
 				body := fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"review"},{"role":"user","content":%s}],"tools":[{"name":"lookup","input_schema":{"type":"object"}}],"max_tokens":8}`, alias, tc.content)
-				code, actual := routeSmart(t, body, "/v1/messages", "X-MyAPIs-Chain-Id", fmt.Sprintf("content-%s-%d", alias, index), 1, "cheap,capable")
+				chain := fmt.Sprintf("content-%s-%d", alias, index)
+				if _, err := model.PinRoutingChain(1, "default", chain, "cheap"); err != nil {
+					t.Fatal(err)
+				}
+				if tc.want == "capable" {
+					if code, _ := routeSmart(t, body, "/v1/messages", "X-MyAPIs-Chain-Id", chain, 1, ""); code != 503 {
+						t.Fatalf("vision requirement ignored for pinned text model: %d", code)
+					}
+					if _, err := model.PinRoutingChain(2, "default", chain, "capable"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				tokenID := int64(1)
+				if tc.want == "capable" {
+					tokenID = 2
+				}
+				code, actual := routeSmart(t, body, "/v1/messages", "X-MyAPIs-Chain-Id", chain, tokenID, "cheap,capable")
 				if code != 204 || actual != tc.want {
 					t.Fatalf("status=%d model=%q want=%q", code, actual, tc.want)
 				}
@@ -46,6 +62,9 @@ func TestNestedImagesDoNotExpandSmartAuthorization(t *testing.T) {
 	}
 	for _, alias := range []string{"myapis-auto", "veyra-auto"} {
 		body := `{"model":"` + alias + `","messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":[{"type":"image","source":{"type":"base64","data":"AA=="}}]}]}],"max_tokens":8}`
+		if _, err := model.PinRoutingChain(1, "default", "limited-image-"+alias, "capable"); err != nil {
+			t.Fatal(err)
+		}
 		if code, actual := routeSmart(t, body, "/v1/messages", "X-MyAPIs-Chain-Id", "limited-image-"+alias, 1, "cheap"); code != 403 || actual != "" {
 			t.Fatalf("nested image escaped model whitelist: %d %s", code, actual)
 		}

@@ -601,6 +601,12 @@ func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
 			if errors.Is(err, model.ErrRoutingChainConflict) {
 				status, code, message = http.StatusConflict, "routing_chain_conflict", err.Error()
 			}
+			if errors.Is(err, model.ErrRoutingChainExpired) {
+				status, code, message = http.StatusBadRequest, "routing_chain_expired", err.Error()
+			}
+			if errors.Is(err, model.ErrRoutingChainLimit) {
+				status, code, message = http.StatusTooManyRequests, "routing_chain_limit", err.Error()
+			}
 			f.errorOut(status, "server_error", code, message)
 			return
 		}

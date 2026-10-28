@@ -23,12 +23,30 @@ func TestSmartContextIncludesToolPayloads(t *testing.T) {
 		fmt.Sprintf(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":[{"type":"text","text":%q}]}]}`, large),
 	} {
 		body := `{"model":"myapis-auto","messages":[{"role":"user","content":"review"},` + message + `],"max_tokens":8}`
-		code, actual := routeSmart(t, body, "/v1/chat/completions", "X-MyAPIs-Chain-Id", fmt.Sprintf("context-%d", i), 1, "")
+		r := httptest.NewRequest("POST", "/v1/chat/completions", nil)
+		r.Header.Set("X-MyAPIs-Chain-Id", fmt.Sprintf("context-%d", i))
+		req, err := readSmartRequirements(r, []byte(body), false)
+		if err != nil || req.input <= 64 {
+			t.Fatalf("tool payload missing from estimate: input=%d err=%v", req.input, err)
+		}
+		if _, err := model.PinRoutingChain(1, "default", fmt.Sprintf("context-%d", i), "cheap"); err != nil {
+			t.Fatal(err)
+		}
+		if code, _ := routeSmart(t, body, "/v1/chat/completions", "X-MyAPIs-Chain-Id", fmt.Sprintf("context-%d", i), 1, ""); code != 503 {
+			t.Fatalf("oversized continuation accepted by small pinned model: %d", code)
+		}
+		if _, err := model.PinRoutingChain(2, "default", fmt.Sprintf("context-%d", i), "capable"); err != nil {
+			t.Fatal(err)
+		}
+		code, actual := routeSmart(t, body, "/v1/chat/completions", "X-MyAPIs-Chain-Id", fmt.Sprintf("context-%d", i), 2, "")
 		if code != 204 || actual != "capable" {
 			t.Fatalf("tool payload not counted: %d %s", code, actual)
 		}
 	}
 	body := fmt.Sprintf(`{"model":"veyra-auto","messages":[{"role":"assistant","tool_calls":[{"id":"call_1","function":{"name":"lookup","arguments":%q}}]}],"max_tokens":8}`, strings.Repeat("a", 100000))
+	if _, err := model.PinRoutingChain(1, "default", "oversized-tool", "capable"); err != nil {
+		t.Fatal(err)
+	}
 	if code, actual := routeSmart(t, body, "/v1/chat/completions", "X-MyAPIs-Chain-Id", "oversized-tool", 1, ""); code != 503 || actual != "" {
 		t.Fatalf("oversized tool input admitted: %d %s", code, actual)
 	}

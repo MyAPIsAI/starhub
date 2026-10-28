@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -31,6 +32,10 @@ func InitDB(path string) error {
 	}
 	if err := db.FirstOrCreate(&OptionRevision{}, OptionRevision{ID: 1}).Error; err != nil {
 		return fmt.Errorf("initialize option revision: %w", err)
+	}
+	// Give pre-lifecycle pins one full idle period during schema migration.
+	if err := db.Model(&RoutingChain{}).Where("expires_at = 0").UpdateColumn("expires_at", time.Now().Add(RoutingChainTTL).Unix()).Error; err != nil {
+		return fmt.Errorf("initialize routing chain expiry: %w", err)
 	}
 	DB = db
 	return nil

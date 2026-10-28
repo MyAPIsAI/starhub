@@ -111,7 +111,12 @@ func UpdateTokenFields(id int64, fields map[string]any) error {
 }
 
 func DeleteToken(id int64) error {
-	return DB.Delete(&Token{}, "id = ?", id).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&Token{}, "id = ?", id).Error; err != nil {
+			return err
+		}
+		return tx.Where("token_id = ?", id).Delete(&RoutingChain{}).Error
+	})
 }
 
 func DecreaseTokenQuota(id int64, amount int64) (bool, error) {

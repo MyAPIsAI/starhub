@@ -137,7 +137,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				}
 				best, err := chooseSmartModel(r, requirements)
 				if err != nil {
-					if errors.Is(err, errSmartChainHistory) {
+					if errors.Is(err, errSmartChainHistory) || errors.Is(err, model.ErrRoutingChainExpired) {
 						fail(http.StatusBadRequest, "routing_chain_history_required", err.Error())
 						return
 					}
@@ -154,7 +154,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 						tokenID, _ := r.Context().Value(common.CtxTokenID).(int64)
 						group, _ := r.Context().Value(common.CtxUsingGroup).(string)
 						chainAdmission = func() error {
-							winner, err := model.PinRoutingChain(tokenID, group, requirements.chain, best)
+							winner, err := model.AdmitRoutingChain(tokenID, group, requirements.chain, best, requirements.continuation)
 							if err == nil && winner != best {
 								return model.ErrRoutingChainConflict
 							}

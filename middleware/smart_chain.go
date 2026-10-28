@@ -8,7 +8,7 @@ import (
 	"errors"
 )
 
-var errSmartChainHistory = errors.New("smart tool routing requires complete conversation history from the first user message, or X-MyAPIs-Chain-Id")
+var errSmartChainHistory = errors.New("smart tool routing requires a known unexpired conversation; start from the first user message and preserve complete history or X-MyAPIs-Chain-Id")
 
 // inferToolChain gives ordinary clients a stable pin without requiring a custom
 // header. It scopes the first user content by endpoint; only its hash is stored.
