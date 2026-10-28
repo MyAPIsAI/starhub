@@ -20,6 +20,7 @@ import { serviceGroupLabel } from "../lib/service-group-label";
 import {
   buildClientConfiguration,
   clientProtocols,
+  findClientModel,
   getClientModels,
   type ClientTarget,
   type ConnectionTool,
@@ -68,8 +69,7 @@ export default function AccessCenter() {
     const matching = keys.find(
       (key) =>
         key.active &&
-        (!model ||
-          getKeyModelOptions(key).some((option) => option.id === model)),
+        (!model || findClientModel(getKeyModelOptions(key), model)),
     );
     const key =
       params.get("key") ??
@@ -106,7 +106,7 @@ export default function AccessCenter() {
     () => (key ? getClientModels(key, draft.target, pricing) : []),
     [key, draft.target, pricing],
   );
-  const selectedModel = models.find((model) => model.id === draft.model);
+  const selectedModel = findClientModel(models, draft.model);
   const unlocked = Boolean(key && (revealed[key.id] ?? 0) > clock);
   const config =
     key?.active && selectedModel
@@ -233,8 +233,9 @@ export default function AccessCenter() {
                   key: e.target.value,
                   model:
                     next &&
-                    getClientModels(next, draft.target, pricing).some(
-                      (m) => m.id === draft.model,
+                    findClientModel(
+                      getClientModels(next, draft.target, pricing),
+                      draft.model,
                     )
                       ? draft.model
                       : "",

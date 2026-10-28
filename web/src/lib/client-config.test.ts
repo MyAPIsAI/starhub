@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { buildClientConfiguration, getClientModels } from "./client-config";
+import {
+  buildClientConfiguration,
+  findClientModel,
+  getClientModels,
+} from "./client-config";
 import { createDefaultPricing } from "./model-pricing";
 import { getDirectoryModel, directoryPrices } from "../config/model-directory";
 import type { KeyModelPolicy } from "./key-model-policy";
@@ -16,6 +20,67 @@ const key: KeyModelPolicy = {
   smartAccess: true,
 };
 describe("client configuration respects model and credential boundaries", () => {
+  describe("connection model selection", () => {
+    it.each(["myapis-auto", "veyra-auto"])(
+      "matches %s only to an authorized smart option",
+      (requested) => {
+        for (const target of ["openai", "claude-code"] as const) {
+          const options = getClientModels(key, target);
+          const selected = findClientModel(options, requested)!;
+          expect(selected.kind).toBe("smart");
+          expect(options).toContain(selected);
+          expect(
+            buildClientConfiguration({ target, model: selected.id })!.model,
+          ).toBe("myapis-auto");
+        }
+      },
+    );
+    it("supports canonical options and legacy drafts without changing either", () => {
+      const options = [
+        { id: "myapis-auto", name: "Auto", kind: "smart" as const },
+      ];
+      const snapshot = structuredClone(options);
+      expect(findClientModel(options, "veyra-auto")).toBe(options[0]);
+      expect(options).toEqual(snapshot);
+    });
+    it.each(["myapis-auto", "veyra-auto"])(
+      "does not grant smart access for %s through alias matching",
+      (requested) => {
+        const pricing = createDefaultPricing();
+        const denied = [
+          getClientModels({ ...key, smartAccess: false }, "openai", pricing),
+          getClientModels(
+            { ...key, modelAccess: "custom", allowedModels: [requested] },
+            "openai",
+            pricing,
+          ),
+          getClientModels(
+            { ...key, modelAccess: "custom", allowedModels: ["deepseek-chat"] },
+            "claude-code",
+            pricing,
+          ),
+          getClientModels(key, "codex", pricing),
+        ];
+        for (const options of denied) {
+          expect(findClientModel(options, requested)).toBeUndefined();
+        }
+      },
+    );
+    it("does not substitute explicit, unavailable, or similar model names", () => {
+      const options = getClientModels(key, "openai");
+      expect(findClientModel(options, "gpt-4.1")?.id).toBe("gpt-4.1");
+      for (const id of [
+        "",
+        "missing-model",
+        "myapis-auto-preview",
+        "veyra-auto-preview",
+        "MYAPIS-AUTO",
+      ]) {
+        expect(findClientModel(options, id)).toBeUndefined();
+      }
+      expect(findClientModel([], "gpt-4.1")).toBeUndefined();
+    });
+  });
   describe.each(["openai", "claude-code"] as const)(
     "%s model exports",
     (target) => {

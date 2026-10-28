@@ -22,6 +22,18 @@ export function getClientModels(
   const protocol = clientProtocols[target];
   return protocol ? getKeyModelOptions(key, protocol, config) : [];
 }
+export function findClientModel(
+  options: ReturnType<typeof getClientModels>,
+  requestedModel: string,
+) {
+  return options.find(
+    (option) =>
+      option.id === requestedModel ||
+      (option.kind === "smart" &&
+        isSmartModelId(option.id) &&
+        isSmartModelId(requestedModel)),
+  );
+}
 export function shellQuote(value: string) {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
