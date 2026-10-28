@@ -20,6 +20,7 @@ import { usePreferences } from "../../lib/preferences";
 import { placeholders } from "../../config/placeholders";
 import { responsesGuide } from "./responses-guide";
 import { geminiNativeGuide } from "./gemini-guide";
+import { gatewayPolicyGuide } from "./gateway-policy-guide";
 
 type ArticleId =
   "quickstart" | "auth" | "tiers" | "claudeCode" | "cursor" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "responses" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
@@ -96,21 +97,24 @@ const curlExample = `curl https://api.myapis.ai/v1/chat/completions \\
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true
   }'`;
-  const pythonExample = `from openai import OpenAI
+  const pythonExample = `import os
+from openai import OpenAI
 
 client = OpenAI(
-    api_key="YOUR_API_KEY",
+    api_key=os.environ["MYAPIS_API_KEY"],
     base_url="https://api.myapis.ai/v1"
 )
 
 response = client.chat.completions.create(
     model="gpt-4.1",
     messages=[{"role": "user", "content": "Hello!"}],
+    max_tokens=64,
     stream=True
 )
 
 for chunk in response:
-    print(chunk.choices[0].delta.content or "", end="")`;
+    if chunk.choices:
+        print(chunk.choices[0].delta.content or "", end="")`;
 
 export default function DocsPage() {
   const { t } = useTranslation();
@@ -120,6 +124,7 @@ export default function DocsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const responses = responsesGuide(text);
   const nativeGemini = geminiNativeGuide(text);
+  const policy = gatewayPolicyGuide(text);
   const articles: { id: ArticleId; title: string; Icon: typeof Terminal }[] = [
     { id: "quickstart", title: t("docsQuickstart"), Icon: Terminal },
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
@@ -268,21 +273,21 @@ export default function DocsPage() {
   // the search covers the full text, not just preset keywords.
   const articleBody: Record<ArticleId, string> = {
     quickstart: "first request endpoint key curl python streaming demo domain environment variable chat request terminal connect application consistent interface",
-    auth: "keys access boundaries usage quotas store securely project restrict access IP allowlist source control environment variables review request logs",
+    auth: policy.quota + " keys access boundaries usage quotas store securely project restrict access IP allowlist source control environment variables review request logs",
     tiers: "service level workload Ultra 1.00 99.5% 800ms Pro 0.80 99.0% 1500ms Standard 0.60 97.5% 3000ms Lite 0.40 price multiplier target latency demo configuration",
     claudeCode: "Claude Code Anthropic endpoint key environment variables ANTHROPIC_BASE_URL ANTHROPIC_API_KEY terminal configuration demo compatibility",
     cursor: [cursorLead, ...cursorSteps, cursorSettings, cursorBoundary, cursorTroubleshooting].join(" "),
     errors: "401 invalid_api_key token_disabled token_expired 403 insufficient_quota token_quota_exhausted auto_group_empty group_not_available 400 invalid_request_body invalid_json invalid_multipart model_required 429 rate_limit_exceeded 502 upstream_unavailable retry_budget_exhausted upstream_result_uncertain 503 no_available_channel 500 pre_consume_failed channel_selection_failed Authorization Bearer JSON multipart",
-    billing: "balance precision usage totals request logs export details account balance 2 4 6 9 display reconciliation",
+    billing: policy.wallet + " balance precision usage totals request logs export details account balance 2 4 6 9 display reconciliation",
     protocols: "Chat Completions OpenAI Messages Anthropic Embeddings Images generations Audio TTS speech STT transcriptions translations Video submit poll Realtime WebSocket Models list Bearer token base URL path auth",
     models: [modelsLead, modelsScope, modelsResponseNote, modelsExample, modelsResponse].join(" "),
     "chat-completions": [chatLead, chatResponseNote, chatStreaming, chatExample, chatResponse].join(" "),
     responses: Object.values(responses).join(" "),
     anthropic: [anthropicLead, anthropicAuth, anthropicResponseNote, anthropicStreaming, anthropicExample, anthropicResponse].join(" "),
     gemini: [geminiLead, geminiBoundary, geminiResponseNote, geminiExample, ...Object.values(nativeGemini)].join(" "),
-    routing: "routing flow key auth user quota check channel selection group model match pre-charge upstream call settle refund group model_limit allowed_ips remain_quota CIDR IP allowlist authorized model list",
-    limits: "user rate limit 100 req/min key 50 model 500 per-request cap 2000000 quota pre-charge malicious large requests 429 rate_limit_exceeded 403 insufficient_quota",
-    faq: "plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field top-up credited immediately balance",
+    routing: policy.tokenFields.flat().join(" ") + " routing flow key auth channel selection pre-charge settle refund",
+    limits: [policy.defaults,policy.quota,policy.rateHelp,...policy.rateRows.flat()].join(" "),
+    faq: policy.wallet + " plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field",
   };
   const filteredArticles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -603,11 +608,7 @@ export default function DocsPage() {
                       "Set project quotas",
                       "حدد حصص المشاريع",
                     ),
-                    text(
-                      "账户余额与单个密钥配额分别计算；请根据项目需要设置日限额和月限额。",
-                      "Account balance and individual key quotas are evaluated separately. Set daily and monthly limits for each project.",
-                      "يتم حساب رصيد الحساب وحصص المفاتيح بشكل منفصل.",
-                    ),
+                    policy.quota,
                   ],
                   [
                     text("限制访问来源", "Restrict access", "تقييد الوصول"),
@@ -759,27 +760,27 @@ export default function DocsPage() {
                     "403",
                     "token_quota_exhausted",
                     text(
-                      "密钥配额已用尽。调整密钥的日/月限额，或等待下个计费周期。",
-                      "The key has reached its quota. Adjust its daily or monthly limit, or wait for the next cycle.",
-                      "وصل المفتاح إلى حصته. عدّل الحد اليومي أو الشهري أو انتظر الدورة التالية.",
+                      "密钥剩余额度已用尽。检查 remain_quota 与 unlimited_quota；当前不会按日/月自动重置，账户 API 配额也须足够。",
+                      "The key quota is exhausted. Check remain_quota and unlimited_quota; quotas do not reset daily or monthly, and account API quota must also be sufficient.",
+                      "نفدت حصة المفتاح. تحقق من remain_quota وunlimited_quota؛ لا تتجدد الحصة يوميًا أو شهريًا، ويجب توفر حصة الحساب أيضًا.",
                     ),
                   ],
                   [
                     "403",
                     "auto_group_empty",
                     text(
-                      "密钥的自动分组中没有可用模型。检查密钥的分组配置。",
-                      "The key's auto group has no available models. Check the key's group configuration.",
-                      "لا توجد نماذج متاحة في المجموعة التلقائية للمفتاح. تحقق من إعدادات المجموعة.",
+                      "密钥使用 auto 分组，但 auto_groups 候选列表为空。配置实际可用的候选分组标识。",
+                      "The key uses auto, but auto_groups is empty. Configure candidate group identifiers.",
+                      "يستخدم المفتاح auto لكن قائمة auto_groups فارغة. اضبط معرّفات المجموعات المرشحة.",
                     ),
                   ],
                   [
                     "403",
                     "group_not_available",
                     text(
-                      "该密钥未授权所请求的服务分组。检查密钥的分组权限设置。",
-                      "The key is not authorized for the requested service group. Check the key's group permissions.",
-                      "المفتاح غير مصرح له بالمجموعة المطلوبة. تحقق من أذونات المجموعة.",
+                      "当前服务分组没有已配置的计费倍率。请管理员检查分组与倍率配置。",
+                      "The current service group has no configured billing ratio. Ask an administrator to check the group and ratio configuration.",
+                      "لا يوجد مضاعف فوترة مضبوط لمجموعة الخدمة الحالية. اطلب من المسؤول التحقق من إعدادات المجموعة والمضاعف.",
                     ),
                   ],
                   [
@@ -831,18 +832,18 @@ export default function DocsPage() {
                     "502",
                     "upstream_unavailable",
                     text(
-                      "上游服务暂时不可用。系统会自动重试其他渠道；全失败时退款。请稍后重试。",
-                      "The upstream service is temporarily unavailable. The system auto-retries other channels; full failure refunds. Retry later.",
-                      "الخدمة غير متوفرة مؤقتًا. يعيد النظام المحاولة تلقائيًا عبر قنوات أخرى؛ الرفض الكامل يسترد الرسوم. أعد المحاولة لاحقًا.",
+                      "上游服务不可用。只有协议允许且结果可安全重试时才尝试其他渠道；已执行的用量可能结算，最终费用请查看调用日志。",
+                      "The upstream is unavailable. Other channels are tried only when the protocol and result permit safe retry. Incurred usage may be billed; check request logs for the final charge.",
+                      "المنبع غير متاح. تُجرب قنوات أخرى فقط عندما يسمح البروتوكول والنتيجة بمحاولة آمنة. قد تُحاسب الاستخدامات المتحققة؛ راجع سجلات الطلبات.",
                     ),
                   ],
                   [
                     "502",
                     "retry_budget_exhausted",
                     text(
-                      "重试预算耗尽，所有渠道均失败。预扣额度已全额退还。请检查渠道配置或稍后重试。",
-                      "Retry budget exhausted; all channels failed. The pre-charged quota has been fully refunded. Check channel configuration or retry later.",
-                      "استنفدت ميزانية المحاولة؛ فشلت جميع القنوات. تم استرداد الحجز بالكامل. تحقق من إعدادات القناة أو أعد المحاولة لاحقًا.",
+                      "重试预算已耗尽，不再尝试其他渠道。未使用的预扣按结算结果退还，请核对调用日志与 API 配额。",
+                      "The retry budget is exhausted; no further channels are tried. Unused reservations are refunded according to settlement. Check request logs and API quota.",
+                      "استُنفدت ميزانية المحاولة ولن تُجرب قنوات أخرى. يُرد الحجز غير المستخدم وفق التسوية؛ تحقق من سجلات الطلبات وحصة الواجهة.",
                     ),
                   ],
                   [
@@ -895,6 +896,7 @@ export default function DocsPage() {
           )}
           {activeTab === "billing" && (
             <>
+              <div className="docs-callout"><p>{policy.wallet}</p></div>
               <p className="docs-lead">
                 {text(
                   "账户余额、报表与调用明细使用不同的显示精度，便于阅读和核对。",
@@ -1018,6 +1020,7 @@ export default function DocsPage() {
                 </p>
               </div>
               <h2>{text("密钥授权范围", "Key authorization scope", "نطاق تفويض المفتاح")}</h2>
+              <div className="docs-table-wrap" role="region" tabIndex={0} aria-label={text("密钥授权字段", "Key authorization fields", "حقول تفويض المفتاح")}>
               <table>
                 <thead>
                   <tr>
@@ -1026,16 +1029,15 @@ export default function DocsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td><code>group</code></td><td>{text("密钥所属服务分组，决定可用的模型和倍率", "Service group, determines available models and multipliers", "مجموعة الخدمة، تحدد النماذج والمضاعفات المتاحة")}</td></tr>
-                  <tr><td><code>model_limit</code></td><td>{text("授权模型列表，逗号分隔；为空表示使用分组内全部模型", "Authorized model list, comma-separated; empty = all models in group", "قائمة النماذج المصرّح بها، مفصولة بفواصل؛ فارغ = كل النماذج في المجموعة")}</td></tr>
-                  <tr><td><code>allowed_ips</code></td><td>{text("IP 白名单，CIDR 格式；为空表示不限制", "IP allowlist, CIDR format; empty = unrestricted", "قائمة IP المسموحة، تنسيق CIDR؛ فارغ = غير مقيد")}</td></tr>
-                  <tr><td><code>remain_quota</code></td><td>{text("密钥剩余额度（quota 单位）；0 表示无限额", "Remaining key quota (quota units); 0 = unlimited", "الحصة المتبقية للمفتاح (وحدات الحصة)؛ 0 = غير محدود")}</td></tr>
+                  {policy.tokenFields.map(([field,description]) => <tr key={field}><td><code>{field}</code></td><td>{description}</td></tr>)}
                 </tbody>
               </table>
+              </div>
             </>
           )}
           {activeTab === "limits" && (
             <>
+              <div className="docs-callout"><p>{policy.defaults}</p></div>
               <p className="docs-lead">
                 {text(
                   "平台对账户和密钥设有配额与速率限制，防止滥用并保障公平使用。",
@@ -1043,7 +1045,7 @@ export default function DocsPage() {
                   "تفرض المنصة حدود الحصة والمعدل على الحسابات والمفاتيح لمنع الإساءة وضمان الاستخدام العادل.",
                 )}
               </p>
-              <div className="docs-table-wrap">
+              <div className="docs-table-wrap" role="region" tabIndex={0} aria-label={text("限流默认值", "Rate limit defaults", "حدود المعدل الافتراضية")}>
                 <table>
                   <thead>
                     <tr>
@@ -1053,15 +1055,12 @@ export default function DocsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr><td>{text("用户速率限制", "User rate limit", "حد معدل المستخدم")}</td><td className="mono">100 req/min</td><td>{text("每用户每分钟最大请求数", "Max requests per user per minute", "الحد الأقصى للطلبات لكل مستخدم في الدقيقة")}</td></tr>
-                    <tr><td>{text("密钥速率限制", "Key rate limit", "حد معدل المفتاح")}</td><td className="mono">50 req/min</td><td>{text("每密钥每分钟最大请求数", "Max requests per key per minute", "الحد الأقصى للطلبات لكل مفتاح في الدقيقة")}</td></tr>
-                    <tr><td>{text("模型速率限制", "Model rate limit", "حد معدل النموذج")}</td><td className="mono">500 req/min</td><td>{text("每模型每分钟最大请求数", "Max requests per model per minute", "الحد الأقصى للطلبات لكل نموذج في الدقيقة")}</td></tr>
-                    <tr><td>{text("单次预扣上限", "Per-request cap", "حد الخصم المسبق")}</td><td className="mono">2,000,000 quota</td><td>{text("单次请求预扣额度上限，防止恶意大请求", "Per-request pre-charge cap, prevents malicious large requests", "حد الخصم المسبق لكل طلب، يمنع الطلبات الكبيرة الخبيثة")}</td></tr>
+                    {policy.rateRows.map(([label,value,description]) => <tr key={label}><td>{label}</td><td className="mono">{value}</td><td>{description}</td></tr>)}
                   </tbody>
                 </table>
               </div>
               <div className="docs-callout">
-                <p>{text("超出速率限制返回 429（rate_limit_exceeded）。超出预扣上限返回 403（insufficient_quota）。", "Exceeding rate limits returns 429 (rate_limit_exceeded). Exceeding pre-charge cap returns 403 (insufficient_quota).", "تجاوز حدود المعدل يُرجع 429. تجاوز حد الخصم المسبق يُرجع 403.")}</p>
+                <div style={{ display: "grid", gap: 12, minWidth: 0 }}><p>{policy.rateHelp}</p><p>{policy.quota}</p></div>
               </div>
             </>
           )}
@@ -1089,7 +1088,7 @@ export default function DocsPage() {
                 },
                 {
                   q: text("充值后多久到账？", "How long does top-up take?", "كم يستغرق الشحن؟"),
-                  a: text("充值成功后即时到账。可在余额页查看最新余额。", "Credited immediately upon successful payment. Check the balance page for the latest amount.", "يُضاف فور نجاح الدفع. راجع صفحة الرصيد للحصول على أحدث مبلغ."),
+                  a: policy.wallet,
                 },
               ].map(({ q, a }, i) => (
                 <details key={i} className="docs-callout">
