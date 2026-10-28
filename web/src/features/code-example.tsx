@@ -21,6 +21,18 @@ export async function copyText(
   }
 }
 const samples: Record<string, string> = {
+  video: `# Use a video model allowed by your API key.
+# The returned task id confirms submission, not video completion.
+curl --fail --silent --show-error ${placeholders.apiBase}/video/generations \\
+  -H "Authorization: Bearer $VEYRA_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "sora-2",
+    "prompt": "A paper boat floating on a calm lake",
+    "seconds": 4,
+    "size": "1280x720",
+    "n": 1
+  }'`,
   transcription: `# Replace speech.mp3 with your audio file.
 # Use a transcription model allowed by your API key.
 curl --fail --silent --show-error ${placeholders.apiBase}/audio/transcriptions \\
@@ -45,6 +57,11 @@ curl --fail --silent --show-error ${placeholders.apiBase}/audio/speech \\
   "claude-code": `# Claude Code integration\nexport ANTHROPIC_BASE_URL="${placeholders.apiBase}"\nexport ANTHROPIC_AUTH_TOKEN="$VEYRA_API_KEY"\nexport ANTHROPIC_MODEL="claude-sonnet-4-20250514"\n\n# Then run Claude Code in your project directory\nclaude`,
   cursor: `# Cursor configuration\n# Settings → Models → OpenAI API Key\nOpenAI API Key: $VEYRA_API_KEY\nOpenAI Base URL: ${placeholders.apiBase}\n\n# Add authorized model identifiers in the Models tab:\n# gpt-4.1\n# claude-sonnet-4-20250514\n# gemini-2.5-pro`,
   gemini: `# Gemini native API\ncurl "${placeholders.apiBase.replace(/\/v1\/?$/, "")}/v1beta/models/gemini-2.5-pro:generateContent" \\\n  -H "x-goog-api-key: $VEYRA_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "contents": [{"parts": [{"text": "Hello"}]}]\n  }'`,
+};
+const sampleEndpoints: Record<string, string> = {
+  audio: "POST /v1/audio/speech",
+  transcription: "POST /v1/audio/transcriptions",
+  video: "POST /v1/video/generations",
 };
 function highlight(code: string) {
   const regex =
@@ -79,6 +96,7 @@ export function CodeExample() {
     gemini: i18n.language === "zh" ? "Gemini" : "Gemini",
     audio: t("codeAudio"),
     transcription: t("codeTranscription"),
+    video: t("codeVideo"),
   };
   return (
     <Tabs.Root
@@ -125,11 +143,7 @@ export function CodeExample() {
       <div className="code-caption">
         <span className="status-dot" />
         <span dir="ltr">
-          {language === "transcription"
-            ? "POST /v1/audio/transcriptions"
-            : language === "audio"
-              ? "POST /v1/audio/speech"
-              : "POST /v1/chat/completions"}
+          {sampleEndpoints[language] ?? "POST /v1/chat/completions"}
         </span>
       </div>
     </Tabs.Root>

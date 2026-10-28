@@ -220,6 +220,7 @@
   "codeNode": "Node.js",
   "codeAudio": "Speech (TTS)",
   "codeTranscription": "Transcription (STT)",
+  "codeVideo": "Video task",
   "pBrand": "MyAPIs",
   "pPlatform": "Infrastructure for intelligence",
   "pHome": "Homepage",
