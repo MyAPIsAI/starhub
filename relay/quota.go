@@ -111,18 +111,12 @@ func estimatePreConsume(pd *PriceData, promptEstimate, completionBudget int64) i
 			return q
 		}
 		// expression failed: fall back to token estimate
-		return tokenUsageQuota(pd, &Usage{
-			PromptTokens:     promptEstimate,
-			CompletionTokens: completionBudget,
-		})
+		return tokenReserveQuota(pd, promptEstimate, completionBudget)
 	}
 	if pd.IsPerCall() {
 		return priceUSDToQuota(pd, pd.ModelPriceUSD)
 	}
-	return tokenUsageQuota(pd, &Usage{
-		PromptTokens:     promptEstimate,
-		CompletionTokens: completionBudget,
-	})
+	return tokenReserveQuota(pd, promptEstimate, completionBudget)
 }
 
 // PreConsumeQuota reserves the estimated cost before the request leaves the

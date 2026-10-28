@@ -1,6 +1,9 @@
 package relay
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"starhub/common"
 	"starhub/relay/channel"
 )
@@ -8,6 +11,17 @@ import (
 type TaskBillingSnapshot struct {
 	PriceData PriceData           `json:"price_data"`
 	Estimate  channel.TaskPricing `json:"estimate"`
+}
+
+// Absolute token tariffs are not enabled for asynchronous tasks until every
+// persisted-snapshot consumer supports them. Reject before submitting upstream;
+// older workers would otherwise silently ignore the new PriceData field.
+func (s TaskBillingSnapshot) MarshalJSON() ([]byte, error) {
+	if s.PriceData.TokenRates.Valid() {
+		return nil, fmt.Errorf("independent token prices are not supported for asynchronous task snapshots")
+	}
+	type snapshot TaskBillingSnapshot
+	return json.Marshal(snapshot(s))
 }
 
 // TaskPricingQuota converts a platform's TaskPricing into quota (the

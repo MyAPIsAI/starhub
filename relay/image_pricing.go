@@ -163,7 +163,7 @@ func (b *ImageBill) PreQuota() int64 {
 		return b.quotaForCount(b.Count)
 	}
 	// Token-billed image models: the prompt drives the estimate.
-	return tokenUsageQuota(pd, &Usage{PromptTokens: promptEst})
+	return tokenReserveQuota(pd, promptEst, 0)
 }
 
 // SettleQuota prices the terminal bill. actualCount is the image count the
