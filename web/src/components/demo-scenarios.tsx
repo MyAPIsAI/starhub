@@ -35,7 +35,7 @@ export const demoScenarios = [
   },
   {
     id: "pricing",
-    path: "/console/model-pricing",
+    path: "/console/model-pricing?demo=1",
     Icon: CircleDollarSign,
     title: { zh: "运营改价", en: "Pricing operations", ar: "إدارة الأسعار" },
     body: {

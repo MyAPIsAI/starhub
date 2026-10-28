@@ -1,0 +1,45 @@
+.server-model-metadata .cm-heading p {
+  max-width: 850px;
+  line-height: 1.7;
+}
+.server-model-metadata > .cm-table {
+  max-height: 650px;
+}
+.server-model-metadata .cm-table td {
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+.server-model-metadata > .pricing-panel {
+  display: grid;
+  gap: 16px;
+}
+.sm-references {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+.sm-references > div {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.sm-references dd {
+  margin: 0;
+}
+.sm-review {
+  display: grid;
+  gap: 14px;
+}
+.sm-review p,
+.sm-review h3 {
+  margin: 0;
+  line-height: 1.7;
+}
+.server-model-dialog [data-overlay-body] {
+  overflow-wrap: anywhere;
+}
+.server-model-metadata [role="alert"],
+.server-model-dialog [role="alert"] {
+  color: var(--danger);
+}

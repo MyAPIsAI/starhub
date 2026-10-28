@@ -6,6 +6,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut, apiDelete } from "./http";
 import type { ModelItem } from "../../config/models";
+import { useSessionQueryIdentity } from "../system-access";
+import { readModelMetadataList, readModelMetadata } from "../model-metadata";
 
 // --- Backend response type (mirrors model/modelmeta.go:27-73) ---
 
@@ -31,19 +33,32 @@ export interface ModelMeta {
 
 const META_KEY = ["plaza-meta"] as const;
 
-export function usePlazaModelMeta() {
+export function usePlazaModelMeta(enabled = true) {
+  const identity = useSessionQueryIdentity();
   return useQuery({
-    queryKey: META_KEY,
-    queryFn: ({ signal }) => apiGet<ModelMeta[]>("/api/plaza/meta", signal),
+    queryKey: [...META_KEY, identity],
+    enabled,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      readModelMetadataList(await apiGet<unknown>("/api/plaza/meta", signal)),
   });
 }
 
 export function useUpsertModelMeta() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (meta: ModelMeta) => apiPut<ModelMeta>("/api/plaza/meta", meta),
-    onSuccess: () => {
+    mutationFn: async (meta: ModelMeta) =>
+      readModelMetadata(await apiPut<unknown>("/api/plaza/meta", meta)),
+    retry: false,
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: META_KEY });
+      for (const key of [
+        "plaza-models",
+        "plaza-model",
+        "plaza-filters",
+        "plaza-rank",
+      ])
+        void queryClient.invalidateQueries({ queryKey: [key] });
     },
   });
 }
@@ -52,9 +67,19 @@ export function useDeleteModelMeta() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (model: string) =>
-      apiDelete<{ model: string }>(`/api/plaza/meta/${encodeURIComponent(model)}`),
-    onSuccess: () => {
+      apiDelete<{ model: string }>(
+        `/api/plaza/meta/${encodeURIComponent(model)}`,
+      ),
+    retry: false,
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: META_KEY });
+      for (const key of [
+        "plaza-models",
+        "plaza-model",
+        "plaza-filters",
+        "plaza-rank",
+      ])
+        void queryClient.invalidateQueries({ queryKey: [key] });
     },
   });
 }
@@ -91,10 +116,16 @@ export function metaToModelItem(meta: ModelMeta): ModelItem {
       input_per_million_usd: meta.official_input_per_m?.toFixed(6) ?? "0",
       output_per_million_usd: meta.official_output_per_m?.toFixed(6) ?? "0",
       ...(meta.official_cache_read_per_m != null
-        ? { cache_read_per_million_usd: meta.official_cache_read_per_m.toFixed(6) }
+        ? {
+            cache_read_per_million_usd:
+              meta.official_cache_read_per_m.toFixed(6),
+          }
         : {}),
       ...(meta.official_cache_write_per_m != null
-        ? { cache_write_per_million_usd: meta.official_cache_write_per_m.toFixed(6) }
+        ? {
+            cache_write_per_million_usd:
+              meta.official_cache_write_per_m.toFixed(6),
+          }
         : {}),
     },
     protocols: [],
@@ -130,8 +161,12 @@ export function modelItemToMeta(model: ModelItem): ModelMeta {
     max_output: 0,
     official_input_per_m: toFloat(model.pricing.input_per_million_usd),
     official_output_per_m: toFloat(model.pricing.output_per_million_usd),
-    official_cache_read_per_m: toFloat(model.pricing.cache_read_per_million_usd),
-    official_cache_write_per_m: toFloat(model.pricing.cache_write_per_million_usd),
+    official_cache_read_per_m: toFloat(
+      model.pricing.cache_read_per_million_usd,
+    ),
+    official_cache_write_per_m: toFloat(
+      model.pricing.cache_write_per_million_usd,
+    ),
     official_per_request: null,
     per_request_usd: null,
     score: null,
