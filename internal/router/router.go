@@ -152,6 +152,7 @@ func New() http.Handler {
 							http.HandlerFunc(handler))))))
 	}
 	mux.Handle("POST /v1/chat/completions", relayChain(dto.InboundOpenAI, controller.RelayChat))
+	mux.Handle("POST /v1/responses", relayChain(dto.InboundOpenAI, controller.RelayResponses))
 	mux.Handle("POST /v1/messages", relayChain(dto.InboundClaude, controller.RelayClaudeChat))
 	mux.Handle("POST /v1/embeddings", relayChain(dto.InboundOpenAI, controller.RelayEmbeddings))
 	mux.Handle("POST /v1/rerank", relayChain(dto.InboundOpenAI, controller.RelayRerank))

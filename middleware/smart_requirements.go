@@ -24,6 +24,7 @@ type smartRequirements struct {
 var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,100}$`)
 
 var smartEndpointTags = map[string][]string{
+	"/v1/responses":         {"responses"},
 	"/v1/video/generations": {"video"}, "/v1/embeddings": {"embedding", "embeddings"},
 	"/v1/rerank": {"rerank"}, "/v1/audio/speech": {"audio", "tts"},
 	"/v1/audio/transcriptions": {"audio", "stt"}, "/v1/audio/translations": {"audio", "stt"},
@@ -51,6 +52,9 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 		req.capabilities = append(req.capabilities, capability)
 	}
 	if !multipart {
+		if r.URL.Path == "/v1/responses" {
+			return readResponsesRequirements(r, body, req)
+		}
 		var fields struct {
 			Messages []struct {
 				Role         string            `json:"role"`
@@ -169,6 +173,10 @@ func (req smartRequirements) compatible(name, group string, ch *model.Channel) (
 	}
 	adaptor, err := relay.GetChatAdaptor(ch.Type)
 	switch req.path {
+	case "/v1/responses":
+		if err == nil {
+			_, err = adaptor.ModeURL(ch.BaseURL, channel.RelayModeResponses)
+		}
 	case "/v1/video/generations":
 		_, err = relay.GetTaskAdaptor(ch.Type)
 	case "/v1/embeddings", "/v1/rerank", "/v1/audio/speech", "/v1/audio/transcriptions", "/v1/audio/translations", "/v1/images/generations", "/v1/images/edits":

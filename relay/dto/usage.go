@@ -12,7 +12,9 @@ package dto
 // completion_tokens) and drive the fine-grained settlement pricing.
 type Usage struct {
 	// RequestProtocol is gateway-owned metadata; upstream JSON cannot set it.
-	RequestProtocol         string                   `json:"-"`
+	RequestProtocol string `json:"-"`
+	// RequestStatus is a gateway-owned outcome, defaulting to success.
+	RequestStatus           int                      `json:"-"`
 	PromptTokens            int64                    `json:"prompt_tokens"`
 	CompletionTokens        int64                    `json:"completion_tokens"`
 	PromptTokensDetails     *PromptTokensDetails     `json:"prompt_tokens_details,omitempty"`

@@ -36,6 +36,8 @@ func (Adaptor) ChatURL(baseURL, _, _ string, _ bool) string {
 func (Adaptor) ModeURL(baseURL string, mode channel.RelayMode) (string, error) {
 	base := trimBase(baseURL)
 	switch mode {
+	case channel.RelayModeResponses:
+		return strings.TrimSuffix(base, "/v1") + "/v1/responses", nil
 	case channel.RelayModeEmbeddings:
 		return base + "/v1/embeddings", nil
 	case channel.RelayModeRerank:

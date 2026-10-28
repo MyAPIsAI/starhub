@@ -24,6 +24,7 @@ func TestSyncRelaySettlementRecoversWithoutCallingUpstream(t *testing.T) {
 		name, path, body, response string
 		handler                    http.HandlerFunc
 	}{
+		{"responses", "/v1/responses", `{"model":"gpt-4o","input":"Hello","max_output_tokens":8}`, `{"id":"resp_test","status":"completed","output":[],"usage":{"input_tokens":10,"output_tokens":2}}`, RelayResponses},
 		{"chat", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"Hello"}],"max_tokens":8}`, `{"id":"chatcmpl-test","object":"chat.completion","model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"Hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`, RelayChat},
 		{"embeddings", "/v1/embeddings", `{"model":"gpt-4o","input":"Hello"}`, `{"object":"list","data":[],"usage":{"prompt_tokens":12,"total_tokens":12}}`, RelayEmbeddings},
 		{"image", "/v1/images/generations", `{"model":"gpt-4o","prompt":"a cat","n":1}`, `{"data":[{"b64_json":"QUJD"}]}`, RelayImageGenerations},

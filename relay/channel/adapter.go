@@ -33,6 +33,7 @@ const (
 	RelayModeSTTTranslation
 	RelayModeImageGeneration
 	RelayModeImageEdit
+	RelayModeResponses
 )
 
 // ErrUnsupportedMode is returned by adaptors that do not serve a relay mode;

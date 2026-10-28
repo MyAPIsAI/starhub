@@ -200,6 +200,13 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 	if usage == nil {
 		usage = &Usage{}
 	}
+	status := usage.RequestStatus
+	if status == 0 {
+		status = 1
+	}
+	if status < 1 || status > 3 {
+		return errors.New("unsupported settlement log status")
+	}
 	actual := ComputeUsageQuota(pd, usage)
 	delta := actual - preQuota
 	originalModel := modelName
@@ -219,7 +226,7 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		Quota:            actual,
 		UsedChannels:     usedChannels,
 		DurationMs:       durationMs,
-		Status:           1, // success
+		Status:           status,
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
