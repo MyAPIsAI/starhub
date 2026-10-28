@@ -633,7 +633,7 @@ export default function ModelDetail() {
                               </td>
                               <td>
                                 {(() => {
-                                  const sqKey = `sq-${model.id}-${group.id}`;
+                                  const sqKey = `sq-${model.id}`;
                                   try {
                                     const raw = localStorage.getItem(sqKey);
                                     if (raw) {

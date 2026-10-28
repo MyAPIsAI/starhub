@@ -329,6 +329,24 @@ export default function ServiceQuality({
           : [],
     [qualityQuery.data, month, months],
   );
+  // Cache per-model SQ metrics so the model detail page can show a quick
+  // success/P95 summary without a separate fetch. Keyed by model id only,
+  // since the backend aggregates per model, not per model+group.
+  useEffect(() => {
+    const byModel = qualityQuery.data?.by_model;
+    if (!byModel) return;
+    try {
+      for (const m of byModel) {
+        localStorage.setItem(
+          `sq-${m.model}`,
+          JSON.stringify({
+            success: m.success_rate,
+            p95: m.p95_duration_ms,
+          }),
+        );
+      }
+    } catch { /* localStorage unavailable */ }
+  }, [qualityQuery.data]);
   const units = useMemo(
     () =>
       filterQualityUnits(allUnits, {
