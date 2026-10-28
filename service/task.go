@@ -79,8 +79,9 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 
 	resultMeta, _ := json.Marshal(result)
 	if dto.IsTerminalTaskStatus(result.Status) {
-		claimTerminalTask(task, result, string(resultMeta))
-		settleTask(ch, task, adaptor, result)
+		if claimTerminalTask(task, result, string(resultMeta)) {
+			settleTask(ch, task, adaptor, result)
+		}
 		return task, nil
 	}
 	if err := model.UpdateTaskProgress(task.ID, result.Status, result.Progress, string(resultMeta)); err != nil {
@@ -94,11 +95,12 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 
 // claimTerminalTask flips the task to a terminal status exactly once and
 // mirrors the final state onto the in-memory task for the caller's view.
-func claimTerminalTask(task *model.Task, result *dto.TaskResult, resultMeta string) {
+// Only the caller that wins the claim may settle the task.
+func claimTerminalTask(task *model.Task, result *dto.TaskResult, resultMeta string) bool {
 	claimed, err := model.ClaimTaskFinalize(task.ID, result.Status, result.FailReason, resultMeta)
 	if err != nil {
 		log.Printf("finalize task %d failed: %v", task.ID, err)
-		return
+		return false
 	}
 	if claimed {
 		task.Status = result.Status
@@ -109,6 +111,7 @@ func claimTerminalTask(task *model.Task, result *dto.TaskResult, resultMeta stri
 		}
 		task.CompleteTime = time.Now().Unix()
 	}
+	return claimed
 }
 
 // settleTask prices the terminal task (AdjustBillingOnComplete) and
