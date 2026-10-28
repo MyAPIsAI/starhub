@@ -30,6 +30,9 @@ func TestFinanceRoleAssignmentIsRootOnlyAndRevocable(t *testing.T) {
 	if err != nil || got.Role != common.RoleFinance || got.IsAdmin() {
 		t.Fatalf("finance became admin: %+v %v", got, err)
 	}
+	if res := doRequest(env.base, "GET", "/api/finance/summary?days=7", userSession, nil); res.Status != 200 {
+		t.Fatalf("finance role cannot read summary: %d %s", res.Status, res.Body)
+	}
 	for _, api := range []string{"/api/user", "/api/channel", "/api/option", "/api/audit"} {
 		if res := doRequest(env.base, "GET", api, userSession, nil); res.Status != 403 {
 			t.Fatalf("finance read admin API %s: %d %s", api, res.Status, res.Body)
@@ -44,6 +47,9 @@ func TestFinanceRoleAssignmentIsRootOnlyAndRevocable(t *testing.T) {
 	got, _ = model.GetUserByID(user.ID)
 	if got.Role != common.RoleUser || got.Quota != 1000 {
 		t.Fatalf("revocation changed quota or retained role: %+v", got)
+	}
+	if res := doRequest(env.base, "GET", "/api/finance/summary", userSession, nil); res.Status != 403 {
+		t.Fatalf("revoked role still reads finance: %d %s", res.Status, res.Body)
 	}
 	var audits []model.AuditLog
 	if err := model.DB.Where("path = ? AND user_id = ? AND status = ?", path, env.rootID, 200).Find(&audits).Error; err != nil || len(audits) != 2 {
