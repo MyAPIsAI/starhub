@@ -50,6 +50,9 @@ func TestDistributeMultipartModel(t *testing.T) {
 	if err := model.InsertChannel(&model.Channel{Name: "multipart", Models: "whisper-1", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1}); err != nil {
 		t.Fatal(err)
 	}
+	if err := model.UpsertModelMeta(&model.ModelMeta{Model: "whisper-1", Tags: "stt"}); err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name, requested, group, limits string
 		malformed                      bool

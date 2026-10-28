@@ -69,6 +69,13 @@ func TestRelayMultipartModelReachesUpstream(t *testing.T) {
 				}
 			}
 			user := newUser(t, "multipart-review", common.RoleUser, 1000000)
+			tag := "stt"
+			if tc.fileField == "image" {
+				tag = "image"
+			}
+			if err := model.UpsertModelMeta(&model.ModelMeta{Model: tc.actual, Tags: tag}); err != nil {
+				t.Fatal(err)
+			}
 			token := mustToken(t, user.ID, 1000000)
 			fileBytes := append([]byte{0, 255, 13, 10}, bytes.Repeat([]byte("myapis-auto"), 1000)...)
 			body, contentType, err := common.BuildMultipartForm(&common.MultipartForm{

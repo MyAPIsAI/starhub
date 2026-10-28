@@ -10,6 +10,7 @@ import (
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
+	"strings"
 )
 
 type smartRequirements struct {
@@ -22,6 +23,13 @@ type smartRequirements struct {
 }
 
 var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,100}$`)
+
+var smartEndpointTags = map[string][]string{
+	"/v1/video/generations": {"video"}, "/v1/embeddings": {"embedding", "embeddings"},
+	"/v1/rerank": {"rerank"}, "/v1/audio/speech": {"audio", "tts"},
+	"/v1/audio/transcriptions": {"audio", "stt"}, "/v1/audio/translations": {"audio", "stt"},
+	"/v1/images/generations": {"image"}, "/v1/images/edits": {"image"},
+}
 
 func routingHeader(r *http.Request, name string) string {
 	if value := r.Header.Get("X-MyAPIs-" + name); value != "" {
@@ -116,10 +124,18 @@ func (req smartRequirements) compatible(name, group string, ch *model.Channel) (
 	if err != nil {
 		return false, err
 	}
-	// Embedding and rerank candidates need explicit capability metadata; the
-	// basic-text fallback cannot establish support for these endpoints.
-	if (req.path == "/v1/embeddings" || req.path == "/v1/rerank") && (!found || len(meta.TagList()) == 0) {
-		return false, nil
+	// An adaptor serving an endpoint does not establish a model's capability.
+	if tags := smartEndpointTags[req.path]; len(tags) > 0 {
+		if !found {
+			return false, nil
+		}
+		matched := false
+		for _, tag := range tags {
+			matched = matched || modelInList(tag, meta.TagList())
+		}
+		if !matched {
+			return false, nil
+		}
 	}
 	if found {
 		if len(meta.Groups()) > 0 && !modelInList(group, meta.Groups()) {
@@ -131,27 +147,25 @@ func (req smartRequirements) compatible(name, group string, ch *model.Channel) (
 		if meta.ContextLength > 0 && (req.input > meta.ContextLength || req.output > meta.ContextLength-req.input) {
 			return false, nil
 		}
-		categories := map[string][]string{
-			"/v1/video/generations": {"video"}, "/v1/embeddings": {"embedding", "embeddings"},
-			"/v1/rerank": {"rerank"}, "/v1/audio/speech": {"audio", "tts"},
-			"/v1/audio/transcriptions": {"audio", "stt"}, "/v1/audio/translations": {"audio", "stt"},
-			"/v1/images/generations": {"image"}, "/v1/images/edits": {"image"},
-		}
-		if tags := categories[req.path]; len(tags) > 0 && len(meta.TagList()) > 0 {
-			matched := false
-			for _, tag := range tags {
-				matched = matched || modelInList(tag, meta.TagList())
-			}
-			if !matched {
-				return false, nil
-			}
-		}
 	}
 	for _, capability := range req.capabilities {
 		if capability == "text" {
 			continue
 		}
-		if !found || !modelInList(capability, meta.TagList()) {
+		accepted := []string{capability}
+		if capability == "embedding" {
+			accepted = []string{"embedding", "embeddings"}
+		}
+		if capability == "audio" && strings.HasPrefix(req.path, "/v1/audio/") {
+			accepted = smartEndpointTags[req.path]
+		}
+		matched := false
+		if found {
+			for _, tag := range accepted {
+				matched = matched || modelInList(tag, meta.TagList())
+			}
+		}
+		if !matched {
 			return false, nil
 		}
 	}

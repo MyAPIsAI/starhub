@@ -50,6 +50,9 @@ func TestImageModelAttribution(t *testing.T) {
 				if err := model.InsertChannel(ch); err != nil {
 					t.Fatal(err)
 				}
+				if err := model.UpsertModelMeta(&model.ModelMeta{Model: "gpt-image-1", Tags: "image"}); err != nil {
+					t.Fatal(err)
+				}
 				user := newUser(t, "image-review", common.RoleUser, 1000000)
 				token := mustToken(t, user.ID, 1000000)
 				handler := middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayImageGenerations)))
