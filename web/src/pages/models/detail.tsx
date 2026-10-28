@@ -631,18 +631,6 @@ export default function ModelDetail() {
                                   </span>
                                 )}
                               </td>
-                              <td>{model.pricing.group_ratio}×</td>
-                              <td>
-                                {(() => {
-                                  const tierDef = placeholders.tiers.find((t) => t.id === group.id);
-                                  if (!tierDef) return "—";
-                                  return (
-                                    <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
-                                      {tierDef.success}% / {tierDef.p95}ms
-                                    </span>
-                                  );
-                                })()}
-                              </td>
                               <td>
                                 {(() => {
                                   const sqKey = `sq-${model.id}-${group.id}`;
@@ -673,6 +661,18 @@ export default function ModelDetail() {
                                   );
                                 })()}
                               </td>
+                              <td>
+                                {(() => {
+                                  const tierDef = placeholders.tiers.find((t) => t.id === group.id);
+                                  if (!tierDef) return "—";
+                                  return (
+                                    <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
+                                      {tierDef.success}% / {tierDef.p95}ms
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                              <td>{model.pricing.group_ratio}×</td>
                             </tr>
                           ),
                         )}
