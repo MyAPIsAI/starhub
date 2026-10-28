@@ -221,6 +221,7 @@
   "codeAudio": "تحويل النص إلى كلام",
   "codeTranscription": "تحويل الكلام إلى نص",
   "codeVideo": "مهمة فيديو",
+  "codeVideoStatus": "حالة الفيديو",
   "pBrand": "MyAPIs",
   "pPlatform": "بنية تحتية للذكاء",
   "pHome": "الرئيسية",

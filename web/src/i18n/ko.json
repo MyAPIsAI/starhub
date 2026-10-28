@@ -221,6 +221,7 @@
   "codeAudio": "음성 합성 (TTS)",
   "codeTranscription": "음성 인식 (STT)",
   "codeVideo": "동영상 작업",
+  "codeVideoStatus": "동영상 상태",
   "pBrand": "MyAPIs",
   "pPlatform": "Infrastructure for intelligence",
   "pHome": "Homepage",

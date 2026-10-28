@@ -21,6 +21,14 @@ export async function copyText(
   }
 }
 const samples: Record<string, string> = {
+  "video-status": `# Set TASK_ID to the gateway task id returned by video submission.
+# Use the API key that submitted the task.
+curl --fail --silent --show-error --request GET \\
+  "${placeholders.apiBase}/video/generations/\${TASK_ID:?Set TASK_ID to the returned task id}" \\
+  -H "Authorization: Bearer $VEYRA_API_KEY"
+
+# Check status and progress; outputs/video_url contain available results.
+# A failed task can include fail_reason. Query again while it is in progress.`,
   video: `# Use a video model allowed by your API key.
 # The returned task id confirms submission, not video completion.
 curl --fail --silent --show-error ${placeholders.apiBase}/video/generations \\
@@ -62,6 +70,7 @@ const sampleEndpoints: Record<string, string> = {
   audio: "POST /v1/audio/speech",
   transcription: "POST /v1/audio/transcriptions",
   video: "POST /v1/video/generations",
+  "video-status": "GET /v1/video/generations/{id}",
 };
 function highlight(code: string) {
   const regex =
@@ -97,6 +106,7 @@ export function CodeExample() {
     audio: t("codeAudio"),
     transcription: t("codeTranscription"),
     video: t("codeVideo"),
+    "video-status": t("codeVideoStatus"),
   };
   return (
     <Tabs.Root

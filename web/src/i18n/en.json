@@ -221,6 +221,7 @@
   "codeAudio": "Speech (TTS)",
   "codeTranscription": "Transcription (STT)",
   "codeVideo": "Video task",
+  "codeVideoStatus": "Video status",
   "pBrand": "MyAPIs",
   "pPlatform": "Infrastructure for intelligence",
   "pHome": "Homepage",
