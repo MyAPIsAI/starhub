@@ -1,19 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut, apiRequest } from "./http";
 import type { ResourcePlacement, ResourceSnapshot } from "../../config/models";
+import { parseResourceCatalog } from "../resource-catalog";
 import {
-  parseResourceCatalog,
-  type ResourceCatalog,
-} from "../resource-catalog";
-import { useProductPreview } from "../product-preview";
-import { ROLE_ADMIN, ROLE_ROOT, useSystemAccess } from "../system-access";
+  ROLE_ADMIN,
+  ROLE_ROOT,
+  useSessionQueryIdentity,
+  useSystemAccess,
+} from "../system-access";
 
 export function useResourceCatalog() {
-  const account = useProductPreview((s) => s.user.id);
+  const identity = useSessionQueryIdentity();
+  const account = useSystemAccess((s) => s.session.accountId);
   const role = useSystemAccess((s) => s.role);
   return useQuery({
-    queryKey: ["resource-catalog", account],
-    enabled: role === ROLE_ADMIN || role === ROLE_ROOT,
+    queryKey: ["resource-catalog", identity],
+    enabled: account !== null && (role === ROLE_ADMIN || role === ROLE_ROOT),
+    retry: false,
     queryFn: async ({ signal }) =>
       parseResourceCatalog(await apiGet<unknown>("/api/resource", signal)),
   });
@@ -21,7 +24,6 @@ export function useResourceCatalog() {
 
 export function useResourceMutation() {
   const client = useQueryClient();
-  const account = useProductPreview((s) => s.user.id);
   return useMutation({
     retry: false,
     mutationFn: async (
@@ -43,21 +45,19 @@ export function useResourceMutation() {
               },
         ),
       ),
-    onSuccess: (data: ResourceCatalog) => {
-      client.setQueryData(["resource-catalog", account], data);
-      client.invalidateQueries({ queryKey: ["admin-audit"] });
-    },
-    onError: () => {
-      void client.invalidateQueries({
-        queryKey: ["resource-catalog", account],
-      });
+    onSettled: () => {
+      for (const key of [
+        "resource-catalog",
+        "resource-publication-context",
+        "admin-audit",
+      ])
+        void client.invalidateQueries({ queryKey: [key] });
     },
   });
 }
 
 export function useRegionMutation() {
   const client = useQueryClient();
-  const account = useProductPreview((s) => s.user.id);
   return useMutation({
     retry: false,
     mutationFn: async (
@@ -83,14 +83,13 @@ export function useRegionMutation() {
           },
         ),
       ),
-    onSuccess: (data: ResourceCatalog) => {
-      client.setQueryData(["resource-catalog", account], data);
-      client.invalidateQueries({ queryKey: ["admin-audit"] });
-    },
-    onError: () => {
-      void client.invalidateQueries({
-        queryKey: ["resource-catalog", account],
-      });
+    onSettled: () => {
+      for (const key of [
+        "resource-catalog",
+        "resource-publication-context",
+        "admin-audit",
+      ])
+        void client.invalidateQueries({ queryKey: [key] });
     },
   });
 }

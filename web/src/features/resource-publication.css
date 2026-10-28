@@ -1,0 +1,137 @@
+.resource-publication {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  scroll-margin-top: 80px;
+}
+.resource-publication header,
+.rp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.resource-publication h2 {
+  margin: 0 0 8px;
+  font-size: 21px;
+}
+.resource-publication h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.resource-publication p,
+.resource-publication aside,
+.rp-issues {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.resource-publication aside {
+  padding: 14px;
+  border-inline-start: 3px solid var(--border);
+  background: var(--bg);
+  border-radius: 8px;
+}
+.rp-versions {
+  font-size: 13px;
+  color: var(--muted);
+}
+.rp-search {
+  display: grid;
+  gap: 8px;
+  max-width: 440px;
+  font-size: 13px;
+}
+.rp-search input,
+.rp-table select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.rp-table {
+  min-width: 0;
+  width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.rp-table:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.rp-table table {
+  width: 100%;
+  min-width: 590px;
+  border-collapse: collapse;
+  text-align: start;
+  font-size: 13px;
+}
+.rp-table th,
+.rp-table td {
+  padding: 13px;
+  text-align: start;
+  border-block-end: 1px solid var(--border);
+  max-width: 440px;
+  overflow-wrap: anywhere;
+}
+.rp-table th {
+  color: var(--muted);
+  background: var(--bg);
+  font-weight: 500;
+}
+.rp-table td code,
+.rp-issues code {
+  display: block;
+  direction: ltr;
+  unicode-bidi: plaintext;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--muted);
+  margin-block-start: 6px;
+}
+.rp-table select {
+  max-width: 480px;
+}
+.rp-result {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.rp-result-status {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.rp-pairs {
+  min-width: 0;
+}
+.rp-issues {
+  display: grid;
+  gap: 12px;
+  padding-inline-start: 24px;
+}
+.rp-issues li {
+  padding: 8px;
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .resource-publication {
+    padding: 14px;
+  }
+  .resource-publication header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .rp-actions {
+    justify-content: flex-start;
+  }
+}

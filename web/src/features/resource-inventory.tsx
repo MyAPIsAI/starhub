@@ -3,7 +3,12 @@ import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { useResourceCatalog, useResourceMutation } from "../lib/api/resource";
-import { ROLE_ADMIN, ROLE_ROOT, useSystemAccess } from "../lib/system-access";
+import {
+  ROLE_ADMIN,
+  ROLE_ROOT,
+  useSessionQueryIdentity,
+  useSystemAccess,
+} from "../lib/system-access";
 import {
   parseResourceSnapshot,
   resourceImportDiff,
@@ -11,6 +16,7 @@ import {
 import type { ResourceSnapshot } from "../config/models";
 import { useSettingsText } from "./settings-text";
 import "./resource-inventory.css";
+import { ResourcePublication } from "./resource-publication";
 
 type Draft =
   | {
@@ -29,6 +35,11 @@ type Draft =
     };
 
 export function ResourceInventory() {
+  const identity = useSessionQueryIdentity();
+  return <ResourceInventoryView key={JSON.stringify(identity)} />;
+}
+
+function ResourceInventoryView() {
   const { text } = useSettingsText();
   const role = useSystemAccess((s) => s.role);
   const query = useResourceCatalog();
@@ -211,6 +222,15 @@ export function ResourceInventory() {
             }
           >
             {text("导入快照", "Import snapshot", "استيراد لقطة")}
+          </Button>
+          <Button asChild>
+            <a href="#gateway-publication">
+              {text(
+                "网关发布预览",
+                "Gateway publication preview",
+                "معاينة نشر البوابة",
+              )}
+            </a>
           </Button>
           <Button asChild>
             <Link to="/admin?tab=resources#regions">
@@ -499,6 +519,10 @@ export function ResourceInventory() {
           )}
         </>
       )}
+      <ResourcePublication
+        catalog={data}
+        refreshCatalog={() => query.refetch()}
+      />
       <Modal
         open={Boolean(draft)}
         onOpenChange={(open) => !open && close()}
