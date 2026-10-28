@@ -157,6 +157,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		Action:         taskReq.Action,
 		Status:         dto.TaskStatusSubmitted,
 		Model:          taskReq.Model,
+		RequestedModel: flow.req.requestedModel,
 		UserID:         flow.req.userID,
 		TokenID:        flow.req.tokenID,
 		TokenName:      flow.req.tokenName,

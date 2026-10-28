@@ -99,3 +99,31 @@ func TestLogRequestedModelMigrationPreservesHistory(t *testing.T) {
 		t.Fatalf("migration changed historical attribution or charge: %+v", got)
 	}
 }
+
+func TestTaskRequestedModelMigrationPreservesHistory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy-task-model.db")
+	if err := InitDB(path); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = CloseDB() })
+	entry := &Task{TaskID: "legacy-video", Model: "sora-2", Quota: 80000, RequestMeta: `{"model":"sora-2","seconds":8,"n":2}`, PricingMeta: `{"estimate":{"units":16}}`}
+	if err := InsertTask(entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Migrator().DropColumn(&Task{}, "RequestedModel"); err != nil {
+		t.Fatal(err)
+	}
+	if err := CloseDB(); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitDB(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := GetTaskByID(entry.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *got != *entry {
+		t.Fatalf("migration changed historical task: got %+v, want %+v", got, entry)
+	}
+}
