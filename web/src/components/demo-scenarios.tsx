@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { usePreferences } from "../lib/preferences";
 import { writtenLanguage } from "../lib/localize";
 import { useProductPreview } from "../lib/product-preview";
-import { useSystemAccess, systemRoleForScenario } from "../lib/system-access";
+import { isAdmin, useSystemAccess } from "../lib/system-access";
 import "./demo-scenarios.css";
 
 export const demoScenarios = [
@@ -39,9 +39,9 @@ export const demoScenarios = [
     Icon: CircleDollarSign,
     title: { zh: "运营改价", en: "Pricing operations", ar: "إدارة الأسعار" },
     body: {
-      zh: "预览客户影响 → 发布演示价格 → 新旧调用费用对照。",
-      en: "Preview customer impact, publish demo rates and compare old and new calls.",
-      ar: "عاين الأثر وانشر أسعاراً تجريبية وقارن الطلبات السابقة والجديدة.",
+      zh: "管理员定价入口。保存会同步服务器倍率；演示场景不授予管理权限。",
+      en: "Administrator pricing entry. Saving syncs server ratios; Demo scenarios do not grant management access.",
+      ar: "مدخل تسعير المسؤول. يُزامن الحفظ معاملات الخادم؛ لا تمنح السيناريوهات صلاحيات إدارية.",
     },
   },
 ] as const;
@@ -50,24 +50,26 @@ export function DemoScenarios({ onSelect }: { onSelect?: () => void }) {
   const language = usePreferences((s) => s.language);
   const resetScenario = useProductPreview((s) => s.resetScenario);
   const navigate = useNavigate();
+  const role = useSystemAccess((s) => s.role);
+  const authenticated = useSystemAccess((s) => s.session.accountId !== null);
   return (
     <div className="demo-scenario-list">
       <p className="demo-scenario-note">
         {language === "zh"
-          ? "选择场景会重置当前浏览器的演示业务与价格。场景中可自由操作，随时通过右下角入口重置。"
+          ? "选择场景会重置本地演示数据与价格，不更改已登录账号或角色。真实工作台需要服务器登录，管理入口需要实际管理员权限。"
           : language === "ar"
-            ? "اختيار سيناريو يعيد بيانات العرض والأسعار في هذا المتصفح. يمكنك العمل بحرية وإعادة الضبط من زر العرض."
-            : "Selecting a scenario resets this browser's demo data and prices. Explore freely and reset from the demo control."}
+            ? "اختيار السيناريو يعيد بيانات العرض والأسعار المحلية دون تغيير الحساب أو الدور. تتطلب اللوحة جلسة خادم وتتطلب الإدارة صلاحية مسؤول فعلية."
+            : "Selecting a scenario resets local Demo data and prices without changing the signed-in account or role. The console requires a server login; management requires an actual administrator."}
       </p>
       {demoScenarios.map(({ id, path, Icon, title, body }) => (
         <button
           key={id}
           className="demo-scenario-card"
+          disabled={id === "pricing" && !isAdmin(role)}
           onClick={() => {
-            useSystemAccess.getState().setRole(systemRoleForScenario(id));
             resetScenario(id);
             onSelect?.();
-            navigate(path);
+            navigate(authenticated ? path : "/login");
           }}
         >
           <Icon size={22} />

@@ -735,10 +735,10 @@ export default function BrandHome() {
         }
         description={
           language === "zh"
-            ? "所有调用、价格与支付状态均为模拟。"
+            ? "仅重置本地演示数据；服务器账号、权限和真实调用仍由后端控制。"
             : language === "ar"
-              ? "جميع الطلبات والأسعار والمدفوعات محاكاة."
-              : "All calls, prices and payment states are simulated."
+              ? "تعيد السيناريوهات بيانات العرض المحلية؛ تظل الحسابات والصلاحيات والطلبات الفعلية خاضعة للخادم."
+              : "Scenarios reset local Demo data; server accounts, permissions and live API calls remain controlled by the backend."
         }
       >
         <DemoScenarios onSelect={() => setScenariosOpen(false)} />

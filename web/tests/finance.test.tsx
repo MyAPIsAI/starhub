@@ -100,7 +100,7 @@ describe("finance precision and role boundaries", () => {
     "allows exact server finance roles only: %s",
     (role) => {
       expect(canReadFinance(role)).toBe([5, 10, 100].includes(role));
-      if (role === 5) expect(isAdmin(role)).toBe(false);
+      expect(isAdmin(role)).toBe([10, 100].includes(role));
     },
   );
   it("never renders cached finance figures for an unauthorized role", () => {

@@ -20,8 +20,12 @@
   text-align: start;
   cursor: pointer;
 }
-.demo-scenario-card:hover {
+.demo-scenario-card:hover:not(:disabled) {
   border-color: var(--brand);
+}
+.demo-scenario-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 .demo-scenario-card > svg:first-child {
   color: var(--brand);

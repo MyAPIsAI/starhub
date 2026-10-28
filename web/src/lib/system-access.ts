@@ -37,7 +37,8 @@ export function useSessionQueryIdentity() {
 // isAdmin reports whether role carries management privileges. This
 // is the single source of truth for admin-only UI; the backend still
 // enforces authorization on every write.
-export const isAdmin = (role: SystemRole): boolean => role >= ROLE_ADMIN;
+export const isAdmin = (role: SystemRole): boolean =>
+  role === ROLE_ADMIN || role === ROLE_ROOT;
 export const canReadFinance = (role: SystemRole): boolean =>
   role === ROLE_FINANCE || role === ROLE_ADMIN || role === ROLE_ROOT;
 
@@ -67,6 +68,3 @@ export const useSystemAccess = create<{
       },
     })),
 }));
-
-export const systemRoleForScenario = (scenario: string): SystemRole =>
-  scenario === "pricing" ? ROLE_ADMIN : ROLE_USER;

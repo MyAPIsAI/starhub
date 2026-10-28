@@ -1,5 +1,6 @@
 import type { PricingAttributes } from "../config/models";
 import { create } from "zustand";
+import { useSystemAccess } from "./system-access";
 import { DEMO_ACCOUNT_PROFILE, accountIdForLegacy } from "./account-identity";
 import { writtenLanguage } from "./localize";
 import { demoAuth, type DemoIdentity } from "./demo-auth";
@@ -1936,6 +1937,9 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   resetScenario: (scenario) => {
+    const session = useSystemAccess.getState().session;
+    const authenticated = session.accountId !== null;
+    const confirmedGuest = session.epoch > 0 && !authenticated;
     try {
       for (const name of [
         "veyra-key-draft-v2",
@@ -2000,22 +2004,24 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
               description: "演示场景初始赠送余额（模拟资金）",
             },
           ],
-      user: {
-        ...s.user,
-        ...DEMO_ACCOUNT_PROFILE,
-        emailVerified: undefined,
-        ...(s.user.id === DEMO_ACCOUNT_PROFILE.id
-          ? profileMetadata(s.user)
-          : (s.accountProfiles[DEMO_ACCOUNT_PROFILE.id] ?? {
-              createdAt: undefined,
-              passwordUpdatedAt: undefined,
-              securityEvents: [],
-              sessions: [currentDemoSession()],
-            })),
-        isLoggedIn: true,
-        onboardingCompleted: !isFirst,
-        accountStatus: "normal",
-      },
+      user: authenticated
+        ? s.user
+        : {
+            ...s.user,
+            ...DEMO_ACCOUNT_PROFILE,
+            emailVerified: undefined,
+            ...(s.user.id === DEMO_ACCOUNT_PROFILE.id
+              ? profileMetadata(s.user)
+              : (s.accountProfiles[DEMO_ACCOUNT_PROFILE.id] ?? {
+                  createdAt: undefined,
+                  passwordUpdatedAt: undefined,
+                  securityEvents: [],
+                  sessions: [currentDemoSession()],
+                })),
+            isLoggedIn: !confirmedGuest,
+            onboardingCompleted: !isFirst,
+            accountStatus: "normal",
+          },
       demoMode: {
         accountState: isFirst ? "new" : "mature",
         balanceState: isFirst ? "zero" : "normal",
