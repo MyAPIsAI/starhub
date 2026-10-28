@@ -14,15 +14,16 @@ import (
 )
 
 type serviceGroupRequest struct {
-	GroupID          string          `json:"group_id"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description"`
-	Enabled          *bool           `json:"enabled"`
-	Visibility       string          `json:"visibility"`
-	AccountIDs       []string        `json:"account_ids"`
-	Multiplier       string          `json:"multiplier"`
-	ExpectedGroupID  json.RawMessage `json:"expected_group_id"`
-	ExpectedRevision json.RawMessage `json:"expected_revision"`
+	GroupID               string          `json:"group_id"`
+	Name                  string          `json:"name"`
+	Description           string          `json:"description"`
+	Enabled               *bool           `json:"enabled"`
+	Visibility            string          `json:"visibility"`
+	AccountIDs            []string        `json:"account_ids"`
+	Multiplier            string          `json:"multiplier"`
+	ExpectedGroupID       json.RawMessage `json:"expected_group_id"`
+	ExpectedRevision      json.RawMessage `json:"expected_revision"`
+	ExpectedOptionVersion json.RawMessage `json:"expected_option_version"`
 }
 
 // ListServiceGroups returns all service group configs.
@@ -39,6 +40,20 @@ func ListServiceGroups(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, data)
 }
 
+func GetServiceGroupCatalog(w http.ResponseWriter, r *http.Request) {
+	catalog, err := model.ReadServiceGroupCatalog(r.Context())
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "service group configuration is unavailable")
+		return
+	}
+	groups := make([]map[string]any, 0, len(catalog.Groups))
+	for i := range catalog.Groups {
+		groups = append(groups, serviceGroupJSON(&catalog.Groups[i]))
+	}
+	common.ApiSuccess(w, map[string]any{"groups": groups, "group_ratios": catalog.GroupRatios, "option_version": catalog.OptionVersion,
+		"loaded_option_version": model.LoadedOptionVersion(), "revision_guards": true, "option_version_guard": true})
+}
+
 // UpsertServiceGroup creates or updates a service group. It also syncs
 // the group_ratio option so relay billing picks up the multiplier.
 func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +65,13 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 	if len(req.ExpectedGroupID) != 0 || len(req.ExpectedRevision) != 0 {
 		if json.Unmarshal(req.ExpectedGroupID, &expectedID) != nil || json.Unmarshal(req.ExpectedRevision, &expectedRevision) != nil || expectedID == nil || expectedRevision == nil {
 			common.ApiError(w, http.StatusBadRequest, "expected_group_id and expected_revision must be supplied together as integers")
+			return
+		}
+	}
+	var expectedOptionVersion *int64
+	if len(req.ExpectedOptionVersion) != 0 {
+		if expectedID == nil || json.Unmarshal(req.ExpectedOptionVersion, &expectedOptionVersion) != nil || expectedOptionVersion == nil {
+			common.ApiError(w, http.StatusBadRequest, "expected_option_version requires explicit group identity and revision guards")
 			return
 		}
 	}
@@ -98,7 +120,9 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
 	// Legacy callers may omit guards; their writes still advance the metadata revision.
-	if expectedID != nil {
+	if expectedOptionVersion != nil {
+		err = model.SaveServiceGroupAndRatioIfState(r.Context(), sgc, actorID, *expectedID, *expectedRevision, *expectedOptionVersion)
+	} else if expectedID != nil {
 		err = model.SaveServiceGroupAndRatioIfRevision(r.Context(), sgc, actorID, *expectedID, *expectedRevision)
 	} else {
 		err = model.SaveServiceGroupAndRatio(r.Context(), sgc, actorID)
@@ -125,8 +149,9 @@ func DeleteServiceGroup(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 {
 		var expected struct {
-			GroupID  *int64 `json:"expected_group_id"`
-			Revision *int64 `json:"expected_revision"`
+			GroupID       *int64          `json:"expected_group_id"`
+			Revision      *int64          `json:"expected_revision"`
+			OptionVersion json.RawMessage `json:"expected_option_version"`
 		}
 		if !decodeResourceBody(w, r, &expected) {
 			return
@@ -135,7 +160,16 @@ func DeleteServiceGroup(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, http.StatusBadRequest, "expected_group_id and expected_revision are required in a delete body")
 			return
 		}
-		err = model.DeleteServiceGroupAndRatioIfRevision(r.Context(), groupID, actorID, *expected.GroupID, *expected.Revision)
+		if len(expected.OptionVersion) != 0 {
+			var version *int64
+			if json.Unmarshal(expected.OptionVersion, &version) != nil || version == nil {
+				common.ApiError(w, http.StatusBadRequest, "expected_option_version must be an integer")
+				return
+			}
+			err = model.DeleteServiceGroupAndRatioIfState(r.Context(), groupID, actorID, *expected.GroupID, *expected.Revision, *version)
+		} else {
+			err = model.DeleteServiceGroupAndRatioIfRevision(r.Context(), groupID, actorID, *expected.GroupID, *expected.Revision)
+		}
 	} else {
 		err = model.DeleteServiceGroupAndRatio(r.Context(), groupID, actorID)
 	}
@@ -154,6 +188,8 @@ func serviceGroupConfigurationError(w http.ResponseWriter, err error) {
 	status, message := http.StatusInternalServerError, "service group configuration could not be changed"
 	switch {
 	case errors.Is(err, model.ErrServiceGroupConflict):
+		status, message = http.StatusConflict, err.Error()
+	case errors.Is(err, model.ErrOptionVersionConflict):
 		status, message = http.StatusConflict, err.Error()
 	case errors.Is(err, model.ErrServiceGroupNotFound):
 		status, message = http.StatusNotFound, err.Error()

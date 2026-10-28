@@ -141,6 +141,7 @@ func New() http.Handler {
 	// Service group management (admin only). The multiplier is synced
 	// to the group_ratio option so relay billing picks up changes.
 	mux.Handle("GET /api/service-group", middleware.AdminAuth(http.HandlerFunc(controller.ListServiceGroups)))
+	mux.Handle("GET /api/service-group/configuration", middleware.AdminAuth(http.HandlerFunc(controller.GetServiceGroupCatalog)))
 	mux.Handle("GET /api/service-group/", middleware.AdminAuth(http.HandlerFunc(controller.ListServiceGroups)))
 	mux.Handle("PUT /api/service-group", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertServiceGroup))))
 	mux.Handle("PUT /api/service-group/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertServiceGroup))))

@@ -20,7 +20,10 @@ const maxServiceGroupRevision int64 = 1<<53 - 1
 var ErrServiceGroupConflict = errors.New("service group identity or revision changed")
 var ErrInvalidServiceGroupPrecondition = errors.New("invalid service group precondition")
 
-type serviceGroupPrecondition struct{ id, revision int64 }
+type serviceGroupPrecondition struct {
+	id, revision  int64
+	optionVersion *int64
+}
 
 func validServiceGroupPrecondition(id, revision int64) bool {
 	return id >= 0 && id <= maxServiceGroupRevision && revision >= 0 && revision < maxServiceGroupRevision && (id != 0 || revision == 0)
@@ -30,7 +33,14 @@ func SaveServiceGroupAndRatioIfRevision(ctx context.Context, group *ServiceGroup
 	if !validServiceGroupPrecondition(expectedID, expectedRevision) {
 		return ErrInvalidServiceGroupPrecondition
 	}
-	return saveServiceGroupAndRatio(ctx, group, actorID, &serviceGroupPrecondition{expectedID, expectedRevision})
+	return saveServiceGroupAndRatio(ctx, group, actorID, &serviceGroupPrecondition{id: expectedID, revision: expectedRevision})
+}
+
+func SaveServiceGroupAndRatioIfState(ctx context.Context, group *ServiceGroupConfig, actorID, expectedID, expectedRevision, expectedOptionVersion int64) error {
+	if !validServiceGroupPrecondition(expectedID, expectedRevision) || expectedOptionVersion < 0 || expectedOptionVersion >= maxServiceGroupRevision {
+		return ErrInvalidServiceGroupPrecondition
+	}
+	return saveServiceGroupAndRatio(ctx, group, actorID, &serviceGroupPrecondition{id: expectedID, revision: expectedRevision, optionVersion: &expectedOptionVersion})
 }
 
 // SaveServiceGroupAndRatio commits metadata and its billing-option change together.
@@ -66,7 +76,14 @@ func DeleteServiceGroupAndRatioIfRevision(ctx context.Context, groupID string, a
 	if expectedID == 0 || !validServiceGroupPrecondition(expectedID, expectedRevision) {
 		return ErrInvalidServiceGroupPrecondition
 	}
-	return mutateServiceGroupAndRatio(ctx, nil, groupID, actorID, &serviceGroupPrecondition{expectedID, expectedRevision})
+	return mutateServiceGroupAndRatio(ctx, nil, groupID, actorID, &serviceGroupPrecondition{id: expectedID, revision: expectedRevision})
+}
+
+func DeleteServiceGroupAndRatioIfState(ctx context.Context, groupID string, actorID, expectedID, expectedRevision, expectedOptionVersion int64) error {
+	if expectedID <= 0 || !validServiceGroupPrecondition(expectedID, expectedRevision) || expectedOptionVersion < 0 || expectedOptionVersion >= maxServiceGroupRevision {
+		return ErrInvalidServiceGroupPrecondition
+	}
+	return mutateServiceGroupAndRatio(ctx, nil, groupID, actorID, &serviceGroupPrecondition{id: expectedID, revision: expectedRevision, optionVersion: &expectedOptionVersion})
 }
 
 func mutateServiceGroupAndRatio(ctx context.Context, group *ServiceGroupConfig, removed string, actorID int64, expected *serviceGroupPrecondition) error {
@@ -80,6 +97,15 @@ func mutateServiceGroupAndRatio(ctx context.Context, group *ServiceGroupConfig, 
 			return fmt.Errorf("option revision is unavailable")
 		}
 		if expected != nil {
+			if expected.optionVersion != nil {
+				var revision OptionRevision
+				if err := tx.First(&revision, 1).Error; err != nil {
+					return err
+				}
+				if revision.Version != *expected.optionVersion {
+					return ErrOptionVersionConflict
+				}
+			}
 			id := removed
 			if group != nil {
 				id = strings.TrimSpace(group.GroupID)
