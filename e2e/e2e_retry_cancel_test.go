@@ -21,11 +21,11 @@ import (
 //
 // When the client cancels a relay request while the upstream is still
 // processing:
-// 1. The upstream handler should observe the cancelled context (via
-//    request body close or context.Done).
-// 2. No new retry attempts should start on other channels.
-// 3. Pre-consumed quota should be fully refunded.
-// 4. No usage log should be written (no successful consumption).
+//  1. The upstream handler should observe the cancelled context (via
+//     request body close or context.Done).
+//  2. No new retry attempts should start on other channels.
+//  3. Pre-consumed quota should be fully refunded.
+//  4. One failed log should be written with zero charge.
 func Test6xxClientCancellation(t *testing.T) {
 	// Slow upstream that waits for the client context to be cancelled,
 	// then returns. Uses a shorter timeout to avoid blocking the test.
@@ -69,7 +69,7 @@ func Test6xxClientCancellation(t *testing.T) {
 	tokenBefore, _ := model.GetTokenByID(env.tokenID)
 
 	// 2. Create two channels: slow (high priority) and backup (low priority).
-	createChannelID(t, env, map[string]any{
+	slowChannelID := createChannelID(t, env, map[string]any{
 		"name":     "slow-upstream",
 		"key":      upstreamKey,
 		"base_url": slowUpstream.URL,
@@ -148,9 +148,10 @@ func Test6xxClientCancellation(t *testing.T) {
 			tokenAfter.RemainQuota, tokenBefore.RemainQuota)
 	}
 
-	// 11. Assert: no usage log (no successful consumption).
-	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-cancel-test"); total != 0 {
-		t.Fatalf("cancel must not write usage logs, got %d rows", total)
+	// 11. Assert: cancellation is observable without charging quota.
+	logs, total, err := model.ListLogs(env.rootID, 1, 10, "gpt-cancel-test")
+	if err != nil || total != 1 || len(logs) != 1 || logs[0].Status != 2 || logs[0].Quota != 0 || logs[0].ChannelID != slowChannelID || logs[0].RequestedModel != "gpt-cancel-test" {
+		t.Fatalf("cancel must write one unbilled log: total=%d logs=%+v err=%v", total, logs, err)
 	}
 
 	// 12. Assert: both channels remain enabled.
@@ -162,7 +163,7 @@ func Test6xxClientCancellation(t *testing.T) {
 		}
 	}
 
-	t.Logf("6.2 client cancel: upstream hit=1, backup hit=0, refunded=true, no logs, channels enabled")
+	t.Logf("6.2 client cancel: upstream hit=1, backup hit=0, refunded=true, 1 unbilled log, channels enabled")
 }
 
 // waitForHits polls an atomic counter until it reaches the target or times out.

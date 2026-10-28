@@ -486,6 +486,8 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		Quota            int64  `json:"quota"`
 		PromptTokens     int64  `json:"prompt_tokens"`
 		CompletionTokens int64  `json:"completion_tokens"`
+		SuccessCount     int64  `json:"success_count"`
+		FailedCount      int64  `json:"failed_count"`
 	}
 	parseUsage := func(body string) []usageItem {
 		var resp struct {
@@ -506,7 +508,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	}
 	aliceItems := parseUsage(res.Body)
 	if len(aliceItems) != 1 || aliceItems[0].Date != today ||
-		aliceItems[0].Requests != 1 || aliceItems[0].Quota != expected {
+		aliceItems[0].Requests != 1 || aliceItems[0].SuccessCount != 1 || aliceItems[0].FailedCount != 0 || aliceItems[0].Quota != expected {
 		t.Fatalf("alice usage wrong: %+v (want 1 request, quota %d)", aliceItems, expected)
 	}
 	res = doRequest(base, "GET", "/api/user/usage?days=7&user_id=0", aliceSession, nil)
@@ -518,16 +520,16 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("root usage failed: %d %s", res.Status, res.Body)
 	}
 	rootItems := parseUsage(res.Body)
-	if len(rootItems) != 1 || rootItems[0].Requests != 3 || rootItems[0].Quota != 3*expected {
-		t.Fatalf("root usage wrong (want 3 requests, quota %d): %+v", 3*expected, rootItems)
+	if len(rootItems) != 1 || rootItems[0].Requests != 4 || rootItems[0].SuccessCount != 3 || rootItems[0].FailedCount != 1 || rootItems[0].Quota != 3*expected {
+		t.Fatalf("root usage wrong (want 3 successes, 1 failure, quota %d): %+v", 3*expected, rootItems)
 	}
 	res = doRequest(base, "GET", "/api/user/usage?days=7&user_id=0", session, nil)
 	if res.Status != 200 {
 		t.Fatalf("global usage failed: %d %s", res.Status, res.Body)
 	}
 	globalItems := parseUsage(res.Body)
-	if len(globalItems) != 1 || globalItems[0].Requests != 4 || globalItems[0].Quota != 4*expected {
-		t.Fatalf("global usage wrong (want 4 requests, quota %d): %+v", 4*expected, globalItems)
+	if len(globalItems) != 1 || globalItems[0].Requests != 5 || globalItems[0].SuccessCount != 4 || globalItems[0].FailedCount != 1 || globalItems[0].Quota != 4*expected {
+		t.Fatalf("global usage wrong (want 4 successes, 1 failure, quota %d): %+v", 4*expected, globalItems)
 	}
 
 	// 22. channel test button writes response_time (B7)
@@ -807,8 +809,9 @@ func TestP1RelayFailoverRefundAndTrace(t *testing.T) {
 	if userAfter.Quota != userBefore.Quota {
 		t.Fatalf("all-failed request must refund user quota: %d vs %d", userAfter.Quota, userBefore.Quota)
 	}
-	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-fail"); total != 0 {
-		t.Fatalf("failed relay must not write usage logs, got %d rows", total)
+	failedLogs, total, err := model.ListLogs(env.rootID, 1, 10, "gpt-fail")
+	if err != nil || total != 1 || len(failedLogs) != 1 || failedLogs[0].Status != 2 || failedLogs[0].Quota != 0 || failedLogs[0].ChannelID != ch500 || failedLogs[0].RequestedModel != "gpt-fail" {
+		t.Fatalf("failed relay must write one unbilled log: total=%d logs=%+v err=%v", total, failedLogs, err)
 	}
 	c500, _ = model.GetChannelByID(ch500)
 	if c500.Status != common.ChannelStatusEnabled {
@@ -829,8 +832,9 @@ func TestP1RelayFailoverRefundAndTrace(t *testing.T) {
 	if tokenAfter.RemainQuota != quotaAfterSuccesses {
 		t.Fatalf("4xx request must be refunded: %d, want %d", tokenAfter.RemainQuota, quotaAfterSuccesses)
 	}
-	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-bad"); total != 0 {
-		t.Fatalf("4xx relay must not write usage logs, got %d rows", total)
+	failedLogs, total, err = model.ListLogs(env.rootID, 1, 10, "gpt-bad")
+	if err != nil || total != 1 || len(failedLogs) != 1 || failedLogs[0].Status != 2 || failedLogs[0].Quota != 0 || failedLogs[0].ChannelID != chBad || failedLogs[0].RequestedModel != "gpt-bad" {
+		t.Fatalf("4xx relay must write one unbilled log: total=%d logs=%+v err=%v", total, failedLogs, err)
 	}
 	cBad, _ := model.GetChannelByID(chBad)
 	if cBad.Status != common.ChannelStatusEnabled {

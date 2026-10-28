@@ -18,7 +18,7 @@ import (
 // 1. Passed through to the client with the exact status and error body.
 // 2. NOT retried on other channels (the healthy channel must not be hit).
 // 3. Pre-consumed quota must be fully refunded.
-// 4. No usage log entry (no successful consumption).
+// 4. One failed log entry with zero charge.
 // 5. Channel status remains enabled (4xx doesn't auto-disable).
 func TestRetry6xxNonRetryable4xx(t *testing.T) {
 	// Upstream that always returns 400 with a specific error message.
@@ -110,9 +110,10 @@ func TestRetry6xxNonRetryable4xx(t *testing.T) {
 			tokenAfter.RemainQuota, tokenBefore.RemainQuota)
 	}
 
-	// 8. Assert: no usage log entry (4xx is not a successful consumption).
-	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-retry-4xx"); total != 0 {
-		t.Fatalf("4xx relay must not write usage logs, got %d rows", total)
+	// 8. Assert: the failed attempt is observable without charging quota.
+	logs, total, err := model.ListLogs(env.rootID, 1, 10, "gpt-retry-4xx")
+	if err != nil || total != 1 || len(logs) != 1 || logs[0].Status != 2 || logs[0].Quota != 0 || logs[0].ChannelID != chBad || logs[0].RequestedModel != "gpt-retry-4xx" {
+		t.Fatalf("4xx relay must write one unbilled log: total=%d logs=%+v err=%v", total, logs, err)
 	}
 
 	// 9. Assert: both channels remain enabled (4xx doesn't auto-disable).
@@ -135,7 +136,7 @@ func TestRetry6xxNonRetryable4xx(t *testing.T) {
 		t.Fatalf("healthy channel used quota = %d, want 0 (was never hit)", chOKAfter.UsedQuota)
 	}
 
-	t.Logf("6.2 non-retryable 4xx: status 400 passed through, bad upstream hit=1, healthy hit=0, fully refunded, no logs, both channels enabled")
+	t.Logf("6.2 non-retryable 4xx: status 400 passed through, bad upstream hit=1, healthy hit=0, fully refunded, 1 unbilled log, both channels enabled")
 }
 
 // stringContains is a helper to avoid importing strings in this file.

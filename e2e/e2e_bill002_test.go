@@ -26,7 +26,7 @@ func TestBILL002FullFailureRefund(t *testing.T) {
 	env := setupRelayApp(t)
 
 	// 1. Create a channel pointing at the always-failing upstream.
-	createChannelID(t, env, map[string]any{
+	failedChannelID := createChannelID(t, env, map[string]any{
 		"name":     "always-500",
 		"key":      upstreamKey,
 		"base_url": failingUpstream.URL,
@@ -38,9 +38,9 @@ func TestBILL002FullFailureRefund(t *testing.T) {
 	//    Use the admin update endpoint with optimistic lock.
 	userBefore, _ := model.GetUserByID(env.rootID)
 	res := doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id":              env.rootID,
-		"quota":           1000,
-		"expected_quota":  userBefore.Quota,
+		"id":             env.rootID,
+		"quota":          1000,
+		"expected_quota": userBefore.Quota,
 	})
 	if res.Status != 200 {
 		t.Fatalf("set user quota failed: %d %s", res.Status, res.Body)
@@ -56,16 +56,17 @@ func TestBILL002FullFailureRefund(t *testing.T) {
 	userUsedBefore := userBefore.UsedQuota
 	tokenRemainBefore := tokenBefore.RemainQuota
 
-	// 4. Make a relay request — it will pre-consume, try the channel,
-	//    get 500, retry (same channel since only one), exhaust budget,
-	//    and ultimately fail. Pre-consumed quota must be refunded.
+	// 4. Bound the completion budget so the 1000-quota balance can reserve
+	//    the request and reach the failing upstream. Exhausting the only
+	//    channel must refund that reservation.
 	chatBody := map[string]any{
-		"model":    "gpt-bill-test",
-		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+		"model":      "gpt-bill-test",
+		"messages":   []map[string]string{{"role": "user", "content": "hi"}},
+		"max_tokens": 64,
 	}
 	res = doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey, chatBody)
-	if res.Status == 200 {
-		t.Fatalf("expected relay to fail, got 200: %s", res.Body)
+	if res.Status != http.StatusBadGateway {
+		t.Fatalf("expected upstream failure to return 502, got %d: %s", res.Status, res.Body)
 	}
 
 	// 5. Verify user quota is fully restored — no charge for failure.
@@ -101,15 +102,16 @@ func TestBILL002FullFailureRefund(t *testing.T) {
 		}
 	}
 
-	// 9. Verify NO log entry is created for the failed request
-	//    (the relay intentionally does not write usage logs for failures
-	//    that never reached a successful upstream response).
+	// 9. Record one failed request for analytics without charging quota.
 	logs, total, err := model.ListLogs(env.rootID, 1, 10, "gpt-bill-test")
 	if err != nil {
 		t.Fatalf("ListLogs failed: %v", err)
 	}
-	if total != 0 || len(logs) != 0 {
-		t.Fatalf("failed relay must not write usage logs, got total=%d len=%d", total, len(logs))
+	if total != 1 || len(logs) != 1 {
+		t.Fatalf("failed relay must write one unbilled log, got total=%d len=%d", total, len(logs))
+	}
+	if logs[0].Status != 2 || logs[0].Quota != 0 || logs[0].UnfundedQuota != 0 || logs[0].ChannelID != failedChannelID || logs[0].RequestedModel != "gpt-bill-test" {
+		t.Fatalf("failed log metadata or quota is wrong: %+v", logs[0])
 	}
 
 	// 10. Verify no wallet ledger entry was created for this failed call.
@@ -131,6 +133,6 @@ func TestBILL002FullFailureRefund(t *testing.T) {
 		}
 	}
 
-	t.Logf("BILL-002: full failure refund verified — user quota %d→%d, token %d→%d, 0 logs, no ledger charge",
+	t.Logf("BILL-002: full failure refund verified — user quota %d→%d, token %d→%d, 1 unbilled log, no ledger charge",
 		userBefore.Quota, userAfter.Quota, tokenRemainBefore, tokenAfter.RemainQuota)
 }

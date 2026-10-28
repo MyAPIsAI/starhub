@@ -176,6 +176,9 @@ type relayFlow struct {
 	currentGroup string    // group of the current attempt (for auto-group walk)
 	groupIdx     int       // cursor into req.autoGroups (auto-group mode)
 	startTime    time.Time // request start for duration_ms logging
+
+	lastChannelID int64 // last selected channel for the terminal failure log
+
 	// Observability (P5): the request-level span and the current attempt
 	// span. The attempt span is set by runChannels before each attempt
 	// and read by callUpstream / the streaming loops to record TTFT.
@@ -339,6 +342,7 @@ func (f *relayFlow) settleGroup() string {
 func (f *relayFlow) begin(ch *model.Channel) {
 	f.tried[ch.ID] = true
 	f.trail = append(f.trail, strconv.FormatInt(ch.ID, 10))
+	f.lastChannelID = ch.ID
 }
 
 // selectKey picks the upstream key for one attempt, honoring a remembered
@@ -465,12 +469,14 @@ func (f *relayFlow) refundUnlessSettled() {
 	// usage counts.
 	if len(f.trail) > 0 {
 		_ = model.InsertFailedLog(&model.Log{
-			UserID:       f.req.userID,
-			TokenID:      f.req.tokenID,
-			TokenName:    f.req.tokenName,
-			Model:        f.req.modelName,
-			UsedChannels: f.trailString(),
-			DurationMs:   time.Since(f.startTime).Milliseconds(),
+			UserID:         f.req.userID,
+			TokenID:        f.req.tokenID,
+			TokenName:      f.req.tokenName,
+			ChannelID:      f.lastChannelID,
+			Model:          f.req.modelName,
+			RequestedModel: f.req.requestedModel,
+			UsedChannels:   f.trailString(),
+			DurationMs:     time.Since(f.startTime).Milliseconds(),
 		})
 	}
 }

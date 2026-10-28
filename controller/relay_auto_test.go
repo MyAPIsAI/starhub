@@ -51,6 +51,9 @@ func TestRelayAutoModelWithoutCandidatesDoesNotCharge(t *testing.T) {
 	if afterUser.Quota != user.Quota || afterUser.UsedQuota != user.UsedQuota || afterToken.RemainQuota != token.RemainQuota || afterToken.UsedQuota != token.UsedQuota {
 		t.Fatal("candidate unavailability changed user or token quota")
 	}
+	if count, err := model.CountLogs(user.ID); err != nil || count != 0 {
+		t.Fatalf("pre-channel failure created a log: count=%d err=%v", count, err)
+	}
 }
 
 func TestRelayAutoModelReachesUpstream(t *testing.T) {
