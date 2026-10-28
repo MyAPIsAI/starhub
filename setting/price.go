@@ -8,6 +8,7 @@ import (
 
 	"starhub/config"
 	"starhub/pkg/billingexpr"
+	"starhub/pkg/pricingtime"
 )
 
 // Pricing option keys (stored in the option table, hot-updatable):
@@ -47,7 +48,7 @@ var (
 func OptionKeys() []string {
 	return append(append(append(append(append(append(RatioOptionKeys(),
 		OptionKeyModelPrice, OptionKeyModelPriceExpr,
-		OptionKeyCacheRatio, OptionKeyAudioRatio),
+		OptionKeyCacheRatio, OptionKeyAudioRatio, OptionKeyModelTimePricing),
 		GroupGroupRatioKeys()...),
 		AffiliateOptionKeys()...),
 		AlertOptionKeys()...),
@@ -64,7 +65,7 @@ func IsOptionKey(key string) bool {
 	}
 	switch key {
 	case OptionKeyModelPrice, OptionKeyModelPriceExpr,
-		OptionKeyCacheRatio, OptionKeyAudioRatio:
+		OptionKeyCacheRatio, OptionKeyAudioRatio, OptionKeyModelTimePricing:
 		return true
 	}
 	return IsRatioOptionKey(key)
@@ -148,6 +149,13 @@ func snapshotOption(key string) (string, error) {
 // UpdatePricing validates and applies one pricing option key.
 func UpdatePricing(key, value string) error {
 	switch key {
+	case OptionKeyModelTimePricing:
+		catalog, err := pricingtime.Decode(value)
+		if err != nil {
+			return err
+		}
+		timePricing.Store(catalog)
+		return nil
 	case OptionKeyModelPrice:
 		prices, err := parseModelPrice(value)
 		if err != nil {
@@ -194,6 +202,8 @@ func SnapshotPricing(key string) (string, error) {
 	priceMu.RLock()
 	defer priceMu.RUnlock()
 	switch key {
+	case OptionKeyModelTimePricing:
+		return snapshotTimePricing(), nil
 	case OptionKeyModelPrice:
 		return marshalStable(modelPrice)
 	case OptionKeyModelPriceExpr:
@@ -299,6 +309,7 @@ func ResetPricingToDefaults() {
 	modelPriceExpr = map[string]string{}
 	cacheRatio = FallbackCacheRatio
 	audioRatio = FallbackAudioRatio
+	timePricing.Store(nil)
 }
 
 // ResetAllToDefaults restores every setting to its compiled-in defaults.

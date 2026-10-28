@@ -1,0 +1,25 @@
+package setting
+
+import (
+	"sync/atomic"
+	"time"
+
+	"starhub/pkg/pricingtime"
+)
+
+const OptionKeyModelTimePricing = "model_time_pricing"
+
+var timePricing atomic.Pointer[pricingtime.Catalog]
+
+// TimePricingAt exposes the validated schedule independently from activation
+// in request billing. The caller supplies the instant to freeze for a request.
+func TimePricingAt(model string, at time.Time) pricingtime.Adjustment {
+	return timePricing.Load().Match(model, at)
+}
+
+func snapshotTimePricing() string {
+	if catalog := timePricing.Load(); catalog != nil {
+		return catalog.JSON()
+	}
+	return "{}"
+}

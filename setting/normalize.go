@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"starhub/config"
+	"starhub/pkg/pricingtime"
 )
 
 // NormalizeOption validates an option and returns its canonical persisted form.
@@ -15,6 +16,12 @@ func NormalizeOption(key, value string) (string, error) {
 		return config.NormalizeOption(key, value)
 	}
 	switch key {
+	case OptionKeyModelTimePricing:
+		catalog, err := pricingtime.Decode(value)
+		if err != nil {
+			return "", err
+		}
+		return catalog.JSON(), nil
 	case OptionKeyGroupRatio, OptionKeyModelRatio, OptionKeyCompletionRatio:
 		m, err := parseRatioMap(value)
 		if err != nil {

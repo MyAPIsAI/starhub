@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	Schema          = "weekly_multiplier_v1"
 	MaxCatalogBytes = 1 << 20
 	MaxModels       = 1024
 	MaxWindows      = 32

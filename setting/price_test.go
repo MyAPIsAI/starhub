@@ -12,6 +12,7 @@ func resetPricing(t *testing.T) {
 		{OptionKeyModelPriceExpr, `{}`},
 		{OptionKeyCacheRatio, `0.5`},
 		{OptionKeyAudioRatio, `40`},
+		{OptionKeyModelTimePricing, `{}`},
 	}
 	for _, u := range updates {
 		if err := UpdatePricing(u.key, u.value); err != nil {
@@ -30,8 +31,8 @@ func TestPricingOptionDispatcher(t *testing.T) {
 		t.Fatal("unknown key must be rejected")
 	}
 	keys := OptionKeys()
-	if len(keys) != 24 {
-		t.Fatalf("OptionKeys = %v, want 21 keys", keys)
+	if len(keys) != 25 {
+		t.Fatalf("OptionKeys = %v, want 25 keys", keys)
 	}
 	if err := UpdateOption("no_such_key", "1"); err == nil {
 		t.Fatal("UpdateOption should reject unknown keys")
