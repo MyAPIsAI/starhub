@@ -222,14 +222,7 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		DurationMs:       durationMs,
 		Status:           1, // success
 	}
-	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
-		return err
-	}
-	// Affiliate rebate: the inviter gets a percentage of the collected spend.
-	// The rebate is best-effort (a failure is logged, not propagated) so a
-	// rebate glitch never fails the relay settlement.
-	applyAffiliateRebate(userID, entry.Quota)
-	return nil
+	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
 
 // applyAffiliateRebate credits the inviter's quota with the rebate ratio of
@@ -298,9 +291,5 @@ func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string,
 		DurationMs:     durationMs,
 		Status:         status,
 	}
-	if err := model.SettleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry); err != nil {
-		return err
-	}
-	applyAffiliateRebate(userID, entry.Quota)
-	return nil
+	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }

@@ -52,6 +52,12 @@ func main() {
 	go model.WatchOptions(context.Background(), time.Second)
 	startChannelTestTask()
 	startTaskPollTask()
+	go config.RunLoop(context.Background(), func(c config.Runtime) time.Duration {
+		if c.TaskPollInterval <= 0 {
+			return 30 * time.Second
+		}
+		return c.TaskPollInterval
+	}, service.RetryPendingQuotaSettlementsOnce)
 	go service.RunRoutingChainCleanup(context.Background(), 15*time.Minute)
 	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, bootstrap.Port, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
