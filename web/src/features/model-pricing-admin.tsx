@@ -32,7 +32,7 @@ import {
   pricingRuleError,
   quoteModelCharge,
 } from "../lib/model-pricing";
-import { useProductPreview } from "../lib/product-preview";
+import { initializeDemoPreview, useProductPreview } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import { useOptionStatus, useOptionHistory, useRollbackOption } from "../lib/api/option";
 import { ApiError } from "../lib/api/http";
@@ -93,6 +93,7 @@ export function ModelPricingAdmin({
   modelId?: string;
   embedded?: boolean;
 }) {
+  useEffect(initializeDemoPreview, []);
   const state = usePricingDraft("models", role, modelId);
   const {
     config,

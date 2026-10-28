@@ -283,11 +283,6 @@ export function readPricing(): PricingCatalogConfig {
         ).filter(
           (id) => defaults.models[resource.canonicalModel].tierAvailability[id],
         );
-      try {
-        localStorage.setItem(PRICING_STORAGE_KEY, JSON.stringify(defaults));
-      } catch {
-        /* Read-only storage still has a safe in-memory default. */
-      }
       return defaults;
     }
   } catch {
@@ -369,6 +364,17 @@ export const useModelPricing = create<{
     return { ok: true, config };
   },
 }));
+export function initializeDemoPricing() {
+  try {
+    if (localStorage.getItem(PRICING_STORAGE_KEY) === null)
+      localStorage.setItem(
+        PRICING_STORAGE_KEY,
+        JSON.stringify(useModelPricing.getState().config),
+      );
+  } catch {
+    /* Explicit Demo sessions may continue without browser persistence. */
+  }
+}
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
     if (event.key === PRICING_STORAGE_KEY || event.key === null)

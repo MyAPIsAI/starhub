@@ -26,6 +26,7 @@ import {
   createDefaultPricing,
   useModelPricing,
   PRICING_STORAGE_KEY,
+  initializeDemoPricing,
 } from "./model-pricing";
 import { sampleRequests } from "../mocks/service";
 import type { RequestRecord } from "./request-record";
@@ -914,6 +915,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   createKeyDetailed: (params) => {
+    initializeDemoPreview();
     if (!params.name.trim()) throw new Error("密钥名称不能为空");
     if (params.ipWhitelist?.some((rule) => !validIpRule(rule)))
       throw new Error("IP（网络地址）白名单格式无效");
@@ -1094,6 +1096,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   recordCall: (id, failed, requestedModel, submittedRequest) => {
+    initializeDemoPreview();
     get().syncBillingStorage();
     const state = get();
     const key = state.keys.find((k) => k.id === id);
@@ -1293,6 +1296,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   recordMeteredCall: (id, modelId, usage, at, attributes) => {
+    initializeDemoPreview();
     get().syncBillingStorage();
     const state = get(),
       key = state.keys.find((item) => item.id === id);
@@ -1454,6 +1458,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   createRechargeOrder: (amountUsd, channel = "card") => {
+    initializeDemoPreview();
     get().syncBillingStorage();
     const amount = validateRechargeAmount(amountUsd);
     if (!amount.ok) return amount;
@@ -1566,6 +1571,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
     if (!snapshot) return false;
     const signature = JSON.stringify(snapshot);
     if (signature === appliedBillingSignature) return true;
+    const restoreDemoIdentity = useSystemAccess.getState().session.epoch === 0;
     const requests: PreviewRequest[] = [
       ...snapshot.liveRequests,
       ...(snapshot.sampleRequestsEnabled ? initialRequests : []),
@@ -1589,7 +1595,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
               selectedKey: snapshot.selectedKey ?? "",
             }
           : {}),
-        ...(snapshot.user
+        ...(snapshot.user && restoreDemoIdentity
           ? {
               user: {
                 ...get().user,
@@ -1643,6 +1649,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   requestExport: (type, rangeDays) => {
+    initializeDemoPreview();
     get().syncBillingStorage();
     if (!Number.isInteger(rangeDays) || rangeDays < 1 || rangeDays > 31) {
       throw new RangeError("Exports require 1–31 inclusive calendar days");
@@ -1740,6 +1747,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   register: (email, enterpriseName, profile) => {
+    initializeDemoPreview();
     set((s) => ({
       accountProfiles: {
         ...s.accountProfiles,
@@ -1881,6 +1889,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
 
   // #105：单人加款，提交即入账，不再按金额分流到待复核（原 >$1,000 走 pending 的分支已删）。
   adminCreateTopUp: (params) => {
+    initializeDemoPreview();
     get().syncBillingStorage();
     const nanoAmount = BigInt(Math.round(params.amount_usd * 1_000_000_000));
     const nowIso = new Date().toISOString();
@@ -1937,6 +1946,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   resetScenario: (scenario) => {
+    initializeDemoPreview();
     const session = useSystemAccess.getState().session;
     const authenticated = session.accountId !== null;
     const confirmedGuest = session.epoch > 0 && !authenticated;
@@ -2066,6 +2076,7 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 
   demoSetBalanceState: (mode) => {
+    initializeDemoPreview();
     get().syncBillingStorage();
     const state = get();
     const target =
@@ -2103,11 +2114,18 @@ export const useProductPreview = create<ProductPreviewState>((set, get) => ({
   },
 }));
 
-// Persist demo permission/usage metadata with the wallet atomically. Prompt and
-// response content, credential strings, passwords and session data are excluded.
-const hasSavedPreview = useProductPreview.getState().syncBillingStorage();
-const stopBillingPersistence = useProductPreview.subscribe(
-  (state, previous) => {
+let demoInitialized = false;
+let stopBillingPersistence: (() => void) | undefined;
+let stopBillingStorageSync: (() => void) | undefined;
+
+// Only an explicit Demo action starts hydration and persistence. Server session
+// restoration and importing shared modules must never create Demo archives.
+export function initializeDemoPreview() {
+  if (demoInitialized) return;
+  demoInitialized = true;
+  initializeDemoPricing();
+  const hasSavedPreview = useProductPreview.getState().syncBillingStorage();
+  stopBillingPersistence = useProductPreview.subscribe((state, previous) => {
     if (receivingBillingSnapshot) return;
     if (
       state.balance === previous.balance &&
@@ -2125,20 +2143,19 @@ const stopBillingPersistence = useProductPreview.subscribe(
     const snapshot = billingSnapshot(state);
     if (writeBillingStorage(snapshot))
       appliedBillingSignature = JSON.stringify(snapshot);
-  },
-);
-const stopBillingStorageSync = listenBillingStorage(() => {
-  useProductPreview.getState().syncBillingStorage();
-});
-// 没有可用的历史存档时（首次进入，或存档损坏被 parseBillingSnapshot 原子拒绝），
-// 不能把 initialState 退化成空账户——那样首屏会是一张白纸。改为把 store 里
-// 已经带着种子数据的 initialState 直接落盘，让后续订阅与刷新都从这份数据接着走。
-if (!hasSavedPreview) {
-  const seeded = billingSnapshot(useProductPreview.getState());
-  if (writeBillingStorage(seeded))
-    appliedBillingSignature = JSON.stringify(seeded);
+  });
+  stopBillingStorageSync = listenBillingStorage(() => {
+    useProductPreview.getState().syncBillingStorage();
+  });
+  // Seed only the explicitly opened Demo; unreadable archives remain untouched
+  // while ordinary server pages load.
+  if (!hasSavedPreview) {
+    const seeded = billingSnapshot(useProductPreview.getState());
+    if (writeBillingStorage(seeded))
+      appliedBillingSignature = JSON.stringify(seeded);
+  }
+  useProductPreview.getState().expireRechargeOrders();
 }
-useProductPreview.getState().expireRechargeOrders();
 
 // Vite disposes the previous module before replacing it during development.
 const billingHot = (
@@ -2147,6 +2164,6 @@ const billingHot = (
   }
 ).hot;
 billingHot?.dispose(() => {
-  stopBillingPersistence();
-  stopBillingStorageSync();
+  stopBillingPersistence?.();
+  stopBillingStorageSync?.();
 });
