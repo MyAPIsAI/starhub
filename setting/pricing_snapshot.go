@@ -10,6 +10,7 @@ type PricingInputs struct {
 	CacheRatio      float64
 	AudioRatio      float64
 	ModelPriceUSD   float64
+	HasModelPrice   bool
 	PriceExpr       string
 }
 
@@ -46,7 +47,7 @@ func resolvePricing(model, group, userGroup string) PricingInputs {
 	}
 	p.CacheRatio = CacheRatioValue()
 	p.AudioRatio = AudioRatioValue()
-	p.ModelPriceUSD, _ = ModelPriceValue(model)
+	p.ModelPriceUSD, p.HasModelPrice = ModelPriceValue(model)
 	p.PriceExpr, _ = ModelPriceExpr(model)
 	return p
 }

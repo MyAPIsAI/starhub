@@ -62,9 +62,9 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 
 	// 2. EstimateBilling → pre-charge. The deferred refund returns the
 	//    reservation when no channel accepts the submit.
-	billingGroup := req.billingGroup()
-	pricing := taskPlatformAdaptor(platform).EstimateBilling(req.modelName, billingGroup, taskReq)
-	priceData := relay.NewPriceDataWithUserGroup(req.modelName, billingGroup, req.userGroup)
+	billingGroup := flow.settleGroup()
+	priceData := req.priceFor(billingGroup)
+	pricing := taskPlatformAdaptor(platform).EstimateBillingWithOptions(req.modelName, billingGroup, taskReq, channel.TaskPricingOptions{ModelPriceUSD: priceData.ModelPriceUSD, ModelPriceSet: priceData.HasModelPrice, Expression: priceData.PriceExpr})
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited,
 		relay.TaskPricingQuotaWithPriceData(priceData, pricing))
 	if err != nil {
@@ -110,7 +110,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		return attemptResult{outcome: attemptUnsupported,
 			cause: fmt.Errorf("channel %d does not serve platform %q", ch.ID, platform)}
 	}
-	priceData := relay.NewPriceDataWithUserGroup(taskReq.Model, flow.settleGroup(), flow.req.userGroup)
+	priceData := flow.req.priceFor(flow.settleGroup())
 	pricingMeta, err := json.Marshal(relay.TaskBillingSnapshot{PriceData: *priceData, Estimate: accepted})
 	if err != nil {
 		return attemptResult{outcome: attemptUpstreamError, cause: fmt.Errorf("encode task pricing: %v", err)}

@@ -245,7 +245,7 @@ func TestVideoTaskTokenFallback(t *testing.T) {
 	resetPricingForTests()
 	defer resetPricingForTests()
 	// No expression, no model_price → token fallback (sora default price
-	// still applies via taskModelPrice, so use a non-sora model name).
+	// still applies in the adaptor, so use a non-sora model name).
 	adaptor := openai.VideoTaskAdaptor{}
 	req := &dto.TaskRequest{Action: "video", Model: "unpriced-video", Prompt: "cat", Seconds: 5, N: 1}
 

@@ -80,12 +80,17 @@ type ImageBill struct {
 	UserGroup     string // user's own group (for the group x group matrix)
 	Size, Quality string
 	Prompt        string
-	Count         int // requested n (already validated [1, MaxImageN])
+	Count         int        // requested n (already validated [1, MaxImageN])
+	Pricing       *PriceData // optional request-captured baseline for this serving group
 }
 
 // priceData builds the PriceData with the user group so the group x group
 // matrix multiplier applies.
 func (b *ImageBill) priceData() *PriceData {
+	if b.Pricing != nil {
+		copy := *b.Pricing
+		return &copy
+	}
 	if b.UserGroup != "" {
 		return NewPriceDataWithUserGroup(b.Model, b.Group, b.UserGroup)
 	}

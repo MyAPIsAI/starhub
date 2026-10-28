@@ -5,7 +5,34 @@ import (
 
 	"starhub/relay/channel"
 	"starhub/relay/dto"
+	"starhub/setting"
 )
+
+func TestTaskEstimateConsumesCapturedOptionsAndRetainsExplicitZero(t *testing.T) {
+	setting.ResetAllToDefaults()
+	t.Cleanup(setting.ResetAllToDefaults)
+	if err := setting.UpdatePricing("model_price", `{"sora-2":0.9}`); err != nil {
+		t.Fatal(err)
+	}
+	adaptor := VideoTaskAdaptor{}
+	request := &dto.TaskRequest{Model: "sora-2", Prompt: "a shape", Seconds: 8, N: 2}
+	priced := adaptor.EstimateBillingWithOptions("sora-2", "default", request, channel.TaskPricingOptions{ModelPriceUSD: 0.01, ModelPriceSet: true})
+	if priced.PerCallUSD != 0.01 || priced.Units != 16 {
+		t.Fatalf("captured task price was ignored: %+v", priced)
+	}
+	zero := adaptor.EstimateBillingWithOptions("sora-2", "default", request, channel.TaskPricingOptions{ModelPriceSet: true})
+	if zero.PerCallUSD != 0 || zero.PromptTokens == 0 {
+		t.Fatal("explicit zero selected the unconfigured Sora fallback")
+	}
+	missing := adaptor.EstimateBillingWithOptions("sora-2", "default", request, channel.TaskPricingOptions{})
+	if missing.PerCallUSD != soraPricePerSecond {
+		t.Fatal("missing price lost the existing Sora fallback")
+	}
+	expression := adaptor.EstimateBillingWithOptions("sora-2", "default", request, channel.TaskPricingOptions{Expression: "seconds * n * 0.01"})
+	if expression.ExprVars["seconds"] != 8 || expression.ExprVars["n"] != 2 || expression.PerCallUSD != 0 {
+		t.Fatal("captured expression mode read live flat pricing")
+	}
+}
 
 func TestTaskStatusValue(t *testing.T) {
 	cases := []struct {

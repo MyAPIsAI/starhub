@@ -25,6 +25,7 @@ type PriceData struct {
 	missingCompletionRatio bool
 	// ModelPriceUSD > 0 switches the model to per-call billing.
 	ModelPriceUSD float64
+	HasModelPrice bool
 	// PriceExpr, when configured, wins over per-call and token billing.
 	PriceExpr string
 
@@ -76,6 +77,7 @@ func priceDataFromInputs(modelName, group, userGroup string, inputs setting.Pric
 		CacheRatio:             inputs.CacheRatio,
 		AudioRatio:             inputs.AudioRatio,
 		OtherRatio:             1,
+		HasModelPrice:          inputs.HasModelPrice,
 		UsingGroup:             group,
 		UserGroup:              userGroup,
 	}

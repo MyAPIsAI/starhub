@@ -27,6 +27,30 @@ func TestImagePriceRatio(t *testing.T) {
 	}
 }
 
+func TestImageCapturedBaselineIsCopiedForEachCountCalculation(t *testing.T) {
+	setting.ResetAllToDefaults()
+	t.Cleanup(setting.ResetAllToDefaults)
+	if err := setting.UpdatePricing("model_price", `{"captured-image":0.01}`); err != nil {
+		t.Fatal(err)
+	}
+	baseline := NewPriceData("captured-image", "default")
+	bill := &ImageBill{Model: "captured-image", Group: "default", Size: "1024x1024", Quality: "standard", Count: 2, Pricing: baseline}
+	if err := setting.UpdatePricing("model_price", `{"captured-image":0.2}`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if quota := bill.PreQuota(); quota != 10000 {
+			t.Fatalf("pre-charge accumulated multipliers or read live price: %d", quota)
+		}
+		if quota := bill.SettleQuota(1, nil); quota != 5000 {
+			t.Fatalf("actual-count price did not use baseline: %d", quota)
+		}
+	}
+	if baseline.OtherRatio != 1 || baseline.ModelPriceUSD != 0.01 {
+		t.Fatal("image calculation mutated captured baseline")
+	}
+}
+
 func TestImageBillPerCallPreAndSettle(t *testing.T) {
 	setOptionTest(t, "model_price", `{"gpt-image-1":0.04}`)
 	// pre: 0.04 x 1.0 (size) x 1.0 (quality) x n=3 x group 1

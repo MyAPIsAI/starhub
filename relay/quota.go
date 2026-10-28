@@ -91,7 +91,11 @@ func EstimateIRPreConsumeQuotaWithPriceData(pd *PriceData, ir *dto.ChatRequest) 
 // zero completion budget (embeddings / rerank / audio inputs: the prompt
 // side is the whole bill).
 func EstimatePreConsumeTokens(modelName, group string, promptTokens int64) int64 {
-	return estimatePreConsume(NewPriceData(modelName, group), promptTokens, 0)
+	return EstimatePreConsumeTokensWithPriceData(NewPriceData(modelName, group), promptTokens)
+}
+
+func EstimatePreConsumeTokensWithPriceData(pd *PriceData, promptTokens int64) int64 {
+	return estimatePreConsume(pd, promptTokens, 0)
 }
 
 // estimatePreConsume prices one prompt/budget estimate with the expression

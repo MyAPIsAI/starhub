@@ -29,7 +29,7 @@ func RelayEmbeddings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	promptEstimate := relay.EstimateTokens(embeddingReq.InputText()) + 1
-	preQuota := relay.EstimatePreConsumeTokens(req.modelName, req.billingGroup(), promptEstimate)
+	preQuota := relay.EstimatePreConsumeTokensWithPriceData(req.priceFor(req.billingGroup()), promptEstimate)
 
 	runPassthroughMode(w, r, req, channel.RelayModeEmbeddings, preQuota,
 		func(flow *relayFlow, ch *model.Channel, resp *http.Response) attemptResult {
@@ -56,7 +56,7 @@ func RelayRerank(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	promptEstimate := relay.EstimateTokens(rerankReq.InputText()) + 1
-	preQuota := relay.EstimatePreConsumeTokens(req.modelName, req.billingGroup(), promptEstimate)
+	preQuota := relay.EstimatePreConsumeTokensWithPriceData(req.priceFor(req.billingGroup()), promptEstimate)
 
 	runPassthroughMode(w, r, req, channel.RelayModeRerank, preQuota,
 		func(flow *relayFlow, ch *model.Channel, resp *http.Response) attemptResult {
@@ -85,7 +85,7 @@ func RelayTTS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pre-charge: per-call price or the input-token estimate.
-	pd := relay.NewPriceDataWithUserGroup(req.modelName, req.billingGroup(), req.userGroup)
+	pd := req.priceFor(req.billingGroup())
 	usage := &relay.Usage{}
 	if !pd.IsPerCall() && !pd.IsExpression() {
 		if ttsReq, err := dto.ParseTTSRequest(req.body); err == nil {
@@ -144,7 +144,7 @@ func relayAudioTranscription(w http.ResponseWriter, r *http.Request, mode channe
 	// STT billing: per-call price when configured, otherwise audio tokens
 	// estimated from the file size (verbose_json responses carry the exact
 	// duration at settle time).
-	pd := relay.NewPriceDataWithUserGroup(req.modelName, req.billingGroup(), req.userGroup)
+	pd := req.priceFor(req.billingGroup())
 	usage := &relay.Usage{}
 	if !pd.IsPerCall() && !pd.IsExpression() {
 		usage.PromptTokens = estimateAudioTokens(form.FileBytes())
@@ -325,8 +325,8 @@ func settleModeAttempt(flow *relayFlow, ch *model.Channel, usage *relay.Usage) a
 		usage = &relay.Usage{}
 	}
 	usage.RequestProtocol = flow.req.protocol
-	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
-		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
+	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
+		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
 		log.Printf("post consume quota failed: %v", err)
 	}

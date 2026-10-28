@@ -113,6 +113,7 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 		Quality:   imgReq.Quality,
 		Prompt:    imgReq.Prompt,
 		Count:     int(imgReq.Count()),
+		Pricing:   req.priceFor(req.billingGroup()),
 	}
 
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, bill.PreQuota())
@@ -193,6 +194,7 @@ func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, b
 		usage = u
 	}
 	bill.Group = flow.settleGroup()
+	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(count, usage)
 	settleImageAttempt(flow, ch, actual)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
@@ -293,6 +295,7 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 		return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 	}
 	bill.Group = flow.settleGroup()
+	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(completed, streamUsage)
 	settleImageAttempt(flow, ch, actual)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
@@ -324,6 +327,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 		// better a working answer in the wrong shape than data loss.
 		writePassthroughBody(flow.w, resp, body)
 		bill.Group = flow.settleGroup()
+		bill.Pricing = flow.req.priceFor(bill.Group)
 		actual := bill.SettleQuota(0, nil)
 		settleImageAttempt(flow, ch, actual)
 		return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
@@ -357,6 +361,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 		flusher.Flush()
 	}
 	bill.Group = flow.settleGroup()
+	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(count, usage)
 	settleImageAttempt(flow, ch, actual)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}

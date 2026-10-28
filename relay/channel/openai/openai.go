@@ -301,10 +301,16 @@ func (VideoTaskAdaptor) ParseTaskResult(statusCode int, body []byte) (*dto.TaskR
 const soraPricePerSecond = 0.1
 
 func (VideoTaskAdaptor) EstimateBilling(modelName, group string, req *dto.TaskRequest) channel.TaskPricing {
+	price, set := setting.ModelPriceValue(modelName)
+	expression, _ := setting.ModelPriceExpr(modelName)
+	return (VideoTaskAdaptor{}).EstimateBillingWithOptions(modelName, group, req, channel.TaskPricingOptions{ModelPriceUSD: price, ModelPriceSet: set, Expression: expression})
+}
+
+func (VideoTaskAdaptor) EstimateBillingWithOptions(modelName, group string, req *dto.TaskRequest, options channel.TaskPricingOptions) channel.TaskPricing {
 	// Expression path: when model_price_expr is configured, fill ExprVars
 	// with the request parameters. Pre-charge assumes task_status=1 (full
 	// success price); the settle step updates it with the terminal status.
-	if _, ok := setting.ModelPriceExpr(modelName); ok {
+	if options.Expression != "" {
 		promptEst := dto.EstimateTokens(req.Prompt) + 100
 		return channel.TaskPricing{
 			ExprVars: map[string]float64{
@@ -317,7 +323,11 @@ func (VideoTaskAdaptor) EstimateBilling(modelName, group string, req *dto.TaskRe
 			},
 		}
 	}
-	if price, ok := taskModelPrice(modelName); ok && price > 0 {
+	price, set := options.ModelPriceUSD, options.ModelPriceSet
+	if !set && strings.HasPrefix(modelName, "sora") {
+		price, set = soraPricePerSecond, true
+	}
+	if set && price > 0 {
 		return channel.TaskPricing{
 			PerCallUSD: price,
 			Units:      float64(req.Seconds) * float64(req.N),
@@ -371,17 +381,4 @@ func taskStatusValue(status string) float64 {
 	default:
 		return 0
 	}
-}
-
-// taskModelPrice looks up the per-second USD price of a task model from the
-// runtime settings (model_price option); the fallback covers unconfigured
-// operators.
-func taskModelPrice(modelName string) (float64, bool) {
-	if price, ok := setting.ModelPriceValue(modelName); ok {
-		return price, true
-	}
-	if strings.HasPrefix(modelName, "sora") {
-		return soraPricePerSecond, true
-	}
-	return 0, false
 }

@@ -106,11 +106,15 @@ type TaskPricing struct {
 	ExprVars map[string]float64 `json:",omitempty"`
 }
 
-// TaskAdaptor is the submit-and-poll lifecycle of asynchronous task
-// platforms (video generation, music, ...). The billing hooks
-// (EstimateBilling / AdjustBillingOnComplete) are part of the contract so
-// every platform plugs into the same pre-charge / terminal-settlement
-// flow instead of reimplementing it.
+// TaskPricingOptions carries the option values captured before task submission.
+type TaskPricingOptions struct {
+	ModelPriceUSD float64
+	ModelPriceSet bool
+	Expression    string
+}
+
+// TaskAdaptor is the submit-and-poll lifecycle of asynchronous task platforms.
+// Its billing hooks share the gateway's reservation and terminal settlement.
 type TaskAdaptor interface {
 	Name() string
 	Platform() string
@@ -119,6 +123,8 @@ type TaskAdaptor interface {
 	ValidateRequestAndSetAction(body []byte, req *dto.TaskRequest) error
 	// EstimateBilling prices the submission (pre-charge input).
 	EstimateBilling(modelName, group string, req *dto.TaskRequest) TaskPricing
+	// EstimateBillingWithOptions avoids live option reads after request capture.
+	EstimateBillingWithOptions(modelName, group string, req *dto.TaskRequest, options TaskPricingOptions) TaskPricing
 	// AdjustBillingOnComplete prices the terminal task (settlement input;
 	// a failed task prices to zero and is fully refunded).
 	AdjustBillingOnComplete(modelName, group string, req *dto.TaskRequest, res *dto.TaskResult, accepted TaskPricing) TaskPricing
