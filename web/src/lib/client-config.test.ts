@@ -16,6 +16,61 @@ const key: KeyModelPolicy = {
   smartAccess: true,
 };
 describe("client configuration respects model and credential boundaries", () => {
+  describe.each(["openai", "claude-code"] as const)(
+    "%s model exports",
+    (target) => {
+      it.each(["myapis-auto", "veyra-auto"])(
+        "exports the canonical smart entry for %s",
+        (model) => {
+          const input = { target, model };
+          const config = buildClientConfiguration(input)!;
+          expect(config.model).toBe("myapis-auto");
+          expect(config.mapping).toEqual(
+            target === "openai"
+              ? { OPENAI_MODEL: "myapis-auto" }
+              : {
+                  ANTHROPIC_MODEL: "myapis-auto",
+                  ANTHROPIC_DEFAULT_OPUS_MODEL: "myapis-auto",
+                  ANTHROPIC_DEFAULT_SONNET_MODEL: "myapis-auto",
+                  ANTHROPIC_DEFAULT_HAIKU_MODEL: "myapis-auto",
+                  CLAUDE_CODE_SUBAGENT_MODEL: "myapis-auto",
+                },
+          );
+          for (const variable of Object.keys(config.mapping)) {
+            expect(config.snippet).toContain(
+              `export ${variable}='myapis-auto'`,
+            );
+          }
+          expect(config.snippet).not.toContain("veyra-auto");
+          expect(config.credential).toBe("$VEYRA_API_KEY");
+          expect(input.model).toBe(model);
+        },
+      );
+      it("preserves explicit model identifiers without prefix normalization", () => {
+        for (const model of [
+          "gpt-4.1",
+          "veyra-auto-preview",
+          "myapis-auto-preview",
+          "value'\"\n$(printf injected)",
+        ]) {
+          const config = buildClientConfiguration({ target, model })!;
+          expect(config.model).toBe(model);
+          expect(
+            Object.values(config.mapping).every((value) => value === model),
+          ).toBe(true);
+        }
+      });
+      it("keeps masked credentials rejected when normalizing smart entries", () => {
+        expect(() =>
+          buildClientConfiguration({
+            target,
+            model: "veyra-auto",
+            secret: "sk-review******mask",
+          }),
+        ).toThrow("masked");
+      });
+    },
+  );
   it("only presents Anthropic candidates to Claude Code and never treats chat as Responses", () => {
     expect(getClientModels(key, "claude-code").map((item) => item.id)).toEqual([
       "claude-sonnet-4-20250514",

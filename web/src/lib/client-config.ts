@@ -1,5 +1,9 @@
 import { placeholders } from "../config/placeholders";
-import { getKeyModelOptions, type KeyModelPolicy } from "./key-model-policy";
+import {
+  getKeyModelOptions,
+  isSmartModelId,
+  type KeyModelPolicy,
+} from "./key-model-policy";
 import type { PricingCatalogConfig } from "../config/models";
 import type { DemoProtocol } from "./request-contract";
 
@@ -33,6 +37,7 @@ export function buildClientConfiguration(input: {
   if (!input.model) return null;
   if (input.secret && !validDemoSecret(input.secret))
     throw new Error("A masked key is not a credential");
+  const model = isSmartModelId(input.model) ? "myapis-auto" : input.model;
   const secret = input.secret ? shellQuote(input.secret) : '"$VEYRA_API_KEY"';
   const baseUrl =
     input.target === "claude-code"
@@ -42,13 +47,13 @@ export function buildClientConfiguration(input: {
   const mapping =
     input.target === "claude-code"
       ? {
-          ANTHROPIC_MODEL: input.model,
-          ANTHROPIC_DEFAULT_OPUS_MODEL: input.model,
-          ANTHROPIC_DEFAULT_SONNET_MODEL: input.model,
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: input.model,
-          CLAUDE_CODE_SUBAGENT_MODEL: input.model,
+          ANTHROPIC_MODEL: model,
+          ANTHROPIC_DEFAULT_OPUS_MODEL: model,
+          ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
+          CLAUDE_CODE_SUBAGENT_MODEL: model,
         }
-      : { OPENAI_MODEL: input.model };
+      : { OPENAI_MODEL: model };
   const variables =
     input.target === "claude-code"
       ? { ANTHROPIC_BASE_URL: baseUrl, ...mapping }
@@ -70,7 +75,7 @@ export function buildClientConfiguration(input: {
   return {
     baseUrl,
     protocol,
-    model: input.model,
+    model,
     secretName,
     credential: input.secret ?? "$VEYRA_API_KEY",
     mapping,
