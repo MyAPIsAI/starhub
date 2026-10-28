@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"reflect"
@@ -61,7 +62,7 @@ func TestPlazaProtocolsFollowGroupAndChannelStatus(t *testing.T) {
 	}
 	rowsFor := func(group string) map[string]plazaRow {
 		t.Helper()
-		rows, err := buildPlazaRows(group, group)
+		rows, err := buildPlazaRows(context.Background(), group, group, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

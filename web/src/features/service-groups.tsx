@@ -233,9 +233,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
       <div className="cm-callout">
         <p>
           {text(
-            "这里展示数据库配置。最终费用还受模型规则、用户/分组矩阵和运行中设置影响。账号名单当前仅是元数据，网关尚未以该名单校验调用。",
-            "This view shows database configuration. Final charges also depend on model rules, user/group matrices and running settings. Account lists are currently metadata; the gateway does not yet enforce these lists on calls.",
-            "تعرض هذه الصفحة إعدادات قاعدة البيانات. تعتمد الرسوم أيضًا على قواعد النماذج ومصفوفات المستخدم والمجموعة والإعدادات الفعلية. قوائم الحسابات حاليًا بيانات وصفية ولا تتحقق البوابة منها في الطلبات.",
+            "这里展示数据库配置。最终费用还受模型规则、用户/分组矩阵和运行中设置影响。网关会检查停用状态与自定义账号名单；名单只匹配真实服务器用户 ID，演示标识不授予调用权限。",
+            "This view shows database configuration. Final charges also depend on model rules, user/group matrices and running settings. The gateway checks disabled groups and custom account lists. Only exact server user IDs grant access; Demo identifiers do not.",
+            "تعرض هذه الصفحة إعدادات قاعدة البيانات. تعتمد الرسوم أيضًا على قواعد النماذج ومصفوفات المستخدم والمجموعة والإعدادات الفعلية. تتحقق البوابة من تعطيل المجموعة وقوائم الحسابات المخصصة. تمنح معرّفات مستخدمي الخادم المطابقة فقط حق الوصول؛ ولا تمنحه معرّفات العرض التجريبي.",
           )}
         </p>
         <Link to="/admin?tab=resources">
@@ -258,9 +258,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
       {query.isError && (
         <p role="alert">
           {text(
-            "无法确认服务器配置或版本保护能力，已隐藏旧数据并暂停编辑。请刷新重试。",
-            "Cannot verify server configuration or version-guard support. Cached data is hidden and editing is paused. Refresh to retry.",
-            "تعذر التحقق من الإعدادات أو دعم حماية الإصدار. أُخفيت البيانات السابقة وأُوقف التحرير. حدّث للمحاولة.",
+            "无法确认服务器配置、版本保护或账号权限校验能力，已隐藏旧数据并暂停编辑。请刷新重试。",
+            "Cannot verify server configuration, version guards or account access checks. Cached data is hidden and editing is paused. Refresh to retry.",
+            "تعذر التحقق من الإعدادات أو حماية الإصدار أو فحص صلاحيات الحساب. أُخفيت البيانات السابقة وأُوقف التحرير. حدّث للمحاولة.",
           )}
         </p>
       )}
@@ -370,9 +370,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                     {group?.visibility === "custom" && (
                       <small>
                         {text(
-                          "历史定制元数据",
-                          "Legacy custom metadata",
-                          "بيانات مخصصة سابقة",
+                          "自定义账号范围",
+                          "Custom account scope",
+                          "نطاق حسابات مخصص",
                         )}
                       </small>
                     )}
@@ -529,11 +529,17 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                         "After removing the ratio, this group no longer passes gateway group admission. Ledgers are unchanged.",
                         "بعد إزالة المعامل لا تجتاز المجموعة تحقق الدخول في البوابة. لا تتغير السجلات المالية.",
                       )
-                    : text(
-                        "保存会发布该倍率；模型可用性仍取决于渠道配置。",
-                        "Saving publishes this ratio; model availability still depends on channel configuration.",
-                        "ينشر الحفظ هذا المعامل؛ يظل توفر النماذج مرتبطًا بإعداد القنوات.",
-                      )}
+                    : draft.original?.visibility === "custom"
+                      ? text(
+                          "保存会发布该倍率并保留原账号范围。名单中匹配的服务器用户 ID 仍需通过模型、渠道与额度检查。",
+                          "Saving publishes this ratio and retains the stored account scope. Matching server user IDs still require model, channel and quota checks.",
+                          "ينشر الحفظ المعامل ويحتفظ بنطاق الحسابات السابق. تظل معرّفات المستخدمين المطابقة خاضعة لفحوص النموذج والقناة والحصة.",
+                        )
+                      : text(
+                          "公共账号范围：保存会发布该倍率，所有账号仍需通过密钥、模型、渠道与额度检查。",
+                          "Common account scope: saving publishes this ratio. All accounts still require key, model, channel and quota checks.",
+                          "نطاق حسابات عام: ينشر الحفظ هذا المعامل. تظل كل الحسابات خاضعة لفحوص المفتاح والنموذج والقناة والحصة.",
+                        )}
                 </p>
                 {!draft.remove && (
                   <Button disabled={pending} onClick={() => setReview(false)}>
@@ -543,6 +549,15 @@ export function ServiceGroups({ role: _role }: { role: number }) {
               </div>
             ) : (
               <div className="sgm-fields">
+                {draft.original?.visibility !== "custom" && (
+                  <p className="sgm-wide">
+                    {text(
+                      "此定义使用公共账号范围，仍需通过密钥、模型、渠道及额度检查。此处暂不编辑自定义名单。",
+                      "This definition uses common account scope, subject to key, model, channel and quota checks. Custom account lists cannot be edited here yet.",
+                      "يستخدم هذا التعريف نطاق حسابات عامًا مع فحوص المفتاح والنموذج والقناة والحصة. لا يمكن تعديل قوائم الحسابات المخصصة هنا بعد.",
+                    )}
+                  </p>
+                )}
                 <label>
                   {text("分组标识", "Group identifier", "معرّف المجموعة")}
                   <input
@@ -635,9 +650,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                     </p>
                     <small>
                       {text(
-                        "本次保留原账号名单；当前不将其作为网关授权保证。",
-                        "This edit retains the stored account list; it is not a gateway authorization guarantee.",
-                        "يُحفظ هنا كشف الحسابات السابق؛ وهو ليس ضمانًا لصلاحيات البوابة.",
+                        "本次保留原账号名单。网关只接受名单中匹配的服务器用户 ID，仍需满足模型、渠道及额度限制。",
+                        "This edit retains the stored account list. The gateway requires a matching server user ID, with model, channel and quota checks still applying.",
+                        "يُحفظ كشف الحسابات السابق. تشترط البوابة معرّف مستخدم خادم مطابقًا، وتظل قيود النموذج والقناة والحصة سارية.",
                       )}
                     </small>
                   </div>

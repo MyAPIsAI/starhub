@@ -49,7 +49,7 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	autoGroups := strings.TrimSpace(req.AutoGroups)
 	if group == common.AutoGroup {
-		if autoGroups == "" {
+		if len(model.SplitList(autoGroups)) == 0 {
 			common.ApiError(w, http.StatusBadRequest, "auto group requires auto_groups to be set")
 			return
 		}
@@ -59,6 +59,9 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+	if !validateTokenGroupAccess(w, r, requestUserID(r), group, autoGroups) {
+		return
 	}
 	token := &model.Token{
 		UserID:         requestUserID(r),
@@ -235,6 +238,9 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "auto group requires auto_groups to be set")
 		return
 	}
+	if (req.Group != nil || req.AutoGroups != nil) && !validateTokenGroupAccess(w, r, token.UserID, group, autoGroups) {
+		return
+	}
 	if quotaSetByUser && req.ExpectedQuota == nil {
 		common.ApiError(w, http.StatusBadRequest, "expected_quota is required when setting a balance")
 		return
@@ -283,6 +289,48 @@ func DeleteToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.ApiSuccess(w, nil)
+}
+
+// Validate the effective owner's scope even when an administrator edits a key.
+// Unrelated edits remain possible after revocation so a key can still be disabled.
+func validateTokenGroupAccess(w http.ResponseWriter, r *http.Request, ownerID int64, group, autoGroups string) bool {
+	if group == "" {
+		owner, err := model.GetUserByID(ownerID)
+		if err != nil {
+			common.ApiError(w, http.StatusInternalServerError, "token owner could not be verified")
+			return false
+		}
+		group = owner.Group
+		if group == "" {
+			group = common.DefaultGroup
+		}
+	}
+	groups := []string{group}
+	if group == common.AutoGroup {
+		groups = model.SplitList(autoGroups)
+		if len(groups) == 0 {
+			common.ApiError(w, http.StatusBadRequest, "auto group requires auto_groups to be set")
+			return false
+		}
+	}
+	for _, candidate := range groups {
+		if candidate == common.AutoGroup || !setting.ContainsGroupRatio(candidate) {
+			common.ApiError(w, http.StatusBadRequest, "group has no ratio configured")
+			return false
+		}
+	}
+	access, err := model.ServiceGroupAccess(r.Context(), groups, ownerID)
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "group access could not be verified")
+		return false
+	}
+	for _, candidate := range groups {
+		if !access[candidate] {
+			common.ApiError(w, http.StatusForbidden, "token owner cannot access the configured group")
+			return false
+		}
+	}
+	return true
 }
 
 func canManageToken(r *http.Request, token *model.Token) bool {

@@ -15,9 +15,8 @@ import (
 // Model plaza API.
 //
 // This is a read-only browse surface over the channel graph, the metadata
-// catalog and the live pricing options. It deliberately shares nothing with
-// the relay path except the setting lookups: the plaza must never be able to
-// affect billing, and the relay must never depend on the catalog existing.
+// catalog and the live pricing options. It shares group access policy with
+// the relay path; browsing never mutates billing or grants calling rights.
 //
 // All prices are returned in USD. Currency conversion and locale formatting
 // are client concerns — a server that renders "$3" cannot be cached across
@@ -29,13 +28,25 @@ import (
 // shopping visitor should see. A signed-in visitor is priced through their
 // own group, including the group x group matrix, so the numbers on the page
 // are the numbers they will actually be billed.
-func plazaSession(r *http.Request) (userGroup string, authed bool) {
+func plazaSession(r *http.Request) (userGroup string, userID int64) {
 	if uid, ok := middleware.Sessions.Get(middleware.SessionToken(r)); ok {
 		if u, err := model.GetUserByID(uid); err == nil && u.Status == common.StatusEnabled {
-			return u.Group, true
+			group := u.Group
+			if group == "" {
+				group = common.DefaultGroup
+			}
+			return group, u.ID
 		}
 	}
-	return common.DefaultGroup, false
+	return common.DefaultGroup, 0
+}
+
+func plazaGroupSLA(r *http.Request, group string, userID int64) (*model.ServiceGroupSLA, error) {
+	access, err := model.ServiceGroupAccess(r.Context(), []string{group}, userID)
+	if err != nil || !access[group] {
+		return nil, err
+	}
+	return model.PublishedServiceGroupSLA(r.Context(), group)
 }
 
 // PlazaListModels handles GET /api/plaza/models.
@@ -53,13 +64,13 @@ func plazaSession(r *http.Request) (userGroup string, authed bool) {
 //	sort            recommended | discount_desc | price_asc | context_desc | newest | name_asc
 //	page, page_size pagination, page_size capped server-side
 func PlazaListModels(w http.ResponseWriter, r *http.Request) {
-	group, _ := plazaSession(r)
-	groupSLA, err := model.PublishedServiceGroupSLA(r.Context(), group)
+	group, userID := plazaSession(r)
+	groupSLA, err := plazaGroupSLA(r, group, userID)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, "service-level targets are unavailable")
 		return
 	}
-	rows, err := buildPlazaRows(group, group)
+	rows, err := buildPlazaRows(r.Context(), group, group, userID)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, "failed to build model catalog: "+err.Error())
 		return
@@ -108,8 +119,8 @@ func PlazaGetModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, _ := plazaSession(r)
-	rows, err := buildPlazaRows(group, group)
+	group, userID := plazaSession(r)
+	rows, err := buildPlazaRows(r.Context(), group, group, userID)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, "failed to build model catalog: "+err.Error())
 		return
@@ -134,7 +145,7 @@ func PlazaGetModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	detail := map[string]any{"model": found, "group": group}
-	groupSLA, err := model.PublishedServiceGroupSLA(r.Context(), group)
+	groupSLA, err := plazaGroupSLA(r, group, userID)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, "service-level targets are unavailable")
 		return
@@ -188,8 +199,8 @@ func PlazaGetModel(w http.ResponseWriter, r *http.Request) {
 // correct, and the catalog is small enough that returning global counts and
 // letting the client render them is both simpler and never wrong.
 func PlazaFilters(w http.ResponseWriter, r *http.Request) {
-	group, _ := plazaSession(r)
-	rows, err := buildPlazaRows(group, group)
+	group, userID := plazaSession(r)
+	rows, err := buildPlazaRows(r.Context(), group, group, userID)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -277,8 +288,8 @@ func PlazaFilters(w http.ResponseWriter, r *http.Request) {
 // Every ranking is data-driven. A model without the required data is omitted;
 // nothing is given a placeholder score to make a list look full.
 func PlazaRank(w http.ResponseWriter, r *http.Request) {
-	group, _ := plazaSession(r)
-	rows, err := buildPlazaRows(group, group)
+	group, userID := plazaSession(r)
+	rows, err := buildPlazaRows(r.Context(), group, group, userID)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return

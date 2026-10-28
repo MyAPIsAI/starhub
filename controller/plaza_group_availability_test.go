@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -18,7 +19,7 @@ func TestPlazaAvailabilityRequiresConfiguredGroupButPreservesExplicitZero(t *tes
 		t.Fatal(err)
 	}
 	for _, group := range []string{"default", "missing", "vip", "zero"} {
-		rows, err := buildPlazaRows(group, group)
+		rows, err := buildPlazaRows(context.Background(), group, group, 0)
 		if err != nil || len(rows) != 1 {
 			t.Fatalf("rows: %v %v", rows, err)
 		}

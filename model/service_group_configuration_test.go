@@ -44,7 +44,11 @@ func groupConfigurationSnapshot(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, err := json.Marshal([]any{groups, options, changes, version})
+	var deletions []ServiceGroupDeletion
+	if err := DB.Order("group_id").Find(&deletions).Error; err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal([]any{groups, options, changes, version, deletions})
 	if err != nil {
 		t.Fatal(err)
 	}

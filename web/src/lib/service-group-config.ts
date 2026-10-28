@@ -11,6 +11,7 @@ export interface ServiceGroupCatalog {
   loaded_option_version: number;
   revision_guards: true;
   option_version_guard: true;
+  account_access_guard: true;
 }
 
 const integer = (value: unknown, min = 0): value is number =>
@@ -60,6 +61,7 @@ export function readServiceGroupCatalog(value: unknown): ServiceGroupCatalog {
   if (
     c.revision_guards !== true ||
     c.option_version_guard !== true ||
+    c.account_access_guard !== true ||
     !integer(c.option_version) ||
     !integer(c.loaded_option_version) ||
     !Array.isArray(c.groups) ||
@@ -93,6 +95,7 @@ export function readServiceGroupCatalog(value: unknown): ServiceGroupCatalog {
     loaded_option_version: c.loaded_option_version,
     revision_guards: true,
     option_version_guard: true,
+    account_access_guard: true,
   };
 }
 

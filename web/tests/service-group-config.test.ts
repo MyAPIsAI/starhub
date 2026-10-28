@@ -26,6 +26,7 @@ const catalog = {
   loaded_option_version: 1,
   revision_guards: true,
   option_version_guard: true,
+  account_access_guard: true,
 };
 
 describe("authoritative group configuration", () => {
@@ -45,6 +46,8 @@ describe("authoritative group configuration", () => {
     for (const data of [
       { ...catalog, groups: [], revision_guards: undefined },
       { ...catalog, option_version_guard: false },
+      { ...catalog, account_access_guard: false },
+      { ...catalog, groups: [], account_access_guard: undefined },
       { ...catalog, groups: undefined },
     ])
       expect(() => readServiceGroupCatalog(data)).toThrow();

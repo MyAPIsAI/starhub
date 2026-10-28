@@ -50,6 +50,7 @@ const snapshot = {
   loaded_option_version: 1,
   revision_guards: true,
   option_version_guard: true,
+  account_access_guard: true,
 };
 function render(role = 100, error = false, empty = false) {
   useSystemAccess.getState().setSession({ id: 7, group: "default", role });

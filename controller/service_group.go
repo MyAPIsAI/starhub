@@ -51,7 +51,8 @@ func GetServiceGroupCatalog(w http.ResponseWriter, r *http.Request) {
 		groups = append(groups, serviceGroupJSON(&catalog.Groups[i]))
 	}
 	common.ApiSuccess(w, map[string]any{"groups": groups, "group_ratios": catalog.GroupRatios, "option_version": catalog.OptionVersion,
-		"loaded_option_version": model.LoadedOptionVersion(), "revision_guards": true, "option_version_guard": true})
+		"loaded_option_version": model.LoadedOptionVersion(), "revision_guards": true, "option_version_guard": true,
+		"account_access_guard": true})
 }
 
 // UpsertServiceGroup creates or updates a service group. It also syncs

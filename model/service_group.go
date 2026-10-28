@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var ErrServiceGroupNotFound = errors.New("service group not found")
@@ -34,7 +35,15 @@ type ServiceGroupConfig struct {
 
 // UpsertServiceGroup creates or updates a service group config row.
 func UpsertServiceGroup(sgc *ServiceGroupConfig) error {
-	return upsertServiceGroup(DB, sgc)
+	if sgc == nil {
+		return errors.New("service group is required")
+	}
+	stored := *sgc
+	if err := DB.Transaction(func(tx *gorm.DB) error { return upsertServiceGroup(tx, &stored) }); err != nil {
+		return err
+	}
+	*sgc = stored
+	return nil
 }
 
 func upsertServiceGroup(db *gorm.DB, sgc *ServiceGroupConfig) error {
@@ -88,6 +97,9 @@ func reloadServiceGroup(db *gorm.DB, sgc *ServiceGroupConfig) error {
 	if err := db.Where("group_id = ?", sgc.GroupID).First(&stored).Error; err != nil {
 		return err
 	}
+	if err := db.Where("group_id = ?", sgc.GroupID).Delete(&ServiceGroupDeletion{}).Error; err != nil {
+		return err
+	}
 	*sgc = stored
 	return nil
 }
@@ -114,7 +126,7 @@ func ListServiceGroups() ([]ServiceGroupConfig, error) {
 
 // DeleteServiceGroup removes a service group config by group_id.
 func DeleteServiceGroup(groupID string) error {
-	return deleteServiceGroup(DB, groupID)
+	return DB.Transaction(func(tx *gorm.DB) error { return deleteServiceGroup(tx, groupID) })
 }
 
 func deleteServiceGroup(db *gorm.DB, groupID string) error {
@@ -125,5 +137,5 @@ func deleteServiceGroup(db *gorm.DB, groupID string) error {
 	if res.RowsAffected == 0 {
 		return ErrServiceGroupNotFound
 	}
-	return nil
+	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&ServiceGroupDeletion{GroupID: groupID}).Error
 }

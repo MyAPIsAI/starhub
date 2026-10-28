@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"math"
 	"sort"
 	"strings"
@@ -179,8 +180,16 @@ type plazaPricingJSON struct {
 // sourcing the model list from the channel graph (not from metadata) is
 // deliberate: the plaza must never advertise a model that cannot be served,
 // and must never hide one that can.
-func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
+func buildPlazaRows(ctx context.Context, group, userGroup string, userID int64) ([]plazaRow, error) {
 	coverage, err := model.ListModelCoverage()
+	if err != nil {
+		return nil, err
+	}
+	groups := []string{group}
+	for _, entry := range coverage {
+		groups = append(groups, entry.Groups...)
+	}
+	access, err := model.ServiceGroupAccess(ctx, groups, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -230,12 +239,12 @@ func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
 
 		if cov != nil {
 			for _, coveredGroup := range sortedUnique(cov.Groups) {
-				if setting.ContainsGroupRatio(coveredGroup) {
+				if setting.ContainsGroupRatio(coveredGroup) && access[coveredGroup] {
 					row.AvailableGroups = append(row.AvailableGroups, coveredGroup)
 				}
 			}
 			row.ChannelCount = cov.ChannelCount
-			if setting.ContainsGroupRatio(group) {
+			if setting.ContainsGroupRatio(group) && access[group] {
 				row.Protocols = plazaProtocols(cov.ChannelTypes[group], row.Tags)
 			}
 		}
@@ -265,6 +274,8 @@ func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
 			reason := "group_not_enabled"
 			if !setting.ContainsGroupRatio(group) {
 				reason = "group_not_configured"
+			} else if !access[group] {
+				reason = "group_not_allowed"
 			} else if cov == nil {
 				reason = "channel_missing"
 			}
