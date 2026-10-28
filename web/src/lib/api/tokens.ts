@@ -12,6 +12,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPut, apiDelete } from "./http";
+import { useSessionQueryIdentity, useSystemAccess } from "../system-access";
 
 export interface Token {
   id: number;
@@ -59,8 +60,13 @@ export interface TokenUpdateInput {
 const TOKENS_KEY = ["tokens"] as const;
 
 export function useTokens() {
+  const identity = useSessionQueryIdentity();
+  const authenticated = useSystemAccess(
+    (state) => state.session.accountId !== null,
+  );
   return useQuery({
-    queryKey: TOKENS_KEY,
+    queryKey: [...TOKENS_KEY, identity],
+    enabled: authenticated,
     queryFn: ({ signal }) => apiGet<Token[]>("/api/token", signal),
   });
 }

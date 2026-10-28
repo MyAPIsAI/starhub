@@ -9,8 +9,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut, apiDelete } from "./http";
 import type { ServiceLevel, ServiceLevelTargets } from "../service-level";
-import { useSystemAccess } from "../system-access";
-import { useProductPreview } from "../product-preview";
+import { useSessionQueryIdentity } from "../system-access";
 
 export interface ServiceGroup {
   id: number;
@@ -39,10 +38,9 @@ export interface ServiceGroupInput {
 const GROUPS_KEY = ["service-groups"] as const;
 
 export function useServiceGroups(enabled = true) {
-  const role = useSystemAccess((state) => state.role);
-  const account = useProductPreview((state) => state.user.id);
+  const identity = useSessionQueryIdentity();
   return useQuery({
-    queryKey: [...GROUPS_KEY, account, role],
+    queryKey: [...GROUPS_KEY, identity],
     enabled,
     queryFn: ({ signal }) =>
       apiGet<ServiceGroup[]>("/api/service-group", signal),

@@ -152,7 +152,8 @@ export function useBackendKeys(plaintextKeys: Record<string, string> = {}): {
   loading: boolean;
   error: Error | null;
 } {
-  const { data, isLoading, error } = useTokens();
+  const { data: cached, isLoading, error } = useTokens();
+  const data = error ? undefined : cached;
   const keys = useMemo(() => {
     if (!data) return [];
     return data.map((token) =>

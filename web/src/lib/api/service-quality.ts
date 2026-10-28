@@ -6,6 +6,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "./http";
+import { useSessionQueryIdentity, useSystemAccess } from "../system-access";
 
 export interface ServiceQualityMetric {
   model: string;
@@ -37,12 +38,17 @@ export interface ServiceQualitySummary {
 }
 
 export function useServiceQuality(hours: number = 24, model?: string) {
+  const identity = useSessionQueryIdentity();
+  const authenticated = useSystemAccess(
+    (state) => state.session.accountId !== null,
+  );
   const params = new URLSearchParams({ hours: String(hours) });
   if (model) params.set("model", model);
   return useQuery({
     queryKey: model
-      ? (["service-quality", hours, model] as const)
-      : (["service-quality", hours] as const),
+      ? (["service-quality", identity, hours, model] as const)
+      : (["service-quality", identity, hours] as const),
+    enabled: authenticated,
     queryFn: ({ signal }) =>
       apiGet<ServiceQualitySummary>(`/api/service-quality?${params}`, signal),
   });

@@ -11,7 +11,7 @@ import {
 import { authUserProfile, getSelf } from "./api/auth";
 import { ApiError } from "./api/http";
 import { useProductPreview } from "./product-preview";
-import { ROLE_USER, useSystemAccess } from "./system-access";
+import { useSystemAccess } from "./system-access";
 
 type RestoreStatus = "checking" | "ready" | "unavailable";
 
@@ -49,7 +49,7 @@ export function SessionRestoreProvider({ children }: { children: ReactNode }) {
     getSelf({ handleUnauthorizedLocally: true }, controller.signal)
       .then((user) => {
         if (controller.signal.aborted) return;
-        useSystemAccess.getState().setRole(user.role);
+        useSystemAccess.getState().setSession(user);
         useProductPreview
           .getState()
           .login(user.email ?? "", user.username, authUserProfile(user));
@@ -59,7 +59,7 @@ export function SessionRestoreProvider({ children }: { children: ReactNode }) {
         if (controller.signal.aborted) return;
         if (error instanceof ApiError && error.status === 401) {
           useProductPreview.getState().logout();
-          useSystemAccess.getState().setRole(ROLE_USER);
+          useSystemAccess.getState().setSession(null);
           setStatus("ready");
         } else {
           // A transport or server failure does not establish an anonymous session.

@@ -10,6 +10,30 @@ export const ROLE_ROOT = 100;
 
 export type SystemRole = number;
 
+export interface SessionIdentity {
+  accountId: number | null;
+  group: string | null;
+  epoch: number;
+}
+
+export function sessionQueryIdentity(state: {
+  session: SessionIdentity;
+  role: SystemRole;
+}) {
+  return [
+    state.session.epoch,
+    state.session.accountId,
+    state.session.group,
+    state.role,
+  ] as const;
+}
+
+export function useSessionQueryIdentity() {
+  const session = useSystemAccess((state) => state.session);
+  const role = useSystemAccess((state) => state.role);
+  return sessionQueryIdentity({ session, role });
+}
+
 // isAdmin reports whether role carries management privileges. This
 // is the single source of truth for admin-only UI; the backend still
 // enforces authorization on every write.
@@ -23,10 +47,25 @@ export const canReadFinance = (role: SystemRole): boolean =>
 // every protected operation is authorized by the backend independently.
 export const useSystemAccess = create<{
   role: SystemRole;
+  session: SessionIdentity;
   setRole: (role: SystemRole) => void;
+  setSession: (
+    user: { id: number; group: string; role: number } | null,
+  ) => void;
 }>((set) => ({
   role: ROLE_USER,
+  session: { accountId: null, group: null, epoch: 0 },
   setRole: (role) => set({ role }),
+  // Only confirmed session events rotate this identity, never Demo profile edits.
+  setSession: (user) =>
+    set((state) => ({
+      role: user?.role ?? ROLE_USER,
+      session: {
+        accountId: user?.id ?? null,
+        group: user?.group ?? null,
+        epoch: state.session.epoch + 1,
+      },
+    })),
 }));
 
 export const systemRoleForScenario = (scenario: string): SystemRole =>

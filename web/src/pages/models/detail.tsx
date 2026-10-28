@@ -64,7 +64,7 @@ export default function ModelDetail() {
   // Fetch service quality summary to show a per-model metric panel inline.
   // The backend returns per-model aggregates in by_model.
   const qualityQuery = useServiceQuality(168, id);
-  const modelQuality = model
+  const modelQuality = model && !qualityQuery.isError
     ? qualityQuery.data?.by_model.find((m) => m.model === model.id)
     : undefined;
   const measuredP95 =

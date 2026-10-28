@@ -263,7 +263,7 @@ export default function AuthDialog() {
         useProductPreview
           .getState()
           .login(user.email ?? "", user.username, authUserProfile(user));
-        useSystemAccess.getState().setRole(user.role);
+        useSystemAccess.getState().setSession(user);
         completeSessionRestore();
       }
       setPassword("");

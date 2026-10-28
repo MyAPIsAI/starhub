@@ -24,7 +24,7 @@ import "./components/refinement.css";
 import "./components/select-controls.css";
 import i18n from "./i18n";
 import { usePreferences } from "./lib/preferences";
-import { useSystemAccess, isAdmin, canReadFinance, ROLE_USER } from "./lib/system-access";
+import { useSystemAccess, isAdmin, canReadFinance } from "./lib/system-access";
 import { useProductPreview } from "./lib/product-preview";
 import { onAuthLoss, ApiError } from "./lib/api/http";
 import {
@@ -184,7 +184,7 @@ function App() {
   useEffect(() => {
     return onAuthLoss(() => {
       useProductPreview.getState().logout();
-      useSystemAccess.getState().setRole(ROLE_USER);
+      useSystemAccess.getState().setSession(null);
       queryClient.clear();
       // Hard redirect: the session is gone, so the full app state
       // must be discarded. This also avoids stale React Query caches.

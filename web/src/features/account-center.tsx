@@ -20,7 +20,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { Modal } from "../components/ui/overlay";
 import { useProductPreview } from "../lib/product-preview";
-import { useSystemAccess, isAdmin, ROLE_USER } from "../lib/system-access";
+import { useSystemAccess, isAdmin } from "../lib/system-access";
 import { logoutUser } from "../lib/api/auth";
 import { useUpdateSelf, useSessions, useTerminateOtherSessions, type SessionInfo } from "../lib/api/user";
 import { ApiError } from "../lib/api/http";
@@ -470,7 +470,7 @@ export default function AccountCenter({
     } catch {
       // Best-effort: clear local state even if the server is unreachable.
     }
-    useSystemAccess.getState().setRole(ROLE_USER);
+    useSystemAccess.getState().setSession(null);
     logout();
     queryClient.clear();
     navigate(path);

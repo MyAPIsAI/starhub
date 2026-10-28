@@ -11,6 +11,8 @@ import {
 import { useServiceQuality } from "../lib/api/service-quality";
 import { usePreferences } from "../lib/preferences";
 import { Button } from "./ui/button";
+import { Link } from "react-router-dom";
+import { useSystemAccess } from "../lib/system-access";
 
 export function ModelRequestTrend({ model }: { model: string }) {
   const language = usePreferences((state) => state.language);
@@ -20,6 +22,9 @@ export function ModelRequestTrend({ model }: { model: string }) {
     "requests",
   );
   const query = useServiceQuality(720, model);
+  const authenticated = useSystemAccess(
+    (state) => state.session.accountId !== null,
+  );
   const title =
     metric === "latency"
       ? text(
@@ -46,7 +51,7 @@ export function ModelRequestTrend({ model }: { model: string }) {
     "No latency data",
     "لا توجد بيانات زمن الاستجابة",
   );
-  const rows = (query.data?.by_day ?? []).map((day) => ({
+  const rows = (query.isError ? [] : (query.data?.by_day ?? [])).map((day) => ({
     ...day,
     success_percent: day.success_rate * 100,
     measured_p95:
@@ -89,7 +94,17 @@ export function ModelRequestTrend({ model }: { model: string }) {
           <option value="latency">{latency}</option>
         </select>
       </label>
-      {query.isPending ? (
+      {!authenticated ? (
+        <p className="access-muted">
+          <Link to="/login">
+            {text(
+              "登录后查看请求趋势",
+              "Sign in to view request trends",
+              "سجّل الدخول لعرض اتجاه الطلبات",
+            )}
+          </Link>
+        </p>
+      ) : query.isPending ? (
         <p className="access-muted" role="status">
           {text("正在加载趋势…", "Loading trend…", "جارٍ تحميل الاتجاه…")}
         </p>

@@ -7,7 +7,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "./http";
-import { useSystemAccess } from "../system-access";
+import { useSessionQueryIdentity } from "../system-access";
 import type { DirectoryModel } from "../../config/model-directory";
 import type { TierId } from "../../config/placeholders";
 import type { ServiceLevel } from "../service-level";
@@ -190,12 +190,10 @@ export function usePlazaRank(rankType: PlazaRankType = "value") {
   });
 }
 
-// The backend resolves the user's group from the session cookie
-// automatically. We only need a cache-busting key that changes when
-// the session changes — the role (from GET /api/user/self via
-// session-restore) serves this purpose without touching the demo store.
+// Session transitions rotate the cache even between accounts with the same role.
+// The backend still resolves the actual group from its cookie on every request.
 function usePlazaIdentity() {
-  return useSystemAccess((state) => state.role);
+  return useSessionQueryIdentity();
 }
 
 // --- Adapter: PlazaRow -> DirectoryModel ---

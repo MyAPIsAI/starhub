@@ -13,7 +13,11 @@ import { ApiError } from "../src/lib/api/http";
 import ModelSquare from "../src/pages/models/index";
 import ModelDetail from "../src/pages/models/detail";
 import { useProductPreview } from "../src/lib/product-preview";
-import { useSystemAccess, ROLE_USER } from "../src/lib/system-access";
+import {
+  useSystemAccess,
+  ROLE_USER,
+  sessionQueryIdentity,
+} from "../src/lib/system-access";
 import { useModelPricing } from "../src/lib/model-pricing";
 import type { ServiceQualitySummary } from "../src/lib/api/service-quality";
 
@@ -23,6 +27,24 @@ vi.mock("../src/components/product-shell", () => ({
 vi.mock("../src/components/demo-control-bar", () => ({
   DemoControlBar: () => null,
 }));
+vi.mock("../src/lib/system-access", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../src/lib/system-access")>();
+  const useRole = Object.assign(
+    <T,>(
+      selector: (
+        state: ReturnType<typeof actual.useSystemAccess.getState>,
+      ) => T,
+    ) => selector(actual.useSystemAccess.getState()),
+    actual.useSystemAccess,
+  );
+  return {
+    ...actual,
+    useSystemAccess: useRole,
+    useSessionQueryIdentity: () =>
+      actual.sessionQueryIdentity(actual.useSystemAccess.getState()),
+  };
+});
 
 const row: PlazaRow = {
   id: "gpt-4o",
@@ -80,6 +102,7 @@ type RenderOptions = {
   otherIdentityOnly?: boolean;
   quality?: ServiceQualitySummary;
   groupSla?: unknown;
+  anonymous?: boolean;
 };
 
 function renderPage({
@@ -91,7 +114,11 @@ function renderPage({
   otherIdentityOnly = false,
   quality,
   groupSla = null,
+  anonymous = false,
 }: RenderOptions = {}) {
+  useSystemAccess
+    .getState()
+    .setSession(anonymous ? null : { id: 7, group, role: ROLE_USER });
   const client = new QueryClient({
     defaultOptions: {
       queries: {
@@ -102,7 +129,7 @@ function renderPage({
       },
     },
   });
-  const identity = useSystemAccess.getState().role;
+  const identity = sessionQueryIdentity(useSystemAccess.getState());
   client.setQueryData(["plaza-filters", identity], filters);
   const quoteIdentity = otherIdentityOnly ? "other-user" : identity;
   const url = new URL(route, "http://localhost");
@@ -157,6 +184,7 @@ function renderPage({
     client.setQueryData(
       [
         "service-quality",
+        identity,
         168,
         decodeURIComponent(url.pathname.slice("/models/".length)),
       ],
