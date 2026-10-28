@@ -40,6 +40,16 @@ func OptionStatus(w http.ResponseWriter, r *http.Request) {
 		"loaded_version": loaded, "in_sync": version == loaded, "instances": instances})
 }
 
+// ReloadOptions applies the stored configuration to this process only.
+// Other instance versions remain heartbeat observations, not acknowledgments.
+func ReloadOptions(w http.ResponseWriter, r *http.Request) {
+	if err := model.LoadOptionsToSettings(); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "failed to reload stored configuration")
+		return
+	}
+	OptionStatus(w, r)
+}
+
 func OptionHistory(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	changes, err := model.ListOptionChanges(limit)
