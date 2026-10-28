@@ -16,26 +16,49 @@ export function ModelRequestTrend({ model }: { model: string }) {
   const language = usePreferences((state) => state.language);
   const text = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
-  const [metric, setMetric] = useState<"requests" | "success">("requests");
+  const [metric, setMetric] = useState<"requests" | "success" | "latency">(
+    "requests",
+  );
   const query = useServiceQuality(720, model);
   const title =
-    metric === "success"
+    metric === "latency"
       ? text(
-          "最近 30 天每日成功率",
-          "Daily success rate over the last 30 days",
-          "معدل النجاح اليومي خلال آخر 30 يومًا",
+          "最近 30 天每日 P95 延迟",
+          "Daily P95 latency over the last 30 days",
+          "زمن P95 اليومي خلال آخر 30 يومًا",
         )
-      : text(
-          "最近 30 天每日请求数",
-          "Daily requests over the last 30 days",
-          "الطلبات اليومية خلال آخر 30 يومًا",
-        );
+      : metric === "success"
+        ? text(
+            "最近 30 天每日成功率",
+            "Daily success rate over the last 30 days",
+            "معدل النجاح اليومي خلال آخر 30 يومًا",
+          )
+        : text(
+            "最近 30 天每日请求数",
+            "Daily requests over the last 30 days",
+            "الطلبات اليومية خلال آخر 30 يومًا",
+          );
   const requests = text("请求数", "Requests", "الطلبات");
   const successRate = text("成功率", "Success rate", "معدل النجاح");
+  const latency = text("P95 延迟", "P95 latency", "زمن P95");
+  const noLatencyData = text(
+    "暂无耗时数据",
+    "No latency data",
+    "لا توجد بيانات زمن الاستجابة",
+  );
   const rows = (query.data?.by_day ?? []).map((day) => ({
     ...day,
     success_percent: day.success_rate * 100,
+    measured_p95:
+      Number.isFinite(day.p95_duration_ms) && day.p95_duration_ms > 0
+        ? day.p95_duration_ms
+        : null,
   }));
+  const dataKey = {
+    requests: "total_requests",
+    success: "success_percent",
+    latency: "measured_p95",
+  }[metric];
 
   return (
     <section className="access-panel model-request-trend" aria-label={title}>
@@ -52,11 +75,18 @@ export function ModelRequestTrend({ model }: { model: string }) {
         <select
           value={metric}
           onChange={(event) =>
-            setMetric(event.target.value === "success" ? "success" : "requests")
+            setMetric(
+              event.target.value === "latency"
+                ? "latency"
+                : event.target.value === "success"
+                  ? "success"
+                  : "requests",
+            )
           }
         >
           <option value="requests">{requests}</option>
           <option value="success">{successRate}</option>
+          <option value="latency">{latency}</option>
         </select>
       </label>
       {query.isPending ? (
@@ -91,56 +121,80 @@ export function ModelRequestTrend({ model }: { model: string }) {
         </p>
       ) : (
         <>
-          <div dir="ltr" aria-hidden="true" style={{ minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart
-                data={rows}
-                margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-              >
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(date: string) => date.slice(5)}
-                  minTickGap={24}
-                  tick={{ fill: "var(--muted)", fontSize: 11 }}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  width={44}
-                  domain={metric === "success" ? [0, 100] : [0, "auto"]}
-                  tickFormatter={
-                    metric === "success"
-                      ? (value: number) => `${value}%`
-                      : undefined
-                  }
-                  tick={{ fill: "var(--muted)", fontSize: 11 }}
-                />
-                <Tooltip
-                  labelFormatter={(date) => `${date} (UTC)`}
-                  formatter={
-                    metric === "success"
-                      ? (value) => `${Number(value).toFixed(1)}%`
-                      : undefined
-                  }
-                  contentStyle={{
-                    background: "var(--surface)",
-                    borderColor: "var(--border)",
-                    color: "var(--text)",
-                  }}
-                  cursor={{ fill: "var(--border)" }}
-                />
-                <Bar
-                  dataKey={
-                    metric === "success" ? "success_percent" : "total_requests"
-                  }
-                  name={metric === "success" ? successRate : requests}
-                  fill="var(--brand)"
-                  maxBarSize={36}
-                  isAnimationActive={false}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {metric === "latency" && (
+            <p className="access-muted">
+              {text(
+                "纵轴单位为秒，数据表与提示为毫秒；无有效耗时的日期不绘制延迟柱。",
+                "Axis in seconds; table and tooltips in milliseconds. Days without measured latency have no bar.",
+                "المحور بالثواني والجدول والتلميحات بالمللي ثانية؛ لا تظهر أعمدة للأيام بلا قياس.",
+              )}
+            </p>
+          )}
+          {metric === "latency" &&
+          rows.every((day) => day.measured_p95 === null) ? (
+            <p className="access-muted" role="status">
+              {noLatencyData}
+            </p>
+          ) : (
+            <div dir="ltr" aria-hidden="true" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart
+                  data={rows}
+                  margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+                >
+                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(date: string) => date.slice(5)}
+                    minTickGap={24}
+                    tick={{ fill: "var(--muted)", fontSize: 11 }}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    width={metric === "latency" ? 56 : 44}
+                    domain={metric === "success" ? [0, 100] : [0, "auto"]}
+                    tickFormatter={
+                      metric === "latency"
+                        ? (value: number) => `${value / 1000}s`
+                        : metric === "success"
+                          ? (value: number) => `${value}%`
+                          : undefined
+                    }
+                    tick={{ fill: "var(--muted)", fontSize: 11 }}
+                  />
+                  <Tooltip
+                    labelFormatter={(date) => `${date} (UTC)`}
+                    formatter={
+                      metric === "latency"
+                        ? (value) => `${value}ms`
+                        : metric === "success"
+                          ? (value) => `${Number(value).toFixed(1)}%`
+                          : undefined
+                    }
+                    contentStyle={{
+                      background: "var(--surface)",
+                      borderColor: "var(--border)",
+                      color: "var(--text)",
+                    }}
+                    cursor={{ fill: "var(--border)" }}
+                  />
+                  <Bar
+                    dataKey={dataKey}
+                    name={
+                      metric === "latency"
+                        ? latency
+                        : metric === "success"
+                          ? successRate
+                          : requests
+                    }
+                    fill="var(--brand)"
+                    maxBarSize={36}
+                    isAnimationActive={false}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
           <details className="access-details">
             <summary>
               {text("查看每日数据", "View daily data", "عرض البيانات اليومية")}
@@ -159,6 +213,7 @@ export function ModelRequestTrend({ model }: { model: string }) {
                     </th>
                     <th>{requests}</th>
                     <th>{successRate}</th>
+                    <th>{latency} (ms)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -169,6 +224,18 @@ export function ModelRequestTrend({ model }: { model: string }) {
                       </th>
                       <td>{day.total_requests}</td>
                       <td>{day.success_percent.toFixed(1)}%</td>
+                      <td
+                        style={{
+                          color:
+                            day.measured_p95 === null
+                              ? "var(--muted)"
+                              : undefined,
+                        }}
+                      >
+                        {day.measured_p95 === null
+                          ? noLatencyData
+                          : `${day.measured_p95}ms`}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
