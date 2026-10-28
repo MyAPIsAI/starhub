@@ -36,6 +36,32 @@ func (group *ServiceGroupConfig) ServiceLevel() ServiceGroupSLA {
 	return result
 }
 
+// PublishedServiceGroupSLA returns only enabled, operator-published group metadata.
+// Missing definitions remain unknown and are never filled from product examples.
+func PublishedServiceGroupSLA(ctx context.Context, groupID string) (*ServiceGroupSLA, error) {
+	var group ServiceGroupConfig
+	if err := DB.WithContext(ctx).Where("group_id = ?", groupID).First(&group).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if !group.Enabled {
+		return nil, nil
+	}
+	state := group.ServiceLevel()
+	if state.Revision < 0 || state.Revision > maxSLARevision || state.UpdatedAt < 0 {
+		return nil, ErrInvalidSLATarget
+	}
+	if err := validateSLATarget(state.Targets); err != nil {
+		return nil, err
+	}
+	if state.Targets != nil && (state.Revision < 1 || state.UpdatedAt < 1) {
+		return nil, ErrInvalidSLATarget
+	}
+	return &state, nil
+}
+
 func validateSLATarget(target *ServiceGroupSLATarget) error {
 	if target == nil {
 		return nil

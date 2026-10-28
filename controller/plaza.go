@@ -54,6 +54,11 @@ func plazaSession(r *http.Request) (userGroup string, authed bool) {
 //	page, page_size pagination, page_size capped server-side
 func PlazaListModels(w http.ResponseWriter, r *http.Request) {
 	group, _ := plazaSession(r)
+	groupSLA, err := model.PublishedServiceGroupSLA(r.Context(), group)
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "service-level targets are unavailable")
+		return
+	}
 	rows, err := buildPlazaRows(group, group)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, "failed to build model catalog: "+err.Error())
@@ -86,6 +91,7 @@ func PlazaListModels(w http.ResponseWriter, r *http.Request) {
 		"page":      page,
 		"page_size": pageSize,
 		"group":     group,
+		"group_sla": groupSLA,
 		"items":     filtered[start:end],
 	})
 }
@@ -128,6 +134,12 @@ func PlazaGetModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	detail := map[string]any{"model": found, "group": group}
+	groupSLA, err := model.PublishedServiceGroupSLA(r.Context(), group)
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "service-level targets are unavailable")
+		return
+	}
+	detail["group_sla"] = groupSLA
 
 	// Related models: same vendor first, then price neighbours. Both lists
 	// are computed from the already-filtered catalog so a visitor never gets

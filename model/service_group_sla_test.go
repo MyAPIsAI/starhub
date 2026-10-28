@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 func slaValue(value int64) *int64 { return &value }
@@ -152,5 +153,31 @@ func TestServiceLevelTargetMigrationDoesNotInventDefaults(t *testing.T) {
 	reopened, err := GetServiceGroup(group.GroupID)
 	if err != nil || reopened.Name != "Legacy" || reopened.Multiplier != "1" || reopened.SLARevision != 0 || reopened.ServiceLevel().Targets != nil {
 		t.Fatalf("legacy data changed: %+v %v", reopened, err)
+	}
+}
+
+func TestPublishedServiceLevelRejectsInvalidDataWithoutInventingTargets(t *testing.T) {
+	newTestDB(t)
+	ctx := context.Background()
+	if value, err := PublishedServiceGroupSLA(ctx, "missing"); err != nil || value != nil {
+		t.Fatalf("missing group: %+v %v", value, err)
+	}
+	group := &ServiceGroupConfig{GroupID: "public-group", Name: "Public", Multiplier: "1", Enabled: true}
+	if err := UpsertServiceGroup(group); err != nil {
+		t.Fatal(err)
+	}
+	if value, err := PublishedServiceGroupSLA(ctx, group.GroupID); err != nil || value == nil || value.Targets != nil {
+		t.Fatalf("unpublished group: %+v %v", value, err)
+	}
+	if err := DB.Model(&ServiceGroupConfig{}).Where("id = ?", group.ID).Updates(map[string]any{"sla_p95_ms": 0, "sla_revision": 1, "sla_updated_at": time.Now().Unix()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if value, err := PublishedServiceGroupSLA(ctx, group.GroupID); !errors.Is(err, ErrInvalidSLATarget) || value != nil {
+		t.Fatalf("invalid target advertised: %+v %v", value, err)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := PublishedServiceGroupSLA(cancelled, group.GroupID); err == nil {
+		t.Fatal("cancelled metadata read succeeded")
 	}
 }
