@@ -197,3 +197,68 @@ func TestGetServiceQualityModelFilter(t *testing.T) {
 		})
 	}
 }
+
+func TestGetServiceQualityP95(t *testing.T) {
+	newTestDB(t)
+	alice := newUser(t, "p95-alice", common.RoleUser, 1000)
+	bob := newUser(t, "p95-bob", common.RoleUser, 1000)
+	now := time.Now().UTC()
+	var logs []model.Log
+	for i := int64(1); i <= 20; i++ {
+		status := 1
+		if i == 20 {
+			status = 2
+		}
+		logs = append(logs,
+			model.Log{UserID: alice.ID, Model: "model-a", DurationMs: i * 100, Status: status, CreatedAt: now.Unix()},
+			model.Log{UserID: alice.ID, Model: "model-a", DurationMs: 0, CreatedAt: now.Unix()},
+			model.Log{UserID: alice.ID, Model: "model-b", DurationMs: 10000, CreatedAt: now.Unix()},
+		)
+	}
+	logs = append(logs,
+		model.Log{UserID: alice.ID, Model: "model-a", DurationMs: 2100, CreatedAt: now.AddDate(0, 0, -20).Unix()},
+		model.Log{UserID: alice.ID, Model: "model-a", DurationMs: 1000000, CreatedAt: now.AddDate(0, 0, -31).Unix()},
+		model.Log{UserID: bob.ID, Model: "model-a", DurationMs: 50000, CreatedAt: now.Unix()},
+		model.Log{UserID: alice.ID, Model: "unmeasured", DurationMs: 0, CreatedAt: now.Unix()},
+		model.Log{UserID: alice.ID, Model: "unmeasured", DurationMs: 0, CreatedAt: now.Unix()},
+		model.Log{UserID: alice.ID, Model: "unmeasured", DurationMs: -5, CreatedAt: now.Unix()},
+		model.Log{UserID: alice.ID, Model: "single", DurationMs: 4321, CreatedAt: now.Unix()},
+		model.Log{UserID: alice.ID, Model: "", DurationMs: 777, CreatedAt: now.Unix()},
+	)
+	if err := model.DB.Create(&logs).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		model   string
+		hours   int
+		role    int
+		total   int64
+		overall int64
+		byModel map[string]int64
+	}{
+		{"all models", "", 168, common.RoleUser, 65, 10000, map[string]int64{"model-a": 1900, "model-b": 10000, "unmeasured": 0, "single": 4321, "": 777}},
+		{"twenty one samples", "model-a", 720, common.RoleUser, 41, 2000, map[string]int64{"model-a": 2000}},
+		{"twenty samples", "model-a", 168, common.RoleUser, 40, 1900, map[string]int64{"model-a": 1900}},
+		{"admin scope", "model-a", 720, common.RoleAdmin, 42, 2100, map[string]int64{"model-a": 2100}},
+		{"no measurements", "unmeasured", 168, common.RoleUser, 3, 0, map[string]int64{"unmeasured": 0}},
+		{"one measurement", "single", 168, common.RoleUser, 1, 4321, map[string]int64{"single": 4321}},
+		{"empty result", "missing", 168, common.RoleUser, 0, 0, map[string]int64{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			query := url.Values{"hours": {strconv.Itoa(tc.hours)}, "model": {tc.model}}
+			rr := call(GetServiceQuality, testRequest{method: http.MethodGet, target: "/api/service-quality?" + query.Encode(), userID: alice.ID, role: tc.role})
+			var got model.ServiceQualitySummary
+			decodeData(t, rr, &got)
+			if got.Overall.P95DurationMs != tc.overall || got.Overall.TotalRequests != tc.total || len(got.ByModel) != len(tc.byModel) {
+				t.Fatalf("P95 or request scope is wrong: %+v, want %+v", got, tc)
+			}
+			for _, metric := range got.ByModel {
+				want, ok := tc.byModel[metric.Model]
+				if !ok || metric.P95DurationMs != want {
+					t.Fatalf("per-model P95 is wrong: %+v, want %d", metric, want)
+				}
+			}
+		})
+	}
+}

@@ -89,6 +89,10 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 	if err != nil {
 		return nil, err
 	}
+	modelP95, overallP95, err := serviceQualityP95(baseWhere, args...)
+	if err != nil {
+		return nil, err
+	}
 
 	byModel := make([]ServiceQualityMetric, 0, len(rows))
 	var overallTotal, overallSuccess, overallFailed, overallQuota int64
@@ -105,6 +109,7 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 			FailedCount:   r.Failed,
 			SuccessRate:   successRate,
 			AvgDurationMs: int64(r.AvgDuration),
+			P95DurationMs: modelP95[r.Model],
 			TotalQuota:    r.TotalQuota,
 			ErrorRate:     1.0 - successRate,
 		}
@@ -121,6 +126,7 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 		SuccessCount:  overallSuccess,
 		FailedCount:   overallFailed,
 		TotalQuota:    overallQuota,
+		P95DurationMs: overallP95,
 	}
 	if overallTotal > 0 {
 		overall.SuccessRate = float64(overallSuccess) / float64(overallTotal)
@@ -173,4 +179,41 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 		ByModel:     byModel,
 		ByDay:       byDay,
 	}, nil
+}
+
+// serviceQualityP95 uses the nearest rank ceil(0.95 * n). Non-positive
+// durations have no measured latency and do not participate in the rank.
+func serviceQualityP95(where string, args ...any) (map[string]int64, int64, error) {
+	var ranks []struct {
+		IsOverall  int
+		Model      string
+		DurationMs int64
+	}
+	err := DB.Raw(`WITH samples AS (
+		SELECT model, duration_ms FROM logs WHERE `+where+` AND duration_ms > 0
+	), scopes AS (
+		SELECT 0 AS is_overall, model, duration_ms FROM samples
+		UNION ALL
+		SELECT 1 AS is_overall, '' AS model, duration_ms FROM samples
+	), ranked AS (
+		SELECT is_overall, model, duration_ms,
+			ROW_NUMBER() OVER (PARTITION BY is_overall, model ORDER BY duration_ms) AS sample_rank,
+			COUNT(*) OVER (PARTITION BY is_overall, model) AS sample_count
+		FROM scopes
+	)
+	SELECT is_overall, model, duration_ms FROM ranked
+	WHERE sample_rank = (sample_count * 95 + 99) / 100`, args...).Scan(&ranks).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	byModel := make(map[string]int64, len(ranks))
+	var overall int64
+	for _, rank := range ranks {
+		if rank.IsOverall == 1 {
+			overall = rank.DurationMs
+		} else {
+			byModel[rank.Model] = rank.DurationMs
+		}
+	}
+	return byModel, overall, nil
 }
