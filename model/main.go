@@ -27,11 +27,14 @@ func InitDB(path string) error {
 	if err != nil {
 		return fmt.Errorf("open sqlite database %s: %w", path, err)
 	}
-	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceQualityMetric{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 	if err := db.FirstOrCreate(&OptionRevision{}, OptionRevision{ID: 1}).Error; err != nil {
 		return fmt.Errorf("initialize option revision: %w", err)
+	}
+	if err := db.FirstOrCreate(&ResourceCatalogRecord{}, ResourceCatalogRecord{ID: 1}).Error; err != nil {
+		return fmt.Errorf("initialize resource catalog: %w", err)
 	}
 	// Give pre-lifecycle pins one full idle period during schema migration.
 	if err := db.Model(&RoutingChain{}).Where("expires_at = 0").UpdateColumn("expires_at", time.Now().Add(RoutingChainTTL).Unix()).Error; err != nil {
