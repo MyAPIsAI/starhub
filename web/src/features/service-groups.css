@@ -1,0 +1,92 @@
+.service-group-management > .cm-callout p {
+  margin: 0 0 10px;
+  line-height: 1.7;
+}
+.service-group-management > .cm-table {
+  max-height: 650px;
+}
+.service-group-management .cm-table td:first-child {
+  max-width: 300px;
+  overflow-wrap: anywhere;
+}
+.sgm-versions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  margin: 0;
+  font-size: var(--text-xs);
+}
+.service-group-dialog [data-overlay-body] {
+  overflow-wrap: anywhere;
+}
+.sgm-review {
+  display: grid;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.sgm-review h3,
+.sgm-review p {
+  margin: 0;
+  line-height: 1.7;
+}
+.sgm-legacy {
+  padding: 12px;
+  background: var(--subtle);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.sgm-legacy p {
+  max-height: 120px;
+  overflow: auto;
+}
+.service-group-management [role="alert"] {
+  color: var(--danger);
+}
+.sgm-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.sgm-fields label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+.sgm-fields input,
+.sgm-fields textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.sgm-fields textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.sgm-fields .cm-wide {
+  grid-column: 1 / -1;
+}
+.sgm-fields .cm-check {
+  display: flex;
+  align-items: center;
+}
+.sgm-fields input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+.sgm-fields small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+@media (max-width: 540px) {
+  .sgm-fields {
+    grid-template-columns: 1fr;
+  }
+}
