@@ -78,19 +78,11 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 		var firstUser json.RawMessage
 		for _, message := range fields.Messages {
 			continuation = continuation || message.Role == "tool" || message.Role == "function" || len(message.ToolCalls) > 0 || (len(message.FunctionCall) > 0 && string(message.FunctionCall) != "null")
-			var blocks []struct {
-				Type string `json:"type"`
+			vision, toolBlocks := smartContentCapabilities(message.Content)
+			if vision {
+				req.capabilities = append(req.capabilities, "vision")
 			}
-			if json.Unmarshal(message.Content, &blocks) == nil {
-				for _, block := range blocks {
-					if block.Type == "image_url" || block.Type == "image" {
-						req.capabilities = append(req.capabilities, "vision")
-					}
-					if block.Type == "tool_use" || block.Type == "tool_result" {
-						continuation = true
-					}
-				}
-			}
+			continuation = continuation || toolBlocks
 			if firstUser == nil && message.Role == "user" && !continuation {
 				firstUser = message.Content
 			}
