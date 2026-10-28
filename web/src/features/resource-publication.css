@@ -146,6 +146,9 @@
 #gateway-bindings table {
   min-width: 980px;
 }
+#gateway-bindings {
+  scroll-margin-top: 90px;
+}
 .rp-publish-dialog p,
 .rp-publish-dialog li {
   overflow-wrap: anywhere;

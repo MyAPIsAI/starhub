@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { useResourceBindingState } from "../lib/api/resource-publication";
 import { useSettingsText } from "./settings-text";
@@ -15,6 +16,16 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
   const [page, setPage] = useState(1);
   const query = useResourceBindingState(enabled, page);
   const state = query.error ? undefined : query.data;
+  const { hash } = useLocation();
+  const section = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (hash !== "#gateway-bindings" || !enabled) return;
+    const frame = requestAnimationFrame(() => {
+      section.current?.scrollIntoView({ block: "start" });
+      section.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [hash, enabled, query.isLoading]);
   const [review, setReview] = useState<BindingChangeReview>();
   const [receipt, setReceipt] = useState<BindingChangeReceipt>();
   const [actionError, setActionError] = useState("");
@@ -55,6 +66,8 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
     <section
       className="rp-result"
       id="gateway-bindings"
+      ref={section}
+      tabIndex={-1}
       aria-label={text(
         "持久网关绑定",
         "Persistent gateway bindings",

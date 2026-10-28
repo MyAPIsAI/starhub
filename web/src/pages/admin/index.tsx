@@ -25,6 +25,7 @@ import { FinanceOverview } from "../../features/finance-overview";
 import { ConfigurationSync } from "../../features/configuration-sync";
 import { ServerTokenPricing } from "../../features/server-token-pricing";
 import { ResourceRegions } from "../../features/resource-regions";
+import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
@@ -2027,6 +2028,7 @@ export default function AdminPortal() {
           }}
           style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
         >
+          <ChannelRoutingNotice onOpenBindings={() => setChannelModalOpen(false)} />
           <div>
             <label htmlFor="ch-name" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
               {text("名称", "Name", "الاسم")}

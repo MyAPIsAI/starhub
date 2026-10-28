@@ -1,0 +1,25 @@
+.channel-routing-notice {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.channel-routing-notice p {
+  margin: 0;
+}
+.channel-routing-notice a {
+  width: fit-content;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.channel-routing-notice-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
