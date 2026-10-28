@@ -121,6 +121,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				return
 			}
 
+			autoModelSelected := false
 			// Auto-routing: when the client sends model "myapis-auto", replace
 			// it with the lowest-cost available model within the token's
 			// authorized scope (group + model whitelist), so the relay can
@@ -155,6 +156,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				}
 				if best != "" {
 					modelName = best
+					autoModelSelected = true
 				}
 			}
 
@@ -166,6 +168,25 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 						"the model is not in the token's model whitelist")
 					return
 				}
+			}
+
+			if autoModelSelected && !isMultipart(contentType) {
+				// Keep passthrough bodies and parsed IR aligned with routing.
+				// Raw fields preserve extension data and numeric precision.
+				var fields map[string]json.RawMessage
+				if err := json.Unmarshal(body, &fields); err != nil {
+					fail(http.StatusBadRequest, "invalid_json", "failed to parse request body for model routing")
+					return
+				}
+				fields["model"], _ = json.Marshal(modelName)
+				body, err = json.Marshal(fields)
+				if err != nil {
+					dto.WriteRelayError(w, http.StatusInternalServerError, inbound, "server_error", "internal_error",
+						"failed to update the routed request model")
+					return
+				}
+				r.Body = io.NopCloser(bytes.NewReader(body))
+				r.ContentLength = int64(len(body))
 			}
 
 			// Channel selection is left to the relay controller: it retries the

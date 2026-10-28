@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -13,6 +15,66 @@ import (
 	"starhub/relay/dto"
 	"starhub/setting"
 )
+
+func TestDistributeAutoModelPreservesJSONFields(t *testing.T) {
+	setupAutoRoutingDB(t)
+	if err := model.InsertChannel(&model.Channel{Name: "json", Models: "gpt-4o", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1}); err != nil {
+		t.Fatal(err)
+	}
+	body := `{
+		"model": "myapis-auto", "stream": true, "max_tokens": 64,
+		"messages": [{"role":"user","content":"Keep myapis-auto in this text"}],
+		"tools": [{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}}],
+		"vendor_extension": {"large":9007199254740993,"precise":1.234567890123456789}
+	}`
+	var original map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &original); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = r.WithContext(common.WithValues(r.Context(), common.CtxUsingGroup, "default"))
+	called := false
+	handler := Distribute(dto.InboundOpenAI)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		cached := r.Context().Value(common.CtxRequestBody).([]byte)
+		readBody, err := io.ReadAll(r.Body)
+		if err != nil || !bytes.Equal(readBody, cached) || r.ContentLength != int64(len(cached)) {
+			t.Fatalf("request reader, cached body, and content length diverged: %v", err)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(cached, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if string(fields["model"]) != `"gpt-4o"` || r.Context().Value(common.CtxRequestModel) != "gpt-4o" {
+			t.Fatalf("routed body model and context disagree: %s", cached)
+		}
+		if len(fields) != len(original) || r.Context().Value(common.CtxRequestStream) != true {
+			t.Fatal("routing changed request metadata")
+		}
+		for key, value := range original {
+			if key == "model" {
+				continue
+			}
+			var before, after bytes.Buffer
+			if err := json.Compact(&before, value); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Compact(&after, fields[key]); err != nil {
+				t.Fatal(err)
+			}
+			if before.String() != after.String() {
+				t.Errorf("field %s changed: %s -> %s", key, &before, &after)
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, r)
+	if !called || rec.Code != http.StatusNoContent {
+		t.Fatalf("request did not reach handler: %d %s", rec.Code, rec.Body)
+	}
+}
 
 func setupAutoRoutingDB(t *testing.T) {
 	t.Helper()
@@ -60,6 +122,16 @@ func TestDistributeAutoModelGroupCandidates(t *testing.T) {
 				called = true
 				if got := r.Context().Value(common.CtxRequestModel); got != tc.selected {
 					t.Errorf("selected model = %v, want %s", got, tc.selected)
+				}
+				cached := r.Context().Value(common.CtxRequestBody).([]byte)
+				if tc.requested != "myapis-auto" && string(cached) != body {
+					t.Errorf("explicit-model request body was rewritten: %s", cached)
+				}
+				var payload struct {
+					Model string `json:"model"`
+				}
+				if err := json.Unmarshal(cached, &payload); err != nil || payload.Model != tc.selected {
+					t.Errorf("cached body model = %q, want %s: %v", payload.Model, tc.selected, err)
 				}
 				w.WriteHeader(http.StatusNoContent)
 			}))
