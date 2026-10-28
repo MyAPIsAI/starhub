@@ -55,6 +55,14 @@ func TestCreateRechargeOrderValidation(t *testing.T) {
 	}
 }
 
+func TestBillingFundingClaimsAndTrailingDocumentsAreRejected(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "funding-owner", common.RoleUser, 0)
+	for _, body := range []string{`{"amount_usd":"10.00","funding_source":"verified_provider"}`, `{"amount_usd":"10.00","api_quota_eligible":true}`, `{"amount_usd":"10.00"} {}`, `{"amount_usd":"10.00","paid_at":123}`, `{"amount_usd":"10.00","provider_transaction_id":"invented"}`} {
+		expectStatus(t, call(CreateRechargeOrder, testRequest{method: "POST", target: "/api/recharge", userID: u.ID, role: common.RoleUser, body: body}), http.StatusBadRequest)
+	}
+}
+
 func TestCreateRechargeOrderSuccess(t *testing.T) {
 	newTestDB(t)
 	u := newUser(t, "alice", common.RoleUser, 1000)

@@ -194,7 +194,7 @@ func buildLedgerExport(userID int64, from time.Time) ([]byte, int, error) {
 	}
 	var buf strings.Builder
 	writer := csv.NewWriter(&buf)
-	writer.Write([]string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID"})
+	writer.Write([]string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID", "Funding Source", "API Quota Eligible"})
 	for _, e := range entries {
 		writer.Write([]string{
 			strconv.FormatInt(e.ID, 10),
@@ -205,6 +205,8 @@ func buildLedgerExport(userID int64, from time.Time) ([]byte, int, error) {
 			e.Description,
 			e.OrderID,
 			e.TraceID,
+			model.PublicFundingSource(e.FundingSource),
+			"false",
 		})
 	}
 	writer.Flush()

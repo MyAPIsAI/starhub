@@ -359,13 +359,13 @@ func TestBuildLedgerExportPreservesNanoUSD(t *testing.T) {
 	if len(rows) != 4 {
 		t.Fatalf("CSV rows = %q, want a header and 3 data rows", rows)
 	}
-	if want := []string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID"}; !reflect.DeepEqual(rows[0], want) {
+	if want := []string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID", "Funding Source", "API Quota Eligible"}; !reflect.DeepEqual(rows[0], want) {
 		t.Fatalf("CSV header = %q, want %q", rows[0], want)
 	}
 	wantByID := map[string][]string{
-		itoa(entries[0].ID): {itoa(entries[0].ID), "2026-10-20T00:00:00Z", "recharge", "1", "1", "one nano", "ord-tiny", ""},
-		itoa(entries[1].ID): {itoa(entries[1].ID), "2026-10-20T00:00:00Z", "recharge", "1000000001", "1000000002", "credit", "ord-credit", ""},
-		itoa(entries[2].ID): {itoa(entries[2].ID), "2026-10-20T00:00:00Z", "call_summary", "-2", "1000000000", "debit", "", "trace-debit"},
+		itoa(entries[0].ID): {itoa(entries[0].ID), "2026-10-20T00:00:00Z", "recharge", "1", "1", "one nano", "ord-tiny", "", "legacy_unverified", "false"},
+		itoa(entries[1].ID): {itoa(entries[1].ID), "2026-10-20T00:00:00Z", "recharge", "1000000001", "1000000002", "credit", "ord-credit", "", "legacy_unverified", "false"},
+		itoa(entries[2].ID): {itoa(entries[2].ID), "2026-10-20T00:00:00Z", "call_summary", "-2", "1000000000", "debit", "", "trace-debit", "legacy_unverified", "false"},
 	}
 	for _, row := range rows[1:] {
 		want, ok := wantByID[row[0]]
@@ -391,7 +391,7 @@ func TestEmptyExportContainsOnlyHeader(t *testing.T) {
 	}{
 		{"requests", []string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"}},
 		{"usage", []string{"Date", "Requests", "Prompt Tokens", "Completion Tokens", "Quota"}},
-		{"ledger", []string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID"}},
+		{"ledger", []string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID", "Funding Source", "API Quota Eligible"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.typ, func(t *testing.T) {

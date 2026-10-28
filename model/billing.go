@@ -24,15 +24,16 @@ type Wallet struct {
 // adjustment, refund). amount is signed nano-USD; balance_after is the
 // resulting wallet balance for audit reconstruction.
 type LedgerEntry struct {
-	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID       int64  `gorm:"index;not null" json:"user_id"`
-	Type         string `gorm:"size:32;not null;default:''" json:"type"` // recharge | call_summary | adjustment | refund
-	Amount       int64  `gorm:"not null;default:0" json:"amount"`        // signed nano-USD
-	BalanceAfter int64  `gorm:"not null;default:0" json:"balance_after"` // nano-USD
-	Description  string `gorm:"size:256;not null;default:''" json:"description"`
-	OrderID      string `gorm:"size:64;not null;default:''" json:"order_id"`
-	TraceID      string `gorm:"size:64;not null;default:''" json:"trace_id"`
-	CreatedAt    int64  `gorm:"autoCreateTime;index" json:"created_at"`
+	ID            int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID        int64  `gorm:"index;not null" json:"user_id"`
+	Type          string `gorm:"size:32;not null;default:''" json:"type"` // recharge | call_summary | adjustment | refund
+	Amount        int64  `gorm:"not null;default:0" json:"amount"`        // signed nano-USD
+	BalanceAfter  int64  `gorm:"not null;default:0" json:"balance_after"` // nano-USD
+	Description   string `gorm:"size:256;not null;default:''" json:"description"`
+	OrderID       string `gorm:"size:64;not null;default:''" json:"order_id"`
+	TraceID       string `gorm:"size:64;not null;default:''" json:"trace_id"`
+	FundingSource string `gorm:"size:32;not null;default:'legacy_unverified'" json:"funding_source"`
+	CreatedAt     int64  `gorm:"autoCreateTime;index" json:"created_at"`
 }
 
 // RechargeOrder tracks a single top-up attempt. The state machine is:
@@ -49,6 +50,20 @@ type RechargeOrder struct {
 	CreatedAt     int64  `gorm:"autoCreateTime" json:"created_at"`
 	ExpiresAt     int64  `gorm:"not null;default:0" json:"expires_at"` // unix seconds
 	PaidAt        int64  `gorm:"not null;default:0" json:"paid_at"`    // unix seconds
+	FundingSource string `gorm:"size:32;not null;default:'legacy_unverified'" json:"funding_source"`
+}
+
+const (
+	FundingSourceLegacyUnverified = "legacy_unverified"
+	FundingSourceSimulation       = "simulation"
+)
+
+// Existing or unrecognized provenance never becomes verified funding.
+func PublicFundingSource(source string) string {
+	if source == FundingSourceSimulation {
+		return FundingSourceSimulation
+	}
+	return FundingSourceLegacyUnverified
 }
 
 // RechargeOrderExpirySeconds is how long a pending order stays payable.
@@ -119,6 +134,9 @@ func ListLedgerSince(userID int64, since int64) ([]LedgerEntry, error) {
 
 // CreateRechargeOrder inserts a new pending order with a 30-minute expiry.
 func CreateRechargeOrder(o *RechargeOrder) error {
+	// This entry point creates simulated orders only. Verified payments need
+	// a separate authenticated provider workflow and must not reuse resolve.
+	o.FundingSource = FundingSourceSimulation
 	if o.OrderNumber == "" {
 		o.OrderNumber = GenerateRechargeOrderNumber()
 	}
@@ -191,6 +209,7 @@ func ResolveRechargeOrder(id int64, outcome string) (*RechargeOrder, error) {
 		}
 		switch outcome {
 		case "success":
+			o.FundingSource = FundingSourceSimulation
 			o.Status = RechargePaid
 			o.PaidAt = now
 			o.LatePayment = now > o.ExpiresAt
@@ -214,6 +233,7 @@ func ResolveRechargeOrder(id int64, outcome string) (*RechargeOrder, error) {
 				"paid_at":        o.PaidAt,
 				"late_payment":   o.LatePayment,
 				"failure_reason": o.FailureReason,
+				"funding_source": o.FundingSource,
 			})
 		if res.Error != nil {
 			return res.Error
@@ -237,12 +257,13 @@ func ResolveRechargeOrder(id int64, outcome string) (*RechargeOrder, error) {
 				return err
 			}
 			entry := &LedgerEntry{
-				UserID:       o.UserID,
-				Type:         "recharge",
-				Amount:       o.Amount,
-				BalanceAfter: w.Balance,
-				Description:  "Recharge order " + o.OrderNumber,
-				OrderID:      o.OrderNumber,
+				UserID:        o.UserID,
+				Type:          "recharge",
+				Amount:        o.Amount,
+				BalanceAfter:  w.Balance,
+				Description:   "Recharge order " + o.OrderNumber,
+				OrderID:       o.OrderNumber,
+				FundingSource: FundingSourceSimulation,
 			}
 			if err := tx.Create(entry).Error; err != nil {
 				return err

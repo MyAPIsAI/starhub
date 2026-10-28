@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -25,11 +27,12 @@ func GetWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.ApiSuccess(w, map[string]any{
-		"user_id":      wallet.UserID,
-		"balance":      wallet.Balance, // nano-USD
-		"balance_nano": strconv.FormatInt(wallet.Balance, 10),
-		"created_at":   wallet.CreatedAt,
-		"updated_at":   wallet.UpdatedAt,
+		"user_id":                        wallet.UserID,
+		"balance":                        wallet.Balance, // nano-USD
+		"balance_nano":                   strconv.FormatInt(wallet.Balance, 10),
+		"created_at":                     wallet.CreatedAt,
+		"updated_at":                     wallet.UpdatedAt,
+		"api_quota_conversion_available": false,
 	})
 }
 
@@ -63,6 +66,8 @@ func ListLedger(w http.ResponseWriter, r *http.Request) {
 			"order_id":           e.OrderID,
 			"trace_id":           e.TraceID,
 			"created_at":         e.CreatedAt,
+			"funding_source":     model.PublicFundingSource(e.FundingSource),
+			"api_quota_eligible": false,
 		})
 	}
 	common.ApiSuccess(w, data)
@@ -79,7 +84,7 @@ type createRechargeRequest struct {
 // validated server-side: $10–$10,000, at most 2 decimal places.
 func CreateRechargeOrder(w http.ResponseWriter, r *http.Request) {
 	var req createRechargeRequest
-	if !decodeJSONBody(w, r, &req) {
+	if !decodeBillingBody(w, r, &req) {
 		return
 	}
 	amountNano, ok := parseRechargeAmount(req.AmountUSD)
@@ -197,7 +202,7 @@ func ResolveRechargeOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req resolveRechargeRequest
-	if !decodeJSONBody(w, r, &req) {
+	if !decodeBillingBody(w, r, &req) {
 		return
 	}
 	outcome := strings.TrimSpace(req.Outcome)
@@ -224,20 +229,36 @@ func canManageOrder(r *http.Request, o *model.RechargeOrder) bool {
 func rechargeOrderJSON(o *model.RechargeOrder) map[string]any {
 	amountNano := o.Amount
 	return map[string]any{
-		"id":             o.ID,
-		"order_number":   o.OrderNumber,
-		"user_id":        o.UserID,
-		"amount":         amountNano,
-		"amount_nano":    amountNano,
-		"amount_usd":     nanoToUsdString(amountNano),
-		"status":         o.Status,
-		"channel":        o.Channel,
-		"failure_reason": o.FailureReason,
-		"late_payment":   o.LatePayment,
-		"created_at":     isoTime(o.CreatedAt),
-		"expires_at":     isoTime(o.ExpiresAt),
-		"paid_at":        isoTimeOrNil(o.PaidAt),
+		"id":                 o.ID,
+		"order_number":       o.OrderNumber,
+		"user_id":            o.UserID,
+		"amount":             amountNano,
+		"amount_nano":        amountNano,
+		"amount_usd":         nanoToUsdString(amountNano),
+		"status":             o.Status,
+		"channel":            o.Channel,
+		"failure_reason":     o.FailureReason,
+		"late_payment":       o.LatePayment,
+		"created_at":         isoTime(o.CreatedAt),
+		"expires_at":         isoTime(o.ExpiresAt),
+		"paid_at":            isoTimeOrNil(o.PaidAt),
+		"funding_source":     model.PublicFundingSource(o.FundingSource),
+		"api_quota_eligible": false,
 	}
+}
+
+func decodeBillingBody(w http.ResponseWriter, r *http.Request, value any) bool {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err == nil {
+		var extra any
+		if err := decoder.Decode(&extra); err == io.EOF {
+			return true
+		}
+	}
+	common.ApiError(w, http.StatusBadRequest, "invalid billing request body")
+	return false
 }
 
 // isoTime converts a unix timestamp to an ISO 8601 string. Zero → "".
