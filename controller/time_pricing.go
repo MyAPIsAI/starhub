@@ -16,7 +16,7 @@ func GetTimePricing(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, 500, "stored time-pricing configuration is unavailable")
 		return
 	}
-	common.ApiSuccess(w, map[string]any{"version": state.Version, "rules": state.Rules, "loaded_version": model.LoadedOptionVersion(), "revision_guards": true, "schema": pricingtime.Schema, "billing_active": false})
+	common.ApiSuccess(w, map[string]any{"version": state.Version, "rules": state.Rules, "loaded_version": model.LoadedOptionVersion(), "revision_guards": true, "schema": pricingtime.Schema, "billing_active": true})
 }
 
 func UpdateTimePricing(w http.ResponseWriter, r *http.Request) {
@@ -48,5 +48,5 @@ func UpdateTimePricing(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, 500, "time-pricing configuration saved, but serving settings could not be reloaded")
 		return
 	}
-	common.ApiSuccess(w, map[string]any{"version": version, "loaded_version": model.LoadedOptionVersion(), "schema": pricingtime.Schema, "billing_active": false})
+	common.ApiSuccess(w, map[string]any{"version": version, "loaded_version": model.LoadedOptionVersion(), "schema": pricingtime.Schema, "billing_active": true})
 }

@@ -2,9 +2,11 @@ package relay
 
 import (
 	"log"
+	"time"
 
 	"starhub/common"
 	"starhub/pkg/billingexpr"
+	"starhub/pkg/pricingtime"
 	"starhub/setting"
 )
 
@@ -12,7 +14,7 @@ import (
 //
 //	base price   = per-token ratio billing, per-call fixed price, or a
 //	               billing expression (highest priority)
-//	final quota  = base x group_ratio x other_ratio
+//	final quota  = base x group_ratio x time_ratio x other_ratio
 //
 // other_ratio accumulates the special multipliers (audio token share, image
 // resolution, video seconds, ...) via AddOtherRatio — the image / video
@@ -24,8 +26,10 @@ type PriceData struct {
 	missingModelRatio      bool
 	missingCompletionRatio bool
 	// ModelPriceUSD > 0 switches the model to per-call billing.
-	ModelPriceUSD float64
-	HasModelPrice bool
+	ModelPriceUSD  float64
+	HasModelPrice  bool
+	TimeAdjustment pricingtime.Adjustment
+	PricingTime    time.Time
 	// PriceExpr, when configured, wins over per-call and token billing.
 	PriceExpr string
 
@@ -58,6 +62,18 @@ func newPriceData(modelName, group, userGroup string) *PriceData {
 // Callers copy a value before applying per-attempt special multipliers.
 func CapturePricing(modelName string, groups []string, userGroup string) map[string]PriceData {
 	inputs := setting.ResolvePricingGroups(modelName, groups, userGroup)
+	return capturedPriceData(modelName, userGroup, inputs)
+}
+
+func CapturePricingAt(modelName string, groups []string, userGroup string, at time.Time) map[string]PriceData {
+	return capturedPriceData(modelName, userGroup, setting.ResolvePricingGroupsAt(modelName, groups, userGroup, at))
+}
+
+func NewPriceDataAt(modelName, group, userGroup string, at time.Time) *PriceData {
+	return priceDataFromInputs(modelName, group, userGroup, setting.ResolvePricingAt(modelName, group, userGroup, at))
+}
+
+func capturedPriceData(modelName, userGroup string, inputs map[string]setting.PricingInputs) map[string]PriceData {
 	result := make(map[string]PriceData, len(inputs))
 	for group, value := range inputs {
 		result[group] = *priceDataFromInputs(modelName, group, userGroup, value)
@@ -78,6 +94,8 @@ func priceDataFromInputs(modelName, group, userGroup string, inputs setting.Pric
 		AudioRatio:             inputs.AudioRatio,
 		OtherRatio:             1,
 		HasModelPrice:          inputs.HasModelPrice,
+		TimeAdjustment:         inputs.TimeAdjustment,
+		PricingTime:            inputs.PricingAt,
 		UsingGroup:             group,
 		UserGroup:              userGroup,
 	}
@@ -111,6 +129,11 @@ func (p *PriceData) AddOtherRatio(ratio float64) {
 // UsingGroup are set; a missing matrix entry is 1.0 (no extra multiplier).
 func (p *PriceData) EffectiveRatio() float64 {
 	r := p.GroupRatio * p.OtherRatio
+	// Old persisted snapshots have no time adjustment; positive-only schedule
+	// validation makes zero an unambiguous legacy default of one.
+	if p.TimeAdjustment.Multiplier != 0 {
+		r *= p.TimeAdjustment.Multiplier
+	}
 	if p.UserGroup != "" && p.UsingGroup != "" {
 		r *= p.GroupGroupRatio
 	}

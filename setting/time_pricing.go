@@ -11,8 +11,7 @@ const OptionKeyModelTimePricing = "model_time_pricing"
 
 var timePricing atomic.Pointer[pricingtime.Catalog]
 
-// TimePricingAt exposes the validated schedule independently from activation
-// in request billing. The caller supplies the instant to freeze for a request.
+// TimePricingAt matches the loaded immutable schedule at the supplied instant.
 func TimePricingAt(model string, at time.Time) pricingtime.Adjustment {
 	return timePricing.Load().Match(model, at)
 }

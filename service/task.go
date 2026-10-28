@@ -108,6 +108,11 @@ func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.T
 	}
 	accepted := adaptor.EstimateBilling(task.Model, task.Group, &req)
 	priceData := relay.NewPriceDataWithUserGroup(task.Model, task.Group, task.UserGroup)
+	// Tasks without a time-aware snapshot predate scheduled pricing. Do not
+	// apply a newly configured time window to their legacy billing contract.
+	priceData.TimeAdjustment.Multiplier = 1
+	priceData.TimeAdjustment.WindowID = ""
+	priceData.TimeAdjustment.Timezone = ""
 	if task.PricingMeta != "" {
 		var snapshot relay.TaskBillingSnapshot
 		if err := json.Unmarshal([]byte(task.PricingMeta), &snapshot); err != nil {

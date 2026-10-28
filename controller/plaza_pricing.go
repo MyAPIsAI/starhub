@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
@@ -57,7 +58,16 @@ type priceModel struct {
 	// Explicit is false when the model has no configured ratio and is
 	// billing at the fallback. The plaza surfaces that so a shopper is not
 	// surprised by a price that was never set on purpose.
-	Explicit bool `json:"explicit"`
+	Explicit    bool           `json:"explicit"`
+	TimePricing *timePriceView `json:"time_pricing,omitempty"`
+}
+
+type timePriceView struct {
+	Multiplier float64   `json:"multiplier"`
+	WindowID   string    `json:"window_id"`
+	Timezone   string    `json:"timezone"`
+	QuotedAt   time.Time `json:"quoted_at"`
+	ValidUntil time.Time `json:"valid_until"`
 }
 
 func f64(v float64) *float64 { return &v }
@@ -75,6 +85,10 @@ func f64(v float64) *float64 { return &v }
 // rather than the list price.
 func resolvePlazaPrice(modelName, group, userGroup string) priceModel {
 	inputs := setting.ResolvePricing(modelName, group, userGroup)
+	return plazaPriceFromInputs(inputs, group, userGroup)
+}
+
+func plazaPriceFromInputs(inputs setting.PricingInputs, group, userGroup string) priceModel {
 
 	// effectiveRatio mirrors relay.PriceData.EffectiveRatio: group ratio,
 	// then the (userGroup, usingGroup) matrix entry when both are set.
@@ -85,6 +99,10 @@ func resolvePlazaPrice(modelName, group, userGroup string) priceModel {
 	ratio = common.ClampRatio(ratio, "plaza_effective")
 
 	out := priceModel{GroupRatio: ratio}
+	if adjustment := inputs.TimeAdjustment; adjustment.Timezone != "" {
+		out.TimePricing = &timePriceView{Multiplier: adjustment.Multiplier, WindowID: adjustment.WindowID, Timezone: adjustment.Timezone, QuotedAt: inputs.PricingAt, ValidUntil: inputs.PricingAt.Truncate(time.Minute).Add(time.Minute)}
+		ratio = common.ClampRatio(ratio*adjustment.Multiplier, "plaza_timed_effective")
+	}
 
 	switch {
 	case inputs.PriceExpr != "":
@@ -155,20 +173,21 @@ type plazaRow struct {
 }
 
 type plazaPricingJSON struct {
-	Mode                   string   `json:"mode"`
-	InputPerM              *float64 `json:"input_per_m"`
-	OutputPerM             *float64 `json:"output_per_m"`
-	CacheReadPerM          *float64 `json:"cache_read_per_m"`
-	CacheWritePerM         *float64 `json:"cache_write_per_m"`
-	PerRequest             *float64 `json:"per_request"`
-	OfficialInputPerM      *float64 `json:"official_input_per_m"`
-	OfficialOutputPerM     *float64 `json:"official_output_per_m"`
-	OfficialCacheReadPerM  *float64 `json:"official_cache_read_per_m"`
-	OfficialCacheWritePerM *float64 `json:"official_cache_write_per_m"`
-	OfficialPerRequest     *float64 `json:"official_per_request"`
-	GroupRatio             float64  `json:"group_ratio"`
-	Explicit               bool     `json:"explicit"`
-	Currency               string   `json:"currency"`
+	Mode                   string         `json:"mode"`
+	InputPerM              *float64       `json:"input_per_m"`
+	OutputPerM             *float64       `json:"output_per_m"`
+	CacheReadPerM          *float64       `json:"cache_read_per_m"`
+	CacheWritePerM         *float64       `json:"cache_write_per_m"`
+	PerRequest             *float64       `json:"per_request"`
+	OfficialInputPerM      *float64       `json:"official_input_per_m"`
+	OfficialOutputPerM     *float64       `json:"official_output_per_m"`
+	OfficialCacheReadPerM  *float64       `json:"official_cache_read_per_m"`
+	OfficialCacheWritePerM *float64       `json:"official_cache_write_per_m"`
+	OfficialPerRequest     *float64       `json:"official_per_request"`
+	GroupRatio             float64        `json:"group_ratio"`
+	Explicit               bool           `json:"explicit"`
+	Currency               string         `json:"currency"`
+	TimePricing            *timePriceView `json:"time_pricing,omitempty"`
 }
 
 // buildPlazaRows joins the channel graph, the metadata catalog and the live
@@ -202,6 +221,7 @@ func buildPlazaRows(ctx context.Context, group, userGroup string, userID int64) 
 	// Calls7D is aggregated per model from the request log. A failure here
 	// degrades the ranking, it must not fail the catalog.
 	calls, _ := model.ModelCallCounts()
+	prices := setting.ResolvePricingModels(names, group, userGroup)
 
 	rows := make([]plazaRow, 0, len(names))
 	for _, name := range names {
@@ -246,7 +266,7 @@ func buildPlazaRows(ctx context.Context, group, userGroup string, userID int64) 
 			}
 		}
 
-		p := resolvePlazaPrice(name, group, userGroup)
+		p := plazaPriceFromInputs(prices[name], group, userGroup)
 		row.Pricing = plazaPricingJSON{
 			Mode:           p.Mode,
 			InputPerM:      p.InputPerM,
@@ -257,6 +277,7 @@ func buildPlazaRows(ctx context.Context, group, userGroup string, userID int64) 
 			GroupRatio:     p.GroupRatio,
 			Explicit:       p.Explicit,
 			Currency:       "USD",
+			TimePricing:    p.TimePricing,
 		}
 		if m != nil {
 			row.Pricing.OfficialInputPerM = m.OfficialInputPerM

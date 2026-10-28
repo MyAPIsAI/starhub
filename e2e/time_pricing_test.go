@@ -14,7 +14,7 @@ import (
 	"starhub/setting"
 )
 
-func TestTimePricingAPIUsesSharedVersionAndExplicitInactiveCapability(t *testing.T) {
+func TestTimePricingAPIUsesSharedVersionAndExplicitActiveCapability(t *testing.T) {
 	env := setupRelayApp(t)
 	read := func() struct {
 		Data struct {
@@ -25,20 +25,26 @@ func TestTimePricingAPIUsesSharedVersionAndExplicitInactiveCapability(t *testing
 			Schema  string          `json:"schema"`
 			Active  bool            `json:"billing_active"`
 		} `json:"data"`
-	} { t.Helper(); response := doRequest(env.base, "GET", "/api/option/time-pricing", env.session, nil); var result struct {
-		Data struct {
-			Version int64           `json:"version"`
-			Loaded  int64           `json:"loaded_version"`
-			Rules   json.RawMessage `json:"rules"`
-			Guards  bool            `json:"revision_guards"`
-			Schema  string          `json:"schema"`
-			Active  bool            `json:"billing_active"`
-		} `json:"data"`
-	}; if err := json.Unmarshal([]byte(response.Body), &result); err != nil || response.Status != 200 {
-		t.Fatalf("read time pricing: %d %s %v", response.Status, response.Body, err)
-	}; return result }
+	} {
+		t.Helper()
+		response := doRequest(env.base, "GET", "/api/option/time-pricing", env.session, nil)
+		var result struct {
+			Data struct {
+				Version int64           `json:"version"`
+				Loaded  int64           `json:"loaded_version"`
+				Rules   json.RawMessage `json:"rules"`
+				Guards  bool            `json:"revision_guards"`
+				Schema  string          `json:"schema"`
+				Active  bool            `json:"billing_active"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(response.Body), &result); err != nil || response.Status != 200 {
+			t.Fatalf("read time pricing: %d %s %v", response.Status, response.Body, err)
+		}
+		return result
+	}
 	initial := read()
-	if initial.Data.Version != 0 || initial.Data.Loaded != 0 || string(initial.Data.Rules) != "{}" || !initial.Data.Guards || initial.Data.Schema != "weekly_multiplier_v1" || initial.Data.Active {
+	if initial.Data.Version != 0 || initial.Data.Loaded != 0 || string(initial.Data.Rules) != "{}" || !initial.Data.Guards || initial.Data.Schema != "weekly_multiplier_v1" || !initial.Data.Active {
 		t.Fatal("initial time-pricing capability is inaccurate")
 	}
 	for _, role := range []int{common.RoleUser, common.RoleFinance, 99, 101, common.RoleAdmin} {
@@ -78,14 +84,14 @@ func TestTimePricingAPIUsesSharedVersionAndExplicitInactiveCapability(t *testing
 		t.Fatalf("save time rules: %d %s", response.Status, response.Body)
 	}
 	saved := read()
-	if saved.Data.Version != 1 || saved.Data.Loaded != 1 || saved.Data.Active || !strings.Contains(string(saved.Data.Rules), "v1") {
+	if saved.Data.Version != 1 || saved.Data.Loaded != 1 || !saved.Data.Active || !strings.Contains(string(saved.Data.Rules), "v1") {
 		t.Fatal("saved/loaded time configuration was not reported accurately")
 	}
 	if got := setting.TimePricingAt("gpt-4o", time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)); got.Multiplier != 2 {
 		t.Fatal("time schedule was not loaded")
 	}
-	if after := relay.ComputeUsageQuota(relay.NewPriceData("gpt-4o", "default"), usage); after != before {
-		t.Fatal("storage-only time rules unexpectedly activated billing")
+	if after := relay.ComputeUsageQuota(relay.NewPriceData("gpt-4o", "default"), usage); after != before*2 {
+		t.Fatal("loaded time rules did not activate consistently")
 	}
 	response := doRequest(env.base, "GET", "/api/option/pricing", env.session, nil)
 	var prices struct {

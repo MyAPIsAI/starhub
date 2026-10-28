@@ -3,11 +3,45 @@ package controller
 import (
 	"math"
 	"testing"
+	"time"
 
 	"starhub/common"
 	"starhub/relay"
 	"starhub/setting"
 )
+
+func TestPlazaTimeMultiplierMatchesBillingAndKeepsGroupRatioSeparate(t *testing.T) {
+	setting.ResetAllToDefaults()
+	t.Cleanup(setting.ResetAllToDefaults)
+	if err := setting.ApplyOptions(map[string]string{"model_ratio": `{"timed":2}`, "completion_ratio": `{"timed":3}`, "group_ratio": `{"default":1,"vip":0.6}`, setting.OptionKeyModelTimePricing: `{"timed":{"timezone":"UTC","windows":[{"id":"all","label":"All","days":[0,1,2,3,4,5,6],"start":"00:00","end":"24:00","multiplier":0.5}]}}`}); err != nil {
+		t.Fatal(err)
+	}
+	quoted := resolvePlazaPrice("timed", "vip", "")
+	if quoted.TimePricing == nil || quoted.TimePricing.Multiplier != 0.5 || quoted.TimePricing.WindowID != "all" || quoted.TimePricing.Timezone != "UTC" || quoted.GroupRatio != 0.6 || quoted.InputPerM == nil || *quoted.InputPerM != 0.6 {
+		t.Fatalf("timed price or multiplier attribution: %+v", quoted)
+	}
+	if age := time.Since(quoted.TimePricing.QuotedAt); age < 0 || age > time.Second {
+		t.Fatal("quote time is not current")
+	}
+	if lifetime := quoted.TimePricing.ValidUntil.Sub(quoted.TimePricing.QuotedAt); lifetime <= 0 || lifetime > time.Minute {
+		t.Fatal("quote did not expire by its next minute boundary")
+	}
+	quota := relay.ComputeUsageQuota(relay.NewPriceData("timed", "vip"), &relay.Usage{PromptTokens: 1_000_000})
+	if math.Abs(float64(quota)/float64(common.QuotaPerUSD)-*quoted.InputPerM) > 1.0/float64(common.QuotaPerUSD) {
+		t.Fatal("timed quote differs from relay billing")
+	}
+	if err := setting.UpdatePricing("model_price", `{"timed":0.02}`); err != nil {
+		t.Fatal(err)
+	}
+	quoted = resolvePlazaPrice("timed", "vip", "")
+	if quoted.PerRequest == nil || *quoted.PerRequest != 0.006 || quoted.GroupRatio != 0.6 {
+		t.Fatal("flat time price was not adjusted separately from group")
+	}
+	inputs := setting.ResolvePricingModels([]string{"timed", "unknown"}, "vip", "")
+	if !inputs["timed"].PricingAt.Equal(inputs["unknown"].PricingAt) {
+		t.Fatal("catalog prices used different quote instants")
+	}
+}
 
 // The plaza quotes prices; the relay charges them. If the two ever disagree,
 // the catalog is lying to the customer, which is the one failure a pricing
