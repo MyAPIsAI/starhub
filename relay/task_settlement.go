@@ -24,7 +24,7 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status}
 	claimed, err := model.SettleTaskQuota(task, entry)
 	if claimed && err == nil {
-		applyAffiliateRebate(task.UserID, entry.Quota)
+		applyAffiliateRebate(entry.ID)
 	}
 	return claimed, err
 }

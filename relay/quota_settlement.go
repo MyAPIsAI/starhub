@@ -15,7 +15,7 @@ func settleDurableQuota(userID, tokenID int64, unlimited bool, delta, actual int
 	}
 	if claimed {
 		*entry = *settled
-		applyAffiliateRebate(userID, entry.Quota)
+		applyAffiliateRebate(entry.ID)
 	}
 	return nil
 }
@@ -25,7 +25,7 @@ func settleDurableQuota(userID, tokenID int64, unlimited bool, delta, actual int
 func RetryQuotaSettlement(id int64) error {
 	entry, claimed, err := model.ApplyQuotaSettlement(id)
 	if err == nil && claimed {
-		applyAffiliateRebate(entry.UserID, entry.Quota)
+		applyAffiliateRebate(entry.ID)
 	}
 	return err
 }

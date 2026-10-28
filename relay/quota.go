@@ -7,7 +7,6 @@ import (
 	"starhub/common"
 	"starhub/model"
 	"starhub/relay/dto"
-	"starhub/setting"
 )
 
 var (
@@ -225,27 +224,11 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
 
-// applyAffiliateRebate credits the inviter's quota with the rebate ratio of
-// the invitee's actual spend. It is a no-op when the user has no inviter or
-// the rebate ratio is 0.
-func applyAffiliateRebate(userID, actual int64) {
-	if actual <= 0 {
-		return
-	}
-	ratio := setting.AffRebateRatioValue()
-	if ratio <= 0 {
-		return
-	}
-	user, err := model.GetUserByID(userID)
-	if err != nil || user.InviterID <= 0 {
-		return
-	}
-	rebate := common.QuotaFromFloat64(float64(actual) * ratio)
-	if rebate <= 0 {
-		return
-	}
-	if err := model.IncreaseUserQuota(user.InviterID, rebate); err != nil {
-		log.Printf("affiliate rebate to user %d failed: %v", user.InviterID, err)
+// applyAffiliateRebate attempts immediate delivery; durable pending work is
+// independent of the already-committed customer settlement.
+func applyAffiliateRebate(logID int64) {
+	if err := model.DeliverAffiliateRebate(logID); err != nil {
+		log.Printf("affiliate rebate for log %d failed: %v", logID, err)
 	}
 }
 

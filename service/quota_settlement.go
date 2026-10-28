@@ -23,4 +23,21 @@ func RetryPendingQuotaSettlementsOnce(ctx context.Context) {
 			log.Printf("quota settlement %d failed: %v", intent.ID, err)
 		}
 	}
+	RetryPendingAffiliateRebatesOnce(ctx)
+}
+
+func RetryPendingAffiliateRebatesOnce(ctx context.Context) {
+	items, err := model.ListPendingAffiliateRebates(200)
+	if err != nil {
+		log.Printf("list pending affiliate rebates failed: %v", err)
+		return
+	}
+	for _, item := range items {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := model.DeliverAffiliateRebate(item.LogID); err != nil {
+			log.Printf("affiliate rebate for log %d failed: %v", item.LogID, err)
+		}
+	}
 }

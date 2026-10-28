@@ -171,7 +171,10 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			}
 		}
 		if entry != nil || settled.UnfundedQuota > 0 {
-			return tx.Create(&settled).Error
+			if err := tx.Create(&settled).Error; err != nil {
+				return err
+			}
+			return queueAffiliateRebate(tx, &settled)
 		}
 		return nil
 	})
