@@ -9,6 +9,7 @@ import (
 	"starhub/common"
 	"starhub/model"
 	"starhub/relay/channel"
+	"starhub/setting"
 )
 
 func TestPlazaProtocols(t *testing.T) {
@@ -38,6 +39,9 @@ func TestPlazaProtocols(t *testing.T) {
 
 func TestPlazaProtocolsFollowGroupAndChannelStatus(t *testing.T) {
 	newTestDB(t)
+	if err := setting.UpdateRatio(setting.OptionKeyGroupRatio, `{"default":1,"vip":0.8}`); err != nil {
+		t.Fatal(err)
+	}
 	add := func(name, group, modelName string, channelType int) *model.Channel {
 		t.Helper()
 		ch := &model.Channel{Name: name, Type: channelType, Models: modelName, Group: group, Status: common.ChannelStatusEnabled, Weight: 1}

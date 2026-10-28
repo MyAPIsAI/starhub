@@ -229,9 +229,15 @@ func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
 		}
 
 		if cov != nil {
-			row.AvailableGroups = sortedUnique(cov.Groups)
+			for _, coveredGroup := range sortedUnique(cov.Groups) {
+				if setting.ContainsGroupRatio(coveredGroup) {
+					row.AvailableGroups = append(row.AvailableGroups, coveredGroup)
+				}
+			}
 			row.ChannelCount = cov.ChannelCount
-			row.Protocols = plazaProtocols(cov.ChannelTypes[group], row.Tags)
+			if setting.ContainsGroupRatio(group) {
+				row.Protocols = plazaProtocols(cov.ChannelTypes[group], row.Tags)
+			}
 		}
 
 		p := resolvePlazaPrice(name, group, userGroup)
@@ -257,7 +263,9 @@ func buildPlazaRows(group, userGroup string) ([]plazaRow, error) {
 		row.IsAvailable = containsString(row.AvailableGroups, group)
 		if !row.IsAvailable {
 			reason := "group_not_enabled"
-			if cov == nil {
+			if !setting.ContainsGroupRatio(group) {
+				reason = "group_not_configured"
+			} else if cov == nil {
 				reason = "channel_missing"
 			}
 			row.UnavailableReason = &reason
