@@ -19,7 +19,7 @@ type createExportRequest struct {
 
 func ListExports(w http.ResponseWriter, r *http.Request) {
 	userID := int64(0)
-	if requestRole(r) < common.RoleAdmin {
+	if !common.IsAdminRole(requestRole(r)) {
 		userID = requestUserID(r)
 	}
 	_ = model.CleanExpiredExports()
@@ -102,7 +102,7 @@ func DownloadExport(w http.ResponseWriter, r *http.Request) {
 }
 
 func canManageExport(r *http.Request, e *model.ExportRecord) bool {
-	return requestRole(r) >= common.RoleAdmin || e.UserID == requestUserID(r)
+	return common.IsAdminRole(requestRole(r)) || e.UserID == requestUserID(r)
 }
 
 func exportJSON(e *model.ExportRecord) map[string]any {

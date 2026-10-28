@@ -17,7 +17,7 @@ func GetServiceQuality(w http.ResponseWriter, r *http.Request) {
 		hours = 24
 	}
 	userID := int64(0)
-	if requestRole(r) < common.RoleAdmin {
+	if !common.IsAdminRole(requestRole(r)) {
 		userID = requestUserID(r)
 	}
 	summary, err := model.SummarizeServiceQuality(userID, int(hours), q.Get("model"))

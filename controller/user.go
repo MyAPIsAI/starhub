@@ -218,7 +218,7 @@ func UserUsage(w http.ResponseWriter, r *http.Request) {
 		days = 90
 	}
 	userID := requestUserID(r)
-	if raw := q.Get("user_id"); raw != "" && requestRole(r) >= common.RoleAdmin {
+	if raw := q.Get("user_id"); raw != "" && common.IsAdminRole(requestRole(r)) {
 		if v, err := strconv.ParseInt(raw, 10, 64); err == nil && v >= 0 {
 			userID = v
 		}

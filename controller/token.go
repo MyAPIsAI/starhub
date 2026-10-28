@@ -86,7 +86,7 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 
 func ListTokens(w http.ResponseWriter, r *http.Request) {
 	userID := int64(0)
-	if requestRole(r) < common.RoleAdmin {
+	if !common.IsAdminRole(requestRole(r)) {
 		userID = requestUserID(r)
 	}
 	tokens, err := model.ListTokens(userID)
@@ -334,7 +334,7 @@ func validateTokenGroupAccess(w http.ResponseWriter, r *http.Request, ownerID in
 }
 
 func canManageToken(r *http.Request, token *model.Token) bool {
-	return requestRole(r) >= common.RoleAdmin || token.UserID == requestUserID(r)
+	return common.IsAdminRole(requestRole(r)) || token.UserID == requestUserID(r)
 }
 
 // RegenerateToken replaces the token key with a fresh sk-... value and

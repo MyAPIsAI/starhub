@@ -7,6 +7,11 @@ const (
 	RoleRoot    = 100
 )
 
+// Administrative authority is assigned explicitly, never inferred from ordering.
+func IsAdminRole(role int) bool {
+	return role == RoleAdmin || role == RoleRoot
+}
+
 const (
 	StatusEnabled  = 1
 	StatusDisabled = 2

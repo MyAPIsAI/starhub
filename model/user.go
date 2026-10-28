@@ -29,7 +29,7 @@ type User struct {
 }
 
 func (u *User) IsAdmin() bool {
-	return u.Role >= common.RoleAdmin
+	return common.IsAdminRole(u.Role)
 }
 
 func GetUserByID(id int64) (*User, error) {

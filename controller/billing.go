@@ -38,7 +38,7 @@ func GetWallet(w http.ResponseWriter, r *http.Request) {
 // ListLedger returns ledger entries. Admins see all; users see their own.
 func ListLedger(w http.ResponseWriter, r *http.Request) {
 	userID := int64(0)
-	if requestRole(r) < common.RoleAdmin {
+	if !common.IsAdminRole(requestRole(r)) {
 		userID = requestUserID(r)
 	}
 	// Lazily expire stale orders so the ledger reflects reality.
@@ -134,7 +134,7 @@ func GetRechargeOrder(w http.ResponseWriter, r *http.Request) {
 // Stale pending/processing orders are lazily expired before returning.
 func ListRechargeOrders(w http.ResponseWriter, r *http.Request) {
 	userID := int64(0)
-	if requestRole(r) < common.RoleAdmin {
+	if !common.IsAdminRole(requestRole(r)) {
 		userID = requestUserID(r)
 	}
 	_ = model.ExpireRechargeOrders()
@@ -216,7 +216,7 @@ func ResolveRechargeOrder(w http.ResponseWriter, r *http.Request) {
 // --- helpers ---
 
 func canManageOrder(r *http.Request, o *model.RechargeOrder) bool {
-	return requestRole(r) >= common.RoleAdmin || o.UserID == requestUserID(r)
+	return common.IsAdminRole(requestRole(r)) || o.UserID == requestUserID(r)
 }
 
 // rechargeOrderJSON serializes an order to the frontend JSON shape.

@@ -23,7 +23,7 @@ func ListLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	modelFilter := q.Get("model")
 	userID := int64(0)
-	if requestRole(r) < common.RoleAdmin {
+	if !common.IsAdminRole(requestRole(r)) {
 		userID = requestUserID(r)
 	}
 	logs, total, err := model.ListLogs(userID, page, pageSize, modelFilter)
