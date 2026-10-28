@@ -36,10 +36,20 @@ export function useUpdateOption() {
       value: string;
       expected_version?: number;
     }) => apiPut("/api/option", input),
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: OPTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: OPTION_STATUS_KEY });
       queryClient.invalidateQueries({ queryKey: OPTION_HISTORY_KEY });
+      for (const key of [
+        "server-pricing",
+        "time-pricing",
+        "service-group-configuration",
+        "plaza-models",
+        "plaza-model",
+        "plaza-filters",
+        "plaza-rank",
+      ])
+        void queryClient.invalidateQueries({ queryKey: [key] });
     },
   });
 }
@@ -74,6 +84,8 @@ export function useReloadOptions() {
         ["admin-metrics"],
         ["plaza-models"],
         ["plaza-model"],
+        ["server-pricing"],
+        ["time-pricing"],
       ])
         client.invalidateQueries({ queryKey: key });
     },
@@ -107,10 +119,20 @@ export function useRollbackOption() {
   return useMutation({
     mutationFn: (input: { version: number; expected_version: number }) =>
       apiPost<{ version: number }>("/api/option/rollback", input),
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: OPTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: OPTION_STATUS_KEY });
       queryClient.invalidateQueries({ queryKey: OPTION_HISTORY_KEY });
+      for (const key of [
+        "server-pricing",
+        "time-pricing",
+        "service-group-configuration",
+        "plaza-models",
+        "plaza-model",
+        "plaza-filters",
+        "plaza-rank",
+      ])
+        void queryClient.invalidateQueries({ queryKey: [key] });
     },
   });
 }

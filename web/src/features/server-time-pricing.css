@@ -1,0 +1,47 @@
+.server-time-pricing {
+  display: grid;
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.server-time-pricing h3 {
+  margin: 0 0 8px;
+}
+.server-time-dialog .time-window-fields {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.server-time-dialog .time-window-fields legend {
+  font-weight: 600;
+  padding-inline: 6px;
+}
+.server-time-dialog .time-window-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 10px;
+}
+.server-time-dialog .time-window-days label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.server-time-dialog .time-window-days input {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
+}
+.time-window-review {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}

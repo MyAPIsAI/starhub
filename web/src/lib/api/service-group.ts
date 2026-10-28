@@ -72,6 +72,8 @@ function invalidateGroupConfiguration(
     ["options"],
     ["option-status"],
     ["option-history"],
+    ["server-pricing"],
+    ["time-pricing"],
   ])
     void client.invalidateQueries({ queryKey });
 }

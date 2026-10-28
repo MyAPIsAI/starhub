@@ -30,6 +30,7 @@ export function useSaveServerPricing() {
     onSettled: () => {
       for (const key of [
         "server-pricing",
+        "time-pricing",
         "options",
         "option-status",
         "option-history",

@@ -20,6 +20,7 @@ import {
 import { useSettingsText } from "./settings-text";
 import "./server-token-pricing.css";
 import { ServerDetailPricing } from "./server-detail-pricing";
+import { ServerTimePricingEditor } from "./server-time-pricing";
 
 type Draft = {
   base: ServerPricing;
@@ -201,9 +202,9 @@ export function ServerTokenPricing() {
       </header>
       <p>
         {text(
-          "可登记、编辑或明确切换按词元、按次及表达式计价。所选模型的模式与价格同事务保存；变更不会创建渠道、投放资源或授予密钥权限。完整分时规则管理仍待实现。",
-          "Configure, edit or explicitly switch token, per-request and expression pricing. The selected model's mode and prices are saved atomically; changes do not create channels, publish resources or grant key permissions. Full time-rule management remains pending.",
-          "اضبط أو عدّل أو بدّل صراحةً التسعير لكل رمز أو طلب أو بالتعبير. يُحفظ نمط النموذج وأسعاره ذريًا دون إنشاء قنوات أو نشر موارد أو منح صلاحيات للمفاتيح. إدارة قواعد الوقت الكاملة قيد التنفيذ.",
+          "可登记、编辑或明确切换按词元、按次及表达式计价，周重复分时倍率在下方单独管理。所选模型的模式与价格同事务保存；变更不会创建渠道、投放资源或授予密钥权限。",
+          "Configure, edit or explicitly switch token, per-request and expression pricing. Manage weekly time multipliers separately below. The selected model's mode and prices are saved atomically; changes do not create channels, publish resources or grant key permissions.",
+          "اضبط أو عدّل أو بدّل التسعير لكل رمز أو طلب أو بالتعبير. أدر معاملات الوقت الأسبوعية منفصلة أدناه. يُحفظ نمط النموذج وأسعاره ذريًا دون إنشاء قنوات أو نشر موارد أو منح صلاحيات للمفاتيح.",
         )}
       </p>
       {query.isLoading && (
@@ -373,6 +374,7 @@ export function ServerTokenPricing() {
           </div>
         </>
       )}
+      <ServerTimePricingEditor />
       <Modal
         className="server-pricing-dialog"
         open={!!draft}
