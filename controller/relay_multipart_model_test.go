@@ -28,6 +28,7 @@ func TestRelayMultipartModelReachesUpstream(t *testing.T) {
 		{"image edit", "/v1/images/edits", "gpt-image-1", "myapis-auto", "image", `{"data":[{"b64_json":"QUJD"}]}`, RelayImageEdits, false, 20000},
 		{"explicit transcription", "/v1/audio/transcriptions", "whisper-1", "whisper-1", "file", `{"text":"review","duration":2}`, RelaySTT, false, 5000},
 		{"transcription retry", "/v1/audio/transcriptions", "whisper-1", "myapis-auto", "file", `{"text":"review","duration":2}`, RelaySTT, true, 5000},
+		{"legacy transcription", "/v1/audio/transcriptions", "whisper-1", "veyra-auto", "file", `{"text":"review","duration":2}`, RelaySTT, false, 5000},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			newTestDB(t)

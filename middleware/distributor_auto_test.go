@@ -112,6 +112,10 @@ func TestDistributeAutoModelGroupCandidates(t *testing.T) {
 		{"nonempty blank allowlist cannot expand", "default", " , ", "myapis-auto", "", http.StatusForbidden},
 		{"explicit model stays unchanged", "default", "", "gpt-4o", "gpt-4o", http.StatusNoContent},
 		{"explicit model still needs authorization", "default", "gpt-4o", "gpt-4o-mini", "", http.StatusForbidden},
+		{"legacy alias current group", "default", "", "veyra-auto", "gpt-4o-mini", http.StatusNoContent},
+		{"legacy alias narrow allowlist", "default", "gpt-4o", "veyra-auto", "gpt-4o", http.StatusNoContent},
+		{"legacy alias cross-group denial", "default", "gemini-1.5-flash", "veyra-auto", "", http.StatusForbidden},
+		{"legacy alias virtual-only allowlist", "default", "veyra-auto", "veyra-auto", "", http.StatusServiceUnavailable},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := `{"model":"` + tc.requested + `","messages":[{"role":"user","content":"Hello"}]}`
@@ -128,7 +132,7 @@ func TestDistributeAutoModelGroupCandidates(t *testing.T) {
 					t.Errorf("original model = %v, want %s", got, tc.requested)
 				}
 				cached := r.Context().Value(common.CtxRequestBody).([]byte)
-				if tc.requested != "myapis-auto" && string(cached) != body {
+				if tc.requested != "myapis-auto" && tc.requested != "veyra-auto" && string(cached) != body {
 					t.Errorf("explicit-model request body was rewritten: %s", cached)
 				}
 				var payload struct {
@@ -166,35 +170,38 @@ func TestDistributeAutoModelWithoutCandidates(t *testing.T) {
 		{"explicit virtual allowlist", "virtual", "myapis-auto"},
 		{"unavailable allowed candidate", "virtual", "myapis-auto,missing"},
 	} {
-		for _, inbound := range []dto.InboundFormat{dto.InboundOpenAI, dto.InboundClaude} {
-			t.Run(tc.name+"/"+string(inbound), func(t *testing.T) {
-				r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"myapis-auto"}`))
-				r = r.WithContext(common.WithValues(r.Context(), common.CtxUsingGroup, tc.group, common.CtxTokenModelLimits, tc.limits))
-				handler := Distribute(inbound)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-					t.Fatal("an unresolved virtual model must not reach the relay")
-				}))
-				rec := httptest.NewRecorder()
-				handler.ServeHTTP(rec, r)
-				var response struct {
-					Type  string `json:"type"`
-					Error struct {
-						Type string `json:"type"`
-						Code string `json:"code"`
-					} `json:"error"`
-				}
-				if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-					t.Fatal(err)
-				}
-				if rec.Code != http.StatusServiceUnavailable || response.Error.Type != "server_error" {
-					t.Fatalf("unexpected response: %d %s", rec.Code, rec.Body)
-				}
-				if inbound == dto.InboundOpenAI && response.Error.Code != "no_available_channel" {
-					t.Fatalf("OpenAI error code = %q, want no_available_channel", response.Error.Code)
-				}
-				if inbound == dto.InboundClaude && response.Type != "error" {
-					t.Fatalf("Claude error envelope type = %q, want error", response.Type)
-				}
-			})
+		for _, requested := range []string{"myapis-auto", "veyra-auto"} {
+			for _, inbound := range []dto.InboundFormat{dto.InboundOpenAI, dto.InboundClaude} {
+				t.Run(tc.name+"/"+requested+"/"+string(inbound), func(t *testing.T) {
+					r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"`+requested+`"}`))
+					limits := strings.ReplaceAll(tc.limits, "myapis-auto", requested)
+					r = r.WithContext(common.WithValues(r.Context(), common.CtxUsingGroup, tc.group, common.CtxTokenModelLimits, limits))
+					handler := Distribute(inbound)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+						t.Fatal("an unresolved virtual model must not reach the relay")
+					}))
+					rec := httptest.NewRecorder()
+					handler.ServeHTTP(rec, r)
+					var response struct {
+						Type  string `json:"type"`
+						Error struct {
+							Type string `json:"type"`
+							Code string `json:"code"`
+						} `json:"error"`
+					}
+					if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+						t.Fatal(err)
+					}
+					if rec.Code != http.StatusServiceUnavailable || response.Error.Type != "server_error" {
+						t.Fatalf("unexpected response: %d %s", rec.Code, rec.Body)
+					}
+					if inbound == dto.InboundOpenAI && response.Error.Code != "no_available_channel" {
+						t.Fatalf("OpenAI error code = %q, want no_available_channel", response.Error.Code)
+					}
+					if inbound == dto.InboundClaude && response.Type != "error" {
+						t.Fatalf("Claude error envelope type = %q, want error", response.Type)
+					}
+				})
+			}
 		}
 	}
 }

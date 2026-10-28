@@ -123,11 +123,11 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 
 			requestedModel := modelName
 			autoModelSelected := false
-			// Auto-routing: when the client sends model "myapis-auto", replace
+			// Auto-routing: for the canonical entry or its legacy alias, replace
 			// it with the lowest-cost available model within the token's
 			// authorized scope (group + model whitelist), so the relay can
 			// proceed as if the user had chosen that model explicitly.
-			if modelName == "myapis-auto" {
+			if isAutoModel(modelName) {
 				usingGroup, _ := r.Context().Value(common.CtxUsingGroup).(string)
 				var checkModels []string
 				if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
@@ -142,7 +142,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				}
 				best, bestQuota := "", int64(1<<62)
 				for _, m := range checkModels {
-					if m == "myapis-auto" || m == "veyra-auto" {
+					if isAutoModel(m) {
 						continue
 					}
 					ch, err := model.GetSatisfiedChannel(usingGroup, m)
@@ -172,7 +172,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			}
 
 			// Never use the virtual entry as an upstream fallback model.
-			if modelName == "myapis-auto" {
+			if isAutoModel(modelName) {
 				dto.WriteRelayError(w, http.StatusServiceUnavailable, inbound, "server_error", "no_available_channel",
 					"no available candidate model for smart routing")
 				return
@@ -220,6 +220,11 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// isAutoModel recognizes both virtual entries; neither is an upstream model.
+func isAutoModel(name string) bool {
+	return name == "myapis-auto" || name == "veyra-auto"
 }
 
 func isMultipart(contentType string) bool {

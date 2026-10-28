@@ -68,6 +68,10 @@ func TestRelayAutoModelReachesUpstream(t *testing.T) {
 		{"openai to claude", dto.InboundOpenAI, channel.ChannelTypeClaude, "myapis-auto"},
 		{"claude to openai", dto.InboundClaude, channel.ChannelTypeOpenAI, "myapis-auto"},
 		{"explicit model", dto.InboundOpenAI, channel.ChannelTypeOpenAI, "gpt-4o"},
+		{"legacy openai passthrough", dto.InboundOpenAI, channel.ChannelTypeOpenAI, "veyra-auto"},
+		{"legacy claude passthrough", dto.InboundClaude, channel.ChannelTypeClaude, "veyra-auto"},
+		{"legacy openai to claude", dto.InboundOpenAI, channel.ChannelTypeClaude, "veyra-auto"},
+		{"legacy claude to openai", dto.InboundClaude, channel.ChannelTypeOpenAI, "veyra-auto"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			newTestDB(t)
