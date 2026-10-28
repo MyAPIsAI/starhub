@@ -1,0 +1,5 @@
+.service-level-value {
+  display: grid;
+  gap: 4px;
+  font-size: var(--text-xs);
+}

@@ -10,6 +10,7 @@ import { apiGet } from "./http";
 import { useSystemAccess } from "../system-access";
 import type { DirectoryModel } from "../../config/model-directory";
 import type { TierId } from "../../config/placeholders";
+import type { ServiceLevel } from "../service-level";
 
 // --- Backend response types (mirror controller/plaza_pricing.go) ---
 
@@ -57,6 +58,7 @@ export interface PlazaListResponse {
   page: number;
   page_size: number;
   group: string;
+  group_sla?: ServiceLevel | null;
   items: PlazaRow[];
 }
 
@@ -84,6 +86,7 @@ export interface PlazaFiltersResponse {
 export interface PlazaDetailResponse {
   model: PlazaRow;
   group: string;
+  group_sla?: ServiceLevel | null;
   related: {
     same_vendor: PlazaRow[];
     same_price: PlazaRow[];
@@ -93,8 +96,8 @@ export interface PlazaDetailResponse {
     score: number | null;
     sort_weight: number;
     created_at: number;
-  per_request: number | null;
-  expression: string | null;
+    per_request: number | null;
+    expression: string | null;
   } | null;
 }
 
@@ -183,10 +186,7 @@ export function usePlazaRank(rankType: PlazaRankType = "value") {
   return useQuery({
     queryKey: ["plaza-rank", identity, rankType] as const,
     queryFn: ({ signal }) =>
-      apiGet<PlazaRankResponse>(
-        `/api/plaza/rank?type=${rankType}`,
-        signal,
-      ),
+      apiGet<PlazaRankResponse>(`/api/plaza/rank?type=${rankType}`, signal),
   });
 }
 

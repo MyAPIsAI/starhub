@@ -27,6 +27,7 @@ import { findClientModel } from "../../lib/client-config";
 import { usePlazaModel, plazaToDirectoryModel } from "../../lib/api/plaza";
 import { useServiceQuality } from "../../lib/api/service-quality";
 import { ModelRequestTrend } from "../../components/model-request-trend";
+import { ServiceLevelValue } from "../../components/service-level-value";
 import { ApiError } from "../../lib/api/http";
 import "../../components/model-pricing.css";
 import "../../components/access-center.css";
@@ -627,6 +628,7 @@ export default function ModelDetail() {
                       "أسعار المجموعة الحالية",
                     )}
                   </summary>
+                  <p className="access-muted">{text("SLA 为运营方发布的分组目标，与模型实测统计分开，不代表合同保证。空白指标未发布。", "SLA values are operator-published group targets, separate from model observations and without a contractual guarantee. Blank metrics are unpublished.", "قيم SLA أهداف للمجموعة ينشرها المشغّل، منفصلة عن إحصاءات النموذج وليست ضمانًا تعاقديًا. المقاييس الفارغة غير منشورة.")}</p>
                   <div
                     className="access-table-wrap"
                     tabIndex={0}
@@ -704,7 +706,7 @@ export default function ModelDetail() {
                                 )}
                               </td>
                               <td>
-                                {text("目标未发布", "Not published", "لم تُنشر الأهداف")}
+                                {groupPrice?.available ? <ServiceLevelValue value={plazaDetail.data?.group_sla} text={text} /> : "—"}
                               </td>
                               <td>{model.pricing.group_ratio}×</td>
                             </tr>

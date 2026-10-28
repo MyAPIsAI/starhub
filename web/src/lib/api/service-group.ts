@@ -8,6 +8,9 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut, apiDelete } from "./http";
+import type { ServiceLevel, ServiceLevelTargets } from "../service-level";
+import { useSystemAccess } from "../system-access";
+import { useProductPreview } from "../product-preview";
 
 export interface ServiceGroup {
   id: number;
@@ -20,6 +23,7 @@ export interface ServiceGroup {
   multiplier: string;
   created_at: number;
   updated_at: number;
+  sla?: ServiceLevel;
 }
 
 export interface ServiceGroupInput {
@@ -34,11 +38,38 @@ export interface ServiceGroupInput {
 
 const GROUPS_KEY = ["service-groups"] as const;
 
-export function useServiceGroups() {
+export function useServiceGroups(enabled = true) {
+  const role = useSystemAccess((state) => state.role);
+  const account = useProductPreview((state) => state.user.id);
   return useQuery({
-    queryKey: GROUPS_KEY,
+    queryKey: [...GROUPS_KEY, account, role],
+    enabled,
     queryFn: ({ signal }) =>
       apiGet<ServiceGroup[]>("/api/service-group", signal),
+  });
+}
+
+export function useUpdateServiceGroupSLA() {
+  const client = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (input: {
+      group: string;
+      expected_group_id: number;
+      expected_revision: number;
+      targets: ServiceLevelTargets | null;
+    }) => {
+      const { group, ...body } = input;
+      return apiPut<ServiceGroup>(
+        `/api/service-group/${encodeURIComponent(group)}/sla`,
+        body,
+      );
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: GROUPS_KEY });
+      void client.invalidateQueries({ queryKey: ["plaza-models"] });
+      void client.invalidateQueries({ queryKey: ["plaza-model"] });
+    },
   });
 }
 

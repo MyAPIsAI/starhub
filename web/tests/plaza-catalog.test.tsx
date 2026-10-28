@@ -79,6 +79,7 @@ type RenderOptions = {
   group?: string;
   otherIdentityOnly?: boolean;
   quality?: ServiceQualitySummary;
+  groupSla?: unknown;
 };
 
 function renderPage({
@@ -89,6 +90,7 @@ function renderPage({
   group = "default",
   otherIdentityOnly = false,
   quality,
+  groupSla = null,
 }: RenderOptions = {}) {
   const client = new QueryClient({
     defaultOptions: {
@@ -136,6 +138,7 @@ function renderPage({
       isDetail
         ? {
             group,
+            group_sla: groupSla,
             model: {
               ...(items[0] ?? row),
               id: decodeURIComponent(url.pathname.slice("/models/".length)),
@@ -456,6 +459,31 @@ describe("backend-only plaza catalog", () => {
   it("does not publish demo SLA targets for a real backend group", () => {
     const html = renderPage({ route: "/models/gpt-4o", group: "pro" });
     expect(html).toContain("目标未发布");
+  });
+
+  it("keeps published zero targets separate from measured model quality", () => {
+    const html = renderPage({
+      route: "/models/gpt-4o",
+      groupSla: {
+        revision: 2,
+        updated_at: 123,
+        targets: { success_rate_ppm: 0, p95_latency_ms: 1200 },
+      },
+    });
+    expect(html).toContain("成功率目标");
+    expect(html).toContain("0%</bdi>");
+    expect(html).toContain("1200 ms");
+    expect(html).toContain("不代表合同保证");
+    const unavailable = renderPage({
+      route: "/models/gpt-4o",
+      items: [{ ...row, is_available: false }],
+      groupSla: {
+        revision: 2,
+        updated_at: 123,
+        targets: { success_rate_ppm: 0, p95_latency_ms: 1200 },
+      },
+    });
+    expect(unavailable).not.toContain("1200 ms");
   });
 
   it("reports missing backend prices without calling the model nonexistent", () => {

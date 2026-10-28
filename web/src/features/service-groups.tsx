@@ -24,6 +24,7 @@ import {
 import { ApiError } from "../lib/api/http";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
+import { ServiceGroupTargets } from "./service-group-targets";
 import "../components/catalog-management.css";
 
 type Draft = {
@@ -170,6 +171,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
           创建分组
         </Button>
       </header>
+      <ServiceGroupTargets />
       <div className="cm-callout">
         <strong>标准模型基准价 × 分组倍率 = 对客价格</strong>
         <p>
