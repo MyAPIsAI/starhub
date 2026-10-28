@@ -158,22 +158,15 @@ func ParseGeminiChatResponse(body []byte) (*ChatResponse, error) {
 			Content      geminiContent `json:"content"`
 			FinishReason string        `json:"finishReason"`
 		} `json:"candidates"`
-		UsageMetadata *struct {
-			PromptTokenCount     int64 `json:"promptTokenCount"`
-			CandidatesTokenCount int64 `json:"candidatesTokenCount"`
-			TotalTokenCount      int64 `json:"totalTokenCount"`
-		} `json:"usageMetadata"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}
-	ir := &ChatResponse{}
-	if resp.UsageMetadata != nil {
-		ir.Usage = &Usage{
-			PromptTokens:     resp.UsageMetadata.PromptTokenCount,
-			CompletionTokens: resp.UsageMetadata.CandidatesTokenCount,
-		}
+	usage, err := ParseGeminiUsage(body)
+	if err != nil {
+		return nil, err
 	}
+	ir := &ChatResponse{Usage: usage}
 	if len(resp.Candidates) == 0 {
 		return ir, nil
 	}
@@ -219,9 +212,6 @@ func ParseGeminiStreamPayload(payload []byte) (*ChatStreamEvent, error) {
 		TextDelta:    resp.Text,
 		FinishReason: resp.FinishReason,
 		Usage:        resp.Usage,
-	}
-	if ev.Usage != nil && ev.Usage.PromptTokens == 0 && ev.Usage.CompletionTokens == 0 {
-		ev.Usage = nil
 	}
 	return ev, nil
 }
