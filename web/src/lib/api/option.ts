@@ -53,11 +53,30 @@ export interface OptionStatus {
   instances: { id: string; version: number; last_seen: number }[];
 }
 
-export function useOptionStatus() {
+export function useOptionStatus(refetchInterval?: number) {
   return useQuery({
     queryKey: OPTION_STATUS_KEY,
-    queryFn: ({ signal }) =>
-      apiGet<OptionStatus>("/api/option/status", signal),
+    queryFn: ({ signal }) => apiGet<OptionStatus>("/api/option/status", signal),
+    refetchInterval,
+  });
+}
+
+export function useReloadOptions() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<OptionStatus>("/api/option/reload"),
+    retry: false,
+    onSuccess: (status) => {
+      client.setQueryData(OPTION_STATUS_KEY, status);
+      for (const key of [
+        OPTIONS_KEY,
+        ["admin-channels"],
+        ["admin-metrics"],
+        ["plaza-models"],
+        ["plaza-model"],
+      ])
+        client.invalidateQueries({ queryKey: key });
+    },
   });
 }
 
@@ -118,12 +137,15 @@ export function buildModelRatioJson(
  * config. Each model's output/input ratio is stored as a float64.
  */
 export function buildCompletionRatioJson(
-  models: Record<string, {
-    pricing: {
-      input_per_million_usd: string;
-      output_per_million_usd: string;
-    };
-  }>,
+  models: Record<
+    string,
+    {
+      pricing: {
+        input_per_million_usd: string;
+        output_per_million_usd: string;
+      };
+    }
+  >,
 ): string {
   const ratioMap: Record<string, number> = {};
   for (const [id, entry] of Object.entries(models)) {

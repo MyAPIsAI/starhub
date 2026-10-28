@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -23,6 +22,7 @@ import { Modal } from "../../components/ui/overlay";
 import { ModelPricingAdmin } from "../../features/model-pricing-admin";
 import { useSystemAccess, isAdmin, canReadFinance, ROLE_ROOT, ROLE_FINANCE } from "../../lib/system-access";
 import { FinanceOverview } from "../../features/finance-overview";
+import { ConfigurationSync } from "../../features/configuration-sync";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
@@ -102,7 +102,6 @@ export default function AdminPortal() {
   const redemptionsQuery = useRedemptions();
   const createRedemptionMut = useCreateRedemption();
   const deleteRedemptionMut = useDeleteRedemption();
-  const queryClient = useQueryClient();
 
   // Channel test result per channel id (cleared on next test).
   const [testResults, setTestResults] = useState<
@@ -179,10 +178,6 @@ export default function AdminPortal() {
   );
   const [topUpNotice, setTopUpNotice] = useState("");
 
-  // Force sync state
-  const [syncing, setSyncing] = useState(false);
-  const [syncedMessage, setSyncedMessage] = useState("");
-
   // Incident modal state
   const [incidentOpen, setIncidentOpen] = useState(false);
   const [incTitle, setIncTitle] = useState("");
@@ -234,18 +229,6 @@ export default function AdminPortal() {
   const handleToggleStatus = (user: AdminUser) => {
     const nextStatus = userIsActive(user.status) ? 2 : 1;
     updateUserMut.mutate({ id: user.id, status: nextStatus });
-  };
-
-  const handleForceSync = () => {
-    setSyncing(true);
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["admin-metrics"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-channels"] }),
-    ]).then(() => {
-      setSyncing(false);
-      setSyncedMessage(t("syncConfirmed"));
-      setTimeout(() => setSyncedMessage(""), 4000);
-    });
   };
 
   const handlePublishIncidentSubmit = (e: React.FormEvent) => {
@@ -989,43 +972,16 @@ export default function AdminPortal() {
                   }}
                 >
                   {text(
-                    "查看资源快照同步情况与网关运行状态。",
-                    "View resource snapshot synchronization and gateway health.",
-                    "عرض مزامنة لقطات الموارد وحالة البوابة.",
+                    "查看上游渠道及共享配置数据库的加载和心跳状态。",
+                    "View upstream channels and shared-configuration load and heartbeat status.",
+                    "عرض القنوات وحالة تحميل الإعدادات المشتركة والنبضات.",
                   )}
                 </p>
               </div>
 
-              {isAdmin(authRole) && (
-                <Button
-                  variant="primary"
-                  onClick={handleForceSync}
-                  disabled={syncing}
-                >
-                  <RefreshCw
-                    size={14}
-                    className={syncing ? "spinning" : ""}
-                    style={{ marginInlineEnd: 6 }}
-                  />
-                  {t("forceSync")}
-                </Button>
-              )}
             </div>
 
-            {syncedMessage && (
-              <div
-                style={{
-                  padding: "var(--space-3) var(--space-4)",
-                  background: "var(--success-soft)",
-                  color: "var(--success)",
-                  borderRadius: "var(--radius-md)",
-                  marginBottom: "var(--space-4)",
-                  fontSize: "var(--text-sm)",
-                }}
-              >
-                {syncedMessage}
-              </div>
-            )}
+            <ConfigurationSync />
 
             {/* Channel list from backend */}
             <section

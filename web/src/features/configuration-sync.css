@@ -1,0 +1,92 @@
+.configuration-sync {
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  min-width: 0;
+}
+.configuration-sync header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.configuration-sync h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+.configuration-sync p {
+  max-width: 700px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.configuration-sync-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.configuration-sync-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.configuration-sync-versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 48px;
+  margin: 20px 0;
+  padding: 20px 0;
+  border-block: 1px solid var(--border);
+}
+.configuration-sync-versions dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.configuration-sync-versions dd {
+  margin: 6px 0;
+  font: 24px var(--font-mono);
+}
+.configuration-sync-versions small {
+  color: var(--secondary);
+  font-size: 12px;
+}
+.configuration-sync-notice,
+.configuration-sync-empty {
+  padding: 12px 16px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.configuration-sync [role="alert"] {
+  color: var(--danger);
+}
+.configuration-sync-table {
+  overflow: auto;
+  max-width: 100%;
+}
+.configuration-sync-table table {
+  width: 100%;
+  min-width: 580px;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: start;
+}
+.configuration-sync-table th,
+.configuration-sync-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  white-space: nowrap;
+}
+.configuration-sync-table th {
+  color: var(--muted);
+  background: var(--subtle);
+}
+@media (max-width: 480px) {
+  .configuration-sync {
+    padding: 16px;
+  }
+}
