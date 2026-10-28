@@ -65,6 +65,17 @@ export default function ModelDetail() {
   const modelQuality = model
     ? qualityQuery.data?.by_model.find((m) => m.model === model.id)
     : undefined;
+  const measuredP95 =
+    modelQuality &&
+    Number.isFinite(modelQuality.p95_duration_ms) &&
+    modelQuality.p95_duration_ms > 0
+      ? modelQuality.p95_duration_ms
+      : null;
+  const noLatencyData = text(
+    "暂无耗时数据",
+    "No latency data",
+    "لا توجد بيانات زمن الاستجابة",
+  );
   const isLoading = plazaDetail.isPending;
   const hasLoadError =
     plazaDetail.isError &&
@@ -316,8 +327,19 @@ export default function ModelDetail() {
                       </span>
                       <span className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }} dir="ltr">
                         {text("P95 延迟", "P95 latency", "زمن P95")}:{" "}
-                        <strong style={{ color: modelQuality.p95_duration_ms > 0 && modelQuality.p95_duration_ms < 3000 ? "var(--success)" : "var(--danger)" }}>
-                          {modelQuality.p95_duration_ms > 0 ? `${modelQuality.p95_duration_ms}ms` : "—"}
+                        <strong
+                          style={{
+                            color:
+                              measuredP95 === null
+                                ? "var(--muted)"
+                                : measuredP95 < 3000
+                                  ? "var(--success)"
+                                  : "var(--danger)",
+                          }}
+                        >
+                          {measuredP95 === null
+                            ? noLatencyData
+                            : `${measuredP95}ms`}
                         </strong>
                       </span>
                       <span className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }} dir="ltr">
@@ -667,10 +689,22 @@ export default function ModelDetail() {
                                     if (raw) {
                                       const sq = JSON.parse(raw);
                                       const success = sq.success != null ? `${(sq.success * 100).toFixed(1)}%` : "—";
-                                      const p95 = sq.p95 != null ? `${sq.p95}ms` : "—";
+                                      const hasLatency =
+                                        Number.isFinite(sq.p95) && sq.p95 > 0;
                                       return (
                                         <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
-                                          {success} / {p95}
+                                          {success} /{" "}
+                                          <span
+                                            style={{
+                                              color: hasLatency
+                                                ? undefined
+                                                : "var(--muted)",
+                                            }}
+                                          >
+                                            {hasLatency
+                                              ? `${sq.p95}ms`
+                                              : noLatencyData}
+                                          </span>
                                         </span>
                                       );
                                     }
