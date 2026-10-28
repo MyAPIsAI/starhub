@@ -17,9 +17,20 @@ import {
 import { PublicHeader } from "../../components/product-shell";
 import { copyText } from "../../features/code-example";
 import { usePreferences } from "../../lib/preferences";
+import { placeholders } from "../../config/placeholders";
 
 type ArticleId =
-  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols" | "routing" | "limits" | "faq";
+  "quickstart" | "auth" | "tiers" | "claudeCode" | "errors" | "billing" | "protocols" | "models" | "routing" | "limits" | "faq";
+const modelsExample = `curl --fail --silent --show-error ${placeholders.apiBase}/models \\
+  -H "Authorization: Bearer $MYAPIS_API_KEY"`;
+const modelsResponse = JSON.stringify(
+  {
+    object: "list",
+    data: [{ id: "gpt-4.1", object: "model", created: 0, owned_by: "starhub" }],
+  },
+  null,
+  2,
+);
 const curlExample = `curl https://api.myapis.ai/v1/chat/completions \\
   -H "Authorization: Bearer $MYAPIS_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -55,6 +66,7 @@ export default function DocsPage() {
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
     { id: "tiers", title: t("docsTiers"), Icon: Cpu },
     { id: "protocols", title: text("协议", "Protocols", "البروتوكولات"), Icon: ArrowUpRight },
+    { id: "models", title: text("模型列表", "Model list", "قائمة النماذج"), Icon: Cpu },
     { id: "claudeCode", title: t("docsClaudeCode"), Icon: Sparkles },
     { id: "errors", title: t("docsErrors"), Icon: ShieldCheck },
     { id: "billing", title: t("docsBilling"), Icon: Coins },
@@ -71,6 +83,21 @@ export default function DocsPage() {
   const [activeTab, setActiveTab] = useState<ArticleId>(initialArticle);
   const [searchQuery, setSearchQuery] = useState("");
   const current = articles.find((article) => article.id === activeTab)!;
+  const modelsLead = text(
+    "GET /v1/models 返回当前密钥所用服务分组中已启用的模型标识。调用模型时，将选定的 data[].id 填入请求的 model 字段。",
+    "GET /v1/models lists enabled model IDs in the service group used by the current key. Set the request's model field to the selected data[].id.",
+    "يعرض GET /v1/models معرّفات النماذج المفعّلة في مجموعة الخدمة التي يستخدمها المفتاح الحالي. ضع قيمة data[].id المختارة في حقل model للطلب.",
+  );
+  const modelsScope = text(
+    "列表按服务分组生成，不会按密钥的模型白名单逐项过滤。出现在列表中不表示该密钥获准调用，也不保证请求时有可用渠道；实际请求仍须通过授权与运行状态检查。",
+    "The list is scoped to the service group, without filtering each entry against the key's model allowlist. A listed model does not guarantee key authorization or channel availability; requests still undergo authorization and runtime checks.",
+    "تقتصر القائمة على مجموعة الخدمة ولا تُصفّى حسب قائمة النماذج المسموح بها للمفتاح. ظهور نموذج لا يضمن تفويض المفتاح أو توفر قناة؛ تظل الطلبات خاضعة لفحوص التفويض وحالة التشغيل.",
+  );
+  const modelsResponseNote = text(
+    "下方 JSON 仅为格式示例，实际 data 可能为空。owned_by 是网关标记，created: 0 不是模型发布日期。",
+    "The JSON below illustrates the response format; data may be empty. owned_by is a gateway label, and created: 0 is not the model's release date.",
+    "يوضح JSON أدناه صيغة الاستجابة فقط وقد تكون data فارغة. الحقل owned_by هو تسمية للبوابة، وcreated: 0 ليس تاريخ إصدار النموذج.",
+  );
 
   // Article search: full-text match against title, keywords, and article body.
   const articleKeywords: Record<ArticleId, string[]> = {
@@ -81,6 +108,7 @@ export default function DocsPage() {
     errors: ["error", "400", "401", "403", "429", "502", "503", "错误", "错误码", "故障排除"],
     billing: ["billing", "quota", "cost", "charge", "balance", "top-up", "计费", "费用", "余额", "充值"],
     protocols: ["protocol", "endpoint", "api", "curl", "url", "path", "协议", "端点", "路径", "接口"],
+    models: ["model list", "/v1/models", "模型列表", "قائمة النماذج"],
     routing: ["routing", "authorization", "group", "model", "allowlist", "auto", "路由", "授权", "分组", "白名单"],
     limits: ["limit", "rate", "quota", "concurrency", "throttle", "配额", "限流", "并发", "额度"],
     faq: ["faq", "question", "answer", "常见问题", "问题", "解答"],
@@ -95,6 +123,7 @@ export default function DocsPage() {
     errors: "401 invalid_api_key token_disabled token_expired 403 insufficient_quota token_quota_exhausted auto_group_empty group_not_available 400 invalid_request_body invalid_json invalid_multipart model_required 429 rate_limit_exceeded 502 upstream_unavailable retry_budget_exhausted upstream_result_uncertain 503 no_available_channel 500 pre_consume_failed channel_selection_failed Authorization Bearer JSON multipart",
     billing: "balance precision usage totals request logs export details account balance 2 4 6 9 display reconciliation",
     protocols: "Chat Completions OpenAI Messages Anthropic Embeddings Images generations Audio TTS speech STT transcriptions translations Video submit poll Realtime WebSocket Models list Bearer token base URL path auth",
+    models: [modelsLead, modelsScope, modelsResponseNote, modelsExample, modelsResponse].join(" "),
     routing: "routing flow key auth user quota check channel selection group model match pre-charge upstream call settle refund group model_limit allowed_ips remain_quota CIDR IP allowlist authorized model list",
     limits: "user rate limit 100 req/min key 50 model 500 per-request cap 2000000 quota pre-charge malicious large requests 429 rate_limit_exceeded 403 insufficient_quota",
     faq: "plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field top-up credited immediately balance",
@@ -289,6 +318,20 @@ export default function DocsPage() {
               <CodeBlock
                 title={text("Python（编程语言）", "Python", "Python")}
                 code={pythonExample}
+              />
+            </>
+          )}
+          {activeTab === "models" && (
+            <>
+              <p className="docs-lead">{modelsLead}</p>
+              <CodeBlock title="GET /v1/models" code={modelsExample} />
+              <div className="docs-callout">
+                <p>{modelsScope}</p>
+              </div>
+              <p>{modelsResponseNote}</p>
+              <CodeBlock
+                title={text("响应格式示例", "Example response", "مثال على الاستجابة")}
+                code={modelsResponse}
               />
             </>
           )}
