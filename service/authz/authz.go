@@ -34,13 +34,14 @@ const (
 type Resource string
 
 const (
-	ResourceUser     Resource = "user"
-	ResourceChannel  Resource = "channel"
-	ResourceToken    Resource = "token"
-	ResourceOption   Resource = "option"
-	ResourceLog      Resource = "log"
-	ResourceAudit    Resource = "audit"
+	ResourceUser       Resource = "user"
+	ResourceChannel    Resource = "channel"
+	ResourceToken      Resource = "token"
+	ResourceOption     Resource = "option"
+	ResourceLog        Resource = "log"
+	ResourceAudit      Resource = "audit"
 	ResourceRedemption Resource = "redemption"
+	ResourceFinance    Resource = "finance"
 )
 
 // policy maps role -> resource -> allowed actions. An empty action set means
@@ -55,6 +56,7 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceLog:        {}, // all actions
 		ResourceAudit:      {}, // all actions
 		ResourceRedemption: {}, // all actions
+		ResourceFinance:    {ActionRead: true},
 	},
 	common.RoleAdmin: {
 		ResourceUser:       {ActionRead: true},
@@ -64,6 +66,12 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceLog:        {ActionRead: true},
 		ResourceAudit:      {ActionRead: true},
 		ResourceRedemption: {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceFinance:    {ActionRead: true},
+	},
+	common.RoleFinance: {
+		ResourceFinance: {ActionRead: true},
+		ResourceToken:   {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceLog:     {ActionRead: true},
 	},
 	common.RoleUser: {
 		ResourceToken: {ActionRead: true, ActionWrite: true, ActionDelete: true},
@@ -121,6 +129,8 @@ func pathResource(path string) (Resource, bool) {
 		return ResourceAudit, true
 	case strings.HasPrefix(path, "/api/redemption"):
 		return ResourceRedemption, true
+	case path == "/api/finance" || strings.HasPrefix(path, "/api/finance/"):
+		return ResourceFinance, true
 	}
 	return "", false
 }

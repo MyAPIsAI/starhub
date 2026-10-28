@@ -71,3 +71,19 @@ func TestCheckRequestManagementAPI(t *testing.T) {
 		t.Fatal("Root should be able to delete users")
 	}
 }
+
+func TestFinanceRoleIsReadOnlyAndHasNoAdminResourceAccess(t *testing.T) {
+	if !Allow(common.RoleFinance, ResourceFinance, ActionRead) || Allow(common.RoleFinance, ResourceFinance, ActionWrite) || Allow(common.RoleFinance, ResourceFinance, ActionDelete) {
+		t.Fatal("finance permissions are not read-only")
+	}
+	for _, resource := range []Resource{ResourceUser, ResourceChannel, ResourceOption, ResourceAudit, ResourceRedemption} {
+		for _, action := range []Action{ActionRead, ActionWrite, ActionDelete} {
+			if Allow(common.RoleFinance, resource, action) {
+				t.Fatalf("finance role gained %s on %s", action, resource)
+			}
+		}
+	}
+	if CheckRequest(common.RoleUser, httptest.NewRequest("GET", "/api/finance/summary", nil)) {
+		t.Fatal("regular user gained finance access")
+	}
+}

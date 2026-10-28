@@ -40,6 +40,7 @@ func New() http.Handler {
 	mux.Handle("GET /api/user", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
 	mux.Handle("GET /api/user/", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
 	mux.Handle("PUT /api/user", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser))))
+	mux.Handle("PUT /api/user/{id}/finance-role", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.SetUserFinanceRole))))
 	mux.Handle("PUT /api/user/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser))))
 
 	mux.Handle("POST /api/channel", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))

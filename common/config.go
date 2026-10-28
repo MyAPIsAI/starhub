@@ -1,9 +1,10 @@
 package common
 
 const (
-	RoleUser  = 1
-	RoleAdmin = 10
-	RoleRoot  = 100
+	RoleUser    = 1
+	RoleFinance = 5
+	RoleAdmin   = 10
+	RoleRoot    = 100
 )
 
 const (
