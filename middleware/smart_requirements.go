@@ -52,6 +52,9 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 		req.capabilities = append(req.capabilities, capability)
 	}
 	if !multipart {
+		if isGeminiPath(r.URL.Path) {
+			return readGeminiRequirements(r, body, req)
+		}
 		if r.URL.Path == "/v1/responses" {
 			return readResponsesRequirements(r, body, req)
 		}
@@ -173,6 +176,13 @@ func (req smartRequirements) compatible(name, group string, ch *model.Channel) (
 	}
 	adaptor, err := relay.GetChatAdaptor(ch.Type)
 	switch req.path {
+	case "/v1beta/models":
+		if _, _, pathErr := dto.ParseGeminiPath("/v1beta/models/" + name + ":generateContent"); pathErr != nil {
+			return false, nil
+		}
+		if err == nil && adaptor.NativeInboundFormat() != dto.InboundGemini {
+			return false, nil
+		}
 	case "/v1/responses":
 		if err == nil {
 			_, err = adaptor.ModeURL(ch.BaseURL, channel.RelayModeResponses)

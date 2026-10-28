@@ -127,8 +127,8 @@ func UserRateLimit(next http.Handler) http.Handler {
 
 func writeRateLimited(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Retry-After", strconv.Itoa(int(rateWindow/time.Second)))
-	if strings.HasPrefix(r.URL.Path, "/v1/") {
-		common.RelayError(w, http.StatusTooManyRequests,
+	if strings.HasPrefix(r.URL.Path, "/v1/") || isGeminiPath(r.URL.Path) {
+		writeRelayRequestError(w, r, http.StatusTooManyRequests,
 			"rate_limit_error", "rate_limit_exceeded",
 			"too many requests, please retry later")
 		return

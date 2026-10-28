@@ -108,11 +108,11 @@ func responsesFallbackUsage(req *dto.ResponsesRequest, output json.RawMessage, t
 	return &relay.Usage{PromptTokens: req.InputTokens, CompletionTokens: tokens}
 }
 
-func settleResponses(flow *relayFlow, ch *model.Channel, usage *relay.Usage, status int) {
+func settleNativeUsage(flow *relayFlow, ch *model.Channel, usage *relay.Usage, status int) {
 	usage.RequestProtocol = flow.req.protocol
 	usage.RequestStatus = status
 	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName, flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
-		log.Printf("Responses quota settlement failed: %v", err)
+		log.Printf("%s quota settlement failed: %v", flow.mode, err)
 	}
 	flow.settled = true
 }
@@ -138,7 +138,7 @@ func relayResponsesJSON(flow *relayFlow, ch *model.Channel, resp *http.Response,
 		}
 	}
 	writePassthroughBody(flow.w, resp, body)
-	settleResponses(flow, ch, usage, status)
+	settleNativeUsage(flow, ch, usage, status)
 	outcome := attemptSuccess
 	if status != 1 {
 		outcome = attemptClientError
@@ -146,9 +146,9 @@ func relayResponsesJSON(flow *relayFlow, ch *model.Channel, resp *http.Response,
 	return attemptResult{outcome: outcome, statusCode: resp.StatusCode, usage: usage}
 }
 
-type responsesForwarder struct{ w http.ResponseWriter }
+type nativeStreamForwarder struct{ w http.ResponseWriter }
 
-func (f responsesForwarder) Write(p []byte) (int, error) {
+func (f nativeStreamForwarder) Write(p []byte) (int, error) {
 	n, err := f.w.Write(p)
 	if flusher, ok := f.w.(http.Flusher); ok {
 		flusher.Flush()
@@ -165,7 +165,7 @@ func relayResponsesStream(flow *relayFlow, ch *model.Channel, resp *http.Respons
 	flow.w.Header().Set("X-Accel-Buffering", "no")
 	// Tee raw bytes so comments, IDs, retries, extension events and numeric
 	// precision survive. Parsing is an accounting observer, not a serializer.
-	reader := channel.NewSSEByteReader(io.TeeReader(io.LimitReader(resp.Body, maxModeResponseBytes+1), responsesForwarder{flow.w}))
+	reader := channel.NewSSEByteReader(io.TeeReader(io.LimitReader(resp.Body, maxModeResponseBytes+1), nativeStreamForwarder{flow.w}))
 	defer reader.Release()
 	var usage *relay.Usage
 	var output json.RawMessage
@@ -210,7 +210,7 @@ func relayResponsesStream(flow *relayFlow, ch *model.Channel, resp *http.Respons
 			usage = &relay.Usage{}
 		}
 	}
-	settleResponses(flow, ch, usage, status)
+	settleNativeUsage(flow, ch, usage, status)
 	if !terminal {
 		return attemptResult{outcome: attemptUncertain, cause: fmt.Errorf("Responses stream ended before a terminal event: %w", streamErr), usage: usage}
 	}

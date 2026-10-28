@@ -40,9 +40,10 @@ type GeminiRequest struct {
 	CachedContent     string                 `json:"cachedContent"`
 	ContinuationToken string                 `json:"continuationToken"`
 	GenerationConfig  struct {
-		MaxOutputTokens *int64          `json:"maxOutputTokens"`
-		CandidateCount  *int64          `json:"candidateCount"`
-		ThinkingConfig  json.RawMessage `json:"thinkingConfig"`
+		MaxOutputTokens    *int64          `json:"maxOutputTokens"`
+		CandidateCount     *int64          `json:"candidateCount"`
+		ThinkingConfig     json.RawMessage `json:"thinkingConfig"`
+		ResponseModalities []string        `json:"responseModalities"`
 	} `json:"generationConfig"`
 	InputTokens  int64           `json:"-"`
 	FirstUser    json.RawMessage `json:"-"`
@@ -71,7 +72,7 @@ func ParseGeminiRequest(body []byte) (*GeminiRequest, error) {
 		return nil, err
 	}
 	if config := fields["generationConfig"]; len(config) > 0 && !bytes.Equal(bytes.TrimSpace(config), []byte("null")) {
-		fields["generationConfig"], err = canonicalGeminiFields(config, map[string]string{"max_output_tokens": "maxOutputTokens", "candidate_count": "candidateCount", "thinking_config": "thinkingConfig"})
+		fields["generationConfig"], err = canonicalGeminiFields(config, map[string]string{"max_output_tokens": "maxOutputTokens", "candidate_count": "candidateCount", "thinking_config": "thinkingConfig", "response_modalities": "responseModalities"})
 		if err != nil {
 			return nil, err
 		}
@@ -91,6 +92,11 @@ func ParseGeminiRequest(body []byte) (*GeminiRequest, error) {
 	}
 	if count := req.GenerationConfig.CandidateCount; count != nil && *count != 1 {
 		return nil, errors.New("native Gemini currently supports candidateCount = 1")
+	}
+	for _, modality := range req.GenerationConfig.ResponseModalities {
+		if modality != "TEXT" {
+			return nil, errors.New("native Gemini currently supports TEXT output only")
+		}
 	}
 	req.HasReasoning = len(req.GenerationConfig.ThinkingConfig) > 0 && !bytes.Equal(bytes.TrimSpace(req.GenerationConfig.ThinkingConfig), []byte("null"))
 	for _, raw := range req.Tools {

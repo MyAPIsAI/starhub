@@ -97,19 +97,32 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 					stream = raw == "true" || raw == "1"
 				}
 			} else {
-				var lite struct {
-					Model  string `json:"model"`
-					Stream bool   `json:"stream"`
-				}
-				if err := json.Unmarshal(body, &lite); err != nil {
-					fail(http.StatusBadRequest, "invalid_json",
-						"request body is not valid JSON: "+err.Error())
-					return
-				}
-				modelName = lite.Model
-				stream = lite.Stream
-				if setting.RoutingAffinityPrefixCacheEnabled() {
-					prefixHash = chatPrefixHashFromBody(body)
+				if inbound == dto.InboundGemini {
+					var pathErr error
+					modelName, stream, pathErr = dto.ParseGeminiPath(r.URL.Path)
+					if pathErr != nil {
+						fail(http.StatusBadRequest, "invalid_gemini_path", pathErr.Error())
+						return
+					}
+					if stream && r.URL.Query().Get("alt") != "sse" {
+						fail(http.StatusBadRequest, "unsupported_stream_format", "native Gemini streaming requires alt=sse")
+						return
+					}
+				} else {
+					var lite struct {
+						Model  string `json:"model"`
+						Stream bool   `json:"stream"`
+					}
+					if err := json.Unmarshal(body, &lite); err != nil {
+						fail(http.StatusBadRequest, "invalid_json",
+							"request body is not valid JSON: "+err.Error())
+						return
+					}
+					modelName = lite.Model
+					stream = lite.Stream
+					if setting.RoutingAffinityPrefixCacheEnabled() {
+						prefixHash = chatPrefixHashFromBody(body)
+					}
 				}
 			}
 			if modelName == "" && defaultModel != "" {
@@ -190,7 +203,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				r.Body = io.NopCloser(bytes.NewReader(body))
 				r.ContentLength = int64(len(body))
 			}
-			if autoModelSelected && !isMultipart(contentType) {
+			if autoModelSelected && !isMultipart(contentType) && inbound != dto.InboundGemini {
 				// Keep passthrough bodies and parsed IR aligned with routing.
 				// Raw fields preserve extension data and numeric precision.
 				var fields map[string]json.RawMessage

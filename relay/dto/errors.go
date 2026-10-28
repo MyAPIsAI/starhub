@@ -84,6 +84,12 @@ func BuildClaudeErrorBody(env *ErrorEnvelope) []byte {
 
 // WriteRelayError writes a gateway-generated error in the inbound format.
 func WriteRelayError(w http.ResponseWriter, status int, inbound InboundFormat, errType, code, message string) {
+	if inbound == InboundGemini {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write(BuildGeminiErrorBody(status, message))
+		return
+	}
 	if inbound == InboundClaude {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
@@ -98,6 +104,12 @@ func WriteRelayError(w http.ResponseWriter, status int, inbound InboundFormat, e
 // WriteUpstreamError passes an upstream error body through to the client,
 // converting the envelope when the inbound format differs from the upstream's.
 func WriteUpstreamError(w http.ResponseWriter, status int, inbound InboundFormat, upstreamBody []byte, upstreamContentType string) {
+	if inbound == InboundGemini && json.Valid(upstreamBody) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write(upstreamBody)
+		return
+	}
 	env := ParseProviderErrorBody(upstreamBody)
 	if env == nil {
 		// Not a structured provider error: forward the bytes unchanged.
@@ -119,4 +131,14 @@ func WriteUpstreamError(w http.ResponseWriter, status int, inbound InboundFormat
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write(BuildOpenAIErrorBody(env))
+}
+
+// BuildGeminiErrorBody follows the native Google RPC JSON error shape.
+func BuildGeminiErrorBody(status int, message string) []byte {
+	name := map[int]string{400: "INVALID_ARGUMENT", 401: "UNAUTHENTICATED", 403: "PERMISSION_DENIED", 404: "NOT_FOUND", 409: "ABORTED", 413: "RESOURCE_EXHAUSTED", 429: "RESOURCE_EXHAUSTED", 500: "INTERNAL", 502: "UNAVAILABLE", 503: "UNAVAILABLE"}[status]
+	if name == "" {
+		name = "UNKNOWN"
+	}
+	body, _ := json.Marshal(map[string]any{"error": map[string]any{"code": status, "message": message, "status": name}})
+	return body
 }

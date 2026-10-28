@@ -25,16 +25,14 @@ func New() *Adaptor { return &Adaptor{} }
 
 func (Adaptor) Name() string { return "gemini" }
 
-// NativeInboundFormat is empty: the gateway exposes no Gemini-native
-// endpoint, so every inbound protocol is served through IR conversion.
-func (Adaptor) NativeInboundFormat() dto.InboundFormat { return "" }
+func (Adaptor) NativeInboundFormat() dto.InboundFormat { return dto.InboundGemini }
 
 func (Adaptor) ChatURL(baseURL, _, model string, stream bool) string {
 	method := "generateContent"
 	if stream {
 		method = "streamGenerateContent?alt=sse"
 	}
-	return trimBase(baseURL) + "/v1beta/models/" + model + ":" + method
+	return strings.TrimSuffix(trimBase(baseURL), "/v1beta") + "/v1beta/models/" + model + ":" + method
 }
 
 func (Adaptor) ModeURL(_ string, _ channel.RelayMode) (string, error) {
@@ -52,7 +50,7 @@ func (Adaptor) PrepareRequest(req *http.Request, apiKey string, _ []byte) error 
 	return nil
 }
 
-// PreparePassthroughBody is never called (no native inbound format).
+// PreparePassthroughBody retains native content without chat-only options.
 func (Adaptor) PreparePassthroughBody(body []byte, _ bool) ([]byte, error) {
 	return body, nil
 }
@@ -61,8 +59,7 @@ func (Adaptor) ConvertChatRequest(ir *dto.ChatRequest) ([]byte, error) {
 	return dto.BuildGeminiChatRequest(ir)
 }
 
-// HandlePassthroughResponse is never called (no native inbound format);
-// the IR path always applies.
+// HandlePassthroughResponse retains the native JSON envelope.
 func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Response, _ bool) (*dto.Usage, string, error) {
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {

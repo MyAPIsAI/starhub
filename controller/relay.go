@@ -147,6 +147,9 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 	if r.URL.Path == "/v1/messages" {
 		req.protocol = "Anthropic"
 	}
+	if strings.HasPrefix(r.URL.Path, "/v1beta/models/") {
+		req.protocol = "Gemini"
+	}
 	if req.requestedModel == "" {
 		req.requestedModel = req.modelName
 	}

@@ -66,6 +66,7 @@ func TestGeminiRequestRejectsUnsupportedAndMalformed(t *testing.T) {
 		`{"contents":[{"parts":[{"text":"x"}]}],"generationConfig":{"maxOutputTokens":-1}}`,
 		`{"contents":[{"parts":[{"text":"x"}]}],"generationConfig":{"maxOutputTokens":1.5}}`,
 		`{"contents":[{"parts":[{"text":"x"}]}],"generationConfig":{"candidateCount":2}}`,
+		`{"contents":[{"parts":[{"text":"x"}]}],"generation_config":{"response_modalities":["AUDIO"]}}`,
 		`{"contents":[{"parts":[{"text":"x"}]}],"generationConfig":{},"generation_config":{}}`,
 		`{"contents":[{"parts":[{"inlineData":{},"inline_data":{}}]}]}`,
 	} {

@@ -24,6 +24,7 @@ func TestSyncRelaySettlementRecoversWithoutCallingUpstream(t *testing.T) {
 		name, path, body, response string
 		handler                    http.HandlerFunc
 	}{
+		{"gemini", "/v1beta/models/gpt-4o:generateContent", `{"contents":[{"parts":[{"text":"Hello"}]}],"generationConfig":{"maxOutputTokens":8}}`, `{"candidates":[{"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2}}`, RelayGemini},
 		{"responses", "/v1/responses", `{"model":"gpt-4o","input":"Hello","max_output_tokens":8}`, `{"id":"resp_test","status":"completed","output":[],"usage":{"input_tokens":10,"output_tokens":2}}`, RelayResponses},
 		{"chat", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"Hello"}],"max_tokens":8}`, `{"id":"chatcmpl-test","object":"chat.completion","model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"Hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`, RelayChat},
 		{"embeddings", "/v1/embeddings", `{"model":"gpt-4o","input":"Hello"}`, `{"object":"list","data":[],"usage":{"prompt_tokens":12,"total_tokens":12}}`, RelayEmbeddings},
@@ -38,7 +39,12 @@ func TestSyncRelaySettlementRecoversWithoutCallingUpstream(t *testing.T) {
 				_, _ = w.Write([]byte(tc.response))
 			}))
 			defer upstream.Close()
+			kind, inbound, protocol := channel.ChannelTypeOpenAI, dto.InboundOpenAI, "OpenAI"
+			if tc.name == "gemini" {
+				kind, inbound, protocol = channel.ChannelTypeGemini, dto.InboundGemini, "Gemini"
+			}
 			ch := &model.Channel{Name: "recovery", Type: channel.ChannelTypeOpenAI, Key: "test", BaseURL: upstream.URL, Models: "gpt-4o", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1}
+			ch.Type = kind
 			if err := model.InsertChannel(ch); err != nil {
 				t.Fatal(err)
 			}
@@ -56,7 +62,7 @@ func TestSyncRelaySettlementRecoversWithoutCallingUpstream(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer model.DB.Callback().Create().Remove(callback)
-			handler := middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(tc.handler))
+			handler := middleware.TokenAuth(middleware.Distribute(inbound)(tc.handler))
 			r := httptest.NewRequest("POST", tc.path, strings.NewReader(tc.body))
 			r.Header.Set("Content-Type", "application/json")
 			r.Header.Set("Authorization", "Bearer "+token.Key)
@@ -90,7 +96,7 @@ func TestSyncRelaySettlementRecoversWithoutCallingUpstream(t *testing.T) {
 				t.Fatalf("recovery balance/call mismatch: user=%+v token=%+v channel=%+v calls=%d", after, afterToken, afterChannel, calls.Load())
 			}
 			logs, total, err := model.ListLogs(user.ID, 1, 10, "")
-			if err != nil || total != 1 || logs[0].Quota != actual || logs[0].Status != 1 || logs[0].Model != "gpt-4o" || logs[0].RequestedModel != "gpt-4o" || logs[0].Protocol != "OpenAI" {
+			if err != nil || total != 1 || logs[0].Quota != actual || logs[0].Status != 1 || logs[0].Model != "gpt-4o" || logs[0].RequestedModel != "gpt-4o" || logs[0].Protocol != protocol {
 				t.Fatalf("recovery log mismatch: %+v %v", logs, err)
 			}
 		})

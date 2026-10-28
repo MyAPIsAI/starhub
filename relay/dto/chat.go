@@ -14,6 +14,7 @@ type InboundFormat string
 const (
 	InboundOpenAI InboundFormat = "openai"
 	InboundClaude InboundFormat = "claude"
+	InboundGemini InboundFormat = "gemini"
 )
 
 // ImageInput is an image attachment of a chat message, in either URL or

@@ -57,39 +57,42 @@ func TokenAuth(next http.Handler) http.Handler {
 			key = strings.TrimSpace(authHeader[len("Bearer "):])
 		} else {
 			key = strings.TrimSpace(r.Header.Get("x-api-key"))
+			if key == "" && isGeminiPath(r.URL.Path) {
+				key = strings.TrimSpace(r.Header.Get("x-goog-api-key"))
+			}
 		}
 		if key == "" {
-			common.RelayError(w, http.StatusUnauthorized,
+			writeRelayRequestError(w, r, http.StatusUnauthorized,
 				"authentication_error", "missing_bearer_key",
 				"missing Authorization: Bearer header")
 			return
 		}
 		token, err := model.GetTokenByKey(key)
 		if err == model.ErrTokenNotFound {
-			common.RelayError(w, http.StatusUnauthorized,
+			writeRelayRequestError(w, r, http.StatusUnauthorized,
 				"authentication_error", "invalid_api_key",
 				"invalid API key")
 			return
 		}
 		if err != nil {
-			common.RelayError(w, http.StatusInternalServerError,
+			writeRelayRequestError(w, r, http.StatusInternalServerError,
 				"server_error", "token_lookup_failed", err.Error())
 			return
 		}
 		if token.Status != common.StatusEnabled {
-			common.RelayError(w, http.StatusUnauthorized,
+			writeRelayRequestError(w, r, http.StatusUnauthorized,
 				"authentication_error", "token_disabled",
 				"API key is disabled")
 			return
 		}
 		if token.ExpiredTime > 0 && time.Now().Unix() > token.ExpiredTime {
-			common.RelayError(w, http.StatusUnauthorized,
+			writeRelayRequestError(w, r, http.StatusUnauthorized,
 				"authentication_error", "token_expired",
 				"API key has expired")
 			return
 		}
 		if !token.UnlimitedQuota && token.RemainQuota <= 0 {
-			common.RelayError(w, http.StatusForbidden,
+			writeRelayRequestError(w, r, http.StatusForbidden,
 				"insufficient_quota", "token_quota_exhausted",
 				"API key quota is exhausted")
 			return
@@ -97,14 +100,14 @@ func TokenAuth(next http.Handler) http.Handler {
 		// IP whitelist: enterprise customers restrict a key to known IPs to
 		// prevent leakage.
 		if !token.AllowsIP(clientIP(r)) {
-			common.RelayError(w, http.StatusForbidden,
+			writeRelayRequestError(w, r, http.StatusForbidden,
 				"authentication_error", "ip_not_allowed",
 				"client IP is not in the token allow-list")
 			return
 		}
 		user, err := model.GetUserByID(token.UserID)
 		if err != nil || user.Status != common.StatusEnabled {
-			common.RelayError(w, http.StatusUnauthorized,
+			writeRelayRequestError(w, r, http.StatusUnauthorized,
 				"authentication_error", "user_unavailable",
 				"API key owner is unavailable")
 			return
@@ -127,13 +130,13 @@ func TokenAuth(next http.Handler) http.Handler {
 		if group == common.AutoGroup {
 			autoGroups = token.AutoGroupList()
 			if len(autoGroups) == 0 {
-				common.RelayError(w, http.StatusForbidden,
+				writeRelayRequestError(w, r, http.StatusForbidden,
 					"invalid_request_error", "auto_group_empty",
 					"token uses the auto group but has no auto_groups configured")
 				return
 			}
 		} else if !setting.ContainsGroupRatio(group) {
-			common.RelayError(w, http.StatusForbidden,
+			writeRelayRequestError(w, r, http.StatusForbidden,
 				"invalid_request_error", "group_not_available",
 				fmt.Sprintf("group %q has no ratio configured", group))
 			return
