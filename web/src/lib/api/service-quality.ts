@@ -36,13 +36,14 @@ export interface ServiceQualitySummary {
   by_day: ServiceQualityDailyMetric[];
 }
 
-export function useServiceQuality(hours: number = 24) {
+export function useServiceQuality(hours: number = 24, model?: string) {
+  const params = new URLSearchParams({ hours: String(hours) });
+  if (model) params.set("model", model);
   return useQuery({
-    queryKey: ["service-quality", hours] as const,
+    queryKey: model
+      ? (["service-quality", hours, model] as const)
+      : (["service-quality", hours] as const),
     queryFn: ({ signal }) =>
-      apiGet<ServiceQualitySummary>(
-        `/api/service-quality?hours=${hours}`,
-        signal,
-      ),
+      apiGet<ServiceQualitySummary>(`/api/service-quality?${params}`, signal),
   });
 }

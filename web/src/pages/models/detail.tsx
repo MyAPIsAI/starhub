@@ -26,6 +26,7 @@ import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
 import { getKeyModelOptions } from "../../lib/key-model-policy";
 import { usePlazaModel, plazaToDirectoryModel } from "../../lib/api/plaza";
 import { useServiceQuality } from "../../lib/api/service-quality";
+import { ModelRequestTrend } from "../../components/model-request-trend";
 import { ApiError } from "../../lib/api/http";
 import "../../components/model-pricing.css";
 import "../../components/access-center.css";
@@ -368,6 +369,7 @@ export default function ModelDetail() {
                 </div>
               </div>
             </section>
+            <ModelRequestTrend model={model.id} />
             {model.kind === "smart" && (
               <section className="access-panel">
                 <h2>
