@@ -8,6 +8,8 @@ import {
 
 const context: PublicationContext = {
   schema: "exact_model_pairs_preview_v1",
+  profile: "openai_text_exact_v1",
+  supported_endpoints: ["/v1/chat/completions", "/v1/messages"],
   resource_revision: 3,
   channel_revision: 8,
   option_version: 12,
@@ -61,6 +63,8 @@ describe("actual resource publication preview", () => {
       { preview_only: false },
       { affects_gateway_routing: true },
       { schema: "publish_v2" },
+      { profile: "unknown" },
+      { supported_endpoints: ["/v1/responses"] },
       { resource_revision: -1 },
       { channel_revision: Number.MAX_SAFE_INTEGER + 1 },
       { option_version: 0.5 },

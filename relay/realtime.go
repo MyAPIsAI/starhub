@@ -94,6 +94,13 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		tried[ch.ID] = true
+		policy, managed, policyErr := model.ReadResourceGatewayPolicy(r.Context(), ch.ID, group, modelName)
+		if policyErr != nil {
+			break
+		}
+		if managed && !policy.Allows("/v1/realtime", nil, 0, 0) {
+			continue
+		}
 		adaptor, err := GetChatAdaptor(ch.Type)
 		if err != nil {
 			continue

@@ -229,6 +229,22 @@ function PublicationPanel({
           "يُنشئ هذا معاينة خادم فقط. لا تُحفظ الروابط ولا يتغير التوجيه أو صلاحيات الواجهة. يجب تطابق معرّفات المصدر والنموذج القياسي والنشر؛ يدعم النطاق الأولي النص والبرمجة من نوع OpenAI فقط. تُدار بيانات الاعتماد في القنوات الفعلية بشكل منفصل.",
         )}
       </aside>
+      <p className="rp-profile">
+        {text(
+          "首期支持 OpenAI/Anthropic 基础文本对话：",
+          "This initial profile supports basic OpenAI/Anthropic text chat:",
+          "يدعم النطاق الأولي المحادثة النصية الأساسية عبر OpenAI/Anthropic:",
+        )}{" "}
+        <code dir="ltr">/v1/chat/completions</code>
+        {" · "}
+        <code dir="ltr">/v1/messages</code>
+        {". "}
+        {text(
+          "工具、图片、音视频及其他端点暂不支持；已登记的上下文限制按请求估算核对，未登记保持未知。",
+          "Tools, images, audio/video and other endpoints are unsupported. Registered context limits are checked against request estimates; missing limits remain unknown.",
+          "الأدوات والصور والصوت والفيديو ونقاط النهاية الأخرى غير مدعومة. تُراجع حدود السياق المسجلة مقابل تقديرات الطلب؛ تبقى الحدود غير المسجلة غير معروفة.",
+        )}
+      </p>
       {query.isLoading && (
         <p role="status">
           {text(

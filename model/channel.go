@@ -51,6 +51,16 @@ func InsertChannel(c *Channel) error {
 
 func UpdateChannel(c *Channel) error {
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
+		var previous Channel
+		err := tx.Select("id", "type", "key", "base_url").First(&previous, "id = ?", c.ID).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err == nil && (previous.Type != c.Type || previous.Key != c.Key || previous.BaseURL != c.BaseURL) {
+			if err := revokeResourceGatewayChannel(tx, c.ID); err != nil {
+				return err
+			}
+		}
 		if err := tx.Save(c).Error; err != nil {
 			return err
 		}

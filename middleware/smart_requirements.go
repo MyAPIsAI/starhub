@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -14,11 +15,14 @@ import (
 )
 
 type smartRequirements struct {
-	path          string
-	capabilities  []string
-	input, output int64
-	chain         string
-	continuation  bool
+	ctx            context.Context
+	body           []byte
+	textValidation *managedTextValidation
+	path           string
+	capabilities   []string
+	input, output  int64
+	chain          string
+	continuation   bool
 }
 
 var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,100}$`)
@@ -38,7 +42,7 @@ func routingHeader(r *http.Request, name string) string {
 	return r.Header.Get("X-Veyra-" + name)
 }
 func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartRequirements, error) {
-	req := smartRequirements{path: r.URL.Path, chain: routingHeader(r, "Chain-Id"), input: 1, output: 1}
+	req := smartRequirements{ctx: r.Context(), body: body, textValidation: &managedTextValidation{}, path: r.URL.Path, chain: routingHeader(r, "Chain-Id"), input: 1, output: 1}
 	if req.chain != "" && !chainIDPattern.MatchString(req.chain) {
 		return req, errors.New("invalid routing tool-chain identifier")
 	}
@@ -125,6 +129,9 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 	return req, nil
 }
 func (req smartRequirements) compatible(name, group string, ch *model.Channel) (bool, error) {
+	if allowed, err := req.resourceCompatible(name, group, ch); err != nil || !allowed {
+		return false, err
+	}
 	meta, found, err := model.GetModelMeta(name)
 	if err != nil {
 		return false, err

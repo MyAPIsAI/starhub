@@ -34,10 +34,10 @@ func TestResourceGatewayExactPairsProtectActualDiscoveryAndCalls(t *testing.T) {
 	if err := model.InsertChannel(ch); err != nil {
 		t.Fatal(err)
 	}
-	if err := model.DB.Create(&model.ResourceGatewayManagedChannel{ChannelID: ch.ID, SourceChannelID: "fixture-source", Active: true}).Error; err != nil {
+	if err := model.DB.Create(&model.ResourceGatewayManagedChannel{ChannelID: ch.ID, SourceChannelID: "fixture-source", Active: true, Profile: model.ResourceGatewayTextProfile}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := model.DB.Create(&[]model.ResourceGatewayRoute{{ChannelID: ch.ID, Model: "alpha", Group: "default"}, {ChannelID: ch.ID, Model: "beta", Group: "vip"}}).Error; err != nil {
+	if err := model.DB.Create(&[]model.ResourceGatewayRoute{{ChannelID: ch.ID, Model: "alpha", Group: "default", Capabilities: `["text"]`, ContextLength: 128000}, {ChannelID: ch.ID, Model: "beta", Group: "vip", Capabilities: `["text"]`, ContextLength: 128000}}).Error; err != nil {
 		t.Fatal(err)
 	}
 	models := func() string {

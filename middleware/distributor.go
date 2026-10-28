@@ -222,6 +222,7 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				r.ContentLength = int64(len(body))
 			}
 
+			channelCheck = resourceGatewayChannelCheck(r, body, isMultipart(contentType), modelName, channelCheck)
 			// Channel selection is left to the relay controller: it retries the
 			// request on alternative channels, and every attempt needs a fresh
 			// pick. The body stays cached in the context so each attempt can

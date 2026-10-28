@@ -32,10 +32,10 @@ func TestResourceGatewayActualInventoryEditRevokesInSameCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := model.DB.Create(&model.ResourceGatewayManagedChannel{ChannelID: ch.ID, SourceChannelID: "supplier", Active: true}).Error; err != nil {
+	if err := model.DB.Create(&model.ResourceGatewayManagedChannel{ChannelID: ch.ID, SourceChannelID: "supplier", Active: true, Profile: model.ResourceGatewayTextProfile}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := model.DB.Create(&model.ResourceGatewayRoute{ChannelID: ch.ID, Model: "alpha", Group: "default"}).Error; err != nil {
+	if err := model.DB.Create(&model.ResourceGatewayRoute{ChannelID: ch.ID, Model: "alpha", Group: "default", Capabilities: `["text"]`, ContextLength: 128000}).Error; err != nil {
 		t.Fatal(err)
 	}
 	before, err := model.GetUserByID(env.rootID)

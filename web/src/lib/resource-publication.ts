@@ -8,6 +8,8 @@ export interface PublicationChannel {
 }
 export interface PublicationContext {
   schema: typeof RESOURCE_PUBLICATION_SCHEMA;
+  profile: "openai_text_exact_v1";
+  supported_endpoints: string[];
   resource_revision: number;
   channel_revision: number;
   option_version: number;
@@ -59,6 +61,9 @@ export function readPublicationContext(value: unknown): PublicationContext {
   if (
     !object(value) ||
     value.schema !== RESOURCE_PUBLICATION_SCHEMA ||
+    value.profile !== "openai_text_exact_v1" ||
+    JSON.stringify(value.supported_endpoints) !==
+      JSON.stringify(["/v1/chat/completions", "/v1/messages"]) ||
     value.preview_only !== true ||
     value.affects_gateway_routing !== false ||
     !version(value.resource_revision) ||

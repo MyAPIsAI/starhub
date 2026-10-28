@@ -28,6 +28,8 @@ type ResourceGatewayChannel struct {
 
 type ResourcePublicationContext struct {
 	Schema                string                   `json:"schema"`
+	Profile               string                   `json:"profile"`
+	SupportedEndpoints    []string                 `json:"supported_endpoints"`
 	ResourceRevision      int64                    `json:"resource_revision"`
 	ChannelRevision       int64                    `json:"channel_revision"`
 	OptionVersion         int64                    `json:"option_version"`
@@ -102,7 +104,7 @@ func readResourcePublicationState(tx *gorm.DB) (*resourcePublicationState, error
 		}
 	}
 	result := &resourcePublicationState{
-		context: ResourcePublicationContext{Schema: ResourcePublicationPreviewSchema, ResourceRevision: catalog.Revision, ChannelRevision: channels.Revision, OptionVersion: options.Version, Channels: []ResourceGatewayChannel{}, PreviewOnly: true},
+		context: ResourcePublicationContext{Schema: ResourcePublicationPreviewSchema, Profile: ResourceGatewayTextProfile, SupportedEndpoints: []string{"/v1/chat/completions", "/v1/messages"}, ResourceRevision: catalog.Revision, ChannelRevision: channels.Revision, OptionVersion: options.Version, Channels: []ResourceGatewayChannel{}, PreviewOnly: true},
 		catalog: catalog, groups: map[string]ServiceGroupConfig{}, deleted: map[string]bool{}, ratios: map[string]float64{},
 	}
 	var rows []Channel

@@ -120,10 +120,10 @@ func TestResourceGatewayPlacementChangesRevokeAndProtectUnrelatedChannels(t *tes
 		t.Run(change, func(t *testing.T) {
 			ch, catalog := resourceGatewayInventoryFixture(t)
 			other := addChannel(t, "other", "default", "unrelated", 0, 1, common.ChannelStatusEnabled)
-			if err := DB.Create(&ResourceGatewayManagedChannel{ChannelID: other.ID, SourceChannelID: "unrelated", Active: true}).Error; err != nil {
+			if err := DB.Create(&ResourceGatewayManagedChannel{ChannelID: other.ID, SourceChannelID: "unrelated", Active: true, Profile: ResourceGatewayTextProfile}).Error; err != nil {
 				t.Fatal(err)
 			}
-			if err := DB.Create(&ResourceGatewayRoute{ChannelID: other.ID, Model: "unrelated", Group: "default"}).Error; err != nil {
+			if err := DB.Create(&ResourceGatewayRoute{ChannelID: other.ID, Model: "unrelated", Group: "default", Capabilities: `["text"]`}).Error; err != nil {
 				t.Fatal(err)
 			}
 			before := channelRevision(t)
