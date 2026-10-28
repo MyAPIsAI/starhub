@@ -55,9 +55,13 @@ func ValidateResponsesRequest(req *dto.ResponsesRequest) error {
 }
 
 func EstimateResponsesPreConsumeQuota(modelName, group, userGroup string, req *dto.ResponsesRequest) int64 {
+	return EstimateResponsesPreConsumeQuotaWithPriceData(NewPriceDataWithUserGroup(modelName, group, userGroup), req)
+}
+
+func EstimateResponsesPreConsumeQuotaWithPriceData(pd *PriceData, req *dto.ResponsesRequest) int64 {
 	output := int64(common.DefaultCompletionBudgetTokens)
 	if req.MaxOutputTokens != nil {
 		output = *req.MaxOutputTokens
 	}
-	return estimatePreConsume(NewPriceDataWithUserGroup(modelName, group, userGroup), req.InputTokens+estimateReserveTokens, output)
+	return estimatePreConsume(pd, req.InputTokens+estimateReserveTokens, output)
 }

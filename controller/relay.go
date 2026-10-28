@@ -123,6 +123,7 @@ type relayRequest struct {
 	prefixHash     string // prompt-prefix scope for prefix-cache affinity
 	channelCheck   func(*model.Channel, string) (bool, error)
 	chainAdmission func() error
+	pricing        map[string]relay.PriceData
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
@@ -154,7 +155,20 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 		req.requestedModel = req.modelName
 	}
 	req.body, _ = ctx.Value(common.CtxRequestBody).([]byte)
+	groups := []string{req.billingGroup()}
+	if req.group == common.AutoGroup {
+		groups = append(groups, req.autoGroups...)
+	}
+	req.pricing = relay.CapturePricing(req.modelName, groups, req.userGroup)
 	return req
+}
+
+func (req relayRequest) priceFor(group string) *relay.PriceData {
+	if price, ok := req.pricing[group]; ok {
+		return &price
+	}
+	// Direct internal callers may construct relayRequest without HTTP context.
+	return relay.NewPriceDataWithUserGroup(req.modelName, group, req.userGroup)
 }
 
 // billingGroup returns the group used for the pre-charge: the first auto
@@ -746,15 +760,13 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 	// independent), the completion budget from the native multiplier fields.
 	// The pre-charge uses the first eligible group; the settlement uses the
 	// actual serving group if a later attempt fails over.
-	var preQuota int64
-	var preErr error
+	var estimate int64
 	if inbound == dto.InboundClaude {
-		preQuota, preErr = relay.PreConsumeIRQuotaWithUserGroup(req.userID, req.tokenID, req.tokenUnlimited,
-			req.modelName, billingGroup, req.userGroup, ir)
+		estimate = relay.EstimateIRPreConsumeQuotaWithPriceData(req.priceFor(billingGroup), ir)
 	} else {
-		preQuota, preErr = relay.PreConsumeQuotaWithUserGroup(req.userID, req.tokenID, req.tokenUnlimited,
-			req.modelName, billingGroup, req.userGroup, req.body)
+		estimate = relay.EstimatePreConsumeQuotaWithPriceData(req.priceFor(billingGroup), req.body)
 	}
+	preQuota, preErr := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, estimate)
 	if preErr != nil {
 		writePreConsumeError(flow.w, inbound, preErr)
 		return
@@ -940,8 +952,8 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 		usage = relay.EstimateIRUsage(ir, content)
 	}
 	usage.RequestProtocol = flow.req.protocol
-	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
-		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage,
+	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
+		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
 		log.Printf("post consume quota failed: %v", err)
 	}

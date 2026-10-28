@@ -17,6 +17,22 @@ type PricingInputs struct {
 func ResolvePricing(model, group, userGroup string) PricingInputs {
 	optionMu.RLock()
 	defer optionMu.RUnlock()
+	return resolvePricing(model, group, userGroup)
+}
+
+// ResolvePricingGroups captures every eligible billing group under one option
+// barrier, so a later retry cannot mix versions of the same request's prices.
+func ResolvePricingGroups(model string, groups []string, userGroup string) map[string]PricingInputs {
+	optionMu.RLock()
+	defer optionMu.RUnlock()
+	result := make(map[string]PricingInputs, len(groups))
+	for _, group := range groups {
+		result[group] = resolvePricing(model, group, userGroup)
+	}
+	return result
+}
+
+func resolvePricing(model, group, userGroup string) PricingInputs {
 	p := PricingInputs{}
 	p.ModelRatio, p.HasModelRatio = LookupModelRatio(model)
 	p.CompletionRatio, p.HasCompletion = LookupCompletionRatio(model)

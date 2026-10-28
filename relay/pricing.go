@@ -50,6 +50,21 @@ func NewPriceData(modelName, group string) *PriceData {
 
 func newPriceData(modelName, group, userGroup string) *PriceData {
 	inputs := setting.ResolvePricing(modelName, group, userGroup)
+	return priceDataFromInputs(modelName, group, userGroup, inputs)
+}
+
+// CapturePricing returns value snapshots for a request's eligible groups.
+// Callers copy a value before applying per-attempt special multipliers.
+func CapturePricing(modelName string, groups []string, userGroup string) map[string]PriceData {
+	inputs := setting.ResolvePricingGroups(modelName, groups, userGroup)
+	result := make(map[string]PriceData, len(inputs))
+	for group, value := range inputs {
+		result[group] = *priceDataFromInputs(modelName, group, userGroup, value)
+	}
+	return result
+}
+
+func priceDataFromInputs(modelName, group, userGroup string, inputs setting.PricingInputs) *PriceData {
 	pd := &PriceData{
 		ModelName:              modelName,
 		ModelRatio:             inputs.ModelRatio,

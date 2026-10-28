@@ -53,7 +53,7 @@ func RelayResponses(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, relay.EstimateResponsesPreConsumeQuota(req.modelName, flow.settleGroup(), req.userGroup, parsed))
+	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, relay.EstimateResponsesPreConsumeQuotaWithPriceData(req.priceFor(flow.settleGroup()), parsed))
 	if err != nil {
 		writePreConsumeError(flow.w, dto.InboundOpenAI, err)
 		return
@@ -111,7 +111,7 @@ func responsesFallbackUsage(req *dto.ResponsesRequest, output json.RawMessage, t
 func settleNativeUsage(flow *relayFlow, ch *model.Channel, usage *relay.Usage, status int) {
 	usage.RequestProtocol = flow.req.protocol
 	usage.RequestStatus = status
-	if err := relay.PostConsumeQuotaWithUserGroup(flow.req.userID, flow.req.tokenID, flow.req.tokenName, flow.req.tokenUnlimited, ch.ID, flow.req.modelName, flow.settleGroup(), flow.req.userGroup, usage, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
+	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName, flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
 		log.Printf("%s quota settlement failed: %v", flow.mode, err)
 	}
 	flow.settled = true

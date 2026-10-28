@@ -15,9 +15,13 @@ func ValidateGeminiRequest(req *dto.GeminiRequest) error {
 }
 
 func EstimateGeminiPreConsumeQuota(modelName, group, userGroup string, req *dto.GeminiRequest) int64 {
+	return EstimateGeminiPreConsumeQuotaWithPriceData(NewPriceDataWithUserGroup(modelName, group, userGroup), req)
+}
+
+func EstimateGeminiPreConsumeQuotaWithPriceData(pd *PriceData, req *dto.GeminiRequest) int64 {
 	output := int64(common.DefaultCompletionBudgetTokens)
 	if req.GenerationConfig.MaxOutputTokens != nil {
 		output = *req.GenerationConfig.MaxOutputTokens
 	}
-	return estimatePreConsume(NewPriceDataWithUserGroup(modelName, group, userGroup), req.InputTokens+estimateReserveTokens, output)
+	return estimatePreConsume(pd, req.InputTokens+estimateReserveTokens, output)
 }

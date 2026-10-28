@@ -49,7 +49,7 @@ func RelayGemini(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, relay.EstimateGeminiPreConsumeQuota(req.modelName, flow.settleGroup(), req.userGroup, parsed))
+	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, relay.EstimateGeminiPreConsumeQuotaWithPriceData(req.priceFor(flow.settleGroup()), parsed))
 	if err != nil {
 		writePreConsumeError(flow.w, dto.InboundGemini, err)
 		return

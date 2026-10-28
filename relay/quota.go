@@ -49,6 +49,10 @@ func EstimatePreConsumeQuota(modelName, group string, body []byte) int64 {
 // user's own group for the group x group matrix multiplier.
 func EstimatePreConsumeQuotaWithUserGroup(modelName, group, userGroup string, body []byte) int64 {
 	pd := NewPriceDataWithUserGroup(modelName, group, userGroup)
+	return EstimatePreConsumeQuotaWithPriceData(pd, body)
+}
+
+func EstimatePreConsumeQuotaWithPriceData(pd *PriceData, body []byte) int64 {
 	promptEstimate := dto.EstimateTokens(ExtractPromptText(body)) + estimateReserveTokens
 	completionBudget := CompletionBudgetTokens(body)
 	return estimatePreConsume(pd, promptEstimate, completionBudget)
@@ -71,6 +75,10 @@ func EstimateIRPreConsumeQuota(modelName, group string, ir *dto.ChatRequest) int
 // the user's own group for the group x group matrix multiplier.
 func EstimateIRPreConsumeQuotaWithUserGroup(modelName, group, userGroup string, ir *dto.ChatRequest) int64 {
 	pd := NewPriceDataWithUserGroup(modelName, group, userGroup)
+	return EstimateIRPreConsumeQuotaWithPriceData(pd, ir)
+}
+
+func EstimateIRPreConsumeQuotaWithPriceData(pd *PriceData, ir *dto.ChatRequest) int64 {
 	promptEstimate := dto.EstimateTokens(ir.PromptText()) + estimateReserveTokens
 	completionBudget := ir.MaxTokens
 	if completionBudget <= 0 {
