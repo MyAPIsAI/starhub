@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   ArrowDownLeft,
@@ -109,29 +109,40 @@ export default function BillingCenter({
   const location = useLocation();
   const tab =
     params.get("tab") === "ledger" || params.has("trace") ? "ledger" : "orders";
-  // Balance comes from the backend wallet API (GET /api/wallet),
-  // falling back to the latest ledger entry's balance_after when the
-  // wallet query has no data yet.
+  // The wallet is authoritative; ledger rows may include other users for admins.
   const ledgerQuery = useLedger();
   const ordersQuery = useRechargeOrders();
   const walletQuery = useWallet();
-  const ledger: LedgerEntry[] = (ledgerQuery.data ?? []).map(
-    adaptLedgerEntry,
-  ) as unknown as LedgerEntry[];
-  const orders: RechargeOrder[] = (ordersQuery.data ?? []).map(
-    adaptRechargeOrder,
-  ) as unknown as RechargeOrder[];
-  const balance = walletQuery.data
-    ? String(walletQuery.data.balance)
-    : ledger.length
-      ? ledger[0].balance_after_nano
-      : "0";
-  const expireOrders = () => {
+  const ledger = useMemo(
+    () =>
+      (ledgerQuery.error ? [] : (ledgerQuery.data ?? [])).map(
+        adaptLedgerEntry,
+      ) as unknown as LedgerEntry[],
+    [ledgerQuery.data, ledgerQuery.error],
+  );
+  const orders = useMemo(
+    () =>
+      (ordersQuery.error ? [] : (ordersQuery.data ?? [])).map(
+        adaptRechargeOrder,
+      ) as unknown as RechargeOrder[],
+    [ordersQuery.data, ordersQuery.error],
+  );
+  const balanceKnown = Boolean(walletQuery.data && !walletQuery.error);
+  const balance = balanceKnown ? walletQuery.data!.balance_nano : "0";
+  const ledgerKnown = Boolean(ledgerQuery.data && !ledgerQuery.error);
+  const recordsKnown =
+    tab === "orders"
+      ? Boolean(ordersQuery.data && !ordersQuery.error)
+      : ledgerKnown;
+  const expireOrders = useCallback(() => {
     // Trigger a refetch so the backend lazily expires stale orders
     // and the list updates with the latest state.
-    void ordersQuery.refetch();
-    void ledgerQuery.refetch();
-  };
+    return Promise.all([
+      ordersQuery.refetch(),
+      ledgerQuery.refetch(),
+      walletQuery.refetch(),
+    ]);
+  }, [ordersQuery.refetch, ledgerQuery.refetch, walletQuery.refetch]);
   const today = billingDate(new Date().toISOString());
   const month = today.slice(0, 7);
   const [from, setFrom] = useState(`${month}-01`);
@@ -147,8 +158,8 @@ export default function BillingCenter({
   const [redeemCode, setRedeemCode] = useState("");
   const [redeemMsg, setRedeemMsg] = useState("");
   useEffect(() => {
-    expireOrders();
-    const timer = setInterval(expireOrders, 15000);
+    void expireOrders();
+    const timer = setInterval(() => void expireOrders(), 15000);
     return () => clearInterval(timer);
   }, [expireOrders]);
   useEffect(() => {
@@ -230,8 +241,8 @@ export default function BillingCenter({
       (e) => e.type === "recharge" && billingDate(e.time).startsWith(month),
     )
     .reduce((sum, e) => sum + BigInt(e.amount_nano), 0n);
-  const isLow = BigInt(balance) < 5_000_000_000n;
-  const isEmpty = BigInt(balance) <= 0n;
+  const isLow = balanceKnown && BigInt(balance) < 5_000_000_000n;
+  const isEmpty = balanceKnown && BigInt(balance) <= 0n;
   const date = (value: string) =>
     new Intl.DateTimeFormat(
       language === "zh" ? "zh-CN" : language === "ar" ? "ar-AE" : "en-GB",
@@ -324,30 +335,55 @@ export default function BillingCenter({
           {c("充值说明", "How top-ups work", "دليل الشحن")}
         </Button>
       </header>
+      {(walletQuery.error || ledgerQuery.error || ordersQuery.error) && (
+        <p
+          role="alert"
+          data-wallet-error={Boolean(walletQuery.error)}
+          data-ledger-error={Boolean(ledgerQuery.error)}
+        >
+          {c(
+            "部分账务数据无法读取，请刷新重试；未确认的金额不显示为零。",
+            "Some billing data is unavailable. Refresh to retry; unconfirmed amounts are not shown as zero.",
+            "بعض بيانات الفوترة غير متاحة. حدّث لإعادة المحاولة؛ لا تُعرض المبالغ غير المؤكدة كصفر.",
+          )}
+        </p>
+      )}
       <div className="bc-summary-grid">
         <section className="bc-wallet-card">
           <div className="bc-wallet-top">
             <span>
-              {c("账户可用余额", "Available balance", "الرصيد المتاح")}
+              {c("支付钱包余额", "Payment wallet balance", "رصيد محفظة الدفع")}
             </span>
             <span className={`bc-wallet-health ${isLow ? "is-low" : ""}`}>
               <i />
-              {isEmpty
-                ? c("余额不足", "Balance depleted", "الرصيد غير كافٍ")
-                : isLow
-                  ? c("余额偏低", "Low balance", "الرصيد منخفض")
-                  : c("余额充足", "Ready to use", "جاهز للاستخدام")}
+              {!balanceKnown
+                ? c("余额未知", "Balance unknown", "الرصيد غير معروف")
+                : isEmpty
+                  ? c("余额不足", "Balance depleted", "الرصيد غير كافٍ")
+                  : isLow
+                    ? c("余额偏低", "Low balance", "الرصيد منخفض")
+                    : c("余额充足", "Wallet funded", "المحفظة ممولة")}
             </span>
           </div>
           <div className="bc-balance">
-            <strong dir="ltr">{formatMoney(balance)}</strong>
+            <strong
+              dir="ltr"
+              tabIndex={balanceKnown ? 0 : undefined}
+              className={
+                balanceKnown && formatMoney(balance).length > 14
+                  ? "is-wide"
+                  : undefined
+              }
+            >
+              {balanceKnown ? formatMoney(balance) : "—"}
+            </strong>
             <span>{c("USD（美元）", "USD", "USD (دولار)")}</span>
           </div>
           <p>
             {c(
-              "按量付费 · 多个模型共用一个账户余额",
-              "Pay as you go · One balance for all your models",
-              "الدفع حسب الاستخدام · رصيد واحد لجميع النماذج",
+              "支付钱包与 API 配额分别记账；模拟充值不会增加 API 配额。",
+              "Payment wallet and API quota are separate; simulated top-ups do not add API quota.",
+              "المحفظة وحصة الواجهة منفصلتان؛ لا تزيد تعبئة المحاكاة حصة الواجهة.",
             )}
           </p>
           <div className="bc-wallet-actions">
@@ -364,31 +400,52 @@ export default function BillingCenter({
           <div className="bc-wallet-footer">
             <ShieldCheck size={14} />
             {c(
-              "不收额外手续费，充值金额全额到账",
-              "No extra fees. Your full top-up is credited.",
-              "لا رسوم إضافية. يُضاف مبلغ الشحن كاملًا.",
+              "模拟支付不产生真实扣款；真实费用与到账须由支付供应商确认。",
+              "Simulated payments do not charge real funds; actual fees and payment confirmation depend on the provider.",
+              "لا تخصم المحاكاة أموالًا فعلية؛ تعتمد الرسوم وتأكيد الدفع الفعليان على المزود.",
             )}
           </div>
         </section>
 
         {/* Redemption code input */}
-        <section className="bc-redeem-card" style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          padding: "var(--space-4)",
-          marginBottom: "var(--space-4)",
-        }}>
-          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "flex-end", flexWrap: "wrap" }}>
+        <section
+          className="bc-redeem-card"
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            padding: "var(--space-4)",
+            marginBottom: "var(--space-4)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: "var(--space-2)",
+              alignItems: "flex-end",
+              flexWrap: "wrap",
+            }}
+          >
             <div style={{ flex: 1, minWidth: 200 }}>
-              <label htmlFor="redeem-code-input" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+              <label
+                htmlFor="redeem-code-input"
+                style={{
+                  display: "block",
+                  fontSize: "var(--text-xs)",
+                  fontWeight: 600,
+                  marginBottom: 4,
+                }}
+              >
                 {c("兑换码", "Redemption code", "رمز الاسترداد")}
               </label>
               <input
                 id="redeem-code-input"
                 className="input"
                 value={redeemCode}
-                onChange={(e) => { setRedeemCode(e.target.value); setRedeemMsg(""); }}
+                onChange={(e) => {
+                  setRedeemCode(e.target.value);
+                  setRedeemMsg("");
+                }}
                 placeholder="RD-xxxxxxxxxxxx"
                 style={{ width: "100%" }}
               />
@@ -400,7 +457,13 @@ export default function BillingCenter({
                 setRedeemMsg("");
                 redeemMut.mutate(redeemCode.trim(), {
                   onSuccess: (res) => {
-                    setRedeemMsg(c("兑换成功", `Redeemed $${(res.quota / 1e9).toFixed(2)}`, "تم الاسترداد"));
+                    setRedeemMsg(
+                      c(
+                        "兑换成功",
+                        `Redeemed $${(res.quota / 1e9).toFixed(2)}`,
+                        "تم الاسترداد",
+                      ),
+                    );
                     setRedeemCode("");
                   },
                   onError: (err) => {
@@ -417,13 +480,18 @@ export default function BillingCenter({
             </Button>
           </div>
           {redeemMsg && (
-            <p style={{
-              margin: "8px 0 0 0",
-              fontSize: "var(--text-sm)",
-              color: redeemMsg.includes("失败") || redeemMsg.includes("failed") || redeemMsg.includes("فشل")
-                ? "var(--danger)"
-                : "var(--success)",
-            }}>
+            <p
+              style={{
+                margin: "8px 0 0 0",
+                fontSize: "var(--text-sm)",
+                color:
+                  redeemMsg.includes("失败") ||
+                  redeemMsg.includes("failed") ||
+                  redeemMsg.includes("فشل")
+                    ? "var(--danger)"
+                    : "var(--success)",
+              }}
+            >
               {redeemMsg}
             </p>
           )}
@@ -441,7 +509,7 @@ export default function BillingCenter({
             <div>
               <span>{c("本月消费", "Usage this month", "استهلاك الشهر")}</span>
               <strong dir="ltr">
-                {formatMoney(spend.toString(), "total")}
+                {ledgerKnown ? formatMoney(spend.toString(), "total") : "—"}
               </strong>
             </div>
           </div>
@@ -453,7 +521,9 @@ export default function BillingCenter({
               <span>
                 {c("本月充值到账", "Top-ups credited", "الشحن المضاف")}
               </span>
-              <strong dir="ltr">{formatMoney(funded.toString())}</strong>
+              <strong dir="ltr">
+                {ledgerKnown ? formatMoney(funded.toString()) : "—"}
+              </strong>
             </div>
           </div>
           <p>
@@ -482,9 +552,9 @@ export default function BillingCenter({
           </div>
           <small>
             {c(
-              "余额耗尽后暂停调用，到账后可继续使用。",
-              "Calls pause when funds run out and resume after a top-up.",
-              "تتوقف الطلبات عند نفاد الرصيد وتستأنف بعد الشحن.",
+              "支付钱包余额不代表 API 配额；实际调用以 API 配额和密钥授权为准。",
+              "Payment wallet balance is separate from API quota; calls require API quota and key authorization.",
+              "رصيد المحفظة منفصل عن حصة الواجهة؛ تتطلب الطلبات حصة واجهة وتفويض المفتاح.",
             )}
           </small>
         </section>
@@ -546,20 +616,31 @@ export default function BillingCenter({
           <div className="bc-history-actions">
             <button
               className="bc-icon-button"
-              onClick={() => {
-                expireOrders();
+              disabled={
+                walletQuery.isFetching ||
+                ledgerQuery.isFetching ||
+                ordersQuery.isFetching
+              }
+              onClick={async () => {
+                const results = await expireOrders();
                 setMessage(
-                  c(
-                    "已刷新订单与流水。",
-                    "Orders and transactions refreshed.",
-                    "تم تحديث الطلبات والحركات.",
-                  ),
+                  results.every((result) => !result.isError)
+                    ? c(
+                        "已读取钱包、订单与流水。",
+                        "Wallet, orders and transactions refreshed.",
+                        "تم تحديث المحفظة والطلبات والحركات.",
+                      )
+                    : c(
+                        "部分账务数据读取失败，请稍后重试。",
+                        "Some billing data could not be refreshed. Retry later.",
+                        "تعذر تحديث بعض بيانات الفوترة. حاول لاحقًا.",
+                      ),
                 );
               }}
               aria-label={c(
-                "刷新订单状态",
-                "Refresh order status",
-                "تحديث حالة الطلب",
+                "刷新账务数据",
+                "Refresh billing data",
+                "تحديث بيانات الفوترة",
               )}
             >
               <RefreshCw size={15} />
@@ -680,7 +761,11 @@ export default function BillingCenter({
               "توقيت دبي · UTC+4 · حتى 31 يومًا لكل استعلام",
             )}
           </span>
-          <b>{c(`${count} 条记录`, `${count} records`, `${count} سجلًا`)}</b>
+          <b>
+            {recordsKnown
+              ? c(`${count} 条记录`, `${count} records`, `${count} سجلًا`)
+              : c("记录尚未确认", "Records unconfirmed", "السجلات غير مؤكدة")}
+          </b>
         </div>
         {message && (
           <p className="bc-feedback" role="status">
@@ -713,18 +798,30 @@ export default function BillingCenter({
           <div className="bc-empty">
             <ReceiptText size={34} />
             <h3>
-              {c(
-                "当前条件下暂无记录",
-                "No matching records",
-                "لا توجد سجلات مطابقة",
-              )}
+              {recordsKnown
+                ? c(
+                    "当前条件下暂无记录",
+                    "No matching records",
+                    "لا توجد سجلات مطابقة",
+                  )
+                : c(
+                    "账务记录尚未确认",
+                    "Billing records are unconfirmed",
+                    "سجلات الفوترة غير مؤكدة",
+                  )}
             </h3>
             <p>
-              {c(
-                "你可以调整筛选条件，或完成第一笔充值。",
-                "Try another filter or complete your first top-up.",
-                "جرّب تصفية أخرى أو أكمل أول عملية شحن.",
-              )}
+              {recordsKnown
+                ? c(
+                    "你可以调整筛选条件，或完成第一笔充值。",
+                    "Try another filter or complete your first top-up.",
+                    "جرّب تصفية أخرى أو أكمل أول عملية شحن.",
+                  )
+                : c(
+                    "数据正在读取或暂不可用，请刷新核对。",
+                    "Data is loading or unavailable. Refresh to check.",
+                    "البيانات قيد التحميل أو غير متاحة. حدّث للتحقق.",
+                  )}
             </p>
             <div>
               <Button onClick={resetFilters}>
@@ -792,11 +889,7 @@ export default function BillingCenter({
                           <td>
                             <span className="bc-method">
                               <CreditCard size={15} />
-                              {c(
-                                "银行卡",
-                                "Card",
-                                "بطاقة",
-                              )}
+                              {c("银行卡", "Card", "بطاقة")}
                             </span>
                           </td>
                           <td className="bc-amount">
@@ -966,9 +1059,9 @@ export default function BillingCenter({
             <ShieldCheck size={22} />
             <p>
               {c(
-                "一个余额，按量使用。充值资金用于平台内的模型调用。",
-                "One prepaid balance for model usage across the platform.",
-                "رصيد مسبق واحد لاستخدام النماذج على المنصة.",
+                "支付钱包与 API 配额分别记账，当前不会自动互通。",
+                "Payment wallet balance and API quota are recorded separately and are not automatically linked.",
+                "تُسجّل المحفظة وحصة الواجهة بشكل منفصل ولا ترتبطان تلقائيًا حاليًا.",
               )}
             </p>
           </div>
@@ -1068,7 +1161,7 @@ export default function BillingCenter({
               <small>
                 {c("变动金额", "Transaction amount", "مبلغ الحركة")}
               </small>
-              <strong dir="ltr">
+              <strong dir="ltr" tabIndex={0}>
                 {BigInt(entry.amount_nano) > 0n ? "+" : ""}
                 {formatMoney(entry.amount_nano, "detail")}
               </strong>

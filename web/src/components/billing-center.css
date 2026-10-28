@@ -116,6 +116,13 @@
   line-height: 1.1;
   letter-spacing: -0.055em;
   font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.bc-balance strong.is-wide {
+  font-size: clamp(20px, 4vw, 30px);
+  letter-spacing: -0.03em;
 }
 .bc-balance > span {
   color: var(--muted);
@@ -824,9 +831,12 @@
 }
 .bc-entry-value strong {
   text-align: start;
-  font-size: 25px;
+  font-size: clamp(14px, 4vw, 22px);
   font-weight: 600;
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow-x: auto;
 }
 .bc-entry-value.is-positive strong {
   color: var(--success);

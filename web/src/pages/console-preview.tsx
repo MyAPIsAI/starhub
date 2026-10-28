@@ -196,14 +196,10 @@ export default function ConsolePreview() {
     name: string;
     plaintext: string;
   } | null>(null);
-  // Balance comes from the backend wallet. Falls back to the demo
-  // store value while loading or on error so the sidebar degrades
-  // gracefully instead of showing "0".
+  // Unknown wallet state never falls back to a browser demo balance.
   const walletQuery = useWallet();
-  const demoBalance = useProductPreview((s) => s.balance);
-  const balance = walletQuery.data
-    ? String(walletQuery.data.balance)
-    : demoBalance;
+  const balanceKnown = Boolean(walletQuery.data && !walletQuery.error);
+  const balance = balanceKnown ? walletQuery.data!.balance_nano : "0";
   const requests = useProductPreview((s) => s.requests);
   // Exports come from the backend /api/export endpoints.
   const exportsQuery = useExports();
@@ -229,7 +225,7 @@ export default function ConsolePreview() {
   const onboardingComplete =
     onboardingDismissed ||
     keys.length > 0 ||
-    (walletQuery.data ? walletQuery.data.balance > 0 : false);
+    (balanceKnown && BigInt(balance) > 0n);
   // Key reveal state — local. The password is verified against the
   // backend via the login endpoint (POST /api/user/login).
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, number>>(
@@ -460,8 +456,8 @@ export default function ConsolePreview() {
     return breakdownByModel(periodRequests(requests, days === "7" ? 7 : 30));
   }, [usageQuery.data, requests, days]);
 
-  const isLowBalance = BigInt(balance) < 5000000000n; // < $5.00
-  const isZeroBalance = BigInt(balance) <= 0n;
+  const isLowBalance = balanceKnown && BigInt(balance) < 5000000000n; // < $5.00
+  const isZeroBalance = balanceKnown && BigInt(balance) <= 0n;
 
   const requestKeySecret = (key: PreviewKey, intent: KeySecretAction) => {
     if (revealedKeyIds[key.id] > Date.now()) {
@@ -1361,7 +1357,7 @@ export default function ConsolePreview() {
                         {c("预付费", "PREPAID", "مدفوع مسبقًا")}
                       </span>
                     </div>
-                    <strong>{formatMoney(balance)}</strong>
+                    <strong tabIndex={balanceKnown ? 0 : undefined} style={{ maxWidth: "100%", overflowX: "auto", whiteSpace: "nowrap" }}>{balanceKnown ? formatMoney(balance) : "—"}</strong>
                     <p>
                       {c(
                         "按量付费 · 随时充值",
@@ -2375,12 +2371,14 @@ export default function ConsolePreview() {
             <Button
               variant="danger"
               disabled={
+                !balanceKnown ||
                 BigInt(balance) < 0n ||
                 BigInt(balance) >= 10000000n ||
                 (BigInt(balance) > 0n && !acknowledgeDust)
               }
               onClick={async () => {
                 if (
+                  !balanceKnown ||
                   BigInt(balance) < 0n ||
                   BigInt(balance) >= 10000000n ||
                   (BigInt(balance) > 0n && !acknowledgeDust)
@@ -2400,9 +2398,11 @@ export default function ConsolePreview() {
         <div className="key-task-close-account">
           <div className="key-task-account-balance">
             <span>{c("当前余额", "Current balance", "الرصيد الحالي")}</span>
-            <strong dir="ltr">{formatMoney(balance, "detail")}</strong>
+            <strong dir="ltr">{balanceKnown ? formatMoney(balance, "detail") : "—"}</strong>
           </div>
-          {BigInt(balance) < 0n ? (
+          {!balanceKnown ? (
+            <p role="alert">{c("无法确认钱包余额，请刷新后再处理注销。", "Wallet balance is unconfirmed. Refresh before closing the account.", "رصيد المحفظة غير مؤكد. حدّث قبل إغلاق الحساب.")}</p>
+          ) : BigInt(balance) < 0n ? (
             <p className="key-task-danger" role="status">
               {c(
                 "账户仍有未结清金额，请先结清余额，再联系客服处理注销。",

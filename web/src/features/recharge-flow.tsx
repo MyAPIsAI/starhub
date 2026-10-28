@@ -29,14 +29,13 @@ import { validateRechargeAmount } from "../lib/billing";
 import { formatMoney } from "../lib/money";
 import { placeholders } from "../config/placeholders";
 import {
-  useLedger,
+  useWallet,
   useRechargeOrders,
   useRechargeOrder,
   useCreateRechargeOrder,
   useBeginRechargePayment,
   useResolveRechargeOrder,
   adaptRechargeOrder,
-  adaptLedgerEntry,
 } from "../lib/api/billing";
 import type { RechargeOrder } from "../lib/billing";
 import "../components/recharge-flow.css";
@@ -344,9 +343,8 @@ export default function RechargeFlow({
   const language = usePreferences((state) => state.language);
   const t = (key: keyof typeof messages) =>
     messages[key][language === "zh" ? 0 : language === "ar" ? 2 : 1];
-  // Balance and recharge orders come from the backend. The wallet
-  // balance is derived from the latest ledger entry's balance_after.
-  const ledgerQuery = useLedger();
+  // Wallet amounts come from the owner-specific endpoint, never a ledger row.
+  const walletQuery = useWallet();
   const ordersQuery = useRechargeOrders();
   const createOrderMut = useCreateRechargeOrder();
   const beginPaymentMut = useBeginRechargePayment();
@@ -355,10 +353,9 @@ export default function RechargeFlow({
     accountDisplayName(state.user),
   );
   const backendOrders = (ordersQuery.data ?? []).map(adaptRechargeOrder);
-  const balance = (() => {
-    const entries = (ledgerQuery.data ?? []).map(adaptLedgerEntry);
-    return entries.length ? entries[0].balance_after_nano : "0";
-  })();
+  const balance = walletQuery.error
+    ? undefined
+    : walletQuery.data?.balance_nano;
   const orders: RechargeOrder[] = backendOrders as unknown as RechargeOrder[];
   const [activeId, setActiveId] = useState<string | null>(orderId ?? null);
   // Precise single-order polling: when an order is active and waiting,
@@ -466,9 +463,7 @@ export default function RechargeFlow({
         },
         onError: (err) => {
           submitted.current = false;
-          displayError(
-            err instanceof Error ? err.message : String(err),
-          );
+          displayError(err instanceof Error ? err.message : String(err));
         },
       },
     );
@@ -787,7 +782,9 @@ export default function RechargeFlow({
                   <Wallet size={16} />
                   {t("currentBalance")}
                 </span>
-                <strong dir="ltr">{formatMoney(balance)}</strong>
+                <strong dir="ltr">
+                  {balance === undefined ? "—" : formatMoney(balance)}
+                </strong>
               </div>
               <div className="rf-cost-summary">
                 <dl>
@@ -872,7 +869,9 @@ export default function RechargeFlow({
                     <Wallet size={16} />
                     {t("latestBalance")}
                   </span>
-                  <strong dir="ltr">{formatMoney(balance)}</strong>
+                  <strong dir="ltr">
+                    {balance === undefined ? "—" : formatMoney(balance)}
+                  </strong>
                 </div>
               )}
               {isPaid && order.late_payment && (

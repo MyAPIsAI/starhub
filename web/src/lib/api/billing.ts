@@ -12,12 +12,16 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./http";
+import { billingNano } from "./billing-money";
+import { useProductPreview } from "../product-preview";
+import { useSystemAccess } from "../system-access";
 
 // --- Types ---
 
 export interface Wallet {
   user_id: number;
   balance: number; // nano-USD
+  balance_nano?: string; // Exact nano-USD; numeric balance is retained for older clients.
   created_at: number;
   updated_at: number;
 }
@@ -28,6 +32,8 @@ export interface LedgerEntry {
   type: "recharge" | "call_summary" | "adjustment" | "refund";
   amount: number; // signed nano-USD
   balance_after: number;
+  amount_nano?: string;
+  balance_after_nano?: string;
   description: string;
   order_id: string;
   trace_id: string;
@@ -35,12 +41,7 @@ export interface LedgerEntry {
 }
 
 export type RechargeStatus =
-  | "pending"
-  | "processing"
-  | "paid"
-  | "expired"
-  | "failed"
-  | "cancelled";
+  "pending" | "processing" | "paid" | "expired" | "failed" | "cancelled";
 
 export interface RechargeOrder {
   id: number;
@@ -64,29 +65,62 @@ const WALLET_KEY = ["wallet"] as const;
 const LEDGER_KEY = ["ledger"] as const;
 const RECHARGE_KEY = ["recharge"] as const;
 
+function useBillingScope() {
+  const account = useProductPreview((state) => state.user.id);
+  const role = useSystemAccess((state) => state.role);
+  return [account, role] as const;
+}
+
+export function normalizeWallet(
+  wallet: Wallet,
+): Wallet & { balance_nano: string } {
+  return {
+    ...wallet,
+    balance_nano: billingNano(wallet.balance_nano, wallet.balance),
+  };
+}
+
+export function normalizeLedger(
+  entry: LedgerEntry,
+): LedgerEntry & { amount_nano: string; balance_after_nano: string } {
+  return {
+    ...entry,
+    amount_nano: billingNano(entry.amount_nano, entry.amount),
+    balance_after_nano: billingNano(
+      entry.balance_after_nano,
+      entry.balance_after,
+    ),
+  };
+}
+
 // --- Hooks: Wallet ---
 
 export function useWallet() {
+  const scope = useBillingScope();
   return useQuery({
-    queryKey: WALLET_KEY,
-    queryFn: ({ signal }) => apiGet<Wallet>("/api/wallet", signal),
+    queryKey: [...WALLET_KEY, ...scope],
+    queryFn: async ({ signal }) =>
+      normalizeWallet(await apiGet<Wallet>("/api/wallet", signal)),
   });
 }
 
 // --- Hooks: Ledger ---
 
 export function useLedger() {
+  const scope = useBillingScope();
   return useQuery({
-    queryKey: LEDGER_KEY,
-    queryFn: ({ signal }) => apiGet<LedgerEntry[]>("/api/ledger", signal),
+    queryKey: [...LEDGER_KEY, ...scope],
+    queryFn: async ({ signal }) =>
+      (await apiGet<LedgerEntry[]>("/api/ledger", signal)).map(normalizeLedger),
   });
 }
 
 // --- Hooks: Recharge orders ---
 
 export function useRechargeOrders() {
+  const scope = useBillingScope();
   return useQuery({
-    queryKey: RECHARGE_KEY,
+    queryKey: [...RECHARGE_KEY, ...scope],
     queryFn: ({ signal }) => apiGet<RechargeOrder[]>("/api/recharge", signal),
   });
 }
@@ -94,8 +128,9 @@ export function useRechargeOrders() {
 /** Fetch a single recharge order by id. Used for precise polling of
  *  the active order's status without refetching the entire list. */
 export function useRechargeOrder(id?: number) {
+  const scope = useBillingScope();
   return useQuery({
-    queryKey: [...RECHARGE_KEY, "single", id] as const,
+    queryKey: [...RECHARGE_KEY, ...scope, "single", id] as const,
     queryFn: ({ signal }) =>
       apiGet<RechargeOrder>(`/api/recharge/${id}`, signal),
     enabled: id != null && id > 0,
@@ -138,8 +173,7 @@ export function useResolveRechargeOrder() {
     }: {
       id: number;
       outcome: "success" | "failed" | "cancelled";
-    }) =>
-      apiPost<RechargeOrder>(`/api/recharge/${id}/resolve`, { outcome }),
+    }) => apiPost<RechargeOrder>(`/api/recharge/${id}/resolve`, { outcome }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: RECHARGE_KEY });
       queryClient.invalidateQueries({ queryKey: WALLET_KEY });
@@ -191,14 +225,13 @@ export interface FrontendRechargeOrder {
  * Convert a backend LedgerEntry to the frontend's string-shaped LedgerEntry.
  */
 export function adaptLedgerEntry(e: LedgerEntry): FrontendLedgerEntry {
-  const sign = e.amount >= 0 ? "+" : "-";
-  const absAmount = Math.abs(e.amount);
+  const amount = BigInt(billingNano(e.amount_nano, e.amount));
   return {
     id: String(e.id),
     time: new Date(e.created_at * 1000).toISOString(),
     type: e.type,
-    amount_nano: sign + String(absAmount),
-    balance_after_nano: String(e.balance_after),
+    amount_nano: (amount >= 0n ? "+" : "") + amount.toString(),
+    balance_after_nano: billingNano(e.balance_after_nano, e.balance_after),
     description: e.description,
     order_id: e.order_id || undefined,
     trace_id: e.trace_id || undefined,
