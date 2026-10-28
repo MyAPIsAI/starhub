@@ -26,6 +26,11 @@ export interface PublicationPair {
   model: string;
   group: string;
 }
+export interface PublicationRoute extends PublicationPair {
+  capabilities: ("text" | "code")[];
+  context_length: number;
+  group_definition_id: string;
+}
 export interface PublicationIssue {
   resource_id?: string;
   source_channel_id?: string;
@@ -36,6 +41,8 @@ export interface PublicationPreview extends PublicationContext {
   ready: boolean;
   bindings: PublicationBinding[];
   proposed_pairs: PublicationPair[];
+  proposed_routes: PublicationRoute[];
+  review_digest: string;
   existing_pairs: (PublicationPair & { enabled: boolean })[];
   issues: PublicationIssue[];
 }
@@ -124,6 +131,10 @@ export function readPublicationPreview(value: unknown): PublicationPreview {
     typeof value.ready !== "boolean" ||
     !Array.isArray(value.bindings) ||
     !Array.isArray(value.proposed_pairs) ||
+    !Array.isArray(value.proposed_routes) ||
+    value.proposed_routes.length !== value.proposed_pairs.length ||
+    typeof value.review_digest !== "string" ||
+    !/^[0-9a-f]{64}$/.test(value.review_digest) ||
     !Array.isArray(value.existing_pairs) ||
     !Array.isArray(value.issues) ||
     value.proposed_pairs.length > 10000 ||
@@ -157,6 +168,35 @@ export function readPublicationPreview(value: unknown): PublicationPreview {
       if (pairs.has(key)) return invalid();
       pairs.add(key);
     }
+  }
+  const proposed = new Set(
+    value.proposed_pairs.map((pair: PublicationPair) =>
+      JSON.stringify([pair.gateway_channel_id, pair.model, pair.group]),
+    ),
+  );
+  const routes = new Set<string>();
+  for (const route of value.proposed_routes) {
+    if (
+      !object(route) ||
+      !id(route.gateway_channel_id) ||
+      !text(route.model, 128) ||
+      !text(route.group, 64) ||
+      !version(route.context_length) ||
+      !(route.group_definition_id === "0" || id(route.group_definition_id)) ||
+      ![
+        JSON.stringify(["text"]),
+        JSON.stringify(["code"]),
+        JSON.stringify(["code", "text"]),
+      ].includes(JSON.stringify(route.capabilities))
+    )
+      return invalid();
+    const key = JSON.stringify([
+      route.gateway_channel_id,
+      route.model,
+      route.group,
+    ]);
+    if (!proposed.has(key) || routes.has(key)) return invalid();
+    routes.add(key);
   }
   for (const issue of value.issues) {
     if (

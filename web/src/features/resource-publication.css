@@ -120,6 +120,9 @@
 .rp-pairs {
   min-width: 0;
 }
+.rp-pairs[data-proposed="true"] table {
+  min-width: 820px;
+}
 .rp-issues {
   display: grid;
   gap: 12px;

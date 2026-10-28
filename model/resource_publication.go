@@ -68,13 +68,22 @@ type ResourcePublicationExistingPair struct {
 	Enabled bool `json:"enabled"`
 }
 
+type ResourcePublicationRoute struct {
+	ResourcePublicationPair
+	Capabilities      []string `json:"capabilities"`
+	ContextLength     int64    `json:"context_length"`
+	GroupDefinitionID string   `json:"group_definition_id"`
+}
+
 type ResourcePublicationPreview struct {
 	ResourcePublicationContext
-	Ready         bool                              `json:"ready"`
-	Bindings      []ResourceChannelBinding          `json:"bindings"`
-	ProposedPairs []ResourcePublicationPair         `json:"proposed_pairs"`
-	ExistingPairs []ResourcePublicationExistingPair `json:"existing_pairs"`
-	Issues        []ResourcePublicationIssue        `json:"issues"`
+	Ready          bool                              `json:"ready"`
+	Bindings       []ResourceChannelBinding          `json:"bindings"`
+	ProposedPairs  []ResourcePublicationPair         `json:"proposed_pairs"`
+	ProposedRoutes []ResourcePublicationRoute        `json:"proposed_routes"`
+	ReviewDigest   string                            `json:"review_digest"`
+	ExistingPairs  []ResourcePublicationExistingPair `json:"existing_pairs"`
+	Issues         []ResourcePublicationIssue        `json:"issues"`
 }
 
 type resourcePublicationState struct {
@@ -184,7 +193,7 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 		if expected.ResourceRevision != state.context.ResourceRevision || expected.ChannelRevision != state.context.ChannelRevision || expected.OptionVersion != state.context.OptionVersion {
 			return ErrResourceConflict
 		}
-		result = &ResourcePublicationPreview{ResourcePublicationContext: state.context, Bindings: append([]ResourceChannelBinding{}, bindings...), ProposedPairs: []ResourcePublicationPair{}, ExistingPairs: []ResourcePublicationExistingPair{}, Issues: []ResourcePublicationIssue{}}
+		result = &ResourcePublicationPreview{ResourcePublicationContext: state.context, Bindings: append([]ResourceChannelBinding{}, bindings...), ProposedPairs: []ResourcePublicationPair{}, ProposedRoutes: []ResourcePublicationRoute{}, ExistingPairs: []ResourcePublicationExistingPair{}, Issues: []ResourcePublicationIssue{}}
 		sort.Slice(result.Bindings, func(i, j int) bool { return result.Bindings[i].SourceChannelID < result.Bindings[j].SourceChannelID })
 		gateway := map[string]ResourceGatewayChannel{}
 		for _, ch := range state.context.Channels {
@@ -196,6 +205,16 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 				sources[source.ID] = source
 			}
 		}
+		owners, err := readResourcePublicationOwners(tx, result.Bindings)
+		if err != nil {
+			return err
+		}
+		ownersByTarget := map[string]ResourceGatewayManagedChannel{}
+		ownersBySource := map[string][]ResourceGatewayManagedChannel{}
+		for _, owner := range owners {
+			ownersByTarget[strconv.FormatInt(owner.ChannelID, 10)] = owner
+			ownersBySource[owner.SourceChannelID] = append(ownersBySource[owner.SourceChannelID], owner)
+		}
 		for _, binding := range result.Bindings {
 			if _, exists := sources[binding.SourceChannelID]; !exists {
 				result.Issues = append(result.Issues, ResourcePublicationIssue{SourceChannelID: binding.SourceChannelID, Code: "unknown_source_channel"})
@@ -203,8 +222,18 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 			if _, exists := gateway[binding.GatewayChannelID]; !exists {
 				result.Issues = append(result.Issues, ResourcePublicationIssue{SourceChannelID: binding.SourceChannelID, Code: "unknown_gateway_channel"})
 			}
+			if owner, exists := ownersByTarget[binding.GatewayChannelID]; exists && owner.SourceChannelID != "" && owner.SourceChannelID != binding.SourceChannelID {
+				result.Issues = append(result.Issues, ResourcePublicationIssue{SourceChannelID: binding.SourceChannelID, Code: "gateway_bound_to_other_source"})
+			}
+			for _, owner := range ownersBySource[binding.SourceChannelID] {
+				if strconv.FormatInt(owner.ChannelID, 10) != binding.GatewayChannelID {
+					result.Issues = append(result.Issues, ResourcePublicationIssue{SourceChannelID: binding.SourceChannelID, Code: "source_bound_to_other_gateway"})
+					break
+				}
+			}
 		}
 		pairs := map[ResourcePublicationPair]bool{}
+		routes := map[ResourcePublicationPair]ResourcePublicationRoute{}
 		tooManyIssues := false
 		issueLimitError := fmt.Errorf("%w: publication preview exceeds 10000 blocking issues", ErrInvalidResource)
 		if state.catalog.Snapshot != nil {
@@ -250,11 +279,21 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 				}
 				for _, group := range placement.GroupIDs {
 					definition, defined := state.groups[group]
-					if !resourceText(group, 64, true) || state.ratios[group] <= 0 || state.deleted[group] || (defined && (!definition.Enabled || (definition.Visibility != "common" && definition.Visibility != "custom"))) {
+					if !resourceText(group, 64, true) || state.ratios[group] <= 0 || state.deleted[group] || (defined && (definition.ID <= 0 || definition.Revision < 0 || definition.Revision > maxResourceRevision || !definition.Enabled || (definition.Visibility != "common" && definition.Visibility != "custom"))) {
 						issue("group_unavailable_or_unpriced", group)
 						continue
 					}
-					pairs[ResourcePublicationPair{GatewayChannelID: ch.ID, Model: *placement.ModelID, Group: group}] = true
+					pair := ResourcePublicationPair{GatewayChannelID: ch.ID, Model: *placement.ModelID, Group: group}
+					pairs[pair] = true
+					candidate := ResourcePublicationRoute{ResourcePublicationPair: pair, Capabilities: append([]string{}, resource.Capabilities...), ContextLength: resource.ContextLength, GroupDefinitionID: strconv.FormatInt(definition.ID, 10)}
+					sort.Strings(candidate.Capabilities)
+					if prior, exists := routes[pair]; exists {
+						candidate = mergeResourcePublicationRoute(prior, candidate)
+					}
+					routes[pair] = candidate
+					if len(candidate.Capabilities) == 0 {
+						issue("incompatible_resource_constraints", group)
+					}
 					if len(pairs) > maxResourcePublicationPairs {
 						return fmt.Errorf("%w: publication preview exceeds 10000 pairs", ErrInvalidResource)
 					}
@@ -264,8 +303,26 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 		if tooManyIssues {
 			return issueLimitError
 		}
-		for pair := range pairs {
+		for pair, route := range routes {
+			if len(route.Capabilities) == 0 {
+				continue
+			}
 			result.ProposedPairs = append(result.ProposedPairs, pair)
+			result.ProposedRoutes = append(result.ProposedRoutes, route)
+		}
+		usedTargets := map[string]bool{}
+		for _, route := range result.ProposedRoutes {
+			usedTargets[route.GatewayChannelID] = true
+		}
+		for _, binding := range result.Bindings {
+			_, knownSource := sources[binding.SourceChannelID]
+			_, knownTarget := gateway[binding.GatewayChannelID]
+			if knownSource && knownTarget && !usedTargets[binding.GatewayChannelID] {
+				if len(result.Issues) >= maxResourcePublicationIssues {
+					return issueLimitError
+				}
+				result.Issues = append(result.Issues, ResourcePublicationIssue{SourceChannelID: binding.SourceChannelID, Code: "binding_without_supported_pairs"})
+			}
 		}
 		if len(result.ProposedPairs) == 0 {
 			if len(result.Issues) >= maxResourcePublicationIssues {
@@ -288,6 +345,9 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 			result.ExistingPairs = append(result.ExistingPairs, ResourcePublicationExistingPair{ResourcePublicationPair: ResourcePublicationPair{GatewayChannelID: strconv.FormatInt(ability.ChannelID, 10), Model: ability.Model, Group: ability.Group}, Enabled: ability.Enabled})
 		}
 		sortPublicationPairs(result.ProposedPairs)
+		sort.Slice(result.ProposedRoutes, func(i, j int) bool {
+			return publicationPairLess(result.ProposedRoutes[i].ResourcePublicationPair, result.ProposedRoutes[j].ResourcePublicationPair)
+		})
 		sort.Slice(result.ExistingPairs, func(i, j int) bool {
 			return publicationPairLess(result.ExistingPairs[i].ResourcePublicationPair, result.ExistingPairs[j].ResourcePublicationPair)
 		})
@@ -305,10 +365,13 @@ func PreviewResourcePublication(ctx context.Context, expected ResourcePublicatio
 			return a.Code < b.Code
 		})
 		result.Ready = len(result.Issues) == 0
-		return nil
+		return sealResourcePublicationPreview(state, result, owners)
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("publication context is unavailable")
+	}
+	if err != nil {
+		return nil, err
 	}
 	return result, err
 }

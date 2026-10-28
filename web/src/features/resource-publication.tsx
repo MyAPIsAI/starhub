@@ -173,6 +173,30 @@ function PublicationPanel({
           "No supported model and group pairs",
           "لا توجد أزواج مدعومة من النماذج والمجموعات",
         );
+      case "incompatible_resource_constraints":
+        return text(
+          "同一组合的来源能力互不兼容，请统一清单或拆分真实渠道。",
+          "Sources for this pair declare incompatible capabilities. Align inventory or use separate gateway channels.",
+          "قدرات مصادر هذا الزوج غير متوافقة. وحّد المخزون أو استخدم قنوات بوابة منفصلة.",
+        );
+      case "gateway_bound_to_other_source":
+        return text(
+          "真实渠道仍绑定其他来源，请先核对并解除旧绑定。",
+          "This gateway belongs to another source. Review and release its existing binding first.",
+          "ترتبط قناة البوابة بمصدر آخر. راجع الرابط الحالي وأزله أولًا.",
+        );
+      case "source_bound_to_other_gateway":
+        return text(
+          "来源仍绑定另一个真实渠道，请先核对并解除旧绑定。",
+          "This source is bound to another gateway. Review and release its existing binding first.",
+          "يرتبط هذا المصدر بقناة بوابة أخرى. راجع الرابط الحالي وأزله أولًا.",
+        );
+      case "binding_without_supported_pairs":
+        return text(
+          "该绑定没有可发布组合，请启用有效投放或取消该选择。",
+          "This binding has no supported pairs. Enable valid placements or remove this selection.",
+          "لا يحتوي هذا الرابط على أزواج مدعومة. فعّل إعدادات نشر صالحة أو أزل هذا الاختيار.",
+        );
       default:
         return text(
           "服务器返回了阻塞原因，请核对来源配置",
@@ -440,12 +464,13 @@ function PublicationPanel({
                 )}
           </p>
           <PairTable
-            key={`proposed-${preview.resource_revision}-${preview.channel_revision}-${preview.option_version}`}
+            key={`proposed-${preview.review_digest}`}
             title={text("拟发布组合", "Proposed pairs", "الأزواج المقترحة")}
-            rows={preview.proposed_pairs}
+            rows={preview.proposed_routes}
+            showConstraints
           />
           <PairTable
-            key={`existing-${preview.resource_revision}-${preview.channel_revision}-${preview.option_version}`}
+            key={`existing-${preview.review_digest}`}
             title={text(
               "当前能力组合",
               "Current ability pairs",
@@ -480,17 +505,23 @@ function PairTable({
   title,
   rows,
   existing = false,
+  showConstraints = false,
 }: {
   title: string;
-  rows: (PublicationPair & { enabled?: boolean })[];
+  rows: (PublicationPair & {
+    enabled?: boolean;
+    capabilities?: string[];
+    context_length?: number;
+  })[];
   existing?: boolean;
+  showConstraints?: boolean;
 }) {
   const { text } = useSettingsText();
   const [page, setPage] = useState(0);
   const pages = Math.max(1, Math.ceil(rows.length / 20));
   const current = Math.min(page, pages - 1);
   return (
-    <section className="rp-pairs" aria-label={title}>
+    <section className="rp-pairs" data-proposed={showConstraints || undefined}>
       <h3>
         {title} · {rows.length}
       </h3>
@@ -501,6 +532,18 @@ function PairTable({
               <th>{text("真实渠道标识", "Gateway ID", "معرّف البوابة")}</th>
               <th>{text("模型", "Model", "النموذج")}</th>
               <th>{text("分组", "Group", "المجموعة")}</th>
+              {showConstraints && (
+                <>
+                  <th>
+                    {text(
+                      "共同能力",
+                      "Shared capabilities",
+                      "القدرات المشتركة",
+                    )}
+                  </th>
+                  <th>{text("上下文限制", "Context limit", "حد السياق")}</th>
+                </>
+              )}
               {existing && (
                 <th>{text("能力状态", "Ability state", "حالة القدرة")}</th>
               )}
@@ -524,6 +567,26 @@ function PairTable({
                 <td>
                   <code>{row.group}</code>
                 </td>
+                {showConstraints && (
+                  <>
+                    <td>
+                      {row.capabilities
+                        ?.map((capability) =>
+                          capability === "code"
+                            ? text("代码", "Code", "برمجة")
+                            : text("文本", "Text", "نص"),
+                        )
+                        .join(" · ")}
+                    </td>
+                    <td>
+                      {row.context_length ? (
+                        <code>{row.context_length.toLocaleString()}</code>
+                      ) : (
+                        text("未知", "Unknown", "غير معروف")
+                      )}
+                    </td>
+                  </>
+                )}
                 {existing && (
                   <td>
                     {row.enabled

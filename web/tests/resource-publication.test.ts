@@ -31,6 +31,15 @@ const preview = () => ({
   ready: true,
   bindings: [{ ...binding }],
   proposed_pairs: [{ ...pair }],
+  proposed_routes: [
+    {
+      ...pair,
+      capabilities: ["text"],
+      context_length: 128000,
+      group_definition_id: "0",
+    },
+  ],
+  review_digest: "a".repeat(64),
   existing_pairs: [{ ...pair, enabled: false }],
   issues: [],
 });
@@ -102,5 +111,37 @@ describe("actual resource publication preview", () => {
       issues: [{ code: "unbound_source_channel", source_channel_id: "other" }],
     };
     expect(readPublicationPreview(blocked).ready).toBe(false);
+  });
+  it("requires a complete matching route-constraint review", () => {
+    const route = preview().proposed_routes[0];
+    for (const overrides of [
+      { review_digest: "not-a-digest" },
+      { proposed_routes: [] },
+      { proposed_routes: [{ ...route, model: "other" }] },
+      { proposed_routes: [{ ...route, capabilities: ["vision"] }] },
+      { proposed_routes: [{ ...route, capabilities: [] }] },
+      { proposed_routes: [{ ...route, context_length: -1 }] },
+      {
+        proposed_routes: [
+          { ...route, context_length: Number.MAX_SAFE_INTEGER + 1 },
+        ],
+      },
+      { proposed_routes: [{ ...route, group_definition_id: 1 }] },
+    ])
+      expect(() =>
+        readPublicationPreview({ ...preview(), ...overrides }),
+      ).toThrow();
+    expect(
+      readPublicationPreview({
+        ...preview(),
+        proposed_routes: [
+          {
+            ...route,
+            context_length: 0,
+            group_definition_id: "9007199254740993",
+          },
+        ],
+      }).proposed_routes[0].context_length,
+    ).toBe(0);
   });
 });
