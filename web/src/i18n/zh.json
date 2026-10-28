@@ -219,6 +219,7 @@
   "codePython": "Python（编程语言）",
   "codeNode": "Node.js（脚本运行时）",
   "codeAudio": "语音合成（TTS）",
+  "codeTranscription": "语音识别（STT）",
   "pBrand": "MyAPIs",
   "pPlatform": "模型连接基础设施",
   "pHome": "品牌首页",

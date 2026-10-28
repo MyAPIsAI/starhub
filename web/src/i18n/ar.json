@@ -219,6 +219,7 @@
   "codePython": "Python",
   "codeNode": "Node.js",
   "codeAudio": "تحويل النص إلى كلام",
+  "codeTranscription": "تحويل الكلام إلى نص",
   "pBrand": "MyAPIs",
   "pPlatform": "بنية تحتية للذكاء",
   "pHome": "الرئيسية",

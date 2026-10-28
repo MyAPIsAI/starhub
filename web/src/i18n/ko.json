@@ -219,6 +219,7 @@
   "codePython": "Python",
   "codeNode": "Node.js",
   "codeAudio": "음성 합성 (TTS)",
+  "codeTranscription": "음성 인식 (STT)",
   "pBrand": "MyAPIs",
   "pPlatform": "Infrastructure for intelligence",
   "pHome": "Homepage",

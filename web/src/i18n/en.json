@@ -219,6 +219,7 @@
   "codePython": "Python",
   "codeNode": "Node.js",
   "codeAudio": "Speech (TTS)",
+  "codeTranscription": "Transcription (STT)",
   "pBrand": "MyAPIs",
   "pPlatform": "Infrastructure for intelligence",
   "pHome": "Homepage",

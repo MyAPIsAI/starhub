@@ -21,6 +21,13 @@ export async function copyText(
   }
 }
 const samples: Record<string, string> = {
+  transcription: `# Replace speech.mp3 with your audio file.
+# Use a transcription model allowed by your API key.
+curl --fail --silent --show-error ${placeholders.apiBase}/audio/transcriptions \\
+  -H "Authorization: Bearer $VEYRA_API_KEY" \\
+  -F 'model=whisper-1' \\
+  -F 'file=@speech.mp3' \\
+  -F 'response_format=verbose_json'`,
   audio: `# Use a speech model allowed by your API key.
 curl --fail --silent --show-error ${placeholders.apiBase}/audio/speech \\
   -H "Authorization: Bearer $VEYRA_API_KEY" \\
@@ -71,6 +78,7 @@ export function CodeExample() {
     cursor: "Cursor",
     gemini: i18n.language === "zh" ? "Gemini" : "Gemini",
     audio: t("codeAudio"),
+    transcription: t("codeTranscription"),
   };
   return (
     <Tabs.Root
@@ -117,9 +125,11 @@ export function CodeExample() {
       <div className="code-caption">
         <span className="status-dot" />
         <span dir="ltr">
-          {language === "audio"
-            ? "POST /v1/audio/speech"
-            : "POST /v1/chat/completions"}
+          {language === "transcription"
+            ? "POST /v1/audio/transcriptions"
+            : language === "audio"
+              ? "POST /v1/audio/speech"
+              : "POST /v1/chat/completions"}
         </span>
       </div>
     </Tabs.Root>
