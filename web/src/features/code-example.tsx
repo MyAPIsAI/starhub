@@ -21,6 +21,17 @@ export async function copyText(
   }
 }
 const samples: Record<string, string> = {
+  audio: `# Use a speech model allowed by your API key.
+curl --fail --silent --show-error ${placeholders.apiBase}/audio/speech \\
+  -H "Authorization: Bearer $VEYRA_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "tts-1",
+    "input": "Hello from MyAPIs!",
+    "voice": "alloy",
+    "response_format": "mp3"
+  }' \\
+  --output speech.mp3`,
   curl: `curl ${placeholders.apiBase}/chat/completions \\\n  -H "Authorization: Bearer $VEYRA_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "gpt-4.1",\n    "messages": [{"role": "user", "content": "Hello"}],\n    "stream": true\n  }'`,
   python: `import os\nfrom openai import OpenAI\n\nclient = OpenAI(\n    base_url="${placeholders.apiBase}",\n    api_key=os.environ["VEYRA_API_KEY"]\n)\n\nfor chunk in client.chat.completions.create(\n    model="gpt-4.1",\n    messages=[{"role": "user", "content": "Hello"}],\n    stream=True,\n):\n    print(chunk.choices[0].delta.content or "", end="")`,
   node: `import OpenAI from "openai";\n\nconst client = new OpenAI({\n  baseURL: "${placeholders.apiBase}",\n  apiKey: process.env.VEYRA_API_KEY,\n});\n\nconst stream = await client.chat.completions.create({\n  model: "gpt-4.1",\n  messages: [{ role: "user", content: "Hello" }],\n  stream: true,\n});\nfor await (const chunk of stream) {\n  process.stdout.write(chunk.choices[0]?.delta.content || "");\n}`,
@@ -59,6 +70,7 @@ export function CodeExample() {
     "claude-code": i18n.language === "zh" ? "Claude Code" : "Claude Code",
     cursor: "Cursor",
     gemini: i18n.language === "zh" ? "Gemini" : "Gemini",
+    audio: t("codeAudio"),
   };
   return (
     <Tabs.Root
@@ -104,7 +116,11 @@ export function CodeExample() {
       ))}
       <div className="code-caption">
         <span className="status-dot" />
-        <span dir="ltr">POST /v1/chat/completions</span>
+        <span dir="ltr">
+          {language === "audio"
+            ? "POST /v1/audio/speech"
+            : "POST /v1/chat/completions"}
+        </span>
       </div>
     </Tabs.Root>
   );

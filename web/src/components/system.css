@@ -1219,9 +1219,14 @@ h3 {
   border-block-end: 1px solid var(--border);
 }
 .code-toolbar .segmented {
+  min-inline-size: 0;
+  flex-wrap: wrap;
   padding: 0;
   border: 0;
   background: transparent;
+}
+.code-toolbar > .button {
+  flex-shrink: 0;
 }
 .code-toolbar .segmented button {
   font-size: var(--text-xs);
