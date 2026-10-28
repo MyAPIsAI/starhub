@@ -19,6 +19,7 @@ import {
 } from "../lib/server-pricing";
 import { useSettingsText } from "./pricing-settings-shared";
 import "./server-token-pricing.css";
+import { ServerDetailPricing } from "./server-detail-pricing";
 
 type Draft = {
   base: ServerPricing;
@@ -224,6 +225,7 @@ export function ServerTokenPricing() {
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
+      <ServerDetailPricing data={data} />
       {data && (
         <>
           <p className="stp-versions">

@@ -10,6 +10,7 @@ import {
   replaceServerExpression,
   validServerExpression,
   replaceServerModelPricing,
+  replaceServerDetailRatios,
 } from "../src/lib/server-pricing";
 const fixture = {
   version: 3,
@@ -172,6 +173,19 @@ describe("server token pricing", () => {
     });
     expect(JSON.parse(options[0].value)).toEqual({ flat: 0.2 });
     expect(Object.hasOwn(JSON.parse(options[1].value), "__proto__")).toBe(true);
+  });
+  it("retains exact detail multipliers and saves only two bounded scalar options", () => {
+    const state = readServerPricing(fixture);
+    expect(state.cache).toBe(0.5);
+    expect(state.audio).toBe(40);
+    expect(replaceServerDetailRatios("0", "1e3")).toEqual([
+      { key: "cache_ratio", value: "0" },
+      { key: "audio_ratio", value: "1000" },
+    ]);
+    for (const invalid of ["", "-1", "1000.01", "NaN", "Infinity", "0x10"]) {
+      expect(() => replaceServerDetailRatios(invalid, "1")).toThrow();
+      expect(() => replaceServerDetailRatios("1", invalid)).toThrow();
+    }
   });
   it("rejects missing, malformed and unsupported snapshots instead of inventing prices", () => {
     for (const value of [

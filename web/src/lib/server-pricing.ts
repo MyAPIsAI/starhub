@@ -17,6 +17,8 @@ export interface ServerPricing {
   completion: Record<string, number>;
   perRequest: Record<string, number>;
   expressions: Record<string, string>;
+  cache: number;
+  audio: number;
 }
 const version = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
@@ -89,6 +91,8 @@ export function readServerPricing(value: unknown): ServerPricing {
     completion: map(parsed.completion_ratio) as Record<string, number>,
     perRequest: map(parsed.model_price) as Record<string, number>,
     expressions: map(parsed.model_price_expr, true) as Record<string, string>,
+    cache: parsed.cache_ratio as number,
+    audio: parsed.audio_ratio as number,
   };
 }
 export function ownPrice<T>(
@@ -166,6 +170,21 @@ export function validServerExpression(value: string): boolean {
   return (
     value.trim().length > 0 && new TextEncoder().encode(value).length <= 512
   );
+}
+export function replaceServerDetailRatios(
+  cache: string,
+  audio: string,
+): PricingOption[] {
+  if (
+    ![cache, audio].every(
+      (value) => validServerRatio(value) && Number(value) <= 1000,
+    )
+  )
+    throw Error("Invalid detail pricing ratios");
+  return [
+    { key: "cache_ratio", value: JSON.stringify(Number(cache)) },
+    { key: "audio_ratio", value: JSON.stringify(Number(audio)) },
+  ];
 }
 export type ServerPricingEdit =
   | { mode: "per_token"; input: string; completion: string }

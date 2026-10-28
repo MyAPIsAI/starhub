@@ -34,6 +34,10 @@
   font-size: var(--text-xs);
   color: var(--muted);
 }
+.stp-detail-ratios {
+  display: grid;
+  gap: 12px;
+}
 .stp-search {
   display: grid;
   gap: 8px;
