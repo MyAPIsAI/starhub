@@ -106,11 +106,19 @@ export const apiGet = <T>(
   options?: ApiRequestOptions,
 ): Promise<T> => apiRequest<T>(path, { method: "GET", signal }, options);
 
-export const apiPost = <T>(path: string, body?: unknown): Promise<T> =>
-  apiRequest<T>(path, {
-    method: "POST",
-    body: body ? JSON.stringify(body) : undefined,
-  });
+export const apiPost = <T>(
+  path: string,
+  body?: unknown,
+  options?: ApiRequestOptions,
+): Promise<T> =>
+  apiRequest<T>(
+    path,
+    {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    },
+    options,
+  );
 
 export const apiPut = <T>(path: string, body?: unknown): Promise<T> =>
   apiRequest<T>(path, {

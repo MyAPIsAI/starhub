@@ -96,6 +96,9 @@ func ConfigureRateLimits(ipPerMinute, userPerMinute int64) {
 }
 
 func ResetRateLimits() {
+	passwordVerificationLimiter.mu.Lock()
+	passwordVerificationLimiter.buckets = map[string]*rateBucket{}
+	passwordVerificationLimiter.mu.Unlock()
 	ipLimiter.mu.Lock()
 	ipLimiter.buckets = map[string]*rateBucket{}
 	ipLimiter.mu.Unlock()

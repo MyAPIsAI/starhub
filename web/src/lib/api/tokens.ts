@@ -11,7 +11,7 @@
 //     updates.  (B5)
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPut, apiDelete } from "./http";
+import { apiGet, apiPost, apiPut, apiDelete, ApiError } from "./http";
 import {
   sessionQueryIdentity,
   useSessionQueryIdentity,
@@ -63,25 +63,69 @@ export interface TokenUpdateInput {
 
 const TOKENS_KEY = ["tokens"] as const;
 
+function assertTokenSession(identity: ReturnType<typeof sessionQueryIdentity>) {
+  if (
+    identity[1] === null ||
+    JSON.stringify(identity) !==
+      JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()))
+  )
+    throw Error("A confirmed unchanged session is required for API keys");
+}
+
+export async function verifyTokenPassword(
+  tokenID: number,
+  password: string,
+  identity: ReturnType<typeof sessionQueryIdentity>,
+): Promise<void> {
+  assertTokenSession(identity);
+  if (
+    !Number.isSafeInteger(tokenID) ||
+    tokenID <= 0 ||
+    !Number.isSafeInteger(identity[1]) ||
+    identity[1]! <= 0 ||
+    !password ||
+    new TextEncoder().encode(password).length > 72
+  )
+    throw Error("Invalid API key password verification input");
+  let result: unknown;
+  try {
+    result = await apiPost<unknown>(
+      `/api/token/${tokenID}/verify-password`,
+      {
+        expected_user_id: identity[1],
+        password,
+      },
+      { handleUnauthorizedLocally: true },
+    );
+  } catch (error) {
+    // A late 401 from a superseded request must not sign out the new owner.
+    assertTokenSession(identity);
+    if (error instanceof ApiError && error.status === 401)
+      useSystemAccess.getState().setSession(null);
+    throw error;
+  }
+  assertTokenSession(identity);
+  if (
+    !result ||
+    typeof result !== "object" ||
+    (result as Record<string, unknown>).verified !== true ||
+    (result as Record<string, unknown>).user_id !== identity[1] ||
+    (result as Record<string, unknown>).token_id !== tokenID
+  )
+    throw Error("API key password verification was not confirmed");
+}
+
 export function useTokens() {
   const identity = useSessionQueryIdentity();
-  const assertSession = () => {
-    if (
-      identity[1] === null ||
-      JSON.stringify(identity) !==
-        JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()))
-    )
-      throw Error("A confirmed unchanged session is required to read API keys");
-  };
   return useQuery({
     queryKey: [...TOKENS_KEY, identity],
     enabled: identity[1] !== null,
     staleTime: 0,
     retry: false,
     queryFn: async ({ signal }) => {
-      assertSession();
+      assertTokenSession(identity);
       const tokens = await apiGet<Token[]>("/api/token", signal);
-      assertSession();
+      assertTokenSession(identity);
       if (
         !Array.isArray(tokens) ||
         tokens.some((token) => !token || token.user_id !== identity[1])

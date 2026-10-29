@@ -77,6 +77,7 @@ func New() http.Handler {
 	mux.Handle("PUT /api/token/", middleware.UserAuth(http.HandlerFunc(controller.UpdateToken)))
 	mux.Handle("DELETE /api/token/{id}", middleware.UserAuth(http.HandlerFunc(controller.DeleteToken)))
 	mux.Handle("POST /api/token/{id}/regenerate", middleware.UserAuth(http.HandlerFunc(controller.RegenerateToken)))
+	mux.Handle("POST /api/token/{id}/verify-password", middleware.UserAuth(middleware.PasswordVerificationRateLimit(http.HandlerFunc(controller.VerifyTokenPassword))))
 
 	mux.Handle("GET /api/option", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))

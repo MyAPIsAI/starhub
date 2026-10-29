@@ -86,12 +86,13 @@ import SmartRouting from "../features/resource-routing";
 import { StandardModels } from "../features/standard-models";
 import { Channels } from "../features/channels";
 import { ServiceGroups } from "../features/service-groups";
-import { useSystemAccess, isAdmin, canReadFinance, sessionUsername } from "../lib/system-access";
+import { useSystemAccess, isAdmin, canReadFinance, sessionUsername, sessionQueryIdentity, useSessionQueryIdentity } from "../lib/system-access";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import {
   useDeleteToken,
   useRegenerateToken,
   useUpdateToken,
+  verifyTokenPassword,
 } from "../lib/api/tokens";
 import { useWallet } from "../lib/api/billing";
 import {
@@ -100,7 +101,7 @@ import {
   downloadExport as downloadBackendExport,
   type ExportRecord,
 } from "../lib/api/exports";
-import { loginUser } from "../lib/api/auth";
+import { ApiError } from "../lib/api/http";
 import { deactivateSelf } from "../lib/api/user";
 import {
   useUserUsage,
@@ -137,6 +138,11 @@ function ResultPill({ failed }: { failed: boolean }) {
 }
 
 export default function ConsolePreview() {
+  const identity = useSessionQueryIdentity();
+  return <ConsoleWorkspace key={JSON.stringify(identity)} />;
+}
+
+function ConsoleWorkspace() {
   const { t, i18n } = useTranslation();
   const c = (zh: string, en: string, ar: string) =>
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
@@ -164,6 +170,8 @@ export default function ConsolePreview() {
   }, [section, role, mobileNavOpen]);
 
   const session = useSystemAccess((s) => s.session);
+  const sessionScope = sessionQueryIdentity({session, role});
+  const isCurrentSession = () => JSON.stringify(sessionScope) === JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()));
   const settingsLabel = c("账号中心", "Account center", "مركز الحساب");
   const profileName = sessionUsername(session) ?? settingsLabel;
   const profileInitials = Array.from(profileName.trim())
@@ -222,21 +230,17 @@ export default function ConsolePreview() {
     onboardingDismissed ||
     keys.length > 0 ||
     (balanceKnown && BigInt(balance) > 0n);
-  // Key reveal state — local. The password is verified against the
-  // backend via the login endpoint (POST /api/user/login).
+  // Unlock only the current owner's locally captured key material. Verification
+  // does not create a new login session or recover old masked credentials.
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, number>>(
     {},
   );
-  const verifyAndReveal = async (
-    keyId: string,
-    password: string,
-  ): Promise<boolean> => {
-    const user = useProductPreview.getState().user;
-    if (!user.isLoggedIn || user.accountStatus === "deactivated") return false;
-    if (!password) return false;
+  const verifyAndReveal = async (keyId: string, password: string): Promise<boolean> => {
+    if (tokensError || !keys.some((key) => key.id === keyId)) return false;
     try {
-      await loginUser(user.username || user.email || "", password);
-      setRevealedKeyIds((s) => ({ ...s, [keyId]: Date.now() + 300000 }));
+      await verifyTokenPassword(Number(keyId), password, sessionScope);
+      if (!isCurrentSession()) return false;
+      setRevealedKeyIds((state) => ({...state, [keyId]: Date.now() + 300000}));
       return true;
     } catch {
       return false;
@@ -348,7 +352,9 @@ export default function ConsolePreview() {
   const [visibleKeyIds, setVisibleKeyIds] = useState<Record<string, boolean>>(
     {},
   );
-  const [authError, setAuthError] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authPending, setAuthPending] = useState(false);
+  const authPendingRef = useRef(false);
   const authInput = useRef<HTMLInputElement>(null);
   const [keyConfirmation, setKeyConfirmation] = useState<{
     action: "delete" | "regenerate";
@@ -456,6 +462,7 @@ export default function ConsolePreview() {
   const isZeroBalance = balanceKnown && BigInt(balance) <= 0n;
 
   const requestKeySecret = (key: PreviewKey, intent: KeySecretAction) => {
+    if (authPendingRef.current || !isCurrentSession()) return;
     if (revealedKeyIds[key.id] > Date.now()) {
       // Use the plaintext key if captured in this session (create/
       // regenerate); otherwise fall back to the masked value from the
@@ -471,14 +478,21 @@ export default function ConsolePreview() {
     setAuthRevealKeyId(key.id);
     setAuthKeyIntent(intent);
     setAuthPassword("");
-    setAuthError(false);
+    setAuthError("");
   };
 
   const handleRevealSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!authRevealKeyId) return;
-    const ok = await verifyAndReveal(authRevealKeyId, authPassword);
-    if (ok) {
+    if (!authRevealKeyId || authPendingRef.current) return;
+    authPendingRef.current = true;
+    setAuthPending(true);
+    setAuthError("");
+    try {
+      if (tokensError || !keys.some((key) => key.id === authRevealKeyId))
+        throw Error("The current account's API key could not be verified");
+      await verifyTokenPassword(Number(authRevealKeyId), authPassword, sessionScope);
+      if (!isCurrentSession()) return;
+      setRevealedKeyIds((s) => ({ ...s, [authRevealKeyId]: Date.now() + 300000 }));
       if (authKeyIntent === "view")
         setVisibleKeyIds((visible) => ({ ...visible, [authRevealKeyId]: true }));
       else {
@@ -490,9 +504,16 @@ export default function ConsolePreview() {
       }
       setAuthRevealKeyId(null);
       setAuthPassword("");
-      setAuthError(false);
-    } else {
-      setAuthError(true);
+      setAuthError("");
+    } catch (error) {
+      setAuthError(error instanceof ApiError && error.status === 403
+        ? t("invalidPassword")
+        : error instanceof ApiError && error.status === 429
+          ? c("验证次数过多，请稍后重试。", "Too many verification attempts. Try again later.", "محاولات تحقق كثيرة. حاول لاحقًا.")
+          : c("未能确认验证结果，请重试；登录状态或密钥变化后请重新打开。", "Verification could not be confirmed. Retry, or reopen after a session or key change.", "تعذر تأكيد التحقق. أعد المحاولة أو افتح النافذة مجددًا بعد تغيير الجلسة أو المفتاح."));
+    } finally {
+      authPendingRef.current = false;
+      setAuthPending(false);
     }
   };
 
@@ -2139,11 +2160,12 @@ export default function ConsolePreview() {
         size="compact"
         initialFocus={authInput}
         open={!!authRevealKeyId}
+        preventOutsideClose={authPending}
         onOpenChange={(v) => {
-          if (!v) {
+          if (!v && !authPendingRef.current) {
             setAuthRevealKeyId(null);
             setAuthPassword("");
-            setAuthError(false);
+            setAuthError("");
           }
         }}
         title={t("reRevealTitle")}
@@ -2159,6 +2181,8 @@ export default function ConsolePreview() {
         >
           {authError && (
             <div
+              id="key-auth-error"
+              role="alert"
               style={{
                 padding: "var(--space-3)",
                 background: "var(--danger-soft)",
@@ -2167,7 +2191,7 @@ export default function ConsolePreview() {
                 fontSize: "var(--text-xs)",
               }}
             >
-              {t("invalidPassword")}
+              {authError}
             </div>
           )}
           <div>
@@ -2193,11 +2217,14 @@ export default function ConsolePreview() {
                 "أدخل كلمة مرور حسابك الحالية",
               )}
               value={authPassword}
+              disabled={authPending}
+              aria-invalid={Boolean(authError)}
+              aria-describedby={authError ? "key-auth-error" : undefined}
               onChange={(e) => setAuthPassword(e.target.value)}
               required
             />
           </div>
-          <Button type="submit" variant="primary">
+          <Button type="submit" variant="primary" disabled={authPending} aria-busy={authPending}>
             {t("unlockKey")}
           </Button>
         </form>

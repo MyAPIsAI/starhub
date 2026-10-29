@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getSelf } from "./auth";
-import { ApiError, apiGet, onAuthLoss } from "./http";
+import { ApiError, apiGet, apiPost, onAuthLoss } from "./http";
 
 describe("unauthorized responses", () => {
   const authLoss = vi.fn();
@@ -62,6 +62,24 @@ describe("unauthorized responses", () => {
       }),
     );
     expect(authLoss).not.toHaveBeenCalled();
+  });
+
+  it("lets a session-bound password POST handle an old unauthorized response locally", async () => {
+    await expect(
+      apiPost(
+        "/api/token/1/verify-password",
+        {
+          expected_user_id: 1,
+          password: "synthetic-verification",
+        },
+        { handleUnauthorizedLocally: true },
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(authLoss).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/token/1/verify-password",
+      expect.objectContaining({ method: "POST", credentials: "same-origin" }),
+    );
   });
 
   it("does not let an old subscription clear a newer listener", async () => {
