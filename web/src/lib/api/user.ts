@@ -1,15 +1,13 @@
 // User self-service API hooks — typed wrappers around the Go backend's
-// /api/user/self endpoint.
+// guarded account profile and device endpoints.
 //
 // Key behavior:
 //   - Change password requires current_password; the backend verifies it.
-//   - Change email does not require verification (matches the demo UI
-//     which treats email as a profile field).
+//   - Email is a profile field and does not require verification.
 //   - Both mutations invalidate the cached user profile so callers refetch.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiPut, apiPost, apiGet, ApiError } from "./http";
-import type { AuthUser } from "./auth";
 import {
   sessionQueryIdentity,
   useSessionQueryIdentity,
@@ -32,10 +30,68 @@ export interface UpdateSelfInput {
 
 export function useUpdateSelf() {
   const queryClient = useQueryClient();
+  const scope = useSessionQueryIdentity();
   return useMutation({
-    mutationFn: (input: UpdateSelfInput) =>
-      apiPut<AuthUser>("/api/user/self", input),
-    onSuccess: () => {
+    retry: false,
+    mutationFn: async (input: UpdateSelfInput) => {
+      assertUserSession(scope);
+      const key = [...USER_KEY, scope];
+      if (queryClient.getQueryState(key)?.status !== "success")
+        throw Error("Reload the account profile before updating");
+      const profile = readUserProfileState(
+        queryClient.getQueryData(key),
+        scope[1]!,
+      );
+      if (!profile.guarded_updates)
+        throw Error("Guarded account profile updates are unavailable");
+      const password = input.new_password !== undefined;
+      if (password === (input.email !== undefined))
+        throw Error("Exactly one profile field is required");
+      if (
+        password &&
+        (typeof input.current_password !== "string" ||
+          !input.current_password ||
+          new TextEncoder().encode(input.current_password).length > 72 ||
+          typeof input.new_password !== "string" ||
+          new TextEncoder().encode(input.new_password).length < 8 ||
+          new TextEncoder().encode(input.new_password).length > 64)
+      )
+        throw Error("Invalid password update");
+      if (
+        !password &&
+        (input.current_password !== undefined ||
+          typeof input.email !== "string" ||
+          input.email !== input.email.trim() ||
+          new TextEncoder().encode(input.email).length > 64)
+      )
+        throw Error("Invalid email update");
+      const result = await inUserSession(scope, () =>
+        apiPut<unknown>(
+          "/api/user/profile-state",
+          {
+            expected_user_id: scope[1],
+            expected_email: profile.user.email,
+            ...(password
+              ? {
+                  current_password: input.current_password,
+                  new_password: input.new_password,
+                }
+              : { email: input.email }),
+          },
+          { handleUnauthorizedLocally: true },
+        ),
+      );
+      const receipt = result as Record<string, unknown> | null;
+      if (
+        !receipt ||
+        typeof receipt !== "object" ||
+        receipt.user_id !== scope[1] ||
+        receipt.updated_field !== (password ? "password" : "email")
+      )
+        throw Error("Account profile update was not confirmed");
+      return { user_id: scope[1]!, updated_field: receipt.updated_field };
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: USER_KEY });
     },
   });
@@ -129,7 +185,10 @@ export function useUserProfile() {
         ),
         scope[1]!,
       ),
-    select: (data) => readUserProfileState(data, scope[1]!).user,
+    select: (data) => {
+      const profile = readUserProfileState(data, scope[1]!);
+      return { ...profile.user, can_update: profile.guarded_updates };
+    },
   });
 }
 

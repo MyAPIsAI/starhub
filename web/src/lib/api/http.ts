@@ -120,11 +120,19 @@ export const apiPost = <T>(
     options,
   );
 
-export const apiPut = <T>(path: string, body?: unknown): Promise<T> =>
-  apiRequest<T>(path, {
-    method: "PUT",
-    body: body ? JSON.stringify(body) : undefined,
-  });
+export const apiPut = <T>(
+  path: string,
+  body?: unknown,
+  options?: ApiRequestOptions,
+): Promise<T> =>
+  apiRequest<T>(
+    path,
+    {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    },
+    options,
+  );
 
 export const apiDelete = <T>(path: string): Promise<T> =>
   apiRequest<T>(path, { method: "DELETE" });

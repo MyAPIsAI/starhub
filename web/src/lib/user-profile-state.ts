@@ -1,5 +1,6 @@
 export interface UserProfileState {
   schema: "profile_state_v1";
+  guarded_updates: boolean;
   user: {
     id: number;
     username: string;
@@ -37,6 +38,7 @@ export function readUserProfileState(
     throw Error("Account profile ownership or metadata could not be verified");
   return {
     schema: "profile_state_v1",
+    guarded_updates: data.guarded_updates === true,
     user: {
       id: owner,
       username: user.username,

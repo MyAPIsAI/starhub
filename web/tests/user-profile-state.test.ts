@@ -19,6 +19,7 @@ import { onAuthLoss } from "../src/lib/api/http";
 
 const state = {
   schema: "profile_state_v1",
+  guarded_updates: false,
   user: {
     id: 7,
     username: "Server owner",
@@ -97,7 +98,10 @@ describe("server profile state", () => {
     expect(query.staleTime).toBe(0);
     const signal = new AbortController().signal;
     fetchMock.mockResolvedValue(Response.json({ success: true, data: state }));
-    expect(query.select(await query.queryFn({ signal }))).toEqual(state.user);
+    expect(query.select(await query.queryFn({ signal }))).toEqual({
+      ...state.user,
+      can_update: false,
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/user/profile-state?expected_user_id=7",
       expect.objectContaining({ signal, credentials: "same-origin" }),

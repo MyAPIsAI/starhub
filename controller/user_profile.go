@@ -8,7 +8,7 @@ import (
 )
 
 // GetProfileState exposes only account profile metadata after checking the
-// caller's expected owner. It does not grant any profile mutation capability.
+// caller's expected owner. Mutation support is advertised explicitly.
 func GetProfileState(w http.ResponseWriter, r *http.Request) {
 	owner, ok := expectedAccountOwner(w, r)
 	if !ok {
@@ -20,7 +20,8 @@ func GetProfileState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.ApiSuccess(w, map[string]any{
-		"schema": "profile_state_v1",
+		"schema":          "profile_state_v1",
+		"guarded_updates": true,
 		"user": map[string]any{
 			"id": user.ID, "username": user.Username, "email": user.Email,
 			"role": user.Role, "status": user.Status, "created_at": user.CreatedAt,
