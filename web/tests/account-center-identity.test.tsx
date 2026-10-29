@@ -29,6 +29,14 @@ const profile = vi.hoisted(() => ({
         can_update?: boolean;
       },
 }));
+const history = vi.hoisted(() => ({
+  error: false,
+  events: [] as {
+    id: number;
+    action: "password_changed" | "email_changed";
+    created_at: number;
+  }[],
+}));
 
 vi.mock("../src/lib/product-preview", () => ({
   useProductPreview: (select: (state: unknown) => unknown) =>
@@ -55,6 +63,13 @@ vi.mock("../src/lib/product-preview", () => ({
     }),
 }));
 vi.mock("../src/lib/api/user", () => ({
+  useUserSecurityHistory: () => ({
+    data: history.events,
+    isError: history.error,
+    isSuccess: !history.error,
+    isLoading: false,
+    isFetching: false,
+  }),
   useUserProfile: () => ({
     data: profile.data,
     isError: profile.error,
@@ -97,6 +112,8 @@ afterEach(() => {
   profile.data = undefined;
   profile.error = false;
   profile.reason = null;
+  history.error = false;
+  history.events = [];
 });
 function render() {
   const client = new QueryClient();
@@ -113,6 +130,25 @@ function render() {
   }
 }
 describe("confirmed account center identifiers", () => {
+  it("hides cached security events on failure without inventing an empty history", () => {
+    useSystemAccess.getState().setSession({
+      id: 7,
+      group: "default",
+      role: 1,
+      username: "Server owner",
+    });
+    history.events = [
+      { id: 1, action: "password_changed", created_at: 1735689600 },
+    ];
+    history.error = true;
+    const html = render();
+    expect(html).toContain(
+      "Security history is unavailable. Previous records are hidden.",
+    );
+    expect(html).not.toContain('class="ac-events"');
+    expect(html).not.toContain("No changes recorded in this scope.");
+    expect(html).toContain("Reload security history");
+  });
   it("opens security changes only with explicit server support and hides Demo contacts/history", () => {
     useSystemAccess.getState().setSession({
       id: 7,
@@ -138,7 +174,10 @@ describe("confirmed account center identifiers", () => {
     ).toContain('disabled=""');
     expect(html).not.toContain("138");
     expect(html).not.toContain("1994");
-    expect(html).toContain("Server security history is unavailable");
+    expect(html).toContain("No changes recorded in this scope.");
+    expect(html).toContain(
+      "Earlier actions, other entry points and device operations are outside this history.",
+    );
     profile.data.can_update = false;
     html = render();
     expect(

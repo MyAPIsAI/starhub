@@ -131,5 +131,9 @@ func TestOwnedProfileCompareAndSwapRejectsConcurrentSecurityChanges(t *testing.T
 		if wins != 1 {
 			t.Fatalf("concurrent winners: %d", wins)
 		}
+		events, err := model.ListUserSecurityEvents(owner.ID)
+		if err != nil || len(events) != 1 {
+			t.Fatal("concurrent profile writes produced an inconsistent history")
+		}
 	})
 }

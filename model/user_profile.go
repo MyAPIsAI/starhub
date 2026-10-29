@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+
+	"gorm.io/gorm"
 	"starhub/common"
 )
 
@@ -13,12 +15,17 @@ func UpdateOwnedProfile(expected *User, field, value string) error {
 	if expected == nil || expected.ID <= 0 || expected.Status != common.StatusEnabled || (field != "password" && field != "email") {
 		return errors.New("invalid account profile update")
 	}
-	result := DB.Model(&User{}).Where("id = ? AND status = ? AND password = ? AND email = ? AND role = ? AND \"group\" = ?", expected.ID, expected.Status, expected.Password, expected.Email, expected.Role, expected.Group).Update(field, value)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrUserProfileConflict
-	}
-	return nil
+	return DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&User{}).Where("id = ? AND status = ? AND password = ? AND email = ? AND role = ? AND \"group\" = ?", expected.ID, expected.Status, expected.Password, expected.Email, expected.Role, expected.Group).Update(field, value)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrUserProfileConflict
+		}
+		if field == "email" && value == expected.Email {
+			return nil
+		}
+		return tx.Create(&UserSecurityEvent{UserID: expected.ID, Action: field + "_changed"}).Error
+	})
 }

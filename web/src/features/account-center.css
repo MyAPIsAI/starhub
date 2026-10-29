@@ -309,6 +309,12 @@
   flex-direction: column;
   gap: 18px;
 }
+.ac-history-status {
+  padding-inline: 28px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
 .ac-events li {
   display: flex;
   gap: 12px;
@@ -583,6 +589,7 @@
     padding: 13px 20px;
   }
   .ac-devices,
+  .ac-history-status,
   .ac-events {
     padding-inline: 20px;
   }

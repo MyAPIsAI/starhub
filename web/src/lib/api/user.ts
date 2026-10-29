@@ -18,6 +18,7 @@ import {
   readSessionTermination,
 } from "../user-session-state";
 import { readUserProfileState } from "../user-profile-state";
+import { readUserSecurityState } from "../user-security-state";
 
 const USER_KEY = ["user-self"] as const;
 const SESSIONS_KEY = ["user-sessions"] as const;
@@ -232,5 +233,28 @@ export function useTerminateOtherSessions() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
     },
+  });
+}
+
+export function useUserSecurityHistory() {
+  const scope = useSessionQueryIdentity();
+  return useQuery({
+    queryKey: [...USER_KEY, "security", scope],
+    enabled:
+      scope[1] !== null && Number.isSafeInteger(scope[1]) && scope[1] > 0,
+    staleTime: 0,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      readUserSecurityState(
+        await inUserSession(scope, () =>
+          apiGet<unknown>(
+            `/api/user/security-state?expected_user_id=${scope[1]}`,
+            signal,
+            { handleUnauthorizedLocally: true },
+          ),
+        ),
+        scope[1]!,
+      ),
+    select: (data) => readUserSecurityState(data, scope[1]!).events,
   });
 }

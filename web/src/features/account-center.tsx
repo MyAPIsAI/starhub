@@ -1,18 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Check,
-  Copy,
-  History,
-  Info,
-  LogOut,
-  Monitor,
-  UserRound,
-} from "lucide-react";
+import { Check, Copy, Info, LogOut, Monitor, UserRound } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { AccountSecurity } from "./account-security";
+import { AccountSecurityHistory } from "./account-security-history";
 import { useProductPreview } from "../lib/product-preview";
 import {
   useSystemAccess,
@@ -429,37 +422,7 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
             </Button>
           </div>
         </section>
-        <section className="ac-card" aria-labelledby="ac-history-title">
-          <div className="ac-section-heading">
-            <div>
-              <h2 id="ac-history-title">
-                <History size={18} />
-                {c(
-                  "最近安全操作",
-                  "Recent security activity",
-                  "نشاط الأمان الأخير",
-                )}
-              </h2>
-            </div>
-          </div>
-          <div className="ac-empty">
-            <History size={25} />
-            <strong>
-              {c(
-                "服务器安全历史尚未接入",
-                "Server security history is unavailable",
-                "سجل أمان الخادم غير متاح",
-              )}
-            </strong>
-            <p>
-              {c(
-                "此处不展示浏览器演示记录；当前无法据此确认历史操作。",
-                "Browser demo records are not shown. Past actions cannot be confirmed here.",
-                "لا تُعرض السجلات التجريبية للمتصفح. لا يمكن تأكيد الإجراءات السابقة هنا.",
-              )}
-            </p>
-          </div>
-        </section>
+        <AccountSecurityHistory />
       </div>
       <section className="ac-close">
         <div>
