@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,7 +20,7 @@ import (
 )
 
 func TestClaudeCachedRequestsKeepCompleteUsageAndAdmissionPrices(t *testing.T) {
-	for _, mode := range []string{"tokens", "flat", "expression"} {
+	for _, mode := range []string{"tokens", "flat", "expression", "independent"} {
 		for _, native := range []bool{false, true} {
 			for _, stream := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/native%t/stream%t", mode, native, stream), func(t *testing.T) {
@@ -38,6 +39,21 @@ func TestClaudeCachedRequestsKeepCompleteUsageAndAdmissionPrices(t *testing.T) {
 					option("model_time_pricing", `{"cached-model":{"timezone":"UTC","windows":[{"id":"all","label":"All week","days":[0,1,2,3,4,5,6],"start":"00:00","end":"24:00","multiplier":0.5}]}}`)
 					option("model_price", "{}")
 					option("model_price_expr", "{}")
+					independent := func(multiplier int) {
+						t.Helper()
+						version, err := model.OptionVersion()
+						if err != nil {
+							t.Fatal(err)
+						}
+						rules := fmt.Sprintf(`{"cached-model":{"timezone":"UTC","windows":[{"id":"absolute","label":"Absolute","days":[0,1,2,3,4,5,6],"start":"00:00","end":"24:00","prices":{"input_per_m":"%d","output_per_m":"%d","cache_read_per_m":"%d","cache_write_per_m":"%d","audio_input_per_m":"%d","audio_output_per_m":"%d"}}]}}`, multiplier, multiplier*2, multiplier*3, multiplier*4, multiplier*5, multiplier*6)
+						result := doRequest(env.base, "PUT", "/api/option/time-token-pricing", env.session, map[string]any{"expected_version": version, "rules": json.RawMessage(rules)})
+						if result.Status != 200 {
+							t.Fatalf("absolute window: %d %s", result.Status, result.Body)
+						}
+					}
+					if mode == "independent" {
+						independent(1)
+					}
 					if mode == "flat" {
 						option("model_price", `{"cached-model":0.02}`)
 					}
@@ -46,7 +62,7 @@ func TestClaudeCachedRequestsKeepCompleteUsageAndAdmissionPrices(t *testing.T) {
 					}
 					usage := &relay.Usage{PromptTokens: 160, CompletionTokens: 20, PromptTokensDetails: &dto.PromptTokensDetails{CachedTokens: 100, CacheWriteTokens: 50}}
 					original := relay.ComputeUsageQuota(relay.NewPriceData("cached-model", "default"), usage)
-					want := map[string]int64{"tokens": 52, "flat": 4000, "expression": 72}[mode]
+					want := map[string]int64{"tokens": 52, "flat": 4000, "expression": 72, "independent": 110}[mode]
 					if original != want {
 						t.Fatalf("fixture fee%d want%d", original, want)
 					}
@@ -100,6 +116,9 @@ func TestClaudeCachedRequestsKeepCompleteUsageAndAdmissionPrices(t *testing.T) {
 					option("cache_ratio", "0.9")
 					option("group_ratio", `{"default":2}`)
 					option("model_time_pricing", "{}")
+					if mode == "independent" {
+						independent(10)
+					}
 					if mode == "flat" {
 						option("model_price", `{"cached-model":0.05}`)
 					}

@@ -84,6 +84,8 @@ func New() http.Handler {
 	mux.Handle("GET /api/option/pricing", middleware.AdminAuth(http.HandlerFunc(controller.GetPricingOptions)))
 	mux.Handle("PUT /api/option/pricing", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdatePricingOptions))))
 	mux.Handle("GET /api/option/time-pricing", middleware.AdminAuth(http.HandlerFunc(controller.GetTimePricing)))
+	mux.Handle("GET /api/option/time-token-pricing", middleware.AdminAuth(http.HandlerFunc(controller.GetTokenTimePricing)))
+	mux.Handle("PUT /api/option/time-token-pricing", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateTokenTimePricing))))
 	mux.Handle("PUT /api/option/time-pricing", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateTimePricing))))
 	mux.Handle("POST /api/option/reload", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.ReloadOptions))))
 	mux.Handle("GET /api/option/history", middleware.AdminAuth(http.HandlerFunc(controller.OptionHistory)))

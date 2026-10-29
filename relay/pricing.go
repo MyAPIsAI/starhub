@@ -31,7 +31,8 @@ type PriceData struct {
 	TimeAdjustment pricingtime.Adjustment
 	PricingTime    time.Time
 	// TokenRates is populated only by validated independent token tariffs.
-	TokenRates pricingtime.TokenRates
+	TokenRates          pricingtime.TokenRates
+	TokenTimeAdjustment pricingtime.TokenAdjustment
 	// PriceExpr, when configured, wins over per-call and token billing.
 	PriceExpr string
 
@@ -97,6 +98,8 @@ func priceDataFromInputs(modelName, group, userGroup string, inputs setting.Pric
 		OtherRatio:             1,
 		HasModelPrice:          inputs.HasModelPrice,
 		TimeAdjustment:         inputs.TimeAdjustment,
+		TokenRates:             inputs.TokenRates,
+		TokenTimeAdjustment:    inputs.TokenAdjustment,
 		PricingTime:            inputs.PricingAt,
 		UsingGroup:             group,
 		UserGroup:              userGroup,

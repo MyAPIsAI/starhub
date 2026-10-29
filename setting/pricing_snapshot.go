@@ -18,6 +18,8 @@ type PricingInputs struct {
 	HasModelPrice   bool
 	PriceExpr       string
 	TimeAdjustment  pricingtime.Adjustment
+	TokenAdjustment pricingtime.TokenAdjustment
+	TokenRates      pricingtime.TokenRates
 	PricingAt       time.Time
 }
 
@@ -85,6 +87,10 @@ func resolvePricing(model, group, userGroup string, at time.Time) PricingInputs 
 	p.ModelPriceUSD, p.HasModelPrice = ModelPriceValue(model)
 	p.PriceExpr, _ = ModelPriceExpr(model)
 	p.TimeAdjustment = TimePricingAt(model, at)
+	p.TokenAdjustment, _ = TokenTimePricingAt(model, at)
+	if p.TokenAdjustment.WindowID != "" {
+		p.TokenRates, _ = pricingtime.NewTokenRates(p.TokenAdjustment.Prices)
+	}
 	p.PricingAt = at.UTC()
 	return p
 }

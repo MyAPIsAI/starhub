@@ -31,6 +31,7 @@ export function TimePricingNote({
     <div
       className={`time-pricing-note${compact ? " is-compact" : ""}`}
       data-time-quote-window={quote.window_id}
+      data-token-price-window={quote.token_window?.window_id}
     >
       <p>
         {text("已含分时倍率", "Time multiplier included", "معامل الوقت مشمول")}:{" "}
@@ -42,6 +43,29 @@ export function TimePricingNote({
           </>
         )}
       </p>
+      {quote.token_window && (
+        <p>
+          {quote.token_window.window_id
+            ? text(
+                "已含独立时段词元单价",
+                "Independent window token prices included",
+                "أسعار رموز الفترة المستقلة مشمولة",
+              )
+            : text(
+                "独立单价时段外，使用基础词元单价",
+                "Outside independent price windows; base token prices apply",
+                "خارج فترات الأسعار المستقلة؛ تُطبق أسعار الرموز الأساسية",
+              )}
+          {" · "}
+          <bdi>{quote.token_window.timezone}</bdi>
+          {quote.token_window.window_id && (
+            <>
+              {" "}
+              · <bdi>{quote.token_window.window_id}</bdi>
+            </>
+          )}
+        </p>
+      )}
       {compact ? (
         <p>
           <time dateTime={quote.quoted_at}>{at}</time>

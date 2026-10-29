@@ -41,11 +41,13 @@ var usdPer1MFromRatio = 1.0
 type priceModel struct {
 	// PerM values are USD per 1M tokens; nil means the model is not billed
 	// on that axis (e.g. a per-call model has no input price).
-	InputPerM      *float64 `json:"input_per_m"`
-	OutputPerM     *float64 `json:"output_per_m"`
-	CacheReadPerM  *float64 `json:"cache_read_per_m"`
-	CacheWritePerM *float64 `json:"cache_write_per_m"`
-	PerRequest     *float64 `json:"per_request"`
+	InputPerM       *float64 `json:"input_per_m"`
+	OutputPerM      *float64 `json:"output_per_m"`
+	CacheReadPerM   *float64 `json:"cache_read_per_m"`
+	CacheWritePerM  *float64 `json:"cache_write_per_m"`
+	AudioInputPerM  *float64 `json:"audio_input_per_m"`
+	AudioOutputPerM *float64 `json:"audio_output_per_m"`
+	PerRequest      *float64 `json:"per_request"`
 
 	// Mode is one of per_token / per_request / tiered.
 	Mode string `json:"mode"`
@@ -63,11 +65,17 @@ type priceModel struct {
 }
 
 type timePriceView struct {
-	Multiplier float64   `json:"multiplier"`
-	WindowID   string    `json:"window_id"`
-	Timezone   string    `json:"timezone"`
-	QuotedAt   time.Time `json:"quoted_at"`
-	ValidUntil time.Time `json:"valid_until"`
+	Multiplier  float64          `json:"multiplier"`
+	WindowID    string           `json:"window_id"`
+	Timezone    string           `json:"timezone"`
+	QuotedAt    time.Time        `json:"quoted_at"`
+	ValidUntil  time.Time        `json:"valid_until"`
+	TokenWindow *tokenWindowView `json:"token_window,omitempty"`
+}
+
+type tokenWindowView struct {
+	WindowID string `json:"window_id"`
+	Timezone string `json:"timezone"`
 }
 
 func f64(v float64) *float64 { return &v }
@@ -103,6 +111,12 @@ func plazaPriceFromInputs(inputs setting.PricingInputs, group, userGroup string)
 		out.TimePricing = &timePriceView{Multiplier: adjustment.Multiplier, WindowID: adjustment.WindowID, Timezone: adjustment.Timezone, QuotedAt: inputs.PricingAt, ValidUntil: inputs.PricingAt.Truncate(time.Minute).Add(time.Minute)}
 		ratio = common.ClampRatio(ratio*adjustment.Multiplier, "plaza_timed_effective")
 	}
+	if token := inputs.TokenAdjustment; token.Timezone != "" {
+		if out.TimePricing == nil {
+			out.TimePricing = &timePriceView{Multiplier: 1, Timezone: token.Timezone, QuotedAt: inputs.PricingAt, ValidUntil: inputs.PricingAt.Truncate(time.Minute).Add(time.Minute)}
+		}
+		out.TimePricing.TokenWindow = &tokenWindowView{WindowID: token.WindowID, Timezone: token.Timezone}
+	}
 
 	switch {
 	case inputs.PriceExpr != "":
@@ -122,6 +136,16 @@ func plazaPriceFromInputs(inputs setting.PricingInputs, group, userGroup string)
 		out.Mode = "per_request"
 		out.PerRequest = f64(inputs.ModelPriceUSD * ratio)
 		out.Explicit = true
+	case inputs.TokenRates.Valid():
+		out.Mode = "per_token"
+		prices := inputs.TokenRates.NanoPrices()
+		out.InputPerM = f64(float64(prices[0]) / 1e9 * ratio)
+		out.OutputPerM = f64(float64(prices[1]) / 1e9 * ratio)
+		out.CacheReadPerM = f64(float64(prices[2]) / 1e9 * ratio)
+		out.CacheWritePerM = f64(float64(prices[3]) / 1e9 * ratio)
+		out.AudioInputPerM = f64(float64(prices[4]) / 1e9 * ratio)
+		out.AudioOutputPerM = f64(float64(prices[5]) / 1e9 * ratio)
+		out.Explicit = true
 
 	default:
 		out.Mode = "per_token"
@@ -132,6 +156,8 @@ func plazaPriceFromInputs(inputs setting.PricingInputs, group, userGroup string)
 		cache := inputs.CacheRatio
 		out.CacheReadPerM = f64(in * cache)
 		out.CacheWritePerM = f64(in)
+		out.AudioInputPerM = f64(in * inputs.AudioRatio)
+		out.AudioOutputPerM = f64(in * inputs.AudioRatio)
 		out.Explicit = inputs.HasModelRatio
 	}
 
@@ -178,6 +204,8 @@ type plazaPricingJSON struct {
 	OutputPerM             *float64       `json:"output_per_m"`
 	CacheReadPerM          *float64       `json:"cache_read_per_m"`
 	CacheWritePerM         *float64       `json:"cache_write_per_m"`
+	AudioInputPerM         *float64       `json:"audio_input_per_m"`
+	AudioOutputPerM        *float64       `json:"audio_output_per_m"`
 	PerRequest             *float64       `json:"per_request"`
 	OfficialInputPerM      *float64       `json:"official_input_per_m"`
 	OfficialOutputPerM     *float64       `json:"official_output_per_m"`
@@ -268,16 +296,18 @@ func buildPlazaRows(ctx context.Context, group, userGroup string, userID int64) 
 
 		p := plazaPriceFromInputs(prices[name], group, userGroup)
 		row.Pricing = plazaPricingJSON{
-			Mode:           p.Mode,
-			InputPerM:      p.InputPerM,
-			OutputPerM:     p.OutputPerM,
-			CacheReadPerM:  p.CacheReadPerM,
-			CacheWritePerM: p.CacheWritePerM,
-			PerRequest:     p.PerRequest,
-			GroupRatio:     p.GroupRatio,
-			Explicit:       p.Explicit,
-			Currency:       "USD",
-			TimePricing:    p.TimePricing,
+			Mode:            p.Mode,
+			InputPerM:       p.InputPerM,
+			OutputPerM:      p.OutputPerM,
+			CacheReadPerM:   p.CacheReadPerM,
+			CacheWritePerM:  p.CacheWritePerM,
+			AudioInputPerM:  p.AudioInputPerM,
+			AudioOutputPerM: p.AudioOutputPerM,
+			PerRequest:      p.PerRequest,
+			GroupRatio:      p.GroupRatio,
+			Explicit:        p.Explicit,
+			Currency:        "USD",
+			TimePricing:     p.TimePricing,
 		}
 		if m != nil {
 			row.Pricing.OfficialInputPerM = m.OfficialInputPerM

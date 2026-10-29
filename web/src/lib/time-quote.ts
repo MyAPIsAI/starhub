@@ -4,6 +4,7 @@ export interface TimeQuote {
   timezone: string;
   quoted_at: string;
   valid_until: string;
+  token_window?: { window_id: string; timezone: string };
 }
 
 export function readTimeQuote(value: unknown): TimeQuote | null | undefined {
@@ -24,6 +25,19 @@ export function readTimeQuote(value: unknown): TimeQuote | null | undefined {
     typeof quote.valid_until !== "string"
   )
     return null;
+  if (quote.token_window !== undefined) {
+    if (!quote.token_window || typeof quote.token_window !== "object")
+      return null;
+    const token = quote.token_window as Record<string, unknown>;
+    if (
+      typeof token.window_id !== "string" ||
+      !/^$|^[A-Za-z0-9_.-]{1,64}$/.test(token.window_id) ||
+      typeof token.timezone !== "string" ||
+      !token.timezone ||
+      token.timezone.length > 64
+    )
+      return null;
+  }
   const at = Date.parse(quote.quoted_at),
     until = Date.parse(quote.valid_until);
   if (

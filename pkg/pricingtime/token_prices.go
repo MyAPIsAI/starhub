@@ -46,9 +46,8 @@ type TokenAdjustment struct {
 	Prices   TokenPrices `json:"prices"`
 }
 
-// TokenCatalog is not registered as a serving option until every billing and
-// quote consumer supports absolute prices. The existing multiplier decoder
-// continues rejecting these rules instead of silently ignoring their prices.
+// TokenCatalog uses a separate contract from multiplier schedules, so legacy
+// decoders continue rejecting absolute prices instead of ignoring them.
 type TokenCatalog struct {
 	matcher   *Catalog
 	prices    map[string]map[string]TokenPrices
@@ -169,6 +168,20 @@ func DecodeTokenPrices(raw string) (*TokenCatalog, error) {
 }
 
 func (c *TokenCatalog) JSON() string { return c.canonical }
+
+// PricedModels returns only models with configured windows, in stable order.
+func (c *TokenCatalog) PricedModels() []string {
+	models := []string{}
+	if c != nil {
+		for model, windows := range c.prices {
+			if len(windows) > 0 {
+				models = append(models, model)
+			}
+		}
+	}
+	sort.Strings(models)
+	return models
+}
 
 // Match returns value-only snapshots; mutating a caller's result cannot reprice
 // later requests. Outside a configured window no absolute price is invented.

@@ -21,6 +21,8 @@ export interface PlazaPricing {
   output_per_m: number | null;
   cache_read_per_m: number | null;
   cache_write_per_m: number | null;
+  audio_input_per_m?: number | null;
+  audio_output_per_m?: number | null;
   per_request: number | null;
   expression: string | null;
   official_input_per_m: number | null;

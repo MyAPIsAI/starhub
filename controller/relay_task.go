@@ -64,6 +64,10 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 	//    reservation when no channel accepts the submit.
 	billingGroup := flow.settleGroup()
 	priceData := req.priceFor(billingGroup)
+	if priceData.TokenRates.Valid() {
+		flow.errorOut(http.StatusBadRequest, "invalid_request_error", "unsupported_task_pricing", "independent token windows are not supported for asynchronous tasks")
+		return
+	}
 	pricing := taskPlatformAdaptor(platform).EstimateBillingWithOptions(req.modelName, billingGroup, taskReq, channel.TaskPricingOptions{ModelPriceUSD: priceData.ModelPriceUSD, ModelPriceSet: priceData.HasModelPrice, Expression: priceData.PriceExpr})
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited,
 		relay.TaskPricingQuotaWithPriceData(priceData, pricing))

@@ -144,6 +144,9 @@ func saveOptionTx(tx *gorm.DB, key, value string, actorID, expectedVersion int64
 		return 0, err
 	}
 	value = normalized
+	if err := lockTokenPriceOptionTx(tx, key); err != nil {
+		return 0, err
+	}
 	if expectedVersion >= 0 {
 		var revision OptionRevision
 		if err := tx.First(&revision, 1).Error; err != nil {
@@ -152,6 +155,9 @@ func saveOptionTx(tx *gorm.DB, key, value string, actorID, expectedVersion int64
 		if revision.Version != expectedVersion {
 			return 0, fmt.Errorf("%w: current %d", ErrOptionVersionConflict, revision.Version)
 		}
+	}
+	if err := validateTokenPriceOptionTx(tx, key, value); err != nil {
+		return 0, err
 	}
 	var old Option
 	err = tx.Where("`key` = ?", key).First(&old).Error

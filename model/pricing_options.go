@@ -120,6 +120,9 @@ func SavePricingOptionsIfVersion(ctx context.Context, options []Option, actorID,
 			var err error
 			version, err = saveOptionTx(tx, option.Key, option.Value, actorID, -1)
 			if err != nil {
+				if errors.Is(err, setting.ErrTokenPriceMode) {
+					return fmt.Errorf("%w: %v", ErrInvalidPricingOptions, err)
+				}
 				return err
 			}
 		}

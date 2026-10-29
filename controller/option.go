@@ -106,6 +106,10 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "unknown option key")
 		return
 	}
+	if req.Key == setting.OptionKeyModelTimeTokenPrices && (req.ExpectedVersion == nil || *req.ExpectedVersion < 0 || *req.ExpectedVersion >= 1<<53-1) {
+		common.ApiError(w, http.StatusBadRequest, "a supported nonnegative expected_version is required for independent token prices")
+		return
+	}
 	value, err := setting.NormalizeOption(req.Key, req.Value)
 	if err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
@@ -117,12 +121,18 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 			status := http.StatusInternalServerError
 			if errors.Is(err, model.ErrOptionVersionConflict) {
 				status = http.StatusConflict
+			} else if errors.Is(err, setting.ErrTokenPriceMode) {
+				status = http.StatusBadRequest
 			}
 			common.ApiError(w, status, err.Error())
 			return
 		}
 	} else if _, err := model.SaveOption(req.Key, value, actorID); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		status := http.StatusInternalServerError
+		if errors.Is(err, setting.ErrTokenPriceMode) {
+			status = http.StatusBadRequest
+		}
+		common.ApiError(w, status, err.Error())
 		return
 	}
 	if err := model.LoadOptionsToSettings(); err != nil {

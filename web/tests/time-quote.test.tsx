@@ -16,6 +16,28 @@ const fixture = {
   valid_until: "2026-10-29T12:01:00Z",
 };
 describe("actual server time quotes", () => {
+  it("refreshes independent token windows inside and outside the window", () => {
+    for (const id of ["morning", ""]) {
+      const quote = {
+        ...fixture,
+        token_window: { window_id: id, timezone: "Asia/Shanghai" },
+      };
+      expect(readTimeQuote(quote)).toEqual(quote);
+      expect(timeQuoteRefreshDelay([quote])).toBe(20_000);
+      const html = renderToStaticMarkup(<TimePricingNote value={quote} />);
+      expect(html).toContain(`data-token-price-window="${id}"`);
+      expect(html).toContain("Asia/Shanghai");
+    }
+    for (const token_window of [
+      null,
+      false,
+      {},
+      { window_id: "bad id", timezone: "UTC" },
+      { window_id: "valid", timezone: "" },
+    ]) {
+      expect(readTimeQuote({ ...fixture, token_window })).toBeNull();
+    }
+  });
   it("preserves exact quote timing and separates missing from unsupported data", () => {
     expect(readTimeQuote(fixture)).toEqual(fixture);
     expect(readTimeQuote(undefined)).toBeUndefined();

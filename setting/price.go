@@ -48,7 +48,7 @@ var (
 func OptionKeys() []string {
 	return append(append(append(append(append(append(RatioOptionKeys(),
 		OptionKeyModelPrice, OptionKeyModelPriceExpr,
-		OptionKeyCacheRatio, OptionKeyAudioRatio, OptionKeyModelTimePricing),
+		OptionKeyCacheRatio, OptionKeyAudioRatio, OptionKeyModelTimePricing, OptionKeyModelTimeTokenPrices),
 		GroupGroupRatioKeys()...),
 		AffiliateOptionKeys()...),
 		AlertOptionKeys()...),
@@ -65,7 +65,7 @@ func IsOptionKey(key string) bool {
 	}
 	switch key {
 	case OptionKeyModelPrice, OptionKeyModelPriceExpr,
-		OptionKeyCacheRatio, OptionKeyAudioRatio, OptionKeyModelTimePricing:
+		OptionKeyCacheRatio, OptionKeyAudioRatio, OptionKeyModelTimePricing, OptionKeyModelTimeTokenPrices:
 		return true
 	}
 	return IsRatioOptionKey(key)
@@ -75,6 +75,9 @@ func IsOptionKey(key string) bool {
 func UpdateOption(key, value string) error {
 	optionMu.Lock()
 	defer optionMu.Unlock()
+	if err := validateTokenPriceUpdate(map[string]string{key: value}); err != nil {
+		return err
+	}
 	return updateOption(key, value)
 }
 
@@ -87,6 +90,9 @@ func ApplyOptions(values map[string]string) error {
 	}
 	optionMu.Lock()
 	defer optionMu.Unlock()
+	if err := validateTokenPriceUpdate(values); err != nil {
+		return err
+	}
 	for key, value := range values {
 		if err := updateOption(key, value); err != nil {
 			return err
@@ -114,7 +120,7 @@ func updateOption(key, value string) error {
 	if IsRatioOptionKey(key) {
 		return UpdateRatio(key, value)
 	}
-	return UpdatePricing(key, value)
+	return updatePricing(key, value)
 }
 
 // SnapshotOption returns the current persisted representation of a key.
@@ -148,7 +154,23 @@ func snapshotOption(key string) (string, error) {
 
 // UpdatePricing validates and applies one pricing option key.
 func UpdatePricing(key, value string) error {
+	optionMu.Lock()
+	defer optionMu.Unlock()
+	if err := validateTokenPriceUpdate(map[string]string{key: value}); err != nil {
+		return err
+	}
+	return updatePricing(key, value)
+}
+
+func updatePricing(key, value string) error {
 	switch key {
+	case OptionKeyModelTimeTokenPrices:
+		catalog, err := pricingtime.DecodeTokenPrices(value)
+		if err != nil {
+			return err
+		}
+		tokenTimePricing.Store(catalog)
+		return nil
 	case OptionKeyModelTimePricing:
 		catalog, err := pricingtime.Decode(value)
 		if err != nil {
@@ -202,6 +224,8 @@ func SnapshotPricing(key string) (string, error) {
 	priceMu.RLock()
 	defer priceMu.RUnlock()
 	switch key {
+	case OptionKeyModelTimeTokenPrices:
+		return snapshotTokenTimePricing(), nil
 	case OptionKeyModelTimePricing:
 		return snapshotTimePricing(), nil
 	case OptionKeyModelPrice:
@@ -310,6 +334,7 @@ func ResetPricingToDefaults() {
 	cacheRatio = FallbackCacheRatio
 	audioRatio = FallbackAudioRatio
 	timePricing.Store(nil)
+	tokenTimePricing.Store(nil)
 }
 
 // ResetAllToDefaults restores every setting to its compiled-in defaults.

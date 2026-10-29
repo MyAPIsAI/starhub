@@ -16,6 +16,12 @@ func NormalizeOption(key, value string) (string, error) {
 		return config.NormalizeOption(key, value)
 	}
 	switch key {
+	case OptionKeyModelTimeTokenPrices:
+		catalog, err := pricingtime.DecodeTokenPrices(value)
+		if err != nil {
+			return "", err
+		}
+		return catalog.JSON(), nil
 	case OptionKeyModelTimePricing:
 		catalog, err := pricingtime.Decode(value)
 		if err != nil {

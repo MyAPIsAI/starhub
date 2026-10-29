@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"starhub/model"
+	"starhub/pkg/pricingtime"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
@@ -113,6 +114,10 @@ func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.T
 	priceData.TimeAdjustment.Multiplier = 1
 	priceData.TimeAdjustment.WindowID = ""
 	priceData.TimeAdjustment.Timezone = ""
+	// Legacy tasks also predate independent token rates. Never import a newly
+	// configured window into a task without its own admission snapshot.
+	priceData.TokenRates = pricingtime.TokenRates{}
+	priceData.TokenTimeAdjustment = pricingtime.TokenAdjustment{}
 	if task.PricingMeta != "" {
 		var snapshot relay.TaskBillingSnapshot
 		if err := json.Unmarshal([]byte(task.PricingMeta), &snapshot); err != nil {
