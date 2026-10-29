@@ -15,6 +15,10 @@ import { useBackendKeys } from "../lib/api/key-adapter";
 import { useSessionQueryIdentity } from "../lib/system-access";
 import type { PreviewKey } from "../lib/product-preview";
 import { isSmartModelId } from "../lib/smart-model";
+import {
+  keySpendingLimitValue,
+  remainingQuotaForLifetimeLimit,
+} from "../lib/key-spending-limit";
 import { copyText } from "./code-example";
 export function NativeKeyForm({
   item,
@@ -47,9 +51,7 @@ export function NativeKeyForm({
     [models, setModels] = useState<string[] | null>(
       item?.allowedModels ?? null,
     ),
-    [quota, setQuota] = useState(
-      item?.quotaLimit_usd == null ? "" : String(item.quotaLimit_usd),
-    ),
+    [quota, setQuota] = useState(() => keySpendingLimitValue(item)),
     [ips, setIps] = useState(item?.ipWhitelist?.join("\n") ?? ""),
     [error, setError] = useState(""),
     [operation, setOperation] = useState(""),
@@ -76,7 +78,18 @@ export function NativeKeyForm({
         .map((c) => c.model) ?? [],
     ),
   ];
-  const selected = models ?? available;
+  const preservingAutoGroup =
+    item?.tier === "auto" && effectiveGroup === "auto";
+  const selected = preservingAutoGroup
+    ? (item.allowedModels ?? [])
+    : (models ?? available);
+  const policyChanged =
+    !item ||
+    effectiveGroup !== item.tier ||
+    (!preservingAutoGroup &&
+      models !== null &&
+      models.join(",") !== (item.allowedModels ?? []).join(","));
+  const quotaChanged = !item || quota !== keySpendingLimitValue(item);
   const reusable = initialModel
     ? keys.find(
         (k) =>
@@ -103,8 +116,8 @@ export function NativeKeyForm({
       return;
     if (
       !name.trim() ||
-      !selected.length ||
-      selected.some((m) => !available.includes(m))
+      (policyChanged &&
+        (!selected.length || selected.some((m) => !available.includes(m))))
     ) {
       setError(
         c(
@@ -116,31 +129,32 @@ export function NativeKeyForm({
       return;
     }
     let remain: number | undefined;
-    if (quota !== "") {
-      if (!/^\d+(\.\d{1,6})?$/.test(quota)) {
+    if (quotaChanged && quota !== "") {
+      try {
+        remain = remainingQuotaForLifetimeLimit(quota, item);
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : "invalid_amount";
         setError(
-          c(
-            "请输入非负美元金额，最多六位小数。",
-            "Enter a nonnegative USD amount with at most six decimals.",
-            "أدخل مبلغًا غير سالب بست منازل عشرية كحد أقصى.",
-          ),
+          reason === "below_used"
+            ? c(
+                "累计额度不能低于已消费金额。",
+                "The lifetime limit cannot be below the amount already spent.",
+                "لا يمكن أن يكون الحد التراكمي أقل من المبلغ المنفق.",
+              )
+            : reason === "too_large"
+              ? c(
+                  "额度过大。",
+                  "Spending limit is too large.",
+                  "حد الإنفاق كبير جدًا.",
+                )
+              : c(
+                  "请输入非负美元金额，最多六位小数。",
+                  "Enter a nonnegative USD amount with at most six decimals.",
+                  "أدخل مبلغًا غير سالب بست منازل عشرية كحد أقصى.",
+                ),
         );
         return;
       }
-      const [a, b = ""] = quota.split(".");
-      const units = (BigInt(a) * 1000000n + BigInt(b.padEnd(6, "0"))) * 500000n;
-      const rounded = (units + 500000n) / 1000000n;
-      if (rounded > BigInt(Number.MAX_SAFE_INTEGER)) {
-        setError(
-          c(
-            "额度过大。",
-            "Spending limit is too large.",
-            "حد الإنفاق كبير جدًا.",
-          ),
-        );
-        return;
-      }
-      remain = Number(rounded);
     }
     pending.current = true;
     setBusy(true);
@@ -148,14 +162,15 @@ export function NativeKeyForm({
     try {
       const payload = {
         name: name.trim(),
-        group: effectiveGroup,
-        model_limits: selected.join(","),
+        ...(policyChanged
+          ? { group: effectiveGroup, model_limits: selected.join(",") }
+          : {}),
         allow_ips: ips
           .split("\n")
           .map((x) => x.trim())
           .filter(Boolean)
           .join(","),
-        unlimited_quota: quota === "",
+        ...(quotaChanged ? { unlimited_quota: quota === "" } : {}),
         ...(remain === undefined ? {} : { remain_quota: remain }),
         choices_revision: initialRevision.current,
       };
@@ -335,7 +350,11 @@ export function NativeKeyForm({
                   value={effectiveGroup}
                   onChange={(e) => {
                     setGroup(e.target.value);
-                    setModels(null);
+                    setModels(
+                      e.target.value === item?.tier
+                        ? (item.allowedModels ?? null)
+                        : null,
+                    );
                   }}
                 >
                   {!groups.includes(effectiveGroup) && (
@@ -358,7 +377,19 @@ export function NativeKeyForm({
                     "النماذج المسموحة صراحةً",
                   )}
                 </p>
-                {available.map((m) => (
+                {preservingAutoGroup && (
+                  <p role="status">
+                    {c(
+                      "保留现有自动分组及模型授权。可直接修改名称、额度和 IP 限制；选择具体分组才会更改路由授权。",
+                      "Existing automatic groups and model permissions are preserved. Edit the name, limit or IP restrictions directly; selecting a specific group changes routing permissions.",
+                      "تُحفظ المجموعات التلقائية وأذونات النماذج الحالية. يمكنك تعديل الاسم أو الحد أو قيود IP؛ اختيار مجموعة محددة يغيّر أذونات التوجيه.",
+                    )}
+                  </p>
+                )}
+                {(preservingAutoGroup
+                  ? (item.allowedModels ?? [])
+                  : available
+                ).map((m) => (
                   <label
                     key={m}
                     style={{
@@ -370,6 +401,7 @@ export function NativeKeyForm({
                     <input
                       type="checkbox"
                       checked={selected.includes(m)}
+                      disabled={preservingAutoGroup}
                       onChange={(e) =>
                         setModels(
                           e.target.checked

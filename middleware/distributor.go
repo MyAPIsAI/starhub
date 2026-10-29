@@ -74,6 +74,12 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			}
 
 			contentType := r.Header.Get("Content-Type")
+			if r.URL.Path == "/v1/responses" || r.URL.Path == "/v1/responses/compact" {
+				if err := dto.ValidateResponsesJSON(body); err != nil {
+					fail(http.StatusBadRequest, "invalid_json", err.Error())
+					return
+				}
+			}
 			group, _ := r.Context().Value(common.CtxUsingGroup).(string)
 			if group == "" {
 				dto.WriteRelayError(w, http.StatusInternalServerError, inbound,

@@ -7,6 +7,33 @@ import (
 	"testing"
 )
 
+func TestOwnedTokenMetadataEditPreservesLegacyAutoPolicy(t *testing.T) {
+	newTestDB(t)
+	u := &User{Username: "legacy-auto-owner", Status: 1, AffCode: "legacy-auto"}
+	if err := CreateUser(u); err != nil {
+		t.Fatal(err)
+	}
+	token := &Token{UserID: u.ID, Name: "Automatic", Key: "synthetic-auto", Status: 1,
+		Group: "auto", AutoGroups: "default,legacy-group", ModelLimits: "legacy-model",
+		ExpiredTime: -1, UsedQuota: 20000000, RemainQuota: 30000000}
+	if err := InsertToken(token); err != nil {
+		t.Fatal(err)
+	}
+	choices, err := ReadOwnedTokenChoices(u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, _, err := MutateOwnedToken(u.ID, "metadata-edit", "update", token.ID,
+		TokenManagementRevision(token), choices.Revision,
+		map[string]any{"name": "Renamed automatic key", "allow_ips": "127.0.0.1", "remain_quota": int64(40000000)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Group != token.Group || updated.AutoGroups != token.AutoGroups || updated.ModelLimits != token.ModelLimits || updated.UsedQuota != token.UsedQuota || updated.RemainQuota != 40000000 {
+		t.Fatalf("metadata edit replaced the original routing or spending history: %+v", updated)
+	}
+}
+
 func TestOwnedTokenActionsCompareSnapshotsAndPersistSecretFreeReceipts(t *testing.T) {
 	newTestDB(t)
 	u := &User{Username: "owned-keys", Status: 1, AffCode: "owned"}

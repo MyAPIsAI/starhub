@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -39,8 +40,17 @@ func TestSmartResponsesCapabilities(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				body := `{"model":"` + alias + `","input":"hello","max_output_tokens":8` + tc.extra + `}`
-				code, selected := routeSmart(t, body, "/v1/responses", "", "", 1, "")
+				fields := map[string]any{"model": alias, "input": "hello", "max_output_tokens": 8}
+				if tc.extra != "" {
+					if err := json.Unmarshal([]byte("{"+strings.TrimPrefix(tc.extra, ",")+"}"), &fields); err != nil {
+						t.Fatal(err)
+					}
+				}
+				body, err := json.Marshal(fields)
+				if err != nil {
+					t.Fatal(err)
+				}
+				code, selected := routeSmart(t, string(body), "/v1/responses", "", "", 1, "")
 				if code != tc.want || (code == 204 && selected != "native") || (code != 204 && selected != "") {
 					t.Fatalf("status=%d model=%q, want %d", code, selected, tc.want)
 				}

@@ -11,7 +11,11 @@ export function keyQuotaSummary(
 ) {
   const used = keyPeriodUsed(key, now);
   const limit =
-    key.quotaLimit_usd == null ? null : decimalUsdNano(key.quotaLimit_usd);
+    key.quotaLimit_nano != null
+      ? BigInt(key.quotaLimit_nano)
+      : key.quotaLimit_usd == null
+        ? null
+        : decimalUsdNano(key.quotaLimit_usd);
   return {
     usedNano: used.toString(),
     limitNano: limit?.toString() ?? null,

@@ -99,6 +99,13 @@ export function tokenToPreviewKey(
   token: Token,
   plaintextKey?: string,
 ): PreviewKey {
+  const lifetimeLimit = token.unlimited_quota
+    ? null
+    : (
+        (BigInt(Math.trunc(token.remain_quota)) +
+          BigInt(Math.trunc(token.used_quota))) *
+        NANO_PER_QUOTA
+      ).toString();
   return {
     id: String(token.id),
     managementRevision: token.management_revision,
@@ -118,9 +125,9 @@ export function tokenToPreviewKey(
     allowedModels: token.model_limits
       ? splitList(token.model_limits)
       : undefined,
-    quotaLimit_usd: token.unlimited_quota
-      ? null
-      : quotaToUsdNumber(token.remain_quota),
+    quotaLimit_usd:
+      lifetimeLimit === null ? null : Number(lifetimeLimit) / NANO_PER_USD,
+    quotaLimit_nano: lifetimeLimit,
     // Backend has no period-reset concept; "never" means the limit is
     // lifetime and totalUsed_nano is the sole usage counter.
     quotaPeriod: "never",

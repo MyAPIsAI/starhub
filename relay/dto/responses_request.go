@@ -31,8 +31,8 @@ type ResponsesRequest struct {
 }
 
 func ParseResponsesRequest(body []byte) (*ResponsesRequest, error) {
-	if trimmed := bytes.TrimSpace(body); len(trimmed) == 0 || trimmed[0] != '{' {
-		return nil, errors.New("Responses request must be a JSON object")
+	if err := ValidateResponsesJSON(body); err != nil {
+		return nil, err
 	}
 	var req ResponsesRequest
 	if err := json.Unmarshal(body, &req); err != nil {

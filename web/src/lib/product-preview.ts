@@ -103,6 +103,7 @@ export interface PreviewKey {
   smartStrategy?: "cost" | "latency" | "stability";
   allowedModels?: string[];
   quotaLimit_usd?: number | null;
+  quotaLimit_nano?: string | null;
   quotaPeriod?: "never" | "daily" | "monthly";
   currentPeriodUsed_nano?: string;
   usagePeriodStartedAt?: string;
