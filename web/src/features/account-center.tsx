@@ -20,9 +20,9 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { Modal } from "../components/ui/overlay";
 import { useProductPreview } from "../lib/product-preview";
-import { useSystemAccess, isAdmin, sessionUsername } from "../lib/system-access";
+import { useSystemAccess, sessionUsername } from "../lib/system-access";
 import { logoutUser } from "../lib/api/auth";
-import { useUpdateSelf, useSessions, useTerminateOtherSessions, type SessionInfo } from "../lib/api/user";
+import { useUpdateSelf, useSessions, useUserProfile, useTerminateOtherSessions, type SessionInfo } from "../lib/api/user";
 import { ApiError } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
 import { DEMO_ACCOUNT_PROFILE } from "../lib/account-identity";
@@ -76,13 +76,15 @@ export default function AccountCenter({
     (state) => state.applyAccountSecurity,
   );
   const sessionsQuery = useSessions();
+  const profileQuery = useUserProfile();
+  const profile = profileQuery.isError ? undefined : profileQuery.data;
+  const profileOwnerChanged = profileQuery.error instanceof ApiError && profileQuery.error.status === 409;
   const deviceOwnerChanged = sessionsQuery.error instanceof ApiError && sessionsQuery.error.status === 409;
   const terminateOthersMut = useTerminateOtherSessions();
   const backendSessions: SessionInfo[] = sessionsQuery.isError ? [] : sessionsQuery.data ?? [];
   const logout = useProductPreview((state) => state.logout);
   const queryClient = useQueryClient();
   const updateSelfMut = useUpdateSelf();
-  const role = useSystemAccess((state) => state.role);
   const session = useSystemAccess((state) => state.session);
   const language = usePreferences((state) => state.language);
   const navigate = useNavigate();
@@ -125,8 +127,8 @@ export default function AccountCenter({
   const accountId = session.accountId === null ? null : String(session.accountId);
   const phone = user.phone?.replace(/(\d{3})\d{4}(\d{4})$/, "$1 **** $2");
   const otherSessions = backendSessions.filter((s) => !s.is_current).length > 0;
-  const email = user.email
-    ? user.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2")
+  const email = profile?.email
+    ? profile.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2")
     : "";
   const events = user.securityEvents ?? [];
   const formatDate = (value?: string) =>
@@ -588,13 +590,13 @@ export default function AccountCenter({
             <p>{c("账号资料", "Account profile", "بيانات الحساب")}</p>
           </div>
           <span
-            className={`ac-badge ${user.accountStatus === "normal" ? "ac-badge--success" : "ac-badge--warning"}`}
+            className={`ac-badge ${profile?.status === 1 ? "ac-badge--success" : "ac-badge--warning"}`}
           >
-            {user.accountStatus === "normal"
+            {profile?.status === 1
               ? c("正常", "Active", "نشط")
-              : user.accountStatus === "frozen"
-                ? c("已冻结", "Frozen", "مجمّد")
-                : c("已注销", "Closed", "مغلق")}
+              : profile?.status === 2
+                ? c("已停用", "Disabled", "معطل")
+                : c("未确认", "Unconfirmed", "غير مؤكد")}
           </span>
         </div>
         <div className="ac-identity-grid">
@@ -643,13 +645,11 @@ export default function AccountCenter({
           <div className="ac-meta">
             <span>{c("账号身份", "Account role", "دور الحساب")}</span>
             <strong>
-              {isAdmin(role)
-                ? c(
-                    "平台管理员 · 演示",
-                    "Platform administrator · Demo",
-                    "مدير المنصة · تجريبي",
-                  )
-                : c("普通用户", "User", "مستخدم")}
+              {profile?.role === 100 ? c("超级管理员", "Root", "المسؤول الأعلى")
+                : profile?.role === 10 ? c("平台管理员", "Administrator", "مدير المنصة")
+                : profile?.role === 5 ? c("财务", "Finance", "المالية")
+                : profile?.role === 1 ? c("普通用户", "User", "مستخدم")
+                : c("未确认", "Unconfirmed", "غير مؤكد")}
             </strong>
             <small>
               {c(
@@ -662,13 +662,13 @@ export default function AccountCenter({
           <div className="ac-meta">
             <span>{c("注册时间", "Created", "تاريخ الإنشاء")}</span>
             <strong>
-              {user.createdAt
-                ? formatDate(user.createdAt)
-                : c(
+              {profile?.created_at
+                ? formatDate(new Date(profile.created_at * 1000).toISOString())
+                : profile ? c(
                     "历史账号，时间未记录",
                     "Existing account; date not recorded",
                     "حساب سابق؛ التاريخ غير مسجل",
-                  )}
+                  ) : c("未确认", "Unconfirmed", "غير مؤكد")}
             </strong>
             <small>
               {c(
@@ -678,6 +678,11 @@ export default function AccountCenter({
               )}
             </small>
           </div>
+        </div>
+        {profileQuery.isLoading && <p role="status" className="ac-empty-hint">{c("正在读取账号资料…", "Loading account profile…", "جارٍ تحميل بيانات الحساب…")}</p>}
+        {profileQuery.isError && <p role="alert" className="ac-empty-hint">{profileOwnerChanged ? c("登录账号可能已变化，请重新确认当前账号。", "The signed-in account may have changed. Confirm the current account.", "ربما تغير الحساب المسجل. أكّد الحساب الحالي.") : c("暂时无法读取账号资料，旧资料已隐藏。", "The account profile is unavailable. Previous details are hidden.", "بيانات الحساب غير متاحة. أُخفيت التفاصيل السابقة.")}</p>}
+        <div className="ac-device-actions">
+          <Button size="small" variant="ghost" disabled={profileQuery.isFetching || session.accountId === null} onClick={() => profileOwnerChanged ? window.location.reload() : void profileQuery.refetch()}>{profileOwnerChanged ? c("确认当前账号", "Confirm current account", "تأكيد الحساب الحالي") : c("重新读取资料", "Reload profile", "إعادة تحميل البيانات")}</Button>
         </div>
       </section>
       <section className="ac-card" aria-labelledby="ac-security-title">
@@ -790,22 +795,12 @@ export default function AccountCenter({
               className="ac-contact-value"
               id="account-email"
               aria-label={c("绑定邮箱", "Linked email", "البريد المرتبط")}
-              value={email || c("未绑定", "Not linked", "غير مرتبط")}
+              value={profile ? email || c("未填写", "Not provided", "غير محدد") : c("未确认", "Unconfirmed", "غير مؤكد")}
               readOnly
               dir={email ? "ltr" : undefined}
             />
             <p>
-              {user.email && !user.emailVerified
-                ? c(
-                    "历史登录邮箱；未补记验证状态，可重新验证并更换。",
-                    "Existing login email; verification history is unavailable. Verify a new email to replace it.",
-                    "بريد دخول سابق؛ سجل التحقق غير متاح. تحقق من بريد جديد لاستبداله.",
-                  )
-                : c(
-                    "验证后可用于邮箱密码登录；不影响正常接入与调用。",
-                    "After verification, use it for email/password sign-in. It is optional for model access.",
-                    "بعد التحقق يمكن الدخول بالبريد وكلمة المرور؛ وهو اختياري للوصول إلى النماذج.",
-                  )}
+              {c("邮箱仅作为账号资料保存；当前使用用户名和密码登录，尚无邮箱验证。", "Email is a profile field. Sign in with your username and password; email verification is unavailable.", "البريد ضمن بيانات الحساب. ادخل باسم المستخدم وكلمة المرور؛ التحقق بالبريد غير متاح.")}
             </p>
           </div>
           <Button

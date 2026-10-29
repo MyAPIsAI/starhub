@@ -12,22 +12,30 @@ import (
 	"starhub/middleware"
 )
 
-// GetSessionState exposes an explicit guarded-management contract. Legacy
-// session-list clients keep their array response on the original endpoint.
-func GetSessionState(w http.ResponseWriter, r *http.Request) {
+func expectedAccountOwner(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil || len(query) != 1 || len(query["expected_user_id"]) != 1 {
 		common.ApiError(w, http.StatusBadRequest, "a single expected_user_id is required")
-		return
+		return 0, false
 	}
 	value := query.Get("expected_user_id")
 	expected, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || expected <= 0 || strconv.FormatInt(expected, 10) != value {
 		common.ApiError(w, http.StatusBadRequest, "invalid expected_user_id")
-		return
+		return 0, false
 	}
 	if expected != requestUserID(r) {
 		common.ApiError(w, http.StatusConflict, "session identity changed; refresh the account")
+		return 0, false
+	}
+	return expected, true
+}
+
+// GetSessionState exposes an explicit guarded-management contract. Legacy
+// session-list clients keep their array response on the original endpoint.
+func GetSessionState(w http.ResponseWriter, r *http.Request) {
+	expected, ok := expectedAccountOwner(w, r)
+	if !ok {
 		return
 	}
 	sessions := middleware.Sessions.ListByUser(expected, middleware.SessionToken(r))

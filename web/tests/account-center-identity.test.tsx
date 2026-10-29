@@ -14,6 +14,20 @@ const devices = vi.hoisted(() => ({
     is_current: boolean;
   }[],
 }));
+const profile = vi.hoisted(() => ({
+  error: false,
+  reason: null as unknown,
+  data: undefined as
+    | undefined
+    | {
+        id: number;
+        username: string;
+        email: string;
+        role: number;
+        status: number;
+        created_at: number;
+      },
+}));
 
 vi.mock("../src/lib/product-preview", () => ({
   useProductPreview: (select: (state: unknown) => unknown) =>
@@ -21,7 +35,8 @@ vi.mock("../src/lib/product-preview", () => ({
       user: {
         id: "demo-impostor-id",
         username: "Demo impostor name",
-        email: "",
+        email: "impostor@demo.invalid",
+        createdAt: "1994-01-01T00:00:00.000Z",
         accountStatus: "normal",
         isLoggedIn: true,
         securityEvents: [],
@@ -31,6 +46,11 @@ vi.mock("../src/lib/product-preview", () => ({
     }),
 }));
 vi.mock("../src/lib/api/user", () => ({
+  useUserProfile: () => ({
+    data: profile.data,
+    isError: profile.error,
+    error: profile.reason,
+  }),
   useSessions: () => ({
     data: devices.sessions,
     isLoading: false,
@@ -65,6 +85,9 @@ afterEach(() => {
   devices.error = false;
   devices.reason = null;
   devices.sessions = [];
+  profile.data = undefined;
+  profile.error = false;
+  profile.reason = null;
 });
 function render() {
   const client = new QueryClient();
@@ -81,6 +104,57 @@ function render() {
   }
 }
 describe("confirmed account center identifiers", () => {
+  it("uses only the server profile for email, role, status and creation date", () => {
+    useSystemAccess.getState().setSession({
+      id: 7,
+      group: "default",
+      role: 5,
+      username: "Server owner",
+    });
+    profile.data = {
+      id: 7,
+      username: "Server owner",
+      email: "server@actual.example",
+      role: 5,
+      status: 1,
+      created_at: 1735689600,
+    };
+    const html = render();
+    expect(html).toContain('value="se***@actual.example"');
+    expect(html).toContain("Finance");
+    expect(html).toContain("Active");
+    expect(html).toContain("2025");
+    expect(html).not.toContain("1994");
+    expect(html).not.toContain("demo.invalid");
+    expect(html).toContain("Reload profile");
+    expect(html).toContain("Email is a profile field.");
+  });
+  it("hides cached profile metadata on failure and offers an explicit reload", () => {
+    useSystemAccess.getState().setSession({
+      id: 7,
+      group: "default",
+      role: 5,
+      username: "Server owner",
+    });
+    profile.data = {
+      id: 7,
+      username: "Server owner",
+      email: "server@actual.example",
+      role: 5,
+      status: 1,
+      created_at: 1735689600,
+    };
+    profile.error = true;
+    const html = render();
+    expect(html).toContain(
+      "The account profile is unavailable. Previous details are hidden.",
+    );
+    expect(html).not.toContain("actual.example");
+    expect(html).not.toContain("2025");
+    expect(html).not.toContain("Finance");
+    expect(html).toContain("Unconfirmed");
+    expect(html).toContain("Reload profile");
+  });
   it("shows the server username and numeric user ID rather than the Demo profile", () => {
     useSystemAccess.getState().setSession({
       id: 7,

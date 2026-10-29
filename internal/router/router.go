@@ -36,6 +36,7 @@ func New() http.Handler {
 	mux.Handle("POST /api/user/deactivate", middleware.UserAuth(http.HandlerFunc(controller.DeactivateSelf)))
 	mux.Handle("GET /api/user/sessions", middleware.UserAuth(http.HandlerFunc(controller.ListSessions)))
 	mux.Handle("GET /api/user/session-state", middleware.UserAuth(http.HandlerFunc(controller.GetSessionState)))
+	mux.Handle("GET /api/user/profile-state", middleware.UserAuth(http.HandlerFunc(controller.GetProfileState)))
 	mux.Handle("POST /api/user/sessions/terminate-others", middleware.UserAuth(http.HandlerFunc(controller.TerminateOtherSessions)))
 	mux.Handle("GET /api/user/usage", middleware.UserAuth(http.HandlerFunc(controller.UserUsage)))
 	mux.Handle("GET /api/user", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))

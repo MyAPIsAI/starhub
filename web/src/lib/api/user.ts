@@ -19,6 +19,7 @@ import {
   readUserSessionState,
   readSessionTermination,
 } from "../user-session-state";
+import { readUserProfileState } from "../user-profile-state";
 
 const USER_KEY = ["user-self"] as const;
 const SESSIONS_KEY = ["user-sessions"] as const;
@@ -66,9 +67,7 @@ function assertUserSession(scope: UserSessionScope) {
     JSON.stringify(scope) !==
       JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()))
   )
-    throw Error(
-      "A confirmed unchanged session is required for account devices",
-    );
+    throw Error("A confirmed unchanged session is required for account data");
 }
 
 async function inUserSession<T>(
@@ -108,6 +107,29 @@ export function useSessions() {
         scope[1]!,
       ),
     select: (data) => readUserSessionState(data, scope[1]!).sessions,
+  });
+}
+
+export function useUserProfile() {
+  const scope = useSessionQueryIdentity();
+  return useQuery({
+    queryKey: [...USER_KEY, scope],
+    enabled:
+      scope[1] !== null && Number.isSafeInteger(scope[1]) && scope[1] > 0,
+    staleTime: 0,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      readUserProfileState(
+        await inUserSession(scope, () =>
+          apiGet<unknown>(
+            `/api/user/profile-state?expected_user_id=${scope[1]}`,
+            signal,
+            { handleUnauthorizedLocally: true },
+          ),
+        ),
+        scope[1]!,
+      ),
+    select: (data) => readUserProfileState(data, scope[1]!).user,
   });
 }
 
