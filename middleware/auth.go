@@ -24,6 +24,9 @@ func UserAuth(next http.Handler) http.Handler {
 			common.ApiError(w, http.StatusUnauthorized, "user unavailable")
 			return
 		}
+		if !guardSessionOwner(w, r, user.ID) {
+			return
+		}
 		ctx := common.WithValues(r.Context(),
 			common.CtxUserID, user.ID,
 			common.CtxRole, user.Role)

@@ -198,6 +198,7 @@ function App() {
         }
       },
       () => JSON.stringify(sessionQueryIdentity(useSystemAccess.getState())),
+      () => useSystemAccess.getState().session.accountId,
     );
   }, []);
 

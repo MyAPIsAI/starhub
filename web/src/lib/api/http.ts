@@ -27,14 +27,16 @@ type AuthLossListener = () => void;
 type AuthLossSubscription = {
   notify: AuthLossListener;
   readIdentity?: () => string;
+  readOwner?: () => number | null;
 };
 let authLossSubscription: AuthLossSubscription | null = null;
 
 export const onAuthLoss = (
   listener: AuthLossListener,
   readIdentity?: () => string,
+  readOwner?: () => number | null,
 ): (() => void) => {
-  const subscription = { notify: listener, readIdentity };
+  const subscription = { notify: listener, readIdentity, readOwner };
   authLossSubscription = subscription;
   return () => {
     if (authLossSubscription === subscription) authLossSubscription = null;
@@ -67,14 +69,31 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const subscription = authLossSubscription;
   const requestIdentity = subscription?.readIdentity?.();
+  const pathname = path.split(/[?#]/, 1)[0];
+  const discoversIdentity =
+    (pathname === "/api/user/self" &&
+      (init.method ?? "GET").toUpperCase() === "GET") ||
+    pathname === "/api/user/login" ||
+    pathname === "/api/user/register";
+  const owner =
+    pathname.startsWith("/api/") && !discoversIdentity
+      ? subscription?.readOwner?.()
+      : null;
+  if (owner != null && (!Number.isSafeInteger(owner) || owner <= 0)) {
+    throw new ApiError(
+      409,
+      "confirmed account is invalid; confirm login again",
+    );
+  }
+  const headers = new Headers(init.headers);
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (init.body && !headers.has("Content-Type"))
+    headers.set("Content-Type", "application/json");
+  if (owner != null) headers.set("X-StarHub-Expected-User-ID", String(owner));
   const res = await fetch(BASE_URL + path, {
     ...init,
     credentials: "same-origin",
-    headers: {
-      Accept: "application/json",
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...(init.headers ?? {}),
-    },
+    headers,
   });
 
   if (res.status === 401) {
@@ -92,6 +111,22 @@ export async function apiRequest<T>(
       subscription.notify();
     }
     throw new ApiError(401, "session expired");
+  }
+
+  if (owner != null) {
+    const guard = res.headers?.get("X-StarHub-Owner-Guard");
+    const subject = res.headers?.get("X-StarHub-User-ID");
+    // Legacy servers may omit both headers. Explicit owner metadata must match;
+    // action-specific capabilities still govern writes to older deployments.
+    if (
+      (guard != null || subject != null) &&
+      (guard !== "v1" || subject !== String(owner))
+    ) {
+      throw new ApiError(
+        409,
+        "response account differs from the confirmed account",
+      );
+    }
   }
 
   let body: unknown;
