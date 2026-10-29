@@ -21,6 +21,7 @@ import { useSettingsText } from "./settings-text";
 import "./server-token-pricing.css";
 import { ServerDetailPricing } from "./server-detail-pricing";
 import { ServerTimePricingEditor } from "./server-time-pricing";
+import { ServerTokenTimePricingEditor } from "./server-time-token-pricing";
 
 type Draft = {
   base: ServerPricing;
@@ -375,6 +376,7 @@ export function ServerTokenPricing() {
         </>
       )}
       <ServerTimePricingEditor />
+      <ServerTokenTimePricingEditor />
       <Modal
         className="server-pricing-dialog"
         open={!!draft}

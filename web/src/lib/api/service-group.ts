@@ -74,6 +74,7 @@ function invalidateGroupConfiguration(
     ["option-history"],
     ["server-pricing"],
     ["time-pricing"],
+    ["time-token-pricing"],
     ["resource-publication-context"],
     ["resource-publication-state"],
   ])

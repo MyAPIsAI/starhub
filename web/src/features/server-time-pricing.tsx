@@ -649,9 +649,9 @@ export function ServerTimePricingEditor() {
                 </Button>
                 <small>
                   {text(
-                    "每个模型最多 32 个互不重叠的周时段，倍率大于 0 且不超过 100。所有时段共享明确时区；此版本仅支持倍率，不支持独立时段词元价格。时区是否受支持由服务器最终校验。",
-                    "At most 32 non-overlapping weekly windows per model, with multiplier greater than 0 and at most 100. All windows share an explicit timezone. This version supports multipliers, not per-window token-price overrides. The server validates timezone support.",
-                    "حتى 32 فترة أسبوعية غير متداخلة لكل نموذج، بمعامل أكبر من صفر وحتى 100. تشترك الفترات في منطقة زمنية صريحة. يدعم هذا الإصدار المعاملات دون أسعار رموز مستقلة لكل فترة. يتحقق الخادم من دعم المنطقة الزمنية.",
+                    "每个模型最多 32 个互不重叠的周时段，倍率大于 0 且不超过 100。所有时段共享明确时区。本区编辑倍率，独立词元单价请在下方单独设置；服务器最终校验时区。",
+                    "At most 32 non-overlapping weekly windows per model, with multiplier greater than 0 and at most 100. All windows share an explicit timezone. This section edits multipliers; configure independent token prices separately below. The server validates timezone support.",
+                    "حتى 32 فترة أسبوعية غير متداخلة لكل نموذج، بمعامل أكبر من صفر وحتى 100 ومنطقة زمنية صريحة. يحرر هذا القسم المعاملات؛ عيّن أسعار الرموز المستقلة منفصلة أدناه. يتحقق الخادم من المنطقة الزمنية.",
                   )}
                 </small>
                 {issue && <p role="alert">{issueText[issue]}</p>}

@@ -41,6 +41,7 @@ export function useSaveServerTimePricing() {
     onSettled: () => {
       for (const key of [
         "time-pricing",
+        "time-token-pricing",
         "server-pricing",
         "options",
         "option-status",

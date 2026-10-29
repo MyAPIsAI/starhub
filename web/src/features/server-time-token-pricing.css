@@ -1,0 +1,26 @@
+.server-time-token-pricing header p {
+  max-width: 80ch;
+}
+.server-token-time-dialog .token-window-inputs,
+.server-token-time-dialog .token-window-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.server-token-time-dialog .token-window-prices {
+  display: grid;
+  gap: 8px;
+}
+.server-token-time-dialog .token-window-prices p {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .server-token-time-dialog .token-window-inputs,
+  .server-token-time-dialog .token-window-times {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -43,6 +43,7 @@ export function useUpdateOption() {
       for (const key of [
         "server-pricing",
         "time-pricing",
+        "time-token-pricing",
         "resource-publication-context",
         "resource-publication-state",
         "service-group-configuration",
@@ -88,6 +89,7 @@ export function useReloadOptions() {
         ["plaza-model"],
         ["server-pricing"],
         ["time-pricing"],
+        ["time-token-pricing"],
       ])
         client.invalidateQueries({ queryKey: key });
     },
@@ -128,6 +130,7 @@ export function useRollbackOption() {
       for (const key of [
         "server-pricing",
         "time-pricing",
+        "time-token-pricing",
         "resource-publication-context",
         "resource-publication-state",
         "service-group-configuration",

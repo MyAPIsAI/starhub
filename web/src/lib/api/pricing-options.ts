@@ -31,6 +31,7 @@ export function useSaveServerPricing() {
       for (const key of [
         "server-pricing",
         "time-pricing",
+        "time-token-pricing",
         "options",
         "option-status",
         "option-history",
