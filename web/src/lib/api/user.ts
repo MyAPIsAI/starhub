@@ -258,3 +258,29 @@ export function useUserSecurityHistory() {
     select: (data) => readUserSecurityState(data, scope[1]!).events,
   });
 }
+
+export function useLogoutCurrent() {
+  const scope = useSessionQueryIdentity();
+  return useMutation({
+    retry: false,
+    mutationFn: async () => {
+      const result = await inUserSession(scope, () =>
+        apiPost<unknown>(
+          "/api/user/logout-current",
+          { schema: "logout_current_v1", expected_user_id: scope[1] },
+          { handleUnauthorizedLocally: true },
+        ),
+      );
+      const receipt = result as Record<string, unknown> | null;
+      if (
+        !receipt ||
+        typeof receipt !== "object" ||
+        receipt.schema !== "logout_receipt_v1" ||
+        receipt.user_id !== scope[1] ||
+        receipt.signed_out !== true
+      )
+        throw Error("Current-session logout was not confirmed");
+      return { user_id: scope[1]!, signed_out: true as const };
+    },
+  });
+}

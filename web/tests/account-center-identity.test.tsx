@@ -63,6 +63,7 @@ vi.mock("../src/lib/product-preview", () => ({
     }),
 }));
 vi.mock("../src/lib/api/user", () => ({
+  useLogoutCurrent: () => ({ isPending: false }),
   useUserSecurityHistory: () => ({
     data: history.events,
     isError: history.error,

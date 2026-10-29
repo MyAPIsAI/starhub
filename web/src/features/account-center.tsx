@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Info, LogOut, Monitor, UserRound } from "lucide-react";
@@ -11,12 +11,13 @@ import {
   useSystemAccess,
   useSessionQueryIdentity,
   sessionUsername,
+  sessionQueryIdentity,
 } from "../lib/system-access";
-import { logoutUser } from "../lib/api/auth";
 import {
   useSessions,
   useUserProfile,
   useTerminateOtherSessions,
+  useLogoutCurrent,
 } from "../lib/api/user";
 import { ApiError } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
@@ -29,6 +30,9 @@ export default function AccountCenter(props: { onDeactivate: () => void }) {
 
 function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
   const sessionsQuery = useSessions();
+  const logoutCurrent = useLogoutCurrent();
+  const scope = useSessionQueryIdentity();
+  const signingOut = useRef(false);
   const profileQuery = useUserProfile();
   const profile = profileQuery.isError ? undefined : profileQuery.data;
   const profileOwnerChanged =
@@ -48,6 +52,7 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
   const c = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
   const [notice, setNotice] = useState("");
+  const [logoutError, setLogoutError] = useState("");
   const [copied, setCopied] = useState(false);
   const profileName =
     sessionUsername(session) ?? c("账号中心", "Account center", "مركز الحساب");
@@ -84,15 +89,32 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
     }
   }
   async function signOut() {
+    if (signingOut.current) return;
+    signingOut.current = true;
+    setNotice("");
+    setLogoutError("");
+    const isCurrent = () =>
+      JSON.stringify(scope) ===
+      JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()));
     try {
-      await logoutUser();
+      await logoutCurrent.mutateAsync();
+      if (!isCurrent()) return;
+      useSystemAccess.getState().setSession(null);
+      logout();
+      queryClient.clear();
+      navigate("/login");
     } catch {
-      /* Local cleanup also runs when the server is unreachable. */
+      if (isCurrent())
+        setLogoutError(
+          c(
+            "未能确认退出结果，请重新读取登录设备或确认当前账号后核对。",
+            "Sign-out could not be confirmed. Reload devices or confirm the current account to check.",
+            "تعذر تأكيد تسجيل الخروج. أعد تحميل الأجهزة أو أكّد الحساب الحالي للتحقق.",
+          ),
+        );
+    } finally {
+      signingOut.current = false;
     }
-    useSystemAccess.getState().setSession(null);
-    logout();
-    queryClient.clear();
-    navigate("/login");
   }
   return (
     <div className="account-center">
@@ -362,6 +384,13 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
                 </p>
               )}
           </div>
+          {logoutError && (
+            <div className="ac-devices">
+              <p role="alert" className="ac-empty-hint">
+                {logoutError}
+              </p>
+            </div>
+          )}
           <div className="ac-device-actions">
             <Button
               size="small"
@@ -416,7 +445,13 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
                 "خروج الأجهزة الأخرى",
               )}
             </Button>
-            <Button size="small" variant="ghost" onClick={() => signOut()}>
+            <Button
+              size="small"
+              variant="ghost"
+              disabled={logoutCurrent.isPending || session.accountId === null}
+              loading={logoutCurrent.isPending}
+              onClick={() => signOut()}
+            >
               <LogOut size={14} />
               {c("退出当前账号", "Sign out", "تسجيل الخروج")}
             </Button>
