@@ -24,12 +24,20 @@ const AUTH_PATHS = ["/login", "/register", "/forgot-password"];
 /** Listener notified once when the session is lost (401). The auth
  *  layer subscribes to clear local state and navigate to /login. */
 type AuthLossListener = () => void;
-let authLossListener: AuthLossListener | null = null;
+type AuthLossSubscription = {
+  notify: AuthLossListener;
+  readIdentity?: () => string;
+};
+let authLossSubscription: AuthLossSubscription | null = null;
 
-export const onAuthLoss = (listener: AuthLossListener): (() => void) => {
-  authLossListener = listener;
+export const onAuthLoss = (
+  listener: AuthLossListener,
+  readIdentity?: () => string,
+): (() => void) => {
+  const subscription = { notify: listener, readIdentity };
+  authLossSubscription = subscription;
   return () => {
-    if (authLossListener === listener) authLossListener = null;
+    if (authLossSubscription === subscription) authLossSubscription = null;
   };
 };
 
@@ -57,6 +65,8 @@ export async function apiRequest<T>(
   init: RequestInit = {},
   options: ApiRequestOptions = {},
 ): Promise<T> {
+  const subscription = authLossSubscription;
+  const requestIdentity = subscription?.readIdentity?.();
   const res = await fetch(BASE_URL + path, {
     ...init,
     credentials: "same-origin",
@@ -69,14 +79,17 @@ export async function apiRequest<T>(
 
   if (res.status === 401) {
     // Avoid redirect loops: don't fire auth-loss when already on an
-    // auth page. The caller may still get the 401 to handle locally.
+    // auth page. A superseded identity or subscription cannot sign out its
+    // replacement. The caller still receives the 401 for local error handling.
     const pathname = window.location.pathname;
     if (
       !options.handleUnauthorizedLocally &&
       !AUTH_PATHS.includes(pathname) &&
-      authLossListener
+      subscription &&
+      authLossSubscription === subscription &&
+      requestIdentity === subscription.readIdentity?.()
     ) {
-      authLossListener();
+      subscription.notify();
     }
     throw new ApiError(401, "session expired");
   }

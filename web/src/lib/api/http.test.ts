@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getSelf } from "./auth";
 import { ApiError, apiGet, apiPost, onAuthLoss } from "./http";
+import { sessionQueryIdentity, useSystemAccess } from "../system-access";
 
 describe("unauthorized responses", () => {
   const authLoss = vi.fn();
@@ -90,5 +91,87 @@ describe("unauthorized responses", () => {
     expect(authLoss).not.toHaveBeenCalled();
     expect(nextListener).toHaveBeenCalledOnce();
     stopNext();
+  });
+
+  it.each(["account", "epoch", "group", "role"])(
+    "does not notify global auth loss for a delayed request after %s changes",
+    async (field) => {
+      const initial = useSystemAccess.getState();
+      useSystemAccess
+        .getState()
+        .setSession({ id: 7, group: "default", role: 1 });
+      const stop = onAuthLoss(authLoss, () =>
+        JSON.stringify(sessionQueryIdentity(useSystemAccess.getState())),
+      );
+      try {
+        let release!: (value: Response) => void;
+        vi.mocked(fetch).mockImplementationOnce(
+          () => new Promise<Response>((resolve) => (release = resolve)),
+        );
+        const pending = apiGet("/api/wallet");
+        if (field === "role") useSystemAccess.getState().setRole(10);
+        else if (field === "group")
+          useSystemAccess.setState((state) => ({
+            session: { ...state.session, group: "vip" },
+          }));
+        else
+          useSystemAccess.getState().setSession({
+            id: field === "account" ? 8 : 7,
+            group: "default",
+            role: 1,
+          });
+        const confirmed = useSystemAccess.getState();
+        release(new Response(null, { status: 401 }));
+        await expect(pending).rejects.toMatchObject({ status: 401 });
+        expect(authLoss).not.toHaveBeenCalled();
+        expect(useSystemAccess.getState()).toBe(confirmed);
+      } finally {
+        stop();
+        useSystemAccess.setState(initial, true);
+      }
+    },
+  );
+
+  it("still notifies auth loss for a scoped request when its session is unchanged", async () => {
+    const stop = onAuthLoss(authLoss, () => "unchanged-scope");
+    try {
+      await expect(apiGet("/api/wallet")).rejects.toMatchObject({
+        status: 401,
+      });
+      expect(authLoss).toHaveBeenCalledOnce();
+    } finally {
+      stop();
+    }
+  });
+
+  it("does not deliver an old request failure to a replacement subscription", async () => {
+    let release!: (value: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(
+      () => new Promise<Response>((resolve) => (release = resolve)),
+    );
+    const pending = apiGet("/api/wallet");
+    const next = vi.fn(),
+      stop = onAuthLoss(next);
+    try {
+      release(new Response(null, { status: 401 }));
+      await expect(pending).rejects.toMatchObject({ status: 401 });
+      expect(authLoss).not.toHaveBeenCalled();
+      expect(next).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+  });
+
+  it("keeps a newer subscription even when it reuses the same listener function", async () => {
+    const stop = onAuthLoss(authLoss);
+    unsubscribe();
+    try {
+      await expect(apiGet("/api/wallet")).rejects.toMatchObject({
+        status: 401,
+      });
+      expect(authLoss).toHaveBeenCalledOnce();
+    } finally {
+      stop();
+    }
   });
 });

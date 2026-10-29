@@ -24,7 +24,12 @@ import "./components/refinement.css";
 import "./components/select-controls.css";
 import i18n from "./i18n";
 import { usePreferences } from "./lib/preferences";
-import { useSystemAccess, isAdmin, canReadFinance } from "./lib/system-access";
+import {
+  useSystemAccess,
+  sessionQueryIdentity,
+  isAdmin,
+  canReadFinance,
+} from "./lib/system-access";
 import { useProductPreview } from "./lib/product-preview";
 import { onAuthLoss, ApiError } from "./lib/api/http";
 import {
@@ -179,19 +184,21 @@ function App() {
     void i18n.changeLanguage(language);
   }, [language, theme]);
 
-  // Wire up the 401 auth-loss listener: when the HTTP client gets
-  // a 401 outside auth pages, silently redirect to /login. (B8/B9)
+  // Bind global auth loss to the request's confirmed session scope.
   useEffect(() => {
-    return onAuthLoss(() => {
-      useProductPreview.getState().logout();
-      useSystemAccess.getState().setSession(null);
-      queryClient.clear();
-      // Hard redirect: the session is gone, so the full app state
-      // must be discarded. This also avoids stale React Query caches.
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
-      }
-    });
+    return onAuthLoss(
+      () => {
+        useProductPreview.getState().logout();
+        useSystemAccess.getState().setSession(null);
+        queryClient.clear();
+        // Hard redirect: the session is gone, so the full app state
+        // must be discarded. This also avoids stale React Query caches.
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+      },
+      () => JSON.stringify(sessionQueryIdentity(useSystemAccess.getState())),
+    );
   }, []);
 
   return (
@@ -251,7 +258,16 @@ function App() {
                 />
 
                 {/* Operations back office (M9): reachable only as the system admin. */}
-                <Route path="/finance" element={<RequireAuth><FinanceOnly><FinancePortal /></FinanceOnly></RequireAuth>} />
+                <Route
+                  path="/finance"
+                  element={
+                    <RequireAuth>
+                      <FinanceOnly>
+                        <FinancePortal />
+                      </FinanceOnly>
+                    </RequireAuth>
+                  }
+                />
                 <Route
                   path="/admin/*"
                   element={
