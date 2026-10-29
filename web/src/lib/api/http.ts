@@ -182,5 +182,7 @@ export const apiPut = <T>(
     options,
   );
 
-export const apiDelete = <T>(path: string): Promise<T> =>
-  apiRequest<T>(path, { method: "DELETE" });
+export const apiDelete = <T>(
+  path: string,
+  options?: ApiRequestOptions,
+): Promise<T> => apiRequest<T>(path, { method: "DELETE" }, options);

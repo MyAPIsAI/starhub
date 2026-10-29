@@ -66,6 +66,8 @@ const TOKENS_KEY = ["tokens"] as const;
 function assertTokenSession(identity: ReturnType<typeof sessionQueryIdentity>) {
   if (
     identity[1] === null ||
+    !Number.isSafeInteger(identity[1]) ||
+    identity[1] <= 0 ||
     JSON.stringify(identity) !==
       JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()))
   )
@@ -146,49 +148,107 @@ export function useTokens() {
   });
 }
 
-/** Create a token. The mutation result contains the plaintext key —
- *  capture it in onSuccess to show the one-time key dialog (B10). */
-export function useCreateToken() {
+function useOwnedTokenMutation<Input, Output>(
+  write: (input: Input) => Promise<Output>,
+  tokenID?: (input: Input) => number,
+  returnsSecret = false,
+) {
   const queryClient = useQueryClient();
+  const identity = useSessionQueryIdentity();
+  const queryKey = [...TOKENS_KEY, identity];
   return useMutation({
-    mutationFn: (input: TokenCreateInput) =>
-      apiPost<Token>("/api/token", input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TOKENS_KEY });
+    retry: false,
+    mutationFn: async (input: Input): Promise<Output> => {
+      assertTokenSession(identity);
+      const id = tokenID?.(input);
+      if (tokenID) {
+        const tokens = queryClient.getQueryData<Token[]>(queryKey);
+        if (
+          id === undefined ||
+          !Number.isSafeInteger(id) ||
+          id <= 0 ||
+          queryClient.getQueryState(queryKey)?.status !== "success" ||
+          !Array.isArray(tokens) ||
+          tokens.some((token) => !token || token.user_id !== identity[1]) ||
+          tokens.filter((token) => token.id === id).length !== 1
+        )
+          throw Error("Reload owned API keys before changing a key");
+      }
+      let result: Output;
+      try {
+        result = await write(input);
+      } catch (error) {
+        assertTokenSession(identity);
+        if (error instanceof ApiError && error.status === 401)
+          useSystemAccess.getState().setSession(null);
+        throw error;
+      }
+      assertTokenSession(identity);
+      if (returnsSecret) {
+        const token = result as Token | null;
+        if (
+          !token ||
+          typeof token !== "object" ||
+          token.user_id !== identity[1] ||
+          !Number.isSafeInteger(token.id) ||
+          token.id <= 0 ||
+          (id !== undefined && token.id !== id) ||
+          typeof token.key !== "string" ||
+          !/^sk-[A-Za-z0-9]{48}$/.test(token.key)
+        )
+          throw Error("API key creation or regeneration was not confirmed");
+      }
+      return result;
+    },
+    onSettled: () => {
+      // Lost responses also require readback, but an old action must not
+      // invalidate the replacement account's list or expose its secret.
+      if (
+        JSON.stringify(identity) ===
+        JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()))
+      )
+        void queryClient.invalidateQueries({ queryKey, exact: true });
     },
   });
+}
+
+/** Capture the returned secret only after the originating scope is checked. */
+export function useCreateToken() {
+  return useOwnedTokenMutation(
+    (input: TokenCreateInput) =>
+      apiPost<Token>("/api/token", input, { handleUnauthorizedLocally: true }),
+    undefined,
+    true,
+  );
 }
 
 /** Update a token. The backend returns no data (only {success:true}),
  *  so we invalidate the list to refetch the current state (B5). */
 export function useUpdateToken() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: TokenUpdateInput) => apiPut<null>("/api/token", input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TOKENS_KEY });
-    },
-  });
+  return useOwnedTokenMutation(
+    (input: TokenUpdateInput) =>
+      apiPut<null>("/api/token", input, { handleUnauthorizedLocally: true }),
+    (input) => input.id,
+  );
 }
 
 export function useDeleteToken() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => apiDelete<null>(`/api/token/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TOKENS_KEY });
-    },
-  });
+  return useOwnedTokenMutation(
+    (id: number) =>
+      apiDelete<null>(`/api/token/${id}`, { handleUnauthorizedLocally: true }),
+    (id) => id,
+  );
 }
 
 /** Regenerate a token key. Like create, the result contains the
  *  plaintext key — capture it in onSuccess (B10). */
 export function useRegenerateToken() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => apiPost<Token>(`/api/token/${id}/regenerate`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TOKENS_KEY });
-    },
-  });
+  return useOwnedTokenMutation(
+    (id: number) =>
+      apiPost<Token>(`/api/token/${id}/regenerate`, undefined, {
+        handleUnauthorizedLocally: true,
+      }),
+    (id) => id,
+    true,
+  );
 }
