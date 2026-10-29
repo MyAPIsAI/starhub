@@ -72,6 +72,9 @@ func TestAdvancedPublicationKeepsAliasPolicyAndRejectsConflictingTargets(t *test
 func TestAdvancedNativeProtocolAndEndpointCapabilities(t *testing.T) {
 	for _, protocol := range []string{"OpenAI", "Anthropic", "Gemini"} {
 		route := ResourceGatewayRoute{UpstreamModel: "provider-model", Protocols: `["` + protocol + `"]`, Capabilities: `["text","function_call","vision","responses","image","video","audio","embedding","rerank"]`}
+		if protocol != "OpenAI" {
+			route.Capabilities = `["text","function_call","vision"]`
+		}
 		policy := resourceGatewayPolicyForRoute(route)
 		if policy == nil {
 			t.Fatal(protocol)
@@ -83,6 +86,15 @@ func TestAdvancedNativeProtocolAndEndpointCapabilities(t *testing.T) {
 			if got := policy.Allows(path, nil, 1, 1); got != (protocol == "OpenAI") {
 				t.Fatalf("%s %s grant=%v", protocol, path, got)
 			}
+		}
+	}
+	for _, route := range []ResourceGatewayRoute{
+		{UpstreamModel: "model", Protocols: `["OpenAI"]`, Capabilities: `["vision"]`},
+		{UpstreamModel: "model", Protocols: `["Anthropic"]`, Capabilities: `["video"]`},
+		{UpstreamModel: "model", Protocols: `["Gemini"]`, Capabilities: `["text","audio"]`},
+	} {
+		if resourceGatewayPolicyForRoute(route) != nil {
+			t.Fatal("resource without supported protocol endpoints was accepted")
 		}
 	}
 	for _, caps := range []string{`["text","unknown"]`, `["text","text"]`, `null`, `{}`, `[]`} {

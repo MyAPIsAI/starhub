@@ -35,6 +35,24 @@ func resourceAdvancedRoute(route ResourceGatewayRoute) *ResourceGatewayPolicy {
 	if protocols[0] == "Gemini" && !regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`).MatchString(route.UpstreamModel) {
 		return nil
 	}
+	if protocols[0] != "OpenAI" {
+		if !slices.Contains(caps, "text") && !slices.Contains(caps, "code") {
+			return nil
+		}
+		for _, cap := range caps {
+			if !slices.Contains([]string{"text", "code", "vision", "reasoning", "function_call"}, cap) {
+				return nil
+			}
+		}
+	} else {
+		endpoint := false
+		for _, cap := range caps {
+			endpoint = endpoint || slices.Contains([]string{"text", "code", "responses", "image", "video", "audio", "embedding", "rerank"}, cap)
+		}
+		if !endpoint {
+			return nil
+		}
+	}
 	return &ResourceGatewayPolicy{contextLength: route.ContextLength, advanced: true, upstream: route.UpstreamModel, protocol: protocols[0], capabilities: caps}
 }
 
