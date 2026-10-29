@@ -18,6 +18,23 @@ func TestResponsesRequestReadsTextToolsAndCapabilities(t *testing.T) {
 	}
 }
 
+func TestResponsesRequestRetainsExplicitStorageIntent(t *testing.T) {
+	for _, value := range []string{"true", "false"} {
+		req, err := ParseResponsesRequest([]byte(`{"model":"m","input":"hello","store":` + value + `}`))
+		if err != nil || req.Store == nil || *req.Store != (value == "true") {
+			t.Fatalf("storage intent %s was lost: %+v %v", value, req, err)
+		}
+	}
+	if req, err := ParseResponsesRequest([]byte(`{"model":"m","input":"hello"}`)); err != nil || req.Store != nil {
+		t.Fatal("absent storage intent acquired an invented override")
+	}
+	for _, value := range []string{`"false"`, `1`, `{}`, `[]`} {
+		if _, err := ParseResponsesRequest([]byte(`{"model":"m","input":"hello","store":` + value + `}`)); err == nil {
+			t.Fatal("nonboolean storage intent was accepted")
+		}
+	}
+}
+
 func TestResponsesRequestDoesNotCountImageBytesAsText(t *testing.T) {
 	body := `{"model":"m","input":[{"role":"user","content":[{"type":"input_text","text":"hello"},{"type":"input_image","image_url":"data:image/png;base64,` + strings.Repeat("A", 100000) + `"}]}]}`
 	req, err := ParseResponsesRequest([]byte(body))

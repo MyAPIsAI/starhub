@@ -525,12 +525,17 @@ export default function DocsPage() {
               <CodeBlock title="POST /v1/responses" code={responses.request} />
               <p>{responses.response}</p>
               <div className="docs-callout"><p>{responses.streaming}</p></div>
+              <p>{responses.retrieval}</p>
+              <CodeBlock title="GET /v1/responses/{id}" code={responses.retrieve} />
+              <p>{responses.indexStatus}</p>
               <div className="docs-callout"><p>{responses.boundary}</p></div>
               <h2>Codex</h2>
               <p>{responses.codex}</p>
               <CodeBlock title="config.toml" code={responses.config} />
               <p>
                 <a href="https://developers.openai.com/api/docs/guides/streaming-responses" target="_blank" rel="noreferrer">{text("Responses 官方事件说明", "Official Responses event guide", "دليل أحداث Responses الرسمي")}</a>
+                {" · "}
+                <a href="https://developers.openai.com/api/docs/guides/conversation-state" target="_blank" rel="noreferrer">{text("官方响应存储说明", "Official response storage guide", "دليل تخزين الاستجابات الرسمي")}</a>
                 {" · "}
                 <a href="https://learn.chatgpt.com/docs/config-file/config-advanced" target="_blank" rel="noreferrer">{text("Codex 官方配置说明", "Official Codex configuration", "إعداد Codex الرسمي")}</a>
               </p>

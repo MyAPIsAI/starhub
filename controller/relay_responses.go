@@ -64,15 +64,19 @@ func RelayResponses(w http.ResponseWriter, r *http.Request) {
 		adaptor, _ := relay.GetChatAdaptor(ch.Type)
 		url, _ := adaptor.ModeURL(ch.BaseURL, channel.RelayModeResponses)
 		key, index := flow.selectKey(ch)
+		capture, err := captureResponseReference(flow, ch, key, parsed)
+		if err != nil {
+			return attemptResult{outcome: attemptUpstreamError, cause: errors.New("Responses ownership scope could not be captured")}
+		}
 		resp, fail := flow.callUpstream(ch, adaptor, upstreamCall{method: http.MethodPost, url: url, contentType: "application/json", body: req.body, key: key, keyIdx: index, sideEffect: true})
 		if fail != nil {
 			return *fail
 		}
 		defer resp.Body.Close()
 		if parsed.Stream {
-			return relayResponsesStream(flow, ch, resp, parsed)
+			return relayResponsesStream(flow, ch, resp, parsed, capture)
 		}
-		return relayResponsesJSON(flow, ch, resp, parsed)
+		return relayResponsesJSON(flow, ch, resp, parsed, capture)
 	})
 }
 
@@ -80,6 +84,7 @@ type responseAccounting struct {
 	ID     string          `json:"id"`
 	Status string          `json:"status"`
 	Output json.RawMessage `json:"output"`
+	Store  *bool           `json:"store"`
 }
 
 func responseOutcome(status string) (int, bool) {
@@ -117,7 +122,7 @@ func settleNativeUsage(flow *relayFlow, ch *model.Channel, usage *relay.Usage, s
 	flow.settled = true
 }
 
-func relayResponsesJSON(flow *relayFlow, ch *model.Channel, resp *http.Response, req *dto.ResponsesRequest) attemptResult {
+func relayResponsesJSON(flow *relayFlow, ch *model.Channel, resp *http.Response, req *dto.ResponsesRequest, capture *responseReferenceCapture) attemptResult {
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxModeResponseBytes+1))
 	if err != nil || len(body) > maxModeResponseBytes {
 		return attemptResult{outcome: attemptUncertain, cause: errors.New("Responses body could not be read within the response limit")}
@@ -137,6 +142,7 @@ func relayResponsesJSON(flow *relayFlow, ch *model.Channel, resp *http.Response,
 			usage = &relay.Usage{}
 		}
 	}
+	flow.w.Header().Set("X-StarHub-Response-Reference", observeResponseReference(flow, capture, result, usage))
 	writePassthroughBody(flow.w, resp, body)
 	settleNativeUsage(flow, ch, usage, status)
 	outcome := attemptSuccess
@@ -156,10 +162,11 @@ func (f nativeStreamForwarder) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func relayResponsesStream(flow *relayFlow, ch *model.Channel, resp *http.Response, req *dto.ResponsesRequest) attemptResult {
+func relayResponsesStream(flow *relayFlow, ch *model.Channel, resp *http.Response, req *dto.ResponsesRequest, capture *responseReferenceCapture) attemptResult {
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-		return relayResponsesJSON(flow, ch, resp, req)
+		return relayResponsesJSON(flow, ch, resp, req, capture)
 	}
+	flow.w.Header().Add("Trailer", "X-StarHub-Response-Reference")
 	flow.w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 	flow.w.Header().Set("Cache-Control", "no-cache")
 	flow.w.Header().Set("X-Accel-Buffering", "no")
@@ -169,6 +176,7 @@ func relayResponsesStream(flow *relayFlow, ch *model.Channel, resp *http.Respons
 	defer reader.Release()
 	var usage *relay.Usage
 	var output json.RawMessage
+	var terminalResponse responseAccounting
 	var text strings.Builder
 	status, terminal := 2, false
 	var streamErr error
@@ -197,6 +205,7 @@ func relayResponsesStream(flow *relayFlow, ch *model.Channel, resp *http.Respons
 		case "response.completed", "response.incomplete", "response.failed", "response.cancelled":
 			status, terminal = responseOutcome(event.Response.Status)
 			output = append(json.RawMessage(nil), event.Response.Output...)
+			terminalResponse = event.Response
 		case "error":
 			status, terminal = 2, true
 		}
@@ -210,6 +219,7 @@ func relayResponsesStream(flow *relayFlow, ch *model.Channel, resp *http.Respons
 			usage = &relay.Usage{}
 		}
 	}
+	flow.w.Header().Set("X-StarHub-Response-Reference", observeResponseReference(flow, capture, terminalResponse, usage))
 	settleNativeUsage(flow, ch, usage, status)
 	if !terminal {
 		return attemptResult{outcome: attemptUncertain, cause: fmt.Errorf("Responses stream ended before a terminal event: %w", streamErr), usage: usage}

@@ -15,6 +15,7 @@ type ResponsesRequest struct {
 	Tools              []json.RawMessage `json:"tools"`
 	MaxOutputTokens    *int64            `json:"max_output_tokens"`
 	Stream             bool              `json:"stream"`
+	Store              *bool             `json:"store"`
 	Background         bool              `json:"background"`
 	PreviousResponseID string            `json:"previous_response_id"`
 	Conversation       json.RawMessage   `json:"conversation"`

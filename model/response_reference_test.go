@@ -16,7 +16,8 @@ func referenceFixture() (ResponseReference, time.Time) {
 	ch := &Channel{ID: 9, Type: 1, BaseURL: "https://upstream.example.invalid/v1", Key: "synthetic-one\nsynthetic-two"}
 	return ResponseReference{UserID: 7, TokenID: 8, ResponseID: "resp_reference", ChannelID: ch.ID,
 		CredentialIdentity: ResponseCredentialIdentity(ch, "synthetic-one"), Model: "gpt-4o", Group: "default", GroupDefinitionID: 3,
-		Status: "completed", PromptTokens: 100, CompletionTokens: 20, HasTools: true}, at
+		AccountIdentity: ResponseAccountIdentity(ch, "synthetic-one"),
+		Status:          "completed", PromptTokens: 100, CompletionTokens: 20, HasTools: true}, at
 }
 
 func TestResponseCredentialIdentityPinsExactAccountWithoutPlaintext(t *testing.T) {
@@ -41,6 +42,38 @@ func TestResponseCredentialIdentityPinsExactAccountWithoutPlaintext(t *testing.T
 	}
 	if ResponseCredentialIdentity(ch, string([]byte{0xff})) == ResponseCredentialIdentity(ch, string([]byte{0xfe})) {
 		t.Fatal("distinct opaque credential bytes were replaced by the same JSON text")
+	}
+}
+
+func TestResponseCredentialNeverRotatesAwayFromTheRecordedEnabledAccount(t *testing.T) {
+	ch := &Channel{ID: 9, Type: 1, BaseURL: "https://upstream.example.invalid", Key: "first\nsecond", Status: 1}
+	identity := ResponseCredentialIdentity(ch, "first")
+	ch.Key, ch.KeyMode = "second\nfirst", KeyModeRandom
+	if key, ok := ResponseCredential(ch, identity); !ok || key != "first" {
+		t.Fatal("pool reorder selected a different upstream account")
+	}
+	for _, mutate := range []func(*Channel){func(c *Channel) { c.Key = "second" }, func(c *Channel) { c.MultiKeyStatus = "1,2" }, func(c *Channel) { c.Status = 2 }, func(c *Channel) { c.BaseURL += "/other" }} {
+		copy := *ch
+		mutate(&copy)
+		if key, ok := ResponseCredential(&copy, identity); ok || key != "" {
+			t.Fatal("unavailable recorded account fell back to another pool key")
+		}
+	}
+}
+
+func TestResponseAccountIdentitySpansDuplicateChannelsButNotDifferentCredentials(t *testing.T) {
+	ch := &Channel{ID: 9, Type: 1, BaseURL: "https://upstream.example.invalid/v1/"}
+	account := ResponseAccountIdentity(ch, "synthetic-one")
+	ch.ID++
+	ch.BaseURL = strings.TrimRight(ch.BaseURL, "/")
+	if len(account) != 64 || ResponseAccountIdentity(ch, "synthetic-one") != account {
+		t.Fatal("duplicate channel configuration created a different storage namespace")
+	}
+	if ResponseAccountIdentity(ch, "synthetic-two") == account || ResponseAccountIdentity(ch, string([]byte{0xff})) == ResponseAccountIdentity(ch, string([]byte{0xfe})) {
+		t.Fatal("different opaque upstream credentials shared a storage namespace")
+	}
+	if ResponseAccountIdentity(nil, "key") != "" || ResponseAccountIdentity(ch, "") != "" {
+		t.Fatal("missing account identity was accepted")
 	}
 }
 
@@ -81,14 +114,20 @@ func TestResponseReferenceScopeExpiryImmutabilityAndRestart(t *testing.T) {
 	if _, err := RecordResponseReference(ctx, changed, at); !errors.Is(err, ErrResponseReferenceConflict) {
 		t.Fatal("duplicate ID overwrote immutable accounting metadata")
 	}
+	if _, err := LookupResponseReference(ctx, ref.UserID, ref.TokenID, ref.ResponseID, at); !errors.Is(err, ErrResponseReferenceAmbiguous) {
+		t.Fatal("conflicting metadata retained a readable ownership grant")
+	}
+	if _, err := RecordResponseReference(ctx, ref, at); !errors.Is(err, ErrResponseReferenceConflict) {
+		t.Fatal("repeating the original metadata revived a conflicted grant")
+	}
 	if err := CloseDB(); err != nil {
 		t.Fatal(err)
 	}
 	if err := InitDB(path); err != nil {
 		t.Fatal(err)
 	}
-	if found, err := LookupResponseReference(ctx, ref.UserID, ref.TokenID, ref.ResponseID, at); err != nil || *found != *stored {
-		t.Fatal("restart lost the private immutable upstream binding")
+	if _, err := LookupResponseReference(ctx, ref.UserID, ref.TokenID, ref.ResponseID, at); !errors.Is(err, ErrResponseReferenceAmbiguous) {
+		t.Fatal("restart lost the persistent collision refusal")
 	}
 	if version, err := OptionVersion(); err != nil || version != 0 {
 		t.Fatal("recording references changed pricing configuration")
@@ -105,6 +144,7 @@ func TestResponseReferenceReusedProviderIDsNeverSelectAnotherBinding(t *testing.
 	otherToken := ref
 	otherToken.TokenID++
 	otherToken.ChannelID++
+	otherToken.AccountIdentity = strings.Repeat("c", 64)
 	if _, err := RecordResponseReference(ctx, otherToken, at); err != nil {
 		t.Fatal(err)
 	}

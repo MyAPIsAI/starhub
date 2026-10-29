@@ -21,9 +21,13 @@ name = "MyAPIs"
 base_url = "${placeholders.apiBase}"
 env_key = "MYAPIS_API_KEY"
 wire_api = "responses"`;
+  const retrieve = `: "\${RESPONSE_ID:?Set RESPONSE_ID to a response created with this API key}"
+curl --fail --silent --show-error "${placeholders.apiBase}/responses/$RESPONSE_ID" \\
+  -H "Authorization: Bearer $MYAPIS_API_KEY"`;
   return {
     request,
     config,
+    retrieve,
     lead: text(
       "POST /v1/responses 接收原生 input，使用 Bearer 密钥。将示例地址和模型占位符替换为你的网关地址及已授权、渠道可用的 Responses（响应接口）模型；执行请求会产生实际费用。",
       "POST /v1/responses accepts native input with Bearer authentication. Replace the example address and model placeholder with your gateway and an authorized Responses model on an available channel. Executing requests incurs usage charges.",
@@ -39,10 +43,20 @@ wire_api = "responses"`;
       "Set stream: true for SSE. Read text deltas from response.output_text.delta.delta; response.completed, response.incomplete, and response.failed are terminal events, while error reports an error. A broken connection is not success. Use semantic events rather than Chat Completions choices or [DONE]. Failed or interrupted requests may still incur usage charges.",
       "اضبط stream: true لاستخدام SSE. اقرأ زيادات النص من response.output_text.delta.delta؛ أحداث response.completed وresponse.incomplete وresponse.failed نهائية، ويشير error إلى خطأ. انقطاع الاتصال لا يعني النجاح. استخدم الأحداث الدلالية بدل choices أو [DONE]. قد تُحاسب الطلبات الفاشلة أو المنقطعة حسب الاستخدام.",
     ),
+    retrieval: text(
+      "创建时设 store: true，或保留上游默认存储选项，可用同一 API 密钥通过 GET /v1/responses/{id} 原生检索已记录归属的终态响应，返回 JSON。网关保存归属索引，内容及实际保留时间由上游负责；索引用于检索的有效期最多 30 天。当前模型、分组、原渠道及原凭证仍须有效；池内其他凭证不会替代原账户。检索不重复扣生成配额，配额耗尽时也可读取已有响应。",
+      "Create with store: true, or retain the upstream storage default, then use the same API key to GET /v1/responses/{id} for a terminal response with a recorded ownership binding. Retrieval returns native JSON. The gateway keeps an ownership index; content storage and actual retention belong to the upstream. Index visibility is at most 30 days. Current model/group access and the original channel/account must remain available; another pool credential is never substituted. Retrieval does not recharge generation quota and remains available when quota is exhausted.",
+      "أنشئ باستخدام store: true أو اترك إعداد التخزين الافتراضي للمزود، ثم استخدم مفتاح API نفسه مع GET /v1/responses/{id} لاسترجاع استجابة نهائية ذات ارتباط ملكية مسجل بصيغة JSON الأصلية. تحفظ البوابة فهرس الملكية، ويحدد المزود تخزين المحتوى ومدة الاحتفاظ الفعلية. صلاحية الفهرس للاسترجاع لا تتجاوز 30 يومًا. يجب استمرار صلاحيات النموذج والمجموعة وتوفر القناة والحساب الأصليين؛ لا يُستبدل الحساب بمفتاح آخر في المجموعة. لا يخصم الاسترجاع حصة التوليد مجددًا ويعمل عند نفادها.",
+    ),
+    indexStatus: text(
+      "归属记录状态位于 X-StarHub-Response-Reference：recorded 表示归属已记录，not_stored 表示请求或上游关闭了存储，unavailable 表示未确认可用记录。JSON 在响应头提供状态；SSE 在流结束后的尾部字段提供状态，请读完整流后再检索。未记录归属的旧响应、未知或歧义 ID 不会转向上游试查；recorded 不保证上游仍保留内容。",
+      "X-StarHub-Response-Reference reports recorded, not_stored, or unavailable ownership-index status. JSON uses a response header; SSE uses a trailer after the stream finishes, so consume the complete stream before retrieving. Old unobserved responses and unknown or ambiguous IDs are not probed upstream. A recorded binding does not guarantee that the upstream still retains the content.",
+      "يعرض X-StarHub-Response-Reference حالة فهرس الملكية: recorded أو not_stored أو unavailable. تظهر في ترويسة JSON، وفي ترويسة ختامية بعد اكتمال SSE؛ اقرأ التدفق كاملًا قبل الاسترجاع. لا تُستعلم من المزود الاستجابات القديمة غير المسجلة أو المعرفات المجهولة أو الملتبسة. تسجيل الارتباط لا يضمن استمرار احتفاظ المزود بالمحتوى.",
+    ),
     boundary: text(
-      "当前支持前台 HTTP/JSON 和 SSE，以及 function/custom 工具的完整历史。previous_response_id、conversation、background: true、文件引用、托管工具、检索/取消/压缩及 Responses WebSocket 尚未开放。续轮请保留首条用户消息、工具调用及结果；智能路由要求 responses 和所需能力元数据，过期绑定或删减的工具历史会被拒绝。",
-      "Foreground HTTP/JSON and SSE support complete function/custom tool histories. previous_response_id, conversation, background: true, file references, hosted tools, retrieval/cancel/compaction endpoints, and Responses WebSocket are unavailable. Preserve the first user message, tool calls, and results on continuation. Smart routing requires responses and applicable capability metadata; expired bindings or trimmed tool histories are rejected.",
-      "تدعم HTTP/JSON وSSE الأماميتان السجل الكامل لأدوات function/custom. لا تتوفر previous_response_id أو conversation أو background: true أو مراجع الملفات أو الأدوات المستضافة أو نقاط الاسترجاع والإلغاء والضغط أو Responses WebSocket. احتفظ بأول رسالة مستخدم واستدعاءات الأدوات ونتائجها عند المتابعة. يتطلب التوجيه الذكي بيانات responses والقدرات اللازمة؛ تُرفض الروابط المنتهية والسجلات المقتطعة.",
+      "当前支持前台 HTTP/JSON 和 SSE，以及 function/custom 工具的完整历史。previous_response_id、conversation、background: true、文件引用、托管工具、流式检索/取消/压缩及 Responses WebSocket 尚未开放。续轮请保留首条用户消息、工具调用及结果；智能路由要求 responses 和所需能力元数据，过期绑定或删减的工具历史会被拒绝。",
+      "Foreground HTTP/JSON and SSE support complete function/custom tool histories. previous_response_id, conversation, background: true, file references, hosted tools, streaming retrieval/cancel/compaction endpoints, and Responses WebSocket are unavailable. Preserve the first user message, tool calls, and results on continuation. Smart routing requires responses and applicable capability metadata; expired bindings or trimmed tool histories are rejected.",
+      "تدعم HTTP/JSON وSSE الأماميتان السجل الكامل لأدوات function/custom. لا تتوفر previous_response_id أو conversation أو background: true أو مراجع الملفات أو الأدوات المستضافة أو الاسترجاع المتدفق أو الإلغاء أو الضغط أو Responses WebSocket. احتفظ بأول رسالة مستخدم واستدعاءات الأدوات ونتائجها عند المتابعة. يتطلب التوجيه الذكي بيانات responses والقدرات اللازمة؛ تُرفض الروابط المنتهية والسجلات المقتطعة.",
     ),
     codex: text(
       "Codex（代码客户端）配置参考：把以下内容合并到自己的 config.toml，在启动客户端的环境中设置 MYAPIS_API_KEY。base_url 保留 /v1；model 必须替换为你获准使用的实际模型。配置字段遵循官方说明；真实 Codex 端到端验收尚未完成，客户端若请求压缩、后台或其他未开放能力会失败。",

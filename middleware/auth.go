@@ -47,7 +47,26 @@ func AdminAuth(next http.Handler) http.Handler {
 }
 
 func TokenAuth(next http.Handler) http.Handler {
+	return tokenAuth(next, false)
+}
+
+// TokenReadOnlyAuth retains token, owner, IP and group authorization for
+// existing-resource reads, without requiring unused generation quota.
+func TokenReadOnlyAuth(next http.Handler) http.Handler {
+	return tokenAuth(next, true)
+}
+
+func tokenAuth(next http.Handler, readOnly bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if readOnly {
+			w.Header().Set("Cache-Control", "private, no-store")
+			w.Header().Add("Vary", "Authorization")
+			w.Header().Add("Vary", "X-Api-Key")
+		}
+		if readOnly && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			writeRelayRequestError(w, r, http.StatusMethodNotAllowed, "invalid_request_error", "read_only_auth", "this authorization path only supports existing-resource reads")
+			return
+		}
 		// The gateway accepts both header styles: OpenAI SDK clients send
 		// "Authorization: Bearer sk-..." while Claude SDK clients send
 		// "x-api-key: sk-..." (both route to the same token table).
@@ -91,7 +110,7 @@ func TokenAuth(next http.Handler) http.Handler {
 				"API key has expired")
 			return
 		}
-		if !token.UnlimitedQuota && token.RemainQuota <= 0 {
+		if !readOnly && !token.UnlimitedQuota && token.RemainQuota <= 0 {
 			writeRelayRequestError(w, r, http.StatusForbidden,
 				"insufficient_quota", "token_quota_exhausted",
 				"API key quota is exhausted")
