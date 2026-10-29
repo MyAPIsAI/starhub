@@ -29,7 +29,9 @@ export function readTokenChoices(value: unknown, owner: number): TokenChoices {
         typeof c.model !== "string" ||
         !c.model ||
         !Array.isArray(c.protocols) ||
-        c.protocols.some((p) => !["OpenAI", "Anthropic", "Gemini"].includes(p)),
+        c.protocols.some(
+          (p) => !["OpenAI", "Anthropic", "Gemini", "Responses"].includes(p),
+        ),
     )
   )
     throw Error("Guarded key choices are unavailable");

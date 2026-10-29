@@ -14,6 +14,7 @@ import (
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
+	"starhub/service"
 )
 
 var responseInclude = regexp.MustCompile(`^[A-Za-z0-9_.]{1,128}$`)
@@ -146,9 +147,20 @@ func RetrieveResponse(w http.ResponseWriter, r *http.Request) {
 		writeModeError(w, 502, "server_error", "response_retrieval_failed", "stored response provider returned an invalid object")
 		return
 	}
-	if _, terminal := responseOutcome(result.Status); !terminal {
-		writeModeError(w, 502, "server_error", "response_retrieval_failed", "nonterminal stored responses are not supported yet")
-		return
+	if !ref.Background {
+		if _, terminal := responseOutcome(result.Status); !terminal {
+			writeModeError(w, 502, "server_error", "response_retrieval_failed", "nonterminal stored responses are not supported yet")
+			return
+		}
+	} else {
+		task, err := model.GetTaskByID(ref.TaskID)
+		if err != nil {
+			writeModeError(w, 500, "server_error", "response_settlement_unavailable", "background accounting metadata is unavailable")
+			return
+		}
+		if _, err := service.ObserveBackgroundResponse(task, body); err != nil {
+			w.Header().Set("X-StarHub-Response-Settlement", "pending")
+		}
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	writePassthroughBody(w, response, body)

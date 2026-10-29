@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"starhub/common"
+	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/dto"
 )
@@ -29,6 +30,18 @@ func readResponsesRequirements(r *http.Request, body []byte, req smartRequiremen
 	}
 	if parsed.HasReasoning {
 		req.capabilities = append(req.capabilities, "reasoning")
+	}
+	if ref, ok := r.Context().Value(common.CtxResponseReference).(*model.ResponseReference); ok {
+		req.input += ref.PromptTokens + ref.CompletionTokens
+		if ref.HasImages {
+			req.capabilities = append(req.capabilities, "vision")
+		}
+		if ref.HasTools {
+			req.capabilities = append(req.capabilities, "function_call")
+		}
+		if ref.HasReasoning {
+			req.capabilities = append(req.capabilities, "reasoning")
+		}
 	}
 	req.continuation = parsed.Continuation
 	// Every complete Responses prefix can acquire a pin, including first

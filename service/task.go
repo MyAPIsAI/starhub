@@ -36,6 +36,9 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 	if task.PendingStatus != "" {
 		return settlePendingTask(task)
 	}
+	if task.Platform == "responses" {
+		return pollBackgroundResponse(ctx, task)
+	}
 	if task.TaskPluginID != 0 {
 		age := time.Since(time.Unix(task.SubmitTime, 0))
 		if task.Status == model.TaskStatusSubmitting {

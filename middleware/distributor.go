@@ -135,9 +135,28 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			}
 
 			requestedModel := modelName
+			r, body, err = prepareResponseConversation(r, body)
+			if err != nil {
+				fail(http.StatusNotFound, "conversation_not_found", "conversation is unavailable for this API key or request state")
+				return
+			}
 			autoModelSelected := false
 			var channelCheck func(*model.Channel, string) (bool, error)
 			var chainAdmission func() error
+			ref, err := responseContinuation(r, modelName, body)
+			if err != nil {
+				fail(http.StatusNotFound, "response_not_found", "stored response is unavailable for this API key")
+				return
+			}
+			if ref != nil {
+				autoModelSelected = isAutoModel(modelName)
+				modelName = ref.Model
+				group = ref.Group
+				r = r.WithContext(common.WithValues(r.Context(), common.CtxUsingGroup, ref.Group, common.CtxResponseReference, ref))
+				channelCheck = func(ch *model.Channel, group string) (bool, error) {
+					return ch.ID == ref.ChannelID && group == ref.Group, nil
+				}
+			}
 			// Auto-routing: for the canonical entry or its legacy alias, replace
 			// it with the lowest-cost available model within the token's
 			// authorized scope (group + model whitelist), so the relay can

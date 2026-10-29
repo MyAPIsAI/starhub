@@ -29,6 +29,7 @@ var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,100}$`)
 
 var smartEndpointTags = map[string][]string{
 	"/v1/responses":         {"responses"},
+	"/v1/responses/compact": {"responses"},
 	"/v1/video/generations": {"video"}, "/v1/embeddings": {"embedding", "embeddings"},
 	"/v1/rerank": {"rerank"}, "/v1/audio/speech": {"audio", "tts"},
 	"/v1/audio/transcriptions": {"audio", "stt"}, "/v1/audio/translations": {"audio", "stt"},
@@ -59,7 +60,7 @@ func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartR
 		if isGeminiPath(r.URL.Path) {
 			return readGeminiRequirements(r, body, req)
 		}
-		if r.URL.Path == "/v1/responses" {
+		if r.URL.Path == "/v1/responses" || r.URL.Path == "/v1/responses/compact" {
 			return readResponsesRequirements(r, body, req)
 		}
 		var fields struct {
@@ -190,7 +191,7 @@ func (req smartRequirements) compatible(name, group string, ch *model.Channel) (
 		if err == nil && adaptor.NativeInboundFormat() != dto.InboundGemini {
 			return false, nil
 		}
-	case "/v1/responses":
+	case "/v1/responses", "/v1/responses/compact":
 		if err == nil {
 			_, err = adaptor.ModeURL(ch.BaseURL, channel.RelayModeResponses)
 		}

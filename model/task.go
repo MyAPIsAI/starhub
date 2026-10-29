@@ -150,7 +150,7 @@ func SettleTaskQuota(task *Task, entry *Log) (bool, error) {
 			if res.RowsAffected == 0 {
 				return errTaskAlreadySettled
 			}
-			return nil
+			return updateBackgroundResponseReference(tx, task)
 		})
 	if errors.Is(err, errTaskAlreadySettled) {
 		return false, nil

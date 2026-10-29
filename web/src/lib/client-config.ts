@@ -46,12 +46,34 @@ export function buildClientConfiguration(input: {
   model: string;
   secret?: string;
   apiBase?: string;
+  responses?: boolean;
 }) {
-  if (input.target === "codex") return null;
+  if (input.target === "codex" && !input.responses) return null;
   if (!input.model) return null;
   if (input.secret && !validDemoSecret(input.secret))
     throw new Error("A masked key is not a credential");
   const model = isSmartModelId(input.model) ? SMART_MODEL_ID : input.model;
+  if (input.target === "codex") {
+    const baseUrl = input.apiBase ?? placeholders.apiBase;
+    return {
+      baseUrl,
+      protocol: "Responses",
+      model,
+      secretName: "MYAPIS_API_KEY",
+      credential: input.secret ?? "$MYAPIS_API_KEY",
+      mapping: {},
+      snippet: [
+        "# Set MYAPIS_API_KEY in the environment that launches Codex.",
+        'model_provider = "myapis"',
+        `model = ${JSON.stringify(model)}`,
+        "[model_providers.myapis]",
+        'name = "MyAPIs"',
+        `base_url = ${JSON.stringify(baseUrl)}`,
+        'env_key = "MYAPIS_API_KEY"',
+        'wire_api = "responses"',
+      ].join("\n"),
+    };
+  }
   const secret = input.secret ? shellQuote(input.secret) : '"$MYAPIS_API_KEY"';
   const baseUrl =
     input.target === "claude-code"

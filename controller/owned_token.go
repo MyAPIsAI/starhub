@@ -50,6 +50,14 @@ func GetOwnedTokenChoices(w http.ResponseWriter, r *http.Request) {
 				tags = model.SplitList(meta.Tags)
 			}
 			choice.Protocols = plazaProtocols(item.ChannelTypes[choice.Group], tags)
+			if containsString(tags, "responses") {
+				for _, kind := range item.ChannelTypes[choice.Group] {
+					if kind == 1 {
+						choice.Protocols = append(choice.Protocols, "Responses")
+						break
+					}
+				}
+			}
 		}
 	}
 	common.ApiSuccess(w, map[string]any{"schema": "owned_token_choices_v1", "guarded_actions": true, "user_id": owner, "revision": state.Revision, "choices": state.Choices})

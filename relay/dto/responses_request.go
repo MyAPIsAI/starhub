@@ -27,6 +27,7 @@ type ResponsesRequest struct {
 	HasReasoning       bool              `json:"-"`
 	HasFiles           bool              `json:"-"`
 	Continuation       bool              `json:"-"`
+	Compact            bool              `json:"-"`
 }
 
 func ParseResponsesRequest(body []byte) (*ResponsesRequest, error) {

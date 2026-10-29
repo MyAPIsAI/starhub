@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"starhub/common"
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/dto"
@@ -72,6 +73,16 @@ func observeResponseReference(flow *relayFlow, capture *responseReferenceCapture
 	if _, err := model.LookupResponseReference(ctx, ref.UserID, ref.TokenID, ref.ResponseID, time.Now()); err != nil {
 		log.Printf("Responses ownership reference cannot be resolved: %v", err)
 		return "unavailable"
+	}
+	if lease, ok := flow.ctx.Value(common.CtxResponseConversationLease).(*model.ResponseConversationLease); ok {
+		id := ""
+		if response.Status == "completed" || response.Status == "incomplete" {
+			id = ref.ResponseID
+		}
+		if err := model.FinishResponseConversation(lease.Conversation.ID, lease.Nonce, id); err != nil {
+			return "unavailable"
+		}
+		lease.Done = true
 	}
 	return "recorded"
 }

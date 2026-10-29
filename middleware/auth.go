@@ -50,23 +50,46 @@ func AdminAuth(next http.Handler) http.Handler {
 }
 
 func TokenAuth(next http.Handler) http.Handler {
-	return tokenAuth(next, false)
+	return tokenAuth(next, false, false)
 }
 
 // TokenReadOnlyAuth retains token, owner, IP and group authorization for
 // existing-resource reads, without requiring unused generation quota.
 func TokenReadOnlyAuth(next http.Handler) http.Handler {
-	return tokenAuth(next, true)
+	return tokenAuth(next, true, false)
 }
 
-func tokenAuth(next http.Handler, readOnly bool) http.Handler {
+// TokenResponseControlAuth retains all authorization checks without requiring
+// generation quota for cancelling or deleting an already owned response.
+func TokenResponseControlAuth(next http.Handler) http.Handler {
+	return tokenAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		allowed := strings.HasPrefix(r.URL.Path, "/v1/responses/") && ((r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/cancel")) || r.Method == http.MethodDelete)
+		if !allowed {
+			writeRelayRequestError(w, r, 405, "invalid_request_error", "response_control_only", "this authorization path only manages existing responses")
+			return
+		}
+		next.ServeHTTP(w, r)
+	}), true, true)
+}
+
+func TokenConversationAuth(next http.Handler) http.Handler {
+	return tokenAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if (r.URL.Path != "/v1/conversations" && !strings.HasPrefix(r.URL.Path, "/v1/conversations/")) || (r.Method != "GET" && r.Method != "POST" && r.Method != "DELETE") {
+			writeRelayRequestError(w, r, 405, "invalid_request_error", "conversation_metadata_only", "this authorization path only manages conversation metadata")
+			return
+		}
+		next.ServeHTTP(w, r)
+	}), true, true)
+}
+
+func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if readOnly {
 			w.Header().Set("Cache-Control", "private, no-store")
 			w.Header().Add("Vary", "Authorization")
 			w.Header().Add("Vary", "X-Api-Key")
 		}
-		if readOnly && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if readOnly && !control && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			writeRelayRequestError(w, r, http.StatusMethodNotAllowed, "invalid_request_error", "read_only_auth", "this authorization path only supports existing-resource reads")
 			return
 		}

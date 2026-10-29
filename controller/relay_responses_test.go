@@ -205,7 +205,11 @@ func TestResponsesRejectUnsupportedBeforeAdmission(t *testing.T) {
 			token := mustToken(t, user.ID, 1000000)
 			rec := httptest.NewRecorder()
 			responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, `{"model":"gpt-4o",`+field+`}`))
-			if rec.Code != 400 {
+			want := 400
+			if strings.Contains(field, "previous_response_id") || strings.Contains(field, "conversation") {
+				want = 404
+			}
+			if rec.Code != want {
 				t.Fatalf("unsupported request admitted: %d %s", rec.Code, rec.Body)
 			}
 			after, _ := model.GetUserByID(user.ID)

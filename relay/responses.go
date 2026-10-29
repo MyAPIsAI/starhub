@@ -16,10 +16,10 @@ func ValidateResponsesRequest(req *dto.ResponsesRequest) error {
 	if req.MaxOutputTokens != nil && *req.MaxOutputTokens > common.MaxChatMaxTokens {
 		return fmt.Errorf("max_output_tokens must not exceed %d", common.MaxChatMaxTokens)
 	}
-	if req.Background {
-		return errors.New("background Responses are not available yet")
+	if req.Background && (req.Stream || req.Store == nil || !*req.Store) {
+		return errors.New("background Responses require explicit store:true and stream:false")
 	}
-	if req.PreviousResponseID != "" || (len(req.Conversation) > 0 && !bytes.Equal(bytes.TrimSpace(req.Conversation), []byte("null"))) {
+	if len(req.Conversation) > 0 && !bytes.Equal(bytes.TrimSpace(req.Conversation), []byte("null")) {
 		return errors.New("stored Responses references are not available yet; send complete input history")
 	}
 	if req.HasFiles {

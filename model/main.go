@@ -36,6 +36,9 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
 		return fmt.Errorf("migrate response ownership index: %w", err)
 	}
+	if err := db.AutoMigrate(&ResponseConversation{}); err != nil {
+		return fmt.Errorf("migrate response conversations: %w", err)
+	}
 	if err := db.AutoMigrate(&UserSecurityEvent{}); err != nil {
 		return fmt.Errorf("migrate user security history: %w", err)
 	}

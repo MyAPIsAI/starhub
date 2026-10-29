@@ -12,6 +12,21 @@ import type { KeyModelPolicy } from "./key-model-policy";
 const isUnix = process.platform !== "win32";
 const itUnix = isUnix ? it : it.skip;
 
+it("builds Codex TOML only after explicit server Responses capability", () => {
+  const config = buildClientConfiguration({
+    target: "codex",
+    model: "server-only-model",
+    apiBase: "http://127.0.0.1:8181/v1",
+    responses: true,
+  });
+  expect(config?.protocol).toBe("Responses");
+  expect(config?.snippet).toContain('wire_api = "responses"');
+  expect(config?.snippet).toContain('env_key = "MYAPIS_API_KEY"');
+  expect(config?.snippet).toContain('model = "server-only-model"');
+  expect(config?.snippet).toContain('base_url = "http://127.0.0.1:8181/v1"');
+  expect(config?.snippet).not.toContain("sk-");
+});
+
 const key: KeyModelPolicy = {
   tier: "standard",
   type: "client",

@@ -78,7 +78,7 @@ export default function AccessCenter({
       target === undefined
         ? undefined
         : target === "codex"
-          ? "OpenAI"
+          ? "Responses"
           : clientProtocols[target];
     const seen = new Set<string>();
     const result: { id: string; name: string; kind: "specified" | "smart" }[] =
@@ -156,6 +156,7 @@ export default function AccessCenter({
     key?.active && selectedModel
       ? buildClientConfiguration({
           target: draft.target,
+          responses: draft.target === "codex",
           model: selectedModel.id,
           apiBase:
             typeof window !== "undefined"
@@ -210,7 +211,10 @@ export default function AccessCenter({
       codex: text("Codex（代码客户端）", "Codex", "Codex"),
       "cc-switch": text("CC Switch（配置管理工具）", "CC Switch", "CC Switch"),
     })[target];
-  const validationUrl = `/console/playground?${new URLSearchParams({ key: draft.key, model: draft.model, protocol: protocol ?? "OpenAI" })}`;
+  const validationUrl =
+    draft.target === "codex"
+      ? "/docs?article=responses"
+      : `/console/playground?${new URLSearchParams({ key: draft.key, model: draft.model, protocol: protocol ?? "OpenAI" })}`;
   return (
     <div className="access-center">
       <header className="access-heading">
@@ -399,7 +403,7 @@ export default function AccessCenter({
               </small>
             </div>
           )}
-          {draft.target !== "codex" && (
+          {
             <div className="access-field">
               <label htmlFor="connect-model">
                 {text(
@@ -438,8 +442,8 @@ export default function AccessCenter({
                 )}
               </small>
             </div>
-          )}
-          {draft.model && !selectedModel && draft.target !== "codex" && (
+          }
+          {draft.model && !selectedModel && (
             <div role="alert" className="access-notice access-error">
               {text(
                 `模型 ${draft.model} 未获当前密钥授权、已不可用或不兼容此工具。请明确选择其他模型或密钥；不会自动替换。`,
@@ -466,7 +470,7 @@ export default function AccessCenter({
             <Terminal size={18} />
             {text("手动配置", "Manual configuration", "الإعداد اليدوي")}
           </h2>
-          {draft.target === "codex" ? (
+          {draft.target === "codex" && !config ? (
             <div className="access-empty">
               <h2>
                 {text(
@@ -477,9 +481,9 @@ export default function AccessCenter({
               </h2>
               <p>
                 {text(
-                  "Codex（代码客户端）要求 Responses（响应接口）协议。现目录仅声明聊天、消息和 Gemini（谷歌模型）协议，不能据此认定兼容。",
-                  "Codex requires the Responses protocol. The current catalog declares chat, messages, and Gemini protocols only; compatibility cannot be assumed.",
-                  "يتطلب Codex بروتوكول Responses. يعلن الدليل الحالي بروتوكولات أخرى فقط ولا يمكن افتراض التوافق.",
+                  "请选择明确声明 Responses（响应接口）能力的服务器模型与密钥；其他协议不代表 Codex 兼容。",
+                  "Select a key and a server model explicitly declaring Responses support. Other protocol declarations do not imply Codex compatibility.",
+                  "اختر مفتاحًا ونموذج خادم يعلن دعم Responses صراحةً. لا تعني البروتوكولات الأخرى التوافق مع Codex.",
                 )}
               </p>
               <p>
@@ -561,7 +565,9 @@ export default function AccessCenter({
                     {lang === "zh"
                       ? config.protocol === "Anthropic"
                         ? "（消息接口）"
-                        : "（聊天补全接口）"
+                        : config.protocol === "Responses"
+                          ? "（响应接口）"
+                          : "（聊天补全接口）"
                       : ""}
                   </dd>
                 </div>

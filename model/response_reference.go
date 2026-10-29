@@ -47,6 +47,9 @@ type ResponseReference struct {
 	Group              string `gorm:"size:64;not null" json:"-"`
 	GroupDefinitionID  int64  `gorm:"not null;default:0" json:"-"`
 	Status             string `gorm:"size:16;not null" json:"-"`
+	TaskID             int64  `gorm:"not null;default:0;index" json:"-"`
+	Background         bool   `gorm:"not null;default:false" json:"-"`
+	DeletedAt          int64  `gorm:"not null;default:0" json:"-"`
 	PromptTokens       int64  `gorm:"not null;default:0" json:"-"`
 	CompletionTokens   int64  `gorm:"not null;default:0" json:"-"`
 	HasImages          bool   `gorm:"not null;default:false" json:"-"`
@@ -112,6 +115,8 @@ func validResponseReference(ref ResponseReference, at time.Time) bool {
 		return false
 	}
 	switch ref.Status {
+	case "queued", "in_progress":
+		return ref.Background && ref.TaskID > 0
 	case "completed", "incomplete", "failed", "cancelled":
 		return true
 	}
@@ -167,7 +172,7 @@ func LookupResponseReference(ctx context.Context, userID, tokenID int64, respons
 	if len(found) > 1 {
 		return nil, ErrResponseReferenceAmbiguous
 	}
-	if len(found) == 0 || found[0].ExpiresAt <= at.Unix() || found[0].CreatedAt > at.Unix() {
+	if len(found) == 0 || found[0].DeletedAt != 0 || found[0].ExpiresAt <= at.Unix() || found[0].CreatedAt > at.Unix() {
 		return nil, ErrResponseReferenceNotFound
 	}
 	ref := found[0]

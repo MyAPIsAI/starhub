@@ -197,7 +197,13 @@ func New() http.Handler {
 	}
 	mux.Handle("POST /v1/chat/completions", relayChain(dto.InboundOpenAI, controller.RelayChat))
 	mux.Handle("POST /v1/responses", relayChain(dto.InboundOpenAI, controller.RelayResponses))
+	mux.Handle("POST /v1/responses/compact", relayChain(dto.InboundOpenAI, controller.RelayResponses))
+	mux.Handle("POST /v1/conversations", middleware.TokenConversationAuth(middleware.TokenRateLimit(http.HandlerFunc(controller.CreateResponseConversation))))
+	mux.Handle("GET /v1/conversations/{id}", middleware.TokenConversationAuth(middleware.TokenRateLimit(http.HandlerFunc(controller.GetResponseConversation))))
+	mux.Handle("DELETE /v1/conversations/{id}", middleware.TokenConversationAuth(middleware.TokenRateLimit(http.HandlerFunc(controller.GetResponseConversation))))
 	mux.Handle("GET /v1/responses/{id}", middleware.TokenReadOnlyAuth(middleware.UserRateLimit(middleware.TokenRateLimit(http.HandlerFunc(controller.RetrieveResponse)))))
+	mux.Handle("POST /v1/responses/{id}/cancel", middleware.TokenResponseControlAuth(middleware.UserRateLimit(middleware.TokenRateLimit(http.HandlerFunc(controller.CancelResponse)))))
+	mux.Handle("DELETE /v1/responses/{id}", middleware.TokenResponseControlAuth(middleware.UserRateLimit(middleware.TokenRateLimit(http.HandlerFunc(controller.DeleteResponse)))))
 	mux.Handle("POST /v1beta/models/{method}", relayChain(dto.InboundGemini, controller.RelayGemini))
 	mux.Handle("POST /v1/messages", relayChain(dto.InboundClaude, controller.RelayClaudeChat))
 	mux.Handle("POST /v1/embeddings", relayChain(dto.InboundOpenAI, controller.RelayEmbeddings))

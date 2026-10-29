@@ -6,14 +6,17 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 	"time"
 
+	"starhub/common"
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
+	"starhub/service"
 )
 
 // RelayResponses forwards native foreground Responses JSON and SSE while
@@ -21,12 +24,26 @@ import (
 func RelayResponses(w http.ResponseWriter, r *http.Request) {
 	req := relayRequestFromContext(r)
 	parsed, err := dto.ParseResponsesRequest(req.body)
+	if parsed != nil {
+		parsed.Compact = r.URL.Path == "/v1/responses/compact"
+	}
 	if err == nil {
 		err = relay.ValidateResponsesRequest(parsed)
 	}
 	if err != nil {
 		writeModeError(w, 400, "invalid_request_error", "invalid_request_body", err.Error())
 		return
+	}
+	if parsed.Compact && parsed.Stream {
+		writeModeError(w, 400, "invalid_request_error", "invalid_request_body", "compaction does not support streaming")
+		return
+	}
+	if ref, ok := r.Context().Value(common.CtxResponseReference).(*model.ResponseReference); ok {
+		if ref.PromptTokens+ref.CompletionTokens > math.MaxInt64-parsed.InputTokens {
+			writeModeError(w, 400, "invalid_request_error", "context_length_exceeded", "stored response context exceeds the gateway limit")
+			return
+		}
+		parsed.InputTokens += ref.PromptTokens + ref.CompletionTokens
 	}
 	previousCheck := req.channelCheck
 	req.channelCheck = func(ch *model.Channel, group string) (bool, error) {
@@ -43,8 +60,18 @@ func RelayResponses(w http.ResponseWriter, r *http.Request) {
 		_, err = adaptor.ModeURL(ch.BaseURL, channel.RelayModeResponses)
 		return err == nil, nil
 	}
+	var lease *model.ResponseConversationLease
+	if conversation, ok := r.Context().Value(common.CtxResponseConversation).(*model.ResponseConversation); ok {
+		lease = &model.ResponseConversationLease{Conversation: conversation, Nonce: common.GenerateSessionKey()}
+		r = r.WithContext(common.WithValues(r.Context(), common.CtxResponseConversationLease, lease))
+	}
 	flow := newRelayFlow(r.Context(), w, req, dto.InboundOpenAI, "responses")
 	defer flow.finish()
+	defer func() {
+		if lease != nil && lease.Claimed && !lease.Done && !lease.Sent && !lease.Handoff {
+			_ = model.FinishResponseConversation(lease.Conversation.ID, lease.Nonce, "")
+		}
+	}()
 	if _, err := flow.pick(); err != nil {
 		if errors.Is(err, model.ErrNoChannel) {
 			flow.exhausted()
@@ -60,19 +87,68 @@ func RelayResponses(w http.ResponseWriter, r *http.Request) {
 	}
 	flow.preQuota = pre
 	defer flow.refundUnlessSettled()
+	if lease != nil {
+		if err := model.ClaimResponseConversation(lease.Conversation, lease.Nonce); err != nil {
+			flow.errorOut(409, "invalid_request_error", "conversation_changed", "conversation changed or another turn is active")
+			return
+		}
+		lease.Claimed = true
+	}
 	flow.runChannels(func(ch *model.Channel) attemptResult {
 		adaptor, _ := relay.GetChatAdaptor(ch.Type)
 		url, _ := adaptor.ModeURL(ch.BaseURL, channel.RelayModeResponses)
+		if parsed.Compact {
+			url = strings.TrimRight(url, "/") + "/compact"
+		}
 		key, index := flow.selectKey(ch)
+		if ref, ok := r.Context().Value(common.CtxResponseReference).(*model.ResponseReference); ok {
+			var enabled bool
+			key, enabled = model.ResponseCredential(ch, ref.CredentialIdentity)
+			if !enabled {
+				return attemptResult{outcome: attemptUnsupported}
+			}
+			for i, k := range ch.Keys() {
+				if k == key {
+					index = i
+					break
+				}
+			}
+		}
 		capture, err := captureResponseReference(flow, ch, key, parsed)
 		if err != nil {
 			return attemptResult{outcome: attemptUpstreamError, cause: errors.New("Responses ownership scope could not be captured")}
 		}
+		if parsed.Compact {
+			capture = nil
+		}
+		var background *model.Task
+		if parsed.Background {
+			background, err = beginBackgroundResponse(flow, ch, capture, parsed)
+			if err != nil {
+				flow.errorOut(500, "server_error", "background_snapshot_unavailable", "background billing responsibility could not be persisted")
+				return attemptResult{outcome: attemptUncertain}
+			}
+		}
+		if lease != nil {
+			lease.Sent = true
+		}
 		resp, fail := flow.callUpstream(ch, adaptor, upstreamCall{method: http.MethodPost, url: url, contentType: "application/json", body: req.body, key: key, keyIdx: index, sideEffect: true})
 		if fail != nil {
+			if lease != nil && fail.outcome != attemptUncertain {
+				lease.Sent = false
+			}
+			if background != nil {
+				if fail.outcome != attemptUncertain {
+					_, _ = service.FailBackgroundSubmission(background, "Provider rejected background submission")
+				}
+				fail.outcome = attemptUncertain
+			}
 			return *fail
 		}
 		defer resp.Body.Close()
+		if background != nil {
+			return relayBackgroundResponse(flow, resp, background)
+		}
 		if parsed.Stream {
 			return relayResponsesStream(flow, ch, resp, parsed, capture)
 		}
@@ -81,6 +157,7 @@ func RelayResponses(w http.ResponseWriter, r *http.Request) {
 }
 
 type responseAccounting struct {
+	Object string          `json:"object"`
 	ID     string          `json:"id"`
 	Status string          `json:"status"`
 	Output json.RawMessage `json:"output"`
@@ -132,6 +209,9 @@ func relayResponsesJSON(flow *relayFlow, ch *model.Channel, resp *http.Response,
 		return attemptResult{outcome: attemptUncertain, cause: errors.New("invalid native Responses object")}
 	}
 	status, terminal := responseOutcome(result.Status)
+	if req.Compact && result.Object == "response.compaction" {
+		status, terminal = 1, true
+	}
 	if !terminal {
 		return attemptResult{outcome: attemptUncertain, cause: errors.New("upstream returned a nonterminal foreground Response")}
 	}

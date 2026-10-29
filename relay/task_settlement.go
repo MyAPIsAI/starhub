@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"encoding/json"
 	"starhub/model"
 	"strconv"
 )
@@ -22,6 +23,13 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 	entry := &model.Log{UserID: task.UserID, TokenID: task.TokenID, TokenName: task.TokenName,
 		ChannelID: task.ChannelID, Model: task.Model, RequestedModel: original, Protocol: task.Protocol,
 		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status}
+	if task.Platform == "responses" {
+		var result model.BackgroundResponseOutcome
+		if json.Unmarshal([]byte(task.PendingResultMeta), &result) == nil {
+			entry.PromptTokens = result.PromptTokens
+			entry.CompletionTokens = result.CompletionTokens
+		}
+	}
 	claimed, err := model.SettleTaskQuota(task, entry)
 	if claimed && err == nil {
 		applyAffiliateRebate(entry.ID)
