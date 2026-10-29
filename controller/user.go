@@ -188,8 +188,12 @@ func ListSessions(w http.ResponseWriter, r *http.Request) {
 // TerminateOtherSessions removes all sessions for the current user
 // except the one making the request.
 func TerminateOtherSessions(w http.ResponseWriter, r *http.Request) {
-	count := middleware.Sessions.RemoveAllExcept(requestUserID(r), middleware.SessionToken(r))
-	common.ApiSuccess(w, map[string]any{"terminated": count})
+	owner, ok := sessionTerminationOwner(w, r)
+	if !ok {
+		return
+	}
+	count := middleware.Sessions.RemoveAllExcept(owner, middleware.SessionToken(r))
+	common.ApiSuccess(w, map[string]any{"terminated": count, "user_id": owner})
 }
 
 func GetSelf(w http.ResponseWriter, r *http.Request) {

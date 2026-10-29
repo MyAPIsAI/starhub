@@ -76,8 +76,9 @@ export default function AccountCenter({
     (state) => state.applyAccountSecurity,
   );
   const sessionsQuery = useSessions();
+  const deviceOwnerChanged = sessionsQuery.error instanceof ApiError && sessionsQuery.error.status === 409;
   const terminateOthersMut = useTerminateOtherSessions();
-  const backendSessions: SessionInfo[] = sessionsQuery.data ?? [];
+  const backendSessions: SessionInfo[] = sessionsQuery.isError ? [] : sessionsQuery.data ?? [];
   const logout = useProductPreview((state) => state.logout);
   const queryClient = useQueryClient();
   const updateSelfMut = useUpdateSelf();
@@ -876,13 +877,16 @@ export default function AccountCenter({
                 )}
               </div>
             ))}
-            {!backendSessions.length && !sessionsQuery.isLoading && (
+            {sessionsQuery.isLoading && <p role="status" className="ac-empty-hint">{c("正在读取登录设备…", "Loading account devices…", "جارٍ تحميل أجهزة الحساب…")}</p>}
+            {sessionsQuery.isError && <div role="alert"><p className="ac-empty-hint">{deviceOwnerChanged ? c("登录账号可能已变化，请重新确认当前账号。", "The signed-in account may have changed. Confirm the current account.", "ربما تغير الحساب المسجل. أكّد الحساب الحالي.") : c("暂时无法读取设备列表，旧记录已隐藏。", "The device list is unavailable. Previous records are hidden.", "قائمة الأجهزة غير متاحة. أُخفيت السجلات السابقة.")}</p></div>}
+            {!backendSessions.length && !sessionsQuery.isLoading && !sessionsQuery.isError && session.accountId !== null && (
               <p className="ac-empty-hint">
                 {c("暂无活跃会话。", "No active sessions.", "لا توجد جلسات نشطة.")}
               </p>
             )}
           </div>
           <div className="ac-device-actions">
+            <Button size="small" variant="ghost" onClick={() => deviceOwnerChanged ? window.location.reload() : void sessionsQuery.refetch()} disabled={sessionsQuery.isFetching || terminateOthersMut.isPending || session.accountId === null}>{deviceOwnerChanged ? c("确认当前账号", "Confirm current account", "تأكيد الحساب الحالي") : c("重新读取设备", "Reload devices", "إعادة تحميل الأجهزة")}</Button>
             <Button
               size="small"
               disabled={!otherSessions || terminateOthersMut.isPending}
@@ -897,6 +901,7 @@ export default function AccountCenter({
                       ),
                     );
                   },
+                  onError: () => setNotice(c("未能确认设备操作结果，请重新读取列表后核对。", "The device operation could not be confirmed. Reload the list to check.", "تعذر تأكيد عملية الأجهزة. أعد تحميل القائمة للتحقق.")),
                 });
               }}
             >
