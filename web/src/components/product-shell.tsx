@@ -19,14 +19,17 @@ import { Select } from "./ui/primitives";
 import { Modal } from "./ui/overlay";
 import { BrandMark } from "./brand";
 import { usePreferences } from "../lib/preferences";
-import { useProductPreview } from "../lib/product-preview";
-import { accountDisplayName } from "../lib/account-identity";
 import { useSessionRestore } from "../lib/session-restore";
 import { CodeExample } from "../features/code-example";
 import { type Language } from "../config/placeholders";
 import { useFocusReturn } from "./ui/focus-return";
 import "./public-header.css";
-import { useSystemAccess, isAdmin, canReadFinance } from "../lib/system-access";
+import {
+  useSystemAccess,
+  isAdmin,
+  canReadFinance,
+  sessionUsername,
+} from "../lib/system-access";
 
 export function ProductBrand({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
@@ -44,7 +47,7 @@ export function PublicHeader() {
   const { t } = useTranslation();
   const { pathname, search, hash } = useLocation();
   const language = usePreferences((s) => s.language);
-  const user = useProductPreview((s) => s.user);
+  const session = useSystemAccess((s) => s.session);
   const { status, retry } = useSessionRestore();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
@@ -55,16 +58,17 @@ export function PublicHeader() {
   const text = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
   const accountCenter = text("账号中心", "Account center", "مركز الحساب");
-  const accountName = user.isLoggedIn
-    ? accountDisplayName(user, accountCenter)
+  const authenticated = session.accountId !== null;
+  const accountName = authenticated
+    ? (sessionUsername(session) ?? accountCenter)
     : t("navLogin");
-  const accountLabel = user.isLoggedIn
+  const accountLabel = authenticated
     ? `${accountName} · ${accountCenter}`
     : accountName;
   const accountEntry = (mobile = false) => {
     const className = [
       !mobile && "veyra-public-login",
-      status === "ready" && user.isLoggedIn && "veyra-public-account",
+      status === "ready" && authenticated && "veyra-public-account",
     ]
       .filter(Boolean)
       .join(" ");
@@ -97,7 +101,7 @@ export function PublicHeader() {
         to={
           unavailable
             ? `${pathname}${search}${hash}`
-            : user.isLoggedIn
+            : authenticated
               ? "/console/settings"
               : "/login"
         }
