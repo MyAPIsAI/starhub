@@ -28,28 +28,32 @@ func ReserveQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) erro
 		return nil
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		res := tx.Model(&User{}).
-			Where("id = ? AND quota >= ?", userID, amount).
-			Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount)})
+		return reserveQuota(tx, userID, tokenID, tokenUnlimited, amount)
+	})
+}
+
+func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amount int64) error {
+	res := tx.Model(&User{}).
+		Where("id = ? AND quota >= ?", userID, amount).
+		Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount)})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrUserQuotaShort
+	}
+	if !tokenUnlimited {
+		res := tx.Model(&Token{}).
+			Where("id = ? AND remain_quota >= ?", tokenID, amount).
+			Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota - ?", amount)})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return ErrUserQuotaShort
+			return ErrTokenQuotaShort
 		}
-		if !tokenUnlimited {
-			res := tx.Model(&Token{}).
-				Where("id = ? AND remain_quota >= ?", tokenID, amount).
-				Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota - ?", amount)})
-			if res.Error != nil {
-				return res.Error
-			}
-			if res.RowsAffected == 0 {
-				return ErrTokenQuotaShort
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // ReleaseQuota returns a reservation (full refund when a relay attempt

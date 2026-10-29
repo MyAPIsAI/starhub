@@ -27,7 +27,7 @@ func InitDB(path string) error {
 	if err != nil {
 		return fmt.Errorf("open sqlite database %s: %w", path, err)
 	}
-	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 	if err := db.AutoMigrate(&ChannelConfigurationState{}); err != nil {

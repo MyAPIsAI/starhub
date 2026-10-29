@@ -34,6 +34,7 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 	//    before any quota moves). Channels without task support are
 	//    skipped.
 	var platform string
+	var selectedAdaptor channel.TaskAdaptor
 	var taskReq *dto.TaskRequest
 	for {
 		ch, err := flow.pick()
@@ -42,6 +43,12 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 		}
 		flow.begin(ch)
 		flow.unsupported++
+		if ch.Type == channel.ChannelTypeTaskPlugin {
+			if !submitPluginTask(flow, ch) {
+				continue
+			}
+			return
+		}
 		adaptor, err := relay.GetTaskAdaptor(ch.Type)
 		if err != nil {
 			continue
@@ -51,6 +58,7 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 			flow.errorOut(http.StatusBadRequest, "invalid_request_error", "invalid_request_body", err.Error())
 			return
 		}
+		selectedAdaptor = adaptor
 		platform = adaptor.Platform()
 		taskReq = parsed
 		break
@@ -68,7 +76,7 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 		flow.errorOut(http.StatusBadRequest, "invalid_request_error", "unsupported_task_pricing", "independent token windows are not supported for asynchronous tasks")
 		return
 	}
-	pricing := taskPlatformAdaptor(platform).EstimateBillingWithOptions(req.modelName, billingGroup, taskReq, channel.TaskPricingOptions{ModelPriceUSD: priceData.ModelPriceUSD, ModelPriceSet: priceData.HasModelPrice, Expression: priceData.PriceExpr})
+	pricing := selectedAdaptor.EstimateBillingWithOptions(req.modelName, billingGroup, taskReq, channel.TaskPricingOptions{ModelPriceUSD: priceData.ModelPriceUSD, ModelPriceSet: priceData.HasModelPrice, Expression: priceData.PriceExpr})
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited,
 		relay.TaskPricingQuotaWithPriceData(priceData, pricing))
 	if err != nil {
@@ -86,22 +94,6 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 	flow.runChannels(func(ch *model.Channel) attemptResult {
 		return taskSubmitAttempt(flow, ch, platform, taskReq, pricing)
 	})
-}
-
-// taskPlatformAdaptor resolves the adaptor of a platform name for billing
-// (the estimate/settle hooks do not depend on the concrete channel).
-func taskPlatformAdaptor(platform string) channel.TaskAdaptor {
-	for _, channelType := range []int{
-		channel.ChannelTypeOpenAI,
-		channel.ChannelTypeClaude,
-		channel.ChannelTypeAWS,
-		channel.ChannelTypeGemini,
-	} {
-		if adaptor, err := relay.GetTaskAdaptor(channelType); err == nil && adaptor.Platform() == platform {
-			return adaptor
-		}
-	}
-	return nil
 }
 
 // taskSubmitAttempt submits the validated request to one channel. Side-effecting
@@ -125,12 +117,8 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		return attemptResult{outcome: attemptUpstreamError,
 			cause: fmt.Errorf("channel %d: build submit: %v", ch.ID, err)}
 	}
-	chatAdaptor, err := relay.GetChatAdaptor(ch.Type)
-	if err != nil {
-		return attemptResult{outcome: attemptUnsupported, cause: err}
-	}
 	key, keyIdx := flow.selectKey(ch)
-	resp, fail := flow.callUpstream(ch, chatAdaptor, upstreamCall{
+	resp, fail := flow.callUpstream(ch, adaptor, upstreamCall{
 		method:     http.MethodPost,
 		url:        adaptor.SubmitURL(ch.BaseURL),
 		body:       body,

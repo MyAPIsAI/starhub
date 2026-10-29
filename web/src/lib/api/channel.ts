@@ -9,6 +9,7 @@ import { apiPost, apiPut, apiDelete } from "./http";
 
 export interface ChannelInput {
   name: string;
+  task_plugin_id?: number;
   type?: number;
   key: string;
   key_mode?: string;

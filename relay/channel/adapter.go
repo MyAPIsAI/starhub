@@ -15,10 +15,11 @@ import (
 // Channel type identifiers. The numbering of the P3 providers mirrors the
 // new-api convention so channel configurations port over unchanged.
 const (
-	ChannelTypeOpenAI = 1
-	ChannelTypeClaude = 14
-	ChannelTypeAWS    = 15
-	ChannelTypeGemini = 25
+	ChannelTypeOpenAI     = 1
+	ChannelTypeClaude     = 14
+	ChannelTypeAWS        = 15
+	ChannelTypeGemini     = 25
+	ChannelTypeTaskPlugin = 61
 )
 
 // RelayMode selects the endpoint family of one relay request.

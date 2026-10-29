@@ -50,6 +50,11 @@ func New() http.Handler {
 	mux.Handle("GET /api/finance/summary", middleware.FinanceAuth(http.HandlerFunc(controller.GetFinanceSummary)))
 	mux.Handle("PUT /api/user/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser))))
 
+	mux.Handle("GET /api/task-plugin", middleware.AdminAuth(http.HandlerFunc(controller.ListTaskPlugins)))
+	mux.Handle("POST /api/task-plugin", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UploadTaskPlugin))))
+	mux.Handle("PUT /api/task-plugin/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.SetTaskPluginEnabled))))
+	mux.Handle("POST /api/task-plugin/{id}/test", middleware.AdminAuth(http.HandlerFunc(controller.TestTaskPlugin)))
+
 	mux.Handle("POST /api/channel", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))
 	mux.Handle("POST /api/channel/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))
 	mux.Handle("POST /api/channel/test/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.TestChannel))))

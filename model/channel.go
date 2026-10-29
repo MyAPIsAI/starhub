@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ const (
 
 type Channel struct {
 	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	TaskPluginID   int64  `gorm:"not null;default:0;index" json:"task_plugin_id"`
 	Name           string `gorm:"size:128;not null;default:''" json:"name"`
 	Type           int    `gorm:"not null;default:1" json:"type"`
 	Key            string `gorm:"type:text;not null;default:''" json:"key"`
@@ -42,6 +44,9 @@ type Channel struct {
 
 func InsertChannel(c *Channel) error {
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
+		if err := validateTaskPluginChannel(tx, c); err != nil {
+			return fmt.Errorf("%w: %v", ErrTaskPluginConfiguration, err)
+		}
 		if err := tx.Create(c).Error; err != nil {
 			return err
 		}
@@ -52,9 +57,17 @@ func InsertChannel(c *Channel) error {
 func UpdateChannel(c *Channel) error {
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		var previous Channel
-		err := tx.Select("id", "type", "key", "base_url").First(&previous, "id = ?", c.ID).Error
+		err := tx.Select("id", "type", "key", "base_url", "task_plugin_id").First(&previous, "id = ?", c.ID).Error
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
+		}
+		if err == nil {
+			if err := guardTaskPluginChannel(tx, &previous, c); err != nil {
+				return err
+			}
+		}
+		if err := validateTaskPluginChannel(tx, c); err != nil {
+			return fmt.Errorf("%w: %v", ErrTaskPluginConfiguration, err)
 		}
 		if err == nil && (previous.Type != c.Type || previous.Key != c.Key || previous.BaseURL != c.BaseURL) {
 			if err := revokeResourceGatewayChannel(tx, c.ID); err != nil {
@@ -70,6 +83,16 @@ func UpdateChannel(c *Channel) error {
 
 func DeleteChannel(id int64) error {
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
+		var previous Channel
+		if err := tx.First(&previous, "id = ?", id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrChannelNotFound
+			}
+			return err
+		}
+		if err := guardTaskPluginChannel(tx, &previous, nil); err != nil {
+			return err
+		}
 		res := tx.Delete(&Channel{}, "id = ?", id)
 		if res.Error != nil {
 			return res.Error

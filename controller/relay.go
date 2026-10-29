@@ -548,7 +548,9 @@ type upstreamCall struct {
 // non-nil attemptResult means the attempt is over (nothing else may read
 // the response); a nil result hands the open response to the caller, who
 // owns closing it.
-func (f *relayFlow) callUpstream(ch *model.Channel, adaptor channel.ChatAdaptor, call upstreamCall) (*http.Response, *attemptResult) {
+func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
+	PrepareRequest(*http.Request, string, []byte) error
+}, call upstreamCall) (*http.Response, *attemptResult) {
 	ctx := f.ctx
 	if call.ctx != nil {
 		ctx = call.ctx

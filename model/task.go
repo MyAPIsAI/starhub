@@ -16,6 +16,7 @@ var ErrTaskNotFound = errors.New("task not found")
 // pre-charge reserved at submit; the terminal poll settles the difference.
 type Task struct {
 	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	TaskPluginID   int64  `gorm:"not null;default:0;index" json:"task_plugin_id"`
 	TaskID         string `gorm:"size:128;not null;default:'';index" json:"task_id"`
 	Platform       string `gorm:"size:32;not null;default:''" json:"platform"`
 	Action         string `gorm:"size:32;not null;default:''" json:"action"`
@@ -36,15 +37,18 @@ type Task struct {
 	// UserGroup snapshots the user's own group at submit so the terminal
 	// settlement (which may happen days later) still applies the group x
 	// group matrix multiplier correctly.
-	UserGroup    string `gorm:"size:64;not null;default:''" json:"user_group"`
-	Quota        int64  `gorm:"not null;default:0" json:"quota"`
-	RequestMeta  string `gorm:"type:text;not null;default:''" json:"request_meta"`
-	PricingMeta  string `gorm:"type:text;not null;default:''" json:"pricing_meta"`
-	ResultMeta   string `gorm:"type:text;not null;default:''" json:"result_meta"`
-	FailReason   string `gorm:"size:512;not null;default:''" json:"fail_reason"`
-	SubmitTime   int64  `gorm:"autoCreateTime" json:"submit_time"`
-	UpdateTime   int64  `gorm:"autoUpdateTime" json:"update_time"`
-	CompleteTime int64  `gorm:"not null;default:0" json:"complete_time"`
+	UserGroup          string `gorm:"size:64;not null;default:''" json:"user_group"`
+	Quota              int64  `gorm:"not null;default:0" json:"quota"`
+	RequestMeta        string `gorm:"type:text;not null;default:''" json:"request_meta"`
+	PricingMeta        string `gorm:"type:text;not null;default:''" json:"pricing_meta"`
+	ResultMeta         string `gorm:"type:text;not null;default:''" json:"result_meta"`
+	FailReason         string `gorm:"size:512;not null;default:''" json:"fail_reason"`
+	SubmitTime         int64  `gorm:"autoCreateTime" json:"submit_time"`
+	UpdateTime         int64  `gorm:"autoUpdateTime" json:"update_time"`
+	CompleteTime       int64  `gorm:"not null;default:0" json:"complete_time"`
+	LastPollTime       int64  `gorm:"not null;default:0;index" json:"-"`
+	PluginMissingCount int    `gorm:"not null;default:0" json:"-"`
+	PluginMissingTime  int64  `gorm:"not null;default:0" json:"-"`
 	// Pending settlement is a durable intent. It survives process interruption
 	// and upstream result expiry without committing a terminal task prematurely.
 	PendingStatus     string `gorm:"size:32;not null;default:''" json:"-"`
@@ -69,16 +73,21 @@ func GetTaskByID(id int64) (*Task, error) {
 	return &t, nil
 }
 
-// ListPendingTasks returns up to limit non-terminal tasks (oldest first)
-// for the background poller.
+// ListPendingTasks rotates least recently attempted tasks first, so failures
+// cannot permanently occupy a limited background polling batch.
 func ListPendingTasks(limit int) ([]Task, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
 	var tasks []Task
 	err := DB.Where("status NOT IN ?", []string{"succeeded", "failed", "cancelled"}).
-		Order("id ASC").Limit(limit).Find(&tasks).Error
+		Order("last_poll_time ASC, id ASC").Limit(limit).Find(&tasks).Error
 	return tasks, err
+}
+
+func TouchTaskPoll(id int64) error {
+	return DB.Model(&Task{}).Where("id = ? AND status NOT IN ?", id,
+		[]string{"succeeded", "failed", "cancelled"}).UpdateColumn("last_poll_time", time.Now().UnixNano()).Error
 }
 
 // UpdateTaskProgress refreshes the mutable state of a still-active task.

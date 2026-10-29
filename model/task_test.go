@@ -58,6 +58,31 @@ func TestListPendingTasksExcludesTerminal(t *testing.T) {
 	}
 }
 
+func TestPendingTaskPollingDoesNotStarveLaterTasks(t *testing.T) {
+	newTestDB(t)
+	for range 205 {
+		insertTask(t, "submitted")
+	}
+	first, err := ListPendingTasks(200)
+	if err != nil || len(first) != 200 {
+		t.Fatalf("first batch: %d %v", len(first), err)
+	}
+	for _, task := range first {
+		if err := TouchTaskPoll(task.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	next, err := ListPendingTasks(200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 5 {
+		if next[i].ID <= first[len(first)-1].ID {
+			t.Fatalf("unpolled task starved: first=%d next=%d", first[len(first)-1].ID, next[i].ID)
+		}
+	}
+}
+
 // A non-positive limit falls back to the documented default of 100 rather
 // than degenerating into an unbounded query.
 func TestListPendingTasksLimitFallback(t *testing.T) {

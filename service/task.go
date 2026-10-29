@@ -30,8 +30,24 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 	if dto.IsTerminalTaskStatus(task.Status) {
 		return task, nil
 	}
+	if err := model.TouchTaskPoll(task.ID); err != nil {
+		return task, err
+	}
 	if task.PendingStatus != "" {
 		return settlePendingTask(task)
+	}
+	if task.TaskPluginID != 0 {
+		age := time.Since(time.Unix(task.SubmitTime, 0))
+		if task.Status == model.TaskStatusSubmitting {
+			if age >= PluginSubmissionTimeout {
+				return FailPluginSubmission(task, "Plugin submission did not finish; upstream execution may be uncertain")
+			}
+			return task, nil
+		}
+		if age >= PluginTaskTimeout {
+			return recordAndSettleTask(task, &dto.TaskResult{Status: dto.TaskStatusFailed,
+				FailReason: "Plugin task exceeded the 24-hour completion deadline"}, "", 0)
+		}
 	}
 	ch, err := model.GetChannelByID(task.ChannelID)
 	if err != nil {
@@ -43,6 +59,9 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 			Status:     dto.TaskStatusFailed,
 			FailReason: fmt.Sprintf("channel %d no longer exists", task.ChannelID),
 		}, "", 0)
+	}
+	if task.TaskPluginID != 0 {
+		return pollPluginTask(ctx, task, ch)
 	}
 	adaptor, err := relay.GetTaskAdaptor(ch.Type)
 	if err != nil {

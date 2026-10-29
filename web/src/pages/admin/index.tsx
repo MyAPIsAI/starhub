@@ -52,6 +52,8 @@ import {
   useDeleteRedemption,
   type Redemption,
 } from "../../lib/api/redemption";
+import { TaskPlugins } from "../../features/task-plugins";
+import { useTaskPlugins, TASK_PLUGIN_CHANNEL_TYPE } from "../../lib/api/task-plugin";
 import { ApiError } from "../../lib/api/http";
 
 export default function AdminPortal() {
@@ -67,7 +69,7 @@ export default function AdminPortal() {
 
   const authRole = useSystemAccess((s) => s.role);
   const isRoot = authRole === ROLE_ROOT;
-  const validTabs = ["customers", "models", "analytics", "resources", "incidents", "audit", "redemption", "finance"] as const;
+  const validTabs = ["customers", "models", "analytics", "resources", "incidents", "audit", "redemption", "finance", "plugins"] as const;
   type AdminTab = (typeof validTabs)[number];
   const [tab, setTab] = useState<AdminTab>(() => {
     const urlTab = searchParams.get("tab");
@@ -102,6 +104,7 @@ export default function AdminPortal() {
   const auditQuery = useAdminAudit(1, 20);
   const metricsQuery = useAdminMetrics();
   const channelsQuery = useAdminChannels();
+  const pluginsQuery = useTaskPlugins();
   const testChannelMut = useTestChannel();
   const createChannelMut = useCreateChannel();
   const updateChannelMut = useUpdateChannel();
@@ -359,6 +362,7 @@ export default function AdminPortal() {
             { id: "finance", label: text("财务", "Finance", "المالية"), Icon: CircleDollarSign },
             { id: "analytics", label: t("adminAnalytics"), Icon: BarChart3 },
             { id: "resources", label: t("adminResources"), Icon: RefreshCw },
+            { id: "plugins", label: text("视频插件", "Video plugins", "إضافات الفيديو"), Icon: Cpu },
             { id: "incidents", label: t("adminIncidents"), Icon: Radio },
             { id: "audit", label: t("adminAudit"), Icon: History },
             { id: "redemption", label: text("兑换码", "Redemption", "استرداد"), Icon: CircleDollarSign },
@@ -433,6 +437,7 @@ export default function AdminPortal() {
           </div>
         )}
 
+        {tab === "plugins" && <TaskPlugins />}
         {/* Tab 1: Customers */}
         {tab === "customers" && (
           <div>
@@ -1257,6 +1262,7 @@ export default function AdminPortal() {
                                   base_url: ch.base_url,
                                   key_mode: ch.key_mode,
                                   type: ch.type,
+                                  task_plugin_id: ch.task_plugin_id ?? 0,
                                   status: ch.status,
                                   priority: ch.priority,
                                   weight: ch.weight,
@@ -2029,6 +2035,26 @@ export default function AdminPortal() {
           style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
         >
           <ChannelRoutingNotice onOpenBindings={() => setChannelModalOpen(false)} />
+          <div className="task-plugin-channel-field">
+            <label htmlFor="ch-type">{text("渠道类型", "Channel type", "نوع القناة")}</label>
+            <select id="ch-type" value={channelForm.type ?? 1} onChange={(e) => setChannelForm((f) => ({ ...f, type: Number(e.target.value), task_plugin_id: 0 }))}>
+              <option value={1}>OpenAI</option>
+              <option value={14}>Claude</option>
+              <option value={15}>AWS Bedrock</option>
+              <option value={25}>Gemini</option>
+              <option value={TASK_PLUGIN_CHANNEL_TYPE}>{text("视频任务插件", "Video task plugin", "إضافة مهام الفيديو")}</option>
+            </select>
+          </div>
+          {channelForm.type === TASK_PLUGIN_CHANNEL_TYPE && <div className="task-plugin-channel-field">
+            <label htmlFor="ch-plugin">{text("插件版本", "Plugin version", "إصدار الإضافة")}</label>
+            <select id="ch-plugin" required value={channelForm.task_plugin_id || ""} onChange={(e) => setChannelForm((f) => ({ ...f, task_plugin_id: Number(e.target.value) }))}>
+              <option value="">{text("选择版本", "Select a version", "اختر إصداراً")}</option>
+              {pluginsQuery.data?.map((p) => <option key={p.id} value={p.id}>{p.key} {p.version}{p.enabled ? "" : text("（已禁用）", " (disabled)", " (معطل)")}</option>)}
+            </select>
+            {pluginsQuery.isError && <span role="alert">{pluginsQuery.error.message}</span>}
+            <span>{text("使用单个上游密钥；有未完成任务时不可更换密钥或地址。", "Use one upstream key. Credentials and base URL are locked while tasks are pending.", "استخدم مفتاحاً واحداً. لا يمكن تغيير المفتاح أو العنوان أثناء وجود مهام معلقة.")}</span>
+          </div>}
+
           <div>
             <label htmlFor="ch-name" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
               {text("名称", "Name", "الاسم")}

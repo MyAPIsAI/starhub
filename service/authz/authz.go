@@ -37,6 +37,7 @@ type Resource string
 const (
 	ResourceUser         Resource = "user"
 	ResourceChannel      Resource = "channel"
+	ResourceTaskPlugin   Resource = "task_plugin"
 	ResourceToken        Resource = "token"
 	ResourceOption       Resource = "option"
 	ResourceLog          Resource = "log"
@@ -56,6 +57,7 @@ var policy = map[int]map[Resource]map[Action]bool{
 	common.RoleRoot: {
 		ResourceUser:         {}, // all actions
 		ResourceChannel:      {}, // all actions
+		ResourceTaskPlugin:   {ActionRead: true, ActionWrite: true},
 		ResourceToken:        {}, // all actions
 		ResourceOption:       {}, // all actions
 		ResourceLog:          {}, // all actions
@@ -70,6 +72,7 @@ var policy = map[int]map[Resource]map[Action]bool{
 	common.RoleAdmin: {
 		ResourceUser:         {ActionRead: true},
 		ResourceChannel:      {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceTaskPlugin:   {ActionRead: true, ActionWrite: true},
 		ResourceToken:        {ActionRead: true, ActionWrite: true, ActionDelete: true},
 		ResourceOption:       {ActionRead: true, ActionWrite: true},
 		ResourceLog:          {ActionRead: true},
@@ -128,6 +131,8 @@ func methodAction(method string) Action {
 func pathResource(path string) (Resource, bool) {
 	path = strings.TrimSuffix(path, "/")
 	switch {
+	case path == "/api/task-plugin" || strings.HasPrefix(path, "/api/task-plugin/"):
+		return ResourceTaskPlugin, true
 	case strings.HasPrefix(path, "/api/user"):
 		return ResourceUser, true
 	case strings.HasPrefix(path, "/api/channel"):

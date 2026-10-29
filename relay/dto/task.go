@@ -44,25 +44,27 @@ type TaskRequest struct {
 	Model  string `json:"model"`
 	Prompt string `json:"prompt"`
 	// Video fields (action == "video").
-	Seconds int    `json:"seconds,omitempty"`
-	Size    string `json:"size,omitempty"`
-	N       int    `json:"n,omitempty"`
+	Seconds int                        `json:"seconds,omitempty"`
+	Size    string                     `json:"size,omitempty"`
+	N       int                        `json:"n,omitempty"`
+	Extra   map[string]json.RawMessage `json:"extra,omitempty"`
 }
 
 // ParseVideoTaskRequest parses and validates a Sora-style video submit body
 // ({model, prompt, seconds, size, n}).
 func ParseVideoTaskRequest(body []byte) (*TaskRequest, error) {
 	var raw struct {
-		Model   string `json:"model"`
-		Prompt  string `json:"prompt"`
-		Seconds *int   `json:"seconds"`
-		Size    string `json:"size"`
-		N       *int   `json:"n"`
+		Model   string                     `json:"model"`
+		Prompt  string                     `json:"prompt"`
+		Seconds *int                       `json:"seconds"`
+		Size    string                     `json:"size"`
+		N       *int                       `json:"n"`
+		Extra   map[string]json.RawMessage `json:"extra"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, err
 	}
-	req := &TaskRequest{Action: TaskActionVideo, Model: raw.Model, Prompt: raw.Prompt, Size: raw.Size}
+	req := &TaskRequest{Action: TaskActionVideo, Model: raw.Model, Prompt: raw.Prompt, Size: raw.Size, Extra: raw.Extra}
 	if raw.Seconds != nil {
 		req.Seconds = *raw.Seconds
 	} else {

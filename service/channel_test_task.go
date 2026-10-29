@@ -7,6 +7,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/relay/channel"
 )
 
 // DefaultChannelTestInterval is the period of the background channel health
@@ -42,7 +43,7 @@ func RunChannelTestOnce(ctx context.Context) {
 	}
 	for i := range channels {
 		ch := &channels[i]
-		if ch.Status == common.ChannelStatusManuallyDisabled {
+		if ch.Type == channel.ChannelTypeTaskPlugin || ch.Status == common.ChannelStatusManuallyDisabled {
 			continue
 		}
 		models := model.SplitList(ch.Models)

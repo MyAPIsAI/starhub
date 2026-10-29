@@ -22,6 +22,7 @@
     "test:browser:settings-reset": "node tests/settings-reset-browser.mjs",
     "test:browser:catalog": "node tests/catalog-management-browser.mjs",
     "test:browser:channels": "node tests/channel-workspace-browser.mjs",
+    "test:browser:plugins": "node tests/task-plugins-browser.mjs",
     "test:browser:requests": "node tests/request-history-browser.mjs",
     "test:browser:quality": "node tests/service-quality-browser.mjs",
     "test:browser:auth": "node tests/auth-browser.mjs",

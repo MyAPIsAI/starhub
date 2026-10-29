@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -9,20 +10,22 @@ import (
 	"starhub/common"
 	"starhub/model"
 	"starhub/relay"
+	"starhub/relay/channel"
 	"starhub/service"
 )
 
 type channelPayload struct {
-	Name     string `json:"name"`
-	Type     *int   `json:"type"`
-	Key      string `json:"key"`
-	KeyMode  string `json:"key_mode"`
-	BaseURL  string `json:"base_url"`
-	Models   string `json:"models"`
-	Group    string `json:"group"`
-	Status   *int   `json:"status"`
-	Priority *int64 `json:"priority"`
-	Weight   *int64 `json:"weight"`
+	Name         string `json:"name"`
+	TaskPluginID *int64 `json:"task_plugin_id"`
+	Type         *int   `json:"type"`
+	Key          string `json:"key"`
+	KeyMode      string `json:"key_mode"`
+	BaseURL      string `json:"base_url"`
+	Models       string `json:"models"`
+	Group        string `json:"group"`
+	Status       *int   `json:"status"`
+	Priority     *int64 `json:"priority"`
+	Weight       *int64 `json:"weight"`
 }
 
 // normalizeKeyMode validates the multi-key selection mode: empty keeps the
@@ -102,8 +105,15 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 		Priority: priority,
 		Weight:   weight,
 	}
+	if req.TaskPluginID != nil {
+		ch.TaskPluginID = *req.TaskPluginID
+	}
 	if err := model.InsertChannel(ch); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		status := http.StatusInternalServerError
+		if errors.Is(err, model.ErrTaskPluginConfiguration) {
+			status = http.StatusBadRequest
+		}
+		common.ApiError(w, status, err.Error())
 		return
 	}
 	common.ApiSuccess(w, maskedChannel(ch))
@@ -154,6 +164,16 @@ func UpdateChannel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		common.ApiError(w, http.StatusNotFound, "channel not found")
 		return
+	}
+	if req.TaskPluginID != nil {
+		ch.TaskPluginID = *req.TaskPluginID
+	}
+	if req.Type != nil && *req.Type != 0 {
+		if _, ok := relay.SupportedChannelTypes()[*req.Type]; !ok {
+			common.ApiError(w, http.StatusBadRequest, "unsupported channel type")
+			return
+		}
+		ch.Type = *req.Type
 	}
 	if req.Name != "" {
 		ch.Name = strings.TrimSpace(req.Name)
@@ -207,7 +227,14 @@ func UpdateChannel(w http.ResponseWriter, r *http.Request) {
 		ch.Weight = *req.Weight
 	}
 	if err := model.UpdateChannel(ch); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		status := http.StatusInternalServerError
+		if errors.Is(err, model.ErrTaskPluginConfiguration) {
+			status = http.StatusBadRequest
+		}
+		if errors.Is(err, model.ErrTaskPluginChannelBusy) {
+			status = http.StatusConflict
+		}
+		common.ApiError(w, status, err.Error())
 		return
 	}
 	common.ApiSuccess(w, maskedChannel(ch))
@@ -219,6 +246,10 @@ func DeleteChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := model.DeleteChannel(id); err != nil {
+		if errors.Is(err, model.ErrTaskPluginChannelBusy) {
+			common.ApiError(w, http.StatusConflict, err.Error())
+			return
+		}
 		if err == model.ErrChannelNotFound {
 			common.ApiError(w, http.StatusNotFound, "channel not found")
 			return
@@ -245,6 +276,15 @@ func TestChannel(w http.ResponseWriter, r *http.Request) {
 	ch, err := model.GetChannelByID(id)
 	if err != nil {
 		common.ApiError(w, http.StatusNotFound, "channel not found")
+		return
+	}
+	if ch.Type == channel.ChannelTypeTaskPlugin {
+		_, err := relay.LoadTaskPlugin(r.Context(), ch.TaskPluginID, false)
+		if err != nil {
+			common.ApiError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		common.ApiSuccess(w, channelTestResult{OK: true, Status: ch.Status, Message: "Plugin validated locally; no upstream task was submitted"})
 		return
 	}
 	if _, err := relay.GetChatAdaptor(ch.Type); err != nil {
@@ -311,6 +351,7 @@ func normalizeBaseURL(w http.ResponseWriter, raw string) (string, bool) {
 func maskedChannel(c *model.Channel) map[string]any {
 	return map[string]any{
 		"id":               c.ID,
+		"task_plugin_id":   c.TaskPluginID,
 		"name":             c.Name,
 		"type":             c.Type,
 		"key":              common.MaskKey(c.Key),
