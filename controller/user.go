@@ -138,7 +138,11 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	const sessionTTL = 7 * 24 * time.Hour
-	token := middleware.Sessions.Create(user.ID, sessionTTL)
+	token := middleware.Sessions.CreateConfirmed(user, sessionTTL)
+	if token == "" {
+		common.ApiError(w, http.StatusConflict, "account changed during login; retry sign-in")
+		return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    token,
@@ -161,21 +165,9 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, nil)
 }
 
-// DeactivateSelf disables the current user's account and clears the
-// session. The user can no longer log in until an admin re-enables
-// the account. Wallet balance and keys are preserved.
+// DeactivateSelf requires a confirmed snapshot and never changes the cookie.
 func DeactivateSelf(w http.ResponseWriter, r *http.Request) {
-	userID := requestUserID(r)
-	if err := model.UpdateUserFields(userID, map[string]any{
-		"status": common.StatusDisabled,
-	}); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	middleware.Sessions.Remove(middleware.SessionToken(r))
-	http.SetCookie(w, &http.Cookie{Name: "session", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: middleware.SecureSessionCookie(r), SameSite: http.SameSiteLaxMode})
-	common.ApiSuccess(w, nil)
+	deactivateOwnedAccount(w, r)
 }
 
 // ListSessions returns the current user's active sessions.

@@ -102,7 +102,7 @@ import {
   type ExportRecord,
 } from "../lib/api/exports";
 import { ApiError } from "../lib/api/http";
-import { deactivateSelf } from "../lib/api/user";
+import AccountDeactivation from "../features/account-deactivation";
 import {
   useUserUsage,
   useLogs,
@@ -251,16 +251,6 @@ function ConsoleWorkspace() {
   const keysNearQuota = keys.filter(
     (key) => keyQuotaSummary(key, quotaAt).nearLimit,
   );
-  const deactivateAccount = async () => {
-    try {
-      await deactivateSelf();
-    } catch {
-      // Best-effort: proceed with local cleanup even if the server is unreachable.
-    }
-    // Hard redirect to clear all client-side state (React Query cache,
-    // Zustand stores, sessionStorage drafts).
-    window.location.href = "/";
-  };
 
   const [chartMetric, setChartMetric] = useState<
     "requests" | "cost" | "latency"
@@ -376,7 +366,6 @@ function ConsoleWorkspace() {
 
   // Deactivate modal
   const [deactivateOpen, setDeactivateOpen] = useState(false);
-  const [acknowledgeDust, setAcknowledgeDust] = useState(false);
 
   // Overview metrics derived from the backend usage summary
   // (GET /api/user/usage). Falls back to demo store data when the
@@ -2367,102 +2356,7 @@ function ConsoleWorkspace() {
         </form>
       </Modal>
 
-      <Modal
-        open={deactivateOpen}
-        onOpenChange={(open) => {
-          setDeactivateOpen(open);
-          if (!open) setAcknowledgeDust(false);
-        }}
-        size="compact"
-        preventOutsideClose
-        title={c("确认注销账户", "Close this account", "تأكيد إغلاق الحساب")}
-        description={c(
-          "注销后无法继续使用此账户，所有密钥将失效。",
-          "Closing the account ends access and disables all its keys.",
-          "يؤدي إغلاق الحساب إلى إنهاء الوصول وتعطيل جميع مفاتيحه.",
-        )}
-        footer={
-          <>
-            <Button
-              onClick={() => {
-                setDeactivateOpen(false);
-                setAcknowledgeDust(false);
-              }}
-            >
-              {t("cancel")}
-            </Button>
-            <Button
-              variant="danger"
-              disabled={
-                !balanceKnown ||
-                BigInt(balance) < 0n ||
-                BigInt(balance) >= 10000000n ||
-                (BigInt(balance) > 0n && !acknowledgeDust)
-              }
-              onClick={async () => {
-                if (
-                  !balanceKnown ||
-                  BigInt(balance) < 0n ||
-                  BigInt(balance) >= 10000000n ||
-                  (BigInt(balance) > 0n && !acknowledgeDust)
-                )
-                  return;
-                await deactivateAccount();
-                setDeactivateOpen(false);
-                setAcknowledgeDust(false);
-                navigate("/");
-              }}
-            >
-              {c("确认注销", "Close account", "إغلاق الحساب")}
-            </Button>
-          </>
-        }
-      >
-        <div className="key-task-close-account">
-          <div className="key-task-account-balance">
-            <span>{c("当前余额", "Current balance", "الرصيد الحالي")}</span>
-            <strong dir="ltr">{balanceKnown ? formatMoney(balance, "detail") : "—"}</strong>
-          </div>
-          {!balanceKnown ? (
-            <p role="alert">{c("无法确认钱包余额，请刷新后再处理注销。", "Wallet balance is unconfirmed. Refresh before closing the account.", "رصيد المحفظة غير مؤكد. حدّث قبل إغلاق الحساب.")}</p>
-          ) : BigInt(balance) < 0n ? (
-            <p className="key-task-danger" role="status">
-              {c(
-                "账户仍有未结清金额，请先结清余额，再联系客服处理注销。",
-                "An outstanding balance remains. Settle it and contact support before closing the account.",
-                "يوجد مبلغ مستحق. سدده وتواصل مع الدعم قبل إغلاق الحساب.",
-              )}
-            </p>
-          ) : BigInt(balance) >= 10000000n ? (
-            <p className="key-task-danger" role="status">
-              {t("contactSupportNotice")}
-            </p>
-          ) : BigInt(balance) > 0n ? (
-            <label className="key-task-dust-ack">
-              <input
-                type="checkbox"
-                checked={acknowledgeDust}
-                onChange={(event) => setAcknowledgeDust(event.target.checked)}
-              />
-              <span>
-                {c(
-                  "我确认放弃以上不足 0.01 美元的剩余余额；注销时将清零并记录流水。",
-                  "I agree to forfeit the remaining balance below $0.01. Closing the account will record this write-off.",
-                  "أوافق على التنازل عن الرصيد المتبقي الأقل من 0.01 دولار. سيُسجل تصفيره عند الإغلاق.",
-                )}
-              </span>
-            </label>
-          ) : (
-            <p>
-              {c(
-                "余额为零，可以继续注销。此操作无法撤销。",
-                "The balance is zero. You can close the account; this cannot be undone.",
-                "الرصيد صفر. يمكنك إغلاق الحساب ولا يمكن التراجع عن ذلك.",
-              )}
-            </p>
-          )}
-        </div>
-      </Modal>
+      {deactivateOpen && <AccountDeactivation onClose={() => setDeactivateOpen(false)} />}
 
       <ConfirmDialog
         open={keyConfirmation !== null}

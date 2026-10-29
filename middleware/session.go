@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/model"
 )
 
 type sessionData struct {
-	userID   int64
-	expires  time.Time
-	created  time.Time
+	userID  int64
+	expires time.Time
+	created time.Time
 }
 
 // SessionInfo is the public representation of a session (no token).
@@ -28,6 +29,22 @@ type SessionStore struct {
 }
 
 var Sessions = &SessionStore{data: map[string]*sessionData{}}
+
+// CreateConfirmed serializes the final login check and session insertion with
+// account-wide revocation. A password check started before closure cannot
+// create an active session after closure has revoked the account's sessions.
+func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fresh, err := model.GetUserByID(user.ID)
+	if err != nil || fresh.Status != common.StatusEnabled || fresh.Password != user.Password || fresh.DeactivationVersion != user.DeactivationVersion {
+		return ""
+	}
+	token := common.GenerateSessionKey()
+	now := time.Now()
+	s.data[token] = &sessionData{userID: user.ID, expires: now.Add(ttl), created: now}
+	return token
+}
 
 func (s *SessionStore) Create(userID int64, ttl time.Duration) string {
 	token := common.GenerateSessionKey()

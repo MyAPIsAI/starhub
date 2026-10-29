@@ -40,6 +40,7 @@ func New() http.Handler {
 	mux.Handle("GET /api/user/profile-state", middleware.UserAuth(http.HandlerFunc(controller.GetProfileState)))
 	mux.Handle("GET /api/user/security-state", middleware.UserAuth(http.HandlerFunc(controller.GetUserSecurityState)))
 	mux.Handle("GET /api/user/deactivation-state", middleware.UserAuth(http.HandlerFunc(controller.GetDeactivationState)))
+	mux.HandleFunc("POST /api/user/deactivation-receipt", controller.GetDeactivationReceipt)
 	mux.Handle("PUT /api/user/profile-state", middleware.UserAuth(middleware.PasswordVerificationRateLimit(http.HandlerFunc(controller.UpdateProfileState))))
 	mux.Handle("POST /api/user/sessions/terminate-others", middleware.UserAuth(http.HandlerFunc(controller.TerminateOtherSessions)))
 	mux.Handle("GET /api/user/usage", middleware.UserAuth(http.HandlerFunc(controller.UserUsage)))

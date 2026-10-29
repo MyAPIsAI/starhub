@@ -21,7 +21,7 @@ func TestDeactivationStateIsReadOnlyVersionedAndOwned(t *testing.T) {
 	response := call(GetDeactivationState, testRequest{target: path, userID: owner.ID})
 	var got map[string]json.RawMessage
 	decodeData(t, response, &got)
-	if string(got["schema"]) != `"deactivation_state_v1"` || string(got["policy"]) != `"dust_below_cent_v1"` || string(got["guarded_deactivation"]) != "false" || string(got["wallet_balance_nano"]) != `"9007199254740993"` || string(got["dust_limit_nano"]) != `"10000000"` {
+	if string(got["schema"]) != `"deactivation_state_v1"` || string(got["policy"]) != `"dust_below_cent_v1"` || string(got["guarded_deactivation"]) != "true" || string(got["wallet_balance_nano"]) != `"9007199254740993"` || string(got["dust_limit_nano"]) != `"10000000"` {
 		t.Fatal("invalid exact readonly preview contract")
 	}
 	if strings.Contains(response.Body.String(), owner.Password) || strings.Contains(response.Body.String(), "password") || len(response.Result().Cookies()) != 0 {

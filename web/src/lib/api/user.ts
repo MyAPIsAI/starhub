@@ -107,14 +107,6 @@ export function useUpdateSelf() {
   });
 }
 
-/**
- * Deactivate the current user's account. The backend disables the
- * user and clears the session. Wallet balance and keys are preserved.
- */
-export async function deactivateSelf(): Promise<void> {
-  await apiPost<null>("/api/user/deactivate");
-}
-
 export interface SessionInfo {
   created_at: number;
   expires_at: number;

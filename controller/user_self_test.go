@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -148,10 +149,12 @@ func TestUpdateSelfPasswordAndEmailTogether(t *testing.T) {
 func TestDeactivateSelf(t *testing.T) {
 	newTestDB(t)
 	u := newUser(t, "alice", common.RoleUser, 1000)
+	state, _ := model.ReadAccountDeactivationState(u.ID)
 
 	rr := call(DeactivateSelf, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/deactivate",
+		body:   fmt.Sprintf(`{"schema":"deactivation_action_v1","expected_user_id":%d,"account_revision":"%s","operation_id":"%s"}`, u.ID, state.AccountRevision, "00000000000000000000000000000001"),
 		userID: u.ID,
 		role:   common.RoleUser,
 	})
@@ -171,10 +174,12 @@ func TestDeactivateSelfPreservesData(t *testing.T) {
 	// Create a token and a wallet so we can verify they survive.
 	mustToken(t, u.ID, 1000)
 	model.GetOrCreateWallet(u.ID)
+	state, _ := model.ReadAccountDeactivationState(u.ID)
 
 	call(DeactivateSelf, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/deactivate",
+		body:   fmt.Sprintf(`{"schema":"deactivation_action_v1","expected_user_id":%d,"account_revision":"%s","operation_id":"%s"}`, u.ID, state.AccountRevision, "00000000000000000000000000000002"),
 		userID: u.ID,
 		role:   common.RoleUser,
 	})

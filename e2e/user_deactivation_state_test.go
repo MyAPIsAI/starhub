@@ -47,7 +47,7 @@ func TestDeactivationPreviewRouteGuardsOwnerAndDoesNotChangeMoney(t *testing.T) 
 					Revision string `json:"account_revision"`
 				} `json:"data"`
 			}
-			if json.Unmarshal(raw, &got) != nil || got.Data.Schema != "deactivation_state_v1" || got.Data.Enabled || got.Data.Owner != owner || got.Data.Balance != "9999999" || !got.Data.Ack || len(got.Data.Revision) != 64 {
+			if json.Unmarshal(raw, &got) != nil || got.Data.Schema != "deactivation_state_v1" || !got.Data.Enabled || got.Data.Owner != owner || got.Data.Balance != "9999999" || !got.Data.Ack || len(got.Data.Revision) != 64 {
 				t.Fatal("unexpected preview contract")
 			}
 		}

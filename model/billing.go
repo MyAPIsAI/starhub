@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"starhub/common"
 )
 
 var ErrRechargeOrderNotFound = errors.New("recharge order not found")
@@ -146,7 +147,16 @@ func CreateRechargeOrder(o *RechargeOrder) error {
 	if o.ExpiresAt == 0 {
 		o.ExpiresAt = time.Now().Unix() + RechargeOrderExpirySeconds
 	}
-	return DB.Create(o).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		owner := tx.Model(&User{}).Where("id = ? AND status = ?", o.UserID, common.StatusEnabled).UpdateColumn("id", gorm.Expr("id"))
+		if owner.Error != nil {
+			return owner.Error
+		}
+		if owner.RowsAffected != 1 {
+			return ErrDeactivationUserUnavailable
+		}
+		return tx.Create(o).Error
+	})
 }
 
 // GetRechargeOrder returns an order by its numeric ID.

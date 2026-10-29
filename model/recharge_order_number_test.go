@@ -38,6 +38,10 @@ func TestRechargeOrderNumbersRemainUniqueAtOneFrozenInstant(t *testing.T) {
 
 func TestConcurrentRechargeOrderCreationPersistsDistinctPendingOrders(t *testing.T) {
 	newTestDB(t)
+	owner := &User{Username: "concurrent-recharge-owner", Status: 1, AffCode: "concurrent-recharge"}
+	if err := CreateUser(owner); err != nil {
+		t.Fatal(err)
+	}
 	const workers = 8
 	const perWorker = 16
 	var group sync.WaitGroup
@@ -47,7 +51,7 @@ func TestConcurrentRechargeOrderCreationPersistsDistinctPendingOrders(t *testing
 		go func() {
 			defer group.Done()
 			for j := 0; j < perWorker; j++ {
-				failures <- CreateRechargeOrder(&RechargeOrder{UserID: 1, Amount: 1000000000})
+				failures <- CreateRechargeOrder(&RechargeOrder{UserID: owner.ID, Amount: 1000000000})
 			}
 		}()
 	}

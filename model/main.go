@@ -39,6 +39,9 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&UserSecurityEvent{}); err != nil {
 		return fmt.Errorf("migrate user security history: %w", err)
 	}
+	if err := db.AutoMigrate(&AccountDeactivationReceipt{}); err != nil {
+		return fmt.Errorf("migrate account deactivation receipts: %w", err)
+	}
 	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
 	}
