@@ -124,7 +124,17 @@ export function useTokens() {
     retry: false,
     queryFn: async ({ signal }) => {
       assertTokenSession(identity);
-      const tokens = await apiGet<Token[]>("/api/token", signal);
+      let tokens: Token[];
+      try {
+        tokens = await apiGet<Token[]>("/api/token", signal, {
+          handleUnauthorizedLocally: true,
+        });
+      } catch (error) {
+        assertTokenSession(identity);
+        if (error instanceof ApiError && error.status === 401)
+          useSystemAccess.getState().setSession(null);
+        throw error;
+      }
       assertTokenSession(identity);
       if (
         !Array.isArray(tokens) ||
