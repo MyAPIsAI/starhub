@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"starhub/relay/dto"
 	"strings"
 	"time"
 
@@ -49,11 +50,37 @@ type Request struct {
 }
 
 type Usage struct {
-	Seconds float64 `json:"seconds"`
-	N       float64 `json:"n"`
+	Tokens  *dto.Usage `json:"tokens,omitempty"`
+	Seconds float64    `json:"seconds"`
+	N       float64    `json:"n"`
+}
+
+func (u *Usage) UnmarshalJSON(raw []byte) error {
+	var fields struct {
+		Seconds float64         `json:"seconds"`
+		N       float64         `json:"n"`
+		Tokens  json.RawMessage `json:"tokens"`
+	}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	tokens, err := dto.ParseTaskUsage(fields.Tokens)
+	if err != nil {
+		return err
+	}
+	*u = Usage{Seconds: fields.Seconds, N: fields.N, Tokens: tokens}
+	return nil
 }
 
 func (u Usage) Validate() error {
+	if u.Tokens != nil {
+		if err := dto.ValidateTaskUsage(u.Tokens); err != nil {
+			return err
+		}
+		if u.Seconds == 0 && u.N == 0 {
+			return nil
+		}
+	}
 	if !(u.Seconds > 0 && u.Seconds <= 60 && u.N > 0 && u.N <= 10 && math.Trunc(u.N) == u.N) {
 		return errors.New("plugin usage requires seconds in (0,60] and n in (0,10]")
 	}

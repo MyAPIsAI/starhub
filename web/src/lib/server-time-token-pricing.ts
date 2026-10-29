@@ -35,7 +35,7 @@ export interface ServerTokenTimePricing {
   schema: "weekly_token_prices_v1";
   billing_active: true;
   token_only: true;
-  asynchronous_tasks: false;
+  asynchronous_tasks: true;
   multiplier_behavior: "stacked";
   rules: Record<string, TokenTimeSchedule>;
 }
@@ -101,7 +101,7 @@ export function readTokenTimeAcknowledgement(value: unknown) {
     state.revision_guards !== true ||
     state.billing_active !== true ||
     state.token_only !== true ||
-    state.asynchronous_tasks !== false ||
+    state.asynchronous_tasks !== true ||
     state.multiplier_behavior !== "stacked"
   )
     throw Error("Unsupported independent token-pricing capabilities");
@@ -183,7 +183,7 @@ export function readServerTokenTimePricing(
     schema: "weekly_token_prices_v1",
     billing_active: true,
     token_only: true,
-    asynchronous_tasks: false,
+    asynchronous_tasks: true,
     multiplier_behavior: "stacked",
     rules,
   };

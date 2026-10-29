@@ -47,7 +47,7 @@ const ack = (version = 3) => ({
   schema: "weekly_token_prices_v1",
   billing_active: true,
   token_only: true,
-  asynchronous_tasks: false,
+  asynchronous_tasks: true,
   multiplier_behavior: "stacked",
 });
 beforeEach(() => {
@@ -115,7 +115,7 @@ describe("independent time pricing confirmed-session transport", () => {
     expect(fake.put).not.toHaveBeenCalled();
     for (const response of [
       { ...ack(4), billing_active: false },
-      { ...ack(4), asynchronous_tasks: true },
+      { ...ack(4), asynchronous_tasks: false },
       ack(6),
       ack(2),
     ]) {

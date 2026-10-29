@@ -39,7 +39,7 @@ func (req smartRequirements) managedAllowed(policy *model.ResourceGatewayPolicy)
 			"/v1/rerank":             "model query documents top_n return_documents max_chunks_per_doc",
 			"/v1/audio/speech":       "model input voice response_format speed instructions",
 			"/v1/images/generations": "model prompt n size quality style response_format user background output_format output_compression moderation",
-			"/v1/video/generations":  "model prompt seconds size n extra",
+			"/v1/video/generations":  "model prompt seconds size n extra max_output_tokens",
 		}[req.path]
 		if keys == "" {
 			return false

@@ -5,23 +5,44 @@ import (
 	"fmt"
 
 	"starhub/common"
+	"starhub/pkg/pricingtime"
 	"starhub/relay/channel"
 )
 
 type TaskBillingSnapshot struct {
+	Version   int                 `json:"version,omitempty"`
 	PriceData PriceData           `json:"price_data"`
 	Estimate  channel.TaskPricing `json:"estimate"`
 }
 
-// Absolute token tariffs are not enabled for asynchronous tasks until every
-// persisted-snapshot consumer supports them. Reject before submitting upstream;
-// older workers would otherwise silently ignore the new PriceData field.
+// Version two snapshots carry independent unit prices and complete token facts.
 func (s TaskBillingSnapshot) MarshalJSON() ([]byte, error) {
-	if s.PriceData.TokenRates.Valid() {
-		return nil, fmt.Errorf("independent token prices are not supported for asynchronous task snapshots")
+	if s.Version < 0 || s.Version > 2 {
+		return nil, fmt.Errorf("unsupported task pricing snapshot version")
+	}
+	if s.PriceData.HasIndependentTaskPricing() {
+		s.Version = 2
 	}
 	type snapshot TaskBillingSnapshot
 	return json.Marshal(snapshot(s))
+}
+func (s *TaskBillingSnapshot) UnmarshalJSON(raw []byte) error {
+	type snapshot TaskBillingSnapshot
+	var value snapshot
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value.Version < 0 || value.Version > 2 || (value.PriceData.TokenRates.Valid() && value.Version != 2) {
+		return fmt.Errorf("unsupported task pricing snapshot version")
+	}
+	if value.Estimate.PromptTokens < 0 || value.Estimate.CompletionTokens < 0 {
+		return fmt.Errorf("invalid task token estimate")
+	}
+	if value.Version < 2 && !value.PriceData.TokenRates.Valid() {
+		value.PriceData.TokenTimeAdjustment = pricingtime.TokenAdjustment{}
+	}
+	*s = TaskBillingSnapshot(value)
+	return nil
 }
 
 // TaskPricingQuota converts a platform's TaskPricing into quota (the
@@ -46,11 +67,19 @@ func TaskPricingQuotaWithUserGroup(modelName, group, userGroup string, p channel
 //	per-call (PerCallUSD > 0)       -> PerCallUSD x Units x EffectiveRatio
 //	token                           -> token billing on Prompt/CompletionTokens
 //
+// A version two token contract takes priority and uses base token rates
+// outside independent windows. Other contracts retain legacy precedence.
 // The expression path takes priority when the model has a configured
 // expression AND the platform filled ExprVars. A failed expression falls
 // through to per-call / token billing (same fallback semantics as
 // ComputeUsageQuota).
 func TaskPricingQuotaWithPriceData(pd *PriceData, p channel.TaskPricing) int64 {
+	if pd.HasIndependentTaskPricing() {
+		if p.Usage != nil {
+			return tokenUsageQuota(pd, p.Usage)
+		}
+		return taskTokenReserveQuota(pd, p.PromptTokens, p.CompletionTokens)
+	}
 	if pd.IsExpression() && len(p.ExprVars) > 0 {
 		if q, ok := evalExpression(pd, p.ExprVars); ok {
 			return q

@@ -11,7 +11,7 @@ import (
 )
 
 func tokenTimePricingCapabilities(version int64) map[string]any {
-	return map[string]any{"version": version, "loaded_version": model.LoadedOptionVersion(), "revision_guards": true, "schema": pricingtime.TokenPricesSchema, "billing_active": true, "token_only": true, "asynchronous_tasks": false, "multiplier_behavior": "stacked"}
+	return map[string]any{"version": version, "loaded_version": model.LoadedOptionVersion(), "revision_guards": true, "schema": pricingtime.TokenPricesSchema, "billing_active": true, "token_only": true, "asynchronous_tasks": true, "task_pricing_snapshot": 2, "missing_usage_behavior": "admission_estimate", "multiplier_behavior": "stacked"}
 }
 
 func GetTokenTimePricing(w http.ResponseWriter, r *http.Request) {

@@ -43,6 +43,8 @@ type TaskRequest struct {
 	Action string `json:"action"`
 	Model  string `json:"model"`
 	Prompt string `json:"prompt"`
+	// MaxOutputTokens is a gateway reservation estimate, not a provider output limit.
+	MaxOutputTokens int64 `json:"max_output_tokens,omitempty"`
 	// Video fields (action == "video").
 	Seconds int                        `json:"seconds,omitempty"`
 	Size    string                     `json:"size,omitempty"`
@@ -54,17 +56,18 @@ type TaskRequest struct {
 // ({model, prompt, seconds, size, n}).
 func ParseVideoTaskRequest(body []byte) (*TaskRequest, error) {
 	var raw struct {
-		Model   string                     `json:"model"`
-		Prompt  string                     `json:"prompt"`
-		Seconds *int                       `json:"seconds"`
-		Size    string                     `json:"size"`
-		N       *int                       `json:"n"`
-		Extra   map[string]json.RawMessage `json:"extra"`
+		Model           string                     `json:"model"`
+		MaxOutputTokens int64                      `json:"max_output_tokens"`
+		Prompt          string                     `json:"prompt"`
+		Seconds         *int                       `json:"seconds"`
+		Size            string                     `json:"size"`
+		N               *int                       `json:"n"`
+		Extra           map[string]json.RawMessage `json:"extra"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, err
 	}
-	req := &TaskRequest{Action: TaskActionVideo, Model: raw.Model, Prompt: raw.Prompt, Size: raw.Size, Extra: raw.Extra}
+	req := &TaskRequest{Action: TaskActionVideo, Model: raw.Model, MaxOutputTokens: raw.MaxOutputTokens, Prompt: raw.Prompt, Size: raw.Size, Extra: raw.Extra}
 	if raw.Seconds != nil {
 		req.Seconds = *raw.Seconds
 	} else {
@@ -74,6 +77,9 @@ func ParseVideoTaskRequest(body []byte) (*TaskRequest, error) {
 		req.N = *raw.N
 	} else {
 		req.N = 1
+	}
+	if req.MaxOutputTokens < 0 || req.MaxOutputTokens > 1_000_000 {
+		return nil, fmt.Errorf("max_output_tokens must be between 0 and 1000000")
 	}
 	if req.Model == "" {
 		return nil, fmt.Errorf("the \"model\" field is required")
@@ -95,11 +101,13 @@ func ParseVideoTaskRequest(body []byte) (*TaskRequest, error) {
 
 // TaskResult is the normalized result of one upstream poll.
 type TaskResult struct {
-	Status     string   `json:"status"` // submitted / in_progress / succeeded / failed / cancelled
-	Progress   int      `json:"progress"`
-	FailReason string   `json:"fail_reason,omitempty"`
-	Outputs    []string `json:"outputs,omitempty"` // video / music URLs
-	Usage      *Usage   `json:"usage,omitempty"`
+	UsageError         string   `json:"-"`
+	BillingUsageSource string   `json:"billing_usage_source,omitempty"`
+	Status             string   `json:"status"` // submitted / in_progress / succeeded / failed / cancelled
+	Progress           int      `json:"progress"`
+	FailReason         string   `json:"fail_reason,omitempty"`
+	Outputs            []string `json:"outputs,omitempty"` // video / music URLs
+	Usage              *Usage   `json:"usage,omitempty"`
 }
 
 // TaskSubmitResponse is the client-facing submit response.
@@ -111,15 +119,17 @@ type TaskSubmitResponse struct {
 
 // TaskView is the client-facing task status document.
 type TaskView struct {
-	ID           string   `json:"id"`
-	Status       string   `json:"status"`
-	Progress     int      `json:"progress"`
-	VideoURL     string   `json:"video_url,omitempty"`
-	Outputs      []string `json:"outputs,omitempty"`
-	FailReason   string   `json:"fail_reason,omitempty"`
-	Model        string   `json:"model,omitempty"`
-	SubmitTime   int64    `json:"submit_time,omitempty"`
-	CompleteTime int64    `json:"complete_time,omitempty"`
+	BillingUsageSource string   `json:"billing_usage_source,omitempty"`
+	Usage              *Usage   `json:"usage,omitempty"`
+	ID                 string   `json:"id"`
+	Status             string   `json:"status"`
+	Progress           int      `json:"progress"`
+	VideoURL           string   `json:"video_url,omitempty"`
+	Outputs            []string `json:"outputs,omitempty"`
+	FailReason         string   `json:"fail_reason,omitempty"`
+	Model              string   `json:"model,omitempty"`
+	SubmitTime         int64    `json:"submit_time,omitempty"`
+	CompleteTime       int64    `json:"complete_time,omitempty"`
 }
 
 // ParseVideoTaskSubmitResponse extracts the upstream task id from an OpenAI
@@ -147,9 +157,10 @@ func ParseVideoTaskSubmitResponse(body []byte) (string, error) {
 // ParseVideoTaskResult normalizes an OpenAI Sora-style poll response.
 func ParseVideoTaskResult(body []byte) (*TaskResult, error) {
 	var resp struct {
-		ID       string `json:"id"`
-		Status   string `json:"status"`
-		Progress int    `json:"progress"`
+		Usage    json.RawMessage `json:"usage"`
+		ID       string          `json:"id"`
+		Status   string          `json:"status"`
+		Progress int             `json:"progress"`
 		Error    *struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
@@ -161,7 +172,11 @@ func ParseVideoTaskResult(body []byte) (*TaskResult, error) {
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}
-	out := &TaskResult{Progress: resp.Progress}
+	usage, err := ParseTaskUsage(resp.Usage)
+	out := &TaskResult{Progress: resp.Progress, Usage: usage}
+	if err != nil {
+		out.UsageError = err.Error()
+	}
 	switch resp.Status {
 	case "queued", "pending":
 		out.Status = TaskStatusInProgress

@@ -205,9 +205,9 @@ function TokenTimeEditor() {
           </h3>
           <p>
             {text(
-              "每个时段明确填写六类词元单价，单位为美元/百万词元。仅支持按词元计费的同步请求；现有分组与分时倍率继续叠加，异步任务暂不支持。",
-              "Set all six token prices per window in USD per million tokens. Supports synchronous token billing; existing group and time multipliers still apply. Asynchronous tasks are not supported.",
-              "حدد أسعار فئات الرموز الست لكل فترة بالدولار لكل مليون رمز. تدعم الطلبات المتزامنة بفوترة الرموز مع معاملات المجموعة والوقت الحالية؛ لا تُدعم المهام غير المتزامنة.",
+              "每个时段明确填写六类词元单价，单位为美元/百万词元。支持同步请求与异步任务的词元计费；分组与分时倍率继续叠加。任务按提交费率冻结，有实际用量按实际结算；缺少用量时按提交估算结算并标注来源，失败退款、取消按一半估算。",
+              "Set all six token prices per window in USD per million tokens. Supports synchronous and asynchronous token billing with group and time multipliers. Tasks freeze admission prices and bill reported usage; missing usage uses the labelled admission estimate (failed: refund; cancelled: half estimate).",
+              "حدد أسعار فئات الرموز الست لكل فترة بالدولار لكل مليون رمز. تدعم الطلبات المتزامنة والمهام مع معاملات المجموعة والوقت. تُثبّت أسعار القبول وتُحسب الرموز الفعلية؛ عند غيابها يُستخدم تقدير القبول المعلن، مع رد الفشل ونصف التقدير للإلغاء.",
             )}
           </p>
         </div>

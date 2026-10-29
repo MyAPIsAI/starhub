@@ -9,7 +9,10 @@ import (
 
 	"starhub/model"
 	"starhub/pkg/billingexpr"
+	"starhub/pkg/pricingtime"
 	"starhub/pkg/taskplugin"
+	"starhub/relay/channel"
+	"starhub/relay/dto"
 )
 
 var taskPluginCache sync.Map
@@ -39,11 +42,17 @@ func PluginTaskQuota(pd *PriceData, usage taskplugin.Usage, status string) (int6
 	if err := usage.Validate(); err != nil {
 		return 0, err
 	}
-	if pd.TokenRates.Valid() {
-		return 0, errors.New("independent token prices are not supported for tasks")
+	if pd.HasIndependentTaskPricing() {
+		if usage.Tokens == nil {
+			return 0, errors.New("independent task prices require explicit token usage")
+		}
+		return tokenUsageQuota(pd, usage.Tokens), nil
 	}
 	if status == "failed" || status == "cancelled" {
 		return 0, nil
+	}
+	if usage.Seconds <= 0 || usage.N <= 0 {
+		return 0, errors.New("duration prices require seconds and n")
 	}
 	vars := map[string]float64{"seconds": usage.Seconds, "n": usage.N, "task_status": 1}
 	if pd.IsExpression() {
@@ -60,8 +69,10 @@ func PluginTaskQuota(pd *PriceData, usage taskplugin.Usage, status string) (int6
 }
 
 type PluginTaskPricingSnapshot struct {
-	PriceData PriceData        `json:"price_data"`
-	Usage     taskplugin.Usage `json:"usage"`
+	Version   int                 `json:"version,omitempty"`
+	Estimate  channel.TaskPricing `json:"token_estimate,omitempty"`
+	PriceData PriceData           `json:"price_data"`
+	Usage     taskplugin.Usage    `json:"usage"`
 }
 
 func PluginTaskFinalQuota(task *model.Task, result taskplugin.Result) (int64, error) {
@@ -69,8 +80,46 @@ func PluginTaskFinalQuota(task *model.Task, result taskplugin.Result) (int64, er
 	if err := json.Unmarshal([]byte(task.PricingMeta), &snapshot); err != nil {
 		return 0, errors.New("invalid plugin task pricing snapshot")
 	}
+	if snapshot.Version < 2 && !snapshot.PriceData.TokenRates.Valid() {
+		snapshot.PriceData.TokenTimeAdjustment = pricingtime.TokenAdjustment{}
+	}
+	if snapshot.PriceData.HasIndependentTaskPricing() {
+		if snapshot.Version != 2 {
+			return 0, errors.New("unsupported plugin task pricing snapshot")
+		}
+		if result.Usage != nil && result.Usage.Tokens != nil {
+			return PluginTaskQuota(&snapshot.PriceData, *result.Usage, result.Status)
+		}
+		estimate := snapshot.Estimate
+		if estimate.PromptTokens < 0 || estimate.CompletionTokens < 0 {
+			return 0, errors.New("invalid plugin task token estimate")
+		}
+		if result.Status == "failed" {
+			return 0, nil
+		}
+		if result.Status == "cancelled" {
+			estimate.PromptTokens /= 2
+			estimate.CompletionTokens /= 2
+		}
+		return TaskPricingQuotaWithPriceData(&snapshot.PriceData, estimate), nil
+	}
+	if snapshot.Version < 0 || snapshot.Version > 2 {
+		return 0, errors.New("unsupported plugin task pricing snapshot")
+	}
 	if result.Usage != nil {
 		snapshot.Usage = *result.Usage
 	}
 	return PluginTaskQuota(&snapshot.PriceData, snapshot.Usage, result.Status)
+}
+
+// PluginTaskReservation prices host estimates without trusting a plugin price.
+func PluginTaskReservation(pd *PriceData, request *dto.TaskRequest, usage taskplugin.Usage) (int64, error) {
+	if !pd.HasIndependentTaskPricing() {
+		return PluginTaskQuota(pd, usage, "succeeded")
+	}
+	if err := usage.Validate(); err != nil {
+		return 0, err
+	}
+	estimate := TaskTokenEstimate(request)
+	return TaskPricingQuotaWithPriceData(pd, estimate), nil
 }

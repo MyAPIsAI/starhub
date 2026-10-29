@@ -1,6 +1,7 @@
 package model
 
 type Log struct {
+	UsageSource      string `gorm:"size:32;not null;default:''" json:"usage_source,omitempty"`
 	ID               int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID           int64  `gorm:"index;not null;default:0" json:"user_id"`
 	TokenID          int64  `gorm:"index;not null;default:0" json:"token_id"`

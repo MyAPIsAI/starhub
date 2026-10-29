@@ -142,7 +142,9 @@ func ObserveBackgroundResponse(task *model.Task, raw []byte) (*model.Task, error
 	if err != nil {
 		return task, err
 	}
+	source := "upstream"
 	if usage == nil {
+		source = "admission_estimate"
 		out := int64(0)
 		encoded, _ := json.Marshal(map[string]any{"model": task.Model, "input": response.Output})
 		if parsed, e := dto.ParseResponsesRequest(encoded); e == nil {
@@ -157,7 +159,7 @@ func ObserveBackgroundResponse(task *model.Task, raw []byte) (*model.Task, error
 	if response.Status == "failed" || response.Status == "cancelled" {
 		status = response.Status
 	}
-	outcome := model.BackgroundResponseOutcome{ResponseStatus: response.Status, PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens, HasImages: snapshot.Binding.HasImages, HasTools: snapshot.Binding.HasTools, HasReasoning: snapshot.Binding.HasReasoning}
+	outcome := model.BackgroundResponseOutcome{UsageSource: source, ResponseStatus: response.Status, PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens, HasImages: snapshot.Binding.HasImages, HasTools: snapshot.Binding.HasTools, HasReasoning: snapshot.Binding.HasReasoning}
 	if len(response.Output) > 0 {
 		encoded, _ := json.Marshal(map[string]any{"model": task.Model, "input": response.Output})
 		if output, e := dto.ParseResponsesRequest(encoded); e == nil {

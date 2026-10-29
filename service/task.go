@@ -109,7 +109,12 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 
 	resultMeta, _ := json.Marshal(result)
 	if dto.IsTerminalTaskStatus(result.Status) {
-		return recordAndSettleTask(task, result, string(resultMeta), taskFinalQuota(task, adaptor, result))
+		actual, err := taskFinalQuota(task, adaptor, result)
+		if err != nil {
+			return task, err
+		}
+		resultMeta, _ = json.Marshal(result)
+		return recordAndSettleTask(task, result, string(resultMeta), actual)
 	}
 	if err := model.UpdateTaskProgress(task.ID, result.Status, result.Progress, string(resultMeta)); err != nil {
 		log.Printf("update task %d progress failed: %v", task.ID, err)
@@ -121,13 +126,14 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 }
 
 // taskFinalQuota prices the terminal task (AdjustBillingOnComplete) and
-// balances the pre-payment: failed tasks refund fully, cancellations
-// partially, successes keep (or adjust to) the request-based bill.
-func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.TaskResult) int64 {
+// balances the pre-payment. Legacy status discounts stay unchanged. New
+// token contracts bill reported facts even on failure or cancellation; missing
+// facts use the labelled admission estimate and legacy status discounts.
+func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.TaskResult) (int64, error) {
 	var req dto.TaskRequest
 	if err := json.Unmarshal([]byte(task.RequestMeta), &req); err != nil {
-		log.Printf("task %d has an unreadable request meta, refunding: %v", task.ID, err)
-		return 0
+		log.Printf("task %d has unreadable request metadata; settlement remains pending: %v", task.ID, err)
+		return 0, fmt.Errorf("unreadable task request metadata")
 	}
 	accepted := adaptor.EstimateBilling(task.Model, task.Group, &req)
 	priceData := relay.NewPriceDataWithUserGroup(task.Model, task.Group, task.UserGroup)
@@ -143,16 +149,30 @@ func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.T
 	if task.PricingMeta != "" {
 		var snapshot relay.TaskBillingSnapshot
 		if err := json.Unmarshal([]byte(task.PricingMeta), &snapshot); err != nil {
-			log.Printf("task %d has an unreadable pricing snapshot, refunding: %v", task.ID, err)
-			return 0
+			log.Printf("task %d has an unreadable pricing snapshot; settlement remains pending: %v", task.ID, err)
+			return 0, err
 		} else {
 			priceData = &snapshot.PriceData
 			accepted = snapshot.Estimate
 		}
 	}
 	pricing := adaptor.AdjustBillingOnComplete(task.Model, task.Group, &req, result, accepted)
+	if priceData.HasIndependentTaskPricing() {
+		if result.UsageError != "" {
+			return 0, fmt.Errorf("invalid provider token usage: %s", result.UsageError)
+		}
+		if result.Usage != nil {
+			if err := dto.ValidateTaskUsage(result.Usage); err != nil {
+				return 0, err
+			}
+			pricing.Usage = result.Usage
+			result.BillingUsageSource = "upstream"
+		} else {
+			result.BillingUsageSource = "admission_estimate"
+		}
+	}
 	actual := relay.TaskPricingQuotaWithPriceData(priceData, pricing)
-	return actual
+	return actual, nil
 }
 
 func recordAndSettleTask(task *model.Task, result *dto.TaskResult, meta string, actual int64) (*model.Task, error) {

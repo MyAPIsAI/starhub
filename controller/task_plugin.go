@@ -127,12 +127,17 @@ func submitPluginTask(flow *relayFlow, picked *model.Channel) bool {
 		return true
 	}
 	pd := flow.req.priceFor(flow.settleGroup())
-	quota, err := relay.PluginTaskQuota(pd, prepared.Usage, dto.TaskStatusSucceeded)
+	quota, err := relay.PluginTaskReservation(pd, taskReq, prepared.Usage)
 	if err != nil {
 		flow.errorOut(400, "invalid_request_error", "invalid_task_pricing", err.Error())
 		return true
 	}
-	pricing, err := json.Marshal(relay.PluginTaskPricingSnapshot{PriceData: *pd, Usage: prepared.Usage})
+	snapshot := relay.PluginTaskPricingSnapshot{PriceData: *pd, Usage: prepared.Usage}
+	if pd.HasIndependentTaskPricing() {
+		snapshot.Version = 2
+		snapshot.Estimate = relay.TaskTokenEstimate(taskReq)
+	}
+	pricing, err := json.Marshal(snapshot)
 	if err != nil {
 		flow.errorOut(500, "server_error", "invalid_task_pricing", "Unable to save task pricing")
 		return true

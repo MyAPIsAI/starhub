@@ -97,6 +97,14 @@ func pollPluginTask(ctx context.Context, task *model.Task, ch *model.Channel) (*
 		}
 		result.Progress = 100
 	}
+	var pricing relay.PluginTaskPricingSnapshot
+	if json.Unmarshal([]byte(task.PricingMeta), &pricing) == nil && pricing.Version == 2 && pricing.PriceData.HasIndependentTaskPricing() {
+		result.BillingUsageSource = "admission_estimate"
+		if parsed.Usage != nil && parsed.Usage.Tokens != nil {
+			result.BillingUsageSource = "upstream"
+			result.Usage = parsed.Usage.Tokens
+		}
+	}
 	metadata, _ := json.Marshal(result)
 	if dto.IsTerminalTaskStatus(result.Status) {
 		quota, err := relay.PluginTaskFinalQuota(task, parsed)

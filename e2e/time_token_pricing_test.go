@@ -19,7 +19,7 @@ func independentHTTPRules(modelName string) json.RawMessage {
 	return json.RawMessage(fmt.Sprintf(`{%q:{"timezone":"UTC","windows":[{"id":"absolute","label":"Absolute","days":[0,1,2,3,4,5,6],"start":"00:00","end":"24:00","prices":{"input_per_m":"1","output_per_m":"2","cache_read_per_m":"3","cache_write_per_m":"4","audio_input_per_m":"5","audio_output_per_m":"6"}}]}}`, modelName))
 }
 
-func TestIndependentTimePricingHTTPGuardsAndTaskRefusal(t *testing.T) {
+func TestIndependentTimePricingHTTPGuardsAndTaskAdmission(t *testing.T) {
 	env := setupRelayApp(t)
 	const path = "/api/option/time-token-pricing"
 	initial := doRequest(env.base, "GET", path, env.session, nil)
@@ -32,7 +32,7 @@ func TestIndependentTimePricingHTTPGuardsAndTaskRefusal(t *testing.T) {
 			Stack   string `json:"multiplier_behavior"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(initial.Body), &state); err != nil || initial.Status != 200 || state.Data.Version != 0 || state.Data.Schema != "weekly_token_prices_v1" || !state.Data.Active || state.Data.Tasks || state.Data.Stack != "stacked" {
+	if err := json.Unmarshal([]byte(initial.Body), &state); err != nil || initial.Status != 200 || state.Data.Version != 0 || state.Data.Schema != "weekly_token_prices_v1" || !state.Data.Active || !state.Data.Tasks || state.Data.Stack != "stacked" {
 		t.Fatalf("capability mismatch: %d %s %v", initial.Status, initial.Body, err)
 	}
 	for _, role := range []int{common.RoleUser, common.RoleFinance, 99, 101, common.RoleAdmin} {
@@ -91,7 +91,10 @@ func TestIndependentTimePricingHTTPGuardsAndTaskRefusal(t *testing.T) {
 		t.Fatal("rejected modes advanced option history")
 	}
 	var calls atomic.Int64
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); fmt.Fprint(w, `{"id":"unexpected"}`) }))
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		fmt.Fprint(w, `{"id":"task-tariff","status":"queued"}`)
+	}))
 	defer upstream.Close()
 	createChannelID(t, env, map[string]any{"name": "Absolute task guard", "key": upstreamKey, "base_url": upstream.URL, "models": "gpt-4o"})
 	quote := doRequest(env.base, "GET", "/api/plaza/models/gpt-4o", env.session, nil)
@@ -115,16 +118,16 @@ func TestIndependentTimePricingHTTPGuardsAndTaskRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := doRequest(env.base, "POST", "/v1/video/generations", env.apiKey, map[string]any{"model": "gpt-4o", "prompt": "local", "seconds": 8})
-	if response.Status != 400 || !strings.Contains(response.Body, "unsupported_task_pricing") || calls.Load() != 0 {
-		t.Fatalf("task dispatched unsupported rates: %d %s calls%d", response.Status, response.Body, calls.Load())
+	if response.Status != 200 || calls.Load() != 1 {
+		t.Fatalf("task admission failed: %d %s calls%d", response.Status, response.Body, calls.Load())
 	}
 	after, err := model.GetUserByID(env.rootID)
-	if err != nil || after.Quota != before.Quota || after.UsedQuota != before.UsedQuota {
-		t.Fatal("rejected task moved quota")
+	if err != nil || after.Quota >= before.Quota || after.UsedQuota != before.UsedQuota {
+		t.Fatal("task reservation did not reconcile")
 	}
 	var tasks int64
-	if err := model.DB.Model(&model.Task{}).Count(&tasks).Error; err != nil || tasks != 0 {
-		t.Fatal("rejected task persisted")
+	if err := model.DB.Model(&model.Task{}).Count(&tasks).Error; err != nil || tasks != 1 {
+		t.Fatal("admitted task was not persisted")
 	}
 }
 

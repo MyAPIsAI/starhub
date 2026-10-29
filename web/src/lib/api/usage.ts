@@ -48,6 +48,7 @@ export interface LogRow {
   model: string;
   requested_model?: string;
   protocol?: string;
+  usage_source?: string;
   prompt_tokens: number;
   completion_tokens: number;
   quota: number;
@@ -156,6 +157,11 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     model: log.model,
     requested_model: log.requested_model || log.model,
     actual_model: log.model,
+    usage_source:
+      log.usage_source === "upstream" ||
+      log.usage_source === "admission_estimate"
+        ? log.usage_source
+        : undefined,
     protocol:
       log.protocol === "OpenAI" ||
       log.protocol === "Anthropic" ||
@@ -183,6 +189,7 @@ export interface PreviewRequestLike {
   model: string;
   requested_model: string;
   actual_model: string;
+  usage_source?: "upstream" | "admission_estimate";
   protocol?: "OpenAI" | "Anthropic" | "Gemini";
   outcome?: "success" | "failed" | "cancelled";
   vendor: string;

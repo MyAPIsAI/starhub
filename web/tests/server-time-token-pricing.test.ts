@@ -16,7 +16,7 @@ const fixture = () => ({
   schema: "weekly_token_prices_v1",
   billing_active: true,
   token_only: true,
-  asynchronous_tasks: false,
+  asynchronous_tasks: true,
   multiplier_behavior: "stacked",
   rules: {
     model: {
@@ -114,7 +114,7 @@ describe("actual independent token schedule contracts", () => {
       { revision_guards: false },
       { billing_active: false },
       { token_only: false },
-      { asynchronous_tasks: true },
+      { asynchronous_tasks: false },
       { asynchronous_tasks: undefined },
       { multiplier_behavior: "replaced" },
       { version: -1 },

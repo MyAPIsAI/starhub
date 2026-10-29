@@ -22,13 +22,13 @@ func TestTimePricingDoesNotApplyNewSchedulesToLegacyTaskSnapshots(t *testing.T) 
 	task := &model.Task{Model: "sora-2", Group: "default", RequestMeta: string(request)}
 	adaptor := openai.VideoTaskAdaptor{}
 	result := &dto.TaskResult{Status: dto.TaskStatusSucceeded}
-	if got := taskFinalQuota(task, adaptor, result); got != 80000 {
+	if got, err := taskFinalQuota(task, adaptor, result); err != nil || got != 80000 {
 		t.Fatalf("legacy task without pricing metadata received a new time multiplier: %d", got)
 	}
 	snapshot := relay.TaskBillingSnapshot{PriceData: relay.PriceData{ModelName: "sora-2", GroupRatio: 1, OtherRatio: 1}, Estimate: channel.TaskPricing{PerCallUSD: 0.01, Units: 16}}
 	encoded, _ := json.Marshal(snapshot)
 	task.PricingMeta = string(encoded)
-	if got := taskFinalQuota(task, adaptor, result); got != 80000 {
+	if got, err := taskFinalQuota(task, adaptor, result); err != nil || got != 80000 {
 		t.Fatalf("old persisted pricing snapshot received a time multiplier: %d", got)
 	}
 	snapshot.PriceData = *relay.NewPriceData("sora-2", "default")
@@ -37,7 +37,7 @@ func TestTimePricingDoesNotApplyNewSchedulesToLegacyTaskSnapshots(t *testing.T) 
 	if err := setting.UpdateOption(setting.OptionKeyModelTimePricing, "{}"); err != nil {
 		t.Fatal(err)
 	}
-	if got := taskFinalQuota(task, adaptor, result); got != 800000 {
+	if got, err := taskFinalQuota(task, adaptor, result); err != nil || got != 800000 {
 		t.Fatalf("time-aware task lost its original adjustment: %d", got)
 	}
 }

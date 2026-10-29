@@ -150,13 +150,32 @@ func TestIndependentTokenReserveCoversEveryUnknownUsageClass(t *testing.T) {
 	}
 }
 
-func TestIndependentTokenTaskSnapshotCannotReachLegacyWorkers(t *testing.T) {
+func TestIndependentTokenTaskSnapshotRequiresVersionTwo(t *testing.T) {
 	p := independentPriceFixture(t, [6]string{"1", "2", "3", "4", "5", "6"})
-	if _, err := json.Marshal(TaskBillingSnapshot{PriceData: *p}); err == nil {
-		t.Fatal("asynchronous snapshots must not silently reach incompatible workers")
+	raw, err := json.Marshal(TaskBillingSnapshot{PriceData: *p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved TaskBillingSnapshot
+	if err := json.Unmarshal(raw, &saved); err != nil || saved.Version != 2 || !saved.PriceData.TokenRates.Valid() {
+		t.Fatal("independent task snapshot lost its version or prices")
+	}
+	var invalid map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &invalid)
+	delete(invalid, "version")
+	raw, _ = json.Marshal(invalid)
+	if json.Unmarshal(raw, &saved) == nil {
+		t.Fatal("unversioned independent task snapshot accepted")
 	}
 	p.TokenRates = pricingtime.TokenRates{}
 	if _, err := json.Marshal(TaskBillingSnapshot{PriceData: *p}); err != nil {
 		t.Fatalf("legacy task snapshot must remain writable: %v", err)
+	}
+}
+
+func TestIndependentTaskBaseWindowReservationIncludesExpensiveDetails(t *testing.T) {
+	p := &PriceData{ModelRatio: 1, CompletionRatio: 2, CacheRatio: 9, AudioRatio: 7, GroupRatio: 1, OtherRatio: 1, TokenTimeAdjustment: pricingtime.TokenAdjustment{Timezone: "UTC"}}
+	if got := taskTokenReserveQuota(p, 4_000_000, 2_000_000); got != 25_000_000 {
+		t.Fatalf("outside-window reservation missed expensive base classes: %d", got)
 	}
 }

@@ -23,6 +23,23 @@ const log: LogRow = {
 };
 
 describe("backend log model attribution", () => {
+  it("retains an explicit estimated task bill without inventing measured tokens", () => {
+    expect(
+      adaptLogRow({
+        ...log,
+        usage_source: "admission_estimate",
+        prompt_tokens: 0,
+        completion_tokens: 0,
+      }),
+    ).toMatchObject({
+      usage_source: "admission_estimate",
+      input_tokens: 0,
+      output_tokens: 0,
+    });
+    expect(
+      adaptLogRow({ ...log, usage_source: "unknown" }).usage_source,
+    ).toBeUndefined();
+  });
   it.each(["OpenAI", "Anthropic", "Gemini", undefined, "", "unknown"])(
     "does not infer the protocol of %s logs",
     (protocol) => {

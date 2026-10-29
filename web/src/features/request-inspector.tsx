@@ -173,11 +173,19 @@ export default function RequestInspector({
         if (!open) onClose();
       }}
       title={text("调用明细", "Request details", "تفاصيل الطلب")}
-      description={text(
-        "模拟调用 · 一笔业务记录对应一次计费",
-        "Simulated call · one business record, one charge",
-        "طلب محاكى · سجل واحد ورسوم واحدة",
-      )}
+      description={
+        record?.source === "api"
+          ? text(
+              "网关记录 · 已记录费用与用量来源",
+              "Gateway record · recorded charge and usage source",
+              "سجل البوابة · الرسوم ومصدر الاستخدام المسجل",
+            )
+          : text(
+              "模拟调用 · 一笔业务记录对应一次计费",
+              "Simulated call · one business record, one charge",
+              "طلب محاكى · سجل واحد ورسوم واحدة",
+            )
+      }
       footer={
         <>
           <Button
@@ -196,6 +204,7 @@ export default function RequestInspector({
                     error_code: record.error_code,
                     billing_status: record.billing_status,
                     cost_nano: record.cost_nano,
+                    usage_source: record.usage_source,
                     pricing_revision: record.pricing_revision,
                     input_rate_usd: record.input_rate_usd,
                     output_rate_usd: record.output_rate_usd,
@@ -393,8 +402,13 @@ export default function RequestInspector({
                     )}
                   </dt>
                   <dd>
-                    {record.input_tokens.toLocaleString()} /{" "}
-                    {record.output_tokens.toLocaleString()}
+                    {record.usage_source === "admission_estimate"
+                      ? text(
+                          "上游未报告用量；费用按提交估算结算。",
+                          "The provider did not report usage; billing uses the admission estimate.",
+                          "لم يبلّغ المزوّد عن الاستخدام؛ تعتمد الفاتورة على تقدير القبول.",
+                        )
+                      : `${record.input_tokens.toLocaleString()} / ${record.output_tokens.toLocaleString()}`}
                   </dd>
                 </div>
                 <div>

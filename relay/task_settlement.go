@@ -3,6 +3,7 @@ package relay
 import (
 	"encoding/json"
 	"starhub/model"
+	"starhub/relay/dto"
 	"strconv"
 )
 
@@ -26,8 +27,19 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 	if task.Platform == "responses" {
 		var result model.BackgroundResponseOutcome
 		if json.Unmarshal([]byte(task.PendingResultMeta), &result) == nil {
+			entry.UsageSource = result.UsageSource
 			entry.PromptTokens = result.PromptTokens
 			entry.CompletionTokens = result.CompletionTokens
+		}
+	}
+	if task.Platform != "responses" {
+		var result dto.TaskResult
+		if json.Unmarshal([]byte(task.PendingResultMeta), &result) == nil {
+			entry.UsageSource = result.BillingUsageSource
+			if result.Usage != nil {
+				entry.PromptTokens = result.Usage.PromptTokens
+				entry.CompletionTokens = result.Usage.CompletionTokens
+			}
 		}
 	}
 	claimed, err := model.SettleTaskQuota(task, entry)

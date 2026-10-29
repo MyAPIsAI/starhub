@@ -93,6 +93,7 @@ type ChatAdaptor interface {
 // billing core converts it into quota; platforms never touch the quota
 // math themselves.
 type TaskPricing struct {
+	Usage *dto.Usage `json:",omitempty"`
 	// PerCallUSD > 0 bills PerCallUSD x Units (per-call priced models).
 	PerCallUSD float64
 	Units      float64
