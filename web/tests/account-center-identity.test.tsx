@@ -26,6 +26,7 @@ const profile = vi.hoisted(() => ({
         role: number;
         status: number;
         created_at: number;
+        can_update?: boolean;
       },
 }));
 
@@ -39,7 +40,15 @@ vi.mock("../src/lib/product-preview", () => ({
         createdAt: "1994-01-01T00:00:00.000Z",
         accountStatus: "normal",
         isLoggedIn: true,
-        securityEvents: [],
+        phone: "13812345678",
+        passwordUpdatedAt: "1994-01-01T00:00:00.000Z",
+        securityEvents: [
+          {
+            id: "fake-event",
+            action: "password_changed",
+            time: "1994-01-01T00:00:00.000Z",
+          },
+        ],
       },
       applyAccountSecurity: () => {},
       logout: () => {},
@@ -104,6 +113,38 @@ function render() {
   }
 }
 describe("confirmed account center identifiers", () => {
+  it("opens security changes only with explicit server support and hides Demo contacts/history", () => {
+    useSystemAccess.getState().setSession({
+      id: 7,
+      group: "default",
+      role: 1,
+      username: "Server owner",
+    });
+    profile.data = {
+      id: 7,
+      username: "Server owner",
+      email: "server@actual.example",
+      role: 1,
+      status: 1,
+      created_at: 1735689600,
+      can_update: true,
+    };
+    let html = render();
+    expect(
+      html.match(/<button[^>]*data-account-action="password"[^>]*>/)?.[0],
+    ).not.toContain('disabled=""');
+    expect(
+      html.match(/<button[^>]*data-account-action="phone"[^>]*>/)?.[0],
+    ).toContain('disabled=""');
+    expect(html).not.toContain("138");
+    expect(html).not.toContain("1994");
+    expect(html).toContain("Server security history is unavailable");
+    profile.data.can_update = false;
+    html = render();
+    expect(
+      html.match(/<button[^>]*data-account-action="password"[^>]*>/)?.[0],
+    ).toContain('disabled=""');
+  });
   it("uses only the server profile for email, role, status and creation date", () => {
     useSystemAccess.getState().setSession({
       id: 7,

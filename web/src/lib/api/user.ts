@@ -23,6 +23,7 @@ const USER_KEY = ["user-self"] as const;
 const SESSIONS_KEY = ["user-sessions"] as const;
 
 export interface UpdateSelfInput {
+  expected_email?: string;
   current_password?: string;
   new_password?: string;
   email?: string;
@@ -44,6 +45,14 @@ export function useUpdateSelf() {
       );
       if (!profile.guarded_updates)
         throw Error("Guarded account profile updates are unavailable");
+      if (
+        input.expected_email !== undefined &&
+        input.expected_email !== profile.user.email
+      )
+        throw new ApiError(
+          409,
+          "account profile changed; reload before updating",
+        );
       const password = input.new_password !== undefined;
       if (password === (input.email !== undefined))
         throw Error("Exactly one profile field is required");

@@ -58,6 +58,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("guarded profile mutations through the actual HTTP client", () => {
+  it("does not silently refresh an open form's expected email before dispatch", async () => {
+    await expect(
+      mutation().mutationFn({
+        expected_email: "older@example.test",
+        email: "new@example.test",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("sends the expected owner/email snapshot and requires the exact password receipt", async () => {
     fetchMock.mockResolvedValue(
       Response.json({
