@@ -8,7 +8,6 @@ import {
   Sparkles,
   Terminal,
 } from "lucide-react";
-import { useModelPricing } from "../../lib/model-pricing";
 import { PublicHeader } from "../../components/product-shell";
 import { Button } from "../../components/ui/button";
 import { type DirectoryRate } from "../../config/model-directory";
@@ -19,11 +18,9 @@ import { DirectoryPrice } from "../../components/directory-price";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../lib/preferences";
 import { writtenLanguage } from "../../lib/localize";
-import { useProductPreview } from "../../lib/product-preview";
-import { useBackendKeys } from "../../lib/api/key-adapter";
-import { resolveCatalogPricingContext } from "../../lib/catalog-browser";
-import { getKeyModelOptions } from "../../lib/key-model-policy";
-import { findClientModel } from "../../lib/client-config";
+import { useTokens } from "../../lib/api/tokens";
+import { useSystemAccess } from "../../lib/system-access";
+import { reusableModelToken } from "../../lib/token-model-access";
 import { usePlazaModel, plazaToDirectoryModel } from "../../lib/api/plaza";
 import { useServiceQuality } from "../../lib/api/service-quality";
 import { ModelRequestTrend } from "../../components/model-request-trend";
@@ -37,10 +34,8 @@ export default function ModelDetail() {
   const lang = usePreferences((s) => s.language);
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
-  const pricing = useModelPricing((s) => s.config);
-  const accountId = useProductPreview((s) => s.user.id);
-  const keys = useBackendKeys().keys;
-  const selectedKey = useProductPreview((s) => s.selectedKey);
+  const session = useSystemAccess((s) => s.session);
+  const tokenQuery = useTokens();
   const [selectedTier, setTier] = useState<string | null>(null);
   const [params] = useSearchParams();
   const from = params.get("from");
@@ -85,20 +80,9 @@ export default function ModelDetail() {
       plazaDetail.error instanceof ApiError && plazaDetail.error.status === 404
     );
   const compatibleKey =
-    model &&
-    [...keys]
-      .sort(
-        (a, b) => Number(b.id === selectedKey) - Number(a.id === selectedKey),
-      )
-      .find(
-        (key) =>
-          resolveCatalogPricingContext(pricing, accountId, [key], key.id)
-            .source === "key" &&
-          findClientModel(
-            getKeyModelOptions(key, undefined, pricing),
-            model.id,
-          ),
-      );
+    model?.online && !tokenQuery.isError
+      ? reusableModelToken(tokenQuery.data ?? [], session, model.id, quoteGroup)
+      : undefined;
   const connectUrl = model
     ? `/console/connect?model=${encodeURIComponent(model.id)}${compatibleKey ? `&key=${encodeURIComponent(compatibleKey.id)}` : ""}`
     : "/models";
@@ -415,7 +399,6 @@ export default function ModelDetail() {
               </p>
               <CatalogPriceComparison
                 model={model}
-                config={pricing}
                 plazaQuote={{ model, group: quoteGroup }}
                 detailed
               />

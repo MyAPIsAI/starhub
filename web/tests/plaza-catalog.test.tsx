@@ -20,6 +20,7 @@ import {
 } from "../src/lib/system-access";
 import { useModelPricing } from "../src/lib/model-pricing";
 import type { ServiceQualitySummary } from "../src/lib/api/service-quality";
+import type { Token } from "../src/lib/api/tokens";
 
 vi.mock("../src/components/product-shell", () => ({
   PublicHeader: () => null,
@@ -103,6 +104,8 @@ type RenderOptions = {
   quality?: ServiceQualitySummary;
   groupSla?: unknown;
   anonymous?: boolean;
+  tokens?: Token[];
+  tokenError?: boolean;
 };
 
 function renderPage({
@@ -115,6 +118,8 @@ function renderPage({
   quality,
   groupSla = null,
   anonymous = false,
+  tokens = [],
+  tokenError = false,
 }: RenderOptions = {}) {
   useSystemAccess
     .getState()
@@ -130,6 +135,17 @@ function renderPage({
     },
   });
   const identity = sessionQueryIdentity(useSystemAccess.getState());
+  client.setQueryData(["tokens", identity], tokens);
+  if (tokenError) {
+    client
+      .getQueryCache()
+      .find({ queryKey: ["tokens", identity] })!
+      .setState({
+        status: "error",
+        error: new ApiError(503, "keys unavailable"),
+        fetchStatus: "idle",
+      });
+  }
   client.setQueryData(["plaza-filters", identity], filters);
   const quoteIdentity = otherIdentityOnly ? "other-user" : identity;
   const url = new URL(route, "http://localhost");
@@ -589,6 +605,57 @@ describe("backend-only plaza catalog", () => {
       );
       expect(html).not.toContain("access-detail-heading");
       expect(html).not.toContain("模型不存在");
+    }
+  });
+
+  it("recommends an owned default-group key for a server-only model regardless of Demo profile", () => {
+    const token: Token = {
+      id: 9,
+      user_id: 7,
+      name: "Server-owned key",
+      key: "sk-masked",
+      status: 1,
+      group: "default",
+      expired_time: -1,
+      remain_quota: 0,
+      unlimited_quota: false,
+      used_quota: 0,
+      model_limits: "server-only-model",
+      allow_ips: "",
+      auto_groups: "",
+      created_at: 0,
+    };
+    const original = useProductPreview.getState();
+    useProductPreview.setState({
+      user: { ...original.user, id: "another-demo-account" },
+      selectedKey: "foreign-key",
+    });
+    try {
+      const html = renderPage({
+        route: "/models/server-only-model",
+        tokens: [token],
+      });
+      expect(html).toContain("Server-owned key");
+      expect(html).toContain(
+        "/console/connect?model=server-only-model&amp;key=9",
+      );
+      expect(html).toContain("$2.5");
+      for (const options of [
+        { anonymous: true },
+        { tokenError: true },
+        { tokens: [{ ...token, user_id: 8 }] },
+        { items: [{ ...row, is_available: false }] },
+      ]) {
+        expect(
+          renderPage({
+            route: "/models/server-only-model",
+            tokens: [token],
+            ...options,
+          }),
+        ).not.toContain("Server-owned key");
+      }
+    } finally {
+      useProductPreview.setState(original, true);
     }
   });
 });

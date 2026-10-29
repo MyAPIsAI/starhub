@@ -29,11 +29,15 @@ export function CatalogPriceComparison({
   detailed = false,
 }: {
   model: DirectoryModel;
-  config: PricingCatalogConfig;
-  publicPrice?: PublicCatalogPrice;
-  plazaQuote?: PlazaQuote;
   detailed?: boolean;
-}) {
+} & (
+  | { plazaQuote: PlazaQuote; config?: never; publicPrice?: never }
+  | {
+      plazaQuote?: undefined;
+      config: PricingCatalogConfig;
+      publicPrice?: PublicCatalogPrice;
+    }
+)) {
   const lang = usePreferences((s) => s.language);
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
@@ -318,8 +322,9 @@ export function CatalogPriceComparison({
         )}
         {(plazaQuote?.group || offer.groupId) && (
           <p className="price-public-source">
-            {plazaQuote?.group ??
-              serviceGroupLabel(offer.groupId!, lang, config)}{" "}
+            {plazaQuote
+              ? plazaQuote.group
+              : serviceGroupLabel(offer.groupId!, lang, config)}{" "}
             ·{" "}
             {text(
               plazaQuote ? "后端报价 · 已包含分组倍率" : "当前时段 · 模拟售价",

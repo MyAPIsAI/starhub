@@ -12,7 +12,11 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPut, apiDelete } from "./http";
-import { useSessionQueryIdentity, useSystemAccess } from "../system-access";
+import {
+  sessionQueryIdentity,
+  useSessionQueryIdentity,
+  useSystemAccess,
+} from "../system-access";
 
 export interface Token {
   id: number;
@@ -61,13 +65,30 @@ const TOKENS_KEY = ["tokens"] as const;
 
 export function useTokens() {
   const identity = useSessionQueryIdentity();
-  const authenticated = useSystemAccess(
-    (state) => state.session.accountId !== null,
-  );
+  const assertSession = () => {
+    if (
+      identity[1] === null ||
+      JSON.stringify(identity) !==
+        JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()))
+    )
+      throw Error("A confirmed unchanged session is required to read API keys");
+  };
   return useQuery({
     queryKey: [...TOKENS_KEY, identity],
-    enabled: authenticated,
-    queryFn: ({ signal }) => apiGet<Token[]>("/api/token", signal),
+    enabled: identity[1] !== null,
+    staleTime: 0,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      assertSession();
+      const tokens = await apiGet<Token[]>("/api/token", signal);
+      assertSession();
+      if (
+        !Array.isArray(tokens) ||
+        tokens.some((token) => !token || token.user_id !== identity[1])
+      )
+        throw Error("API key ownership could not be verified");
+      return tokens;
+    },
   });
 }
 
