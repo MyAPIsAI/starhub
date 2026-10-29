@@ -214,7 +214,7 @@ func TestResourcePublicationPreviewFailsClosedForUnsupportedInventory(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			// Explicitly restore an alias placement after import disabled it, proving that preview still rejects it.
+			// Explicitly restore the placement after inventory identity invalidation.
 			if change == "alias" || change == "placement-model" || change == "duplicate-resource" {
 				modelID := "alpha"
 				resourceID := "resource-1"
@@ -237,7 +237,7 @@ func TestResourcePublicationPreviewFailsClosedForUnsupportedInventory(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			if change == "duplicate-resource" {
+			if change == "duplicate-resource" || change == "alias" || change == "placement-model" || change == "capability" {
 				if !preview.Ready || len(preview.ProposedPairs) != 2 {
 					t.Fatalf("duplicates not collapsed: %+v", preview)
 				}

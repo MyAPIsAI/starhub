@@ -555,6 +555,10 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 	if call.ctx != nil {
 		ctx = call.ctx
 	}
+	call, rewriteErr := resourceUpstreamCall(ch, f.req.modelName, call)
+	if rewriteErr != nil {
+		return nil, &attemptResult{outcome: attemptUpstreamError, cause: rewriteErr}
+	}
 	req, err := http.NewRequestWithContext(ctx, call.method, call.url, bytes.NewReader(call.body))
 	if err != nil {
 		return nil, &attemptResult{outcome: attemptUpstreamError,

@@ -256,25 +256,25 @@ function PublicationPanel({
       </header>
       <aside>
         {text(
-          "先生成服务器预览；只有明确确认发布后，才会保存绑定并替换所选渠道的路由授权。来源模型、标准模型和投放模型须同名。上游凭证仍在真实渠道中单独管理。",
-          "Generate a server preview first. Only explicit publication confirmation saves bindings and replaces routing grants on selected channels. Source, canonical and placement model IDs must match. Manage upstream credentials separately in real channels.",
-          "أنشئ معاينة الخادم أولًا. لا تُحفظ الروابط ولا تُستبدل صلاحيات التوجيه للقنوات المحددة إلا بعد تأكيد النشر صراحةً. يجب تطابق معرّفات المصدر والنموذج القياسي والنشر. تُدار بيانات الاعتماد في القنوات الفعلية بشكل منفصل.",
+          "先生成服务器预览；只有明确确认发布后，才会保存绑定并替换所选渠道的路由授权。公开模型与上游模型分别确认，按实际协议和能力逐条授权。上游凭证仍在真实渠道中单独管理。",
+          "Generate a server preview first. Only explicit publication confirmation saves bindings and replaces routing grants on selected channels. Review public and upstream model IDs separately; each route grants only its declared protocol and capabilities. Manage upstream credentials separately in real channels.",
+          "أنشئ معاينة الخادم أولًا. لا تُحفظ الروابط ولا تُستبدل صلاحيات التوجيه للقنوات المحددة إلا بعد تأكيد النشر صراحةً. راجع معرّفات النموذج العام والأصلي والبروتوكول والقدرات لكل مسار. تُدار بيانات الاعتماد في القنوات الفعلية بشكل منفصل.",
         )}
       </aside>
       <p className="rp-profile">
         {text(
-          "首期支持 OpenAI/Anthropic 基础文本对话：",
-          "This initial profile supports basic OpenAI/Anthropic text chat:",
-          "يدعم النطاق الأولي المحادثة النصية الأساسية عبر OpenAI/Anthropic:",
+          "按资源声明选择协议与端点，文本对话包括：",
+          "Resource declarations control protocols and endpoints. Text chat includes:",
+          "تحدد الموارد البروتوكولات ونقاط النهاية. تشمل المحادثة النصية:",
         )}{" "}
         <code dir="ltr">/v1/chat/completions</code>
         {" · "}
         <code dir="ltr">/v1/messages</code>
         {". "}
         {text(
-          "工具、图片、音视频及其他端点暂不支持；已登记的上下文限制按请求估算核对，未登记保持未知。",
-          "Tools, images, audio/video and other endpoints are unsupported. Registered context limits are checked against request estimates; missing limits remain unknown.",
-          "الأدوات والصور والصوت والفيديو ونقاط النهاية الأخرى غير مدعومة. تُراجع حدود السياق المسجلة مقابل تقديرات الطلب؛ تبقى الحدود غير المسجلة غير معروفة.",
+          "工具、视觉、Responses、原生 Gemini 与图像/音视频等端点须逐项声明能力，并匹配渠道协议。上下文按请求估算核对，未登记保持未知；声明不代表真实供应商验收。",
+          "Tools, vision, Responses, native Gemini and image/audio/video endpoints require explicit capabilities and a matching provider protocol. Context checks use estimates; missing limits remain unknown. Declarations do not establish provider acceptance.",
+          "تتطلب الأدوات والوسائط وResponses وGemini قدرات معلنة وبروتوكولًا مطابقًا. السياق تقديري؛ ولا تثبت التصريحات قبول المزوّد.",
         )}
       </p>
       {query.isLoading && (
@@ -555,6 +555,8 @@ function PairTable({
   rows: (PublicationPair & {
     enabled?: boolean;
     capabilities?: string[];
+    upstream_model?: string;
+    protocols?: string[];
     context_length?: number;
   })[];
   existing?: boolean;
@@ -607,6 +609,13 @@ function PairTable({
                 </td>
                 <td>
                   <code>{row.model}</code>
+                  {row.upstream_model && (
+                    <div>
+                      <code dir="ltr">
+                        → {row.upstream_model} · {row.protocols?.join(" / ")}
+                      </code>
+                    </div>
+                  )}
                 </td>
                 <td>
                   <code>{row.group}</code>
@@ -618,7 +627,9 @@ function PairTable({
                         ?.map((capability) =>
                           capability === "code"
                             ? text("代码", "Code", "برمجة")
-                            : text("文本", "Text", "نص"),
+                            : capability === "text"
+                              ? text("文本", "Text", "نص")
+                              : capability,
                         )
                         .join(" · ")}
                     </td>

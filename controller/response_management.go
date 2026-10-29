@@ -92,7 +92,7 @@ func manageStoredResponse(w http.ResponseWriter, r *http.Request, deleting bool)
 		}
 	} else {
 		var result struct{ ID, Status, Model string }
-		if json.Unmarshal(body, &result) != nil || result.ID != ref.ResponseID || (result.Model != "" && result.Model != ref.Model) {
+		if json.Unmarshal(body, &result) != nil || result.ID != ref.ResponseID || (result.Model != "" && result.Model != ref.ProviderModel()) {
 			writeModeError(w, 502, "server_error", "response_management_uncertain", "provider returned a mismatched response")
 			return
 		}

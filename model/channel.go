@@ -24,6 +24,7 @@ const (
 )
 
 type Channel struct {
+	RuntimeModel   string `gorm:"-" json:"-"`
 	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	TaskPluginID   int64  `gorm:"not null;default:0;index" json:"task_plugin_id"`
 	Name           string `gorm:"size:128;not null;default:''" json:"name"`

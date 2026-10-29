@@ -22,6 +22,8 @@ type ResourceGatewayManagedChannel struct {
 
 type ResourceGatewayRoute struct {
 	ChannelID         int64  `gorm:"primaryKey;autoIncrement:false"`
+	UpstreamModel     string `gorm:"size:128;not null;default:''"`
+	Protocols         string `gorm:"type:text;not null;default:'[]'"`
 	Model             string `gorm:"primaryKey;size:128"`
 	Group             string `gorm:"column:group;primaryKey;size:64"`
 	Capabilities      string `gorm:"type:text;not null;default:'[]'"`
@@ -38,10 +40,9 @@ func resourceGatewayAbilityCondition(alias string) string {
 		SELECT 1 FROM resource_gateway_managed_channels rgm
 		JOIN resource_gateway_routes rgr ON rgr.channel_id = rgm.channel_id
 		WHERE rgm.channel_id = %[1]s.channel_id AND rgm.active = 1
-		AND rgm.profile = 'openai_text_exact_v1'
-		AND rgr.capabilities IN ('["text"]', '["code"]', '["code","text"]')
+		AND ((rgm.profile = 'openai_text_exact_v1' AND rgr.upstream_model = '' AND rgr.capabilities IN ('["text"]', '["code"]', '["code","text"]')) OR (rgm.profile = 'exact_resource_policy_v2' AND `+resourceAdvancedSQL("rgr")+`))
 		AND rgr.context_length BETWEEN 0 AND 9007199254740991
-		AND EXISTS (SELECT 1 FROM channels rgc WHERE rgc.id = rgm.channel_id AND rgc.type = 1)
+		AND EXISTS (SELECT 1 FROM channels rgc WHERE rgc.id = rgm.channel_id AND ((rgm.profile = 'openai_text_exact_v1' AND rgc.type = 1) OR (rgm.profile = 'exact_resource_policy_v2' AND ((rgc.type = 1 AND rgr.protocols = '["OpenAI"]') OR (rgc.type = 14 AND rgr.protocols = '["Anthropic"]') OR (rgc.type = 25 AND rgr.protocols = '["Gemini"]')))))
 		AND `+resourceGatewayGroupCondition("rgr")+`
 		AND rgr.model = %[1]s.model AND rgr."group" = %[1]s."group"
 	))`, alias)
@@ -70,7 +71,7 @@ func addResourceGatewayAbilities(tx *gorm.DB, channel *Channel) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !managed.Active || managed.Profile != ResourceGatewayTextProfile || channel.Type != common.DefaultChannelType {
+	if !managed.Active || !validResourceProfile(managed.Profile) || resourceNativeProtocol(channel.Type) == "" {
 		return true, nil
 	}
 	var routes []ResourceGatewayRoute
@@ -79,7 +80,7 @@ func addResourceGatewayAbilities(tx *gorm.DB, channel *Channel) (bool, error) {
 	}
 	abilities := make([]Ability, 0, len(routes))
 	for _, route := range routes {
-		if resourceGatewayPolicyForRoute(route) == nil {
+		if resourceGatewayPolicyForRoute(route) == nil || (managed.Profile == ResourceGatewayTextProfile && route.UpstreamModel != "") || (managed.Profile == ResourceGatewayAdvancedProfile && (route.UpstreamModel == "" || route.Protocols != `["`+resourceNativeProtocol(channel.Type)+`"]`)) {
 			continue
 		}
 		abilities = append(abilities, Ability{ChannelID: channel.ID, Model: route.Model, Group: route.Group, Enabled: channel.Status == common.ChannelStatusEnabled, Priority: channel.Priority, Weight: channel.Weight})

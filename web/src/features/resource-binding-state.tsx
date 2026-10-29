@@ -268,15 +268,16 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
                               "Revoked; source retained",
                               "ملغاة؛ المصدر محفوظ",
                             )}
-                      {row.profile !== "openai_text_exact_v1" && (
-                        <p>
-                          {text(
-                            "策略未识别，未开放路由",
-                            "Unrecognized profile; routing unavailable",
-                            "نطاق غير معروف؛ التوجيه غير متاح",
-                          )}
-                        </p>
-                      )}
+                      {row.profile !== "openai_text_exact_v1" &&
+                        row.profile !== "exact_resource_policy_v2" && (
+                          <p>
+                            {text(
+                              "策略未识别，未开放路由",
+                              "Unrecognized profile; routing unavailable",
+                              "نطاق غير معروف؛ التوجيه غير متاح",
+                            )}
+                          </p>
+                        )}
                     </td>
                     <td>
                       <code dir="ltr">

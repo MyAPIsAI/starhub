@@ -150,8 +150,9 @@ func TestResourcePublicationRejectsBlockedPlansAndInvalidInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	placement := catalog.Placements["resource-1"]
-	modelID := "unsupported-alias"
+	modelID := "explicit-alias"
 	placement.ModelID = &modelID
+	placement.GroupIDs = []string{"unpriced-group"}
 	if _, err := SaveResourcePlacement(context.Background(), catalog.Revision, "resource-1", placement); err != nil {
 		t.Fatal(err)
 	}

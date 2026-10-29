@@ -23,7 +23,7 @@ func captureResponseReference(flow *relayFlow, ch *model.Channel, key string, re
 		return nil, nil
 	}
 	ref := model.ResponseReference{UserID: flow.req.userID, TokenID: flow.req.tokenID, ChannelID: ch.ID,
-		CredentialIdentity: model.ResponseCredentialIdentity(ch, key), Model: flow.req.modelName, Group: flow.settleGroup(),
+		UpstreamModel: ch.RuntimeModel, CredentialIdentity: model.ResponseCredentialIdentity(ch, key), Model: flow.req.modelName, Group: flow.settleGroup(),
 		AccountIdentity: model.ResponseAccountIdentity(ch, key),
 		HasImages:       req.HasImages, HasTools: req.HasTools, HasReasoning: req.HasReasoning}
 	group, err := model.GetServiceGroup(ref.Group)

@@ -43,6 +43,7 @@ type ResponseReference struct {
 	CredentialIdentity string `gorm:"size:64;not null" json:"-"`
 	AccountIdentity    string `gorm:"size:64;not null;default:'';index:idx_response_reference_account,priority:1" json:"-"`
 	Conflicted         bool   `gorm:"not null;default:false" json:"-"`
+	UpstreamModel      string `gorm:"size:128;not null;default:''" json:"-"`
 	Model              string `gorm:"size:128;not null" json:"-"`
 	Group              string `gorm:"size:64;not null" json:"-"`
 	GroupDefinitionID  int64  `gorm:"not null;default:0" json:"-"`
@@ -132,6 +133,9 @@ func RecordResponseReference(ctx context.Context, ref ResponseReference, at time
 	ref.ID = 0
 	ref.Conflicted = false
 	ref.BindingID = responseBindingDigest([]any{ref.ChannelID, ref.CredentialIdentity, ref.Model, ref.Group, ref.GroupDefinitionID})
+	if ref.UpstreamModel != "" {
+		ref.BindingID = responseBindingDigest([]any{ref.BindingID, ref.UpstreamModel})
+	}
 	ref.CreatedAt, ref.ExpiresAt = at.Unix(), at.Unix()+int64(ResponseReferenceLifetime/time.Second)
 	var stored ResponseReference
 	conflict := false
@@ -189,4 +193,12 @@ func LookupResponseReference(ctx context.Context, userID, tokenID int64, respons
 		return nil, ErrResponseReferenceAmbiguous
 	}
 	return &found[0], nil
+}
+
+// ProviderModel preserves historical references without an alias binding.
+func (ref *ResponseReference) ProviderModel() string {
+	if ref.UpstreamModel != "" {
+		return ref.UpstreamModel
+	}
+	return ref.Model
 }

@@ -1,5 +1,7 @@
 import {
   readPublicationPreview,
+  validPublicationProfile,
+  validPublicationRoute,
   type PublicationPreview,
   type PublicationBinding,
   type PublicationRoute,
@@ -11,7 +13,7 @@ export interface PublicationAcknowledgement {
   resource_revision: number;
   channel_revision: number;
   option_version: number;
-  profile: "openai_text_exact_v1";
+  profile: PublicationPreview["profile"];
   binding_count: number;
   route_count: number;
   published: true;
@@ -56,7 +58,7 @@ export function readPublicationAcknowledgement(
     !version(value.channel_revision) ||
     value.channel_revision < 1 ||
     !version(value.option_version) ||
-    value.profile !== "openai_text_exact_v1" ||
+    !validPublicationProfile(value.profile) ||
     value.published !== true ||
     value.operation !== "publish" ||
     !version(value.binding_count) ||
@@ -75,6 +77,7 @@ export function acknowledgementMatchesReview(
   review: PublicationPreview,
 ): boolean {
   return (
+    value.profile === review.profile &&
     value.review_digest === review.review_digest &&
     value.resource_revision === review.resource_revision + 1 &&
     value.channel_revision === review.channel_revision + 1 &&
@@ -143,11 +146,10 @@ export function readPublicationReceipt(value: unknown): PublicationReceipt {
       !text(route.group, 64) ||
       !version(route.context_length) ||
       !(route.group_definition_id === "0" || id(route.group_definition_id)) ||
-      ![
-        JSON.stringify(["text"]),
-        JSON.stringify(["code"]),
-        JSON.stringify(["code", "text"]),
-      ].includes(JSON.stringify(route.capabilities))
+      !validPublicationRoute(
+        route,
+        value.profile as PublicationPreview["profile"],
+      )
     )
       return invalid();
     const key = JSON.stringify([
@@ -181,6 +183,8 @@ export function receiptMatchesReview(
           item.gateway_channel_id,
           item.model,
           item.group,
+          item.upstream_model,
+          item.protocols,
           item.capabilities,
           item.context_length,
           item.group_definition_id,

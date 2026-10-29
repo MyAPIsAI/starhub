@@ -107,6 +107,11 @@ func RetrieveResponse(w http.ResponseWriter, r *http.Request) {
 		writeModeError(w, 409, "invalid_request_error", "response_account_unavailable", "the original stored response upstream account is unavailable")
 		return
 	}
+	policy, managed, policyErr := model.ReadResourceGatewayPolicy(r.Context(), ch.ID, ref.Group, ref.Model)
+	if policyErr != nil || (managed && (policy == nil || !policy.Allows("/v1/responses", nil, 0, 0) || (policy.UpstreamModel() != "" && policy.UpstreamModel() != ref.ProviderModel()))) {
+		responseNotFound(w)
+		return
+	}
 	adaptor, err := relay.GetChatAdaptor(ch.Type)
 	if err != nil {
 		responseNotFound(w)

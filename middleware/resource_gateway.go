@@ -28,7 +28,11 @@ func (req smartRequirements) resourceCompatible(name, group string, ch *model.Ch
 	if err != nil || !managed {
 		return !managed && err == nil, err
 	}
-	return policy.Allows(req.path, req.capabilities, req.input, req.output) && req.managedTextAllowed(), nil
+	allowed := policy.Allows(req.path, req.capabilities, req.input, req.output) && req.managedAllowed(policy)
+	if allowed {
+		ch.RuntimeModel = policy.UpstreamModel()
+	}
+	return allowed, nil
 }
 
 func resourceGatewayChannelCheck(r *http.Request, body []byte, multipart bool, name string, existing func(*model.Channel, string) (bool, error)) func(*model.Channel, string) (bool, error) {
@@ -42,12 +46,18 @@ func resourceGatewayChannelCheck(r *http.Request, body []byte, multipart bool, n
 		}
 		if managed {
 			once.Do(func() { requirements, parseErr = readSmartRequirements(r, body, multipart) })
-			if parseErr != nil || !policy.Allows(requirements.path, requirements.capabilities, requirements.input, requirements.output) || !requirements.managedTextAllowed() {
+			if parseErr != nil || !policy.Allows(requirements.path, requirements.capabilities, requirements.input, requirements.output) || !requirements.managedAllowed(policy) {
 				return false, nil
 			}
 		}
 		if existing != nil {
-			return existing(ch, group)
+			allowed, err := existing(ch, group)
+			if err != nil || !allowed {
+				return allowed, err
+			}
+		}
+		if managed {
+			ch.RuntimeModel = policy.UpstreamModel()
 		}
 		return true, nil
 	}

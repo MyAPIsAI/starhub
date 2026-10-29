@@ -134,7 +134,7 @@ func validateResourceSnapshot(snapshot ResourceSnapshot) error {
 		if !resourceText(instance.ID, 128, true) || ids[instance.ID] || !channels[instance.ChannelID] || !concreteResourceModel(instance.UpstreamModel) || !concreteResourceModel(instance.CanonicalModel) {
 			return invalid("instance identity or reference")
 		}
-		if !resourceEnums(instance.Protocols, "OpenAI", "Anthropic", "Gemini") || !resourceEnums(instance.Capabilities, "text", "code", "vision", "reasoning", "image", "video") {
+		if !resourceEnums(instance.Protocols, "OpenAI", "Anthropic", "Gemini") || !resourceEnums(instance.Capabilities, resourceAdvancedCapabilities...) {
 			return invalid("instance protocol or capability")
 		}
 		if instance.ContextLength < 0 || instance.ContextLength > maxResourceRevision || math.IsNaN(instance.LatencyMS) || math.IsInf(instance.LatencyMS, 0) || instance.LatencyMS < 0 || instance.LatencyMS > float64(maxResourceRevision) || !resourceText(instance.Region, 128, false) {

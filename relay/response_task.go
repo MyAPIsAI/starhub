@@ -1,10 +1,10 @@
 package relay
 
 type ResponseTaskBinding struct {
-	ChannelID, GroupDefinitionID                      int64
-	CredentialIdentity, AccountIdentity, Model, Group string
-	HasImages, HasTools, HasReasoning                 bool
-	ConversationID, ConversationNonce                 string
+	ChannelID, GroupDefinitionID                                     int64
+	CredentialIdentity, AccountIdentity, Model, Group, UpstreamModel string
+	HasImages, HasTools, HasReasoning                                bool
+	ConversationID, ConversationNonce                                string
 }
 type BackgroundResponseSnapshot struct {
 	Binding     ResponseTaskBinding `json:"binding"`

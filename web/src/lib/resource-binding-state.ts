@@ -97,7 +97,8 @@ export function readResourceBindingState(
           !row.configured_active ||
           row.gateway_status !== 1 ||
           row.gateway_type !== 1 ||
-          row.profile !== "openai_text_exact_v1"))
+          (row.profile !== "openai_text_exact_v1" &&
+            row.profile !== "exact_resource_policy_v2")))
     )
       return invalid();
     previous = BigInt(row.gateway_channel_id);

@@ -13,13 +13,19 @@ const ResourceGatewayTextProfile = "openai_text_exact_v1"
 
 // ResourceGatewayPolicy is immutable and only applies to a managed exact pair.
 type ResourceGatewayPolicy struct {
-	contextLength int64
-	code          bool
+	contextLength      int64
+	code               bool
+	advanced           bool
+	upstream, protocol string
+	capabilities       []string
 }
 
 func resourceGatewayPolicyForRoute(route ResourceGatewayRoute) *ResourceGatewayPolicy {
 	if route.ContextLength < 0 || route.ContextLength > maxResourceRevision || route.GroupDefinitionID < 0 {
 		return nil
+	}
+	if route.UpstreamModel != "" {
+		return resourceAdvancedRoute(route)
 	}
 	switch route.Capabilities {
 	case `["text"]`:
@@ -32,10 +38,16 @@ func resourceGatewayPolicyForRoute(route ResourceGatewayRoute) *ResourceGatewayP
 }
 
 func (policy *ResourceGatewayPolicy) Allows(path string, capabilities []string, input, output int64) bool {
-	if policy == nil || (path != "/v1/chat/completions" && path != "/v1/messages") || input < 0 || output < 0 || input > maxResourceRevision || output > maxResourceRevision {
+	if policy == nil || input < 0 || output < 0 || input > maxResourceRevision || output > maxResourceRevision {
 		return false
 	}
 	if policy.contextLength > 0 && (input > policy.contextLength || output > policy.contextLength-input) {
+		return false
+	}
+	if policy.advanced {
+		return policy.allowsAdvanced(path, capabilities)
+	}
+	if path != "/v1/chat/completions" && path != "/v1/messages" {
 		return false
 	}
 	for _, capability := range capabilities {
@@ -64,7 +76,7 @@ func ReadResourceGatewayPolicy(ctx context.Context, channelID int64, group, mode
 			return err
 		}
 		managed = true
-		if !owner.Active || owner.Profile != ResourceGatewayTextProfile {
+		if !owner.Active || !validResourceProfile(owner.Profile) {
 			return nil
 		}
 		var ch Channel
@@ -74,7 +86,7 @@ func ReadResourceGatewayPolicy(ctx context.Context, channelID int64, group, mode
 			}
 			return err
 		}
-		if ch.Type != common.DefaultChannelType || ch.Status != common.ChannelStatusEnabled {
+		if resourceNativeProtocol(ch.Type) == "" || ch.Status != common.ChannelStatusEnabled {
 			return nil
 		}
 		var route ResourceGatewayRoute
@@ -83,6 +95,12 @@ func ReadResourceGatewayPolicy(ctx context.Context, channelID int64, group, mode
 				return nil
 			}
 			return err
+		}
+		if owner.Profile == ResourceGatewayTextProfile && (ch.Type != common.DefaultChannelType || route.UpstreamModel != "") {
+			return nil
+		}
+		if owner.Profile == ResourceGatewayAdvancedProfile && (route.UpstreamModel == "" || route.Protocols != `["`+resourceNativeProtocol(ch.Type)+`"]`) {
+			return nil
 		}
 		policy = resourceGatewayPolicyForRoute(route)
 		return nil

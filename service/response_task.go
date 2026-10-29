@@ -32,7 +32,7 @@ func EnsureBackgroundResponseReference(ctx context.Context, task *model.Task) (*
 		return nil, err
 	}
 	b := snapshot.Binding
-	ref := model.ResponseReference{UserID: task.UserID, TokenID: task.TokenID, ChannelID: b.ChannelID, CredentialIdentity: b.CredentialIdentity, AccountIdentity: b.AccountIdentity, Model: b.Model, Group: b.Group, GroupDefinitionID: b.GroupDefinitionID, ResponseID: task.TaskID, Status: "queued", TaskID: task.ID, Background: true, HasImages: b.HasImages, HasTools: b.HasTools, HasReasoning: b.HasReasoning}
+	ref := model.ResponseReference{UserID: task.UserID, TokenID: task.TokenID, ChannelID: b.ChannelID, CredentialIdentity: b.CredentialIdentity, AccountIdentity: b.AccountIdentity, UpstreamModel: b.UpstreamModel, Model: b.Model, Group: b.Group, GroupDefinitionID: b.GroupDefinitionID, ResponseID: task.TaskID, Status: "queued", TaskID: task.ID, Background: true, HasImages: b.HasImages, HasTools: b.HasTools, HasReasoning: b.HasReasoning}
 	existing, err := model.LookupResponseReference(ctx, task.UserID, task.TokenID, task.TaskID, time.Now())
 	if err == nil {
 		if existing.TaskID != task.ID {
@@ -117,7 +117,14 @@ func ObserveBackgroundResponse(task *model.Task, raw []byte) (*model.Task, error
 		ID, Status, Model string
 		Output            json.RawMessage
 	}
-	if json.Unmarshal(raw, &response) != nil || response.ID != task.TaskID || (response.Model != "" && response.Model != task.Model) {
+	if json.Unmarshal(raw, &response) != nil || response.ID != task.TaskID || (response.Model != "" && response.Model != func() string {
+		var saved relay.BackgroundResponseSnapshot
+		_ = json.Unmarshal([]byte(task.RequestMeta), &saved)
+		if saved.Binding.UpstreamModel != "" {
+			return saved.Binding.UpstreamModel
+		}
+		return task.Model
+	}()) {
 		return task, errors.New("provider response identity mismatch")
 	}
 	switch response.Status {

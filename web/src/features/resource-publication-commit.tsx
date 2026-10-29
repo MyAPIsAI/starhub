@@ -249,9 +249,9 @@ export function PublicationCommit({
             </ul>
             <p>
               {text(
-                "仅支持基础 Chat/Anthropic 文本，按所列能力与上下文约束接入。工具、多模态及其他端点不在本次发布范围。",
-                "Only basic Chat/Anthropic text is supported under the listed capability and context constraints. Tools, multimodal requests and other endpoints are outside this publication profile.",
-                "يُدعم النص الأساسي عبر Chat/Anthropic فقط ضمن قيود القدرات والسياق المدرجة. الأدوات والطلبات متعددة الوسائط ونقاط النهاية الأخرى خارج هذا النطاق.",
+                "仅授予本次列出的模型、分组、上游模型、协议与能力，未声明的端点和多模态输入不能调用。上下文采用估算；发布不代表真实供应商验收。",
+                "Only the listed model/group pairs, provider models, protocols and capabilities are granted. Undeclared endpoints and media are denied. Context is estimated; publication does not establish provider acceptance.",
+                "تُمنح فقط النماذج والمجموعات والبروتوكولات والقدرات المدرجة. تُرفض الوسائط ونقاط النهاية غير المعلنة. السياق تقديري؛ والنشر لا يثبت قبول المزوّد.",
               )}
             </p>
             <p>

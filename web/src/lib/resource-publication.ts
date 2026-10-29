@@ -8,7 +8,7 @@ export interface PublicationChannel {
 }
 export interface PublicationContext {
   schema: typeof RESOURCE_PUBLICATION_SCHEMA;
-  profile: "openai_text_exact_v1";
+  profile: "openai_text_exact_v1" | "exact_resource_policy_v2";
   supported_endpoints: string[];
   resource_revision: number;
   channel_revision: number;
@@ -28,7 +28,9 @@ export interface PublicationPair {
   group: string;
 }
 export interface PublicationRoute extends PublicationPair {
-  capabilities: ("text" | "code")[];
+  upstream_model?: string;
+  protocols?: string[];
+  capabilities: string[];
   context_length: number;
   group_definition_id: string;
 }
@@ -69,9 +71,9 @@ export function readPublicationContext(value: unknown): PublicationContext {
   if (
     !object(value) ||
     value.schema !== RESOURCE_PUBLICATION_SCHEMA ||
-    value.profile !== "openai_text_exact_v1" ||
+    !validPublicationProfile(value.profile) ||
     JSON.stringify(value.supported_endpoints) !==
-      JSON.stringify(["/v1/chat/completions", "/v1/messages"]) ||
+      JSON.stringify(publicationEndpoints(value.profile)) ||
     value.preview_only !== true ||
     (value.publish_available !== undefined &&
       typeof value.publish_available !== "boolean") ||
@@ -186,11 +188,7 @@ export function readPublicationPreview(value: unknown): PublicationPreview {
       !text(route.group, 64) ||
       !version(route.context_length) ||
       !(route.group_definition_id === "0" || id(route.group_definition_id)) ||
-      ![
-        JSON.stringify(["text"]),
-        JSON.stringify(["code"]),
-        JSON.stringify(["code", "text"]),
-      ].includes(JSON.stringify(route.capabilities))
+      !validPublicationRoute(route, context.profile)
     )
       return invalid();
     const key = JSON.stringify([
@@ -218,4 +216,66 @@ export function readPublicationPreview(value: unknown): PublicationPreview {
   )
     return invalid();
   return value as unknown as PublicationPreview;
+}
+
+export const advancedResourceCapabilities = [
+  "text",
+  "code",
+  "vision",
+  "reasoning",
+  "function_call",
+  "responses",
+  "image",
+  "video",
+  "audio",
+  "embedding",
+  "rerank",
+];
+export const validPublicationProfile = (
+  value: unknown,
+): value is PublicationContext["profile"] =>
+  value === "openai_text_exact_v1" || value === "exact_resource_policy_v2";
+export const publicationEndpoints = (profile: PublicationContext["profile"]) =>
+  profile === "openai_text_exact_v1"
+    ? ["/v1/chat/completions", "/v1/messages"]
+    : [
+        "/v1/chat/completions",
+        "/v1/messages",
+        "/v1/responses",
+        "/v1/responses/compact",
+        "/v1beta/models",
+        "/v1/images/generations",
+        "/v1/images/edits",
+        "/v1/video/generations",
+        "/v1/embeddings",
+        "/v1/rerank",
+        "/v1/audio/speech",
+        "/v1/audio/transcriptions",
+        "/v1/audio/translations",
+      ];
+export function validPublicationRoute(
+  route: Record<string, unknown>,
+  profile: PublicationContext["profile"],
+): boolean {
+  if (profile === "openai_text_exact_v1")
+    return (
+      route.upstream_model === undefined &&
+      route.protocols === undefined &&
+      ['["text"]', '["code"]', '["code","text"]'].includes(
+        JSON.stringify(route.capabilities),
+      )
+    );
+  return (
+    text(route.upstream_model, 128) &&
+    Array.isArray(route.protocols) &&
+    route.protocols.length === 1 &&
+    ["OpenAI", "Anthropic", "Gemini"].includes(route.protocols[0]) &&
+    Array.isArray(route.capabilities) &&
+    route.capabilities.length > 0 &&
+    new Set(route.capabilities).size === route.capabilities.length &&
+    route.capabilities.every(
+      (cap: unknown) =>
+        typeof cap === "string" && advancedResourceCapabilities.includes(cap),
+    )
+  );
 }

@@ -25,7 +25,7 @@ func mergeResourcePublicationRoute(first, second ResourcePublicationRoute) Resou
 	if second.ContextLength > 0 && (result.ContextLength == 0 || second.ContextLength < result.ContextLength) {
 		result.ContextLength = second.ContextLength
 	}
-	if result.GroupDefinitionID != second.GroupDefinitionID {
+	if result.GroupDefinitionID != second.GroupDefinitionID || result.UpstreamModel != second.UpstreamModel || !sameResourceSet(result.Protocols, second.Protocols) {
 		result.Capabilities = nil
 	}
 	return result

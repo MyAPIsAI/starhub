@@ -71,6 +71,8 @@ type ResourcePublicationExistingPair struct {
 
 type ResourcePublicationRoute struct {
 	ResourcePublicationPair
+	UpstreamModel     string   `json:"upstream_model,omitempty"`
+	Protocols         []string `json:"protocols,omitempty"`
 	Capabilities      []string `json:"capabilities"`
 	ContextLength     int64    `json:"context_length"`
 	GroupDefinitionID string   `json:"group_definition_id"`
@@ -282,7 +284,7 @@ func previewResourcePublicationInTransaction(tx *gorm.DB, expected ResourcePubli
 					issue("unavailable_resource_or_channel", "")
 					continue
 				}
-				if placement.ModelID == nil || *placement.ModelID != resource.CanonicalModel || resource.CanonicalModel != resource.UpstreamModel {
+				if placement.ModelID == nil || !concreteResourceModel(*placement.ModelID) || !concreteResourceModel(resource.UpstreamModel) {
 					issue("model_alias_not_supported", "")
 					continue
 				}
@@ -290,9 +292,14 @@ func previewResourcePublicationInTransaction(tx *gorm.DB, expected ResourcePubli
 					issue("gateway_model_id_not_supported", "")
 					continue
 				}
-				if ch.Type != common.DefaultChannelType || len(resource.Protocols) != 1 || resource.Protocols[0] != "OpenAI" || !previewTextCapabilities(resource.Capabilities) {
+				if len(resource.Protocols) != 1 || resource.Protocols[0] != resourceNativeProtocol(ch.Type) || !resourceEnums(resource.Capabilities, resourceAdvancedCapabilities...) {
 					issue("protocol_or_capability_not_supported", "")
 					continue
+				}
+				advanced := ch.Type != common.DefaultChannelType || *placement.ModelID != resource.UpstreamModel || !previewTextCapabilities(resource.Capabilities)
+				if advanced {
+					result.Profile = ResourceGatewayAdvancedProfile
+					result.SupportedEndpoints = []string{"/v1/chat/completions", "/v1/messages", "/v1/responses", "/v1/responses/compact", "/v1beta/models", "/v1/images/generations", "/v1/images/edits", "/v1/video/generations", "/v1/embeddings", "/v1/rerank", "/v1/audio/speech", "/v1/audio/transcriptions", "/v1/audio/translations"}
 				}
 				for _, group := range placement.GroupIDs {
 					definition, defined := state.groups[group]
@@ -303,7 +310,17 @@ func previewResourcePublicationInTransaction(tx *gorm.DB, expected ResourcePubli
 					pair := ResourcePublicationPair{GatewayChannelID: ch.ID, Model: *placement.ModelID, Group: group}
 					pairs[pair] = true
 					candidate := ResourcePublicationRoute{ResourcePublicationPair: pair, Capabilities: append([]string{}, resource.Capabilities...), ContextLength: resource.ContextLength, GroupDefinitionID: strconv.FormatInt(definition.ID, 10)}
+					// All reviewed routes retain wire identity for conflict detection.
+					candidate.UpstreamModel = resource.UpstreamModel
+					candidate.Protocols = append([]string{}, resource.Protocols...)
 					sort.Strings(candidate.Capabilities)
+					caps, _ := json.Marshal(candidate.Capabilities)
+					protocols, _ := json.Marshal(candidate.Protocols)
+					if resourceGatewayPolicyForRoute(ResourceGatewayRoute{UpstreamModel: candidate.UpstreamModel, Protocols: string(protocols), Capabilities: string(caps), ContextLength: candidate.ContextLength, GroupDefinitionID: definition.ID}) == nil {
+						issue("protocol_or_capability_not_supported", group)
+						delete(pairs, pair)
+						continue
+					}
 					if prior, exists := routes[pair]; exists {
 						candidate = mergeResourcePublicationRoute(prior, candidate)
 					}
@@ -321,6 +338,10 @@ func previewResourcePublicationInTransaction(tx *gorm.DB, expected ResourcePubli
 			return issueLimitError
 		}
 		for pair, route := range routes {
+			if result.Profile == ResourceGatewayTextProfile {
+				route.UpstreamModel = ""
+				route.Protocols = nil
+			}
 			if len(route.Capabilities) == 0 {
 				continue
 			}

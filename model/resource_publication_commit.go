@@ -66,7 +66,7 @@ func ReadResourcePublicationReceipt(ctx context.Context, digest string) (*Resour
 	}
 	var bindings []ResourceChannelBinding
 	var routes []ResourcePublicationRoute
-	if json.Unmarshal([]byte(receipt.Bindings), &bindings) != nil || json.Unmarshal([]byte(receipt.Routes), &routes) != nil || receipt.Operation != "publish" || receipt.Profile != ResourceGatewayTextProfile || len(bindings) == 0 || len(bindings) > 500 || len(routes) == 0 || len(routes) > maxResourcePublicationPairs || receipt.ActorID <= 0 || receipt.ID <= 0 || receipt.ResourceRevision < 1 || receipt.ResourceRevision > maxResourceRevision || receipt.ChannelRevision < 1 || receipt.ChannelRevision > maxResourceRevision || receipt.OptionVersion < 0 || receipt.OptionVersion > maxResourceRevision || receipt.CreatedAt <= 0 || receipt.CreatedAt > maxResourceRevision || !validResourcePublicationReceiptRoutes(bindings, routes) {
+	if json.Unmarshal([]byte(receipt.Bindings), &bindings) != nil || json.Unmarshal([]byte(receipt.Routes), &routes) != nil || receipt.Operation != "publish" || !validResourceProfile(receipt.Profile) || len(bindings) == 0 || len(bindings) > 500 || len(routes) == 0 || len(routes) > maxResourcePublicationPairs || receipt.ActorID <= 0 || receipt.ID <= 0 || receipt.ResourceRevision < 1 || receipt.ResourceRevision > maxResourceRevision || receipt.ChannelRevision < 1 || receipt.ChannelRevision > maxResourceRevision || receipt.OptionVersion < 0 || receipt.OptionVersion > maxResourceRevision || receipt.CreatedAt <= 0 || receipt.CreatedAt > maxResourceRevision || !validResourcePublicationReceiptRoutes(bindings, routes) {
 		return nil, fmt.Errorf("publication receipt is unavailable")
 	}
 	return &ResourcePublicationReceipt{ResourcePublicationAcknowledgement: ResourcePublicationAcknowledgement{PublicationID: strconv.FormatInt(receipt.ID, 10), ReviewDigest: receipt.ReviewDigest, ResourceRevision: receipt.ResourceRevision, ChannelRevision: receipt.ChannelRevision, OptionVersion: receipt.OptionVersion, Profile: receipt.Profile, BindingCount: len(bindings), RouteCount: len(routes), Published: true, Operation: receipt.Operation}, ActorID: strconv.FormatInt(receipt.ActorID, 10), CreatedAt: receipt.CreatedAt, Bindings: bindings, Routes: routes, Historical: true, Committed: true}, nil
@@ -91,7 +91,7 @@ func validResourcePublicationReceiptRoutes(bindings []ResourceChannelBinding, ro
 			return false
 		}
 		caps, _ := json.Marshal(route.Capabilities)
-		if resourceGatewayPolicyForRoute(ResourceGatewayRoute{Capabilities: string(caps), ContextLength: route.ContextLength, GroupDefinitionID: groupID}) == nil {
+		if resourceGatewayPolicyForRoute(ResourceGatewayRoute{UpstreamModel: route.UpstreamModel, Protocols: func() string { p, _ := json.Marshal(route.Protocols); return string(p) }(), Capabilities: string(caps), ContextLength: route.ContextLength, GroupDefinitionID: groupID}) == nil {
 			return false
 		}
 		pairs[route.ResourcePublicationPair] = true
@@ -133,7 +133,7 @@ func PublishResourceGateway(ctx context.Context, expected ResourcePublicationPre
 		if err != nil {
 			return err
 		}
-		receipt := ResourceGatewayPublication{ActorID: actorID, Operation: "publish", Profile: ResourceGatewayTextProfile, ReviewDigest: reviewDigest, ResourceRevision: expected.ResourceRevision + 1, ChannelRevision: expected.ChannelRevision + 1, OptionVersion: expected.OptionVersion, Bindings: string(encodedBindings), Routes: string(encodedRoutes)}
+		receipt := ResourceGatewayPublication{ActorID: actorID, Operation: "publish", Profile: preview.Profile, ReviewDigest: reviewDigest, ResourceRevision: expected.ResourceRevision + 1, ChannelRevision: expected.ChannelRevision + 1, OptionVersion: expected.OptionVersion, Bindings: string(encodedBindings), Routes: string(encodedRoutes)}
 		if err := tx.Create(&receipt).Error; err != nil {
 			return err
 		}
@@ -141,7 +141,7 @@ func PublishResourceGateway(ctx context.Context, expected ResourcePublicationPre
 		for _, binding := range preview.Bindings {
 			id, _ := strconv.ParseInt(binding.GatewayChannelID, 10, 64)
 			ids = append(ids, id)
-			owner := ResourceGatewayManagedChannel{ChannelID: id, SourceChannelID: binding.SourceChannelID, Active: true, Profile: ResourceGatewayTextProfile, PublicationID: receipt.ID}
+			owner := ResourceGatewayManagedChannel{ChannelID: id, SourceChannelID: binding.SourceChannelID, Active: true, Profile: preview.Profile, PublicationID: receipt.ID}
 			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "channel_id"}}, DoUpdates: clause.AssignmentColumns([]string{"source_channel_id", "active", "profile", "publication_id"})}).Create(&owner).Error; err != nil {
 				return err
 			}
@@ -157,7 +157,7 @@ func PublishResourceGateway(ctx context.Context, expected ResourcePublicationPre
 			id, _ := strconv.ParseInt(route.GatewayChannelID, 10, 64)
 			groupID, _ := strconv.ParseInt(route.GroupDefinitionID, 10, 64)
 			capabilities, _ := json.Marshal(route.Capabilities)
-			routes = append(routes, ResourceGatewayRoute{ChannelID: id, Model: route.Model, Group: route.Group, Capabilities: string(capabilities), ContextLength: route.ContextLength, GroupDefinitionID: groupID})
+			routes = append(routes, ResourceGatewayRoute{ChannelID: id, UpstreamModel: route.UpstreamModel, Protocols: func() string { p, _ := json.Marshal(route.Protocols); return string(p) }(), Model: route.Model, Group: route.Group, Capabilities: string(capabilities), ContextLength: route.ContextLength, GroupDefinitionID: groupID})
 		}
 		if err := tx.CreateInBatches(routes, 100).Error; err != nil {
 			return err
@@ -182,7 +182,7 @@ func PublishResourceGateway(ctx context.Context, expected ResourcePublicationPre
 		if err := tx.Model(&ResourceCatalogRecord{}).Where("id = 1").Updates(map[string]any{"revision": expected.ResourceRevision + 1, "updated_at": time.Now().Unix()}).Error; err != nil {
 			return err
 		}
-		result = &ResourcePublicationAcknowledgement{PublicationID: strconv.FormatInt(receipt.ID, 10), ReviewDigest: reviewDigest, ResourceRevision: receipt.ResourceRevision, ChannelRevision: receipt.ChannelRevision, OptionVersion: receipt.OptionVersion, Profile: ResourceGatewayTextProfile, BindingCount: len(preview.Bindings), RouteCount: len(preview.ProposedRoutes), Published: true, Operation: receipt.Operation}
+		result = &ResourcePublicationAcknowledgement{PublicationID: strconv.FormatInt(receipt.ID, 10), ReviewDigest: reviewDigest, ResourceRevision: receipt.ResourceRevision, ChannelRevision: receipt.ChannelRevision, OptionVersion: receipt.OptionVersion, Profile: preview.Profile, BindingCount: len(preview.Bindings), RouteCount: len(preview.ProposedRoutes), Published: true, Operation: receipt.Operation}
 		return nil
 	})
 	if err != nil {

@@ -52,6 +52,10 @@ func OwnedResponseReference(ctx context.Context, id string) (*model.ResponseRefe
 	if err := model.DB.WithContext(ctx).Model(&model.Ability{}).Where("channel_id = ? AND \"group\" = ? AND model = ? AND enabled = ?", ch.ID, ref.Group, ref.Model, true).Count(&count).Error; err != nil {
 		return nil, nil, "", err
 	}
+	policy, managed, err := model.ReadResourceGatewayPolicy(ctx, ch.ID, ref.Group, ref.Model)
+	if err != nil || (managed && (policy == nil || !policy.Allows("/v1/responses", nil, 0, 0) || (policy.UpstreamModel() != "" && policy.UpstreamModel() != ref.ProviderModel()))) {
+		return nil, nil, "", ErrResponseAccess
+	}
 	if count == 0 {
 		return nil, nil, "", ErrResponseAccess
 	}

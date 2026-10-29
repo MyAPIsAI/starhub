@@ -51,3 +51,8 @@ func rewriteMultipartModel(contentType string, body []byte, modelName string) ([
 	}
 	return output.Bytes(), nil
 }
+
+// RewriteMultipartModel preserves multipart parts while replacing the model field.
+func RewriteMultipartModel(contentType string, body []byte, modelName string) ([]byte, error) {
+	return rewriteMultipartModel(contentType, body, modelName)
+}

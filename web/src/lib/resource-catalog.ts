@@ -82,6 +82,11 @@ export function parseResourceSnapshot(value: unknown): ResourceSnapshot {
         "reasoning",
         "image",
         "video",
+        "function_call",
+        "responses",
+        "audio",
+        "embedding",
+        "rerank",
       ]) ||
       !integer(resource.contextLength) ||
       !text(resource.region, 128, false) ||

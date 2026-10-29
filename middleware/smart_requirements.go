@@ -23,6 +23,7 @@ type smartRequirements struct {
 	input, output  int64
 	chain          string
 	continuation   bool
+	multipart      bool
 }
 
 var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,100}$`)
@@ -43,7 +44,7 @@ func routingHeader(r *http.Request, name string) string {
 	return r.Header.Get("X-Veyra-" + name)
 }
 func readSmartRequirements(r *http.Request, body []byte, multipart bool) (smartRequirements, error) {
-	req := smartRequirements{ctx: r.Context(), body: body, textValidation: &managedTextValidation{}, path: r.URL.Path, chain: routingHeader(r, "Chain-Id"), input: 1, output: 1}
+	req := smartRequirements{multipart: multipart, ctx: r.Context(), body: body, textValidation: &managedTextValidation{}, path: r.URL.Path, chain: routingHeader(r, "Chain-Id"), input: 1, output: 1}
 	if req.chain != "" && !chainIDPattern.MatchString(req.chain) {
 		return req, errors.New("invalid routing tool-chain identifier")
 	}

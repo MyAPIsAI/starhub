@@ -19,7 +19,7 @@ func beginBackgroundResponse(flow *relayFlow, ch *model.Channel, capture *respon
 		return nil, errors.New("background ownership snapshot is required")
 	}
 	r := capture.reference
-	snapshot := relay.BackgroundResponseSnapshot{Binding: relay.ResponseTaskBinding{ChannelID: r.ChannelID, GroupDefinitionID: r.GroupDefinitionID, CredentialIdentity: r.CredentialIdentity, AccountIdentity: r.AccountIdentity, Model: r.Model, Group: r.Group, HasImages: r.HasImages, HasTools: r.HasTools, HasReasoning: r.HasReasoning}, PriceData: *flow.req.priceFor(flow.settleGroup()), InputTokens: request.InputTokens, CreatedAt: capture.at.Unix()}
+	snapshot := relay.BackgroundResponseSnapshot{Binding: relay.ResponseTaskBinding{ChannelID: r.ChannelID, GroupDefinitionID: r.GroupDefinitionID, CredentialIdentity: r.CredentialIdentity, AccountIdentity: r.AccountIdentity, UpstreamModel: r.UpstreamModel, Model: r.Model, Group: r.Group, HasImages: r.HasImages, HasTools: r.HasTools, HasReasoning: r.HasReasoning}, PriceData: *flow.req.priceFor(flow.settleGroup()), InputTokens: request.InputTokens, CreatedAt: capture.at.Unix()}
 	lease, _ := flow.ctx.Value(common.CtxResponseConversationLease).(*model.ResponseConversationLease)
 	if lease != nil {
 		snapshot.Binding.ConversationID = lease.Conversation.ID
@@ -42,7 +42,14 @@ func beginBackgroundResponse(flow *relayFlow, ch *model.Channel, capture *respon
 func relayBackgroundResponse(flow *relayFlow, response *http.Response, task *model.Task) attemptResult {
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxModeResponseBytes+1))
 	var result struct{ ID, Status, Model string }
-	if err != nil || len(raw) > maxModeResponseBytes || json.Unmarshal(raw, &result) != nil || result.ID == "" || (result.Model != "" && result.Model != task.Model) {
+	if err != nil || len(raw) > maxModeResponseBytes || json.Unmarshal(raw, &result) != nil || result.ID == "" || (result.Model != "" && result.Model != func() string {
+		var snapshot relay.BackgroundResponseSnapshot
+		_ = json.Unmarshal([]byte(task.RequestMeta), &snapshot)
+		if snapshot.Binding.UpstreamModel != "" {
+			return snapshot.Binding.UpstreamModel
+		}
+		return task.Model
+	}()) {
 		flow.errorOut(502, "server_error", "background_submission_uncertain", "provider response could not be recorded; execution may be uncertain")
 		return attemptResult{outcome: attemptUncertain}
 	}
