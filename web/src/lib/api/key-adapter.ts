@@ -53,7 +53,7 @@ export function quotaToUsdNumber(quota: number): number {
 function groupToTier(group: string): TierId {
   // "default" and "" (no group) map to "pro" — the standard tier used
   // as the default in the create-key form.
-  if (!group || group === "default") return "pro";
+  if (!group) return "default";
   // If the admin configured group ratios matching frontend tier IDs,
   // pass them through so the TierBadge renders the right label.
   return group;
@@ -65,8 +65,8 @@ function groupToTier(group: string): TierId {
  * is the only group configured out of the box, so all tiers map to it.
  * If the admin adds tier-matching groups, this can be relaxed.
  */
-export function tierToGroup(_tier: TierId): string {
-  return "default";
+export function tierToGroup(tier: TierId): string {
+  return tier;
 }
 
 // --- List helpers ---
@@ -101,6 +101,7 @@ export function tokenToPreviewKey(
 ): PreviewKey {
   return {
     id: String(token.id),
+    managementRevision: token.management_revision,
     name: token.name,
     // Backend doesn't track a single default model; left blank so
     // key-model-policy falls back to the group's model list.

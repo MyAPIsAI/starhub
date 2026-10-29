@@ -7,8 +7,25 @@ const cache = vi.hoisted(() => ({
 vi.mock("@tanstack/react-query", () => ({
   useMutation: (options: unknown) => options,
   useQueryClient: () => ({
-    getQueryData: () => cache.data,
-    getQueryState: () => ({ status: cache.status }),
+    getQueryData: (key: unknown[]) =>
+      key[0] === "token-choices"
+        ? {
+            schema: "owned_token_choices_v1",
+            guarded_actions: true,
+            user_id: 7,
+            revision: "c".repeat(64),
+            choices: [
+              {
+                group: "default",
+                model: "server-only-model",
+                protocols: ["OpenAI"],
+              },
+            ],
+          }
+        : cache.data,
+    getQueryState: (key: unknown[]) => ({
+      status: key[0] === "token-choices" ? "success" : cache.status,
+    }),
     invalidateQueries: cache.invalidate,
   }),
 }));
@@ -35,7 +52,13 @@ import {
 const fetchMock = vi.fn(),
   loss = vi.fn();
 let stop: () => void;
-const secret = { id: 2, user_id: 7, key: "sk-" + "s".repeat(48) };
+const secret = {
+  id: 2,
+  user_id: 7,
+  key: "sk-" + "s".repeat(48),
+  management_schema: "owned_token_v1",
+  management_revision: "a".repeat(64),
+};
 const changes = [
   {
     name: "create",
@@ -48,7 +71,7 @@ const changes = [
   {
     name: "update",
     hook: useUpdateToken,
-    input: { id: 2, name: "changed" },
+    input: { id: 2, name: "changed", expected_revision: "a".repeat(64) },
     method: "PUT",
     path: "/api/token",
     result: undefined,
@@ -56,7 +79,7 @@ const changes = [
   {
     name: "delete",
     hook: useDeleteToken,
-    input: 2,
+    input: { id: 2, expected_revision: "a".repeat(64) },
     method: "DELETE",
     path: "/api/token/2",
     result: undefined,
@@ -64,7 +87,7 @@ const changes = [
   {
     name: "regenerate",
     hook: useRegenerateToken,
-    input: 2,
+    input: { id: 2, expected_revision: "a".repeat(64) },
     method: "POST",
     path: "/api/token/2/regenerate",
     result: secret,
@@ -83,12 +106,32 @@ const setChange = (field: string) => {
       role: 1,
     });
 };
+function wrap(token: unknown, action: string) {
+  const call = fetchMock.mock.calls.at(-1);
+  const body = call ? JSON.parse(call[1].body) : {};
+  return {
+    schema: "owned_token_receipt_v1",
+    user_id: 7,
+    operation_id: body.operation_id,
+    action,
+    token_id: 2,
+    revision: "a".repeat(64),
+    token,
+  };
+}
 beforeEach(() => {
   fetchMock.mockReset();
   loss.mockReset();
   cache.invalidate.mockReset();
   cache.status = "success";
-  cache.data = [{ id: 2, user_id: 7 }];
+  cache.data = [
+    {
+      id: 2,
+      user_id: 7,
+      management_schema: "owned_token_v1",
+      management_revision: "a".repeat(64),
+    },
+  ];
   vi.stubGlobal("fetch", fetchMock);
   vi.stubGlobal("window", { location: { pathname: "/console/keys" } });
   useSystemAccess.getState().setSession({ id: 7, group: "default", role: 1 });
@@ -110,14 +153,15 @@ describe.each(changes)(
       const current = action(),
         identity = sessionQueryIdentity(useSystemAccess.getState());
       expect(current.retry).toBe(false);
-      fetchMock.mockResolvedValue(
-        Response.json({ success: true, data: result }),
+      fetchMock.mockImplementation(async () =>
+        Response.json({ success: true, data: wrap(result, name) }),
       );
-      await expect(current.mutationFn(input)).resolves.toEqual(result);
+      await expect(current.mutationFn(input)).resolves.toEqual(result ?? null);
       current.onSettled();
       const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe(path);
-      expect(init.method).toBe(method);
+      expect(url).toBe("/api/token/owned-action");
+      expect(JSON.parse(init.body).action).toBe(name);
+      expect(init.method).toBe("POST");
       expect(new Headers(init.headers).get("X-StarHub-Expected-User-ID")).toBe(
         "7",
       );
@@ -194,7 +238,7 @@ describe.each(changes)(
       it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
         "rejects unsafe target key ID %s before dispatch",
         async (id) => {
-          const invalid = name === "update" ? { id, name: "changed" } : id;
+          const invalid = name === "update" ? { id, name: "changed" } : { id };
           await expect(action().mutationFn(invalid)).rejects.toThrow(
             /Reload owned/,
           );
@@ -244,7 +288,9 @@ describe.each(changes)(
         { ...secret, id: 0 },
         { ...secret, id: 9007199254740992 },
       ])("refuses unconfirmed or foreign one-time secrets %j", async (data) => {
-        fetchMock.mockResolvedValue(Response.json({ success: true, data }));
+        fetchMock.mockImplementation(async () =>
+          Response.json({ success: true, data: wrap(data, name) }),
+        );
         await expect(action().mutationFn(input)).rejects.toThrow(
           /not confirmed/,
         );
@@ -253,8 +299,11 @@ describe.each(changes)(
     }
     if (name === "regenerate")
       it("requires the regenerated receipt to name the exact requested key", async () => {
-        fetchMock.mockResolvedValue(
-          Response.json({ success: true, data: { ...secret, id: 3 } }),
+        fetchMock.mockImplementation(async () =>
+          Response.json({
+            success: true,
+            data: wrap({ ...secret, id: 3 }, name),
+          }),
         );
         await expect(action().mutationFn(input)).rejects.toThrow(
           /not confirmed/,

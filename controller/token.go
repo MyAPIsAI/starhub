@@ -103,21 +103,23 @@ func ListTokens(w http.ResponseWriter, r *http.Request) {
 
 func maskedToken(t *model.Token) map[string]any {
 	return map[string]any{
-		"id":              t.ID,
-		"user_id":         t.UserID,
-		"name":            t.Name,
-		"key":             common.MaskKey(t.Key),
-		"status":          t.Status,
-		"group":           t.Group,
-		"expired_time":    t.ExpiredTime,
-		"remain_quota":    t.RemainQuota,
-		"unlimited_quota": t.UnlimitedQuota,
-		"used_quota":      t.UsedQuota,
-		"model_limits":    t.ModelLimits,
-		"allow_ips":       t.AllowIps,
-		"auto_groups":     t.AutoGroups,
-		"smart_access":    t.AllowsSmartRouting(),
-		"created_at":      t.CreatedAt,
+		"id":                  t.ID,
+		"user_id":             t.UserID,
+		"name":                t.Name,
+		"key":                 common.MaskKey(t.Key),
+		"status":              t.Status,
+		"group":               t.Group,
+		"expired_time":        t.ExpiredTime,
+		"remain_quota":        t.RemainQuota,
+		"unlimited_quota":     t.UnlimitedQuota,
+		"used_quota":          t.UsedQuota,
+		"model_limits":        t.ModelLimits,
+		"allow_ips":           t.AllowIps,
+		"auto_groups":         t.AutoGroups,
+		"smart_access":        t.AllowsSmartRouting(),
+		"created_at":          t.CreatedAt,
+		"management_schema":   "owned_token_v1",
+		"management_revision": model.TokenManagementRevision(t),
 	}
 }
 

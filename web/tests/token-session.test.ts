@@ -165,7 +165,7 @@ describe("confirmed API key list transport", () => {
     const tokens = [{ id: 2, user_id: 7 }];
     fake.get.mockResolvedValue(tokens);
     expect(await query.queryFn({ signal })).toBe(tokens);
-    expect(fake.get).toHaveBeenCalledWith("/api/token", signal, {
+    expect(fake.get).toHaveBeenCalledWith("/api/token/owned", signal, {
       handleUnauthorizedLocally: true,
     });
   });

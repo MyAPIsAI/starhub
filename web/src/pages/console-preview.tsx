@@ -88,11 +88,13 @@ import { Channels } from "../features/channels";
 import { ServiceGroups } from "../features/service-groups";
 import { useSystemAccess, isAdmin, canReadFinance, sessionUsername, sessionQueryIdentity, useSessionQueryIdentity } from "../lib/system-access";
 import { useBackendKeys } from "../lib/api/key-adapter";
+import { useTokenChoices } from "../lib/api/token-choices";
 import {
   useDeleteToken,
   useRegenerateToken,
   useUpdateToken,
   verifyTokenPassword,
+  readOwnedKeyReceipt,
 } from "../lib/api/tokens";
 import { useWallet } from "../lib/api/billing";
 import {
@@ -192,6 +194,11 @@ function ConsoleWorkspace() {
     loading: tokensLoading,
     error: tokensError,
   } = useBackendKeys(plaintextKeys);
+  useTokenChoices();
+  const [keyActionError,setKeyActionError]=useState("");
+  const [keyOperation,setKeyOperation]=useState("");
+  const keyActionPending=useRef(false);
+  const keyWriteFailed=(error:unknown)=>{if(!isCurrentSession())return;setKeyActionError(error instanceof ApiError && error.status===409?c("密钥或配置已变化，请重新读取后确认。","Key or configuration changed. Reload before confirming.","تغيّر المفتاح أو الإعداد. أعد التحميل قبل التأكيد."):c("操作结果未确认，请读取列表或查询收据后核对。","The operation is unconfirmed. Reload keys or check its receipt.","العملية غير مؤكدة. أعد تحميل المفاتيح أو تحقق من الإيصال."));setKeyOperation((error as {operationId?:string})?.operationId??"");};
   const deleteTokenMut = useDeleteToken();
   const regenerateTokenMut = useRegenerateToken();
   const updateTokenMut = useUpdateToken();
@@ -1595,6 +1602,7 @@ function ConsoleWorkspace() {
             </div>
           )}
 
+          {section === "keys" && keyActionError && <div role="alert" className="key-list-empty"><p>{keyActionError}</p><Button onClick={()=>window.location.reload()}>{c("重新读取密钥","Reload keys","إعادة تحميل المفاتيح")}</Button>{keyOperation && <Button onClick={async()=>{try{const receipt=await readOwnedKeyReceipt(keyOperation,sessionScope);if(isCurrentSession())setKeyActionError(c(`操作已确认，密钥 ID：${receipt.token_id}。明文不会再次返回。`,`Operation confirmed for key ${receipt.token_id}; plaintext is not returned again.`,`تأكدت العملية للمفتاح ${receipt.token_id}؛ لا يُعاد النص السري.`));}catch{if(isCurrentSession())setKeyActionError(c("未查到可确认的收据，不能据此判断操作失败。","No confirmed receipt found; this does not prove failure.","لم يُعثر على إيصال مؤكد؛ لا يثبت ذلك الفشل."));}}}>{c("查询操作收据","Check operation receipt","التحقق من إيصال العملية")}</Button>}</div>}
           {/* SECTION: KEYS */}
           {section === "keys" &&
             (tokensLoading ? (
@@ -1631,12 +1639,14 @@ function ConsoleWorkspace() {
                   chooseKey(key.id);
                   navigate(`/console/connect?key=${encodeURIComponent(key.id)}`);
                 }}
-                onToggle={(key) =>
+                onToggle={(key) => {
+                  if(keyActionPending.current)return;keyActionPending.current=true;setKeyActionError("");
                   updateTokenMut.mutate({
                     id: Number(key.id),
                     status: key.active ? 2 : 1,
-                  })
-                }
+                    expected_revision: key.managementRevision,
+                  },{onError:keyWriteFailed,onSettled:()=>{keyActionPending.current=false;}});
+                }}
                 onRegenerate={(key) =>
                   setKeyConfirmation({ action: "regenerate", key })
                 }
@@ -2387,11 +2397,13 @@ function ConsoleWorkspace() {
             : c("重置密钥", "Regenerate key", "تجديد المفتاح")
         }
         onConfirm={() => {
-          if (!keyConfirmation) return;
+          if (!keyConfirmation || keyActionPending.current) return;
+          keyActionPending.current=true;setKeyActionError("");
           if (keyConfirmation.action === "delete") {
-            deleteTokenMut.mutate(Number(keyConfirmation.key.id));
+            deleteTokenMut.mutate({id:Number(keyConfirmation.key.id),expected_revision:keyConfirmation.key.managementRevision},{onError:keyWriteFailed,onSettled:()=>{keyActionPending.current=false;}});
           } else {
-            regenerateTokenMut.mutate(Number(keyConfirmation.key.id), {
+            regenerateTokenMut.mutate({id:Number(keyConfirmation.key.id),expected_revision:keyConfirmation.key.managementRevision}, {
+              onError:keyWriteFailed,onSettled:()=>{keyActionPending.current=false;},
               onSuccess: (token) => {
                 const id = String(token.id);
                 setPlaintextKeys((s) => ({ ...s, [id]: token.key }));

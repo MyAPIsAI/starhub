@@ -46,6 +46,7 @@ type Token struct {
 	// token's group is "auto" (cheapest-first, degrade to pricier on failure).
 	AutoGroups string `gorm:"size:512;not null;default:''" json:"auto_groups"`
 	CreatedAt  int64  `gorm:"autoCreateTime" json:"created_at"`
+	Revision   int64  `gorm:"not null;default:0" json:"management_version"`
 }
 
 func InsertToken(t *Token) error {
@@ -107,6 +108,7 @@ func UpdateTokenFields(id int64, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}
+	fields["revision"] = gorm.Expr("revision + 1")
 	return DB.Model(&Token{}).Where("id = ?", id).Updates(fields).Error
 }
 

@@ -4,6 +4,17 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateKey from "./create-key";
 
+vi.mock("../lib/api/token-choices", () => ({
+  useTokenChoices: () => ({
+    data: {
+      revision: "a".repeat(64),
+      choices: [
+        { group: "pro", model: "gpt-4.1", protocols: ["OpenAI", "Anthropic"] },
+      ],
+    },
+    isError: false,
+  }),
+}));
 const fixture = vi.hoisted(() => ({ smartAccess: true, active: true }));
 vi.mock("../lib/api/key-adapter", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api/key-adapter")>()),
@@ -24,6 +35,7 @@ vi.mock("../lib/api/key-adapter", async (importOriginal) => ({
 vi.mock("../lib/api/tokens", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api/tokens")>()),
   useCreateToken: () => ({ isPending: false }),
+  useUpdateToken: () => ({ isPending: false }),
 }));
 vi.mock("../components/ui/overlay", () => ({
   Modal: ({ children }: { children: ReactNode }) =>

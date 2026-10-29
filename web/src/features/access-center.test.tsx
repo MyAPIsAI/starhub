@@ -5,6 +5,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import AccessCenter from "./access-center";
 import type { PreviewRequestLike } from "../lib/api/usage";
 
+vi.mock("../lib/api/token-choices", () => ({
+  useTokenChoices: () => ({
+    data: {
+      revision: "a".repeat(64),
+      choices: [
+        {
+          group: "standard",
+          model: "gpt-4.1",
+          protocols: ["OpenAI", "Anthropic"],
+        },
+      ],
+    },
+    isError: false,
+  }),
+}));
+
 const fixture = vi.hoisted(() => ({
   smartAccess: true,
   active: true,

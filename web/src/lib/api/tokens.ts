@@ -11,7 +11,8 @@
 //     updates.  (B5)
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPut, apiDelete, ApiError } from "./http";
+import { apiGet, apiPost, ApiError } from "./http";
+import { readTokenChoices } from "./token-choices";
 import {
   sessionQueryIdentity,
   useSessionQueryIdentity,
@@ -19,6 +20,8 @@ import {
 } from "../system-access";
 
 export interface Token {
+  management_schema?: string;
+  management_revision?: string;
   id: number;
   user_id: number;
   name: string;
@@ -37,6 +40,7 @@ export interface Token {
 }
 
 export interface TokenCreateInput {
+  choices_revision?: string;
   name: string;
   remain_quota?: number;
   unlimited_quota?: boolean;
@@ -48,6 +52,8 @@ export interface TokenCreateInput {
 }
 
 export interface TokenUpdateInput {
+  choices_revision?: string;
+  expected_revision?: string;
   id: number;
   name?: string;
   remain_quota?: number;
@@ -128,7 +134,7 @@ export function useTokens() {
       assertTokenSession(identity);
       let tokens: Token[];
       try {
-        tokens = await apiGet<Token[]>("/api/token", signal, {
+        tokens = await apiGet<Token[]>("/api/token/owned", signal, {
           handleUnauthorizedLocally: true,
         });
       } catch (error) {
@@ -148,107 +154,181 @@ export function useTokens() {
   });
 }
 
-function useOwnedTokenMutation<Input, Output>(
-  write: (input: Input) => Promise<Output>,
+export interface OwnedTokenTarget {
+  id: number;
+  expected_revision?: string;
+}
+export async function readOwnedKeyReceipt(
+  operation: string,
+  identity: ReturnType<typeof sessionQueryIdentity>,
+) {
+  assertTokenSession(identity);
+  const receipt = await apiPost<Record<string, unknown>>(
+    "/api/token/owned-receipt",
+    {
+      schema: "owned_token_action_v1",
+      expected_user_id: identity[1],
+      operation_id: operation,
+    },
+    { handleUnauthorizedLocally: true },
+  );
+  assertTokenSession(identity);
+  if (
+    receipt.schema !== "owned_token_receipt_v1" ||
+    receipt.user_id !== identity[1] ||
+    receipt.operation_id !== operation
+  )
+    throw Error("Key receipt was not confirmed");
+  return receipt;
+}
+function useOwnedTokenMutation<Input extends object, Output>(
+  action: string,
   tokenID?: (input: Input) => number,
   returnsSecret = false,
 ) {
-  const queryClient = useQueryClient();
-  const identity = useSessionQueryIdentity();
-  const queryKey = [...TOKENS_KEY, identity];
+  const client = useQueryClient(),
+    identity = useSessionQueryIdentity(),
+    queryKey = [...TOKENS_KEY, identity];
   return useMutation({
     retry: false,
     mutationFn: async (input: Input): Promise<Output> => {
       assertTokenSession(identity);
-      const id = tokenID?.(input);
+      const raw = input as Record<string, unknown>,
+        id = tokenID?.(input),
+        choicesKey = ["token-choices", identity];
+      const choices = readTokenChoices(
+        client.getQueryData(choicesKey),
+        identity[1]!,
+      );
+      if (
+        client.getQueryState(choicesKey)?.status !== "success" ||
+        (raw.choices_revision !== undefined &&
+          raw.choices_revision !== choices.revision)
+      )
+        throw new ApiError(
+          409,
+          "Key choices changed; close and reload the form",
+        );
+      let revision = "";
       if (tokenID) {
-        const tokens = queryClient.getQueryData<Token[]>(queryKey);
+        const rows = client.getQueryData<Token[]>(queryKey),
+          matches = Array.isArray(rows) ? rows.filter((t) => t.id === id) : [];
         if (
-          id === undefined ||
           !Number.isSafeInteger(id) ||
-          id <= 0 ||
-          queryClient.getQueryState(queryKey)?.status !== "success" ||
-          !Array.isArray(tokens) ||
-          tokens.some((token) => !token || token.user_id !== identity[1]) ||
-          tokens.filter((token) => token.id === id).length !== 1
+          id! <= 0 ||
+          client.getQueryState(queryKey)?.status !== "success" ||
+          !Array.isArray(rows) ||
+          rows.some((t) => !t || t.user_id !== identity[1]) ||
+          matches.length !== 1 ||
+          matches[0].management_schema !== "owned_token_v1" ||
+          !/^[a-f0-9]{64}$/.test(matches[0].management_revision ?? "")
         )
           throw Error("Reload owned API keys before changing a key");
+        revision = matches[0].management_revision!;
+        if (raw.expected_revision !== revision)
+          throw new ApiError(
+            409,
+            "Key changed; close and reload the confirmation",
+          );
       }
-      let result: Output;
+      const operation = crypto.randomUUID().replaceAll("-", "");
+      const {
+        choices_revision: _choices,
+        expected_revision: _revision,
+        id: _id,
+        ...payload
+      } = raw;
+      let result: Record<string, unknown>;
       try {
-        result = await write(input);
-      } catch (error) {
+        result = await apiPost(
+          "/api/token/owned-action",
+          {
+            schema: "owned_token_action_v1",
+            expected_user_id: identity[1],
+            operation_id: operation,
+            action,
+            token_id: id ?? 0,
+            revision,
+            choices_revision: choices.revision,
+            payload,
+          },
+          { handleUnauthorizedLocally: true },
+        );
+      } catch (e) {
         assertTokenSession(identity);
-        if (error instanceof ApiError && error.status === 401)
+        if (e instanceof ApiError && e.status === 401)
           useSystemAccess.getState().setSession(null);
-        throw error;
+        throw Object.assign(
+          e instanceof Error ? e : new Error("Key action unconfirmed"),
+          { operationId: operation },
+        );
       }
       assertTokenSession(identity);
+      if (
+        !result ||
+        result.schema !== "owned_token_receipt_v1" ||
+        result.user_id !== identity[1] ||
+        result.operation_id !== operation ||
+        result.action !== action ||
+        !Number.isSafeInteger(result.token_id) ||
+        Number(result.token_id) <= 0 ||
+        (id !== undefined && result.token_id !== id) ||
+        typeof result.revision !== "string" ||
+        !/^[a-f0-9]{64}$/.test(result.revision)
+      )
+        throw Object.assign(new Error("Key action was not confirmed"), {
+          operationId: operation,
+        });
       if (returnsSecret) {
-        const token = result as Token | null;
+        const token = result.token as Token | null;
         if (
           !token ||
-          typeof token !== "object" ||
           token.user_id !== identity[1] ||
-          !Number.isSafeInteger(token.id) ||
-          token.id <= 0 ||
-          (id !== undefined && token.id !== id) ||
+          token.id !== result.token_id ||
+          token.management_revision !== result.revision ||
           typeof token.key !== "string" ||
           !/^sk-[A-Za-z0-9]{48}$/.test(token.key)
         )
-          throw Error("API key creation or regeneration was not confirmed");
+          throw Object.assign(
+            new Error("API key creation or regeneration was not confirmed"),
+            { operationId: operation },
+          );
+        return token as Output;
       }
-      return result;
+      return null as Output;
     },
     onSettled: () => {
-      // Lost responses also require readback, but an old action must not
-      // invalidate the replacement account's list or expose its secret.
       if (
         JSON.stringify(identity) ===
         JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()))
       )
-        void queryClient.invalidateQueries({ queryKey, exact: true });
+        void client.invalidateQueries({ queryKey, exact: true });
     },
   });
 }
-
-/** Capture the returned secret only after the originating scope is checked. */
 export function useCreateToken() {
-  return useOwnedTokenMutation(
-    (input: TokenCreateInput) =>
-      apiPost<Token>("/api/token", input, { handleUnauthorizedLocally: true }),
+  return useOwnedTokenMutation<TokenCreateInput, Token>(
+    "create",
     undefined,
     true,
   );
 }
-
-/** Update a token. The backend returns no data (only {success:true}),
- *  so we invalidate the list to refetch the current state (B5). */
 export function useUpdateToken() {
-  return useOwnedTokenMutation(
-    (input: TokenUpdateInput) =>
-      apiPut<null>("/api/token", input, { handleUnauthorizedLocally: true }),
+  return useOwnedTokenMutation<TokenUpdateInput, null>(
+    "update",
     (input) => input.id,
   );
 }
-
 export function useDeleteToken() {
-  return useOwnedTokenMutation(
-    (id: number) =>
-      apiDelete<null>(`/api/token/${id}`, { handleUnauthorizedLocally: true }),
-    (id) => id,
+  return useOwnedTokenMutation<OwnedTokenTarget, null>(
+    "delete",
+    (input) => input.id,
   );
 }
-
-/** Regenerate a token key. Like create, the result contains the
- *  plaintext key — capture it in onSuccess (B10). */
 export function useRegenerateToken() {
-  return useOwnedTokenMutation(
-    (id: number) =>
-      apiPost<Token>(`/api/token/${id}/regenerate`, undefined, {
-        handleUnauthorizedLocally: true,
-      }),
-    (id) => id,
+  return useOwnedTokenMutation<OwnedTokenTarget, Token>(
+    "regenerate",
+    (input) => input.id,
     true,
   );
 }

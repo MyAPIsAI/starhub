@@ -12,21 +12,21 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { usePreferences } from "../lib/preferences";
-import { useProductPreview } from "../lib/product-preview";
+import { useTokenChoices } from "../lib/api/token-choices";
+import { useSessionQueryIdentity } from "../lib/system-access";
+import type { PreviewKey } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import { useBackendRequests } from "../lib/api/usage";
-import { useModelPricing } from "../lib/model-pricing";
-import { serviceGroupLabel } from "../lib/service-group-label";
+
 import {
   buildClientConfiguration,
   clientProtocols,
   findClientModel,
   validDemoSecret,
-  getClientModels,
   type ClientTarget,
   type ConnectionTool,
 } from "../lib/client-config";
-import { getKeyModelOptions } from "../lib/key-model-policy";
+
 import { canonicalModelId } from "../lib/smart-model";
 import { copyText } from "./code-example";
 import "../components/access-center.css";
@@ -38,9 +38,9 @@ type Draft = {
   target: ClientTarget;
   model: string;
 };
-function readDraft(): Partial<Draft> {
+function readDraft(storageKey: string): Partial<Draft> {
   try {
-    const value = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "{}");
+    const value = JSON.parse(sessionStorage.getItem(storageKey) ?? "{}");
     return typeof value === "object" && value ? value : {};
   } catch {
     return {};
@@ -65,23 +65,55 @@ export default function AccessCenter({
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const { keys } = useBackendKeys(plaintextKeys);
-  const selectedKey = useProductPreview((s) => s.selectedKey);
+  const [selectedKey, chooseKey] = useState("");
+  const scope = useSessionQueryIdentity(),
+    storageKey = DRAFT_KEY + JSON.stringify(scope),
+    choicesQuery = useTokenChoices();
+  const choices = choicesQuery.isError ? undefined : choicesQuery.data;
+  const nativeModels = (
+    key: PreviewKey,
+    target?: ClientTarget,
+  ): { id: string; name: string; kind: "specified" | "smart" }[] => {
+    const protocol =
+      target === undefined
+        ? undefined
+        : target === "codex"
+          ? "OpenAI"
+          : clientProtocols[target];
+    const seen = new Set<string>();
+    const result: { id: string; name: string; kind: "specified" | "smart" }[] =
+      (choices?.choices ?? [])
+        .filter(
+          (c) =>
+            c.group === key.tier &&
+            (!protocol || c.protocols.includes(protocol)) &&
+            (key.modelAccess === "all" || key.allowedModels?.includes(c.model)),
+        )
+        .filter((c) => {
+          if (seen.has(c.model)) return false;
+          seen.add(c.model);
+          return true;
+        })
+        .map((c) => ({
+          id: c.model,
+          name: c.model,
+          kind: "specified" as const,
+        }));
+    if (key.smartAccess && result.length)
+      result.push({ id: "myapis-auto", name: "MyAPIs Auto", kind: "smart" });
+    return result;
+  };
   const requests = useBackendRequests(100).rows;
-  const demoRevealed = useProductPreview((s) => s.revealedKeyIds);
-  const revealed = revealedKeys ?? demoRevealed;
-  const chooseKey = useProductPreview((s) => s.chooseKey);
-  const demoUnlock = useProductPreview((s) => s.verifyPasswordAndRevealKey);
-  const unlock = onReveal ?? demoUnlock;
-  const pricing = useModelPricing((s) => s.config);
+  const revealed = revealedKeys ?? {};
+  const unlock = onReveal ?? (async () => false);
   const [draft, setDraft] = useState<Draft>(() => {
-    const saved = readDraft();
+    const saved = readDraft(storageKey);
     const model =
       params.get("model") ??
       (typeof saved.model === "string" ? saved.model : "");
     const matching = keys.find(
       (key) =>
-        key.active &&
-        (!model || findClientModel(getKeyModelOptions(key), model)),
+        key.active && (!model || findClientModel(nativeModels(key), model)),
     );
     const key =
       params.get("key") ??
@@ -101,9 +133,7 @@ export default function AccessCenter({
       tool,
       target,
       model:
-        model ||
-        (foundKey ? getClientModels(foundKey, target)[0]?.id : "") ||
-        "",
+        model || (foundKey ? nativeModels(foundKey, target)[0]?.id : "") || "",
     };
   });
   const [clock, setClock] = useState(Date.now());
@@ -115,8 +145,8 @@ export default function AccessCenter({
   const key = keys.find((item) => item.id === draft.key);
   const protocol = clientProtocols[draft.target];
   const models = useMemo(
-    () => (key ? getClientModels(key, draft.target, pricing) : []),
-    [key, draft.target, pricing],
+    () => (key ? nativeModels(key, draft.target) : []),
+    [key, draft.target, choices],
   );
   const selectedModel = findClientModel(models, draft.model);
   const unlocked = Boolean(
@@ -152,7 +182,7 @@ export default function AccessCenter({
       : undefined;
   useEffect(() => {
     try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      sessionStorage.setItem(storageKey, JSON.stringify(draft));
     } catch {
       /* In-memory configuration remains usable. */
     }
@@ -252,7 +282,7 @@ export default function AccessCenter({
                   model:
                     next &&
                     findClientModel(
-                      getClientModels(next, draft.target, pricing),
+                      nativeModels(next, draft.target),
                       draft.model,
                     )
                       ? draft.model
@@ -269,7 +299,7 @@ export default function AccessCenter({
               </option>
               {keys.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} · {serviceGroupLabel(item.tier, lang, pricing)}
+                  {item.name} · {item.tier}
                   {!item.active
                     ? ` · ${text("已停用", "Disabled", "معطل")}`
                     : ""}
@@ -292,7 +322,7 @@ export default function AccessCenter({
           {key && (
             <div className="access-notice">
               <span>
-                {serviceGroupLabel(key.tier, lang, pricing)} ·{" "}
+                {key.tier} ·{" "}
                 {key.quotaLimit_usd == null
                   ? text(
                       "未设置密钥消费上限",

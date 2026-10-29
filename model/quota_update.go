@@ -1,6 +1,9 @@
 package model
 
-import "errors"
+import (
+	"errors"
+	"gorm.io/gorm"
+)
 
 var ErrQuotaConflict = errors.New("quota changed since the record was read")
 
@@ -29,5 +32,6 @@ func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64)
 }
 
 func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {
+	fields["revision"] = gorm.Expr("revision + 1")
 	return updateFieldsWithQuota(&Token{}, id, fields, "remain_quota", expected)
 }
