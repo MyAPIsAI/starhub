@@ -70,7 +70,6 @@ import {
   type PreviewRequest,
 } from "../lib/product-preview";
 import { modelCatalog } from "../lib/platform-catalog";
-import { accountDisplayName } from "../lib/account-identity";
 import "../components/console-redesign.css";
 import "../components/key-task.css";
 import { useModelPricing } from "../lib/model-pricing";
@@ -87,7 +86,7 @@ import SmartRouting from "../features/resource-routing";
 import { StandardModels } from "../features/standard-models";
 import { Channels } from "../features/channels";
 import { ServiceGroups } from "../features/service-groups";
-import { useSystemAccess, isAdmin, canReadFinance } from "../lib/system-access";
+import { useSystemAccess, isAdmin, canReadFinance, sessionUsername } from "../lib/system-access";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import {
   useDeleteToken,
@@ -164,12 +163,9 @@ export default function ConsolePreview() {
       nav.scrollTop -= boundary.top - item.top + 12;
   }, [section, role, mobileNavOpen]);
 
-  const user = useProductPreview((s) => s.user);
-  const profileName = accountDisplayName(
-    user,
-    c("演示账号", "Demo account", "حساب تجريبي"),
-  );
+  const session = useSystemAccess((s) => s.session);
   const settingsLabel = c("账号中心", "Account center", "مركز الحساب");
+  const profileName = sessionUsername(session) ?? settingsLabel;
   const profileInitials = Array.from(profileName.trim())
     .slice(0, 2)
     .join("")

@@ -20,15 +20,12 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { Modal } from "../components/ui/overlay";
 import { useProductPreview } from "../lib/product-preview";
-import { useSystemAccess, isAdmin } from "../lib/system-access";
+import { useSystemAccess, isAdmin, sessionUsername } from "../lib/system-access";
 import { logoutUser } from "../lib/api/auth";
 import { useUpdateSelf, useSessions, useTerminateOtherSessions, type SessionInfo } from "../lib/api/user";
 import { ApiError } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
-import {
-  accountDisplayName,
-  DEMO_ACCOUNT_PROFILE,
-} from "../lib/account-identity";
+import { DEMO_ACCOUNT_PROFILE } from "../lib/account-identity";
 import {
   demoAuth,
   DEMO_ACCOUNT,
@@ -85,6 +82,7 @@ export default function AccountCenter({
   const queryClient = useQueryClient();
   const updateSelfMut = useUpdateSelf();
   const role = useSystemAccess((state) => state.role);
+  const session = useSystemAccess((state) => state.session);
   const language = usePreferences((state) => state.language);
   const navigate = useNavigate();
   const c = (zh: string, en: string, ar: string) =>
@@ -121,10 +119,9 @@ export default function AccountCenter({
     user.accountStatus !== "deactivated" &&
     Boolean(demoAuth.identity(user.id)) &&
     !hasContactConflict(user, demoAuth.identity(user.id));
-  const profileName = accountDisplayName(
-    user,
-    c("演示账号", "Demo account", "حساب تجريبي"),
-  );
+  const profileName =
+    sessionUsername(session) ?? c("账号中心", "Account center", "مركز الحساب");
+  const accountId = session.accountId === null ? null : String(session.accountId);
   const phone = user.phone?.replace(/(\d{3})\d{4}(\d{4})$/, "$1 **** $2");
   const otherSessions = backendSessions.filter((s) => !s.is_current).length > 0;
   const email = user.email
@@ -448,8 +445,9 @@ export default function AccountCenter({
     }
   }
   async function copyId() {
+    if (accountId === null) return;
     try {
-      await navigator.clipboard.writeText(user.id);
+      await navigator.clipboard.writeText(accountId);
       setCopied(true);
       setNotice(
         c("用户 ID（标识）已复制。", "User ID copied.", "نُسخ معرّف المستخدم."),
@@ -601,7 +599,7 @@ export default function AccountCenter({
         <div className="ac-identity-grid">
           <div className="ac-field">
             <label htmlFor="account-username">
-              {user.username
+              {sessionUsername(session)
                 ? c("用户名", "Username", "اسم المستخدم")
                 : c("登录账号", "Login account", "حساب الدخول")}
             </label>
@@ -619,7 +617,7 @@ export default function AccountCenter({
               {c("用户 ID（标识）", "User ID", "معرّف المستخدم")}
             </label>
             <div className="ac-id">
-              <Input id="account-id" value={user.id} readOnly dir="ltr" />
+              <Input id="account-id" value={accountId ?? "—"} readOnly dir="ltr" />
               <Button
                 size="icon"
                 aria-label={c(
@@ -628,6 +626,7 @@ export default function AccountCenter({
                   "نسخ معرّف المستخدم",
                 )}
                 onClick={copyId}
+                disabled={accountId === null}
               >
                 {copied ? <Check size={16} /> : <Copy size={16} />}
               </Button>
