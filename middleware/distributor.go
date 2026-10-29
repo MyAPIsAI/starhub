@@ -115,6 +115,10 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 						return
 					}
 				} else {
+					if err := dto.ValidateChatJSON(body); err != nil {
+						fail(http.StatusBadRequest, "invalid_json", err.Error())
+						return
+					}
 					var lite struct {
 						Model  string `json:"model"`
 						Stream bool   `json:"stream"`

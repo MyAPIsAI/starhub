@@ -31,9 +31,12 @@ type Task struct {
 	// TokenUnlimited snapshots the token's unlimited flag at submit so the
 	// terminal settlement (which may happen days later) still skips the
 	// token balance correctly.
-	TokenUnlimited bool   `gorm:"not null;default:false" json:"token_unlimited"`
-	ChannelID      int64  `gorm:"not null;default:0" json:"channel_id"`
-	Group          string `gorm:"size:64;not null;default:'default'" json:"group"`
+	TokenUnlimited bool  `gorm:"not null;default:false" json:"token_unlimited"`
+	ChannelID      int64 `gorm:"not null;default:0" json:"channel_id"`
+	// KeyIndex stores the upstream key index used at submission so the
+	// terminal poll reuses the same account instead of re-selecting.
+	KeyIndex int    `gorm:"not null;default:0" json:"key_index"`
+	Group    string `gorm:"size:64;not null;default:'default'" json:"group"`
 	// UserGroup snapshots the user's own group at submit so the terminal
 	// settlement (which may happen days later) still applies the group x
 	// group matrix multiplier correctly.
@@ -187,6 +190,55 @@ func truncateForColumn(s string, max int) string {
 		return s
 	}
 	return s[:max]
+}
+
+// CompleteTaskSubmission binds the upstream task ID and advances a native
+// (non-plugin) task from "submitting" to "submitted". It guards against
+// overwriting an already-completed admission.
+func CompleteTaskSubmission(id int64, upstreamID string) error {
+	if strings.TrimSpace(upstreamID) == "" || len(upstreamID) > 128 {
+		return errors.New("invalid upstream task id")
+	}
+	result := DB.Model(&Task{}).Where("id = ? AND task_plugin_id = 0 AND task_id = '' AND status = ? AND pending_status = ''",
+		id, TaskStatusSubmitting).
+		Updates(map[string]any{"task_id": upstreamID, "status": "submitted", "update_time": time.Now().Unix()})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return errors.New("task submission is no longer active")
+	}
+	return nil
+}
+
+// RecordTaskSubmissionFailure marks a native (non-plugin) task in
+// "submitting" status as failed so the durable settlement can refund the
+// pre-charge. It is the native-task counterpart of RecordPluginSubmissionFailure.
+func RecordTaskSubmissionFailure(id int64, reason string) (*Task, error) {
+	err := DB.Model(&Task{}).Where("id = ? AND task_plugin_id = 0 AND status = ? AND pending_status = ''",
+		id, TaskStatusSubmitting).
+		Updates(map[string]any{"pending_status": "failed", "pending_quota": 0,
+			"pending_fail_reason": truncateForColumn(reason, 512), "update_time": time.Now().Unix()}).Error
+	if err != nil {
+		return nil, err
+	}
+	return GetTaskByID(id)
+}
+
+// SumPendingTaskQuota returns the total pre-charge held by non-terminal tasks
+// for the given token. It lets quota edits account for in-flight reservations
+// so the cumulative limit (remain + used) does not silently inflate when
+// pending tasks settle.
+func SumPendingTaskQuota(tx *gorm.DB, tokenID int64) int64 {
+	if tx == nil {
+		tx = DB
+	}
+	var total int64
+	tx.Model(&Task{}).
+		Where("token_id = ? AND status NOT IN ?", tokenID,
+			[]string{"succeeded", "failed", "cancelled"}).
+		Select("COALESCE(SUM(quota), 0)").Scan(&total)
+	return total
 }
 
 // TaskOutputURLs extracts the output URLs of the stored result meta (best

@@ -1,7 +1,10 @@
 package dto
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"strings"
 	"unicode/utf8"
 )
@@ -107,4 +110,53 @@ func EstimateTokens(text string) int64 {
 		return 0
 	}
 	return int64((n + 3) / 4)
+}
+
+// ValidateChatJSON rejects ambiguous JSON before routing or passthrough
+// forwarding. Duplicate root-level fields and case-variant "model" field
+// names are rejected so Go's case-insensitive struct decoding cannot
+// disagree with the upstream's case-sensitive field handling about which
+// model to authorize and execute. Extension fields remain case-sensitive
+// and are forwarded verbatim.
+func ValidateChatJSON(body []byte) error {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return errors.New("chat request must be a JSON object")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok || delim != '{' {
+		return errors.New("chat request must be a JSON object")
+	}
+	seen := map[string]bool{}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		name, ok := token.(string)
+		if !ok || seen[name] {
+			return errors.New("chat JSON contains duplicate or invalid fields")
+		}
+		seen[name] = true
+		if name != "model" && strings.EqualFold(name, "model") {
+			return errors.New("chat model field must use the exact lowercase name")
+		}
+		var v json.RawMessage
+		if err := decoder.Decode(&v); err != nil {
+			return err
+		}
+	}
+	if _, err := decoder.Token(); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return errors.New("chat request must contain exactly one JSON object")
+	}
+	return nil
 }

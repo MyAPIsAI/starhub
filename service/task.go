@@ -52,6 +52,13 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 				FailReason: "Plugin task exceeded the 24-hour completion deadline"}, "", 0)
 		}
 	}
+	if task.Status == model.TaskStatusSubmitting {
+		age := time.Since(time.Unix(task.SubmitTime, 0))
+		if age >= PluginSubmissionTimeout {
+			return FailTaskSubmission(task, "Task submission did not finish; upstream execution may be uncertain")
+		}
+		return task, nil
+	}
 	ch, err := model.GetChannelByID(task.ChannelID)
 	if err != nil {
 		if !errors.Is(err, model.ErrChannelNotFound) {
@@ -74,7 +81,20 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 		}, "", 0)
 	}
 
-	upstreamKey, _ := ch.SelectKey()
+	// Reuse the submission credential so the upstream sees the same account.
+	// A multi-key channel that selects a different key at poll time would
+	// receive 404 from providers that isolate tasks by account.
+	keys := ch.Keys()
+	var upstreamKey string
+	if task.KeyIndex >= 0 && task.KeyIndex < len(keys) {
+		upstreamKey = keys[task.KeyIndex]
+	}
+	if upstreamKey == "" {
+		return recordAndSettleTask(task, &dto.TaskResult{
+			Status:     dto.TaskStatusFailed,
+			FailReason: fmt.Sprintf("channel %d key index %d no longer exists", task.ChannelID, task.KeyIndex),
+		}, "", 0)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		adaptor.FetchURL(ch.BaseURL, task.TaskID), nil)
 	if err != nil {
@@ -196,6 +216,21 @@ func settlePendingTask(task *model.Task) (*model.Task, error) {
 		*task = *stored
 	}
 	return task, err
+}
+
+// FailTaskSubmission releases a durable reservation exactly once for a
+// native (non-plugin) task whose upstream submission failed. A completed
+// admission cannot be overwritten by a late submission-error cleanup.
+func FailTaskSubmission(task *model.Task, reason string) (*model.Task, error) {
+	stored, err := model.RecordTaskSubmissionFailure(task.ID, reason)
+	if err != nil {
+		return task, err
+	}
+	*task = *stored
+	if task.PendingStatus != "" {
+		return settlePendingTask(task)
+	}
+	return task, nil
 }
 
 // RunTaskPollLoop is the background reaper: clients that never poll their

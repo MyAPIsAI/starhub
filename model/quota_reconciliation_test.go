@@ -58,7 +58,7 @@ func TestSettlementReconcilesDifferentBalances(t *testing.T) {
 			}
 			wantTokenQuota, wantTokenUsed := tc.tokenQuota-tc.charged, tc.charged
 			if tc.unlimited {
-				wantTokenQuota, wantTokenUsed = tc.tokenQuota, 0
+				wantTokenQuota = tc.tokenQuota
 			}
 			if gotToken.RemainQuota != wantTokenQuota || gotToken.UsedQuota != wantTokenUsed {
 				t.Fatalf("token balance=%d used=%d", gotToken.RemainQuota, gotToken.UsedQuota)

@@ -224,6 +224,21 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 			for k, v := range fields {
 				updates[k] = v
 			}
+			// When the lifetime limit is being edited, subtract the
+			// in-flight pre-charge held by pending tasks. Without this,
+			// remain_quota is set to (new_total - used_quota) which
+			// ignores pending reservations; when those tasks settle,
+			// the cumulative (remain + used) silently inflates.
+			if rq, ok := updates["remain_quota"]; ok && action == "update" {
+				pending := SumPendingTaskQuota(tx, id)
+				if pending > 0 {
+					newRemain := rq.(int64) - pending
+					if newRemain < 0 {
+						return fmt.Errorf("quota limit is below in-flight task reservations (%d)", pending)
+					}
+					updates["remain_quota"] = newRemain
+				}
+			}
 			if action == "regenerate" {
 				updates["key"] = common.GenerateTokenKey()
 			}

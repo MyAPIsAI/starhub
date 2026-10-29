@@ -157,11 +157,12 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			}
 		}
 		if settled.Quota > 0 {
-			if !tokenUnlimited {
-				if err := tx.Model(&Token{}).Where("id = ?", tokenID).
-					Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", settled.Quota)}).Error; err != nil {
-					return err
-				}
+			// used_quota is a usage counter, not a balance. It must be
+			// updated for unlimited tokens too so the key-level consumption
+			// statistics remain accurate.
+			if err := tx.Model(&Token{}).Where("id = ?", tokenID).
+				Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", settled.Quota)}).Error; err != nil {
+				return err
 			}
 			if err := tx.Model(&User{}).Where("id = ?", userID).
 				Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", settled.Quota)}).Error; err != nil {

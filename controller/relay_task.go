@@ -95,10 +95,12 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// taskSubmitAttempt submits the validated request to one channel. Side-effecting
-// failures (upstream accepted the request but local processing failed, or a
-// transport error after the send) return attemptUncertain to prevent unsafe
-// cross-channel retries.
+// taskSubmitAttempt submits the validated request to one channel. The task
+// row is persisted in "submitting" status BEFORE the upstream call so a
+// persistence failure or process exit cannot orphan an accepted upstream task.
+// Side-effecting failures (upstream accepted the request but local processing
+// failed, or a transport error after the send) return attemptUncertain to
+// prevent unsafe cross-channel retries.
 func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, taskReq *dto.TaskRequest, accepted channel.TaskPricing) attemptResult {
 	adaptor, err := relay.GetTaskAdaptor(ch.Type)
 	if err != nil || adaptor.Platform() != platform {
@@ -117,6 +119,52 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 			cause: fmt.Errorf("channel %d: build submit: %v", ch.ID, err)}
 	}
 	key, keyIdx := flow.selectKey(ch)
+
+	// Persist the task with its pre-charge BEFORE submitting upstream.
+	// Status "submitting" protects the reservation through process restarts
+	// and tracks the task if the upstream call is uncertain. The stored
+	// key index lets the terminal poll reuse the same upstream account.
+	requestMeta, _ := json.Marshal(taskReq)
+	task := &model.Task{
+		TaskID:         "",
+		Platform:       platform,
+		Action:         taskReq.Action,
+		Status:         model.TaskStatusSubmitting,
+		Model:          taskReq.Model,
+		RequestedModel: flow.req.requestedModel,
+		Protocol:       flow.req.protocol,
+		UserID:         flow.req.userID,
+		TokenID:        flow.req.tokenID,
+		TokenName:      flow.req.tokenName,
+		TokenUnlimited: flow.req.tokenUnlimited,
+		ChannelID:      ch.ID,
+		KeyIndex:       keyIdx,
+		Group:          flow.settleGroup(),
+		UserGroup:      flow.req.userGroup,
+		Quota:          flow.preQuota,
+		RequestMeta:    string(requestMeta),
+		PricingMeta:    string(pricingMeta),
+	}
+	if err := model.InsertTask(task); err != nil {
+		log.Printf("task persistence failed before upstream submit: %v", err)
+		flow.lastErr = fmt.Errorf("task persistence failed: %v", err)
+		return attemptResult{outcome: attemptUpstreamError, cause: flow.lastErr}
+	}
+
+	// The pre-charge now belongs to the task row; the poll-side settlement
+	// balances it (failed tasks refund fully).
+	flow.settled = true
+
+	completed := false
+	defer func() {
+		if !completed {
+			reason := "task submission failed; upstream execution may be uncertain"
+			if _, ferr := service.FailTaskSubmission(task, reason); ferr != nil {
+				log.Printf("task %d submission refund pending: %v", task.ID, ferr)
+			}
+		}
+	}()
+
 	resp, fail := flow.callUpstream(ch, adaptor, upstreamCall{
 		method:     http.MethodPost,
 		url:        adaptor.SubmitURL(ch.BaseURL),
@@ -140,39 +188,19 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		return attemptResult{outcome: attemptUncertain, statusCode: resp.StatusCode}
 	}
 
-	// Persist the task with its pre-charge; the terminal poll settles.
-	requestMeta, _ := json.Marshal(taskReq)
-	task := &model.Task{
-		TaskID:         taskID,
-		Platform:       platform,
-		Action:         taskReq.Action,
-		Status:         dto.TaskStatusSubmitted,
-		Model:          taskReq.Model,
-		RequestedModel: flow.req.requestedModel,
-		Protocol:       flow.req.protocol,
-		UserID:         flow.req.userID,
-		TokenID:        flow.req.tokenID,
-		TokenName:      flow.req.tokenName,
-		TokenUnlimited: flow.req.tokenUnlimited,
-		ChannelID:      ch.ID,
-		Group:          flow.settleGroup(),
-		UserGroup:      flow.req.userGroup,
-		Quota:          flow.preQuota,
-		RequestMeta:    string(requestMeta),
-		PricingMeta:    string(pricingMeta),
-	}
-	if err := model.InsertTask(task); err != nil {
-		log.Printf("task %q accepted by upstream %d but persistence failed: %v", taskID, ch.ID, err)
-		flow.lastErr = fmt.Errorf("task accepted but not persisted: %v", err)
+	// Bind the upstream task ID and advance to "submitted".
+	if err := model.CompleteTaskSubmission(task.ID, taskID); err != nil {
+		log.Printf("task %q accepted by upstream %d but ID persistence failed: %v", taskID, ch.ID, err)
+		flow.lastErr = fmt.Errorf("task accepted but ID not persisted: %v", err)
 		dto.WriteRelayError(flow.w, http.StatusInternalServerError, flow.inbound,
 			"server_error", "persistence_failed",
-			"task was accepted by upstream but could not be saved locally")
+			"task was accepted by upstream but its ID could not be saved locally")
 		return attemptResult{outcome: attemptUncertain, statusCode: http.StatusInternalServerError}
 	}
 
-	// The pre-charge now belongs to the task row; the poll-side settlement
-	// balances it (failed tasks refund fully).
-	flow.settled = true
+	completed = true
+	task.TaskID = taskID
+	task.Status = dto.TaskStatusSubmitted
 	writeTaskSubmitResponse(flow.w, task)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
