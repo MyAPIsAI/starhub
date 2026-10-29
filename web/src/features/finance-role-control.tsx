@@ -9,10 +9,27 @@ import {
   ROLE_FINANCE,
   ROLE_ROOT,
   ROLE_USER,
-  useSystemAccess,
+  useSessionQueryIdentity,
 } from "../lib/system-access";
 
 export function FinanceRoleControl({
+  user,
+  onUpdated,
+}: {
+  user: AdminUser;
+  onUpdated: (role: number) => void;
+}) {
+  const scope = useSessionQueryIdentity();
+  return (
+    <FinanceRoleControlView
+      key={JSON.stringify([...scope, user.id, user.role])}
+      user={user}
+      onUpdated={onUpdated}
+    />
+  );
+}
+
+function FinanceRoleControlView({
   user,
   onUpdated,
 }: {
@@ -23,10 +40,11 @@ export function FinanceRoleControl({
   const { i18n } = useTranslation();
   const text = (zh: string, en: string, ar: string) =>
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
-  const actor = useSystemAccess((s) => s.role);
+  const scope = useSessionQueryIdentity();
   const mutation = useSetFinanceRole();
   if (
-    actor !== ROLE_ROOT ||
+    scope[1] === null ||
+    scope[3] !== ROLE_ROOT ||
     (user.role !== ROLE_USER && user.role !== ROLE_FINANCE)
   )
     return null;

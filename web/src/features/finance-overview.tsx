@@ -4,7 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useFinanceSummary } from "../lib/api/finance";
 import { formatFinanceAmount } from "../lib/finance-format";
-import { canReadFinance, useSystemAccess } from "../lib/system-access";
+import { canReadFinance, useSessionQueryIdentity } from "../lib/system-access";
 import "./finance-overview.css";
 
 export function FinanceOverview() {
@@ -15,8 +15,8 @@ export function FinanceOverview() {
   const candidate = Number(params.get("days") || 30);
   const days = [7, 30, 90].includes(candidate) ? candidate : 30;
   const query = useFinanceSummary(days);
-  const role = useSystemAccess((s) => s.role);
-  if (!canReadFinance(role))
+  const scope = useSessionQueryIdentity();
+  if (scope[1] === null || !canReadFinance(scope[3]))
     return (
       <p role="alert">
         {text(

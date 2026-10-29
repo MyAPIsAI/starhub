@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut } from "./http";
-import { useProductPreview } from "../product-preview";
-import { canReadFinance, useSystemAccess } from "../system-access";
+import {
+  canReadFinance,
+  ROLE_FINANCE,
+  ROLE_ROOT,
+  ROLE_USER,
+  sessionQueryIdentity,
+  useSessionQueryIdentity,
+  useSystemAccess,
+} from "../system-access";
 
 export interface FinanceSummary {
   since: number;
@@ -62,33 +69,79 @@ export function parseFinanceSummary(value: unknown): FinanceSummary {
 }
 
 export function useFinanceSummary(days: number) {
-  const accountId = useProductPreview((s) => s.user.id);
-  const role = useSystemAccess((s) => s.role);
+  const scope = useSessionQueryIdentity();
   return useQuery({
-    queryKey: ["finance-summary", accountId, days],
-    enabled: canReadFinance(role),
-    queryFn: async ({ signal }) =>
-      parseFinanceSummary(
-        await apiGet<unknown>(`/api/finance/summary?days=${days}`, signal),
-      ),
+    queryKey: ["finance-summary", scope, days],
+    enabled:
+      scope[1] !== null && canReadFinance(scope[3]) && validFinanceDays(days),
+    retry: false,
+    queryFn: async ({ signal }) => {
+      assertFinanceScope(scope, false);
+      if (!validFinanceDays(days))
+        throw Error("Finance days must be an integer between 1 and 90");
+      const result = await apiGet<unknown>(
+        `/api/finance/summary?days=${days}`,
+        signal,
+      );
+      assertFinanceScope(scope, false);
+      return parseFinanceSummary(result);
+    },
   });
+}
+
+function validFinanceDays(days: number) {
+  return Number.isSafeInteger(days) && days >= 1 && days <= 90;
+}
+
+function assertFinanceScope(
+  scope: ReturnType<typeof sessionQueryIdentity>,
+  root: boolean,
+) {
+  const current = useSystemAccess.getState();
+  if (
+    scope[1] === null ||
+    JSON.stringify(scope) !== JSON.stringify(sessionQueryIdentity(current)) ||
+    (root ? current.role !== ROLE_ROOT : !canReadFinance(current.role))
+  )
+    throw Error(
+      "A confirmed unchanged server session with finance privileges is required",
+    );
 }
 
 export function useSetFinanceRole() {
   const client = useQueryClient();
+  const scope = useSessionQueryIdentity();
   return useMutation({
-    mutationFn: (input: {
+    retry: false,
+    mutationFn: async (input: {
       id: number;
       enabled: boolean;
       expected_role: number;
-    }) =>
-      apiPut<null>(`/api/user/${input.id}/finance-role`, {
-        enabled: input.enabled,
-        expected_role: input.expected_role,
-      }),
-    onSuccess: () => {
+    }) => {
+      assertFinanceScope(scope, true);
+      if (
+        !Number.isSafeInteger(input.id) ||
+        input.id <= 0 ||
+        typeof input.enabled !== "boolean" ||
+        ![ROLE_USER, ROLE_FINANCE].includes(input.expected_role)
+      )
+        throw Error("Invalid finance role change");
+      const result = await apiPut<unknown>(
+        `/api/user/${input.id}/finance-role`,
+        {
+          enabled: input.enabled,
+          expected_role: input.expected_role,
+        },
+      );
+      assertFinanceScope(scope, true);
+      if (result !== null && result !== undefined)
+        throw Error("Invalid finance role acknowledgement");
+      return result;
+    },
+    onSettled: () => {
       client.invalidateQueries({ queryKey: ["admin-users"] });
       client.invalidateQueries({ queryKey: ["admin-audit"] });
+      client.invalidateQueries({ queryKey: ["finance-summary"] });
     },
   });
 }

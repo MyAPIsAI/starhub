@@ -13,8 +13,8 @@ import {
   ROLE_USER,
   ROLE_ROOT,
   ROLE_FINANCE,
+  sessionQueryIdentity,
 } from "../src/lib/system-access";
-import { useProductPreview } from "../src/lib/product-preview";
 import { FinanceOverview } from "../src/features/finance-overview";
 import { FinanceRoleControl } from "../src/features/finance-role-control";
 import type { AdminUser } from "../src/lib/api/admin";
@@ -34,7 +34,12 @@ vi.mock("../src/lib/system-access", async (importOriginal) => {
     ) => selector(actual.useSystemAccess.getState()),
     actual.useSystemAccess,
   );
-  return { ...actual, useSystemAccess: useRole };
+  return {
+    ...actual,
+    useSystemAccess: useRole,
+    useSessionQueryIdentity: () =>
+      actual.sessionQueryIdentity(actual.useSystemAccess.getState()),
+  };
 });
 
 const summary: FinanceSummary = {
@@ -68,12 +73,33 @@ const user: AdminUser = {
   created_at: 100,
 };
 const initialRole = useSystemAccess.getState().role;
+const initialSession = useSystemAccess.getState().session;
 afterEach(() => {
-  useSystemAccess.getState().setRole(initialRole);
+  useSystemAccess.setState({ role: initialRole, session: initialSession });
   vi.restoreAllMocks();
 });
 
 describe("finance precision and role boundaries", () => {
+  it("requires a confirmed account before rendering privileged finance views", () => {
+    useSystemAccess.getState().setSession(null);
+    useSystemAccess.getState().setRole(ROLE_ROOT);
+    const client = new QueryClient();
+    client.setQueryData(
+      ["finance-summary", sessionQueryIdentity(useSystemAccess.getState()), 30],
+      summary,
+    );
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <FinanceOverview />
+          <FinanceRoleControl user={user} onUpdated={() => {}} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(html).not.toContain('data-metric="wallet"');
+    expect(html).not.toContain("<button");
+    client.clear();
+  });
   it("distinguishes small charged amounts from zero", () => {
     expect(formatFinanceAmount("0")).toBe("$0.0000");
     expect(formatFinanceAmount("8000")).toBe("$0.000008");
@@ -105,8 +131,11 @@ describe("finance precision and role boundaries", () => {
   );
   it("never renders cached finance figures for an unauthorized role", () => {
     const client = new QueryClient();
+    useSystemAccess
+      .getState()
+      .setSession({ id: 7, group: "default", role: ROLE_USER });
     client.setQueryData(
-      ["finance-summary", useProductPreview.getState().user.id, 30],
+      ["finance-summary", sessionQueryIdentity(useSystemAccess.getState()), 30],
       summary,
     );
     useSystemAccess.getState().setRole(ROLE_USER);
@@ -123,8 +152,11 @@ describe("finance precision and role boundaries", () => {
   });
   it("formats authorized huge totals with integer arithmetic", () => {
     const client = new QueryClient();
+    useSystemAccess
+      .getState()
+      .setSession({ id: 7, group: "default", role: ROLE_FINANCE });
     client.setQueryData(
-      ["finance-summary", useProductPreview.getState().user.id, 30],
+      ["finance-summary", sessionQueryIdentity(useSystemAccess.getState()), 30],
       summary,
     );
     useSystemAccess.getState().setRole(ROLE_FINANCE);
@@ -142,7 +174,7 @@ describe("finance precision and role boundaries", () => {
   it.each([ROLE_USER, ROLE_FINANCE, 10, ROLE_ROOT])(
     "exposes grants only to Root: %s",
     (role) => {
-      useSystemAccess.getState().setRole(role);
+      useSystemAccess.getState().setSession({ id: 7, group: "default", role });
       const client = new QueryClient();
       const html = renderToStaticMarkup(
         <QueryClientProvider client={client}>
@@ -156,7 +188,9 @@ describe("finance precision and role boundaries", () => {
   it.each([10, 100])(
     "does not offer finance-role changes for privileged target %s",
     (role) => {
-      useSystemAccess.getState().setRole(ROLE_ROOT);
+      useSystemAccess
+        .getState()
+        .setSession({ id: 7, group: "default", role: ROLE_ROOT });
       const client = new QueryClient();
       const html = renderToStaticMarkup(
         <QueryClientProvider client={client}>
