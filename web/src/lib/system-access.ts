@@ -14,6 +14,17 @@ export interface SessionIdentity {
   accountId: number | null;
   group: string | null;
   epoch: number;
+  username?: string | null;
+}
+
+// Display only the username supplied by a confirmed server session. Legacy or
+// incomplete identities stay unknown rather than inheriting a Demo profile.
+export function sessionUsername(session: SessionIdentity): string | null {
+  return session.accountId !== null &&
+    typeof session.username === "string" &&
+    session.username.trim() !== ""
+    ? session.username
+    : null;
 }
 
 export function sessionQueryIdentity(state: {
@@ -51,11 +62,11 @@ export const useSystemAccess = create<{
   session: SessionIdentity;
   setRole: (role: SystemRole) => void;
   setSession: (
-    user: { id: number; group: string; role: number } | null,
+    user: { id: number; group: string; role: number; username?: string } | null,
   ) => void;
 }>((set) => ({
   role: ROLE_USER,
-  session: { accountId: null, group: null, epoch: 0 },
+  session: { accountId: null, group: null, epoch: 0, username: null },
   setRole: (role) => set({ role }),
   // Only confirmed session events rotate this identity, never Demo profile edits.
   setSession: (user) =>
@@ -65,6 +76,7 @@ export const useSystemAccess = create<{
         accountId: user?.id ?? null,
         group: user?.group ?? null,
         epoch: state.session.epoch + 1,
+        username: user?.username ?? null,
       },
     })),
 }));

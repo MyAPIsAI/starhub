@@ -3,6 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import {
   sessionQueryIdentity,
   useSystemAccess,
+  sessionUsername,
 } from "../src/lib/system-access";
 import { useProductPreview } from "../src/lib/product-preview";
 
@@ -48,9 +49,12 @@ describe("authoritative session query isolation", () => {
     });
   });
   it("never obtains session identity from Demo profile edits", () => {
-    useSystemAccess
-      .getState()
-      .setSession({ id: 10, group: "default", role: 1 });
+    useSystemAccess.getState().setSession({
+      id: 10,
+      group: "default",
+      role: 1,
+      username: "confirmed-server-user",
+    });
     const before = identity();
     useProductPreview.getState().login("", "demo-changed", {
       id: "not-a-server-id",
@@ -58,6 +62,41 @@ describe("authoritative session query isolation", () => {
     });
     expect(identity()).toEqual(before);
     expect(useSystemAccess.getState().session.accountId).toBe(10);
+    expect(sessionUsername(useSystemAccess.getState().session)).toBe(
+      "confirmed-server-user",
+    );
+  });
+  it("preserves server usernames without Demo aliases and clears names on incomplete sessions", () => {
+    const store = useSystemAccess.getState();
+    store.setSession({
+      id: 10,
+      group: "default",
+      role: 1,
+      username: "admin@enterprise.example",
+    });
+    expect(sessionUsername(useSystemAccess.getState().session)).toBe(
+      "admin@enterprise.example",
+    );
+    store.setSession({ id: 11, group: "default", role: 1 });
+    expect(sessionUsername(useSystemAccess.getState().session)).toBeNull();
+    store.setSession({ id: 11, group: "default", role: 1, username: "  " });
+    expect(sessionUsername(useSystemAccess.getState().session)).toBeNull();
+    store.setSession({
+      id: 11,
+      group: "default",
+      role: 1,
+      username: "confirmed-other-user",
+    });
+    store.setSession(null);
+    expect(useSystemAccess.getState().session.username).toBeNull();
+    expect(
+      sessionUsername({
+        accountId: null,
+        group: null,
+        epoch: 1,
+        username: "stale-user",
+      }),
+    ).toBeNull();
   });
   it("keeps a late old-session response out of the new session cache", async () => {
     const client = new QueryClient({

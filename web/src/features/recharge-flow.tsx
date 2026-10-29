@@ -23,9 +23,11 @@ import {
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { usePreferences } from "../lib/preferences";
-import { useProductPreview } from "../lib/product-preview";
-import { accountDisplayName } from "../lib/account-identity";
-import { useSessionQueryIdentity } from "../lib/system-access";
+import {
+  sessionUsername,
+  useSessionQueryIdentity,
+  useSystemAccess,
+} from "../lib/system-access";
 import { fundingSourceLabel } from "../lib/funding-source";
 import { validateRechargeAmount } from "../lib/billing";
 import { formatMoney } from "../lib/money";
@@ -365,9 +367,8 @@ function RechargeFlowView({
   const createOrderMut = useCreateRechargeOrder();
   const beginPaymentMut = useBeginRechargePayment();
   const resolveOrderMut = useResolveRechargeOrder();
-  const accountName = useProductPreview((state) =>
-    accountDisplayName(state.user),
-  );
+  const accountName =
+    useSystemAccess((state) => sessionUsername(state.session)) ?? "—";
   const backendOrders = (ordersQuery.data ?? []).map(adaptRechargeOrder);
   const balance = walletQuery.error
     ? undefined
