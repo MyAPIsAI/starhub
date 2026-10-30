@@ -24,7 +24,22 @@ import { gatewayPolicyGuide } from "./gateway-policy-guide";
 import { claudeCodeGuide } from "./claude-code-guide";
 
 type ArticleId =
-  "quickstart" | "auth" | "tiers" | "claudeCode" | "cursor" | "errors" | "billing" | "protocols" | "models" | "chat-completions" | "responses" | "anthropic" | "gemini" | "routing" | "limits" | "faq";
+  | "quickstart"
+  | "auth"
+  | "tiers"
+  | "claudeCode"
+  | "cursor"
+  | "errors"
+  | "billing"
+  | "protocols"
+  | "models"
+  | "chat-completions"
+  | "responses"
+  | "anthropic"
+  | "gemini"
+  | "routing"
+  | "limits"
+  | "faq";
 const cursorSettings = `OpenAI API Key: <YOUR_MYAPIS_API_KEY>
 Override OpenAI Base URL: ${placeholders.apiBase}
 Custom Model: gpt-4.1`;
@@ -75,7 +90,13 @@ const chatResponse = JSON.stringify(
     object: "chat.completion",
     created: 0,
     model: "gpt-4.1",
-    choices: [{ index: 0, message: { role: "assistant", content: "Hello!" }, finish_reason: "stop" }],
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content: "Hello!" },
+        finish_reason: "stop",
+      },
+    ],
   },
   null,
   2,
@@ -98,7 +119,7 @@ const curlExample = `curl https://api.myapis.ai/v1/chat/completions \\
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true
   }'`;
-  const pythonExample = `import os
+const pythonExample = `import os
 from openai import OpenAI
 
 client = OpenAI(
@@ -131,19 +152,75 @@ export default function DocsPage() {
     { id: "quickstart", title: t("docsQuickstart"), Icon: Terminal },
     { id: "auth", title: t("docsAuth"), Icon: KeyRound },
     { id: "tiers", title: t("docsTiers"), Icon: Cpu },
-    { id: "protocols", title: text("协议", "Protocols", "البروتوكولات"), Icon: ArrowUpRight },
-    { id: "chat-completions", title: text("Chat Completions（聊天补全）", "Chat Completions", "إكمال المحادثات"), Icon: Terminal },
-    { id: "responses", title: text("Responses（响应接口）与 Codex", "Responses and Codex", "Responses وCodex"), Icon: Terminal },
-    { id: "anthropic", title: text("Anthropic Messages（消息）", "Anthropic Messages", "رسائل Anthropic"), Icon: Terminal },
-    { id: "gemini", title: text("Gemini（原生与兼容）", "Gemini native and compatible APIs", "Gemini الأصلي والمتوافق"), Icon: Terminal },
-    { id: "models", title: text("模型列表", "Model list", "قائمة النماذج"), Icon: Cpu },
+    {
+      id: "protocols",
+      title: text("协议", "Protocols", "البروتوكولات"),
+      Icon: ArrowUpRight,
+    },
+    {
+      id: "chat-completions",
+      title: text(
+        "Chat Completions（聊天补全）",
+        "Chat Completions",
+        "إكمال المحادثات",
+      ),
+      Icon: Terminal,
+    },
+    {
+      id: "responses",
+      title: text(
+        "Responses（响应接口）与 Codex",
+        "Responses and Codex",
+        "Responses وCodex",
+      ),
+      Icon: Terminal,
+    },
+    {
+      id: "anthropic",
+      title: text(
+        "Anthropic Messages（消息）",
+        "Anthropic Messages",
+        "رسائل Anthropic",
+      ),
+      Icon: Terminal,
+    },
+    {
+      id: "gemini",
+      title: text(
+        "Gemini（原生与兼容）",
+        "Gemini native and compatible APIs",
+        "Gemini الأصلي والمتوافق",
+      ),
+      Icon: Terminal,
+    },
+    {
+      id: "models",
+      title: text("模型列表", "Model list", "قائمة النماذج"),
+      Icon: Cpu,
+    },
     { id: "claudeCode", title: t("docsClaudeCode"), Icon: Sparkles },
-    { id: "cursor", title: text("Cursor 接入指南", "Cursor setup", "إعداد Cursor"), Icon: Terminal },
+    {
+      id: "cursor",
+      title: text("Cursor 接入指南", "Cursor setup", "إعداد Cursor"),
+      Icon: Terminal,
+    },
     { id: "errors", title: t("docsErrors"), Icon: ShieldCheck },
     { id: "billing", title: t("docsBilling"), Icon: Coins },
-    { id: "routing", title: text("路由与权限", "Routing & authz", "التوجيه والصلاحيات"), Icon: ArrowUpRight },
-    { id: "limits", title: text("配额与限流", "Limits & rate", "الحدود والمعدل"), Icon: BookOpen },
-    { id: "faq", title: text("常见问题", "FAQ", "الأسئلة الشائعة"), Icon: ChevronRight },
+    {
+      id: "routing",
+      title: text("路由与权限", "Routing & authz", "التوجيه والصلاحيات"),
+      Icon: ArrowUpRight,
+    },
+    {
+      id: "limits",
+      title: text("配额与限流", "Limits & rate", "الحدود والمعدل"),
+      Icon: BookOpen,
+    },
+    {
+      id: "faq",
+      title: text("常见问题", "FAQ", "الأسئلة الشائعة"),
+      Icon: ChevronRight,
+    },
   ];
   const validIds = articles.map((article) => article.id);
   const urlArticle = searchParams.get("article");
@@ -254,42 +331,197 @@ export default function DocsPage() {
 
   // Article search: full-text match against title, keywords, and article body.
   const articleKeywords: Record<ArticleId, string[]> = {
-    quickstart: ["curl", "python", "node", "api key", "base url", "getting started", "快速开始", "入门", "创建密钥"],
-    auth: ["authentication", "authorization", "bearer", "token", "api key", "认证", "授权", "密钥", "bearer"],
-    tiers: ["service tier", "group", "ultra", "pro", "standard", "lite", "分组", "等级", "服务"],
-    claudeCode: ["claude", "anthropic", "codex", "cursor", "gemini", "工具集成", "claude code", "编程工具"],
+    quickstart: [
+      "curl",
+      "python",
+      "node",
+      "api key",
+      "base url",
+      "getting started",
+      "快速开始",
+      "入门",
+      "创建密钥",
+    ],
+    auth: [
+      "authentication",
+      "authorization",
+      "bearer",
+      "token",
+      "api key",
+      "认证",
+      "授权",
+      "密钥",
+      "bearer",
+    ],
+    tiers: [
+      "service tier",
+      "group",
+      "ultra",
+      "pro",
+      "standard",
+      "lite",
+      "分组",
+      "等级",
+      "服务",
+    ],
+    claudeCode: [
+      "claude",
+      "anthropic",
+      "codex",
+      "cursor",
+      "gemini",
+      "工具集成",
+      "claude code",
+      "编程工具",
+    ],
     cursor: ["cursor setup", "Cursor 接入指南", "إعداد Cursor"],
-    errors: ["error", "400", "401", "403", "429", "502", "503", "错误", "错误码", "故障排除"],
-    billing: ["billing", "quota", "cost", "charge", "balance", "top-up", "计费", "费用", "余额", "充值"],
-    protocols: ["protocol", "endpoint", "api", "curl", "url", "path", "协议", "端点", "路径", "接口"],
+    errors: [
+      "error",
+      "400",
+      "401",
+      "403",
+      "429",
+      "502",
+      "503",
+      "错误",
+      "错误码",
+      "故障排除",
+    ],
+    billing: [
+      "billing",
+      "quota",
+      "cost",
+      "charge",
+      "balance",
+      "top-up",
+      "计费",
+      "费用",
+      "余额",
+      "充值",
+    ],
+    protocols: [
+      "protocol",
+      "endpoint",
+      "api",
+      "curl",
+      "url",
+      "path",
+      "协议",
+      "端点",
+      "路径",
+      "接口",
+    ],
     models: ["model list", "/v1/models", "模型列表", "قائمة النماذج"],
-    "chat-completions": ["chat completions", "/v1/chat/completions", "聊天补全", "إكمال المحادثات"],
+    "chat-completions": [
+      "chat completions",
+      "/v1/chat/completions",
+      "聊天补全",
+      "إكمال المحادثات",
+    ],
     responses: ["responses", "codex", "/v1/responses", "响应接口"],
-    anthropic: ["anthropic messages", "/v1/messages", "消息协议", "رسائل Anthropic"],
-    gemini: ["gemini compatibility", "Gemini 兼容接入", "الوصول المتوافق إلى Gemini"],
-    routing: ["routing", "authorization", "group", "model", "allowlist", "auto", "路由", "授权", "分组", "白名单"],
-    limits: ["limit", "rate", "quota", "concurrency", "throttle", "配额", "限流", "并发", "额度"],
+    anthropic: [
+      "anthropic messages",
+      "/v1/messages",
+      "消息协议",
+      "رسائل Anthropic",
+    ],
+    gemini: [
+      "gemini compatibility",
+      "Gemini 兼容接入",
+      "الوصول المتوافق إلى Gemini",
+    ],
+    routing: [
+      "routing",
+      "authorization",
+      "group",
+      "model",
+      "allowlist",
+      "auto",
+      "路由",
+      "授权",
+      "分组",
+      "白名单",
+    ],
+    limits: [
+      "limit",
+      "rate",
+      "quota",
+      "concurrency",
+      "throttle",
+      "配额",
+      "限流",
+      "并发",
+      "额度",
+    ],
     faq: ["faq", "question", "answer", "常见问题", "问题", "解答"],
   };
   // Searchable body text for each article, built from the article content so
   // the search covers the full text, not just preset keywords.
   const articleBody: Record<ArticleId, string> = {
-    quickstart: "first request endpoint key curl python streaming demo domain environment variable chat request terminal connect application consistent interface",
-    auth: policy.quota + " keys access boundaries usage quotas store securely project restrict access IP allowlist source control environment variables review request logs",
-    tiers: "service level workload Ultra 1.00 99.5% 800ms Pro 0.80 99.0% 1500ms Standard 0.60 97.5% 3000ms Lite 0.40 price multiplier target latency demo configuration",
+    quickstart:
+      "first request endpoint key curl python streaming demo domain environment variable chat request terminal connect application consistent interface",
+    auth:
+      policy.quota +
+      " keys access boundaries usage quotas store securely project restrict access IP allowlist source control environment variables review request logs",
+    tiers:
+      "service level workload Ultra 1.00 99.5% 800ms Pro 0.80 99.0% 1500ms Standard 0.60 97.5% 3000ms Lite 0.40 price multiplier target latency demo configuration",
     claudeCode: Object.values(claudeCode).join(" "),
-    cursor: [cursorLead, ...cursorSteps, cursorSettings, cursorBoundary, cursorTroubleshooting].join(" "),
-    errors: "401 invalid_api_key token_disabled token_expired 403 insufficient_quota token_quota_exhausted auto_group_empty group_not_available 400 invalid_request_body invalid_json invalid_multipart model_required 429 rate_limit_exceeded 502 upstream_unavailable retry_budget_exhausted upstream_result_uncertain 503 no_available_channel 500 pre_consume_failed channel_selection_failed Authorization Bearer JSON multipart",
-    billing: policy.wallet + " balance precision usage totals request logs export details account balance 2 4 6 9 display reconciliation",
-    protocols: "Chat Completions OpenAI Messages Anthropic Embeddings Images generations Audio TTS speech STT transcriptions translations Video submit poll Realtime WebSocket Models list Bearer token base URL path auth",
-    models: [modelsLead, modelsScope, modelsResponseNote, modelsExample, modelsResponse].join(" "),
-    "chat-completions": [chatLead, chatResponseNote, chatStreaming, chatExample, chatResponse].join(" "),
+    cursor: [
+      cursorLead,
+      ...cursorSteps,
+      cursorSettings,
+      cursorBoundary,
+      cursorTroubleshooting,
+    ].join(" "),
+    errors:
+      "401 invalid_api_key token_disabled token_expired 403 insufficient_quota token_quota_exhausted auto_group_empty group_not_available 400 invalid_request_body invalid_json invalid_multipart model_required 429 rate_limit_exceeded 502 upstream_unavailable retry_budget_exhausted upstream_result_uncertain 503 no_available_channel 500 pre_consume_failed channel_selection_failed Authorization Bearer JSON multipart",
+    billing:
+      policy.wallet +
+      " balance precision usage totals request logs export details account balance 2 4 6 9 display reconciliation",
+    protocols:
+      "Chat Completions OpenAI Messages Anthropic Embeddings Images generations Audio TTS speech STT transcriptions translations Video submit poll Realtime WebSocket Models list Bearer token base URL path auth",
+    models: [
+      modelsLead,
+      modelsScope,
+      modelsResponseNote,
+      modelsExample,
+      modelsResponse,
+    ].join(" "),
+    "chat-completions": [
+      chatLead,
+      chatResponseNote,
+      chatStreaming,
+      chatExample,
+      chatResponse,
+    ].join(" "),
     responses: Object.values(responses).join(" "),
-    anthropic: [anthropicLead, anthropicAuth, anthropicResponseNote, anthropicStreaming, anthropicExample, anthropicResponse].join(" "),
-    gemini: [geminiLead, geminiBoundary, geminiResponseNote, geminiExample, ...Object.values(nativeGemini)].join(" "),
-    routing: policy.tokenFields.flat().join(" ") + " routing flow key auth channel selection pre-charge settle refund",
-    limits: [policy.defaults,policy.quota,policy.rateHelp,...policy.rateRows.flat()].join(" "),
-    faq: policy.wallet + " plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field",
+    anthropic: [
+      anthropicLead,
+      anthropicAuth,
+      anthropicResponseNote,
+      anthropicStreaming,
+      anthropicExample,
+      anthropicResponse,
+    ].join(" "),
+    gemini: [
+      geminiLead,
+      geminiBoundary,
+      geminiResponseNote,
+      geminiExample,
+      ...Object.values(nativeGemini),
+    ].join(" "),
+    routing:
+      policy.tokenFields.flat().join(" ") +
+      " routing flow key auth channel selection pre-charge settle refund",
+    limits: [
+      policy.defaults,
+      policy.quota,
+      policy.rateHelp,
+      ...policy.rateRows.flat(),
+    ].join(" "),
+    faq:
+      policy.wallet +
+      " plaintext API key creation regeneration mask sk-**** failed requests charged pre-charged quota refunded switch models model field",
   };
   const filteredArticles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -300,7 +532,9 @@ export default function DocsPage() {
       return (
         title.toLowerCase().includes(q) ||
         body.toLowerCase().includes(q) ||
-        keywords.some((kw) => kw.toLowerCase().includes(q) || q.includes(kw.toLowerCase()))
+        keywords.some(
+          (kw) => kw.toLowerCase().includes(q) || q.includes(kw.toLowerCase()),
+        )
       );
     });
   }, [searchQuery, lang]);
@@ -360,10 +594,22 @@ export default function DocsPage() {
           </div>
           <nav aria-label={t("navDocs")}>
             <div className="docs-search-box" style={{ marginBottom: 8 }}>
-              <Search size={14} style={{ opacity: 0.5, position: "absolute", marginInlineStart: 8, marginTop: 7 }} />
+              <Search
+                size={14}
+                style={{
+                  opacity: 0.5,
+                  position: "absolute",
+                  marginInlineStart: 8,
+                  marginTop: 7,
+                }}
+              />
               <input
                 type="search"
-                placeholder={text("搜索文档…", "Search docs…", "ابحث في المستندات…")}
+                placeholder={text(
+                  "搜索文档…",
+                  "Search docs…",
+                  "ابحث في المستندات…",
+                )}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
@@ -391,8 +637,18 @@ export default function DocsPage() {
               </button>
             ))}
             {filteredArticles.length === 0 && (
-              <p style={{ padding: "8px 4px", fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-                {text("未找到匹配的文档", "No matching docs", "لا مستندات مطابقة")}
+              <p
+                style={{
+                  padding: "8px 4px",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--muted)",
+                }}
+              >
+                {text(
+                  "未找到匹配的文档",
+                  "No matching docs",
+                  "لا مستندات مطابقة",
+                )}
               </p>
             )}
           </nav>
@@ -487,15 +743,52 @@ export default function DocsPage() {
           {activeTab === "cursor" && (
             <>
               <p className="docs-lead">{cursorLead}</p>
-              <ol className="docs-steps">{cursorSteps.map((step) => <li key={step}>{step}</li>)}</ol>
-              <CodeBlock title="Cursor Settings → Models" code={cursorSettings} />
-              <div className="docs-callout"><p>{cursorBoundary}</p></div>
+              <ol className="docs-steps">
+                {cursorSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+              <CodeBlock
+                title="Cursor Settings → Models"
+                code={cursorSettings}
+              />
+              <div className="docs-callout">
+                <p>{cursorBoundary}</p>
+              </div>
               <p>{cursorTroubleshooting}</p>
-              <p><Link to="/docs?article=chat-completions">{text("查看 Chat Completions 请求示例", "Read the Chat Completions request example", "اقرأ مثال طلب Chat Completions")}</Link></p>
               <p>
-                <a href="https://cursor.com/help/models-and-usage/api-keys" target="_blank" rel="noreferrer">{text("Cursor 官方密钥说明", "Cursor API key documentation", "وثائق مفاتيح Cursor")}</a>
+                <Link to="/docs?article=chat-completions">
+                  {text(
+                    "查看 Chat Completions 请求示例",
+                    "Read the Chat Completions request example",
+                    "اقرأ مثال طلب Chat Completions",
+                  )}
+                </Link>
+              </p>
+              <p>
+                <a
+                  href="https://cursor.com/help/models-and-usage/api-keys"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {text(
+                    "Cursor 官方密钥说明",
+                    "Cursor API key documentation",
+                    "وثائق مفاتيح Cursor",
+                  )}
+                </a>
                 {" · "}
-                <a href="https://developers.cloudflare.com/ai-gateway/integrations/coding-agents/cursor/" target="_blank" rel="noreferrer">{text("自定义地址与模式兼容说明", "Custom base URL and mode compatibility", "توافق العنوان المخصص والأوضاع")}</a>
+                <a
+                  href="https://developers.cloudflare.com/ai-gateway/integrations/coding-agents/cursor/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {text(
+                    "自定义地址与模式兼容说明",
+                    "Custom base URL and mode compatibility",
+                    "توافق العنوان المخصص والأوضاع",
+                  )}
+                </a>
               </p>
             </>
           )}
@@ -504,18 +797,47 @@ export default function DocsPage() {
               <p className="docs-lead">{nativeGemini.lead}</p>
               <CodeBlock title="Gemini REST" code={nativeGemini.example} />
               <p>{nativeGemini.response}</p>
-              <div className="docs-callout"><p>{nativeGemini.streaming}</p></div>
-              <div className="docs-callout"><p>{nativeGemini.boundary}</p></div>
-              <p><a href="https://ai.google.dev/api/generate-content" target="_blank" rel="noreferrer">{text("Gemini 官方接口参考", "Official Gemini API reference", "مرجع Gemini الرسمي")}</a></p>
-              <h2>{text("兼容聊天接入", "Compatible chat API", "واجهة المحادثة المتوافقة")}</h2>
+              <div className="docs-callout">
+                <p>{nativeGemini.streaming}</p>
+              </div>
+              <div className="docs-callout">
+                <p>{nativeGemini.boundary}</p>
+              </div>
+              <p>
+                <a
+                  href="https://ai.google.dev/api/generate-content"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {text(
+                    "Gemini 官方接口参考",
+                    "Official Gemini API reference",
+                    "مرجع Gemini الرسمي",
+                  )}
+                </a>
+              </p>
+              <h2>
+                {text(
+                  "兼容聊天接入",
+                  "Compatible chat API",
+                  "واجهة المحادثة المتوافقة",
+                )}
+              </h2>
               <p className="docs-lead">{geminiLead}</p>
-              <CodeBlock title="POST /v1/chat/completions" code={geminiExample} />
+              <CodeBlock
+                title="POST /v1/chat/completions"
+                code={geminiExample}
+              />
               <div className="docs-callout">
                 <p>{geminiBoundary}</p>
               </div>
               <p>{geminiResponseNote}</p>
               <Link to="/docs?article=chat-completions">
-                {text("查看 Chat Completions 格式", "Read the Chat Completions format", "اقرأ صيغة Chat Completions")}
+                {text(
+                  "查看 Chat Completions 格式",
+                  "Read the Chat Completions format",
+                  "اقرأ صيغة Chat Completions",
+                )}
               </Link>
             </>
           )}
@@ -524,20 +846,57 @@ export default function DocsPage() {
               <p className="docs-lead">{responses.lead}</p>
               <CodeBlock title="POST /v1/responses" code={responses.request} />
               <p>{responses.response}</p>
-              <div className="docs-callout"><p>{responses.streaming}</p></div>
+              <div className="docs-callout">
+                <p>{responses.streaming}</p>
+              </div>
               <p>{responses.retrieval}</p>
-              <CodeBlock title="GET /v1/responses/{id}" code={responses.retrieve} />
+              <CodeBlock
+                title="GET /v1/responses/{id}"
+                code={responses.retrieve}
+              />
               <p>{responses.indexStatus}</p>
-              <div className="docs-callout"><p>{responses.boundary}</p></div>
+              <div className="docs-callout">
+                <p>{responses.boundary}</p>
+              </div>
               <h2>Codex</h2>
               <p>{responses.codex}</p>
               <CodeBlock title="config.toml" code={responses.config} />
               <p>
-                <a href="https://developers.openai.com/api/docs/guides/streaming-responses" target="_blank" rel="noreferrer">{text("Responses 官方事件说明", "Official Responses event guide", "دليل أحداث Responses الرسمي")}</a>
+                <a
+                  href="https://developers.openai.com/api/docs/guides/streaming-responses"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {text(
+                    "Responses 官方事件说明",
+                    "Official Responses event guide",
+                    "دليل أحداث Responses الرسمي",
+                  )}
+                </a>
                 {" · "}
-                <a href="https://developers.openai.com/api/docs/guides/conversation-state" target="_blank" rel="noreferrer">{text("官方响应存储说明", "Official response storage guide", "دليل تخزين الاستجابات الرسمي")}</a>
+                <a
+                  href="https://developers.openai.com/api/docs/guides/conversation-state"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {text(
+                    "官方响应存储说明",
+                    "Official response storage guide",
+                    "دليل تخزين الاستجابات الرسمي",
+                  )}
+                </a>
                 {" · "}
-                <a href="https://learn.chatgpt.com/docs/config-file/config-advanced" target="_blank" rel="noreferrer">{text("Codex 官方配置说明", "Official Codex configuration", "إعداد Codex الرسمي")}</a>
+                <a
+                  href="https://learn.chatgpt.com/docs/config-file/config-advanced"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {text(
+                    "Codex 官方配置说明",
+                    "Official Codex configuration",
+                    "إعداد Codex الرسمي",
+                  )}
+                </a>
               </p>
             </>
           )}
@@ -550,7 +909,11 @@ export default function DocsPage() {
               </div>
               <p>{anthropicResponseNote}</p>
               <CodeBlock
-                title={text("响应格式示例", "Example response", "مثال على الاستجابة")}
+                title={text(
+                  "响应格式示例",
+                  "Example response",
+                  "مثال على الاستجابة",
+                )}
                 code={anthropicResponse}
               />
               <div className="docs-callout">
@@ -564,7 +927,11 @@ export default function DocsPage() {
               <CodeBlock title="POST /v1/chat/completions" code={chatExample} />
               <p>{chatResponseNote}</p>
               <CodeBlock
-                title={text("响应格式示例", "Example response", "مثال على الاستجابة")}
+                title={text(
+                  "响应格式示例",
+                  "Example response",
+                  "مثال على الاستجابة",
+                )}
                 code={chatResponse}
               />
               <div className="docs-callout">
@@ -581,7 +948,11 @@ export default function DocsPage() {
               </div>
               <p>{modelsResponseNote}</p>
               <CodeBlock
-                title={text("响应格式示例", "Example response", "مثال على الاستجابة")}
+                title={text(
+                  "响应格式示例",
+                  "Example response",
+                  "مثال على الاستجابة",
+                )}
                 code={modelsResponse}
               />
             </>
@@ -640,9 +1011,7 @@ export default function DocsPage() {
               <p className="docs-lead">{claudeCode.lead}</p>
               <div className="docs-callout">
                 <BookOpen size={18} />
-                <span>
-                  {claudeCode.endpoint}
-                </span>
+                <span>{claudeCode.endpoint}</span>
               </div>
               <h2>
                 {text("环境变量", "Environment variables", "متغيرات البيئة")}
@@ -653,14 +1022,41 @@ export default function DocsPage() {
                   "Terminal configuration",
                   "إعداد الطرفية",
                 )}
-                code={
-                  claudeCode.bash
-                }
+                code={claudeCode.bash}
               />
               <CodeBlock title="PowerShell" code={claudeCode.powershell} />
-              <CodeBlock title="POST /v1/messages · cURL" code={claudeCode.request} />
-              <div className="docs-callout"><p>{claudeCode.boundary}</p></div>
-              <p><a href="https://code.claude.com/docs/en/llm-gateway-connect" target="_blank" rel="noreferrer">{text("Claude Code 官方网关配置", "Official Claude Code gateway setup", "إعداد بوابة Claude Code الرسمي")}</a>{" · "}<a href="https://code.claude.com/docs/en/llm-gateway-protocol" target="_blank" rel="noreferrer">{text("官方协议与能力要求", "Official protocol and capability requirements", "متطلبات البروتوكول والقدرات الرسمية")}</a></p>
+              <CodeBlock
+                title="POST /v1/messages · cURL"
+                code={claudeCode.request}
+              />
+              <div className="docs-callout">
+                <p>{claudeCode.boundary}</p>
+              </div>
+              <p>
+                <a
+                  href="https://code.claude.com/docs/en/llm-gateway-connect"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {text(
+                    "Claude Code 官方网关配置",
+                    "Official Claude Code gateway setup",
+                    "إعداد بوابة Claude Code الرسمي",
+                  )}
+                </a>
+                {" · "}
+                <a
+                  href="https://code.claude.com/docs/en/llm-gateway-protocol"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {text(
+                    "官方协议与能力要求",
+                    "Official protocol and capability requirements",
+                    "متطلبات البروتوكول والقدرات الرسمية",
+                  )}
+                </a>
+              </p>
               <Link className="docs-next-link" to="/console/keys">
                 {t("createKeyWithModel")}
                 <ArrowUpRight size={15} />
@@ -897,7 +1293,9 @@ export default function DocsPage() {
           )}
           {activeTab === "billing" && (
             <>
-              <div className="docs-callout"><p>{policy.wallet}</p></div>
+              <div className="docs-callout">
+                <p>{policy.wallet}</p>
+              </div>
               <p className="docs-lead">
                 {text(
                   "账户余额、报表与调用明细使用不同的显示精度，便于阅读和核对。",
@@ -969,22 +1367,117 @@ export default function DocsPage() {
                   </thead>
                   <tbody>
                     {[
-                      [text("Chat Completions（OpenAI 兼容）", "Chat Completions (OpenAI)", "Chat Completions (OpenAI)"), "https://api.myapis.ai/v1", "/chat/completions", "Bearer token"],
-                      ["Responses", placeholders.apiBase, "/responses", "Bearer token"],
-                      ["Gemini", placeholders.apiBase.replace(/\/v1\/?$/, ""), "/v1beta/models/{model}:generateContent", "x-goog-api-key / Bearer"],
-                      [text("Messages（Anthropic 兼容）", "Messages (Anthropic)", "Messages (Anthropic)"), "https://api.myapis.ai/v1", "/messages", "Bearer token"],
-                      [text("Embeddings（OpenAI 兼容）", "Embeddings (OpenAI)", "Embeddings (OpenAI)"), "https://api.myapis.ai/v1", "/embeddings", "Bearer token"],
-                      [text("Images（OpenAI 兼容）", "Images (OpenAI)", "Images (OpenAI)"), "https://api.myapis.ai/v1", "/images/generations", "Bearer token"],
-                      [text("Audio TTS（OpenAI 兼容）", "Audio TTS (OpenAI)", "Audio TTS (OpenAI)"), "https://api.myapis.ai/v1", "/audio/speech", "Bearer token"],
-                      [text("Audio STT（OpenAI 兼容）", "Audio STT (OpenAI)", "Audio STT (OpenAI)"), "https://api.myapis.ai/v1", "/audio/transcriptions", "Bearer token"],
-                      [text("Video（任务提交+轮询）", "Video (submit+poll)", "Video (submit+poll)"), "https://api.myapis.ai/v1", "/video/generations", "Bearer token"],
-                      [text("Realtime（WebSocket）", "Realtime (WebSocket)", "Realtime (WebSocket)"), "https://api.myapis.ai/v1", "/realtime", "Bearer token"],
-                      [text("Models（模型列表）", "Models (list)", "Models (list)"), "https://api.myapis.ai/v1", "/models", "Bearer token"],
+                      [
+                        text(
+                          "Chat Completions（OpenAI 兼容）",
+                          "Chat Completions (OpenAI)",
+                          "Chat Completions (OpenAI)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/chat/completions",
+                        "Bearer token",
+                      ],
+                      [
+                        "Responses",
+                        placeholders.apiBase,
+                        "/responses",
+                        "Bearer token",
+                      ],
+                      [
+                        "Gemini",
+                        placeholders.apiBase.replace(/\/v1\/?$/, ""),
+                        "/v1beta/models/{model}:generateContent",
+                        "x-goog-api-key / Bearer",
+                      ],
+                      [
+                        text(
+                          "Messages（Anthropic 兼容）",
+                          "Messages (Anthropic)",
+                          "Messages (Anthropic)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/messages",
+                        "Bearer token",
+                      ],
+                      [
+                        text(
+                          "Embeddings（OpenAI 兼容）",
+                          "Embeddings (OpenAI)",
+                          "Embeddings (OpenAI)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/embeddings",
+                        "Bearer token",
+                      ],
+                      [
+                        text(
+                          "Images（OpenAI 兼容）",
+                          "Images (OpenAI)",
+                          "Images (OpenAI)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/images/generations",
+                        "Bearer token",
+                      ],
+                      [
+                        text(
+                          "Audio TTS（OpenAI 兼容）",
+                          "Audio TTS (OpenAI)",
+                          "Audio TTS (OpenAI)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/audio/speech",
+                        "Bearer token",
+                      ],
+                      [
+                        text(
+                          "Audio STT（OpenAI 兼容）",
+                          "Audio STT (OpenAI)",
+                          "Audio STT (OpenAI)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/audio/transcriptions",
+                        "Bearer token",
+                      ],
+                      [
+                        text(
+                          "Video（任务提交+轮询）",
+                          "Video (submit+poll)",
+                          "Video (submit+poll)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/video/generations",
+                        "Bearer token",
+                      ],
+                      [
+                        text(
+                          "Realtime（WebSocket）",
+                          "Realtime (WebSocket)",
+                          "Realtime (WebSocket)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/realtime",
+                        "Bearer token",
+                      ],
+                      [
+                        text(
+                          "Models（模型列表）",
+                          "Models (list)",
+                          "Models (list)",
+                        ),
+                        "https://api.myapis.ai/v1",
+                        "/models",
+                        "Bearer token",
+                      ],
                     ].map(([protocol, baseUrl, path, auth], i) => (
                       <tr key={i}>
                         <td>{protocol}</td>
-                        <td><code className="mono">{baseUrl}</code></td>
-                        <td><code className="mono">{path}</code></td>
+                        <td>
+                          <code className="mono">{baseUrl}</code>
+                        </td>
+                        <td>
+                          <code className="mono">{path}</code>
+                        </td>
                         <td>{auth}</td>
                       </tr>
                     ))}
@@ -1020,25 +1513,49 @@ export default function DocsPage() {
                   )}
                 </p>
               </div>
-              <h2>{text("密钥授权范围", "Key authorization scope", "نطاق تفويض المفتاح")}</h2>
-              <div className="docs-table-wrap" role="region" tabIndex={0} aria-label={text("密钥授权字段", "Key authorization fields", "حقول تفويض المفتاح")}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>{text("字段", "Field", "الحقل")}</th>
-                    <th>{text("说明", "Description", "الوصف")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {policy.tokenFields.map(([field,description]) => <tr key={field}><td><code>{field}</code></td><td>{description}</td></tr>)}
-                </tbody>
-              </table>
+              <h2>
+                {text(
+                  "密钥授权范围",
+                  "Key authorization scope",
+                  "نطاق تفويض المفتاح",
+                )}
+              </h2>
+              <div
+                className="docs-table-wrap"
+                role="region"
+                tabIndex={0}
+                aria-label={text(
+                  "密钥授权字段",
+                  "Key authorization fields",
+                  "حقول تفويض المفتاح",
+                )}
+              >
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{text("字段", "Field", "الحقل")}</th>
+                      <th>{text("说明", "Description", "الوصف")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {policy.tokenFields.map(([field, description]) => (
+                      <tr key={field}>
+                        <td>
+                          <code>{field}</code>
+                        </td>
+                        <td>{description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </>
           )}
           {activeTab === "limits" && (
             <>
-              <div className="docs-callout"><p>{policy.defaults}</p></div>
+              <div className="docs-callout">
+                <p>{policy.defaults}</p>
+              </div>
               <p className="docs-lead">
                 {text(
                   "平台对账户和密钥设有配额与速率限制，防止滥用并保障公平使用。",
@@ -1046,7 +1563,16 @@ export default function DocsPage() {
                   "تفرض المنصة حدود الحصة والمعدل على الحسابات والمفاتيح لمنع الإساءة وضمان الاستخدام العادل.",
                 )}
               </p>
-              <div className="docs-table-wrap" role="region" tabIndex={0} aria-label={text("限流默认值", "Rate limit defaults", "حدود المعدل الافتراضية")}>
+              <div
+                className="docs-table-wrap"
+                role="region"
+                tabIndex={0}
+                aria-label={text(
+                  "限流默认值",
+                  "Rate limit defaults",
+                  "حدود المعدل الافتراضية",
+                )}
+              >
                 <table>
                   <thead>
                     <tr>
@@ -1056,12 +1582,21 @@ export default function DocsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {policy.rateRows.map(([label,value,description]) => <tr key={label}><td>{label}</td><td className="mono">{value}</td><td>{description}</td></tr>)}
+                    {policy.rateRows.map(([label, value, description]) => (
+                      <tr key={label}>
+                        <td>{label}</td>
+                        <td className="mono">{value}</td>
+                        <td>{description}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
               <div className="docs-callout">
-                <div style={{ display: "grid", gap: 12, minWidth: 0 }}><p>{policy.rateHelp}</p><p>{policy.quota}</p></div>
+                <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
+                  <p>{policy.rateHelp}</p>
+                  <p>{policy.quota}</p>
+                </div>
               </div>
             </>
           )}
@@ -1076,25 +1611,69 @@ export default function DocsPage() {
               </p>
               {[
                 {
-                  q: text("密钥明文能在哪里看到？", "Where can I see the plaintext API key?", "أين يمكنني رؤية مفتاح API الصريح؟"),
-                  a: text("仅在创建或重置密钥时一次性显示。之后只显示掩码（sk-****）。请妥善保存。", "Only shown once at creation or regeneration. After that only the mask (sk-****) is displayed. Save it securely.", "يُعرض مرة واحدة فقط عند الإنشاء أو إعادة التعيين. بعد ذلك يُعرض القناع فقط (sk-****). احفظه بأمان."),
+                  q: text(
+                    "密钥明文能在哪里看到？",
+                    "Where can I see the plaintext API key?",
+                    "أين يمكنني رؤية مفتاح API الصريح؟",
+                  ),
+                  a: text(
+                    "仅在创建或重置密钥时一次性显示。之后只显示掩码（sk-****）。请妥善保存。",
+                    "Only shown once at creation or regeneration. After that only the mask (sk-****) is displayed. Save it securely.",
+                    "يُعرض مرة واحدة فقط عند الإنشاء أو إعادة التعيين. بعد ذلك يُعرض القناع فقط (sk-****). احفظه بأمان.",
+                  ),
                 },
                 {
-                  q: text("失败请求会扣费吗？", "Are failed requests charged?", "هل تُحاسب الطلبات الفاشلة؟"),
-                  a: text("请求在准入前被拒绝不扣费。已开始执行的请求可能按已产生的用量结算，包括 Responses 失败、取消或流中断；未使用的预扣差额会退还。请以调用日志为准。", "Requests rejected before admission are not charged. Requests that started execution may settle incurred usage, including failed, cancelled, or interrupted Responses. Unused reservations are refunded. Check request logs for the final bill.", "لا تُحاسب الطلبات المرفوضة قبل القبول. قد تُحاسب الطلبات التي بدأ تنفيذها حسب الاستخدام، بما فيها Responses الفاشلة أو الملغاة أو المنقطعة. تُسترد الحصة المحجوزة غير المستخدمة. راجع سجلات الطلبات للفاتورة النهائية."),
+                  q: text(
+                    "失败请求会扣费吗？",
+                    "Are failed requests charged?",
+                    "هل تُحاسب الطلبات الفاشلة؟",
+                  ),
+                  a: text(
+                    "请求在准入前被拒绝不扣费。已开始执行的请求可能按已产生的用量结算，包括 Responses 失败、取消或流中断；未使用的预扣差额会退还。请以调用日志为准。",
+                    "Requests rejected before admission are not charged. Requests that started execution may settle incurred usage, including failed, cancelled, or interrupted Responses. Unused reservations are refunded. Check request logs for the final bill.",
+                    "لا تُحاسب الطلبات المرفوضة قبل القبول. قد تُحاسب الطلبات التي بدأ تنفيذها حسب الاستخدام، بما فيها Responses الفاشلة أو الملغاة أو المنقطعة. تُسترد الحصة المحجوزة غير المستخدمة. راجع سجلات الطلبات للفاتورة النهائية.",
+                  ),
                 },
                 {
-                  q: text("如何切换模型？", "How do I switch models?", "كيف أبدل النماذج؟"),
-                  a: text("OpenAI/Anthropic 请求修改正文的 model；Gemini 原生请求修改路径中的模型标识。模型须已获密钥授权，并有匹配协议与能力的可用渠道。", "For OpenAI/Anthropic, change the body model field. For native Gemini, change the model ID in the path. The key must authorize it and a channel must support the protocol and capabilities.", "غيّر model في جسم طلبات OpenAI/Anthropic، ومعرّف النموذج في مسار Gemini الأصلي. يجب أن يصرّح المفتاح بالنموذج وأن تتوفر قناة تدعم البروتوكول والقدرات."),
+                  q: text(
+                    "如何切换模型？",
+                    "How do I switch models?",
+                    "كيف أبدل النماذج؟",
+                  ),
+                  a: text(
+                    "OpenAI/Anthropic 请求修改正文的 model；Gemini 原生请求修改路径中的模型标识。模型须已获密钥授权，并有匹配协议与能力的可用渠道。",
+                    "For OpenAI/Anthropic, change the body model field. For native Gemini, change the model ID in the path. The key must authorize it and a channel must support the protocol and capabilities.",
+                    "غيّر model في جسم طلبات OpenAI/Anthropic، ومعرّف النموذج في مسار Gemini الأصلي. يجب أن يصرّح المفتاح بالنموذج وأن تتوفر قناة تدعم البروتوكول والقدرات.",
+                  ),
                 },
                 {
-                  q: text("充值后多久到账？", "How long does top-up take?", "كم يستغرق الشحن؟"),
+                  q: text(
+                    "充值后多久到账？",
+                    "How long does top-up take?",
+                    "كم يستغرق الشحن؟",
+                  ),
                   a: policy.wallet,
                 },
               ].map(({ q, a }, i) => (
                 <details key={i} className="docs-callout">
-                  <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "var(--text-sm)" }}>{q}</summary>
-                  <p style={{ marginTop: 8, fontSize: "var(--text-sm)", color: "var(--secondary)" }}>{a}</p>
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      fontSize: "var(--text-sm)",
+                    }}
+                  >
+                    {q}
+                  </summary>
+                  <p
+                    style={{
+                      marginTop: 8,
+                      fontSize: "var(--text-sm)",
+                      color: "var(--secondary)",
+                    }}
+                  >
+                    {a}
+                  </p>
                 </details>
               ))}
             </>

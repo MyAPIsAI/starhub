@@ -25,8 +25,7 @@ const EXPORTS_KEY = ["exports"] as const;
 export function useExports() {
   return useQuery({
     queryKey: EXPORTS_KEY,
-    queryFn: ({ signal }) =>
-      apiGet<ExportRecord[]>("/api/export", signal),
+    queryFn: ({ signal }) => apiGet<ExportRecord[]>("/api/export", signal),
   });
 }
 

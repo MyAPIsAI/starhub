@@ -59,9 +59,10 @@ export default function ModelDetail() {
   // Fetch service quality summary to show a per-model metric panel inline.
   // The backend returns per-model aggregates in by_model.
   const qualityQuery = useServiceQuality(168, id);
-  const modelQuality = model && !qualityQuery.isError
-    ? qualityQuery.data?.by_model.find((m) => m.model === model.id)
-    : undefined;
+  const modelQuality =
+    model && !qualityQuery.isError
+      ? qualityQuery.data?.by_model.find((m) => m.model === model.id)
+      : undefined;
   const measuredP95 =
     modelQuality &&
     Number.isFinite(modelQuality.p95_duration_ms) &&
@@ -302,17 +303,50 @@ export default function ModelDetail() {
                 </strong>
               </div>
               <div>
-                <small>{text("服务质量", "Service quality", "جودة الخدمة")}</small>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center", marginTop: 4 }}>
+                <small>
+                  {text("服务质量", "Service quality", "جودة الخدمة")}
+                </small>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "var(--space-2)",
+                    alignItems: "center",
+                    marginTop: 4,
+                  }}
+                >
                   {modelQuality && modelQuality.total_requests > 0 ? (
                     <>
-                      <span className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }} dir="ltr">
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: "var(--text-xs)",
+                          color: "var(--muted)",
+                        }}
+                        dir="ltr"
+                      >
                         {text("成功率", "Success", "النجاح")}:{" "}
-                        <strong style={{ color: modelQuality.success_rate >= 0.99 ? "var(--success)" : modelQuality.success_rate >= 0.97 ? "var(--warning, #e0a030)" : "var(--danger)" }}>
+                        <strong
+                          style={{
+                            color:
+                              modelQuality.success_rate >= 0.99
+                                ? "var(--success)"
+                                : modelQuality.success_rate >= 0.97
+                                  ? "var(--warning, #e0a030)"
+                                  : "var(--danger)",
+                          }}
+                        >
                           {(modelQuality.success_rate * 100).toFixed(1)}%
                         </strong>
                       </span>
-                      <span className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }} dir="ltr">
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: "var(--text-xs)",
+                          color: "var(--muted)",
+                        }}
+                        dir="ltr"
+                      >
                         {text("P95 延迟", "P95 latency", "زمن P95")}:{" "}
                         <strong
                           style={{
@@ -329,13 +363,30 @@ export default function ModelDetail() {
                             : `${measuredP95}ms`}
                         </strong>
                       </span>
-                      <span className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }} dir="ltr">
-                        {text("请求数", "Requests", "الطلبات")}: <strong>{modelQuality.total_requests}</strong>
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: "var(--text-xs)",
+                          color: "var(--muted)",
+                        }}
+                        dir="ltr"
+                      >
+                        {text("请求数", "Requests", "الطلبات")}:{" "}
+                        <strong>{modelQuality.total_requests}</strong>
                       </span>
                     </>
                   ) : (
-                    <span style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-                      {text("暂无请求数据", "No request data yet", "لا توجد بيانات طلبات بعد")}
+                    <span
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--muted)",
+                      }}
+                    >
+                      {text(
+                        "暂无请求数据",
+                        "No request data yet",
+                        "لا توجد بيانات طلبات بعد",
+                      )}
                     </span>
                   )}
                   <Link
@@ -611,7 +662,13 @@ export default function ModelDetail() {
                       "أسعار المجموعة الحالية",
                     )}
                   </summary>
-                  <p className="access-muted">{text("SLA 为运营方发布的分组目标，与模型实测统计分开，不代表合同保证。空白指标未发布。", "SLA values are operator-published group targets, separate from model observations and without a contractual guarantee. Blank metrics are unpublished.", "قيم SLA أهداف للمجموعة ينشرها المشغّل، منفصلة عن إحصاءات النموذج وليست ضمانًا تعاقديًا. المقاييس الفارغة غير منشورة.")}</p>
+                  <p className="access-muted">
+                    {text(
+                      "SLA 为运营方发布的分组目标，与模型实测统计分开，不代表合同保证。空白指标未发布。",
+                      "SLA values are operator-published group targets, separate from model observations and without a contractual guarantee. Blank metrics are unpublished.",
+                      "قيم SLA أهداف للمجموعة ينشرها المشغّل، منفصلة عن إحصاءات النموذج وليست ضمانًا تعاقديًا. المقاييس الفارغة غير منشورة.",
+                    )}
+                  </p>
                   <div
                     className="access-table-wrap"
                     tabIndex={0}
@@ -633,19 +690,40 @@ export default function ModelDetail() {
                               "السعر الفعلي الحالي",
                             )}
                           </th>
-                          <th>{text("模型7天成功率/P95", "Model success/P95 (7d)", "نجاح النموذج/P95 (7 أيام)")}</th>
-                          <th>{text("SLA 目标", "SLA targets", "أهداف SLA")}</th>
+                          <th>
+                            {text(
+                              "模型7天成功率/P95",
+                              "Model success/P95 (7d)",
+                              "نجاح النموذج/P95 (7 أيام)",
+                            )}
+                          </th>
+                          <th>
+                            {text("SLA 目标", "SLA targets", "أهداف SLA")}
+                          </th>
                           <th>{text("辅助倍率", "Multiplier", "المعامل")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {tierPrices.map(
                           ({ tier: group, price: groupPrice }) => (
-                            <tr key={group.id} className={!groupPrice?.available ? "detail-group-unavailable" : ""}>
+                            <tr
+                              key={group.id}
+                              className={
+                                !groupPrice?.available
+                                  ? "detail-group-unavailable"
+                                  : ""
+                              }
+                            >
                               <td>{group.id}</td>
                               <td>
                                 {groupPrice?.available ? (
-                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 8,
+                                    }}
+                                  >
                                     <DirectoryPrice
                                       plazaPricing={model.pricing}
                                       lang={lang}
@@ -665,31 +743,52 @@ export default function ModelDetail() {
                                   </div>
                                 ) : (
                                   <span style={{ color: "var(--muted)" }}>
-                                    {text("暂不可用", "Unavailable", "غير متاح")}
+                                    {text(
+                                      "暂不可用",
+                                      "Unavailable",
+                                      "غير متاح",
+                                    )}
                                   </span>
                                 )}
                               </td>
                               <td>
-                                {modelQuality && modelQuality.total_requests > 0 ? (
-                                  <span className="mono" style={{ fontSize: "var(--text-xs)" }} dir="ltr">
-                                    {(modelQuality.success_rate * 100).toFixed(1)}% /{" "}
-                                    {measuredP95 === null ? noLatencyData : `${measuredP95}ms`}
+                                {modelQuality &&
+                                modelQuality.total_requests > 0 ? (
+                                  <span
+                                    className="mono"
+                                    style={{ fontSize: "var(--text-xs)" }}
+                                    dir="ltr"
+                                  >
+                                    {(modelQuality.success_rate * 100).toFixed(
+                                      1,
+                                    )}
+                                    % /{" "}
+                                    {measuredP95 === null
+                                      ? noLatencyData
+                                      : `${measuredP95}ms`}
                                   </span>
                                 ) : (
-                                    <Link
-                                      to={`/console/service-quality?model=${encodeURIComponent(model.id)}`}
-                                      style={{
-                                        fontSize: "var(--text-xs)",
-                                        color: "var(--brand)",
-                                        textDecoration: "none",
-                                      }}
-                                    >
-                                      {text("查看", "View", "عرض")}
-                                    </Link>
+                                  <Link
+                                    to={`/console/service-quality?model=${encodeURIComponent(model.id)}`}
+                                    style={{
+                                      fontSize: "var(--text-xs)",
+                                      color: "var(--brand)",
+                                      textDecoration: "none",
+                                    }}
+                                  >
+                                    {text("查看", "View", "عرض")}
+                                  </Link>
                                 )}
                               </td>
                               <td>
-                                {groupPrice?.available ? <ServiceLevelValue value={plazaDetail.data?.group_sla} text={text} /> : "—"}
+                                {groupPrice?.available ? (
+                                  <ServiceLevelValue
+                                    value={plazaDetail.data?.group_sla}
+                                    text={text}
+                                  />
+                                ) : (
+                                  "—"
+                                )}
                               </td>
                               <td>{model.pricing.group_ratio}×</td>
                             </tr>
@@ -703,9 +802,7 @@ export default function ModelDetail() {
             </section>
             {model.pricing.mode === "per_token" && (
               <section className="access-panel">
-                <h2>
-                  {text("定价详情", "Pricing details", "تفاصيل التسعير")}
-                </h2>
+                <h2>{text("定价详情", "Pricing details", "تفاصيل التسعير")}</h2>
                 <p className="access-muted">
                   {text(
                     "以下展示模型的定价结构与缓存折扣。实际费用取决于请求时的用量、缓存命中和分组倍率。",
@@ -718,16 +815,22 @@ export default function ModelDetail() {
                     <thead>
                       <tr>
                         <th>{text("计费项", "Billing item", "بند الفوترة")}</th>
-                        <th>{text("单价（美元/百万 Token）", "Rate (USD/M tokens)", "السعر (دولار/مليون رمز)")}</th>
+                        <th>
+                          {text(
+                            "单价（美元/百万 Token）",
+                            "Rate (USD/M tokens)",
+                            "السعر (دولار/مليون رمز)",
+                          )}
+                        </th>
                         <th>{text("说明", "Description", "الوصف")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td>{text("输入 Token", "Input tokens", "رموز الإدخال")}</td>
-                        <td className="mono">
-                          ${amounts?.input ?? "—"}
+                        <td>
+                          {text("输入 Token", "Input tokens", "رموز الإدخال")}
                         </td>
+                        <td className="mono">${amounts?.input ?? "—"}</td>
                         <td>
                           {text(
                             "请求中的提示词和对话内容",
@@ -737,10 +840,10 @@ export default function ModelDetail() {
                         </td>
                       </tr>
                       <tr>
-                        <td>{text("输出 Token", "Output tokens", "رموز الإخراج")}</td>
-                        <td className="mono">
-                          ${amounts?.output ?? "—"}
+                        <td>
+                          {text("输出 Token", "Output tokens", "رموز الإخراج")}
                         </td>
+                        <td className="mono">${amounts?.output ?? "—"}</td>
                         <td>
                           {text(
                             "模型生成的回复内容",
@@ -751,10 +854,10 @@ export default function ModelDetail() {
                       </tr>
                       {amounts?.cacheRead !== undefined && (
                         <tr>
-                          <td>{text("缓存读取", "Cache read", "قراءة التخزين")}</td>
-                          <td className="mono">
-                            ${amounts.cacheRead}
+                          <td>
+                            {text("缓存读取", "Cache read", "قراءة التخزين")}
                           </td>
+                          <td className="mono">${amounts.cacheRead}</td>
                           <td>
                             {text(
                               "命中缓存的输入按折扣价计费",
@@ -766,10 +869,10 @@ export default function ModelDetail() {
                       )}
                       {amounts?.cacheWrite !== undefined && (
                         <tr>
-                          <td>{text("缓存写入", "Cache write", "كتابة التخزين")}</td>
-                          <td className="mono">
-                            ${amounts.cacheWrite}
+                          <td>
+                            {text("缓存写入", "Cache write", "كتابة التخزين")}
                           </td>
+                          <td className="mono">${amounts.cacheWrite}</td>
                           <td>
                             {text(
                               "首次写入缓存的输入内容",
@@ -782,16 +885,53 @@ export default function ModelDetail() {
                     </tbody>
                   </table>
                 </div>
-                <div className="pricing-mobile-cards" style={{ display: "none" }}>
+                <div
+                  className="pricing-mobile-cards"
+                  style={{ display: "none" }}
+                >
                   {[
-                    { label: text("输入 Token", "Input tokens", "رموز الإدخال"), value: amounts?.input },
-                    { label: text("输出 Token", "Output tokens", "رموز الإخراج"), value: amounts?.output },
-                    ...(amounts?.cacheRead !== undefined ? [{ label: text("缓存读取", "Cache read", "قراءة التخزين"), value: amounts.cacheRead }] : []),
-                    ...(amounts?.cacheWrite !== undefined ? [{ label: text("缓存写入", "Cache write", "كتابة التخزين"), value: amounts.cacheWrite }] : []),
+                    {
+                      label: text("输入 Token", "Input tokens", "رموز الإدخال"),
+                      value: amounts?.input,
+                    },
+                    {
+                      label: text(
+                        "输出 Token",
+                        "Output tokens",
+                        "رموز الإخراج",
+                      ),
+                      value: amounts?.output,
+                    },
+                    ...(amounts?.cacheRead !== undefined
+                      ? [
+                          {
+                            label: text(
+                              "缓存读取",
+                              "Cache read",
+                              "قراءة التخزين",
+                            ),
+                            value: amounts.cacheRead,
+                          },
+                        ]
+                      : []),
+                    ...(amounts?.cacheWrite !== undefined
+                      ? [
+                          {
+                            label: text(
+                              "缓存写入",
+                              "Cache write",
+                              "كتابة التخزين",
+                            ),
+                            value: amounts.cacheWrite,
+                          },
+                        ]
+                      : []),
                   ].map((item) => (
                     <div key={item.label} className="pricing-mobile-card">
                       <span className="pricing-mobile-label">{item.label}</span>
-                      <span className="mono pricing-mobile-value">${item.value ?? "—"}</span>
+                      <span className="mono pricing-mobile-value">
+                        ${item.value ?? "—"}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -804,76 +944,90 @@ export default function ModelDetail() {
                 </p>
               </section>
             )}
-            {(model.pricing.mode === "tiered" || model.pricing.mode === "expression") && model.pricing.expression?.trim() && (
-              <section className="access-panel">
-                <h2>
-                  {text("表达式定价", "Expression pricing", "تسعير بالتعبير")}
-                </h2>
-                <p className="access-muted">
-                  {text(
-                    "此模型使用表达式定价规则，实际费用取决于请求时的用量变量。下方为平台配置的表达式。",
-                    "This model uses expression-based pricing. Actual cost depends on request usage variables. Below is the platform-configured expression.",
-                    "يستخدم هذا النموذج تسعيرًا قائمًا على التعبيرات. التكلفة الفعلية تعتمد على متغيرات الاستخدام. أدناه التعبير المكون.",
-                  )}
-                </p>
-                <div
-                  className="docs-code"
-                  style={{ marginBottom: "var(--space-4)" }}
-                >
-                  <div>
-                    <span>
-                      {text("计价表达式", "Pricing expression", "تعبير التسعير")}
-                    </span>
+            {(model.pricing.mode === "tiered" ||
+              model.pricing.mode === "expression") &&
+              model.pricing.expression?.trim() && (
+                <section className="access-panel">
+                  <h2>
+                    {text("表达式定价", "Expression pricing", "تسعير بالتعبير")}
+                  </h2>
+                  <p className="access-muted">
+                    {text(
+                      "此模型使用表达式定价规则，实际费用取决于请求时的用量变量。下方为平台配置的表达式。",
+                      "This model uses expression-based pricing. Actual cost depends on request usage variables. Below is the platform-configured expression.",
+                      "يستخدم هذا النموذج تسعيرًا قائمًا على التعبيرات. التكلفة الفعلية تعتمد على متغيرات الاستخدام. أدناه التعبير المكون.",
+                    )}
+                  </p>
+                  <div
+                    className="docs-code"
+                    style={{ marginBottom: "var(--space-4)" }}
+                  >
+                    <div>
+                      <span>
+                        {text(
+                          "计价表达式",
+                          "Pricing expression",
+                          "تعبير التسعير",
+                        )}
+                      </span>
+                    </div>
+                    <pre dir="ltr" tabIndex={0}>
+                      <code className="mono">{model.pricing.expression}</code>
+                    </pre>
                   </div>
-                  <pre dir="ltr" tabIndex={0}>
-                    <code className="mono">
-                      {model.pricing.expression}
-                    </code>
-                  </pre>
-                </div>
-              </section>
-            )}
+                </section>
+              )}
 
-            {model.pricing.mode === "per_request" && model.pricing.per_request !== null && model.pricing.per_request > 0 && (
-              <section className="access-panel">
-                <h2>
-                  {text("计量定价", "Per-request pricing", "تسعير لكل طلب")}
-                </h2>
-                <p className="access-muted">
-                  {text(
-                    "此模型按次计费，每次请求收取固定费用。实际费用取决于请求次数。",
-                    "This model is billed per request at a fixed rate. Actual cost depends on the number of requests.",
-                    "يُحاسب هذا النموذج لكل طلب بسعر ثابت. التكلفة الفعلية تعتمد على عدد الطلبات.",
-                  )}
-                </p>
-                <div className="access-table-wrap" tabIndex={0} role="region">
-                  <table className="access-table">
-                    <thead>
-                      <tr>
-                        <th>{text("计费项", "Billing item", "بند الفوترة")}</th>
-                        <th>{text("单价（美元/次）", "Rate (USD/request)", "السعر (دولار/طلب)")}</th>
-                        <th>{text("说明", "Description", "الوصف")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>{text("每次请求", "Per request", "لكل طلب")}</td>
-                        <td className="mono">
-                          ${model.pricing.per_request.toFixed(6)}
-                        </td>
-                        <td>
-                          {text(
-                            "无论用量多少，每次 API 请求收取固定费用",
-                            "A fixed charge per API request regardless of usage",
-                            "رسم ثابت لكل طلب API بغض النظر عن الاستخدام",
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
+            {model.pricing.mode === "per_request" &&
+              model.pricing.per_request !== null &&
+              model.pricing.per_request > 0 && (
+                <section className="access-panel">
+                  <h2>
+                    {text("计量定价", "Per-request pricing", "تسعير لكل طلب")}
+                  </h2>
+                  <p className="access-muted">
+                    {text(
+                      "此模型按次计费，每次请求收取固定费用。实际费用取决于请求次数。",
+                      "This model is billed per request at a fixed rate. Actual cost depends on the number of requests.",
+                      "يُحاسب هذا النموذج لكل طلب بسعر ثابت. التكلفة الفعلية تعتمد على عدد الطلبات.",
+                    )}
+                  </p>
+                  <div className="access-table-wrap" tabIndex={0} role="region">
+                    <table className="access-table">
+                      <thead>
+                        <tr>
+                          <th>
+                            {text("计费项", "Billing item", "بند الفوترة")}
+                          </th>
+                          <th>
+                            {text(
+                              "单价（美元/次）",
+                              "Rate (USD/request)",
+                              "السعر (دولار/طلب)",
+                            )}
+                          </th>
+                          <th>{text("说明", "Description", "الوصف")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>{text("每次请求", "Per request", "لكل طلب")}</td>
+                          <td className="mono">
+                            ${model.pricing.per_request.toFixed(6)}
+                          </td>
+                          <td>
+                            {text(
+                              "无论用量多少，每次 API 请求收取固定费用",
+                              "A fixed charge per API request regardless of usage",
+                              "رسم ثابت لكل طلب API بغض النظر عن الاستخدام",
+                            )}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
             {supportsClient && (
               <section className="access-panel">
                 <h2>

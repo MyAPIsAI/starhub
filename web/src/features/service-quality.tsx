@@ -309,9 +309,10 @@ export default function ServiceQuality({
           : m.total_requests === 0
             ? "insufficient"
             : "below") as QualityStatus,
-      performanceStatus: m.p95_duration_ms > 0
-        ? (m.p95_duration_ms < 3000 ? "pass" : "below") as QualityStatus
-        : null,
+      performanceStatus:
+        m.p95_duration_ms > 0
+          ? ((m.p95_duration_ms < 3000 ? "pass" : "below") as QualityStatus)
+          : null,
       status: (m.success_rate >= 0.995
         ? "pass"
         : m.success_rate >= 0.97
@@ -345,7 +346,9 @@ export default function ServiceQuality({
           }),
         );
       }
-    } catch { /* localStorage unavailable */ }
+    } catch {
+      /* localStorage unavailable */
+    }
   }, [qualityQuery.data]);
   const units = useMemo(
     () =>

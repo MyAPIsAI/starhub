@@ -20,7 +20,13 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/primitives";
 import { Modal } from "../../components/ui/overlay";
 import { StandardModels } from "../../features/standard-models";
-import { useSystemAccess, isAdmin, canReadFinance, ROLE_ROOT, ROLE_FINANCE } from "../../lib/system-access";
+import {
+  useSystemAccess,
+  isAdmin,
+  canReadFinance,
+  ROLE_ROOT,
+  ROLE_FINANCE,
+} from "../../lib/system-access";
 import { FinanceOverview } from "../../features/finance-overview";
 import { ConfigurationSync } from "../../features/configuration-sync";
 import { ServerTokenPricing } from "../../features/server-token-pricing";
@@ -53,7 +59,10 @@ import {
   type Redemption,
 } from "../../lib/api/redemption";
 import { TaskPlugins } from "../../features/task-plugins";
-import { useTaskPlugins, TASK_PLUGIN_CHANNEL_TYPE } from "../../lib/api/task-plugin";
+import {
+  useTaskPlugins,
+  TASK_PLUGIN_CHANNEL_TYPE,
+} from "../../lib/api/task-plugin";
 import { ApiError } from "../../lib/api/http";
 
 export default function AdminPortal() {
@@ -69,13 +78,27 @@ export default function AdminPortal() {
 
   const authRole = useSystemAccess((s) => s.role);
   const isRoot = authRole === ROLE_ROOT;
-  const validTabs = ["customers", "models", "analytics", "resources", "incidents", "audit", "redemption", "finance", "plugins"] as const;
+  const validTabs = [
+    "customers",
+    "models",
+    "analytics",
+    "resources",
+    "incidents",
+    "audit",
+    "redemption",
+    "finance",
+    "plugins",
+  ] as const;
   type AdminTab = (typeof validTabs)[number];
   const [tab, setTab] = useState<AdminTab>(() => {
     const urlTab = searchParams.get("tab");
-    return validTabs.includes(urlTab as AdminTab) ? (urlTab as AdminTab) : "customers";
+    return validTabs.includes(urlTab as AdminTab)
+      ? (urlTab as AdminTab)
+      : "customers";
   });
-  const [modelCatalogVisited, setModelCatalogVisited] = useState(tab === "models");
+  const [modelCatalogVisited, setModelCatalogVisited] = useState(
+    tab === "models",
+  );
   useEffect(() => {
     if (tab === "models") setModelCatalogVisited(true);
   }, [tab]);
@@ -359,40 +382,54 @@ export default function AdminPortal() {
           {[
             { id: "customers", label: t("adminCustomers"), Icon: Users },
             { id: "models", label: t("adminModels"), Icon: Cpu },
-            { id: "finance", label: text("财务", "Finance", "المالية"), Icon: CircleDollarSign },
+            {
+              id: "finance",
+              label: text("财务", "Finance", "المالية"),
+              Icon: CircleDollarSign,
+            },
             { id: "analytics", label: t("adminAnalytics"), Icon: BarChart3 },
             { id: "resources", label: t("adminResources"), Icon: RefreshCw },
-            { id: "plugins", label: text("视频插件", "Video plugins", "إضافات الفيديو"), Icon: Cpu },
+            {
+              id: "plugins",
+              label: text("视频插件", "Video plugins", "إضافات الفيديو"),
+              Icon: Cpu,
+            },
             { id: "incidents", label: t("adminIncidents"), Icon: Radio },
             { id: "audit", label: t("adminAudit"), Icon: History },
-            { id: "redemption", label: text("兑换码", "Redemption", "استرداد"), Icon: CircleDollarSign },
-          ].filter(({ id }) => id !== "finance" || canReadFinance(authRole)).map(({ id, label, Icon }) => {
-            const active = tab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setTab(id as any)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "12px 4px",
-                  background: "transparent",
-                  border: "none",
-                  borderBottom: active
-                    ? "2px solid var(--brand)"
-                    : "2px solid transparent",
-                  color: active ? "var(--brand)" : "var(--secondary)",
-                  fontWeight: active ? 600 : 500,
-                  fontSize: "var(--text-sm)",
-                  cursor: "pointer",
-                }}
-              >
-                <Icon size={15} />
-                <span>{label}</span>
-              </button>
-            );
-          })}
+            {
+              id: "redemption",
+              label: text("兑换码", "Redemption", "استرداد"),
+              Icon: CircleDollarSign,
+            },
+          ]
+            .filter(({ id }) => id !== "finance" || canReadFinance(authRole))
+            .map(({ id, label, Icon }) => {
+              const active = tab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setTab(id as any)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "12px 4px",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: active
+                      ? "2px solid var(--brand)"
+                      : "2px solid transparent",
+                    color: active ? "var(--brand)" : "var(--secondary)",
+                    fontWeight: active ? 600 : 500,
+                    fontSize: "var(--text-sm)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Icon size={15} />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
         </div>
       </div>
 
@@ -583,11 +620,7 @@ export default function AdminPortal() {
                           color: "var(--danger)",
                         }}
                       >
-                        {text(
-                          "加载失败",
-                          "Failed to load",
-                          "فشل التحميل",
-                        )}
+                        {text("加载失败", "Failed to load", "فشل التحميل")}
                       </td>
                     </tr>
                   )}
@@ -758,11 +791,7 @@ export default function AdminPortal() {
                     marginBottom: 4,
                   }}
                 >
-                  {text(
-                    "总请求数",
-                    "Total requests",
-                    "إجمالي الطلبات",
-                  )}
+                  {text("总请求数", "Total requests", "إجمالي الطلبات")}
                 </div>
                 <div
                   className="mono"
@@ -772,10 +801,12 @@ export default function AdminPortal() {
                     color: "var(--brand)",
                   }}
                 >
-                  {(metricsQuery.data?.requests?.reduce(
-                    (sum, r) => sum + r.count,
-                    0,
-                  ) ?? 0).toLocaleString()}
+                  {(
+                    metricsQuery.data?.requests?.reduce(
+                      (sum, r) => sum + r.count,
+                      0,
+                    ) ?? 0
+                  ).toLocaleString()}
                 </div>
               </div>
               <div
@@ -802,9 +833,10 @@ export default function AdminPortal() {
                     fontWeight: "var(--weight-bold)",
                   }}
                 >
-                  {(usersQuery.data?.filter((u) =>
-                    userIsActive(u.status),
-                  ).length ?? 0).toLocaleString()}
+                  {(
+                    usersQuery.data?.filter((u) => userIsActive(u.status))
+                      .length ?? 0
+                  ).toLocaleString()}
                 </div>
               </div>
               <div
@@ -849,7 +881,11 @@ export default function AdminPortal() {
                     marginBottom: 4,
                   }}
                 >
-                  {text("请求成功率", "Request success rate", "معدل نجاح الطلبات")}
+                  {text(
+                    "请求成功率",
+                    "Request success rate",
+                    "معدل نجاح الطلبات",
+                  )}
                 </div>
                 <div
                   className="mono"
@@ -873,84 +909,86 @@ export default function AdminPortal() {
             </div>
 
             {/* Request breakdown by class */}
-            {metricsQuery.data && (metricsQuery.data.requests?.length ?? 0) > 0 && (
-              <section
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  overflowX: "auto",
-                }}
-              >
-                <div
+            {metricsQuery.data &&
+              (metricsQuery.data.requests?.length ?? 0) > 0 && (
+                <section
                   style={{
-                    padding: "var(--space-4)",
-                    borderBottom: "1px solid var(--border)",
-                    background: "var(--subtle)",
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-lg)",
+                    overflowX: "auto",
                   }}
                 >
-                  <h3
+                  <div
                     style={{
-                      margin: 0,
-                      fontSize: "var(--text-base)",
-                      fontWeight: 600,
+                      padding: "var(--space-4)",
+                      borderBottom: "1px solid var(--border)",
+                      background: "var(--subtle)",
                     }}
                   >
-                    {text(
-                      "请求分类统计",
-                      "Request breakdown by class",
-                      "تصنيف الطلبات حسب الفئة",
-                    )}
-                  </h3>
-                </div>
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: "var(--text-sm)",
-                  }}
-                >
-                  <thead>
-                    <tr
+                    <h3
                       style={{
-                        borderBottom: "1px solid var(--border)",
-                        background: "var(--subtle)",
+                        margin: 0,
+                        fontSize: "var(--text-base)",
+                        fontWeight: 600,
                       }}
                     >
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        {text("分类", "Class", "الفئة")}
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        {text("次数", "Count", "العدد")}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(metricsQuery.data.requests ?? []).map((r) => (
+                      {text(
+                        "请求分类统计",
+                        "Request breakdown by class",
+                        "تصنيف الطلبات حسب الفئة",
+                      )}
+                    </h3>
+                  </div>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "var(--text-sm)",
+                    }}
+                  >
+                    <thead>
                       <tr
-                        key={r.class}
-                        style={{ borderBottom: "1px solid var(--border)" }}
+                        style={{
+                          borderBottom: "1px solid var(--border)",
+                          background: "var(--subtle)",
+                        }}
                       >
-                        <td
-                          style={{
-                            padding: "10px 14px",
-                            fontWeight: 500,
-                          }}
+                        <th
+                          style={{ padding: "10px 14px", textAlign: "start" }}
                         >
-                          {r.class}
-                        </td>
-                        <td
-                          className="mono"
-                          style={{ padding: "10px 14px" }}
+                          {text("分类", "Class", "الفئة")}
+                        </th>
+                        <th
+                          style={{ padding: "10px 14px", textAlign: "start" }}
                         >
-                          {r.count.toLocaleString()}
-                        </td>
+                          {text("次数", "Count", "العدد")}
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            )}
+                    </thead>
+                    <tbody>
+                      {(metricsQuery.data.requests ?? []).map((r) => (
+                        <tr
+                          key={r.class}
+                          style={{ borderBottom: "1px solid var(--border)" }}
+                        >
+                          <td
+                            style={{
+                              padding: "10px 14px",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {r.class}
+                          </td>
+                          <td className="mono" style={{ padding: "10px 14px" }}>
+                            {r.count.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+              )}
           </div>
         )}
 
@@ -990,7 +1028,6 @@ export default function AdminPortal() {
                   )}
                 </p>
               </div>
-
             </div>
 
             <ServerTokenPricing />
@@ -1021,7 +1058,13 @@ export default function AdminPortal() {
                     fontWeight: 600,
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <span>
                       {text("渠道列表", "Channels", "القنوات")} (
                       {channelsQuery.data?.length ?? 0})
@@ -1079,7 +1122,11 @@ export default function AdminPortal() {
                       {text("成功率", "Success rate", "معدل النجاح")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("平均 TTFT (ms)", "Avg TTFT (ms)", "متوسط TTFT (ملث)")}
+                      {text(
+                        "平均 TTFT (ms)",
+                        "Avg TTFT (ms)",
+                        "متوسط TTFT (ملث)",
+                      )}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "end" }}>
                       {text("测试", "Test", "اختبار")}
@@ -1156,18 +1203,12 @@ export default function AdminPortal() {
                               : text("禁用", "Disabled", "مُعطّل")}
                           </span>
                         </td>
-                        <td
-                          className="mono"
-                          style={{ padding: "10px 14px" }}
-                        >
+                        <td className="mono" style={{ padding: "10px 14px" }}>
                           {stat
                             ? (stat.success_rate * 100).toFixed(1) + "%"
                             : "—"}
                         </td>
-                        <td
-                          className="mono"
-                          style={{ padding: "10px 14px" }}
-                        >
+                        <td className="mono" style={{ padding: "10px 14px" }}>
                           {stat ? stat.avg_ttft_ms.toFixed(0) : "—"}
                         </td>
                         <td style={{ padding: "10px 14px", textAlign: "end" }}>
@@ -1235,7 +1276,9 @@ export default function AdminPortal() {
                                 <span
                                   style={{
                                     fontSize: 11,
-                                    color: (testResults[ch.id] as ChannelTestResult).ok
+                                    color: (
+                                      testResults[ch.id] as ChannelTestResult
+                                    ).ok
                                       ? "var(--success)"
                                       : "var(--danger)",
                                   }}
@@ -1248,7 +1291,13 @@ export default function AdminPortal() {
                           </div>
                         </td>
                         <td style={{ padding: "10px 14px", textAlign: "end" }}>
-                          <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 4,
+                              justifyContent: "flex-end",
+                            }}
+                          >
                             <Button
                               size="small"
                               variant="secondary"
@@ -1280,7 +1329,16 @@ export default function AdminPortal() {
                                 deleteChannelMut.variables === ch.id
                               }
                               onClick={() => {
-                                if (!confirm(text("确认删除此渠道？", "Delete this channel?", "حذف هذه القناة؟"))) return;
+                                if (
+                                  !confirm(
+                                    text(
+                                      "确认删除此渠道？",
+                                      "Delete this channel?",
+                                      "حذف هذه القناة؟",
+                                    ),
+                                  )
+                                )
+                                  return;
                                 deleteChannelMut.mutate(ch.id);
                               }}
                             >
@@ -1486,13 +1544,9 @@ export default function AdminPortal() {
                         className="mono"
                         style={{ padding: "10px 14px", fontSize: 12 }}
                       >
-                        {new Date(
-                          log.created_at * 1000,
-                        ).toLocaleString()}
+                        {new Date(log.created_at * 1000).toLocaleString()}
                       </td>
-                      <td
-                        style={{ padding: "10px 14px", fontWeight: 500 }}
-                      >
+                      <td style={{ padding: "10px 14px", fontWeight: 500 }}>
                         {log.username || `#${log.user_id}`}
                       </td>
                       <td
@@ -1595,11 +1649,27 @@ export default function AdminPortal() {
               }}
             >
               <div>
-                <h1 style={{ fontSize: "var(--text-xl)", fontWeight: "var(--weight-bold)", margin: 0 }}>
+                <h1
+                  style={{
+                    fontSize: "var(--text-xl)",
+                    fontWeight: "var(--weight-bold)",
+                    margin: 0,
+                  }}
+                >
                   {text("兑换码管理", "Redemption codes", "أكواد الاسترداد")}
                 </h1>
-                <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)", margin: "4px 0 0 0" }}>
-                  {text("创建、查看和删除预付费兑换码。", "Create, view and delete prepaid redemption codes.", "إنشاء وعرض وحذف أكواد الاسترداد المدفوعة مسبقاً.")}
+                <p
+                  style={{
+                    color: "var(--muted)",
+                    fontSize: "var(--text-sm)",
+                    margin: "4px 0 0 0",
+                  }}
+                >
+                  {text(
+                    "创建、查看和删除预付费兑换码。",
+                    "Create, view and delete prepaid redemption codes.",
+                    "إنشاء وعرض وحذف أكواد الاسترداد المدفوعة مسبقاً.",
+                  )}
                 </p>
               </div>
               <Button
@@ -1616,59 +1686,133 @@ export default function AdminPortal() {
               </Button>
             </div>
             {redeemNotice && (
-              <div style={{
-                padding: "var(--space-3) var(--space-4)",
-                background: "var(--success-soft)",
-                color: "var(--success)",
-                borderRadius: "var(--radius-md)",
-                marginBottom: "var(--space-4)",
-                fontSize: "var(--text-sm)",
-              }}>
+              <div
+                style={{
+                  padding: "var(--space-3) var(--space-4)",
+                  background: "var(--success-soft)",
+                  color: "var(--success)",
+                  borderRadius: "var(--radius-md)",
+                  marginBottom: "var(--space-4)",
+                  fontSize: "var(--text-sm)",
+                }}
+              >
                 {redeemNotice}
               </div>
             )}
-            <section style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-lg)",
-              overflowX: "auto",
-            }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-sm)" }}>
+            <section
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-lg)",
+                overflowX: "auto",
+              }}
+            >
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: "var(--text-sm)",
+                }}
+              >
                 <thead>
-                  <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--subtle)" }}>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("码", "Code", "الرمز")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("面值", "Value", "القيمة")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{t("status")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("使用人", "Used by", "استُخدم من")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>{text("创建时间", "Created", "أُنشئ")}</th>
-                    <th style={{ padding: "10px 14px", textAlign: "end" }}>{text("操作", "Actions", "الإجراءات")}</th>
+                  <tr
+                    style={{
+                      borderBottom: "1px solid var(--border)",
+                      background: "var(--subtle)",
+                    }}
+                  >
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("码", "Code", "الرمز")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("面值", "Value", "القيمة")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {t("status")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("使用人", "Used by", "استُخدم من")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
+                      {text("创建时间", "Created", "أُنشئ")}
+                    </th>
+                    <th style={{ padding: "10px 14px", textAlign: "end" }}>
+                      {text("操作", "Actions", "الإجراءات")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {redemptionsQuery.isLoading && (
-                    <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
-                      {text("加载中…", "Loading…", "جارٍ التحميل…")}
-                    </td></tr>
+                    <tr>
+                      <td
+                        colSpan={6}
+                        style={{
+                          padding: 24,
+                          textAlign: "center",
+                          color: "var(--muted)",
+                        }}
+                      >
+                        {text("加载中…", "Loading…", "جارٍ التحميل…")}
+                      </td>
+                    </tr>
                   )}
                   {redemptionsQuery.data?.map((rd: Redemption) => (
-                    <tr key={rd.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                      <td className="mono" style={{ padding: "10px 14px", fontWeight: 600 }}>{rd.code}</td>
-                      <td className="mono" style={{ padding: "10px 14px", color: "var(--brand)" }}>
+                    <tr
+                      key={rd.id}
+                      style={{ borderBottom: "1px solid var(--border)" }}
+                    >
+                      <td
+                        className="mono"
+                        style={{ padding: "10px 14px", fontWeight: 600 }}
+                      >
+                        {rd.code}
+                      </td>
+                      <td
+                        className="mono"
+                        style={{ padding: "10px 14px", color: "var(--brand)" }}
+                      >
                         ${(rd.quota / 1e9).toFixed(2)}
                       </td>
                       <td style={{ padding: "10px 14px" }}>
-                        <span style={{
-                          fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600,
-                          background: rd.status === 1 ? "var(--success-soft)" : "var(--subtle)",
-                          color: rd.status === 1 ? "var(--success)" : "var(--muted)",
-                        }}>
-                          {rd.status === 1 ? text("未使用", "Unused", "غير مستخدم") : text("已使用", "Used", "مستخدم")}
+                        <span
+                          style={{
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            borderRadius: 4,
+                            fontWeight: 600,
+                            background:
+                              rd.status === 1
+                                ? "var(--success-soft)"
+                                : "var(--subtle)",
+                            color:
+                              rd.status === 1
+                                ? "var(--success)"
+                                : "var(--muted)",
+                          }}
+                        >
+                          {rd.status === 1
+                            ? text("未使用", "Unused", "غير مستخدم")
+                            : text("已使用", "Used", "مستخدم")}
                         </span>
                       </td>
-                      <td className="mono" style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>
+                      <td
+                        className="mono"
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: 12,
+                          color: "var(--muted)",
+                        }}
+                      >
                         {rd.used_by ? `#${rd.used_by}` : "—"}
                       </td>
-                      <td className="mono" style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>
+                      <td
+                        className="mono"
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: 12,
+                          color: "var(--muted)",
+                        }}
+                      >
                         {new Date(rd.created_at * 1000).toLocaleString()}
                       </td>
                       <td style={{ padding: "10px 14px", textAlign: "end" }}>
@@ -1676,9 +1820,21 @@ export default function AdminPortal() {
                           <Button
                             size="small"
                             variant="danger"
-                            disabled={deleteRedemptionMut.isPending && deleteRedemptionMut.variables === rd.id}
+                            disabled={
+                              deleteRedemptionMut.isPending &&
+                              deleteRedemptionMut.variables === rd.id
+                            }
                             onClick={() => {
-                              if (!confirm(text("确认删除此兑换码？", "Delete this code?", "حذف هذا الرمز؟"))) return;
+                              if (
+                                !confirm(
+                                  text(
+                                    "确认删除此兑换码？",
+                                    "Delete this code?",
+                                    "حذف هذا الرمز؟",
+                                  ),
+                                )
+                              )
+                                return;
                               deleteRedemptionMut.mutate(rd.id);
                             }}
                           >
@@ -1688,11 +1844,21 @@ export default function AdminPortal() {
                       </td>
                     </tr>
                   ))}
-                  {redemptionsQuery.data && redemptionsQuery.data.length === 0 && (
-                    <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
-                      {text("暂无兑换码", "No codes", "لا أكواد")}
-                    </td></tr>
-                  )}
+                  {redemptionsQuery.data &&
+                    redemptionsQuery.data.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          style={{
+                            padding: 24,
+                            textAlign: "center",
+                            color: "var(--muted)",
+                          }}
+                        >
+                          {text("暂无兑换码", "No codes", "لا أكواد")}
+                        </td>
+                      </tr>
+                    )}
                 </tbody>
               </table>
             </section>
@@ -1989,9 +2155,11 @@ export default function AdminPortal() {
         preventOutsideClose
         open={channelModalOpen}
         onOpenChange={setChannelModalOpen}
-        title={editingChannel
-          ? text("编辑渠道", "Edit channel", "تعديل القناة")
-          : text("新建渠道", "New channel", "قناة جديدة")}
+        title={
+          editingChannel
+            ? text("编辑渠道", "Edit channel", "تعديل القناة")
+            : text("新建渠道", "New channel", "قناة جديدة")
+        }
         description={text(
           "配置渠道名称、密钥、模型和分组。",
           "Configure channel name, key, models and group.",
@@ -2032,83 +2200,204 @@ export default function AdminPortal() {
               });
             }
           }}
-          style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-4)",
+          }}
         >
-          <ChannelRoutingNotice onOpenBindings={() => setChannelModalOpen(false)} />
+          <ChannelRoutingNotice
+            onOpenBindings={() => setChannelModalOpen(false)}
+          />
           <div className="task-plugin-channel-field">
-            <label htmlFor="ch-type">{text("渠道类型", "Channel type", "نوع القناة")}</label>
-            <select id="ch-type" value={channelForm.type ?? 1} onChange={(e) => setChannelForm((f) => ({ ...f, type: Number(e.target.value), task_plugin_id: 0 }))}>
+            <label htmlFor="ch-type">
+              {text("渠道类型", "Channel type", "نوع القناة")}
+            </label>
+            <select
+              id="ch-type"
+              value={channelForm.type ?? 1}
+              onChange={(e) =>
+                setChannelForm((f) => ({
+                  ...f,
+                  type: Number(e.target.value),
+                  task_plugin_id: 0,
+                }))
+              }
+            >
               <option value={1}>OpenAI</option>
               <option value={14}>Claude</option>
               <option value={15}>AWS Bedrock</option>
               <option value={25}>Gemini</option>
-              <option value={TASK_PLUGIN_CHANNEL_TYPE}>{text("视频任务插件", "Video task plugin", "إضافة مهام الفيديو")}</option>
+              <option value={TASK_PLUGIN_CHANNEL_TYPE}>
+                {text(
+                  "视频任务插件",
+                  "Video task plugin",
+                  "إضافة مهام الفيديو",
+                )}
+              </option>
             </select>
           </div>
-          {channelForm.type === TASK_PLUGIN_CHANNEL_TYPE && <div className="task-plugin-channel-field">
-            <label htmlFor="ch-plugin">{text("插件版本", "Plugin version", "إصدار الإضافة")}</label>
-            <select id="ch-plugin" required value={channelForm.task_plugin_id || ""} onChange={(e) => setChannelForm((f) => ({ ...f, task_plugin_id: Number(e.target.value) }))}>
-              <option value="">{text("选择版本", "Select a version", "اختر إصداراً")}</option>
-              {pluginsQuery.data?.map((p) => <option key={p.id} value={p.id}>{p.key} {p.version}{p.enabled ? "" : text("（已禁用）", " (disabled)", " (معطل)")}</option>)}
-            </select>
-            {pluginsQuery.isError && <span role="alert">{pluginsQuery.error.message}</span>}
-            <span>{text("使用单个上游密钥；有未完成任务时不可更换密钥或地址。", "Use one upstream key. Credentials and base URL are locked while tasks are pending.", "استخدم مفتاحاً واحداً. لا يمكن تغيير المفتاح أو العنوان أثناء وجود مهام معلقة.")}</span>
-          </div>}
+          {channelForm.type === TASK_PLUGIN_CHANNEL_TYPE && (
+            <div className="task-plugin-channel-field">
+              <label htmlFor="ch-plugin">
+                {text("插件版本", "Plugin version", "إصدار الإضافة")}
+              </label>
+              <select
+                id="ch-plugin"
+                required
+                value={channelForm.task_plugin_id || ""}
+                onChange={(e) =>
+                  setChannelForm((f) => ({
+                    ...f,
+                    task_plugin_id: Number(e.target.value),
+                  }))
+                }
+              >
+                <option value="">
+                  {text("选择版本", "Select a version", "اختر إصداراً")}
+                </option>
+                {pluginsQuery.data?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.key} {p.version}
+                    {p.enabled
+                      ? ""
+                      : text("（已禁用）", " (disabled)", " (معطل)")}
+                  </option>
+                ))}
+              </select>
+              {pluginsQuery.isError && (
+                <span role="alert">{pluginsQuery.error.message}</span>
+              )}
+              <span>
+                {text(
+                  "使用单个上游密钥；有未完成任务时不可更换密钥或地址。",
+                  "Use one upstream key. Credentials and base URL are locked while tasks are pending.",
+                  "استخدم مفتاحاً واحداً. لا يمكن تغيير المفتاح أو العنوان أثناء وجود مهام معلقة.",
+                )}
+              </span>
+            </div>
+          )}
 
           <div>
-            <label htmlFor="ch-name" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+            <label
+              htmlFor="ch-name"
+              style={{
+                display: "block",
+                fontSize: "var(--text-xs)",
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
               {text("名称", "Name", "الاسم")}
             </label>
             <Input
               id="ch-name"
               value={channelForm.name}
-              onChange={(e) => setChannelForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) =>
+                setChannelForm((f) => ({ ...f, name: e.target.value }))
+              }
               required
             />
           </div>
           <div>
-            <label htmlFor="ch-key" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+            <label
+              htmlFor="ch-key"
+              style={{
+                display: "block",
+                fontSize: "var(--text-xs)",
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
               {text("密钥", "API Key", "المفتاح")}
             </label>
             <Input
               id="ch-key"
               type="password"
               value={channelForm.key}
-              onChange={(e) => setChannelForm((f) => ({ ...f, key: e.target.value }))}
-              placeholder={editingChannel ? text("留空则不修改", "Leave empty to keep", "اترك فارغًا للإبقاء") : ""}
+              onChange={(e) =>
+                setChannelForm((f) => ({ ...f, key: e.target.value }))
+              }
+              placeholder={
+                editingChannel
+                  ? text(
+                      "留空则不修改",
+                      "Leave empty to keep",
+                      "اترك فارغًا للإبقاء",
+                    )
+                  : ""
+              }
               required={!editingChannel}
             />
           </div>
           <div>
-            <label htmlFor="ch-models" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
-              {text("模型（逗号分隔）", "Models (comma-separated)", "النماذج (مفصولة بفواصل)")}
+            <label
+              htmlFor="ch-models"
+              style={{
+                display: "block",
+                fontSize: "var(--text-xs)",
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
+              {text(
+                "模型（逗号分隔）",
+                "Models (comma-separated)",
+                "النماذج (مفصولة بفواصل)",
+              )}
             </label>
             <Input
               id="ch-models"
               value={channelForm.models}
-              onChange={(e) => setChannelForm((f) => ({ ...f, models: e.target.value }))}
+              onChange={(e) =>
+                setChannelForm((f) => ({ ...f, models: e.target.value }))
+              }
               placeholder="gpt-4.1,claude-sonnet-4-20250514"
               required
             />
           </div>
           <div>
-            <label htmlFor="ch-group" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+            <label
+              htmlFor="ch-group"
+              style={{
+                display: "block",
+                fontSize: "var(--text-xs)",
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
               {text("分组", "Group", "المجموعة")}
             </label>
             <Input
               id="ch-group"
               value={channelForm.group}
-              onChange={(e) => setChannelForm((f) => ({ ...f, group: e.target.value }))}
+              onChange={(e) =>
+                setChannelForm((f) => ({ ...f, group: e.target.value }))
+              }
             />
           </div>
           <div>
-            <label htmlFor="ch-base-url" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
-              {text("Base URL（可选）", "Base URL (optional)", "عنوان أساسي (اختياري)")}
+            <label
+              htmlFor="ch-base-url"
+              style={{
+                display: "block",
+                fontSize: "var(--text-xs)",
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
+              {text(
+                "Base URL（可选）",
+                "Base URL (optional)",
+                "عنوان أساسي (اختياري)",
+              )}
             </label>
             <Input
               id="ch-base-url"
               value={channelForm.base_url}
-              onChange={(e) => setChannelForm((f) => ({ ...f, base_url: e.target.value }))}
+              onChange={(e) =>
+                setChannelForm((f) => ({ ...f, base_url: e.target.value }))
+              }
               placeholder="https://api.openai.com/v1"
             />
           </div>
@@ -2121,7 +2410,11 @@ export default function AdminPortal() {
         preventOutsideClose
         open={redeemModalOpen}
         onOpenChange={setRedeemModalOpen}
-        title={text("创建兑换码", "Create redemption codes", "إنشاء أكواد استرداد")}
+        title={text(
+          "创建兑换码",
+          "Create redemption codes",
+          "إنشاء أكواد استرداد",
+        )}
         description={text(
           "指定面值和数量，系统将生成随机兑换码。",
           "Specify value and count; the system will generate random codes.",
@@ -2129,7 +2422,9 @@ export default function AdminPortal() {
         )}
         footer={
           <>
-            <Button onClick={() => setRedeemModalOpen(false)}>{t("cancel")}</Button>
+            <Button onClick={() => setRedeemModalOpen(false)}>
+              {t("cancel")}
+            </Button>
             <Button
               variant="primary"
               type="submit"
@@ -2171,10 +2466,22 @@ export default function AdminPortal() {
               },
             );
           }}
-          style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-4)",
+          }}
         >
           <div>
-            <label htmlFor="redeem-quota" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+            <label
+              htmlFor="redeem-quota"
+              style={{
+                display: "block",
+                fontSize: "var(--text-xs)",
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
               {text("面值 (USD)", "Value (USD)", "القيمة (دولار)")}
             </label>
             <Input
@@ -2187,7 +2494,15 @@ export default function AdminPortal() {
             />
           </div>
           <div>
-            <label htmlFor="redeem-count" style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600, marginBottom: 4 }}>
+            <label
+              htmlFor="redeem-count"
+              style={{
+                display: "block",
+                fontSize: "var(--text-xs)",
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
               {text("数量", "Count", "العدد")}
             </label>
             <Input
@@ -2208,34 +2523,47 @@ export default function AdminPortal() {
       <Modal
         size="default"
         open={!!detailUser}
-        onOpenChange={(open) => { if (!open) closeDetailUser(); }}
+        onOpenChange={(open) => {
+          if (!open) closeDetailUser();
+        }}
         title={text("账户详情", "Account details", "تفاصيل الحساب")}
         description={detailUser ? detailUser.username : ""}
         footer={
           <>
-            {isRoot && <>
-            <Button onClick={() => {
-              if (detailUser) {
-                setTopUpTarget(detailUser);
-                setTopUpAmount("");
-                setTopUpReason("");
-                setTopUpOpen(true);
-                closeDetailUser();
-              }
-            }}>
-              {t("manualTopUp")}
-            </Button>
-            <Button variant={detailUser && userIsActive(detailUser.status) ? "danger" : "primary"}
-              onClick={() => {
-                 if (detailUser) {
-                  handleToggleStatus(detailUser);
-                  closeDetailUser();
-                }
-              }}
-            >
-              {detailUser && userIsActive(detailUser.status) ? t("disableAccount") : t("enableAccount")}
-            </Button>
-            </>}
+            {isRoot && (
+              <>
+                <Button
+                  onClick={() => {
+                    if (detailUser) {
+                      setTopUpTarget(detailUser);
+                      setTopUpAmount("");
+                      setTopUpReason("");
+                      setTopUpOpen(true);
+                      closeDetailUser();
+                    }
+                  }}
+                >
+                  {t("manualTopUp")}
+                </Button>
+                <Button
+                  variant={
+                    detailUser && userIsActive(detailUser.status)
+                      ? "danger"
+                      : "primary"
+                  }
+                  onClick={() => {
+                    if (detailUser) {
+                      handleToggleStatus(detailUser);
+                      closeDetailUser();
+                    }
+                  }}
+                >
+                  {detailUser && userIsActive(detailUser.status)
+                    ? t("disableAccount")
+                    : t("enableAccount")}
+                </Button>
+              </>
+            )}
             <Button variant="secondary" onClick={closeDetailUser}>
               {text("关闭", "Close", "إغلاق")}
             </Button>
@@ -2243,56 +2571,135 @@ export default function AdminPortal() {
         }
       >
         {detailUser && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-            <FinanceRoleControl user={detailUser} onUpdated={role=>setDetailUser(current=>current?{...current,role}:current)} />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-3)",
+            }}
+          >
+            <FinanceRoleControl
+              user={detailUser}
+              onUpdated={(role) =>
+                setDetailUser((current) =>
+                  current ? { ...current, role } : current,
+                )
+              }
+            />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "var(--space-3)",
+              }}
+            >
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("用户名", "Username", "اسم المستخدم")}</small>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("用户名", "Username", "اسم المستخدم")}
+                </small>
                 <div style={{ fontWeight: 600 }}>{detailUser.username}</div>
               </div>
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("邮箱", "Email", "البريد")}</small>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("邮箱", "Email", "البريد")}
+                </small>
                 <div>{detailUser.email || "—"}</div>
               </div>
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("角色", "Role", "الدور")}</small>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("角色", "Role", "الدور")}
+                </small>
                 <div>
-                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600, background: "var(--subtle)" }}>
-                    {detailUser.role >= 100 ? "Root" : detailUser.role >= 10 ? "Admin" : detailUser.role === ROLE_FINANCE ? text("财务（只读）", "Finance (read-only)", "المالية (للقراءة فقط)") : "User"}
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      borderRadius: 4,
+                      fontWeight: 600,
+                      background: "var(--subtle)",
+                    }}
+                  >
+                    {detailUser.role >= 100
+                      ? "Root"
+                      : detailUser.role >= 10
+                        ? "Admin"
+                        : detailUser.role === ROLE_FINANCE
+                          ? text(
+                              "财务（只读）",
+                              "Finance (read-only)",
+                              "المالية (للقراءة فقط)",
+                            )
+                          : "User"}
                   </span>
                 </div>
               </div>
               <div>
                 <small style={{ color: "var(--muted)" }}>{t("status")}</small>
                 <div>
-                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600, background: userIsActive(detailUser.status) ? "var(--success-soft)" : "var(--danger-soft)", color: userIsActive(detailUser.status) ? "var(--success)" : "var(--danger)" }}>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      borderRadius: 4,
+                      fontWeight: 600,
+                      background: userIsActive(detailUser.status)
+                        ? "var(--success-soft)"
+                        : "var(--danger-soft)",
+                      color: userIsActive(detailUser.status)
+                        ? "var(--success)"
+                        : "var(--danger)",
+                    }}
+                  >
                     {userStatusText(detailUser.status)}
                   </span>
                 </div>
               </div>
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("余额", "Balance", "الرصيد")}</small>
-                <div className="mono" style={{ fontWeight: 600, color: "var(--brand)" }}>${quotaToUsd(detailUser.quota)}</div>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("余额", "Balance", "الرصيد")}
+                </small>
+                <div
+                  className="mono"
+                  style={{ fontWeight: 600, color: "var(--brand)" }}
+                >
+                  ${quotaToUsd(detailUser.quota)}
+                </div>
               </div>
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("已用", "Used", "المستخدم")}</small>
-                <div className="mono" style={{ color: "var(--muted)" }}>${quotaToUsd(detailUser.used_quota)}</div>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("已用", "Used", "المستخدم")}
+                </small>
+                <div className="mono" style={{ color: "var(--muted)" }}>
+                  ${quotaToUsd(detailUser.used_quota)}
+                </div>
               </div>
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("分组", "Group", "المجموعة")}</small>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("分组", "Group", "المجموعة")}
+                </small>
                 <div>{detailUser.group || "default"}</div>
               </div>
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("邀请码", "Affiliate code", "رمز الإحالة")}</small>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("邀请码", "Affiliate code", "رمز الإحالة")}
+                </small>
                 <div className="mono">{detailUser.aff_code || "—"}</div>
               </div>
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("邀请人", "Inviter", "الداعي")}</small>
-                <div>{detailUser.inviter_id ? `#${detailUser.inviter_id}` : "—"}</div>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("邀请人", "Inviter", "الداعي")}
+                </small>
+                <div>
+                  {detailUser.inviter_id ? `#${detailUser.inviter_id}` : "—"}
+                </div>
               </div>
               <div>
-                <small style={{ color: "var(--muted)" }}>{text("注册时间", "Registered", "مسجل")}</small>
-                <div className="mono" style={{ fontSize: "var(--text-xs)" }}>{new Date(detailUser.created_at * 1000).toLocaleString()}</div>
+                <small style={{ color: "var(--muted)" }}>
+                  {text("注册时间", "Registered", "مسجل")}
+                </small>
+                <div className="mono" style={{ fontSize: "var(--text-xs)" }}>
+                  {new Date(detailUser.created_at * 1000).toLocaleString()}
+                </div>
               </div>
             </div>
           </div>

@@ -582,18 +582,36 @@ export default function ModelSquare() {
         )}
 
         {/* Model ranking */}
-        <section className="catalog-ranking" style={{ marginTop: "var(--space-8)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-4)" }}>
+        <section
+          className="catalog-ranking"
+          style={{ marginTop: "var(--space-8)" }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-3)",
+              marginBottom: "var(--space-4)",
+            }}
+          >
             <Sparkles size={18} />
-            <h2 style={{ margin: 0, fontSize: "var(--text-lg)", fontWeight: "var(--weight-bold)" }}>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "var(--text-lg)",
+                fontWeight: "var(--weight-bold)",
+              }}
+            >
               {text("模型排行榜", "Model ranking", "ترتيب النماذج")}
             </h2>
             <div style={{ display: "flex", gap: 4 }}>
-              {([
-                { id: "value", label: text("性价比", "Value", "القيمة") },
-                { id: "hot", label: text("热门", "Popular", "الشائع") },
-                { id: "new", label: text("最新", "Newest", "الأحدث") },
-              ] as { id: PlazaRankType; label: string }[]).map((tab) => (
+              {(
+                [
+                  { id: "value", label: text("性价比", "Value", "القيمة") },
+                  { id: "hot", label: text("热门", "Popular", "الشائع") },
+                  { id: "new", label: text("最新", "Newest", "الأحدث") },
+                ] as { id: PlazaRankType; label: string }[]
+              ).map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setRankType(tab.id)}
@@ -601,7 +619,8 @@ export default function ModelSquare() {
                     padding: "4px 10px",
                     fontSize: "var(--text-xs)",
                     fontWeight: rankType === tab.id ? 600 : 400,
-                    background: rankType === tab.id ? "var(--brand)" : "var(--subtle)",
+                    background:
+                      rankType === tab.id ? "var(--brand)" : "var(--subtle)",
                     color: rankType === tab.id ? "#fff" : "var(--secondary)",
                     border: "none",
                     borderRadius: "var(--radius-sm)",
@@ -618,7 +637,13 @@ export default function ModelSquare() {
               {text("加载中…", "Loading…", "جارٍ التحميل…")}
             </p>
           ) : rankQuery.data?.items?.length ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "var(--space-3)" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "var(--space-3)",
+              }}
+            >
               {rankQuery.data.items.map((item) => (
                 <Link
                   key={item.model.id}
@@ -647,18 +672,37 @@ export default function ModelSquare() {
                     #{item.rank}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>
+                    <div
+                      style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}
+                    >
                       {item.model.name}
                     </div>
-                    <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+                    <div
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--muted)",
+                      }}
+                    >
                       {item.model.vendor_display || item.model.vendor}
                     </div>
                   </div>
                   <div style={{ textAlign: "end" }}>
-                    <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+                    <div
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--muted)",
+                      }}
+                    >
                       {item.metric_label}
                     </div>
-                    <div className="mono" style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--brand)" }}>
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: "var(--text-sm)",
+                        fontWeight: 600,
+                        color: "var(--brand)",
+                      }}
+                    >
                       {item.metric_value}
                     </div>
                   </div>

@@ -337,7 +337,13 @@ export default function DesignSystem() {
               title={t("activityTitle")}
               subtitle={t("activityNote")}
             />
-            <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)", padding: "var(--space-4) 0" }}>
+            <p
+              style={{
+                color: "var(--muted)",
+                fontSize: "var(--text-sm)",
+                padding: "var(--space-4) 0",
+              }}
+            >
               {t("activityNote")}
             </p>
           </section>

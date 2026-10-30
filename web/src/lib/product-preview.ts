@@ -87,7 +87,7 @@ export type PreviewRequest = Omit<RequestRecord, "source"> & {
 };
 
 export interface PreviewKey {
-	managementRevision?: string;
+  managementRevision?: string;
   accountId?: string;
   id: string;
   name: string;

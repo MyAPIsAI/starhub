@@ -19,7 +19,10 @@ export default function StatusPage() {
 
   // Build a model → quality metric lookup from the backend.
   const metricByModel = useMemo(() => {
-    const map = new Map<string, { successRate: number; avgDurationMs: number }>();
+    const map = new Map<
+      string,
+      { successRate: number; avgDurationMs: number }
+    >();
     for (const m of sqQuery.data?.by_model ?? []) {
       map.set(m.model, {
         successRate: m.success_rate,
@@ -437,9 +440,7 @@ export default function StatusPage() {
                                   : "var(--success)",
                               }}
                             />
-                            {isDegraded
-                              ? t("degraded")
-                              : t("operational")}
+                            {isDegraded ? t("degraded") : t("operational")}
                           </span>
                         </div>
                       </div>
@@ -491,7 +492,12 @@ export default function StatusPage() {
                                 ? "قبل 90 يومًا"
                                 : "90 days ago"}
                           </span>
-                          <span>{t("uptime90Days")}: {hasRealData ? (overallSuccessRate * 100).toFixed(2) + "%" : "—"}</span>
+                          <span>
+                            {t("uptime90Days")}:{" "}
+                            {hasRealData
+                              ? (overallSuccessRate * 100).toFixed(2) + "%"
+                              : "—"}
+                          </span>
                           <span>
                             {lang === "zh"
                               ? "今天"

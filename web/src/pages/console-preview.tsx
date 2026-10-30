@@ -86,7 +86,14 @@ import SmartRouting from "../features/resource-routing";
 import { StandardModels } from "../features/standard-models";
 import { Channels } from "../features/channels";
 import { ServiceGroups } from "../features/service-groups";
-import { useSystemAccess, isAdmin, canReadFinance, sessionUsername, sessionQueryIdentity, useSessionQueryIdentity } from "../lib/system-access";
+import {
+  useSystemAccess,
+  isAdmin,
+  canReadFinance,
+  sessionUsername,
+  sessionQueryIdentity,
+  useSessionQueryIdentity,
+} from "../lib/system-access";
 import { useBackendKeys } from "../lib/api/key-adapter";
 import { useTokenChoices } from "../lib/api/token-choices";
 import {
@@ -172,8 +179,10 @@ function ConsoleWorkspace() {
   }, [section, role, mobileNavOpen]);
 
   const session = useSystemAccess((s) => s.session);
-  const sessionScope = sessionQueryIdentity({session, role});
-  const isCurrentSession = () => JSON.stringify(sessionScope) === JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()));
+  const sessionScope = sessionQueryIdentity({ session, role });
+  const isCurrentSession = () =>
+    JSON.stringify(sessionScope) ===
+    JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()));
   const settingsLabel = c("账号中心", "Account center", "مركز الحساب");
   const profileName = sessionUsername(session) ?? settingsLabel;
   const profileInitials = Array.from(profileName.trim())
@@ -195,10 +204,26 @@ function ConsoleWorkspace() {
     error: tokensError,
   } = useBackendKeys(plaintextKeys);
   useTokenChoices();
-  const [keyActionError,setKeyActionError]=useState("");
-  const [keyOperation,setKeyOperation]=useState("");
-  const keyActionPending=useRef(false);
-  const keyWriteFailed=(error:unknown)=>{if(!isCurrentSession())return;setKeyActionError(error instanceof ApiError && error.status===409?c("密钥或配置已变化，请重新读取后确认。","Key or configuration changed. Reload before confirming.","تغيّر المفتاح أو الإعداد. أعد التحميل قبل التأكيد."):c("操作结果未确认，请读取列表或查询收据后核对。","The operation is unconfirmed. Reload keys or check its receipt.","العملية غير مؤكدة. أعد تحميل المفاتيح أو تحقق من الإيصال."));setKeyOperation((error as {operationId?:string})?.operationId??"");};
+  const [keyActionError, setKeyActionError] = useState("");
+  const [keyOperation, setKeyOperation] = useState("");
+  const keyActionPending = useRef(false);
+  const keyWriteFailed = (error: unknown) => {
+    if (!isCurrentSession()) return;
+    setKeyActionError(
+      error instanceof ApiError && error.status === 409
+        ? c(
+            "密钥或配置已变化，请重新读取后确认。",
+            "Key or configuration changed. Reload before confirming.",
+            "تغيّر المفتاح أو الإعداد. أعد التحميل قبل التأكيد.",
+          )
+        : c(
+            "操作结果未确认，请读取列表或查询收据后核对。",
+            "The operation is unconfirmed. Reload keys or check its receipt.",
+            "العملية غير مؤكدة. أعد تحميل المفاتيح أو تحقق من الإيصال.",
+          ),
+    );
+    setKeyOperation((error as { operationId?: string })?.operationId ?? "");
+  };
   const deleteTokenMut = useDeleteToken();
   const regenerateTokenMut = useRegenerateToken();
   const updateTokenMut = useUpdateToken();
@@ -242,12 +267,18 @@ function ConsoleWorkspace() {
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, number>>(
     {},
   );
-  const verifyAndReveal = async (keyId: string, password: string): Promise<boolean> => {
+  const verifyAndReveal = async (
+    keyId: string,
+    password: string,
+  ): Promise<boolean> => {
     if (tokensError || !keys.some((key) => key.id === keyId)) return false;
     try {
       await verifyTokenPassword(Number(keyId), password, sessionScope);
       if (!isCurrentSession()) return false;
-      setRevealedKeyIds((state) => ({...state, [keyId]: Date.now() + 300000}));
+      setRevealedKeyIds((state) => ({
+        ...state,
+        [keyId]: Date.now() + 300000,
+      }));
       return true;
     } catch {
       return false;
@@ -397,25 +428,32 @@ function ConsoleWorkspace() {
       }));
     }
     // Fallback to demo data.
-    return activityFor(periodRequests(requests, days === "7" ? 7 : 30), days === "7" ? 7 : 30);
+    return activityFor(
+      periodRequests(requests, days === "7" ? 7 : 30),
+      days === "7" ? 7 : 30,
+    );
   }, [usageItems, requests, days]);
 
   const summary = useMemo(() => {
     if (usageItems.length) {
       const totalRequests = usageItems.reduce((sum, i) => sum + i.requests, 0);
       const totalQuota = usageItems.reduce((sum, i) => sum + i.quota, 0);
-      const totalSuccess = usageItems.reduce((sum, i) => sum + (i.success_count ?? 0), 0);
+      const totalSuccess = usageItems.reduce(
+        (sum, i) => sum + (i.success_count ?? 0),
+        0,
+      );
       return {
         count: totalRequests,
         cost: quotaToNanoUsd(totalQuota),
         // Compute the real success rate from the backend's per-day
         // success_count. Falls back to 100% when success_count is 0
         // (old logs without the status field).
-        success: totalRequests > 0
-          ? totalSuccess > 0
-            ? Number(((totalSuccess / totalRequests) * 100).toFixed(2))
-            : 100
-          : 0,
+        success:
+          totalRequests > 0
+            ? totalSuccess > 0
+              ? Number(((totalSuccess / totalRequests) * 100).toFixed(2))
+              : 100
+            : 0,
       };
     }
     // Fallback to demo data.
@@ -426,7 +464,10 @@ function ConsoleWorkspace() {
     // Use backend by_model when available; fall back to demo store.
     const byModel = usageQuery.data?.by_model;
     if (byModel && byModel.length > 0) {
-      const buckets = new Map<string, { count: number; quota: number; tokens: number }>();
+      const buckets = new Map<
+        string,
+        { count: number; quota: number; tokens: number }
+      >();
       for (const row of byModel) {
         const existing = buckets.get(row.model);
         if (existing) {
@@ -486,11 +527,21 @@ function ConsoleWorkspace() {
     try {
       if (tokensError || !keys.some((key) => key.id === authRevealKeyId))
         throw Error("The current account's API key could not be verified");
-      await verifyTokenPassword(Number(authRevealKeyId), authPassword, sessionScope);
+      await verifyTokenPassword(
+        Number(authRevealKeyId),
+        authPassword,
+        sessionScope,
+      );
       if (!isCurrentSession()) return;
-      setRevealedKeyIds((s) => ({ ...s, [authRevealKeyId]: Date.now() + 300000 }));
+      setRevealedKeyIds((s) => ({
+        ...s,
+        [authRevealKeyId]: Date.now() + 300000,
+      }));
       if (authKeyIntent === "view")
-        setVisibleKeyIds((visible) => ({ ...visible, [authRevealKeyId]: true }));
+        setVisibleKeyIds((visible) => ({
+          ...visible,
+          [authRevealKeyId]: true,
+        }));
       else {
         const secret =
           plaintextKeys[authRevealKeyId] ??
@@ -502,11 +553,21 @@ function ConsoleWorkspace() {
       setAuthPassword("");
       setAuthError("");
     } catch (error) {
-      setAuthError(error instanceof ApiError && error.status === 403
-        ? t("invalidPassword")
-        : error instanceof ApiError && error.status === 429
-          ? c("验证次数过多，请稍后重试。", "Too many verification attempts. Try again later.", "محاولات تحقق كثيرة. حاول لاحقًا.")
-          : c("未能确认验证结果，请重试；登录状态或密钥变化后请重新打开。", "Verification could not be confirmed. Retry, or reopen after a session or key change.", "تعذر تأكيد التحقق. أعد المحاولة أو افتح النافذة مجددًا بعد تغيير الجلسة أو المفتاح."));
+      setAuthError(
+        error instanceof ApiError && error.status === 403
+          ? t("invalidPassword")
+          : error instanceof ApiError && error.status === 429
+            ? c(
+                "验证次数过多，请稍后重试。",
+                "Too many verification attempts. Try again later.",
+                "محاولات تحقق كثيرة. حاول لاحقًا.",
+              )
+            : c(
+                "未能确认验证结果，请重试；登录状态或密钥变化后请重新打开。",
+                "Verification could not be confirmed. Retry, or reopen after a session or key change.",
+                "تعذر تأكيد التحقق. أعد المحاولة أو افتح النافذة مجددًا بعد تغيير الجلسة أو المفتاح.",
+              ),
+      );
     } finally {
       authPendingRef.current = false;
       setAuthPending(false);
@@ -527,9 +588,7 @@ function ConsoleWorkspace() {
           setExportError("");
         },
         onError: (err) => {
-          setExportError(
-            err instanceof Error ? err.message : String(err),
-          );
+          setExportError(err instanceof Error ? err.message : String(err));
         },
       },
     );
@@ -677,7 +736,16 @@ function ConsoleWorkspace() {
               </Link>
             </div>
           ))}
-          {canReadFinance(role) && <Link to="/finance" className="xy-nav-link" onClick={()=>setMobileNavOpen(false)}><CircleDollarSign size={18}/><span>{c("财务概览","Finance overview","نظرة مالية")}</span></Link>}
+          {canReadFinance(role) && (
+            <Link
+              to="/finance"
+              className="xy-nav-link"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <CircleDollarSign size={18} />
+              <span>{c("财务概览", "Finance overview", "نظرة مالية")}</span>
+            </Link>
+          )}
           {isSystemAdmin && (
             <>
               <span className="xy-nav-label xy-nav-divider">
@@ -764,16 +832,17 @@ function ConsoleWorkspace() {
             <ProductSearch />
             <Link className="xy-system-link" to="/status">
               <span
-                className={`xy-status-dot ${
-                  (() => {
-                    const reqs = metricsQuery.data?.requests ?? [];
-                    const total = reqs.reduce((s, r) => s + r.count, 0);
-                    const errs = reqs
-                      .filter((r) => r.class !== "success" && r.class !== "client_error")
-                      .reduce((s, r) => s + r.count, 0);
-                    return total > 0 && errs / total > 0.01 ? "is-warning" : "";
-                  })()
-                }`}
+                className={`xy-status-dot ${(() => {
+                  const reqs = metricsQuery.data?.requests ?? [];
+                  const total = reqs.reduce((s, r) => s + r.count, 0);
+                  const errs = reqs
+                    .filter(
+                      (r) =>
+                        r.class !== "success" && r.class !== "client_error",
+                    )
+                    .reduce((s, r) => s + r.count, 0);
+                  return total > 0 && errs / total > 0.01 ? "is-warning" : "";
+                })()}`}
               />
               {c("系统状态", "System status", "حالة النظام")}
             </Link>
@@ -882,7 +951,7 @@ function ConsoleWorkspace() {
                   </button>
                 </div>
               </div>
-{!onboardingComplete && (
+              {!onboardingComplete && (
                 <section className="xy-onboarding">
                   <div>
                     <span className="xy-onboarding-icon">
@@ -1319,10 +1388,12 @@ function ConsoleWorkspace() {
                                 </div>
                               </td>
                               <td>
-                                {new Date(log.created_at * 1000).toLocaleTimeString(
-                                  "en-GB",
-                                  { timeZone: "Asia/Dubai", hour12: false },
-                                )}
+                                {new Date(
+                                  log.created_at * 1000,
+                                ).toLocaleTimeString("en-GB", {
+                                  timeZone: "Asia/Dubai",
+                                  hour12: false,
+                                })}
                               </td>
                               <td>
                                 {/* Backend logs only contain billed
@@ -1338,7 +1409,11 @@ function ConsoleWorkspace() {
                                 <Link
                                   className="xy-row-detail"
                                   to="/console/requests"
-                                  aria-label={c("查看调用详情", "View request details", "عرض تفاصيل الطلب")}
+                                  aria-label={c(
+                                    "查看调用详情",
+                                    "View request details",
+                                    "عرض تفاصيل الطلب",
+                                  )}
                                 >
                                   <ArrowUpRight size={16} />
                                 </Link>
@@ -1370,7 +1445,16 @@ function ConsoleWorkspace() {
                         {c("预付费", "PREPAID", "مدفوع مسبقًا")}
                       </span>
                     </div>
-                    <strong tabIndex={balanceKnown ? 0 : undefined} style={{ maxWidth: "100%", overflowX: "auto", whiteSpace: "nowrap" }}>{balanceKnown ? formatMoney(balance) : "—"}</strong>
+                    <strong
+                      tabIndex={balanceKnown ? 0 : undefined}
+                      style={{
+                        maxWidth: "100%",
+                        overflowX: "auto",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {balanceKnown ? formatMoney(balance) : "—"}
+                    </strong>
                     <p>
                       {c(
                         "按量付费 · 随时充值",
@@ -1409,8 +1493,7 @@ function ConsoleWorkspace() {
                       const errors = reqs
                         .filter(
                           (r) =>
-                            r.class !== "success" &&
-                            r.class !== "client_error",
+                            r.class !== "success" && r.class !== "client_error",
                         )
                         .reduce((s, r) => s + r.count, 0);
                       const hasIssue = total > 0 && errors / total > 0.01;
@@ -1503,11 +1586,7 @@ function ConsoleWorkspace() {
                           </div>
                           <div className="xy-health-line">
                             <span>
-                              {c(
-                                "活跃密钥",
-                                "Active keys",
-                                "المفاتيح النشطة",
-                              )}
+                              {c("活跃密钥", "Active keys", "المفاتيح النشطة")}
                             </span>
                             <strong>{keys.length}</strong>
                           </div>
@@ -1602,21 +1681,65 @@ function ConsoleWorkspace() {
             </div>
           )}
 
-          {section === "keys" && keyActionError && <div role="alert" className="key-list-empty"><p>{keyActionError}</p><Button onClick={()=>window.location.reload()}>{c("重新读取密钥","Reload keys","إعادة تحميل المفاتيح")}</Button>{keyOperation && <Button onClick={async()=>{try{const receipt=await readOwnedKeyReceipt(keyOperation,sessionScope);if(isCurrentSession())setKeyActionError(c(`操作已确认，密钥 ID：${receipt.token_id}。明文不会再次返回。`,`Operation confirmed for key ${receipt.token_id}; plaintext is not returned again.`,`تأكدت العملية للمفتاح ${receipt.token_id}؛ لا يُعاد النص السري.`));}catch{if(isCurrentSession())setKeyActionError(c("未查到可确认的收据，不能据此判断操作失败。","No confirmed receipt found; this does not prove failure.","لم يُعثر على إيصال مؤكد؛ لا يثبت ذلك الفشل."));}}}>{c("查询操作收据","Check operation receipt","التحقق من إيصال العملية")}</Button>}</div>}
+          {section === "keys" && keyActionError && (
+            <div role="alert" className="key-list-empty">
+              <p>{keyActionError}</p>
+              <Button onClick={() => window.location.reload()}>
+                {c("重新读取密钥", "Reload keys", "إعادة تحميل المفاتيح")}
+              </Button>
+              {keyOperation && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      const receipt = await readOwnedKeyReceipt(
+                        keyOperation,
+                        sessionScope,
+                      );
+                      if (isCurrentSession())
+                        setKeyActionError(
+                          c(
+                            `操作已确认，密钥 ID：${receipt.token_id}。明文不会再次返回。`,
+                            `Operation confirmed for key ${receipt.token_id}; plaintext is not returned again.`,
+                            `تأكدت العملية للمفتاح ${receipt.token_id}؛ لا يُعاد النص السري.`,
+                          ),
+                        );
+                    } catch {
+                      if (isCurrentSession())
+                        setKeyActionError(
+                          c(
+                            "未查到可确认的收据，不能据此判断操作失败。",
+                            "No confirmed receipt found; this does not prove failure.",
+                            "لم يُعثر على إيصال مؤكد؛ لا يثبت ذلك الفشل.",
+                          ),
+                        );
+                    }
+                  }}
+                >
+                  {c(
+                    "查询操作收据",
+                    "Check operation receipt",
+                    "التحقق من إيصال العملية",
+                  )}
+                </Button>
+              )}
+            </div>
+          )}
           {/* SECTION: KEYS */}
           {section === "keys" &&
             (tokensLoading ? (
               <div className="key-list-empty">
                 <KeyRound size={28} />
-                <h2>
-                  {c("加载中…", "Loading…", "جارٍ التحميل…")}
-                </h2>
+                <h2>{c("加载中…", "Loading…", "جارٍ التحميل…")}</h2>
               </div>
             ) : tokensError ? (
               <div className="key-list-empty">
                 <KeyRound size={28} />
                 <h2>
-                  {c("无法加载密钥", "Failed to load keys", "تعذّر تحميل المفاتيح")}
+                  {c(
+                    "无法加载密钥",
+                    "Failed to load keys",
+                    "تعذّر تحميل المفاتيح",
+                  )}
                 </h2>
                 <p>
                   {c(
@@ -1637,20 +1760,34 @@ function ConsoleWorkspace() {
                 onEdit={setEditingKey}
                 onConnect={(key) => {
                   chooseKey(key.id);
-                  navigate(`/console/connect?key=${encodeURIComponent(key.id)}`);
+                  navigate(
+                    `/console/connect?key=${encodeURIComponent(key.id)}`,
+                  );
                 }}
                 onToggle={(key) => {
-                  if(keyActionPending.current)return;keyActionPending.current=true;setKeyActionError("");
-                  updateTokenMut.mutate({
-                    id: Number(key.id),
-                    status: key.active ? 2 : 1,
-                    expected_revision: key.managementRevision,
-                  },{onError:keyWriteFailed,onSettled:()=>{keyActionPending.current=false;}});
+                  if (keyActionPending.current) return;
+                  keyActionPending.current = true;
+                  setKeyActionError("");
+                  updateTokenMut.mutate(
+                    {
+                      id: Number(key.id),
+                      status: key.active ? 2 : 1,
+                      expected_revision: key.managementRevision,
+                    },
+                    {
+                      onError: keyWriteFailed,
+                      onSettled: () => {
+                        keyActionPending.current = false;
+                      },
+                    },
+                  );
                 }}
                 onRegenerate={(key) =>
                   setKeyConfirmation({ action: "regenerate", key })
                 }
-                onDelete={(key) => setKeyConfirmation({ action: "delete", key })}
+                onDelete={(key) =>
+                  setKeyConfirmation({ action: "delete", key })
+                }
                 onSecret={requestKeySecret}
                 onHide={(id) =>
                   setVisibleKeyIds((current) => ({ ...current, [id]: false }))
@@ -2223,7 +2360,12 @@ function ConsoleWorkspace() {
               required
             />
           </div>
-          <Button type="submit" variant="primary" disabled={authPending} aria-busy={authPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={authPending}
+            aria-busy={authPending}
+          >
             {t("unlockKey")}
           </Button>
         </form>
@@ -2360,13 +2502,19 @@ function ConsoleWorkspace() {
             </span>
           </div>
 
-          <Button type="submit" variant="primary" disabled={createExportMut.isPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={createExportMut.isPending}
+          >
             {c("生成 CSV（表格文件）", "Generate CSV export", "إنشاء ملف CSV")}
           </Button>
         </form>
       </Modal>
 
-      {deactivateOpen && <AccountDeactivation onClose={() => setDeactivateOpen(false)} />}
+      {deactivateOpen && (
+        <AccountDeactivation onClose={() => setDeactivateOpen(false)} />
+      )}
 
       <ConfirmDialog
         open={keyConfirmation !== null}
@@ -2398,21 +2546,42 @@ function ConsoleWorkspace() {
         }
         onConfirm={() => {
           if (!keyConfirmation || keyActionPending.current) return;
-          keyActionPending.current=true;setKeyActionError("");
+          keyActionPending.current = true;
+          setKeyActionError("");
           if (keyConfirmation.action === "delete") {
-            deleteTokenMut.mutate({id:Number(keyConfirmation.key.id),expected_revision:keyConfirmation.key.managementRevision},{onError:keyWriteFailed,onSettled:()=>{keyActionPending.current=false;}});
-          } else {
-            regenerateTokenMut.mutate({id:Number(keyConfirmation.key.id),expected_revision:keyConfirmation.key.managementRevision}, {
-              onError:keyWriteFailed,onSettled:()=>{keyActionPending.current=false;},
-              onSuccess: (token) => {
-                const id = String(token.id);
-                setPlaintextKeys((s) => ({ ...s, [id]: token.key }));
-                setRegeneratedKey({
-                  name: keyConfirmation.key.name,
-                  plaintext: token.key,
-                });
+            deleteTokenMut.mutate(
+              {
+                id: Number(keyConfirmation.key.id),
+                expected_revision: keyConfirmation.key.managementRevision,
               },
-            });
+              {
+                onError: keyWriteFailed,
+                onSettled: () => {
+                  keyActionPending.current = false;
+                },
+              },
+            );
+          } else {
+            regenerateTokenMut.mutate(
+              {
+                id: Number(keyConfirmation.key.id),
+                expected_revision: keyConfirmation.key.managementRevision,
+              },
+              {
+                onError: keyWriteFailed,
+                onSettled: () => {
+                  keyActionPending.current = false;
+                },
+                onSuccess: (token) => {
+                  const id = String(token.id);
+                  setPlaintextKeys((s) => ({ ...s, [id]: token.key }));
+                  setRegeneratedKey({
+                    name: keyConfirmation.key.name,
+                    plaintext: token.key,
+                  });
+                },
+              },
+            );
           }
           setKeyConfirmation(null);
         }}
@@ -2441,10 +2610,7 @@ function ConsoleWorkspace() {
           "المفتاح القديم غير صالح. حدّث تطبيقاتك بالمفتاح الجديد؛ هذا العرض الوحيد له.",
         )}
         footer={
-          <Button
-            variant="primary"
-            onClick={() => setRegeneratedKey(null)}
-          >
+          <Button variant="primary" onClick={() => setRegeneratedKey(null)}>
             {c("我已保存", "I've saved it", "حفظته")}
           </Button>
         }

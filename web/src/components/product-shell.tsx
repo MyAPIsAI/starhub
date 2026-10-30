@@ -401,7 +401,13 @@ export function ProductSearch() {
                     </Command.Item>
                   </Command.Group>
                 )}
-                {canReadFinance(role) && <Command.Group heading={text("财务","Finance","المالية")}><Command.Item onSelect={()=>go("/finance")}>{text("财务概览","Finance overview","نظرة مالية")}</Command.Item></Command.Group>}
+                {canReadFinance(role) && (
+                  <Command.Group heading={text("财务", "Finance", "المالية")}>
+                    <Command.Item onSelect={() => go("/finance")}>
+                      {text("财务概览", "Finance overview", "نظرة مالية")}
+                    </Command.Item>
+                  </Command.Group>
+                )}
                 <Command.Group heading={t("pModels")}>
                   {modelIds.map((m) => (
                     <Command.Item

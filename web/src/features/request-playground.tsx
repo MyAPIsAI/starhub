@@ -211,9 +211,15 @@ export default function Playground({
               .join("")
           : (data?.choices?.[0]?.message?.content ?? "");
       const inputTokens =
-        gemini?.inputTokens ?? data?.usage?.prompt_tokens ?? data?.usage?.input_tokens ?? 0;
+        gemini?.inputTokens ??
+        data?.usage?.prompt_tokens ??
+        data?.usage?.input_tokens ??
+        0;
       const outputTokens =
-        gemini?.outputTokens ?? data?.usage?.completion_tokens ?? data?.usage?.output_tokens ?? 0;
+        gemini?.outputTokens ??
+        data?.usage?.completion_tokens ??
+        data?.usage?.output_tokens ??
+        0;
       setRelayResult({
         source: "api",
         trace_id: `relay_${Date.now()}`,
@@ -229,7 +235,9 @@ export default function Playground({
         error_code: gemini?.errorCode ?? "",
         error_message: gemini?.errorCode ? `Gemini: ${gemini.errorCode}` : "",
         requested_model: snapshot.model,
-        actual_model: gemini ? gemini.actualModel : data?.model ?? snapshot.model,
+        actual_model: gemini
+          ? gemini.actualModel
+          : (data?.model ?? snapshot.model),
         protocol: snapshot.protocol,
         response_text: content,
       } as any);
@@ -355,7 +363,13 @@ export default function Playground({
                   >
                     <option value="OpenAI">OpenAI（对话协议）</option>
                     <option value="Anthropic">Anthropic（消息协议）</option>
-                    <option value="Gemini">{c("Gemini（内容生成）", "Gemini (content generation)", "Gemini (إنشاء المحتوى)")}</option>
+                    <option value="Gemini">
+                      {c(
+                        "Gemini（内容生成）",
+                        "Gemini (content generation)",
+                        "Gemini (إنشاء المحتوى)",
+                      )}
+                    </option>
                   </select>
                 </Field>
                 <Field
@@ -562,10 +576,7 @@ export default function Playground({
                 <Button
                   variant="primary"
                   disabled={
-                    busy ||
-                    !currentKey ||
-                    !currentKey.active ||
-                    !prompt.trim()
+                    busy || !currentKey || !currentKey.active || !prompt.trim()
                   }
                   onClick={send}
                 >

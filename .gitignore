@@ -24,3 +24,4 @@ web/!.env.example
 web/test-results/
 web/docs/
 web/dbg-tmp.ts
+web/HANDOFF.md

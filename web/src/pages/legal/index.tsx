@@ -5,7 +5,10 @@ import { usePreferences } from "../../lib/preferences";
 
 type LegalDoc = "privacy" | "terms";
 
-const docs: Record<LegalDoc, { title: [string, string, string]; updated: string }> = {
+const docs: Record<
+  LegalDoc,
+  { title: [string, string, string]; updated: string }
+> = {
   privacy: {
     title: ["隐私政策", "Privacy Policy", "سياسة الخصوصية"],
     updated: "2026-10-23",
@@ -32,7 +35,11 @@ export default function LegalPage() {
       <PublicHeader />
       <main
         className="public-page-container"
-        style={{ maxWidth: 780, padding: "var(--space-8) var(--space-6)", flex: 1 }}
+        style={{
+          maxWidth: 780,
+          padding: "var(--space-8) var(--space-6)",
+          flex: 1,
+        }}
       >
         <Link
           to="/"
@@ -70,7 +77,11 @@ export default function LegalPage() {
                 transition: "all .15s",
               }}
             >
-              {id === "privacy" ? <ShieldCheck size={14} /> : <Scale size={14} />}
+              {id === "privacy" ? (
+                <ShieldCheck size={14} />
+              ) : (
+                <Scale size={14} />
+              )}
               {docs[id].title[lang === "zh" ? 0 : lang === "ar" ? 2 : 1]}
             </Link>
           ))}
@@ -106,11 +117,35 @@ export default function LegalPage() {
                   "هذه الصفحة نموذج للعرض التوضيحي ولا تشكل التزامًا قانونيًا حقيقيًا. استبدلها بنص مراجَع قانونيًا قبل النشر الفعلي.",
                 )}
               </p>
-              <h2>{t("收集的信息", "Information we collect", "المعلومات التي نجمعها")}</h2>
+              <h2>
+                {t(
+                  "收集的信息",
+                  "Information we collect",
+                  "المعلومات التي نجمعها",
+                )}
+              </h2>
               <ul>
-                <li>{t("账户信息：用户名、邮箱", "Account information: username, email address", "معلومات الحساب: اسم المستخدم والبريد الإلكتروني")}</li>
-                <li>{t("API 密钥（仅存储哈希值）", "API keys (only hashes are stored)", "مفاتيح API (تُخزن التجزئة فقط)")}</li>
-                <li>{t("调用日志：模型、Token 数、时长、费用", "Request logs: model, token counts, duration, cost", "سجلات الطلبات: النموذج وعدد الرموز والمدة والتكلفة")}</li>
+                <li>
+                  {t(
+                    "账户信息：用户名、邮箱",
+                    "Account information: username, email address",
+                    "معلومات الحساب: اسم المستخدم والبريد الإلكتروني",
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "API 密钥（仅存储哈希值）",
+                    "API keys (only hashes are stored)",
+                    "مفاتيح API (تُخزن التجزئة فقط)",
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "调用日志：模型、Token 数、时长、费用",
+                    "Request logs: model, token counts, duration, cost",
+                    "سجلات الطلبات: النموذج وعدد الرموز والمدة والتكلفة",
+                  )}
+                </li>
               </ul>
               <h2>{t("数据存储", "Data storage", "تخزين البيانات")}</h2>
               <p>
@@ -155,7 +190,9 @@ export default function LegalPage() {
                   "تحاسب المنصة على استخدام الرموز الفعلي أو الوحدات المقاسة. الطلبات الفاشلة مجانية. تُضاف مبالغ الشحن فور نجاح الدفع.",
                 )}
               </p>
-              <h2>{t("责任限制", "Limitation of liability", "حد المسؤولية")}</h2>
+              <h2>
+                {t("责任限制", "Limitation of liability", "حد المسؤولية")}
+              </h2>
               <p>
                 {t(
                   "演示环境不提供任何 SLA 承诺或赔付。生产环境的责任条款以正式合同为准。",
@@ -179,7 +216,11 @@ export default function LegalPage() {
             }}
           >
             <FileText size={13} />
-            {t("演示文档 · 不构成法律承诺", "Demo document · not a legal commitment", "مستند تجريبي · ليس التزامًا قانونيًا")}
+            {t(
+              "演示文档 · 不构成法律承诺",
+              "Demo document · not a legal commitment",
+              "مستند تجريبي · ليس التزامًا قانونيًا",
+            )}
           </footer>
         </article>
       </main>

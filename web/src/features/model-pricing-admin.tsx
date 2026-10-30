@@ -32,9 +32,16 @@ import {
   pricingRuleError,
   quoteModelCharge,
 } from "../lib/model-pricing";
-import { initializeDemoPreview, useProductPreview } from "../lib/product-preview";
+import {
+  initializeDemoPreview,
+  useProductPreview,
+} from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
-import { useOptionStatus, useOptionHistory, useRollbackOption } from "../lib/api/option";
+import {
+  useOptionStatus,
+  useOptionHistory,
+  useRollbackOption,
+} from "../lib/api/option";
 import { ApiError } from "../lib/api/http";
 import { getKeyModels } from "../lib/key-model-policy";
 import { formatMoney } from "../lib/money";
@@ -1401,23 +1408,42 @@ export function ModelPricingAdmin({
 
       {/* Option config status & history */}
       {canEdit && (
-        <div className="pricing-table-scroll" style={{ marginTop: "var(--space-6)" }}>
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "var(--space-3)",
-          }}>
+        <div
+          className="pricing-table-scroll"
+          style={{ marginTop: "var(--space-6)" }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "var(--space-3)",
+            }}
+          >
             <div>
               <strong>
-                {text("服务器配置版本（独立于演示）", "Server config version (separate from Demo)", "إصدار إعدادات الخادم (مستقل عن العرض)")}
+                {text(
+                  "服务器配置版本（独立于演示）",
+                  "Server config version (separate from Demo)",
+                  "إصدار إعدادات الخادم (مستقل عن العرض)",
+                )}
               </strong>
               {optionStatusQuery.data && (
-                <span style={{ marginInlineStart: 8, fontSize: "var(--text-sm)" }}>
+                <span
+                  style={{ marginInlineStart: 8, fontSize: "var(--text-sm)" }}
+                >
                   v{optionStatusQuery.data.database_version}
                   {optionStatusQuery.data.in_sync
-                    ? text(" · 响应进程已加载", " · loaded by response process", " · محمّل في العملية المستجيبة")
-                    : text(" · 响应进程版本滞后", " · response process behind", " · العملية المستجيبة متأخرة")}
+                    ? text(
+                        " · 响应进程已加载",
+                        " · loaded by response process",
+                        " · محمّل في العملية المستجيبة",
+                      )
+                    : text(
+                        " · 响应进程版本滞后",
+                        " · response process behind",
+                        " · العملية المستجيبة متأخرة",
+                      )}
                 </span>
               )}
             </div>
@@ -1429,11 +1455,18 @@ export function ModelPricingAdmin({
               }}
             >
               <Clock3 size={15} style={{ marginInlineEnd: 4 }} />
-              {text("服务器历史与回滚", "Server history & rollback", "سجل الخادم والتراجع")}
+              {text(
+                "服务器历史与回滚",
+                "Server history & rollback",
+                "سجل الخادم والتراجع",
+              )}
             </Button>
           </div>
           {rollbackNotice && (
-            <p role="alert" style={{ fontSize: "var(--text-sm)", color: "var(--success)" }}>
+            <p
+              role="alert"
+              style={{ fontSize: "var(--text-sm)", color: "var(--success)" }}
+            >
               {rollbackNotice}
             </p>
           )}
@@ -1558,7 +1591,11 @@ export function ModelPricingAdmin({
       <Modal
         open={historyOpen}
         onOpenChange={setHistoryOpen}
-        title={text("服务器配置变更历史", "Server config change history", "سجل تغييرات إعدادات الخادم")}
+        title={text(
+          "服务器配置变更历史",
+          "Server config change history",
+          "سجل تغييرات إعدادات الخادم",
+        )}
         description={text(
           "此处操作真实服务器配置，与浏览器演示定价独立。回滚恢复所选变更前的配置值，并校验当前服务器版本。",
           "These actions change real server configuration independently of browser Demo pricing. Rollback restores the selected pre-change value and checks the current server version.",
@@ -1585,29 +1622,45 @@ export function ModelPricingAdmin({
             <tbody>
               {optionHistoryQuery.data?.map((change) => (
                 <tr key={change.id}>
-                  <td className="mono" style={{ padding: "8px 10px", fontSize: 12 }}>v{change.version}</td>
+                  <td
+                    className="mono"
+                    style={{ padding: "8px 10px", fontSize: 12 }}
+                  >
+                    v{change.version}
+                  </td>
                   <td style={{ padding: "8px 10px" }}>{change.key}</td>
-                  <td className="mono" style={{
-                    padding: "8px 10px",
-                    fontSize: 11,
-                    maxWidth: 200,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }} dir="ltr">
+                  <td
+                    className="mono"
+                    style={{
+                      padding: "8px 10px",
+                      fontSize: 11,
+                      maxWidth: 200,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    dir="ltr"
+                  >
                     {change.old_value || "—"}
                   </td>
-                  <td className="mono" style={{
-                    padding: "8px 10px",
-                    fontSize: 11,
-                    maxWidth: 200,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }} dir="ltr">
+                  <td
+                    className="mono"
+                    style={{
+                      padding: "8px 10px",
+                      fontSize: 11,
+                      maxWidth: 200,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    dir="ltr"
+                  >
                     {change.new_value || "—"}
                   </td>
-                  <td className="mono" style={{ padding: "8px 10px", fontSize: 12 }}>
+                  <td
+                    className="mono"
+                    style={{ padding: "8px 10px", fontSize: 12 }}
+                  >
                     {new Date(change.created_at * 1000).toLocaleString()}
                   </td>
                   <td style={{ padding: "8px 10px" }}>
@@ -1617,24 +1670,37 @@ export function ModelPricingAdmin({
                       disabled={
                         rollbackMut.isPending ||
                         !optionStatusQuery.data ||
-                        change.version === optionStatusQuery.data.database_version
+                        change.version ===
+                          optionStatusQuery.data.database_version
                       }
                       onClick={() => {
-                        const currentVersion = optionStatusQuery.data?.database_version;
+                        const currentVersion =
+                          optionStatusQuery.data?.database_version;
                         if (!currentVersion) return;
                         setRollbackNotice("");
                         rollbackMut.mutate(
-                          { version: change.version, expected_version: currentVersion },
+                          {
+                            version: change.version,
+                            expected_version: currentVersion,
+                          },
                           {
                             onSuccess: () =>
                               setRollbackNotice(
-                                text("已回滚到此版本。", "Rolled back.", "تم التراجع."),
+                                text(
+                                  "已回滚到此版本。",
+                                  "Rolled back.",
+                                  "تم التراجع.",
+                                ),
                               ),
                             onError: (err) =>
                               setRollbackNotice(
                                 err instanceof ApiError
                                   ? err.message
-                                  : text("回滚失败", "Rollback failed", "فشل التراجع"),
+                                  : text(
+                                      "回滚失败",
+                                      "Rollback failed",
+                                      "فشل التراجع",
+                                    ),
                               ),
                           },
                         );
@@ -1645,13 +1711,21 @@ export function ModelPricingAdmin({
                   </td>
                 </tr>
               ))}
-              {optionHistoryQuery.data && optionHistoryQuery.data.length === 0 && (
-                <tr>
-                  <td colSpan={6} style={{ padding: 16, textAlign: "center", color: "var(--muted)" }}>
-                    {text("暂无变更记录", "No changes", "لا تغييرات")}
-                  </td>
-                </tr>
-              )}
+              {optionHistoryQuery.data &&
+                optionHistoryQuery.data.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      style={{
+                        padding: 16,
+                        textAlign: "center",
+                        color: "var(--muted)",
+                      }}
+                    >
+                      {text("暂无变更记录", "No changes", "لا تغييرات")}
+                    </td>
+                  </tr>
+                )}
             </tbody>
           </table>
         )}
