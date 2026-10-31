@@ -229,16 +229,19 @@ func RecordTaskSubmissionFailure(id int64, reason string) (*Task, error) {
 // for the given token. It lets quota edits account for in-flight reservations
 // so the cumulative limit (remain + used) does not silently inflate when
 // pending tasks settle.
-func SumPendingTaskQuota(tx *gorm.DB, tokenID int64) int64 {
+func SumPendingTaskQuota(tx *gorm.DB, tokenID int64) (int64, error) {
 	if tx == nil {
 		tx = DB
 	}
 	var total int64
-	tx.Model(&Task{}).
+	err := tx.Model(&Task{}).
 		Where("token_id = ? AND status NOT IN ?", tokenID,
 			[]string{"succeeded", "failed", "cancelled"}).
-		Select("COALESCE(SUM(quota), 0)").Scan(&total)
-	return total
+		Select("COALESCE(SUM(quota), 0)").Scan(&total).Error
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 // TaskOutputURLs extracts the output URLs of the stored result meta (best

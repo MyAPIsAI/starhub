@@ -230,7 +230,10 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 			// ignores pending reservations; when those tasks settle,
 			// the cumulative (remain + used) silently inflates.
 			if rq, ok := updates["remain_quota"]; ok && action == "update" {
-				pending := SumPendingTaskQuota(tx, id)
+				pending, err := SumPendingTaskQuota(tx, id)
+				if err != nil {
+					return err
+				}
 				if pending > 0 {
 					newRemain := rq.(int64) - pending
 					if newRemain < 0 {
