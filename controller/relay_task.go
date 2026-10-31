@@ -148,7 +148,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 	if err := model.InsertTask(task); err != nil {
 		log.Printf("task persistence failed before upstream submit: %v", err)
 		flow.lastErr = fmt.Errorf("task persistence failed: %v", err)
-		return attemptResult{outcome: attemptUpstreamError, cause: flow.lastErr}
+		return attemptResult{outcome: attemptUncertain, cause: flow.lastErr}
 	}
 
 	// The pre-charge now belongs to the task row; the poll-side settlement
@@ -174,7 +174,12 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		sideEffect: true,
 	})
 	if fail != nil {
-		return *fail
+		// The task row already holds the pre-charge. FailTaskSubmission
+		// (in the deferred cleanup) refunds it. Do not let runChannels
+		// retry on another channel: the retry would create a second task
+		// row without a new ReserveQuota, giving the user a free task.
+		return attemptResult{outcome: attemptUncertain, statusCode: fail.statusCode,
+			cause: fail.cause}
 	}
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	resp.Body.Close()
