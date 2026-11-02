@@ -189,10 +189,22 @@ func decodeResourceBody(w http.ResponseWriter, r *http.Request, value any) bool 
 	return false
 }
 
+// Import numeric fields must be present and non-null before conversion to domain values.
+type resourceInstanceImport struct {
+	model.ResourceInstance
+	ContextLength *int64   `json:"contextLength"`
+	LatencyMS     *float64 `json:"latencyMs"`
+}
+
+type resourceSnapshotImport struct {
+	model.ResourceSnapshot
+	Instances []resourceInstanceImport `json:"instances"`
+}
+
 func UpdateResources(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		ExpectedRevision *int64                  `json:"expected_revision"`
-		Snapshot         *model.ResourceSnapshot `json:"snapshot"`
+		Snapshot         *resourceSnapshotImport `json:"snapshot"`
 	}
 	if !decodeResourceBody(w, r, &request) {
 		return
@@ -201,7 +213,20 @@ func UpdateResources(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "expected_revision and snapshot are required")
 		return
 	}
-	catalog, err := model.SaveResourceSnapshot(r.Context(), *request.ExpectedRevision, *request.Snapshot)
+	snapshot := request.Snapshot.ResourceSnapshot
+	if request.Snapshot.Instances != nil {
+		snapshot.Instances = make([]model.ResourceInstance, len(request.Snapshot.Instances))
+	}
+	for i, instance := range request.Snapshot.Instances {
+		if instance.ContextLength == nil || instance.LatencyMS == nil {
+			common.ApiError(w, http.StatusBadRequest, "contextLength and latencyMs are required numbers")
+			return
+		}
+		snapshot.Instances[i] = instance.ResourceInstance
+		snapshot.Instances[i].ContextLength = *instance.ContextLength
+		snapshot.Instances[i].LatencyMS = *instance.LatencyMS
+	}
+	catalog, err := model.SaveResourceSnapshot(r.Context(), *request.ExpectedRevision, snapshot)
 	writeResourceResult(w, catalog, err)
 }
 
