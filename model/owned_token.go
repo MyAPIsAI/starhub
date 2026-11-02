@@ -8,21 +8,28 @@ import (
 	"fmt"
 	"gorm.io/gorm"
 	"starhub/common"
+	"starhub/config"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var ErrOwnedTokenConflict = errors.New("owned token state changed")
 
 type OwnedTokenChoice struct {
-	Group     string   `json:"group"`
-	Model     string   `json:"model"`
-	Protocols []string `json:"protocols"`
+	Vendor        string   `json:"vendor,omitempty"`
+	VendorDisplay string   `json:"vendor_display,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
+	Group         string   `json:"group"`
+	Model         string   `json:"model"`
+	Protocols     []string `json:"protocols"`
+	SmartEligible bool     `json:"smart_eligible"`
 }
 type OwnedTokenChoices struct {
-	UserID   int64              `json:"user_id"`
-	Revision string             `json:"revision"`
-	Choices  []OwnedTokenChoice `json:"choices"`
+	QuotaTimezone string             `json:"quota_timezone"`
+	UserID        int64              `json:"user_id"`
+	Revision      string             `json:"revision"`
+	Choices       []OwnedTokenChoice `json:"choices"`
 }
 type OwnedTokenReceipt struct {
 	ID          int64  `gorm:"primaryKey" json:"-"`
@@ -96,7 +103,7 @@ func readOwnedTokenChoices(tx *gorm.DB, owner int64) (*OwnedTokenChoices, error)
 	for _, d := range deleted {
 		allowed[d.GroupID] = false
 	}
-	out := &OwnedTokenChoices{UserID: owner, Choices: []OwnedTokenChoice{}}
+	out := &OwnedTokenChoices{UserID: owner, Choices: []OwnedTokenChoice{}, QuotaTimezone: config.RegionTimezone()}
 	seen := map[string]bool{}
 	for _, a := range abilities {
 		key := a.Group + "\x00" + a.Model
@@ -138,7 +145,10 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 		}
 		if action != "create" {
 			if err := tx.First(&result, "id = ? AND user_id = ?", id, owner).Error; err != nil {
-				return ErrOwnedTokenConflict
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrTokenNotFound
+				}
+				return err
 			}
 			if TokenManagementRevision(&result) != revision {
 				return ErrOwnedTokenConflict
@@ -147,6 +157,20 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 			result = Token{UserID: owner, Status: 1, ExpiredTime: -1, Key: common.GenerateTokenKey()}
 		}
 		if action == "create" || action == "update" {
+			policy := result
+			if value, ok := fields["model_limits"]; ok {
+				policy.ModelLimits = value.(string)
+			}
+			if value, ok := fields["smart_candidates"]; ok {
+				policy.SmartCandidates = value.(string)
+			}
+			if value, ok := fields["smart_access"]; ok {
+				enabled := value.(bool)
+				policy.SmartAccess = &enabled
+			}
+			if err := ValidateTokenSmartPolicy(&policy); err != nil {
+				return err
+			}
 			group := result.Group
 			if v, ok := fields["group"]; ok {
 				group = v.(string)
@@ -194,6 +218,9 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 						return fmt.Errorf("group is unavailable")
 					}
 					for _, m := range SplitList(models) {
+						if action == "update" && group == result.Group && containsTokenModel(result.ModelLimitList(), m) {
+							continue
+						}
 						found := false
 						for _, c := range choices.Choices {
 							if c.Group == g && c.Model == m {
@@ -209,27 +236,44 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 		}
 		switch action {
 		case "create":
+			if err := checkTokenCreationLimit(tx, owner); err != nil {
+				return err
+			}
 			data := map[string]any{"user_id": owner, "key": result.Key, "status": 1, "expired_time": int64(-1)}
 			for k, v := range fields {
 				data[k] = v
 			}
-			if err := tx.Model(&Token{}).Create(data).Error; err != nil {
+			raw, err := json.Marshal(data)
+			if err != nil {
 				return err
 			}
-			if err := tx.First(&result, "key = ?", result.Key).Error; err != nil {
+			if err := json.Unmarshal(raw, &result); err != nil {
+				return err
+			}
+			if _, ok := fields["quota_limit"]; ok {
+				result.RemainQuota = result.QuotaLimit
+			}
+			if err := tx.Create(&result).Error; err != nil {
 				return err
 			}
 		case "update", "regenerate":
+			if err := refreshTokenPeriod(tx, &result, time.Now()); err != nil {
+				return err
+			}
 			updates := map[string]any{}
 			for k, v := range fields {
 				updates[k] = v
+			}
+			if err := prepareTokenPeriodUpdate(tx, &result, updates); err != nil {
+				return err
 			}
 			// When the lifetime limit is being edited, subtract the
 			// in-flight pre-charge held by pending tasks. Without this,
 			// remain_quota is set to (new_total - used_quota) which
 			// ignores pending reservations; when those tasks settle,
 			// the cumulative (remain + used) silently inflates.
-			if rq, ok := updates["remain_quota"]; ok && action == "update" {
+			_, periodLimit := updates["quota_limit"]
+			if rq, ok := updates["remain_quota"]; ok && action == "update" && !periodLimit {
 				pending, err := SumPendingTaskQuota(tx, id)
 				if err != nil {
 					return err
@@ -241,11 +285,19 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 					}
 					updates["remain_quota"] = newRemain
 				}
+				used := result.UsedQuota
+				if result.QuotaPeriod != "never" {
+					used = result.PeriodUsedQuota
+				}
+				updates["quota_limit"] = rq.(int64) + used
 			}
 			if action == "regenerate" {
 				updates["key"] = common.GenerateTokenKey()
 			}
 			updates["revision"] = gorm.Expr("revision + 1")
+			if err := encryptTokenFields(tx, updates); err != nil {
+				return err
+			}
 			if err := tx.Model(&Token{}).Where("id = ? AND user_id = ?", id, owner).Updates(updates).Error; err != nil {
 				return err
 			}
@@ -286,6 +338,14 @@ func ValidOwnedTokenFields(fields map[string]any) error {
 		case "remain_quota":
 			if value.(int64) < 0 {
 				return fmt.Errorf("invalid key quota")
+			}
+		case "quota_limit":
+			if value.(int64) < 0 {
+				return fmt.Errorf("invalid key quota limit")
+			}
+		case "quota_period":
+			if err := validateTokenPeriod(value.(string), 0); err != nil {
+				return err
 			}
 		case "status":
 			if value.(int) != 1 && value.(int) != 2 {

@@ -92,7 +92,7 @@ func TestP6ManagementContract(t *testing.T) {
 	request("PUT", "/api/token/", memberSession, map[string]any{"id": stored.ID, "remain_quota": 10}, 400)
 	request("PUT", "/api/token/", memberSession, map[string]any{"id": stored.ID, "remain_quota": 10, "expected_quota": 0}, 200)
 	request("PUT", "/api/token/", memberSession, map[string]any{"id": stored.ID, "remain_quota": 20, "expected_quota": 0, "name": "stale"}, 409)
-	request("PUT", "/api/token/", memberSession, map[string]any{"id": env.tokenID, "name": "forbidden"}, 403)
+	request("PUT", "/api/token/", memberSession, map[string]any{"id": env.tokenID, "name": "forbidden"}, 404)
 	request("PUT", "/api/token/", adminSession, map[string]any{"id": stored.ID, "unlimited_quota": true, "expected_quota": 10}, 200)
 	request("PUT", "/api/token/", adminSession, map[string]any{"id": stored.ID, "unlimited_quota": false, "remain_quota": 0, "expected_quota": 0}, 200)
 	stored, _ = model.GetTokenByID(stored.ID)

@@ -1,0 +1,181 @@
+.native-key-access {
+  min-inline-size: 0;
+  padding-block-start: 18px;
+  border-block-start: 1px solid var(--border);
+}
+
+.native-key-access-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+}
+
+.native-key-access-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+  min-inline-size: 0;
+}
+
+.native-key-access-heading strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.native-key-access-heading > span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.native-key-access-toggle > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.native-key-access-toggle[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+.native-key-access-toggle:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+
+.native-key-access-body:not([hidden]) {
+  display: grid;
+  gap: 22px;
+  padding-block-start: 20px;
+}
+
+.native-key-expiry {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.native-key-expiry legend,
+.native-key-ip-heading label {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.native-key-expiry legend {
+  padding: 0 0 6px;
+}
+
+.native-key-expiry-options {
+  display: inline-flex;
+  max-inline-size: 100%;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--subtle);
+}
+
+.native-key-expiry-option {
+  position: relative;
+  min-inline-size: 0;
+  cursor: pointer;
+}
+
+.native-key-expiry-option input {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.native-key-expiry-option span {
+  display: block;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.native-key-expiry-option input:checked + span {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.native-key-expiry-option input:focus-visible + span {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.native-key-expiry-option input:disabled + span {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.native-key-expiry-date {
+  display: grid;
+  gap: 6px;
+  margin-block-start: 12px;
+  font-size: 12px;
+}
+
+.native-key-ip-field {
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.native-key-ip-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#native-key-ip-count {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.native-key-access .native-key-ip-input {
+  min-block-size: 114px;
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.8;
+  text-align: left;
+}
+
+.native-key-access-hint,
+.native-key-access-error {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.native-key-access-hint {
+  color: var(--muted);
+}
+
+.native-key-access-error,
+#native-key-ip-count.is-over-limit {
+  color: var(--danger);
+}

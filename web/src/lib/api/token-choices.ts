@@ -6,11 +6,20 @@ import {
   useSystemAccess,
 } from "../system-access";
 export interface TokenChoices {
+  quota_timezone?: string;
   schema: "owned_token_choices_v1";
   guarded_actions: true;
   user_id: number;
   revision: string;
-  choices: { group: string; model: string; protocols: string[] }[];
+  choices: {
+    group: string;
+    model: string;
+    protocols: string[];
+    smart_eligible?: boolean;
+    vendor?: string;
+    vendor_display?: string;
+    tags?: string[];
+  }[];
 }
 export function readTokenChoices(value: unknown, owner: number): TokenChoices {
   const v = value as TokenChoices | null;
@@ -28,6 +37,14 @@ export function readTokenChoices(value: unknown, owner: number): TokenChoices {
         !c.group ||
         typeof c.model !== "string" ||
         !c.model ||
+        (c.vendor !== undefined && typeof c.vendor !== "string") ||
+        (c.vendor_display !== undefined &&
+          typeof c.vendor_display !== "string") ||
+        (c.tags !== undefined &&
+          (!Array.isArray(c.tags) ||
+            c.tags.some((tag) => typeof tag !== "string"))) ||
+        (c.smart_eligible !== undefined &&
+          typeof c.smart_eligible !== "boolean") ||
         !Array.isArray(c.protocols) ||
         c.protocols.some(
           (p) => !["OpenAI", "Anthropic", "Gemini", "Responses"].includes(p),
@@ -37,7 +54,11 @@ export function readTokenChoices(value: unknown, owner: number): TokenChoices {
     throw Error("Guarded key choices are unavailable");
   return {
     ...v,
-    choices: v.choices.map((c) => ({ ...c, protocols: [...c.protocols] })),
+    choices: v.choices.map((c) => ({
+      ...c,
+      protocols: [...c.protocols],
+      ...(c.tags ? { tags: [...c.tags] } : {}),
+    })),
   };
 }
 export function useTokenChoices() {

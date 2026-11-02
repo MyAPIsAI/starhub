@@ -25,7 +25,7 @@ vi.mock("../lib/api/tokens", () => ({
   useUpdateToken: () => ({ isPending: false }),
 }));
 vi.mock("../components/ui/overlay", () => ({
-  Modal: ({ children }: { children: ReactNode }) =>
+  Drawer: ({ children }: { children: ReactNode }) =>
     createElement("div", null, children),
 }));
 vi.mock("react-i18next", () => ({
@@ -33,6 +33,40 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("editing existing native keys", () => {
+  it("offers smart candidates only within the existing authorization", () => {
+    const item = tokenToPreviewKey({
+      id: 1,
+      user_id: 1,
+      name: "Restricted",
+      key: "masked",
+      status: 1,
+      group: "default",
+      auto_groups: "",
+      expired_time: -1,
+      model_limits: "allowed-model",
+      smart_access: true,
+      smart_candidates: "allowed-model",
+      allow_ips: "",
+      unlimited_quota: true,
+      remain_quota: 0,
+      used_quota: 0,
+      created_at: 0,
+    });
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, {
+        children: createElement(NativeKeyForm, { item, onClose: () => {} }),
+      }),
+    );
+    expect(html).toContain("Smart candidate models");
+    expect(html).toContain("Unavailable");
+    const candidates = html
+      .split("<legend>Smart candidate models</legend>")[1]
+      .split("</fieldset>")[0];
+    expect(candidates).not.toContain("current-model");
+    expect(candidates).toContain(
+      "No authorized text candidates are available.",
+    );
+  });
   it.each(["legacy-model", ""])(
     "preserves automatic routing with allowlist %s",
     (limits) => {
@@ -63,8 +97,7 @@ describe("editing existing native keys", () => {
       expect(html).toContain('value="auto" selected=""');
       expect(html).toContain('id="new-key-quota"');
       expect(html).toContain('value="100"');
-      if (limits)
-        expect(html).toContain('type="checkbox" disabled="" checked=""');
+      if (limits) expect(html).toContain('disabled="" checked=""');
       expect(html).not.toContain(
         'type="checkbox" checked=""/><span>current-model',
       );

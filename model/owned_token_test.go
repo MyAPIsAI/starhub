@@ -121,7 +121,7 @@ func TestOwnedTokenActionsRejectForeignAndChangedChoices(t *testing.T) {
 	other := &User{Username: "root-foreign", Role: 100, Status: 1, AffCode: "root-foreign"}
 	CreateUser(other)
 	foreign, _ := ReadOwnedTokenChoices(other.ID)
-	if _, _, err := MutateOwnedToken(other.ID, "foreign", "delete", token.ID, TokenManagementRevision(token), foreign.Revision, nil); !errors.Is(err, ErrOwnedTokenConflict) {
+	if _, _, err := MutateOwnedToken(other.ID, "foreign", "delete", token.ID, TokenManagementRevision(token), foreign.Revision, nil); !errors.Is(err, ErrTokenNotFound) {
 		t.Fatal("Root bypassed personal ownership")
 	}
 	if err := UpsertServiceGroup(&ServiceGroupConfig{GroupID: "default", Enabled: false}); err != nil {

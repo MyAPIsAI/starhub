@@ -8,9 +8,14 @@ database:
   # Relative paths are resolved against this configuration file.
   sqlite_path: starhub.db
 
+region:
+  timezone: Asia/Dubai
+
 security:
   # Keep this true when TLS terminates at a reverse proxy.
   force_secure_cookie: false
+  # Only these connection peers may supply X-Forwarded-For chains.
+  trusted_proxies: []
 
 # These values seed only missing database options. Change existing options
 # through the management API so updates are versioned and reloaded.

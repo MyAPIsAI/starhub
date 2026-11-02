@@ -25,6 +25,37 @@ const token: Token = {
   created_at: 0,
 };
 describe("backend smart-routing capability", () => {
+  it("uses the server quota period, limit and region timezone independently of lifetime usage", () => {
+    const key = tokenToPreviewKey({
+      ...token,
+      unlimited_quota: false,
+      quota_limit: 200,
+      remain_quota: 100,
+      used_quota: 900,
+      period_used_quota: 100,
+      quota_period: "daily",
+      quota_timezone: "Asia/Shanghai",
+      period_started_at: Date.parse("2026-10-31T18:30:00Z") / 1000,
+    });
+    expect(key.totalUsed_nano).toBe("1800000");
+    expect(keyQuotaSummary(key, "2026-10-31T21:00:00Z")).toMatchObject({
+      usedNano: "200000",
+      limitNano: "400000",
+      percentage: 50,
+      period: "daily",
+    });
+    expect(keyQuotaSummary(key, "2026-11-01T16:00:00Z").usedNano).toBe("0");
+  });
+  it("retains a separate smart candidate list without narrowing direct access", () => {
+    const key = tokenToPreviewKey({
+      ...token,
+      model_limits: "gpt-4.1,other",
+      smart_access: true,
+      smart_candidates: "gpt-4.1",
+    });
+    expect(key.allowedModels).toEqual(["gpt-4.1", "other"]);
+    expect(key.smartCandidates).toEqual(["gpt-4.1"]);
+  });
   it("uses the explicit capability and preserves the actual-model allowlist", () => {
     const key = tokenToPreviewKey({ ...token, smart_access: true });
     expect(getClientModels(key, "openai").map((model) => model.id)).toEqual([

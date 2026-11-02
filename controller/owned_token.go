@@ -44,12 +44,29 @@ func GetOwnedTokenChoices(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range state.Choices {
 		choice := &state.Choices[i]
+		choice.Vendor, choice.VendorDisplay = model.InferVendor(choice.Model)
+		if meta := metadata[choice.Model]; meta != nil {
+			if meta.Vendor != "" {
+				choice.Vendor, choice.VendorDisplay = meta.Vendor, meta.Vendor
+			}
+			if meta.VendorDisplay != "" {
+				choice.VendorDisplay = meta.VendorDisplay
+			}
+			choice.Tags = model.SplitList(meta.Tags)
+		}
 		if item, ok := coverage[choice.Model]; ok {
 			var tags []string
 			if meta := metadata[choice.Model]; meta != nil {
 				tags = model.SplitList(meta.Tags)
 			}
 			choice.Protocols = plazaProtocols(item.ChannelTypes[choice.Group], tags)
+			choice.SmartEligible = len(choice.Protocols) > 0
+			for _, tag := range tags {
+				switch tag {
+				case "image", "video", "embedding", "embeddings", "rerank", "audio", "tts", "stt":
+					choice.SmartEligible = false
+				}
+			}
 			if containsString(tags, "responses") {
 				for _, kind := range item.ChannelTypes[choice.Group] {
 					if kind == 1 {
@@ -60,7 +77,7 @@ func GetOwnedTokenChoices(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	common.ApiSuccess(w, map[string]any{"schema": "owned_token_choices_v1", "guarded_actions": true, "user_id": owner, "revision": state.Revision, "choices": state.Choices})
+	common.ApiSuccess(w, map[string]any{"schema": "owned_token_choices_v1", "guarded_actions": true, "user_id": owner, "revision": state.Revision, "choices": state.Choices, "quota_timezone": state.QuotaTimezone})
 }
 
 type ownedTokenAction struct {
@@ -109,8 +126,19 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 	if p.ModelLimits != nil {
 		fields["model_limits"] = strings.TrimSpace(*p.ModelLimits)
 	}
+	if p.SmartAccess != nil {
+		fields["smart_access"] = *p.SmartAccess
+	}
+	if p.SmartCandidates != nil {
+		fields["smart_candidates"] = strings.TrimSpace(*p.SmartCandidates)
+	}
 	if p.AllowIps != nil {
-		fields["allow_ips"] = strings.TrimSpace(*p.AllowIps)
+		ips, err := model.NormalizeTokenIPs(strings.TrimSpace(*p.AllowIps))
+		if err != nil {
+			common.ApiError(w, 400, err.Error())
+			return
+		}
+		fields["allow_ips"] = ips
 	}
 	if p.AutoGroups != nil {
 		fields["auto_groups"] = strings.TrimSpace(*p.AutoGroups)
@@ -130,7 +158,13 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 	if p.ExpiredTime != nil {
 		fields["expired_time"] = *p.ExpiredTime
 	}
-	for _, v := range []string{stringValue(fields, "model_limits"), stringValue(fields, "allow_ips"), stringValue(fields, "auto_groups")} {
+	if p.QuotaPeriod != nil {
+		fields["quota_period"] = *p.QuotaPeriod
+	}
+	if p.QuotaLimit != nil {
+		fields["quota_limit"] = *p.QuotaLimit
+	}
+	for _, v := range []string{stringValue(fields, "model_limits"), stringValue(fields, "smart_candidates"), stringValue(fields, "auto_groups")} {
 		if len(v) > 1024 {
 			common.ApiError(w, 400, "key policy exceeds limit")
 			return
@@ -161,23 +195,31 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.Action != "create" {
-		token, err := model.GetTokenByID(input.TokenID)
-		if err != nil || token.UserID != input.ExpectedUserID {
-			common.ApiError(w, 409, "owned key changed")
+		token, err := model.GetOwnedTokenByID(input.ExpectedUserID, input.TokenID)
+		if err != nil {
+			if errors.Is(err, model.ErrTokenNotFound) {
+				common.ApiError(w, http.StatusNotFound, "token not found")
+			} else {
+				common.ApiError(w, http.StatusInternalServerError, "token ownership could not be verified")
+			}
 			return
 		}
 		if p.ExpectedQuota != nil && *p.ExpectedQuota != token.RemainQuota {
 			common.ApiError(w, 409, "key balance changed")
 			return
 		}
-		if p.UnlimitedQuota != nil && !*p.UnlimitedQuota && token.UnlimitedQuota && p.RemainQuota == nil {
+		if p.UnlimitedQuota != nil && !*p.UnlimitedQuota && token.UnlimitedQuota && p.RemainQuota == nil && p.QuotaLimit == nil {
 			common.ApiError(w, 400, "remaining quota required")
 			return
 		}
 	}
 	token, receipt, err := model.MutateOwnedToken(input.ExpectedUserID, input.OperationID, input.Action, input.TokenID, input.Revision, input.ChoicesRevision, fields)
 	if err != nil {
-		if errors.Is(err, model.ErrOwnedTokenConflict) {
+		if errors.Is(err, model.ErrTokenNotFound) {
+			common.ApiError(w, http.StatusNotFound, "token not found")
+		} else if errors.Is(err, model.ErrTokenLimitReached) {
+			common.ApiError(w, http.StatusConflict, err.Error())
+		} else if errors.Is(err, model.ErrOwnedTokenConflict) {
 			common.ApiError(w, 409, "key or configuration changed; reload and confirm again")
 		} else {
 			common.ApiError(w, 400, "key action was rejected; verify the selected group and models")
@@ -191,6 +233,42 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 		out["token"] = public
 	}
 	common.ApiSuccess(w, out)
+}
+
+func ownedTokenFromPath(w http.ResponseWriter, r *http.Request) (*model.Token, bool) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return nil, false
+	}
+	token, err := model.GetOwnedTokenByID(requestUserID(r), id)
+	if err != nil {
+		if errors.Is(err, model.ErrTokenNotFound) {
+			common.ApiError(w, http.StatusNotFound, "token not found")
+		} else {
+			common.ApiError(w, http.StatusInternalServerError, "token ownership could not be verified")
+		}
+		return nil, false
+	}
+	return token, true
+}
+
+func GetOwnedToken(w http.ResponseWriter, r *http.Request) {
+	if token, ok := ownedTokenFromPath(w, r); ok {
+		common.ApiSuccess(w, maskedToken(token))
+	}
+}
+
+func GetOwnedTokenUsage(w http.ResponseWriter, r *http.Request) {
+	if token, ok := ownedTokenFromPath(w, r); ok {
+		var periods []model.TokenQuotaPeriod
+		if err := model.DB.Where("token_id = ?", token.ID).Order("started_at DESC").Find(&periods).Error; err != nil {
+			common.ApiError(w, 500, "key period history unavailable")
+			return
+		}
+		common.ApiSuccess(w, map[string]any{"token_id": token.ID, "used_quota": token.UsedQuota, "remain_quota": token.RemainQuota, "unlimited_quota": token.UnlimitedQuota,
+			"quota_period": token.QuotaPeriod, "quota_limit": token.QuotaLimit, "quota_timezone": token.QuotaTimezone, "period_used_quota": token.PeriodUsedQuota, "period_started_at": token.PeriodStartedAt, "periods": periods})
+	}
 }
 func stringValue(fields map[string]any, key string) string {
 	value, _ := fields[key].(string)

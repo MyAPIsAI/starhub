@@ -84,6 +84,8 @@ func New() http.Handler {
 
 	mux.Handle("POST /api/token", middleware.UserAuth(http.HandlerFunc(controller.CreateToken)))
 	mux.Handle("GET /api/token/owned", middleware.UserAuth(http.HandlerFunc(controller.ListOwnedTokens)))
+	mux.Handle("GET /api/token/{id}", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedToken)))
+	mux.Handle("GET /api/token/{id}/usage", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedTokenUsage)))
 	mux.Handle("GET /api/token/owned-choices", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedTokenChoices)))
 	mux.Handle("POST /api/token/owned-action", middleware.UserAuth(http.HandlerFunc(controller.WriteOwnedToken)))
 	mux.Handle("POST /api/token/owned-receipt", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedTokenReceipt)))
@@ -95,6 +97,7 @@ func New() http.Handler {
 	mux.Handle("DELETE /api/token/{id}", middleware.UserAuth(http.HandlerFunc(controller.DeleteToken)))
 	mux.Handle("POST /api/token/{id}/regenerate", middleware.UserAuth(http.HandlerFunc(controller.RegenerateToken)))
 	mux.Handle("POST /api/token/{id}/verify-password", middleware.UserAuth(middleware.PasswordVerificationRateLimit(http.HandlerFunc(controller.VerifyTokenPassword))))
+	mux.Handle("POST /api/token/{id}/reveal", middleware.UserAuth(http.HandlerFunc(controller.RevealToken)))
 
 	mux.Handle("GET /api/option", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))

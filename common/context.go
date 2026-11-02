@@ -8,15 +8,16 @@ const (
 	CtxUsingGroup   ctxKey = "using_group"
 	CtxRequestModel ctxKey = "request_model"
 	// CtxRequestedModel retains the client model before routing rewrites it.
-	CtxRequestedModel     ctxKey = "requested_model"
-	CtxRequestBody        ctxKey = "request_body"
-	CtxRequestStream      ctxKey = "request_stream"
-	CtxRequestContentType ctxKey = "request_content_type"
-	CtxUserID             ctxKey = "user_id"
-	CtxRole               ctxKey = "role"
-	CtxTokenID            ctxKey = "token_id"
-	CtxTokenName          ctxKey = "token_name"
-	CtxTokenUnlimited     ctxKey = "token_unlimited"
+	CtxRequestedModel       ctxKey = "requested_model"
+	CtxRequestBody          ctxKey = "request_body"
+	CtxRequestStream        ctxKey = "request_stream"
+	CtxRequestContentType   ctxKey = "request_content_type"
+	CtxUserID               ctxKey = "user_id"
+	CtxRole                 ctxKey = "role"
+	CtxTokenID              ctxKey = "token_id"
+	CtxTokenName            ctxKey = "token_name"
+	CtxTokenUnlimited       ctxKey = "token_unlimited"
+	CtxTokenPeriodStartedAt ctxKey = "token_period_started_at"
 	// CtxAutoGroups carries the token's auto-group sequence when the using
 	// group is "auto"; the relay flow walks it group by group.
 	CtxAutoGroups ctxKey = "auto_groups"
@@ -24,7 +25,9 @@ const (
 	CtxUserGroup ctxKey = "user_group"
 	// CtxTokenModelLimits carries the token's model whitelist (comma-separated)
 	// so the distributor can enforce it once the model name is parsed.
-	CtxTokenModelLimits ctxKey = "token_model_limits"
+	CtxTokenModelLimits     ctxKey = "token_model_limits"
+	CtxTokenSmartAccess     ctxKey = "token_smart_access"
+	CtxTokenSmartCandidates ctxKey = "token_smart_candidates"
 	// CtxRequestPrefixHash carries a stable hash of the prompt prefix so
 	// prefix-cache affinity can keep a conversation on the same upstream.
 	// Empty when prefix affinity is disabled or no prefix could be derived.

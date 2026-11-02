@@ -63,7 +63,14 @@ beforeEach(() => {
 describe("session-bound password verification transport", () => {
   const scope = () => sessionQueryIdentity(fake.state);
   it("posts only the current owner and password to the exact owned-token path", async () => {
-    fake.post.mockResolvedValue({ verified: true, user_id: 7, token_id: 2 });
+    fake.post.mockResolvedValue({
+      verified: true,
+      user_id: 7,
+      token_id: 2,
+      key: "sk-synthetic-unlocked-key",
+      grant: "a".repeat(64),
+      expires_at: Math.floor(Date.now() / 1000) + 300,
+    });
     await verifyTokenPassword(2, "verification-password", scope());
     expect(fake.post).toHaveBeenCalledExactlyOnceWith(
       "/api/token/2/verify-password",

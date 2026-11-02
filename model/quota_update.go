@@ -9,8 +9,8 @@ var ErrQuotaConflict = errors.New("quota changed since the record was read")
 
 // updateFieldsWithQuota compares and updates in one SQL statement so a
 // stale form cannot overwrite concurrent consumption or redemption.
-func updateFieldsWithQuota(entity any, id int64, fields map[string]any, column string, expected *int64) error {
-	q := DB.Model(entity).Where("id = ?", id)
+func updateFieldsWithQuota(db *gorm.DB, entity any, id int64, fields map[string]any, column string, expected *int64) error {
+	q := db.Model(entity).Where("id = ?", id)
 	if _, changed := fields[column]; changed {
 		if expected == nil {
 			return ErrQuotaConflict
@@ -28,10 +28,38 @@ func updateFieldsWithQuota(entity any, id int64, fields map[string]any, column s
 }
 
 func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {
-	return updateFieldsWithQuota(&User{}, id, fields, "quota", expected)
+	return updateFieldsWithQuota(DB, &User{}, id, fields, "quota", expected)
 }
 
-func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {
-	fields["revision"] = gorm.Expr("revision + 1")
-	return updateFieldsWithQuota(&Token{}, id, fields, "remain_quota", expected)
+func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64, revision ...int64) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Token{}).Where("id = ?", id).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+			return err
+		}
+		var token Token
+		if err := tx.First(&token, id).Error; err != nil {
+			return err
+		}
+		if err := prepareTokenPeriodUpdate(tx, &token, fields); err != nil {
+			return err
+		}
+		if err := encryptTokenFields(tx, fields); err != nil {
+			return err
+		}
+		if remain, ok := fields["remain_quota"].(int64); ok {
+			if _, explicit := fields["quota_limit"]; !explicit {
+				used := token.UsedQuota
+				if token.QuotaPeriod != "never" {
+					used = token.PeriodUsedQuota
+				}
+				fields["quota_limit"] = remain + used
+			}
+		}
+		fields["revision"] = gorm.Expr("revision + 1")
+		q := tx
+		if len(revision) > 0 {
+			q = q.Where("revision = ?", revision[0])
+		}
+		return updateFieldsWithQuota(q, &Token{}, id, fields, "remain_quota", expected)
+	})
 }
