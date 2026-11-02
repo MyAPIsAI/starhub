@@ -125,7 +125,11 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 					{"POST", fmt.Sprintf("/api/recharge/%d/begin", orders[env.rootID].ID), nil},
 					{"POST", fmt.Sprintf("/api/recharge/%d/resolve", orders[env.rootID].ID), map[string]any{"outcome": "success"}},
 				} {
-					if response := doRequest(env.base, request.method, request.path, session, request.body); response.Status != 403 {
+					want := 403
+					if strings.HasPrefix(request.path, "/api/token") {
+						want = 404
+					}
+					if response := doRequest(env.base, request.method, request.path, session, request.body); response.Status != want {
 						t.Fatalf("role %d could mutate another owner's resource: %s %s status=%d", role, request.method, request.path, response.Status)
 					}
 				}

@@ -1,3 +1,9 @@
+# Key acceptance fixes · 2026-11-02
+
+- Implemented KEY-AC-14, KEY-AC-17 and ARC-AC-11: independent smart-entry permission and candidate lists, an atomic 200-key account limit shared by both creation APIs, and identical 404 responses for foreign and missing keys on customer key operations. Existing administrative management privileges remain unchanged. New owner-bound detail and usage endpoints return masked metadata and quota counters.
+- The key form selects smart candidates only from authorized text models and requires a nonempty selection when enabled. Legacy keys retain their previous routing behavior after migration; explicit policies survive restart. Legacy policy writes compare the management revision to prevent concurrent edits from combining incompatible authorization and candidate lists.
+- After removing the uncommitted account-language experiment and its configuration, tests and SMTP templates, Go build, vet and the full test suite pass. The frontend production build passes; frontend tests have 931 passed and 4 skipped. Key API acceptance, concurrency, migration/restart and 12 browser combinations covering Chinese/English/Arabic, light/dark and desktop/390px pass. Evidence: [browser report](../output/key-acceptance-check/browser-report.json). Running user services were not restarted.
+
 # Veyra（平台）交接 · 2026-09-28
 
 本轮完成公共导航与密钥列表整理，原项目源码及生产构建已同步。开始前完整阅读 [AGENT.md（协作规则）](AGENT.md)，再执行文件快照核验。

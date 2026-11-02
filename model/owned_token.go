@@ -15,9 +15,10 @@ import (
 var ErrOwnedTokenConflict = errors.New("owned token state changed")
 
 type OwnedTokenChoice struct {
-	Group     string   `json:"group"`
-	Model     string   `json:"model"`
-	Protocols []string `json:"protocols"`
+	Group         string   `json:"group"`
+	Model         string   `json:"model"`
+	Protocols     []string `json:"protocols"`
+	SmartEligible bool     `json:"smart_eligible"`
 }
 type OwnedTokenChoices struct {
 	UserID   int64              `json:"user_id"`
@@ -138,7 +139,10 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 		}
 		if action != "create" {
 			if err := tx.First(&result, "id = ? AND user_id = ?", id, owner).Error; err != nil {
-				return ErrOwnedTokenConflict
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrTokenNotFound
+				}
+				return err
 			}
 			if TokenManagementRevision(&result) != revision {
 				return ErrOwnedTokenConflict
@@ -147,6 +151,20 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 			result = Token{UserID: owner, Status: 1, ExpiredTime: -1, Key: common.GenerateTokenKey()}
 		}
 		if action == "create" || action == "update" {
+			policy := result
+			if value, ok := fields["model_limits"]; ok {
+				policy.ModelLimits = value.(string)
+			}
+			if value, ok := fields["smart_candidates"]; ok {
+				policy.SmartCandidates = value.(string)
+			}
+			if value, ok := fields["smart_access"]; ok {
+				enabled := value.(bool)
+				policy.SmartAccess = &enabled
+			}
+			if err := ValidateTokenSmartPolicy(&policy); err != nil {
+				return err
+			}
 			group := result.Group
 			if v, ok := fields["group"]; ok {
 				group = v.(string)
@@ -209,6 +227,9 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 		}
 		switch action {
 		case "create":
+			if err := checkTokenCreationLimit(tx, owner); err != nil {
+				return err
+			}
 			data := map[string]any{"user_id": owner, "key": result.Key, "status": 1, "expired_time": int64(-1)}
 			for k, v := range fields {
 				data[k] = v

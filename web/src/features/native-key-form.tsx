@@ -58,6 +58,11 @@ export function NativeKeyForm({
     [receipt, setReceipt] = useState(""),
     [created, setCreated] = useState<Token | null>(null),
     [busy, setBusy] = useState(false);
+  const [smartEnabled, setSmartEnabled] = useState(item?.smartAccess ?? true);
+  const [smartDirty, setSmartDirty] = useState(false);
+  const [candidateModels, setCandidateModels] = useState<string[] | null>(
+    item?.smartCandidates ?? null,
+  );
   const pending = useRef(false);
   const groups = [...new Set(choices?.choices.map((c) => c.group) ?? [])];
   const effectiveGroup = groups.includes(group)
@@ -90,6 +95,20 @@ export function NativeKeyForm({
       models !== null &&
       models.join(",") !== (item.allowedModels ?? []).join(","));
   const quotaChanged = !item || quota !== keySpendingLimitValue(item);
+  const smartAvailable = selected.filter(
+    (model) =>
+      preservingAutoGroup ||
+      choices?.choices.some(
+        (choice) =>
+          choice.group === effectiveGroup &&
+          choice.model === model &&
+          choice.smart_eligible !== false,
+      ),
+  );
+  const smartSelected = (candidateModels ?? smartAvailable).filter((model) =>
+    smartAvailable.includes(model),
+  );
+  const smartPolicyChanged = !item || smartDirty || policyChanged;
   const reusable = initialModel
     ? keys.find(
         (k) =>
@@ -129,6 +148,16 @@ export function NativeKeyForm({
       return;
     }
     let remain: number | undefined;
+    if (smartPolicyChanged && smartEnabled && smartSelected.length === 0) {
+      setError(
+        c(
+          "开启智能入口时须选择至少一个已授权的文本模型。",
+          "Select at least one authorized text model for smart routing.",
+          "اختر نموذجًا نصيًا مصرحًا به على الأقل للتوجيه الذكي.",
+        ),
+      );
+      return;
+    }
     if (quotaChanged && quota !== "") {
       try {
         remain = remainingQuotaForLifetimeLimit(quota, item);
@@ -165,6 +194,12 @@ export function NativeKeyForm({
         ...(policyChanged
           ? { group: effectiveGroup, model_limits: selected.join(",") }
           : {}),
+        ...(smartPolicyChanged
+          ? {
+              smart_access: smartEnabled,
+              smart_candidates: smartSelected.join(","),
+            }
+          : {}),
         allow_ips: ips
           .split("\n")
           .map((x) => x.trim())
@@ -188,11 +223,21 @@ export function NativeKeyForm({
         onCreated?.(token);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(
+        e instanceof Error && e.message.startsWith("key limit reached:")
+          ? c(
+              "每个账号最多创建 200 把密钥，请先删除不再使用的密钥。",
+              "This account has reached the 200-key limit. Delete an unused key before creating another.",
+              "بلغ الحساب الحد الأقصى البالغ 200 مفتاح. احذف مفتاحًا غير مستخدم قبل إنشاء آخر.",
+            )
+          : e instanceof Error
+            ? e.message
+            : String(e),
+      );
       if (!(
         e instanceof Object &&
         "status" in e &&
-        [400, 409].includes(Number(e.status))
+        [400, 404, 409].includes(Number(e.status))
       ))
         setOperation((e as { operationId?: string })?.operationId ?? "");
     } finally {
@@ -414,6 +459,77 @@ export function NativeKeyForm({
                   </label>
                 ))}
               </div>
+              <label>
+                <input
+                  id="native-key-smart-access"
+                  type="checkbox"
+                  checked={smartEnabled}
+                  disabled={preservingAutoGroup}
+                  onChange={(event) => {
+                    setSmartEnabled(event.target.checked);
+                    setSmartDirty(true);
+                    setError("");
+                  }}
+                />
+                {c(
+                  "允许智能路由入口",
+                  "Allow smart routing",
+                  "السماح بالتوجيه الذكي",
+                )}
+              </label>
+              {smartEnabled && (
+                <fieldset style={{ minWidth: 0 }}>
+                  <legend>
+                    {c(
+                      "智能候选模型",
+                      "Smart candidate models",
+                      "النماذج المرشحة للتوجيه الذكي",
+                    )}
+                  </legend>
+                  <p>
+                    {c(
+                      "默认从已授权文本模型中按费用选择，可进一步缩小候选范围。取消授权会同时移除对应候选。",
+                      "Cost routing uses authorized text models. Narrow the candidate list here; removing model access also removes its candidacy.",
+                      "يختار التوجيه الأقل تكلفة من النماذج النصية المصرح بها. ضيّق القائمة هنا؛ إلغاء صلاحية نموذج يزيل ترشيحه أيضًا.",
+                    )}
+                  </p>
+                  {smartAvailable.map((model) => (
+                    <label
+                      key={model}
+                      style={{
+                        display: "flex",
+                        gap: ".5rem",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={smartSelected.includes(model)}
+                        disabled={preservingAutoGroup}
+                        onChange={(event) => {
+                          setCandidateModels(
+                            event.target.checked
+                              ? [...smartSelected, model]
+                              : smartSelected.filter((name) => name !== model),
+                          );
+                          setSmartDirty(true);
+                          setError("");
+                        }}
+                      />
+                      <span>{model}</span>
+                    </label>
+                  ))}
+                  {!smartAvailable.length && (
+                    <p role="status">
+                      {c(
+                        "当前没有已授权的文本候选模型。",
+                        "No authorized text candidates are available.",
+                        "لا تتوفر نماذج نصية مرشحة مصرح بها.",
+                      )}
+                    </p>
+                  )}
+                </fieldset>
+              )}
               <label>
                 {c(
                   "消费额度（美元，留空不限额）",

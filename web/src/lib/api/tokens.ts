@@ -36,10 +36,13 @@ export interface Token {
   allow_ips: string;
   auto_groups: string;
   smart_access?: boolean;
+  smart_candidates?: string;
   created_at: number;
 }
 
 export interface TokenCreateInput {
+  smart_access?: boolean;
+  smart_candidates?: string;
   choices_revision?: string;
   name: string;
   remain_quota?: number;
@@ -52,6 +55,8 @@ export interface TokenCreateInput {
 }
 
 export interface TokenUpdateInput {
+  smart_access?: boolean;
+  smart_candidates?: string;
   choices_revision?: string;
   expected_revision?: string;
   id: number;

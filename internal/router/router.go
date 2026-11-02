@@ -83,6 +83,8 @@ func New() http.Handler {
 
 	mux.Handle("POST /api/token", middleware.UserAuth(http.HandlerFunc(controller.CreateToken)))
 	mux.Handle("GET /api/token/owned", middleware.UserAuth(http.HandlerFunc(controller.ListOwnedTokens)))
+	mux.Handle("GET /api/token/{id}", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedToken)))
+	mux.Handle("GET /api/token/{id}/usage", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedTokenUsage)))
 	mux.Handle("GET /api/token/owned-choices", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedTokenChoices)))
 	mux.Handle("POST /api/token/owned-action", middleware.UserAuth(http.HandlerFunc(controller.WriteOwnedToken)))
 	mux.Handle("POST /api/token/owned-receipt", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedTokenReceipt)))

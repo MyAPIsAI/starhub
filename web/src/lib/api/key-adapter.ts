@@ -121,6 +121,9 @@ export function tokenToPreviewKey(
     keySecret: plaintextKey ?? token.key,
     type: "client",
     smartAccess: token.smart_access === true,
+    smartCandidates: token.smart_candidates
+      ? splitList(token.smart_candidates)
+      : undefined,
     modelAccess: token.model_limits ? "custom" : "all",
     allowedModels: token.model_limits
       ? splitList(token.model_limits)

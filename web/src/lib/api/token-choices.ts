@@ -10,7 +10,12 @@ export interface TokenChoices {
   guarded_actions: true;
   user_id: number;
   revision: string;
-  choices: { group: string; model: string; protocols: string[] }[];
+  choices: {
+    group: string;
+    model: string;
+    protocols: string[];
+    smart_eligible?: boolean;
+  }[];
 }
 export function readTokenChoices(value: unknown, owner: number): TokenChoices {
   const v = value as TokenChoices | null;
@@ -28,6 +33,8 @@ export function readTokenChoices(value: unknown, owner: number): TokenChoices {
         !c.group ||
         typeof c.model !== "string" ||
         !c.model ||
+        (c.smart_eligible !== undefined &&
+          typeof c.smart_eligible !== "boolean") ||
         !Array.isArray(c.protocols) ||
         c.protocols.some(
           (p) => !["OpenAI", "Anthropic", "Gemini", "Responses"].includes(p),
