@@ -61,7 +61,7 @@ func TestARCAC11ForeignKeysAreIndistinguishableFromMissingKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, operation := range []string{"view", "usage", "edit", "disable", "regenerate", "delete", "verify", "owned-update", "owned-regenerate", "owned-delete"} {
+	for _, operation := range []string{"view", "usage", "edit", "disable", "regenerate", "delete", "verify", "reveal", "owned-update", "owned-regenerate", "owned-delete"} {
 		t.Run(operation, func(t *testing.T) {
 			responses := []apiResult{}
 			for _, id := range []int64{env.tokenID, 99999999} {
@@ -82,6 +82,9 @@ func TestARCAC11ForeignKeysAreIndistinguishableFromMissingKeys(t *testing.T) {
 				case "verify":
 					method, path = "POST", path+"/verify-password"
 					payload = map[string]any{"expected_user_id": owner, "password": "synthetic-password"}
+				case "reveal":
+					method, path = "POST", path+"/reveal"
+					payload = map[string]any{"expected_user_id": owner, "grant": strings.Repeat("a", 64)}
 				case "owned-update", "owned-regenerate", "owned-delete":
 					method, path = "POST", "/api/token/owned-action"
 					fields := map[string]any{}

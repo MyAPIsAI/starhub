@@ -2,6 +2,8 @@
 *.db-journal
 *.db-wal
 *.db-shm
+# Runtime key encryption material must stay outside version control.
+*.key
 config.yml
 web/node_modules/
 web/dist/

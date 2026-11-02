@@ -2,7 +2,9 @@ package model
 
 import (
 	"errors"
+	"net/netip"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -34,16 +36,23 @@ func (t *Token) AllowsSmartRouting() bool {
 }
 
 type Token struct {
-	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID         int64  `gorm:"index;not null" json:"user_id"`
-	Name           string `gorm:"size:64;not null;default:''" json:"name"`
-	Key            string `gorm:"uniqueIndex;size:64;not null" json:"key"`
-	Status         int    `gorm:"not null;default:1" json:"status"`
-	Group          string `gorm:"column:group;size:64;not null;default:''" json:"group"`
-	ExpiredTime    int64  `gorm:"not null;default:-1" json:"expired_time"`
-	RemainQuota    int64  `gorm:"not null;default:0" json:"remain_quota"`
-	UnlimitedQuota bool   `gorm:"not null;default:false" json:"unlimited_quota"`
-	UsedQuota      int64  `gorm:"not null;default:0" json:"used_quota"`
+	ID              int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID          int64  `gorm:"index;not null" json:"user_id"`
+	Name            string `gorm:"size:64;not null;default:''" json:"name"`
+	Key             string `gorm:"-" json:"key"`
+	KeyCiphertext   string `gorm:"column:key;not null" json:"-"`
+	KeyHash         string `gorm:"uniqueIndex;size:64" json:"-"`
+	Status          int    `gorm:"not null;default:1" json:"status"`
+	Group           string `gorm:"column:group;size:64;not null;default:''" json:"group"`
+	ExpiredTime     int64  `gorm:"not null;default:-1" json:"expired_time"`
+	RemainQuota     int64  `gorm:"not null;default:0" json:"remain_quota"`
+	UnlimitedQuota  bool   `gorm:"not null;default:false" json:"unlimited_quota"`
+	UsedQuota       int64  `gorm:"not null;default:0" json:"used_quota"`
+	QuotaPeriod     string `gorm:"not null;default:'never'" json:"quota_period"`
+	QuotaLimit      int64  `gorm:"not null;default:0" json:"quota_limit"`
+	QuotaTimezone   string `gorm:"not null;default:'Asia/Dubai'" json:"quota_timezone"`
+	PeriodUsedQuota int64  `gorm:"not null;default:0" json:"period_used_quota"`
+	PeriodStartedAt int64  `gorm:"not null;default:0" json:"period_started_at"`
 	// ModelLimits is a comma-separated model whitelist; empty means no limit.
 	// A sub-key can be restricted to cheaper models only.
 	ModelLimits string `gorm:"size:1024;not null;default:''" json:"model_limits"`
@@ -53,7 +62,7 @@ type Token struct {
 	SmartCandidates string `gorm:"size:1024;not null;default:''" json:"smart_candidates"`
 	// AllowIps is a comma-separated IP whitelist; empty means no limit.
 	// Enterprise customers use it to prevent key leakage.
-	AllowIps string `gorm:"size:1024;not null;default:''" json:"allow_ips"`
+	AllowIps string `gorm:"size:4096;not null;default:''" json:"allow_ips"`
 	// AutoGroups is a comma-separated group sequence tried in order when the
 	// token's group is "auto" (cheapest-first, degrade to pricier on failure).
 	AutoGroups string `gorm:"size:512;not null;default:''" json:"auto_groups"`
@@ -62,6 +71,11 @@ type Token struct {
 }
 
 func InsertToken(t *Token) error {
+	var err error
+	t.AllowIps, err = NormalizeTokenIPs(t.AllowIps)
+	if err != nil {
+		return err
+	}
 	if err := ValidateTokenSmartPolicy(t); err != nil {
 		return err
 	}
@@ -137,7 +151,7 @@ func GetTokenByKey(key string) (*Token, error) {
 		return nil, ErrTokenNotFound
 	}
 	var t Token
-	err := DB.Where("key = ?", key).First(&t).Error
+	err := DB.Where("key_hash = ?", tokenKeyHash(key)).First(&t).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrTokenNotFound
 	}
@@ -169,6 +183,13 @@ func ListTokens(userID int64) ([]Token, error) {
 		q = q.Where("user_id = ?", userID)
 	}
 	err := q.Order("id DESC").Find(&tokens).Error
+	if err == nil {
+		for i := range tokens {
+			if err = RefreshTokenPeriod(&tokens[i], time.Now()); err != nil {
+				break
+			}
+		}
+	}
 	return tokens, err
 }
 
@@ -177,6 +198,9 @@ func UpdateTokenFields(id int64, fields map[string]any) error {
 		return nil
 	}
 	fields["revision"] = gorm.Expr("revision + 1")
+	if err := encryptTokenFields(DB, fields); err != nil {
+		return err
+	}
 	return DB.Model(&Token{}).Where("id = ?", id).Updates(fields).Error
 }
 
@@ -251,8 +275,13 @@ func (t *Token) AllowsIP(ip string) bool {
 	if len(ips) == 0 {
 		return true
 	}
+	address, err := netip.ParseAddr(ip)
+	if err != nil || address.Zone() != "" {
+		return false
+	}
 	for _, allowed := range ips {
-		if allowed == ip {
+		prefix, err := common.ParseIPNetwork(allowed)
+		if err == nil && prefix.Contains(address.Unmap()) {
 			return true
 		}
 	}

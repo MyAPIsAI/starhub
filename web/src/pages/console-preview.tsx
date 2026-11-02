@@ -101,6 +101,7 @@ import {
   useRegenerateToken,
   useUpdateToken,
   verifyTokenPassword,
+  revealTokenSecret,
   readOwnedKeyReceipt,
 } from "../lib/api/tokens";
 import { useWallet } from "../lib/api/billing";
@@ -262,8 +263,8 @@ function ConsoleWorkspace() {
     onboardingDismissed ||
     keys.length > 0 ||
     (balanceKnown && BigInt(balance) > 0n);
-  // Unlock only the current owner's locally captured key material. Verification
-  // does not create a new login session or recover old masked credentials.
+  // Reauthentication unlocks this owner's encrypted key for five minutes.
+  const revealGrants = useRef<Record<string, string>>({});
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, number>>(
     {},
   );
@@ -273,11 +274,17 @@ function ConsoleWorkspace() {
   ): Promise<boolean> => {
     if (tokensError || !keys.some((key) => key.id === keyId)) return false;
     try {
-      await verifyTokenPassword(Number(keyId), password, sessionScope);
+      const unlocked = await verifyTokenPassword(
+        Number(keyId),
+        password,
+        sessionScope,
+      );
       if (!isCurrentSession()) return false;
+      revealGrants.current[keyId] = unlocked.grant;
+      setPlaintextKeys((previous) => ({ ...previous, [keyId]: unlocked.key }));
       setRevealedKeyIds((state) => ({
         ...state,
-        [keyId]: Date.now() + 300000,
+        [keyId]: Math.min(unlocked.expires_at * 1000, Date.now() + 300000),
       }));
       return true;
     } catch {
@@ -498,17 +505,32 @@ function ConsoleWorkspace() {
   const isLowBalance = balanceKnown && BigInt(balance) < 5000000000n; // < $5.00
   const isZeroBalance = balanceKnown && BigInt(balance) <= 0n;
 
-  const requestKeySecret = (key: PreviewKey, intent: KeySecretAction) => {
+  const requestKeySecret = async (key: PreviewKey, intent: KeySecretAction) => {
     if (authPendingRef.current || !isCurrentSession()) return;
-    if (revealedKeyIds[key.id] > Date.now()) {
-      // Use the plaintext key if captured in this session (create/
-      // regenerate); otherwise fall back to the masked value from the
-      // backend list endpoint.
-      const secret = plaintextKeys[key.id] ?? key.keySecret;
-      if (intent === "view")
-        setVisibleKeyIds((visible) => ({ ...visible, [key.id]: true }));
-      else void copyText(secret, t("keyCopied"), t("copyFailed"));
-      return;
+    if (revealedKeyIds[key.id] > Date.now() && revealGrants.current[key.id]) {
+      authPendingRef.current = true;
+      try {
+        const unlocked = await revealTokenSecret(
+          Number(key.id),
+          revealGrants.current[key.id],
+          sessionScope,
+        );
+        if (!isCurrentSession()) return;
+        setPlaintextKeys((previous) => ({
+          ...previous,
+          [key.id]: unlocked.key,
+        }));
+        if (intent === "view")
+          setVisibleKeyIds((visible) => ({ ...visible, [key.id]: true }));
+        else void copyText(unlocked.key, t("keyCopied"), t("copyFailed"));
+        return;
+      } catch {
+        if (!isCurrentSession()) return;
+        delete revealGrants.current[key.id];
+        setRevealedKeyIds((previous) => ({ ...previous, [key.id]: 0 }));
+      } finally {
+        authPendingRef.current = false;
+      }
     }
     // A new unlock must not revive a previous reveal when the intent is copy.
     setVisibleKeyIds((visible) => ({ ...visible, [key.id]: false }));
@@ -527,15 +549,23 @@ function ConsoleWorkspace() {
     try {
       if (tokensError || !keys.some((key) => key.id === authRevealKeyId))
         throw Error("The current account's API key could not be verified");
-      await verifyTokenPassword(
+      const unlocked = await verifyTokenPassword(
         Number(authRevealKeyId),
         authPassword,
         sessionScope,
       );
       if (!isCurrentSession()) return;
+      revealGrants.current[authRevealKeyId] = unlocked.grant;
+      setPlaintextKeys((previous) => ({
+        ...previous,
+        [authRevealKeyId]: unlocked.key,
+      }));
       setRevealedKeyIds((s) => ({
         ...s,
-        [authRevealKeyId]: Date.now() + 300000,
+        [authRevealKeyId]: Math.min(
+          unlocked.expires_at * 1000,
+          Date.now() + 300000,
+        ),
       }));
       if (authKeyIntent === "view")
         setVisibleKeyIds((visible) => ({
@@ -543,11 +573,7 @@ function ConsoleWorkspace() {
           [authRevealKeyId]: true,
         }));
       else {
-        const secret =
-          plaintextKeys[authRevealKeyId] ??
-          keys.find((k) => k.id === authRevealKeyId)?.keySecret ??
-          "";
-        void copyText(secret, t("keyCopied"), t("copyFailed"));
+        void copyText(unlocked.key, t("keyCopied"), t("copyFailed"));
       }
       setAuthRevealKeyId(null);
       setAuthPassword("");

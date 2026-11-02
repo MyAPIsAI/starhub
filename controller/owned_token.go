@@ -67,7 +67,7 @@ func GetOwnedTokenChoices(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	common.ApiSuccess(w, map[string]any{"schema": "owned_token_choices_v1", "guarded_actions": true, "user_id": owner, "revision": state.Revision, "choices": state.Choices})
+	common.ApiSuccess(w, map[string]any{"schema": "owned_token_choices_v1", "guarded_actions": true, "user_id": owner, "revision": state.Revision, "choices": state.Choices, "quota_timezone": state.QuotaTimezone})
 }
 
 type ownedTokenAction struct {
@@ -123,7 +123,12 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 		fields["smart_candidates"] = strings.TrimSpace(*p.SmartCandidates)
 	}
 	if p.AllowIps != nil {
-		fields["allow_ips"] = strings.TrimSpace(*p.AllowIps)
+		ips, err := model.NormalizeTokenIPs(strings.TrimSpace(*p.AllowIps))
+		if err != nil {
+			common.ApiError(w, 400, err.Error())
+			return
+		}
+		fields["allow_ips"] = ips
 	}
 	if p.AutoGroups != nil {
 		fields["auto_groups"] = strings.TrimSpace(*p.AutoGroups)
@@ -143,7 +148,13 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 	if p.ExpiredTime != nil {
 		fields["expired_time"] = *p.ExpiredTime
 	}
-	for _, v := range []string{stringValue(fields, "model_limits"), stringValue(fields, "smart_candidates"), stringValue(fields, "allow_ips"), stringValue(fields, "auto_groups")} {
+	if p.QuotaPeriod != nil {
+		fields["quota_period"] = *p.QuotaPeriod
+	}
+	if p.QuotaLimit != nil {
+		fields["quota_limit"] = *p.QuotaLimit
+	}
+	for _, v := range []string{stringValue(fields, "model_limits"), stringValue(fields, "smart_candidates"), stringValue(fields, "auto_groups")} {
 		if len(v) > 1024 {
 			common.ApiError(w, 400, "key policy exceeds limit")
 			return
@@ -187,7 +198,7 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, 409, "key balance changed")
 			return
 		}
-		if p.UnlimitedQuota != nil && !*p.UnlimitedQuota && token.UnlimitedQuota && p.RemainQuota == nil {
+		if p.UnlimitedQuota != nil && !*p.UnlimitedQuota && token.UnlimitedQuota && p.RemainQuota == nil && p.QuotaLimit == nil {
 			common.ApiError(w, 400, "remaining quota required")
 			return
 		}
@@ -240,7 +251,13 @@ func GetOwnedToken(w http.ResponseWriter, r *http.Request) {
 
 func GetOwnedTokenUsage(w http.ResponseWriter, r *http.Request) {
 	if token, ok := ownedTokenFromPath(w, r); ok {
-		common.ApiSuccess(w, map[string]any{"token_id": token.ID, "used_quota": token.UsedQuota, "remain_quota": token.RemainQuota, "unlimited_quota": token.UnlimitedQuota})
+		var periods []model.TokenQuotaPeriod
+		if err := model.DB.Where("token_id = ?", token.ID).Order("started_at DESC").Find(&periods).Error; err != nil {
+			common.ApiError(w, 500, "key period history unavailable")
+			return
+		}
+		common.ApiSuccess(w, map[string]any{"token_id": token.ID, "used_quota": token.UsedQuota, "remain_quota": token.RemainQuota, "unlimited_quota": token.UnlimitedQuota,
+			"quota_period": token.QuotaPeriod, "quota_limit": token.QuotaLimit, "quota_timezone": token.QuotaTimezone, "period_used_quota": token.PeriodUsedQuota, "period_started_at": token.PeriodStartedAt, "periods": periods})
 	}
 }
 func stringValue(fields map[string]any, key string) string {

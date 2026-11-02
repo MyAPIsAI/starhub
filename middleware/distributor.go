@@ -220,6 +220,28 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 						"the model is not in the token's model whitelist")
 					return
 				}
+				if !isAutoModel(modelName) {
+					groups := []string{group}
+					if group == common.AutoGroup {
+						groups, _ = r.Context().Value(common.CtxAutoGroups).([]string)
+					}
+					available := false
+					for _, candidateGroup := range groups {
+						models, err := model.ListModelsByGroup(candidateGroup)
+						if err != nil {
+							fail(500, "model_lookup_failed", "model availability unavailable")
+							return
+						}
+						if modelInList(modelName, models) {
+							available = true
+							break
+						}
+					}
+					if !available {
+						fail(http.StatusNotFound, "model_not_found", "the authorized model is no longer deployed")
+						return
+					}
+				}
 			}
 
 			if autoModelSelected {

@@ -362,9 +362,11 @@ export default function RequestInspector({
             <div>
               <dt>{text("使用密钥", "Key", "المفتاح")}</dt>
               <dd>
-                {key?.name ??
-                  record.key_id ??
-                  text("历史样例", "Historical sample", "عينة سابقة")}
+                {record.key_deleted
+                  ? text("已删除的 Key", "Deleted key", "مفتاح محذوف")
+                  : (key?.name ??
+                    record.key_id ??
+                    text("历史样例", "Historical sample", "عينة سابقة"))}
               </dd>
             </div>
             <div>
