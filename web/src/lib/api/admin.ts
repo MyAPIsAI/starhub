@@ -109,6 +109,36 @@ export interface ChannelTestResult {
   status: number;
 }
 
+/** Per-key upstream usage from /api/channel/{id}/upstream-usage. */
+export interface UpstreamKeyUsage {
+  key_index: number;
+  key_masked: string;
+  available: boolean;
+  error?: string;
+  name?: string;
+  total_used: number;
+  total_available: number;
+  total_granted: number;
+  unlimited: boolean;
+  expires_at: number;
+  model_limits?: unknown;
+  user_quota?: {
+    total_available: number;
+    total_used: number;
+  };
+}
+
+/** Aggregated upstream usage result. */
+export interface UpstreamUsageResult {
+  channel_id: number;
+  channel_name: string;
+  local_used_quota: number;
+  keys: UpstreamKeyUsage[];
+  upstream_total_used: number;
+  diff: number;
+  supported: boolean;
+}
+
 // --- Query keys ---
 
 const ADMIN_USERS_KEY = ["admin-users"] as const;
@@ -178,6 +208,13 @@ export function useTestChannel() {
       queryClient.invalidateQueries({ queryKey: ADMIN_CHANNELS_KEY });
       queryClient.invalidateQueries({ queryKey: ADMIN_METRICS_KEY });
     },
+  });
+}
+
+export function useUpstreamUsage() {
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiGet<UpstreamUsageResult>(`/api/channel/${id}/upstream-usage`),
   });
 }
 

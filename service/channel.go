@@ -3,11 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"starhub/common"
@@ -17,6 +19,10 @@ import (
 )
 
 var probeHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
+// upstreamUsageHTTPClient is a short-timeout client for upstream usage
+// queries; it must not block the admin UI when the upstream is slow.
+var upstreamUsageHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // disableKeywords are substrings (lower-cased) that prove an upstream channel
 // is misconfigured; finding one in an error body is enough to auto-disable.
@@ -183,4 +189,161 @@ func ApplyProbeResult(ch *model.Channel, res ProbeResult) int {
 			ch.ID, res.KeyIdx)
 	}
 	return ch.Status
+}
+
+// UpstreamKeyUsage is the per-key usage snapshot fetched from the upstream
+// new-api instance. It mirrors the fields returned by /api/usage/token/.
+type UpstreamKeyUsage struct {
+	KeyIndex       int    `json:"key_index"`
+	KeyMasked      string `json:"key_masked"`
+	Available      bool   `json:"available"`
+	Error          string `json:"error,omitempty"`
+	Name           string `json:"name,omitempty"`
+	TotalUsed      int64  `json:"total_used"`
+	TotalAvailable int64  `json:"total_available"`
+	TotalGranted   int64  `json:"total_granted"`
+	Unlimited      bool   `json:"unlimited"`
+	ExpiresAt      int64  `json:"expires_at"`
+	ModelLimits    any    `json:"model_limits,omitempty"`
+	UserQuota      *struct {
+		TotalAvailable int64 `json:"total_available"`
+		TotalUsed      int64 `json:"total_used"`
+	} `json:"user_quota,omitempty"`
+}
+
+// UpstreamUsageResult is the aggregated response for all keys of a channel.
+type UpstreamUsageResult struct {
+	ChannelID      int64              `json:"channel_id"`
+	ChannelName    string             `json:"channel_name"`
+	LocalUsedQuota int64              `json:"local_used_quota"`
+	Keys           []UpstreamKeyUsage `json:"keys"`
+	UpstreamTotal  int64              `json:"upstream_total_used"`
+	Diff           int64              `json:"diff"`
+	Supported      bool               `json:"supported"`
+}
+
+// FetchUpstreamTokenUsage queries the upstream new-api instance for each key
+// of the channel and returns the per-key usage plus a reconciliation diff
+// against the local Channel.UsedQuota. Multi-key channels are queried
+// concurrently (max 5 parallel requests). Upstreams that are not new-api or
+// do not expose /api/usage/token/ are reported as unsupported without error.
+func FetchUpstreamTokenUsage(ctx context.Context, ch *model.Channel) (*UpstreamUsageResult, error) {
+	result := &UpstreamUsageResult{
+		ChannelID:      ch.ID,
+		ChannelName:    ch.Name,
+		LocalUsedQuota: ch.UsedQuota,
+		Keys:           nil,
+		Supported:      false,
+	}
+	if ch.BaseURL == "" {
+		return result, nil
+	}
+	keys := ch.Keys()
+	if len(keys) == 0 {
+		return result, nil
+	}
+	base := strings.TrimRight(strings.TrimSpace(ch.BaseURL), "/")
+
+	type queryResult struct {
+		idx   int
+		usage UpstreamKeyUsage
+	}
+	results := make([]UpstreamKeyUsage, len(keys))
+	sem := make(chan struct{}, 5)
+	var wg sync.WaitGroup
+	for i, key := range keys {
+		wg.Add(1)
+		go func(idx int, keyVal string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			usage := fetchOneUpstreamKey(ctx, base, keyVal, idx)
+			results[idx] = usage
+		}(i, key)
+	}
+	wg.Wait()
+
+	result.Keys = results
+	supported := false
+	var upstreamTotal int64
+	for i := range results {
+		if results[i].Available {
+			supported = true
+			upstreamTotal += results[i].TotalUsed
+		}
+	}
+	result.Supported = supported
+	result.UpstreamTotal = upstreamTotal
+	result.Diff = upstreamTotal - ch.UsedQuota
+	return result, nil
+}
+
+func fetchOneUpstreamKey(ctx context.Context, base, key string, idx int) UpstreamKeyUsage {
+	u := UpstreamKeyUsage{
+		KeyIndex:  idx,
+		KeyMasked: maskKey(key),
+	}
+	if key == "" {
+		u.Error = "key is empty"
+		return u
+	}
+	url := base + "/api/usage/token/"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		u.Error = "build request failed: " + err.Error()
+		return u
+	}
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Accept", "application/json")
+	resp, err := upstreamUsageHTTPClient.Do(req)
+	if err != nil {
+		u.Error = "request failed: " + err.Error()
+		return u
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+		u.Error = "upstream does not support usage queries (not a new-api instance)"
+		return u
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		u.Error = "upstream token invalid or disabled"
+		return u
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		u.Error = fmt.Sprintf("upstream returned %d", resp.StatusCode)
+		return u
+	}
+	var wrapper struct {
+		Success bool            `json:"success"`
+		Message string          `json:"message"`
+		Code    bool            `json:"code"`
+		Data    json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &wrapper); err != nil {
+		u.Error = "parse response failed: " + err.Error()
+		return u
+	}
+	var data UpstreamKeyUsage
+	raw := body
+	if len(wrapper.Data) > 0 {
+		raw = wrapper.Data
+	}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		u.Error = "parse usage data failed: " + err.Error()
+		return u
+	}
+	data.KeyIndex = idx
+	data.KeyMasked = maskKey(key)
+	data.Available = true
+	return data
+}
+
+// maskKey returns a masked representation of a key for display: first 7 and
+// last 4 characters visible, middle replaced with asterisks.
+func maskKey(key string) string {
+	if len(key) <= 11 {
+		return strings.Repeat("*", len(key))
+	}
+	return key[:7] + strings.Repeat("*", len(key)-11) + key[len(key)-4:]
 }

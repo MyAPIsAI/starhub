@@ -40,11 +40,13 @@ import {
   useAdminMetrics,
   useAdminChannels,
   useTestChannel,
+  useUpstreamUsage,
   userIsActive,
   userStatusText,
   quotaToUsd,
   type AdminUser,
   type ChannelTestResult,
+  type UpstreamUsageResult,
 } from "../../lib/api/admin";
 import {
   useCreateChannel,
@@ -140,6 +142,12 @@ export default function AdminPortal() {
   const [testResults, setTestResults] = useState<
     Record<number, ChannelTestResult | string>
   >({});
+
+  // Upstream usage reconciliation modal state.
+  const upstreamMut = useUpstreamUsage();
+  const [upstreamModal, setUpstreamModal] = useState<UpstreamUsageResult | null>(null);
+  const [upstreamLoading, setUpstreamLoading] = useState(false);
+  const [upstreamError, setUpstreamError] = useState<string | null>(null);
 
   // Channel create/edit modal state.
   const [channelModalOpen, setChannelModalOpen] = useState(false);
@@ -1301,6 +1309,34 @@ export default function AdminPortal() {
                             <Button
                               size="small"
                               variant="secondary"
+                              disabled={upstreamLoading && upstreamModal?.channel_id === ch.id}
+                              onClick={() => {
+                                setUpstreamModal(null);
+                                setUpstreamError(null);
+                                setUpstreamLoading(true);
+                                upstreamMut.mutate(ch.id, {
+                                  onSuccess: (res) => {
+                                    setUpstreamModal(res);
+                                    setUpstreamLoading(false);
+                                  },
+                                  onError: (err) => {
+                                    setUpstreamError(
+                                      err instanceof ApiError
+                                        ? err.message
+                                        : text("查询失败", "Query failed", "فشل الاستعلام"),
+                                    );
+                                    setUpstreamLoading(false);
+                                  },
+                                });
+                              }}
+                            >
+                              {upstreamLoading && upstreamMut.variables === ch.id
+                                ? text("查询中…", "Querying…", "استعلام…")
+                                : text("上游对账", "Reconcile", "مطابقة")}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="secondary"
                               onClick={() => {
                                 setEditingChannel(ch.id);
                                 setChannelForm({
@@ -1352,6 +1388,242 @@ export default function AdminPortal() {
                 </tbody>
               </table>
             </section>
+
+            {/* Upstream usage reconciliation modal */}
+            {upstreamError && (
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(0,0,0,0.4)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 1000,
+                }}
+                onClick={() => setUpstreamError(null)}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    background: "var(--bg)",
+                    borderRadius: 12,
+                    padding: 24,
+                    maxWidth: 480,
+                    width: "90%",
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+                  }}
+                >
+                  <p style={{ color: "var(--danger)", margin: "0 0 16px 0" }}>
+                    {upstreamError}
+                  </p>
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    onClick={() => setUpstreamError(null)}
+                  >
+                    {text("关闭", "Close", "إغلاق")}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {upstreamModal && (
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(0,0,0,0.4)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 1000,
+                }}
+                onClick={() => setUpstreamModal(null)}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    background: "var(--bg)",
+                    borderRadius: 12,
+                    padding: 24,
+                    maxWidth: 680,
+                    width: "90%",
+                    maxHeight: "80vh",
+                    overflow: "auto",
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 16,
+                    }}
+                  >
+                    <h3 style={{ margin: 0, fontSize: "var(--text-lg)" }}>
+                      {text("上游对账", "Upstream Reconciliation", "مطابقة المنبع")}
+                    </h3>
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      onClick={() => setUpstreamModal(null)}
+                    >
+                      {text("关闭", "Close", "إغلاق")}
+                    </Button>
+                  </div>
+                  <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)", margin: "0 0 16px 0" }}>
+                    {upstreamModal.channel_name} (ID: {upstreamModal.channel_id})
+                  </p>
+                  {!upstreamModal.supported ? (
+                    <p style={{ color: "var(--muted)" }}>
+                      {text(
+                        "上游不支持用量查询（可能不是 new-api 实例）",
+                        "Upstream does not support usage queries (may not be a new-api instance)",
+                        "المنبع لا يدعم استعلامات الاستخدام",
+                      )}
+                    </p>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 24,
+                          marginBottom: 16,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                            {text("本地累计", "Local Used", "المحلي")}
+                          </div>
+                          <div className="mono" style={{ fontSize: "var(--text-lg)" }}>
+                            {quotaToUsd(upstreamModal.local_used_quota)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                            {text("上游累计", "Upstream Used", "المنبع")}
+                          </div>
+                          <div className="mono" style={{ fontSize: "var(--text-lg)" }}>
+                            {quotaToUsd(upstreamModal.upstream_total_used)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                            {text("差异", "Diff", "الفرق")}
+                          </div>
+                          <div
+                            className="mono"
+                            style={{
+                              fontSize: "var(--text-lg)",
+                              color:
+                                Math.abs(upstreamModal.diff) > 100000
+                                  ? "var(--warning, #e0a030)"
+                                  : "var(--success)",
+                            }}
+                          >
+                            {upstreamModal.diff >= 0 ? "+" : ""}
+                            {quotaToUsd(upstreamModal.diff)}
+                          </div>
+                        </div>
+                      </div>
+                      <table
+                        style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          fontSize: "var(--text-sm)",
+                        }}
+                      >
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                            <th style={{ textAlign: "start", padding: "8px 12px" }}>Key</th>
+                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                              {text("已用", "Used", "مستخدم")}
+                            </th>
+                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                              {text("剩余", "Available", "متاح")}
+                            </th>
+                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                              {text("过期", "Expires", "تنتهي")}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {upstreamModal.keys.map((k) => (
+                            <tr
+                              key={k.key_index}
+                              style={{ borderBottom: "1px solid var(--border)" }}
+                            >
+                              <td
+                                className="mono"
+                                style={{
+                                  padding: "8px 12px",
+                                  fontSize: "var(--text-xs)",
+                                }}
+                              >
+                                {k.key_masked}
+                                {!k.available && (
+                                  <span
+                                    style={{
+                                      marginLeft: 8,
+                                      fontSize: 11,
+                                      color: "var(--danger)",
+                                    }}
+                                  >
+                                    {k.error || text("不可用", "N/A", "غير متاح")}
+                                  </span>
+                                )}
+                              </td>
+                              <td
+                                className="mono"
+                                style={{ padding: "8px 12px", textAlign: "end" }}
+                              >
+                                {k.available ? quotaToUsd(k.total_used) : "—"}
+                              </td>
+                              <td
+                                className="mono"
+                                style={{
+                                  padding: "8px 12px",
+                                  textAlign: "end",
+                                  color:
+                                    k.available &&
+                                    !k.unlimited &&
+                                    k.total_available < 100000
+                                      ? "var(--danger)"
+                                      : "inherit",
+                                }}
+                              >
+                                {k.available
+                                  ? k.unlimited
+                                    ? text("无限", "Unlimited", "غير محدود")
+                                    : quotaToUsd(k.total_available)
+                                  : "—"}
+                              </td>
+                              <td
+                                className="mono"
+                                style={{ padding: "8px 12px", textAlign: "end" }}
+                              >
+                                {k.available && k.expires_at > 0
+                                  ? new Date(k.expires_at * 1000).toLocaleDateString()
+                                  : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 16 }}>
+                        {text(
+                          "差异可能来自倍率不同、精度差异或退款同步延迟，不一定代表计费错误。",
+                          "The diff may stem from different multipliers, rounding, or refund sync delays, and does not necessarily indicate a billing error.",
+                          "قد ينبع الفرق من معدلات مختلفة أو تأخر المزامنة ولا يعني بالضرورة خطأ في الفوترة.",
+                        )}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
