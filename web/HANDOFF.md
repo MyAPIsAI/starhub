@@ -1,3 +1,15 @@
+# Key choices retry visibility · 2026-11-02
+
+- Removed the always-visible Reload key choices action from the create/edit drawer. A localized Retry button now appears only after choices loading fails; loading uses a status message, success removes the retry action, and drafts remain intact through recovery.
+- Verification: 937 frontend tests passed with 4 existing skips; production build and twelve language/theme/viewport browser combinations passed. Browser checks inject a labeled choices-load failure, verify saving is blocked, retry against the real backend and confirm draft preservation and button removal. Evidence: [browser report](../output/key-choices-retry-20261102/browser/browser-report.json), [normal mobile form](../output/key-choices-retry-20261102/browser/key-collapsed-zh-dark-390.png), [failed-load mobile form](../output/key-choices-retry-20261102/browser/key-choices-error-zh-dark-390.png).
+
+# M3 PRD repairs on dev-wyc · 2026-11-02
+
+- Completed the resumed repairs on `dev-wyc`. Key quota shortfalls return `key_quota_exceeded`, account balance shortfalls return `insufficient_balance`, and disabled/deleted service groups return `tier_capacity_unavailable`, including gateways retaining old ratios. Accepted requests collect actual cost beyond the key limit when account funds suffice; subsequent requests are blocked, and period resets preserve the overrun history.
+- Group multipliers allow 0–100 with exact four-decimal precision across both current and legacy configuration paths. Explicit zero survives pricing snapshots and settles to zero. Pristine installations atomically seed the four PRD groups and targets; existing configuration, edits and deletions are preserved. Key names consistently use 1–50 Unicode characters in both APIs and the drawer.
+- Verification: Go build/vet and the full Go suite pass; frontend tests have 937 passed and 4 existing skips, and the production build passes. Twelve browser combinations cover Chinese/English/Arabic, light/dark and desktop/390px, including free-group saving and exact precision. Additional browser flows verify rotation/deletion confirmation, retained deleted-key usage and the non-red 99-percent quota state. All 23 cases in the user's list pass; AC-22 and AC-23 remain outside this requested list. Validation uses isolated databases and synthetic local providers.
+- Evidence: [per-case report](../output/key-prd-resume-20261102/report.html), [structured report](../output/key-prd-resume-20261102/report.json), [full Go results](../output/key-prd-resume-20261102/go-tests-final.jsonl). User services and databases have not been replaced or restarted.
+
 # Key disclosure defaults · 2026-11-02
 
 - Removed the model-permission step number and its reserved indentation. Model permissions and Access control now start collapsed in create/edit drawers; validation still expands and focuses the relevant section without clearing drafts.

@@ -51,6 +51,7 @@ export function NativeKeyForm({
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
   const choices = query.isError ? undefined : query.data,
     initialRevision = useRef<string>();
+  const choicesFailed = query.isError && !query.isFetching;
   if (!initialRevision.current && choices && !query.isFetching)
     initialRevision.current = choices.revision;
   const [name, setName] = useState(item?.name ?? ""),
@@ -452,8 +453,9 @@ export function NativeKeyForm({
                 <Input
                   id={item ? "edit-key-name" : "new-key-name"}
                   value={name}
-                  maxLength={50}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) =>
+                    setName(Array.from(e.target.value).slice(0, 50).join(""))
+                  }
                 />
               </label>
               <label>
@@ -748,12 +750,21 @@ export function NativeKeyForm({
               </section>
             </fieldset>
           </form>
-          {!choices && (
+          {!choices && query.isFetching && (
+            <p role="status">
+              {c(
+                "正在加载服务分组和模型…",
+                "Loading service groups and models…",
+                "جارٍ تحميل مجموعات الخدمة والنماذج…",
+              )}
+            </p>
+          )}
+          {choicesFailed && (
             <p role="alert">
               {c(
-                "尚未确认服务器密钥选项，请重新读取。",
-                "Server key choices are unconfirmed. Reload to retry.",
-                "خيارات مفاتيح الخادم غير مؤكدة. أعد التحميل.",
+                "无法加载服务分组和模型，请重试。",
+                "Unable to load service groups and models. Please retry.",
+                "تعذر تحميل مجموعات الخدمة والنماذج. أعد المحاولة.",
               )}
             </p>
           )}
@@ -777,16 +788,15 @@ export function NativeKeyForm({
             </>
           )}
           {receipt && <p role="status">{receipt}</p>}
-          <Button
-            disabled={busy || query.isFetching || !!operation}
-            onClick={() => void query.refetch()}
-          >
-            {c(
-              "重新读取密钥选项",
-              "Reload key choices",
-              "إعادة تحميل خيارات المفاتيح",
-            )}
-          </Button>
+          {choicesFailed && (
+            <Button
+              id="native-key-choices-retry"
+              disabled={busy || query.isFetching || !!operation}
+              onClick={() => void query.refetch()}
+            >
+              {c("重试", "Retry", "إعادة المحاولة")}
+            </Button>
+          )}
         </div>
       )}
     </Drawer>

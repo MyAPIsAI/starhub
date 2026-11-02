@@ -119,7 +119,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
       description: original?.description ?? "",
       multiplier:
         original?.multiplier ??
-        (ratio !== undefined && ratio > 0 && ratio <= 100
+        (ratio !== undefined && ratio >= 0 && ratio <= 100
           ? String(ratio)
           : id
             ? ""
@@ -646,9 +646,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   />
                   <small id="group-ratio-help">
                     {text(
-                      "大于 0，不超过 100。",
-                      "Greater than 0 and at most 100.",
-                      "أكبر من 0 وحتى 100.",
+                      "0–100，最多四位小数；0 表示免费分组。",
+                      "0–100 with at most four decimal places; 0 makes the group free.",
+                      "من 0 إلى 100 بأربع منازل عشرية كحد أقصى؛ 0 يجعل المجموعة مجانية.",
                     )}
                   </small>
                 </label>

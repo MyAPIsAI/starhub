@@ -74,8 +74,9 @@ func resolvePricing(model, group, userGroup string, at time.Time) PricingInputs 
 	p := PricingInputs{}
 	p.ModelRatio, p.HasModelRatio = LookupModelRatio(model)
 	p.CompletionRatio, p.HasCompletion = LookupCompletionRatio(model)
-	p.GroupRatio, _ = GroupRatioValue(group)
-	if p.GroupRatio <= 0 {
+	var configuredGroup bool
+	p.GroupRatio, configuredGroup = GroupRatioValue(group)
+	if !configuredGroup || p.GroupRatio < 0 {
 		p.GroupRatio = 1
 	}
 	p.GroupGroupRatio = 1

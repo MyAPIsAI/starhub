@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"starhub/common"
+	"starhub/model"
 	"starhub/setting"
 )
 
@@ -81,7 +82,7 @@ func TestUpsertServiceGroupValidation(t *testing.T) {
 		{"empty group_id", `{"group_id":"","name":"X","multiplier":"1"}`},
 		{"invalid group_id", `{"group_id":"UPPER","name":"X","multiplier":"1"}`},
 		{"empty name", `{"group_id":"x","name":"","multiplier":"1"}`},
-		{"zero multiplier", `{"group_id":"x","name":"X","multiplier":"0"}`},
+		{"excess multiplier precision", `{"group_id":"xx","name":"X","multiplier":"0.12345"}`},
 		{"negative multiplier", `{"group_id":"x","name":"X","multiplier":"-1"}`},
 		{"too large multiplier", `{"group_id":"x","name":"X","multiplier":"101"}`},
 		{"custom without accounts", `{"group_id":"x","name":"X","multiplier":"1","visibility":"custom"}`},
@@ -145,6 +146,10 @@ func TestDeleteServiceGroupNotFound(t *testing.T) {
 func TestListServiceGroups(t *testing.T) {
 	newTestDB(t)
 	admin := newUser(t, "admin", common.RoleAdmin, 1000)
+	existing, err := model.ListServiceGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	call(UpsertServiceGroup, testRequest{
 		method: http.MethodPut,
@@ -168,8 +173,8 @@ func TestListServiceGroups(t *testing.T) {
 	})
 	var groups []map[string]any
 	decodeData(t, rr, &groups)
-	if len(groups) != 2 {
-		t.Fatalf("got %d groups, want 2", len(groups))
+	if len(groups) != len(existing)+2 {
+		t.Fatalf("got %d groups, want %d", len(groups), len(existing)+2)
 	}
 }
 

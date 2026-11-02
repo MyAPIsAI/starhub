@@ -23,13 +23,13 @@ func TestTokenGroupEditsUseOwnerScopeAndAllowRevokedKeyDisable(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, body := range []string{`{"group":"private"}`, `{"group":"disabled"}`, `{"group":"auto","auto_groups":"default,private"}`} {
+	for _, body := range []string{`{"name":"Scoped","group":"private"}`, `{"name":"Scoped","group":"disabled"}`, `{"name":"Scoped","group":"auto","auto_groups":"default,private"}`} {
 		expectError(t, call(CreateToken, testRequest{method: "POST", target: "/api/token", body: body, userID: owner.ID, role: owner.Role}), 403, "cannot access")
 	}
 	if err := model.UpdateUserFields(owner.ID, map[string]any{"group": "private"}); err != nil {
 		t.Fatal(err)
 	}
-	expectError(t, call(CreateToken, testRequest{method: "POST", target: "/api/token", body: `{}`, userID: owner.ID, role: owner.Role}), 403, "cannot access")
+	expectError(t, call(CreateToken, testRequest{method: "POST", target: "/api/token", body: `{"name":"Scoped"}`, userID: owner.ID, role: owner.Role}), 403, "cannot access")
 	key := mustToken(t, owner.ID, 1000)
 	update := func(body string) *httptest.ResponseRecorder {
 		return call(UpdateToken, testRequest{method: "PUT", target: "/api/token", body: body, userID: admin.ID, role: admin.Role})

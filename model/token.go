@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 
@@ -17,6 +18,15 @@ var (
 )
 
 const MaxTokensPerUser = 200
+
+func ValidateTokenName(name string) error {
+	name = strings.TrimSpace(name)
+	length := utf8.RuneCountInString(name)
+	if !utf8.ValidString(name) || length < 1 || length > 50 {
+		return errors.New("key name must contain 1-50 Unicode characters")
+	}
+	return nil
+}
 
 // AllowsSmartRouting honors explicit policy while preserving legacy key behavior.
 // Virtual-only allowlists cannot authorize any actual upstream model.

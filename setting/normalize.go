@@ -29,7 +29,7 @@ func NormalizeOption(key, value string) (string, error) {
 		}
 		return catalog.JSON(), nil
 	case OptionKeyGroupRatio, OptionKeyModelRatio, OptionKeyCompletionRatio:
-		m, err := parseRatioMap(value)
+		m, err := parseRatioOption(key, value)
 		if err != nil {
 			return "", fmt.Errorf("invalid value for %s: %w", key, err)
 		}

@@ -809,9 +809,14 @@ func validateInboundChat(body []byte, ir *dto.ChatRequest, inbound dto.InboundFo
 }
 
 func writePreConsumeError(w http.ResponseWriter, inbound dto.InboundFormat, err error) {
-	if errors.Is(err, relay.ErrInsufficientTokenQuota) || errors.Is(err, relay.ErrInsufficientUserQuota) {
+	if errors.Is(err, relay.ErrInsufficientTokenQuota) {
 		dto.WriteRelayError(w, http.StatusForbidden, inbound,
-			"insufficient_quota", "insufficient_quota", err.Error())
+			"insufficient_quota", "key_quota_exceeded", err.Error())
+		return
+	}
+	if errors.Is(err, relay.ErrInsufficientUserQuota) {
+		dto.WriteRelayError(w, http.StatusForbidden, inbound,
+			"insufficient_quota", "insufficient_balance", err.Error())
 		return
 	}
 	dto.WriteRelayError(w, http.StatusInternalServerError, inbound,

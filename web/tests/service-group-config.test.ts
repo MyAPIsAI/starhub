@@ -139,11 +139,20 @@ describe("authoritative group configuration", () => {
       readManagedServiceGroup({ ...group, multiplier: "NaN" }).multiplier,
     ).toBe("NaN");
   });
-  it.each(["0", "-1", "NaN", "Infinity", "100.1", "0x10", "1e999", ""])(
-    "rejects invalid write multiplier %s",
-    (value) => expect(validGroupMultiplier(value)).toBe(false),
+  it.each([
+    "-1",
+    "NaN",
+    "Infinity",
+    "100.1",
+    "0x10",
+    "1e999",
+    "0.12345",
+    "1e-5",
+    "",
+  ])("rejects invalid write multiplier %s", (value) =>
+    expect(validGroupMultiplier(value)).toBe(false),
   );
-  it.each(["1", ".5", "100", "1e-3", "+.5"])(
+  it.each(["0", "1", ".5", "100", "1e-3", "+.5", "0.1234", "1e-4", "0.0003"])(
     "accepts supported finite multiplier %s",
     (value) => expect(validGroupMultiplier(value)).toBe(true),
   );

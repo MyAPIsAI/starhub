@@ -15,6 +15,10 @@ func TestGroupConfigurationHandlerRollsBackStorageFailures(t *testing.T) {
 	admin := newUser(t, "atomic-admin", common.RoleAdmin, 1000)
 	request := testRequest{method: "PUT", target: "/api/service-group", userID: admin.ID, role: common.RoleAdmin, body: `{"group_id":"managed","name":"Original","multiplier":"0.8","enabled":true}`}
 	expectStatus(t, call(UpsertServiceGroup, request), 200)
+	beforeGroups, err := model.ListServiceGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
 	before, err := model.GetServiceGroup("managed")
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +48,7 @@ func TestGroupConfigurationHandlerRollsBackStorageFailures(t *testing.T) {
 		t.Fatal("failed API changed metadata")
 	}
 	groups, err := model.ListServiceGroups()
-	if err != nil || len(groups) != 1 {
+	if err != nil || !reflect.DeepEqual(groups, beforeGroups) {
 		t.Fatal("failed create left a group")
 	}
 	afterOptions, err := model.AllOptions()

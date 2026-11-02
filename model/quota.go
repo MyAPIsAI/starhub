@@ -83,10 +83,10 @@ func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) erro
 }
 
 // SettleQuota settles both balances, usage counters and the log atomically.
-// A shortfall caps the extra charge at the smaller available balance. Both
-// balances and all counters use the same collected amount; the log retains
-// the uncollected cost separately. The caller's log is updated only after
-// commit so downstream rebates can use the amount actually collected.
+// Account funds bound collection; an accepted request may exceed its key limit.
+// A negative key remainder blocks subsequent reservations until a reset or edit.
+// All counters and the log use the collected amount, with unfunded account cost
+// retained separately. The caller's log changes only after commit.
 func SettleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64, entry *Log) error {
 	return settleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry, nil)
 }
@@ -121,8 +121,7 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
-			// An accepted task outlives deletion of its key. Refund the owner,
-			// but do not collect extra limited-key quota from an absent key.
+			// An accepted task outlives deletion of its key and settles to its owner.
 			var exists int64
 			if queryErr := tx.Model(&Token{}).Where("id = ?", tokenID).Count(&exists).Error; queryErr != nil {
 				return queryErr
@@ -144,9 +143,6 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 				return err
 			}
 			collectedDelta := min(delta, max(user.Quota, 0))
-			if chargeToken {
-				collectedDelta = min(collectedDelta, max(token.RemainQuota, 0))
-			}
 			settled.UnfundedQuota = delta - collectedDelta
 			settled.Quota = actual - settled.UnfundedQuota
 			if chargeToken {

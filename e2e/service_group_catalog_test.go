@@ -13,6 +13,10 @@ import (
 
 func TestGroupCatalogPolicyAndIndependentPriceRevisionGuard(t *testing.T) {
 	env := setupRelayApp(t)
+	// Keep this fixture empty to cover guarded creation without definitions.
+	if err := model.DB.Where("group_id IN ?", []string{"ultra", "pro", "standard", "lite"}).Delete(&model.ServiceGroupConfig{}).Error; err != nil {
+		t.Fatal(err)
+	}
 	type groupRow struct {
 		ID         int64  `json:"id"`
 		Revision   int64  `json:"revision"`

@@ -37,7 +37,7 @@ func TestGroupConfigurationRoutesKeepUnrelatedPricesAndApplyExplicitDisable(t *t
 		t.Fatal("disabled default silently reenabled")
 	}
 	res := doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey, map[string]any{"model": "gpt-4o", "messages": []any{map[string]any{"role": "user", "content": "must not forward"}}})
-	if res.Status != 403 || !strings.Contains(res.Body, "group_not_available") {
+	if res.Status != 403 || !strings.Contains(res.Body, "tier_capacity_unavailable") {
 		t.Fatalf("disabled group reached relay: %d %s", res.Status, res.Body)
 	}
 	put("managed", "0.6", true)

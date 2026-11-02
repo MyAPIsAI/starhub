@@ -51,20 +51,14 @@ export function quotaToUsdNumber(quota: number): number {
 
 /** Map a backend group string to a frontend tier ID. */
 function groupToTier(group: string): TierId {
-  // "default" and "" (no group) map to "pro" — the standard tier used
-  // as the default in the create-key form.
+  // Legacy empty bindings retain the compatibility default group.
   if (!group) return "default";
   // If the admin configured group ratios matching frontend tier IDs,
   // pass them through so the TierBadge renders the right label.
   return group;
 }
 
-/**
- * Map a frontend tier to a backend group. The backend validates group
- * against configured group ratios (setting.ContainsGroupRatio). "default"
- * is the only group configured out of the box, so all tiers map to it.
- * If the admin adds tier-matching groups, this can be relaxed.
- */
+/** Preserve the selected backend group identity without a tier-name mapping. */
 export function tierToGroup(tier: TierId): string {
   return tier;
 }

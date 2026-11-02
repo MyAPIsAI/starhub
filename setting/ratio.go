@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"sync"
+
+	"starhub/common"
 )
 
 const (
@@ -133,7 +135,7 @@ func LookupCompletionRatio(model string) (float64, bool) {
 }
 
 func UpdateRatio(key, value string) error {
-	ratios, err := parseRatioMap(value)
+	ratios, err := parseRatioOption(key, value)
 	if err != nil {
 		return fmt.Errorf("invalid value for %s: %w", key, err)
 	}
@@ -196,6 +198,33 @@ func parseRatioMap(value string) (map[string]float64, error) {
 		}
 	}
 	return m, nil
+}
+
+// Group multipliers share the exact same contract across all write paths.
+// Model token ratios retain their independent bounds and precision.
+func parseRatioOption(key, value string) (map[string]float64, error) {
+	if key != OptionKeyGroupRatio {
+		return parseRatioMap(value)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(value), &raw); err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("group ratios must be an object")
+	}
+	ratios := make(map[string]float64, len(raw))
+	for id, number := range raw {
+		if id == "" {
+			return nil, fmt.Errorf("empty ratio key")
+		}
+		value, err := common.ParseServiceGroupMultiplier(string(number))
+		if err != nil {
+			return nil, fmt.Errorf("invalid group multiplier for %q: %w", id, err)
+		}
+		ratios[id] = value
+	}
+	return ratios, nil
 }
 
 // ResetRatiosToDefaults restores the compiled-in default ratios. Tests

@@ -184,32 +184,33 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 					"token uses the auto group but has no auto_groups configured")
 				return
 			}
-		} else if !setting.ContainsGroupRatio(group) {
-			writeRelayRequestError(w, r, http.StatusForbidden,
-				"invalid_request_error", "group_not_available",
-				fmt.Sprintf("group %q has no ratio configured", group))
-			return
 		}
 		groups := []string{group}
 		if group == common.AutoGroup {
 			groups = autoGroups
 		}
-		access, err := model.ServiceGroupAccess(r.Context(), groups, user.ID)
+		access, err := model.ServiceGroupAccessDetails(r.Context(), groups, user.ID)
 		if err != nil {
 			writeRelayRequestError(w, r, http.StatusInternalServerError,
 				"server_error", "group_access_unavailable", "group access could not be verified")
 			return
 		}
+		if group != common.AutoGroup && (access[group].Unavailable || !setting.ContainsGroupRatio(group)) {
+			writeRelayRequestError(w, r, http.StatusForbidden,
+				"invalid_request_error", "tier_capacity_unavailable",
+				fmt.Sprintf("service group %q is unavailable", group))
+			return
+		}
 		if group == common.AutoGroup {
 			admitted := make([]string, 0, len(autoGroups))
 			for _, candidate := range autoGroups {
-				if candidate != common.AutoGroup && setting.ContainsGroupRatio(candidate) && access[candidate] {
+				if candidate != common.AutoGroup && setting.ContainsGroupRatio(candidate) && access[candidate].Allowed {
 					admitted = append(admitted, candidate)
 				}
 			}
 			autoGroups = admitted
 		}
-		if (group == common.AutoGroup && len(autoGroups) == 0) || (group != common.AutoGroup && !access[group]) {
+		if (group == common.AutoGroup && len(autoGroups) == 0) || (group != common.AutoGroup && !access[group].Allowed) {
 			writeRelayRequestError(w, r, http.StatusForbidden,
 				"authentication_error", "group_not_allowed", "API key owner cannot access the configured group")
 			return

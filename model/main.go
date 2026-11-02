@@ -119,8 +119,15 @@ func CloseDB() error {
 }
 
 func Seed(rootPassword string) error {
+	if err := DB.Transaction(func(tx *gorm.DB) error { return seedRootAndGroups(tx, rootPassword) }); err != nil {
+		return err
+	}
+	return SeedOptions()
+}
+
+func seedRootAndGroups(tx *gorm.DB, rootPassword string) error {
 	var count int64
-	if err := DB.Model(&User{}).Count(&count).Error; err != nil {
+	if err := tx.Model(&User{}).Count(&count).Error; err != nil {
 		return err
 	}
 	if count == 0 {
@@ -137,9 +144,10 @@ func Seed(rootPassword string) error {
 			Group:    common.DefaultGroup,
 			AffCode:  common.GenerateAffCode(),
 		}
-		if err := DB.Create(root).Error; err != nil {
+		if err := tx.Create(root).Error; err != nil {
 			return err
 		}
+		return seedDefaultServiceGroups(tx)
 	}
-	return SeedOptions()
+	return nil
 }

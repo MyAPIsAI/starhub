@@ -30,6 +30,10 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	if err := model.ValidateTokenName(req.Name); err != nil {
+		common.ApiError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	unlimited := req.UnlimitedQuota != nil && *req.UnlimitedQuota
 	remainQuota := int64(0)
 	if !unlimited {

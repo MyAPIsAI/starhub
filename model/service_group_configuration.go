@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
 
+	"starhub/common"
 	"starhub/setting"
 )
 
@@ -57,9 +56,8 @@ func saveServiceGroupAndRatio(ctx context.Context, group *ServiceGroupConfig, ac
 	if stored.Multiplier == "" {
 		stored.Multiplier = "1"
 	}
-	value, err := strconv.ParseFloat(stored.Multiplier, 64)
-	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 || value > 100 {
-		return fmt.Errorf("invalid service group multiplier")
+	if _, err := common.ParseServiceGroupMultiplier(stored.Multiplier); err != nil {
+		return err
 	}
 	if err := mutateServiceGroupAndRatio(ctx, &stored, "", actorID, expected); err != nil {
 		return err
@@ -156,7 +154,7 @@ func mutateServiceGroupAndRatio(ctx context.Context, group *ServiceGroupConfig, 
 		if group != nil {
 			if group.Enabled {
 				// The public save entry validates this exact stored value before starting the transaction.
-				value, err := strconv.ParseFloat(group.Multiplier, 64)
+				value, err := common.ParseServiceGroupMultiplier(group.Multiplier)
 				if err != nil {
 					return err
 				}

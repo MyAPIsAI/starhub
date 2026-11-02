@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"reflect"
 	"testing"
 
 	"starhub/common"
@@ -10,6 +11,10 @@ import (
 func TestGroupAccountRequestsCannotPackMultipleIdentitiesInOneEntry(t *testing.T) {
 	newTestDB(t)
 	admin := newUser(t, "account-admin", common.RoleAdmin, 1000)
+	beforeGroups, err := model.ListServiceGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
 	before, err := model.OptionVersion()
 	if err != nil {
 		t.Fatal(err)
@@ -19,7 +24,7 @@ func TestGroupAccountRequestsCannotPackMultipleIdentitiesInOneEntry(t *testing.T
 	}
 	groups, err := model.ListServiceGroups()
 	after, versionErr := model.OptionVersion()
-	if err != nil || versionErr != nil || len(groups) != 0 || before != after {
+	if err != nil || versionErr != nil || !reflect.DeepEqual(groups, beforeGroups) || before != after {
 		t.Fatal("invalid account request changed configuration")
 	}
 }

@@ -15,14 +15,34 @@ type ServiceGroupDeletion struct {
 	CreatedAt int64  `gorm:"autoCreateTime"`
 }
 
+// ServiceGroupPermission separates unavailable definitions from account denials.
+type ServiceGroupPermission struct {
+	Allowed     bool
+	Unavailable bool
+}
+
 // ServiceGroupAccess resolves metadata restrictions in one read. Missing rows
 // retain legacy access; callers must separately require a configured live ratio.
 // Custom lists contain exact decimal server user IDs, never Demo identifiers.
 func ServiceGroupAccess(ctx context.Context, groups []string, userID int64) (map[string]bool, error) {
-	allowed := make(map[string]bool, len(groups))
+	states, err := ServiceGroupAccessDetails(ctx, groups, userID)
+	if err != nil {
+		return nil, err
+	}
+	allowed := make(map[string]bool, len(states))
+	for group, state := range states {
+		allowed[group] = state.Allowed
+	}
+	return allowed, nil
+}
+
+// ServiceGroupAccessDetails distinguishes unavailable groups from denied accounts
+// using one database snapshot, including when process-local ratios are stale.
+func ServiceGroupAccessDetails(ctx context.Context, groups []string, userID int64) (map[string]ServiceGroupPermission, error) {
+	allowed := make(map[string]ServiceGroupPermission, len(groups))
 	for _, group := range groups {
 		if group != "" {
-			allowed[group] = true
+			allowed[group] = ServiceGroupPermission{Allowed: true}
 		}
 	}
 	if len(allowed) == 0 {
@@ -56,10 +76,10 @@ func ServiceGroupAccess(ctx context.Context, groups []string, userID int64) (map
 				}
 			}
 		}
-		allowed[row.GroupID] = admitted
+		allowed[row.GroupID] = ServiceGroupPermission{Allowed: admitted, Unavailable: !row.Enabled}
 	}
 	for _, row := range deleted {
-		allowed[row.GroupID] = false
+		allowed[row.GroupID] = ServiceGroupPermission{Unavailable: true}
 	}
 	return allowed, nil
 }

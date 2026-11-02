@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"starhub/model"
@@ -50,6 +51,10 @@ func TestGroupRequestGuardsMetadataOnlyEditsAndDelete(t *testing.T) {
 
 func TestGroupRequestRejectsMalformedOrPartialPreconditions(t *testing.T) {
 	newTestDB(t)
+	before, err := model.ListServiceGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, fields := range []string{`"expected_group_id":0`, `"expected_revision":0`, `"expected_group_id":null,"expected_revision":null`, `"expected_group_id":0,"expected_revision":null`, `"expected_group_id":0,"expected_revision":0.5`, `"expected_group_id":-1,"expected_revision":0`, `"expected_group_id":0,"expected_revision":1`, `"expected_group_id":9007199254740992,"expected_revision":0`} {
 		body := `{"group_id":"guarded","name":"Invalid","multiplier":"0.8",` + fields + `}`
 		expectStatus(t, call(UpsertServiceGroup, testRequest{method: "PUT", target: "/api/service-group", body: body}), 400)
@@ -58,7 +63,7 @@ func TestGroupRequestRejectsMalformedOrPartialPreconditions(t *testing.T) {
 		expectStatus(t, call(DeleteServiceGroup, testRequest{method: "DELETE", target: "/api/service-group/guarded", path: map[string]string{"id": "guarded"}, body: body}), 400)
 	}
 	groups, err := model.ListServiceGroups()
-	if err != nil || len(groups) != 0 {
+	if err != nil || !reflect.DeepEqual(groups, before) {
 		t.Fatal("invalid guards persisted metadata")
 	}
 }

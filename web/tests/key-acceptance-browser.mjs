@@ -10,7 +10,11 @@ import assert from "node:assert/strict";
 
 const web = fileURLToPath(new URL("../", import.meta.url));
 const project = path.resolve(web, "..");
-const out = path.join(project, "output", "key-collapsed-check");
+const out = path.join(
+  project,
+  "output",
+  process.env.STARHUB_KEY_BROWSER_OUTPUT || "key-collapsed-check",
+);
 await mkdir(out, { recursive: true });
 const temp = await mkdtemp(path.join(out, "run-"));
 const binary = path.join(
@@ -57,6 +61,7 @@ const words = {
     candidates: "智能候选模型",
     empty: "开启智能入口时须选择至少一个已授权的文本模型。",
     close: "关闭",
+    retry: "重试",
   },
   en: {
     create: "Create key",
@@ -64,6 +69,7 @@ const words = {
     candidates: "Smart candidate models",
     empty: "Select at least one authorized text model for smart routing.",
     close: "Close",
+    retry: "Retry",
   },
   ar: {
     create: "إنشاء مفتاح",
@@ -71,6 +77,7 @@ const words = {
     candidates: "النماذج المرشحة للتوجيه الذكي",
     empty: "اختر نموذجًا نصيًا مصرحًا به على الأقل للتوجيه الذكي.",
     close: "إغلاق",
+    retry: "إعادة المحاولة",
   },
 };
 try {
@@ -101,6 +108,30 @@ try {
   });
   assert.equal(login.status(), 200);
   const ownerID = (await login.json()).data.user.id;
+  const initialCatalog = await seed.request.get(
+    `${base}/api/service-group/configuration`,
+  );
+  assert.equal(initialCatalog.status(), 200);
+  const initialGroups = (await initialCatalog.json()).data;
+  for (const [id, multiplier] of [
+    ["ultra", 1],
+    ["pro", 0.8],
+    ["standard", 0.6],
+    ["lite", 0.4],
+  ]) {
+    assert.ok(
+      initialGroups.groups.some(
+        (group) =>
+          group.group_id === id &&
+          group.enabled &&
+          group.visibility === "common",
+      ),
+    );
+    assert.equal(initialGroups.group_ratios[id], multiplier);
+  }
+  report.checks.push(
+    "fresh installation exposes all four editable common default groups with PRD multipliers",
+  );
   const rateLimit = await seed.request.put(`${base}/api/option`, {
     data: { key: "ip_rate_limit", value: "10000" },
   });
@@ -172,19 +203,95 @@ try {
         page.setDefaultTimeout(12000);
         page.on("pageerror", (error) => report.errors.push(String(error)));
         page.on("response", (response) => {
-          if (response.url().includes("/api/") && response.status() >= 400)
+          if (
+            response.url().includes("/api/") &&
+            response.status() >= 400 &&
+            response.headers()["x-key-choice-test"] !== "1"
+          )
             report.networkErrors.push({
               path: new URL(response.url()).pathname,
               status: response.status(),
             });
         });
+        let failChoices = true;
+        await page.route("**/api/token/owned-choices?**", (route) =>
+          failChoices
+            ? route.fulfill({
+                status: 503,
+                contentType: "application/json",
+                headers: { "x-key-choice-test": "1" },
+                body: JSON.stringify({
+                  success: false,
+                  message: "Synthetic key-choice load failure",
+                }),
+              })
+            : route.continue(),
+        );
         await page.goto(`${base}/console/keys`);
         await page
           .locator(".key-manager-header")
           .getByRole("button", { name: text.create, exact: true })
           .click();
         const dialog = page.getByRole("dialog");
-        await page.locator("#new-key-name").fill("Key acceptance");
+        const keyName = page.locator("#new-key-name");
+        const retry = dialog.getByRole("button", {
+          name: text.retry,
+          exact: true,
+        });
+        await retry.waitFor();
+        assert.equal(
+          await dialog
+            .getByRole("button", { name: text.create, exact: true })
+            .isEnabled(),
+          false,
+        );
+        await keyName.fill("Draft before retry");
+        await dialog.evaluate((element) =>
+          Promise.all(
+            element
+              .getAnimations()
+              .map((animation) => animation.finished.catch(() => {})),
+          ),
+        );
+        const failedBox = await dialog.boundingBox();
+        assert.ok(
+          failedBox &&
+            failedBox.x >= 0 &&
+            failedBox.x + failedBox.width <= width + 1,
+          "failed-load dialog exceeds viewport",
+        );
+        const failedShot = `key-choices-error-${language}-${theme}-${width}.png`;
+        await page.screenshot({
+          path: path.join(out, failedShot),
+          fullPage: false,
+        });
+        report.screenshots.push(failedShot);
+        failChoices = false;
+        const recovered = page.waitForResponse(
+          (response) =>
+            response.url().includes("/api/token/owned-choices?") &&
+            response.status() === 200,
+        );
+        await retry.click();
+        await recovered;
+        await dialog
+          .getByRole("button", { name: text.create, exact: true })
+          .click({ trial: true });
+        assert.equal(
+          await page.locator("#native-key-choices-retry").count(),
+          0,
+        );
+        assert.equal(await keyName.inputValue(), "Draft before retry");
+        report.checks.push(
+          `${language}/${theme}/${width}: choices failure exposes Retry, blocks saving, preserves the draft and hides Retry after successful recovery`,
+        );
+        await keyName.fill("测".repeat(50));
+        assert.equal(await keyName.inputValue(), "测".repeat(50));
+        await keyName.fill("😀".repeat(50));
+        assert.equal(Array.from(await keyName.inputValue()).length, 50);
+        await keyName.fill("a".repeat(51));
+        assert.equal((await keyName.inputValue()).length, 50);
+        await keyName.fill("Key acceptance");
         const policy = page.locator(".native-key-model-policy");
         assert.equal(await page.locator(".native-key-step").count(), 0);
         assert.equal(
@@ -319,6 +426,9 @@ try {
           .getByRole("button", { name: text.create, exact: true })
           .click();
         await page.locator("#native-key-expiry-error").waitFor();
+        await page.waitForFunction(
+          () => document.activeElement?.id === "native-key-expiry",
+        );
         assert.equal(writes, 0, "empty scheduled expiry was submitted");
         await page.locator("#new-key-quota").fill("25");
         await page.locator("#native-key-period").selectOption("daily");
@@ -536,8 +646,90 @@ try {
           await page.keyboard.press("Escape");
         }
         await dialog.waitFor({ state: "hidden" });
+        const groupWords = {
+          zh: {
+            add: "新增分组定义",
+            id: "分组标识",
+            name: "分组名称",
+            ratio: "分组倍率",
+            review: "预览分组变更",
+            confirm: "确认分组变更",
+          },
+          en: {
+            add: "Add group definition",
+            id: "Group identifier",
+            name: "Group name",
+            ratio: "Group ratio",
+            review: "Review group changes",
+            confirm: "Confirm group changes",
+          },
+          ar: {
+            add: "إضافة تعريف مجموعة",
+            id: "معرّف المجموعة",
+            name: "اسم المجموعة",
+            ratio: "معامل المجموعة",
+            review: "مراجعة تغييرات المجموعة",
+            confirm: "تأكيد تغييرات المجموعة",
+          },
+        }[language];
+        await page.goto(`${base}/console/service-groups`);
+        await page
+          .getByRole("button", { name: groupWords.add, exact: true })
+          .click();
+        const groupDialog = page.getByRole("dialog");
+        const groupID = `free-${language}-${theme}-${width}`;
+        await groupDialog
+          .getByLabel(groupWords.id, { exact: true })
+          .fill(groupID);
+        await groupDialog
+          .getByLabel(groupWords.name, { exact: true })
+          .fill("Free acceptance");
+        const ratio = groupDialog.getByLabel(groupWords.ratio, { exact: true });
+        const review = groupDialog.getByRole("button", {
+          name: groupWords.review,
+          exact: true,
+        });
+        await ratio.fill("0.12345");
+        assert.equal(
+          await review.isEnabled(),
+          false,
+          "five-decimal multiplier can be submitted",
+        );
+        await ratio.fill("0.1234");
+        assert.equal(await review.isEnabled(), true);
+        await ratio.fill("0");
+        assert.equal(
+          await review.isEnabled(),
+          true,
+          "free group cannot be reviewed",
+        );
+        const groupShot = `group-zero-${language}-${theme}-${width}.png`;
+        await groupDialog.screenshot({ path: path.join(out, groupShot) });
+        report.screenshots.push(groupShot);
+        await review.click();
+        const groupSaved = page.waitForResponse(
+          (response) =>
+            response.request().method() === "PUT" &&
+            response.url().endsWith("/api/service-group"),
+        );
+        await groupDialog
+          .getByRole("button", { name: groupWords.confirm, exact: true })
+          .click();
+        assert.equal((await groupSaved).status(), 200);
+        await groupDialog.waitFor({ state: "hidden" });
+        const persistedGroups = (
+          await (
+            await context.request.get(`${base}/api/service-group/configuration`)
+          ).json()
+        ).data;
+        assert.equal(
+          persistedGroups.groups.find((group) => group.group_id === groupID)
+            .multiplier,
+          "0",
+        );
+        assert.equal(persistedGroups.group_ratios[groupID], 0);
         report.checks.push(
-          `${language}/${theme}/${width}: collapsed defaults without step number, candidate boundary, access disclosure, expiry selection, 50-entry limit, draft preservation, keyboard and viewport`,
+          `${language}/${theme}/${width}: Unicode name limit, collapsed defaults, candidate boundary, expiry and IP controls, keyboard and viewport; group zero saves and five-decimal input is blocked`,
         );
         console.log(`PASS ${language}/${theme}/${width}`);
         await context.close();

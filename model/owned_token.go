@@ -10,7 +10,6 @@ import (
 	"starhub/common"
 	"starhub/config"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -332,8 +331,8 @@ func ValidOwnedTokenFields(fields map[string]any) error {
 		switch key {
 		case "name":
 			v := value.(string)
-			if strings.TrimSpace(v) == "" || len(v) > 64 {
-				return fmt.Errorf("invalid key name")
+			if err := ValidateTokenName(v); err != nil {
+				return err
 			}
 		case "remain_quota":
 			if value.(int64) < 0 {

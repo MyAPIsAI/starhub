@@ -10,6 +10,10 @@ import (
 
 func TestGroupCatalogAndCombinedGuardRequests(t *testing.T) {
 	newTestDB(t)
+	// Exercise guarded creation in an explicitly empty configuration.
+	if err := model.DB.Where("group_id IN ?", []string{"ultra", "pro", "standard", "lite"}).Delete(&model.ServiceGroupConfig{}).Error; err != nil {
+		t.Fatal(err)
+	}
 	var catalog struct {
 		Groups         []any              `json:"groups"`
 		Version        int64              `json:"option_version"`

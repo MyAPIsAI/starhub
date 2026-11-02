@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"starhub/common"
@@ -89,9 +87,9 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 	if multiplier == "" {
 		multiplier = "1"
 	}
-	mult, err := strconv.ParseFloat(multiplier, 64)
-	if err != nil || math.IsNaN(mult) || math.IsInf(mult, 0) || mult <= 0 || mult > 100 {
-		common.ApiError(w, http.StatusBadRequest, "multiplier must be a number > 0 and <= 100")
+	_, err := common.ParseServiceGroupMultiplier(multiplier)
+	if err != nil {
+		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	visibility := strings.TrimSpace(req.Visibility)

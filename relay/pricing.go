@@ -197,10 +197,10 @@ func ComputeUsageQuota(p *PriceData, usage *Usage) int64 {
 }
 
 // priceUSDToQuota converts a per-call / expression USD price into quota.
-// A configured positive price always bills at least 1 quota so rounding can
-// never silently wash out a paid model.
+// A positive effective price bills at least one quota; a zero multiplier
+// deliberately makes the group free.
 func priceUSDToQuota(p *PriceData, usd float64) int64 {
-	if usd <= 0 {
+	if usd <= 0 || p.EffectiveRatio() == 0 {
 		return 0
 	}
 	quota := common.QuotaFromFloat64(usd * float64(common.QuotaPerUSD) * p.EffectiveRatio())
@@ -219,6 +219,9 @@ func priceUSDToQuota(p *PriceData, usd float64) int64 {
 // Cached / audio tokens are subsets of the usage totals, so a lying upstream
 // cannot inflate the discount beyond the totals (clamped in Usage helpers).
 func tokenUsageQuota(p *PriceData, usage *Usage) int64 {
+	if p.EffectiveRatio() == 0 {
+		return 0
+	}
 	if p.TokenRates.Valid() {
 		return independentUsageQuota(p, usage)
 	}

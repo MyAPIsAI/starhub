@@ -15,7 +15,7 @@ func TestSettlementReconcilesDifferentBalances(t *testing.T) {
 		unlimited, omitLog    bool
 		charged               int64
 	}{
-		{"token short", 1000, 100, false, false, 100},
+		{"key limit exceeded after acceptance", 1000, 100, false, false, 130},
 		{"user short", 100, 1000, false, false, 100},
 		{"both sufficient", 1000, 1000, false, false, 130},
 		{"unlimited token", 100, 0, true, false, 100},

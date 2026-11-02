@@ -130,10 +130,19 @@ export function parseGroupAccountIDs(value: string): string[] | null {
 
 export function validGroupMultiplier(value: string): boolean {
   const text = value.trim();
-  return (
-    /^[+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text) &&
-    Number.isFinite(Number(text)) &&
-    Number(text) > 0 &&
-    Number(text) <= 100
-  );
+  if (text.length > 128) return false;
+  const match = /^\+?(\d+(?:\.\d*)?|\.\d+)(?:[eE]([+-]?\d+))?$/.exec(text);
+  if (!match) return false;
+  const exponent = Number(match[2] ?? 0);
+  if (!Number.isInteger(exponent) || Math.abs(exponent) > 1000) return false;
+  const fraction = match[1].split(".")[1]?.length ?? 0;
+  const power = 4 + exponent - fraction;
+  let scaled = BigInt(match[1].replace(".", ""));
+  if (power >= 0) scaled *= 10n ** BigInt(power);
+  else {
+    const divisor = 10n ** BigInt(-power);
+    if (scaled % divisor !== 0n) return false;
+    scaled /= divisor;
+  }
+  return scaled <= 1000000n;
 }
