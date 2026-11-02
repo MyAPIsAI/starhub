@@ -1,3 +1,14 @@
+# Key disclosure defaults · 2026-11-02
+
+- Removed the model-permission step number and its reserved indentation. Model permissions and Access control now start collapsed in create/edit drawers; validation still expands and focuses the relevant section without clearing drafts.
+- Verification: 932 frontend tests passed with 4 existing skips; production build and all twelve browser language/theme/viewport combinations passed. Evidence: [browser report](../output/key-collapsed-check/browser-report.json), [collapsed dark view](../output/key-collapsed-check/key-collapsed-zh-dark-1440.png).
+
+# Key model-permission layout · 2026-11-02
+
+- Implemented the approved model-permission section: collapsible heading, all-at-save snapshot / custom selection controls, vendor-grouped searchable model lists, selection counts, unavailable and retained model states, and an independent smart-entry card. The entry and its examples use `myapis-auto` per the user's explicit naming choice. Only the lowest-cost strategy is shown; candidates can be narrowed within authorized text models.
+- Choices now include safe vendor/tag display metadata from the existing backend catalog, without extra admin-only browser requests or static demo model lists. Account-scoped choices and their mutation revision remain authoritative. The first form revision is captured after fresh choices load; an explicit snapshot update refreshes the chosen list and revision. Metadata-only edits retain an existing key's authorization.
+- Verification: Go build/vet and the full suite pass, including new metadata privacy and revision checks. Frontend: 932 passed, 4 existing skips; production build passes. Twelve browser combinations cover Chinese/English/Arabic, light/dark, desktop and 390px. Real API flows verify explicit snapshot storage, no automatic expansion after new models appear, explicit permission refresh, and independent smart-entry disabling. Search, unavailable rows, candidate bounds, zero-candidate validation and keyboard disclosure are covered. Evidence: [browser report](../output/key-model-policy-check/browser-report.json), [snapshot view](../output/key-model-policy-check/model-snapshot-zh-light-1440.png), [custom selection](../output/key-model-policy-check/model-custom-zh-light-1440.png).
+
 # Key access-control layout · 2026-11-02
 
 - Applied the approved reference layout to the native create/edit drawer: a collapsible Access control section, a keyboard-accessible No expiry / Set expiration selector, conditional date/time input, and a live nonempty-line allowlist count. Empty example addresses are placeholders and are never saved. Existing expiry and IP settings remain visible when editing; toggling expiry modes or collapsing the section preserves drafts.

@@ -21,6 +21,11 @@ import {
   remainingQuotaForLifetimeLimit,
 } from "../lib/key-spending-limit";
 import { copyText } from "./code-example";
+import {
+  NativeKeyModelPolicy,
+  type NativeModelScope,
+  type NativePolicyError,
+} from "./native-key-model-policy";
 import "./native-key-form.css";
 export function NativeKeyForm({
   item,
@@ -46,7 +51,7 @@ export function NativeKeyForm({
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
   const choices = query.isError ? undefined : query.data,
     initialRevision = useRef<string>();
-  if (!initialRevision.current && choices)
+  if (!initialRevision.current && choices && !query.isFetching)
     initialRevision.current = choices.revision;
   const [name, setName] = useState(item?.name ?? ""),
     [group, setGroup] = useState(item?.tier ?? initialGroup ?? ""),
@@ -76,7 +81,7 @@ export function NativeKeyForm({
   const [expiryMode, setExpiryMode] = useState<"never" | "date">(
     item?.validUntil ? "date" : "never",
   );
-  const [accessOpen, setAccessOpen] = useState(true);
+  const [accessOpen, setAccessOpen] = useState(false);
   const [accessError, setAccessError] = useState<"expiry" | "ips" | null>(null);
   const expiryInput = useRef<HTMLInputElement>(null);
   const ipInput = useRef<HTMLTextAreaElement>(null);
@@ -88,6 +93,13 @@ export function NativeKeyForm({
     item?.smartCandidates ?? null,
   );
   const pending = useRef(false);
+  const [modelScope, setModelScope] = useState<NativeModelScope>(
+    item ? "custom" : "snapshot",
+  );
+  const [snapshotModels, setSnapshotModels] = useState<string[] | null>(null);
+  const [policyDirty, setPolicyDirty] = useState(false);
+  const [policyError, setPolicyError] = useState<NativePolicyError>(null);
+  const [validationAttempt, setValidationAttempt] = useState(0);
   const groups = [...new Set(choices?.choices.map((c) => c.group) ?? [])];
   const effectiveGroup = groups.includes(group)
     ? group
@@ -111,13 +123,16 @@ export function NativeKeyForm({
     item?.tier === "auto" && effectiveGroup === "auto";
   const selected = preservingAutoGroup
     ? (item.allowedModels ?? [])
-    : (models ?? available);
+    : modelScope === "snapshot"
+      ? (snapshotModels ?? available)
+      : (models ?? (item?.modelAccess === "all" ? available : []));
   const policyChanged =
     !item ||
     effectiveGroup !== item.tier ||
     (!preservingAutoGroup &&
-      models !== null &&
-      models.join(",") !== (item.allowedModels ?? []).join(","));
+      policyDirty &&
+      (modelScope === "snapshot" ||
+        selected.join(",") !== (item.allowedModels ?? []).join(",")));
   const quotaChanged =
     !item ||
     quota !== keySpendingLimitValue(item) ||
@@ -157,41 +172,36 @@ export function NativeKeyForm({
       operation ||
       !choices ||
       !initialRevision.current ||
+      query.isFetching ||
       query.isError
     )
       return;
+    if (!name.trim()) {
+      setError(c("请填写密钥名称。", "Enter a key name.", "أدخل اسم المفتاح."));
+      return;
+    }
     if (
-      !name.trim() ||
-      (policyChanged &&
-        (!selected.length ||
-          selected.some(
-            (m) =>
-              !available.includes(m) &&
-              !(
-                item?.tier === effectiveGroup && item.allowedModels?.includes(m)
-              ),
-          )))
+      policyChanged &&
+      (!selected.length ||
+        selected.some(
+          (m) =>
+            !available.includes(m) &&
+            !(item?.tier === effectiveGroup && item.allowedModels?.includes(m)),
+        ))
     ) {
-      setError(
-        c(
-          "请填写名称并选择可用模型。",
-          "Enter a name and select available models.",
-          "أدخل اسمًا واختر نماذج متاحة.",
-        ),
-      );
+      setError("");
+      setPolicyError("models");
+      setValidationAttempt((value) => value + 1);
       return;
     }
     let remain: number | undefined;
     if (smartPolicyChanged && smartEnabled && smartSelected.length === 0) {
-      setError(
-        c(
-          "开启智能入口时须选择至少一个已授权的文本模型。",
-          "Select at least one authorized text model for smart routing.",
-          "اختر نموذجًا نصيًا مصرحًا به على الأقل للتوجيه الذكي.",
-        ),
-      );
+      setError("");
+      setPolicyError("candidates");
+      setValidationAttempt((value) => value + 1);
       return;
     }
+    setPolicyError(null);
     if (
       expiryMode === "date" &&
       (!expiry || !Number.isFinite(new Date(expiry).getTime()))
@@ -351,7 +361,14 @@ export function NativeKeyForm({
           {!created && !receipt && (
             <Button
               variant="primary"
-              disabled={busy || !choices || query.isError || !!operation}
+              disabled={
+                busy ||
+                !choices ||
+                query.isError ||
+                query.isFetching ||
+                !initialRevision.current ||
+                !!operation
+              }
               onClick={() => void submit()}
             >
               {item
@@ -421,7 +438,7 @@ export function NativeKeyForm({
             }}
           >
             <fieldset
-              disabled={busy || !!operation}
+              disabled={busy || !!operation || query.isFetching}
               style={{
                 border: 0,
                 padding: 0,
@@ -447,6 +464,16 @@ export function NativeKeyForm({
                   value={effectiveGroup}
                   onChange={(e) => {
                     setGroup(e.target.value);
+                    setModelScope(
+                      e.target.value === item?.tier ? "custom" : "snapshot",
+                    );
+                    setSnapshotModels(
+                      choices?.choices
+                        .filter((choice) => choice.group === e.target.value)
+                        .map((choice) => choice.model) ?? [],
+                    );
+                    setPolicyDirty(e.target.value !== item?.tier);
+                    setPolicyError(null);
                     setModels(
                       e.target.value === item?.tier
                         ? (item.allowedModels ?? null)
@@ -466,127 +493,52 @@ export function NativeKeyForm({
                   ))}
                 </select>
               </label>
-              <div>
-                <p>
-                  {c(
-                    "明确授权的模型",
-                    "Explicitly allowed models",
-                    "النماذج المسموحة صراحةً",
-                  )}
-                </p>
-                {preservingAutoGroup && (
-                  <p role="status">
-                    {c(
-                      "保留现有自动分组及模型授权。可直接修改名称、额度和 IP 限制；选择具体分组才会更改路由授权。",
-                      "Existing automatic groups and model permissions are preserved. Edit the name, limit or IP restrictions directly; selecting a specific group changes routing permissions.",
-                      "تُحفظ المجموعات التلقائية وأذونات النماذج الحالية. يمكنك تعديل الاسم أو الحد أو قيود IP؛ اختيار مجموعة محددة يغيّر أذونات التوجيه.",
-                    )}
-                  </p>
-                )}
-                {(preservingAutoGroup
-                  ? (item.allowedModels ?? [])
-                  : [...new Set([...available, ...selected])]
-                ).map((m) => (
-                  <label
-                    key={m}
-                    style={{
-                      display: "flex",
-                      gap: ".5rem",
-                      overflowWrap: "anywhere",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(m)}
-                      disabled={preservingAutoGroup}
-                      onChange={(e) =>
-                        setModels(
-                          e.target.checked
-                            ? [...selected, m]
-                            : selected.filter((x) => x !== m),
-                        )
-                      }
-                    />
-                    <span>
-                      {m}
-                      {!preservingAutoGroup &&
-                        !available.includes(m) &&
-                        ` (${c("已下架", "Unavailable", "غير متاح")})`}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <label>
-                <input
-                  id="native-key-smart-access"
-                  type="checkbox"
-                  checked={smartEnabled}
-                  disabled={preservingAutoGroup}
-                  onChange={(event) => {
-                    setSmartEnabled(event.target.checked);
-                    setSmartDirty(true);
-                    setError("");
-                  }}
-                />
-                {c(
-                  "允许智能路由入口",
-                  "Allow smart routing",
-                  "السماح بالتوجيه الذكي",
-                )}
-              </label>
-              {smartEnabled && (
-                <fieldset style={{ minWidth: 0 }}>
-                  <legend>
-                    {c(
-                      "智能候选模型",
-                      "Smart candidate models",
-                      "النماذج المرشحة للتوجيه الذكي",
-                    )}
-                  </legend>
-                  <p>
-                    {c(
-                      "默认从已授权文本模型中按费用选择，可进一步缩小候选范围。取消授权会同时移除对应候选。",
-                      "Cost routing uses authorized text models. Narrow the candidate list here; removing model access also removes its candidacy.",
-                      "يختار التوجيه الأقل تكلفة من النماذج النصية المصرح بها. ضيّق القائمة هنا؛ إلغاء صلاحية نموذج يزيل ترشيحه أيضًا.",
-                    )}
-                  </p>
-                  {smartAvailable.map((model) => (
-                    <label
-                      key={model}
-                      style={{
-                        display: "flex",
-                        gap: ".5rem",
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={smartSelected.includes(model)}
-                        disabled={preservingAutoGroup}
-                        onChange={(event) => {
-                          setCandidateModels(
-                            event.target.checked
-                              ? [...smartSelected, model]
-                              : smartSelected.filter((name) => name !== model),
-                          );
-                          setSmartDirty(true);
-                          setError("");
-                        }}
-                      />
-                      <span>{model}</span>
-                    </label>
-                  ))}
-                  {!smartAvailable.length && (
-                    <p role="status">
-                      {c(
-                        "当前没有已授权的文本候选模型。",
-                        "No authorized text candidates are available.",
-                        "لا تتوفر نماذج نصية مرشحة مصرح بها.",
-                      )}
-                    </p>
-                  )}
-                </fieldset>
-              )}
+              <NativeKeyModelPolicy
+                choices={choices?.choices ?? []}
+                group={effectiveGroup}
+                available={available}
+                selected={selected}
+                scope={modelScope}
+                locked={preservingAutoGroup}
+                existing={!!item}
+                legacyUnrestricted={!!item && item.modelAccess === "all"}
+                onScopeChange={(scope) => {
+                  setModelScope(scope);
+                  if (scope === "snapshot") setSnapshotModels([...available]);
+                  if (scope === "snapshot" && choices && !query.isFetching)
+                    initialRevision.current = choices.revision;
+                  setPolicyDirty(true);
+                  setPolicyError(null);
+                  setError("");
+                }}
+                onModelsChange={(next) => {
+                  setModels(next);
+                  setPolicyDirty(true);
+                  if (candidateModels !== null)
+                    setCandidateModels(
+                      candidateModels.filter((model) => next.includes(model)),
+                    );
+                  setPolicyError(null);
+                  setError("");
+                }}
+                smartEnabled={smartEnabled}
+                onSmartChange={(enabled) => {
+                  setSmartEnabled(enabled);
+                  setSmartDirty(true);
+                  setPolicyError(null);
+                  setError("");
+                }}
+                smartAvailable={smartAvailable}
+                smartSelected={smartSelected}
+                onCandidatesChange={(next) => {
+                  setCandidateModels(next);
+                  setSmartDirty(true);
+                  setPolicyError(null);
+                  setError("");
+                }}
+                error={policyError}
+                validationAttempt={validationAttempt}
+              />
               <label>
                 {c(
                   "消费额度（美元，留空不限额）",
