@@ -6,6 +6,7 @@ import {
   useSystemAccess,
 } from "../system-access";
 export interface TokenChoices {
+  quota_timezone?: string;
   schema: "owned_token_choices_v1";
   guarded_actions: true;
   user_id: number;

@@ -21,12 +21,26 @@ func dsn(path string) string {
 }
 
 func InitDB(path string) error {
+	aead, err := openTokenCipher(path)
+	if err != nil {
+		return err
+	}
 	db, err := gorm.Open(sqlite.Open(dsn(path)), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		return fmt.Errorf("open sqlite database %s: %w", path, err)
 	}
+	initialized := false
+	defer func() {
+		if !initialized {
+			if connection, err := db.DB(); err == nil {
+				_ = connection.Close()
+			}
+		}
+	}()
+	db = db.Set(tokenCipherSetting, aead).Session(&gorm.Session{})
+	legacyQuotaLimits := !db.Migrator().HasColumn(&Token{}, "quota_limit")
 	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
@@ -47,6 +61,20 @@ func InitDB(path string) error {
 	}
 	if err := db.AutoMigrate(&OwnedTokenReceipt{}); err != nil {
 		return fmt.Errorf("migrate owned token receipts: %w", err)
+	}
+	if err := db.AutoMigrate(&TokenRevealGrant{}); err != nil {
+		return fmt.Errorf("migrate key viewing authorizations: %w", err)
+	}
+	if err := db.AutoMigrate(&TokenQuotaPeriod{}); err != nil {
+		return fmt.Errorf("migrate key quota periods: %w", err)
+	}
+	if legacyQuotaLimits {
+		if err := db.Exec("UPDATE tokens SET quota_limit = remain_quota + used_quota + COALESCE((SELECT SUM(quota) FROM tasks WHERE tasks.token_id = tokens.id AND token_unlimited = 0 AND status NOT IN ('succeeded', 'failed', 'cancelled')), 0)").Error; err != nil {
+			return fmt.Errorf("migrate key quota limits: %w", err)
+		}
+	}
+	if err := db.Exec("UPDATE tokens SET period_started_at = CASE WHEN created_at > 0 THEN created_at ELSE strftime('%s','now') END WHERE period_started_at = 0 AND quota_period = 'never'").Error; err != nil {
+		return err
 	}
 	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
@@ -70,7 +98,11 @@ func InitDB(path string) error {
 	if err := db.Model(&RoutingChain{}).Where("expires_at = 0").UpdateColumn("expires_at", time.Now().Add(RoutingChainTTL).Unix()).Error; err != nil {
 		return fmt.Errorf("initialize routing chain expiry: %w", err)
 	}
+	if err := migrateTokenSecrets(db); err != nil {
+		return fmt.Errorf("migrate key encryption: %w", err)
+	}
 	DB = db
+	initialized = true
 	return nil
 }
 

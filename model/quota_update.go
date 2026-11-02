@@ -32,10 +32,34 @@ func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64)
 }
 
 func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64, revision ...int64) error {
-	fields["revision"] = gorm.Expr("revision + 1")
-	q := DB
-	if len(revision) > 0 {
-		q = q.Where("revision = ?", revision[0])
-	}
-	return updateFieldsWithQuota(q, &Token{}, id, fields, "remain_quota", expected)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Token{}).Where("id = ?", id).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+			return err
+		}
+		var token Token
+		if err := tx.First(&token, id).Error; err != nil {
+			return err
+		}
+		if err := prepareTokenPeriodUpdate(tx, &token, fields); err != nil {
+			return err
+		}
+		if err := encryptTokenFields(tx, fields); err != nil {
+			return err
+		}
+		if remain, ok := fields["remain_quota"].(int64); ok {
+			if _, explicit := fields["quota_limit"]; !explicit {
+				used := token.UsedQuota
+				if token.QuotaPeriod != "never" {
+					used = token.PeriodUsedQuota
+				}
+				fields["quota_limit"] = remain + used
+			}
+		}
+		fields["revision"] = gorm.Expr("revision + 1")
+		q := tx
+		if len(revision) > 0 {
+			q = q.Where("revision = ?", revision[0])
+		}
+		return updateFieldsWithQuota(q, &Token{}, id, fields, "remain_quota", expected)
+	})
 }

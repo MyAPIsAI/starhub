@@ -25,7 +25,7 @@ vi.mock("../lib/api/tokens", () => ({
   useUpdateToken: () => ({ isPending: false }),
 }));
 vi.mock("../components/ui/overlay", () => ({
-  Modal: ({ children }: { children: ReactNode }) =>
+  Drawer: ({ children }: { children: ReactNode }) =>
     createElement("div", null, children),
 }));
 vi.mock("react-i18next", () => ({
@@ -58,6 +58,7 @@ describe("editing existing native keys", () => {
       }),
     );
     expect(html).toContain("Smart candidate models");
+    expect(html).toContain("(Unavailable)");
     const candidates = html
       .split("<legend>Smart candidate models</legend>")[1]
       .split("</fieldset>")[0];

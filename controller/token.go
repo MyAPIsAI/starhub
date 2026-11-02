@@ -21,6 +21,8 @@ type tokenPayload struct {
 	AutoGroups      string `json:"auto_groups"`
 	SmartAccess     *bool  `json:"smart_access"`
 	SmartCandidates string `json:"smart_candidates"`
+	QuotaPeriod     string `json:"quota_period"`
+	QuotaLimit      *int64 `json:"quota_limit"`
 }
 
 func CreateToken(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +44,10 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	expiredTime := int64(-1)
+	if req.ExpiredTime != nil && *req.ExpiredTime < -1 {
+		common.ApiError(w, 400, "invalid expired_time")
+		return
+	}
 	if req.ExpiredTime != nil && *req.ExpiredTime > 0 {
 		expiredTime = *req.ExpiredTime
 	}
@@ -79,6 +85,23 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		AutoGroups:      autoGroups,
 		SmartAccess:     req.SmartAccess,
 		SmartCandidates: strings.TrimSpace(req.SmartCandidates),
+		QuotaPeriod:     req.QuotaPeriod,
+	}
+	if req.QuotaLimit != nil {
+		token.QuotaLimit = *req.QuotaLimit
+		if !unlimited {
+			token.RemainQuota = *req.QuotaLimit
+		}
+	}
+	if req.QuotaPeriod != "" && req.QuotaPeriod != "never" && req.QuotaPeriod != "daily" && req.QuotaPeriod != "monthly" || req.QuotaLimit != nil && *req.QuotaLimit < 0 {
+		common.ApiError(w, 400, "invalid quota period or limit")
+		return
+	}
+	var ipErr error
+	token.AllowIps, ipErr = model.NormalizeTokenIPs(token.AllowIps)
+	if ipErr != nil {
+		common.ApiError(w, http.StatusBadRequest, ipErr.Error())
+		return
 	}
 	if err := model.ValidateTokenSmartPolicy(token); err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
@@ -126,6 +149,11 @@ func maskedToken(t *model.Token) map[string]any {
 		"remain_quota":        t.RemainQuota,
 		"unlimited_quota":     t.UnlimitedQuota,
 		"used_quota":          t.UsedQuota,
+		"quota_period":        t.QuotaPeriod,
+		"quota_limit":         t.QuotaLimit,
+		"quota_timezone":      t.QuotaTimezone,
+		"period_used_quota":   t.PeriodUsedQuota,
+		"period_started_at":   t.PeriodStartedAt,
 		"model_limits":        t.ModelLimits,
 		"allow_ips":           t.AllowIps,
 		"auto_groups":         t.AutoGroups,
@@ -151,6 +179,8 @@ type tokenUpdateRequest struct {
 	Status          *int    `json:"status"`
 	SmartAccess     *bool   `json:"smart_access"`
 	SmartCandidates *string `json:"smart_candidates"`
+	QuotaPeriod     *string `json:"quota_period"`
+	QuotaLimit      *int64  `json:"quota_limit"`
 }
 
 func UpdateToken(w http.ResponseWriter, r *http.Request) {
@@ -210,7 +240,7 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 			// skips remain_quota when it was set implicitly by
 			// unlimited_quota, not explicitly by the caller.
 			fields["remain_quota"] = int64(0)
-		} else if !*req.UnlimitedQuota && token.UnlimitedQuota && req.RemainQuota == nil {
+		} else if !*req.UnlimitedQuota && token.UnlimitedQuota && req.RemainQuota == nil && req.QuotaLimit == nil {
 			// Turning off unlimited without specifying a new balance
 			// would leave remain_quota at 0 (from the unlimited reset),
 			// effectively disabling the token. Require remain_quota.
@@ -241,7 +271,22 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		fields["model_limits"] = strings.TrimSpace(*req.ModelLimits)
 	}
 	if req.AllowIps != nil {
-		fields["allow_ips"] = strings.TrimSpace(*req.AllowIps)
+		ips, err := model.NormalizeTokenIPs(strings.TrimSpace(*req.AllowIps))
+		if err != nil {
+			common.ApiError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		fields["allow_ips"] = ips
+	}
+	if req.QuotaPeriod != nil {
+		fields["quota_period"] = *req.QuotaPeriod
+	}
+	if req.QuotaLimit != nil {
+		fields["quota_limit"] = *req.QuotaLimit
+	}
+	if err := model.ValidOwnedTokenFields(fields); err != nil {
+		common.ApiError(w, 400, err.Error())
+		return
 	}
 	if req.AutoGroups != nil {
 		autoGroups := strings.TrimSpace(*req.AutoGroups)
@@ -275,7 +320,7 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 	if (req.Group != nil || req.AutoGroups != nil) && !validateTokenGroupAccess(w, r, token.UserID, group, autoGroups) {
 		return
 	}
-	if quotaSetByUser && req.ExpectedQuota == nil {
+	if (quotaSetByUser || req.QuotaLimit != nil) && req.ExpectedQuota == nil {
 		common.ApiError(w, http.StatusBadRequest, "expected_quota is required when setting a balance")
 		return
 	}

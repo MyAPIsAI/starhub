@@ -534,11 +534,12 @@ func TestDownloadExportRequestsCSVEscaping(t *testing.T) {
 	u := newUser(t, "alice", common.RoleUser, 1000)
 	createdAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
 	const tokenName = "key,\"quoted\"\nsecond line"
+	token := mustToken(t, u.ID, 1000)
 	const modelName = "model,\"variant\"\nnext line"
 	const requestedModel = "entry,\"alias\"\nnext line"
 	l := &model.Log{
 		UserID:           u.ID,
-		TokenID:          42,
+		TokenID:          token.ID,
 		TokenName:        tokenName,
 		Model:            modelName,
 		RequestedModel:   requestedModel,
@@ -590,7 +591,7 @@ func TestDownloadExportRequestsCSVEscaping(t *testing.T) {
 	}
 	want := [][]string{
 		{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"},
-		{itoa(l.ID), createdAt.Format(time.RFC3339), itoa(u.ID), "42", tokenName, modelName, "100", "50", "23", requestedModel},
+		{itoa(l.ID), createdAt.Format(time.RFC3339), itoa(u.ID), itoa(token.ID), tokenName, modelName, "100", "50", "23", requestedModel},
 	}
 	if !reflect.DeepEqual(rows, want) {
 		t.Fatalf("CSV rows = %q, want %q", rows, want)

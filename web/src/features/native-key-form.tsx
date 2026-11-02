@@ -1,7 +1,8 @@
 ﻿import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Modal } from "../components/ui/overlay";
+import { ChevronDown } from "lucide-react";
+import { Drawer } from "../components/ui/overlay";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { useTokenChoices } from "../lib/api/token-choices";
@@ -20,6 +21,7 @@ import {
   remainingQuotaForLifetimeLimit,
 } from "../lib/key-spending-limit";
 import { copyText } from "./code-example";
+import "./native-key-form.css";
 export function NativeKeyForm({
   item,
   onClose,
@@ -59,7 +61,29 @@ export function NativeKeyForm({
     [created, setCreated] = useState<Token | null>(null),
     [busy, setBusy] = useState(false);
   const [smartEnabled, setSmartEnabled] = useState(item?.smartAccess ?? true);
+  const [period, setPeriod] = useState(item?.quotaPeriod ?? "never");
+  const [expiry, setExpiry] = useState(() =>
+    item?.validUntil
+      ? new Date(
+          new Date(item.validUntil).getTime() -
+            new Date(item.validUntil).getTimezoneOffset() * 60000,
+        )
+          .toISOString()
+          .slice(0, 16)
+      : "",
+  );
   const [smartDirty, setSmartDirty] = useState(false);
+  const [expiryMode, setExpiryMode] = useState<"never" | "date">(
+    item?.validUntil ? "date" : "never",
+  );
+  const [accessOpen, setAccessOpen] = useState(true);
+  const [accessError, setAccessError] = useState<"expiry" | "ips" | null>(null);
+  const expiryInput = useRef<HTMLInputElement>(null);
+  const ipInput = useRef<HTMLTextAreaElement>(null);
+  const ipEntries = ips
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter(Boolean);
   const [candidateModels, setCandidateModels] = useState<string[] | null>(
     item?.smartCandidates ?? null,
   );
@@ -94,7 +118,10 @@ export function NativeKeyForm({
     (!preservingAutoGroup &&
       models !== null &&
       models.join(",") !== (item.allowedModels ?? []).join(","));
-  const quotaChanged = !item || quota !== keySpendingLimitValue(item);
+  const quotaChanged =
+    !item ||
+    quota !== keySpendingLimitValue(item) ||
+    period !== (item.quotaPeriod ?? "never");
   const smartAvailable = selected.filter(
     (model) =>
       preservingAutoGroup ||
@@ -136,7 +163,14 @@ export function NativeKeyForm({
     if (
       !name.trim() ||
       (policyChanged &&
-        (!selected.length || selected.some((m) => !available.includes(m))))
+        (!selected.length ||
+          selected.some(
+            (m) =>
+              !available.includes(m) &&
+              !(
+                item?.tier === effectiveGroup && item.allowedModels?.includes(m)
+              ),
+          )))
     ) {
       setError(
         c(
@@ -158,9 +192,27 @@ export function NativeKeyForm({
       );
       return;
     }
+    if (
+      expiryMode === "date" &&
+      (!expiry || !Number.isFinite(new Date(expiry).getTime()))
+    ) {
+      setError("");
+      setAccessError("expiry");
+      setAccessOpen(true);
+      requestAnimationFrame(() => expiryInput.current?.focus());
+      return;
+    }
+    if (ipEntries.length > 50) {
+      setError("");
+      setAccessError("ips");
+      setAccessOpen(true);
+      requestAnimationFrame(() => ipInput.current?.focus());
+      return;
+    }
+    setAccessError(null);
     if (quotaChanged && quota !== "") {
       try {
-        remain = remainingQuotaForLifetimeLimit(quota, item);
+        remain = remainingQuotaForLifetimeLimit(quota);
       } catch (e) {
         const reason = e instanceof Error ? e.message : "invalid_amount";
         setError(
@@ -200,13 +252,14 @@ export function NativeKeyForm({
               smart_candidates: smartSelected.join(","),
             }
           : {}),
-        allow_ips: ips
-          .split("\n")
-          .map((x) => x.trim())
-          .filter(Boolean)
-          .join(","),
+        allow_ips: ipEntries.join(","),
         ...(quotaChanged ? { unlimited_quota: quota === "" } : {}),
-        ...(remain === undefined ? {} : { remain_quota: remain }),
+        ...(remain === undefined ? {} : { quota_limit: remain }),
+        ...(quotaChanged ? { quota_period: period } : {}),
+        expired_time:
+          expiryMode === "date"
+            ? Math.floor(new Date(expiry).getTime() / 1000)
+            : -1,
         choices_revision: initialRevision.current,
       };
       if (item) {
@@ -272,13 +325,12 @@ export function NativeKeyForm({
     }
   }
   return (
-    <Modal
+    <Drawer
       open
+      preventOutsideClose
       onOpenChange={(open) => {
         if (!open && !pending.current) onClose();
       }}
-      preventOutsideClose
-      size="wide"
       title={
         created
           ? c("密钥已创建", "Key created", "أُنشئ المفتاح")
@@ -287,9 +339,9 @@ export function NativeKeyForm({
             : c("创建密钥", "Create key", "إنشاء مفتاح")
       }
       description={c(
-        "使用服务器分组和明确模型白名单。密钥只在创建或重置成功时展示一次明文。",
-        "Use server groups and an explicit model allowlist. Plaintext is shown once after creation or regeneration.",
-        "استخدم مجموعات الخادم وقائمة نماذج صريحة. يظهر النص السري مرة واحدة بعد الإنشاء أو التجديد.",
+        "设置服务分组、模型授权、额度和访问限制。查看完整密钥需要验证登录密码。",
+        "Set the service group, model permissions, spending limit and access restrictions. Viewing the full key requires your login password.",
+        "اضبط مجموعة الخدمة وأذونات النماذج وحد الإنفاق وقيود الوصول. عرض المفتاح الكامل يتطلب كلمة مرور تسجيل الدخول.",
       )}
       footer={
         <>
@@ -328,9 +380,9 @@ export function NativeKeyForm({
           </div>
           <p>
             {c(
-              "关闭后无法再次获取此明文，请妥善保存。",
-              "Save this secret now. It cannot be recovered after closing.",
-              "احفظ السر الآن؛ لا يمكن استعادته بعد الإغلاق.",
+              "请妥善保存密钥。之后可在列表中验证登录密码后再次查看。",
+              "Store the key securely. You can view it again from the list after verifying your login password.",
+              "احفظ المفتاح بأمان. يمكنك عرضه مجددًا من القائمة بعد التحقق من كلمة مرور تسجيل الدخول.",
             )}
           </p>
         </div>
@@ -383,12 +435,12 @@ export function NativeKeyForm({
                 <Input
                   id={item ? "edit-key-name" : "new-key-name"}
                   value={name}
-                  maxLength={64}
+                  maxLength={50}
                   onChange={(e) => setName(e.target.value)}
                 />
               </label>
               <label>
-                {c("服务器分组", "Server group", "مجموعة الخادم")}
+                {c("服务分组", "Service group", "مجموعة الخدمة")}
                 <select
                   id="native-key-group"
                   className="select-trigger"
@@ -433,7 +485,7 @@ export function NativeKeyForm({
                 )}
                 {(preservingAutoGroup
                   ? (item.allowedModels ?? [])
-                  : available
+                  : [...new Set([...available, ...selected])]
                 ).map((m) => (
                   <label
                     key={m}
@@ -455,7 +507,12 @@ export function NativeKeyForm({
                         )
                       }
                     />
-                    <span>{m}</span>
+                    <span>
+                      {m}
+                      {!preservingAutoGroup &&
+                        !available.includes(m) &&
+                        ` (${c("已下架", "Unavailable", "غير متاح")})`}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -543,25 +600,200 @@ export function NativeKeyForm({
                   onChange={(e) => setQuota(e.target.value)}
                 />
               </label>
-              <p>
-                {c(
-                  "额度为累计上限，不会按日或按月重置。",
-                  "The spending limit is lifetime; it does not reset daily or monthly.",
-                  "حد الإنفاق تراكمي ولا يُعاد يوميًا أو شهريًا.",
-                )}
-              </p>
               <label>
-                {c(
-                  "允许的 IP 地址（每行一个，留空不限）",
-                  "Allowed IP addresses (one per line, empty for unrestricted)",
-                  "عناوين IP المسموحة، عنوان لكل سطر، فارغ دون قيد",
-                )}
-                <textarea
-                  className="input"
-                  value={ips}
-                  onChange={(e) => setIps(e.target.value)}
-                />
+                {c("额度周期", "Quota period", "فترة الحصة")}
+                <select
+                  id="native-key-period"
+                  className="select-trigger"
+                  value={period}
+                  onChange={(event) =>
+                    setPeriod(event.target.value as typeof period)
+                  }
+                >
+                  <option value="never">
+                    {c("不重置", "Never reset", "دون إعادة تعيين")}
+                  </option>
+                  <option value="daily">
+                    {c("每天重置", "Daily", "يوميًا")}
+                  </option>
+                  <option value="monthly">
+                    {c("每月重置", "Monthly", "شهريًا")}
+                  </option>
+                </select>
+                <small>
+                  {c(
+                    "按地区时区在午夜重置：",
+                    "Resets at midnight in the region timezone: ",
+                    "يُعاد عند منتصف الليل بتوقيت المنطقة: ",
+                  )}
+                  {item?.quotaTimezone ??
+                    choices?.quota_timezone ??
+                    "Asia/Dubai"}
+                </small>
               </label>
+              <section className="native-key-access">
+                <button
+                  id="native-key-access-toggle"
+                  type="button"
+                  className="native-key-access-toggle"
+                  aria-expanded={accessOpen}
+                  aria-controls="native-key-access-fields"
+                  onClick={() => setAccessOpen((open) => !open)}
+                >
+                  <span className="native-key-access-heading">
+                    <strong>
+                      {c("访问控制", "Access control", "التحكم في الوصول")}
+                    </strong>
+                    <span>
+                      {c(
+                        "有效期 · 来源地址限制 · 可选",
+                        "Expiration · Source restrictions · Optional",
+                        "الصلاحية · قيود المصدر · اختياري",
+                      )}
+                    </span>
+                  </span>
+                  <ChevronDown size={15} aria-hidden="true" />
+                </button>
+                <div
+                  id="native-key-access-fields"
+                  className="native-key-access-body"
+                  role="region"
+                  aria-labelledby="native-key-access-toggle"
+                  hidden={!accessOpen}
+                >
+                  <fieldset className="native-key-expiry">
+                    <legend>{c("有效期", "Expiration", "الصلاحية")}</legend>
+                    <div className="native-key-expiry-options">
+                      {(["never", "date"] as const).map((mode) => (
+                        <label key={mode} className="native-key-expiry-option">
+                          <input
+                            id={`native-key-expiry-${mode}`}
+                            type="radio"
+                            name="native-key-expiry-mode"
+                            value={mode}
+                            checked={expiryMode === mode}
+                            onChange={() => {
+                              setExpiryMode(mode);
+                              setAccessError(null);
+                            }}
+                          />
+                          <span>
+                            {mode === "never"
+                              ? c("永久有效", "No expiry", "دون انتهاء")
+                              : c(
+                                  "指定到期时间",
+                                  "Set expiration",
+                                  "تحديد الانتهاء",
+                                )}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    {expiryMode === "date" && (
+                      <label className="native-key-expiry-date">
+                        <span>
+                          {c(
+                            "到期日期与时间",
+                            "Expiration date and time",
+                            "تاريخ ووقت الانتهاء",
+                          )}
+                        </span>
+                        <Input
+                          ref={expiryInput}
+                          id="native-key-expiry"
+                          type="datetime-local"
+                          value={expiry}
+                          aria-invalid={accessError === "expiry"}
+                          aria-describedby={
+                            accessError === "expiry"
+                              ? "native-key-expiry-error"
+                              : undefined
+                          }
+                          onChange={(event) => {
+                            setExpiry(event.target.value);
+                            setAccessError(null);
+                          }}
+                        />
+                      </label>
+                    )}
+                    {accessError === "expiry" && (
+                      <p
+                        id="native-key-expiry-error"
+                        className="native-key-access-error"
+                        role="alert"
+                      >
+                        {c(
+                          "请选择到期日期与时间。",
+                          "Choose an expiration date and time.",
+                          "اختر تاريخ ووقت انتهاء الصلاحية.",
+                        )}
+                      </p>
+                    )}
+                  </fieldset>
+                  <div className="native-key-ip-field">
+                    <div className="native-key-ip-heading">
+                      <label htmlFor="native-key-ips">
+                        {c(
+                          "IP（来源地址）白名单",
+                          "IP (source address) allowlist",
+                          "قائمة عناوين IP المسموحة",
+                        )}
+                      </label>
+                      <span
+                        id="native-key-ip-count"
+                        dir="ltr"
+                        className={
+                          ipEntries.length > 50 ? "is-over-limit" : undefined
+                        }
+                        aria-live="polite"
+                        aria-atomic="true"
+                      >
+                        {ipEntries.length} / 50
+                      </span>
+                    </div>
+                    <textarea
+                      ref={ipInput}
+                      id="native-key-ips"
+                      dir="ltr"
+                      className="input native-key-ip-input"
+                      rows={4}
+                      placeholder={
+                        "203.0.113.10\n198.51.100.0/24\n2001:db8::/32"
+                      }
+                      value={ips}
+                      aria-invalid={accessError === "ips"}
+                      aria-describedby={`native-key-ip-hint native-key-ip-count${accessError === "ips" ? " native-key-ip-error" : ""}`}
+                      onChange={(event) => {
+                        setIps(event.target.value);
+                        setAccessError(null);
+                      }}
+                    />
+                    <p
+                      id="native-key-ip-hint"
+                      className="native-key-access-hint"
+                    >
+                      {c(
+                        "每行一条，支持 IPv4（四版地址）、IPv6（六版地址）与 CIDR（网段）；为空表示不限制。",
+                        "One entry per line. Supports IPv4, IPv6 and CIDR networks. Leave empty to allow any source.",
+                        "إدخال واحد لكل سطر. يدعم IPv4 وIPv6 وشبكات CIDR. اتركه فارغًا للسماح بأي مصدر.",
+                      )}
+                    </p>
+                    {accessError === "ips" && (
+                      <p
+                        id="native-key-ip-error"
+                        className="native-key-access-error"
+                        role="alert"
+                      >
+                        {c(
+                          "IP 白名单最多允许 50 条，请移除多余条目。",
+                          "The IP allowlist supports up to 50 entries. Remove the extra entries.",
+                          "تدعم قائمة IP حتى 50 إدخالًا. احذف الإدخالات الزائدة.",
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
             </fieldset>
           </form>
           {!choices && (
@@ -605,6 +837,6 @@ export function NativeKeyForm({
           </Button>
         </div>
       )}
-    </Modal>
+    </Drawer>
   );
 }

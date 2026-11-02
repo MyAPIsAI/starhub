@@ -11,6 +11,7 @@ package dto
 // the totals (OpenAI counts cached / audio tokens inside prompt_tokens and
 // completion_tokens) and drive the fine-grained settlement pricing.
 type Usage struct {
+	TokenPeriodStartedAt int64 `json:"-"`
 	// RequestProtocol is gateway-owned metadata; upstream JSON cannot set it.
 	RequestProtocol string `json:"-"`
 	// RequestStatus is a gateway-owned outcome, defaulting to success.

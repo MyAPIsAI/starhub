@@ -125,20 +125,24 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 			return
 		}
 		if token.Status != common.StatusEnabled {
-			writeRelayRequestError(w, r, http.StatusUnauthorized,
-				"authentication_error", "token_disabled",
+			writeRelayRequestError(w, r, http.StatusForbidden,
+				"authentication_error", "key_disabled",
 				"API key is disabled")
 			return
 		}
-		if token.ExpiredTime > 0 && time.Now().Unix() > token.ExpiredTime {
+		if token.ExpiredTime > 0 && time.Now().Unix() >= token.ExpiredTime {
 			writeRelayRequestError(w, r, http.StatusUnauthorized,
-				"authentication_error", "token_expired",
+				"authentication_error", "key_expired",
 				"API key has expired")
+			return
+		}
+		if err := model.RefreshTokenPeriod(token, time.Now()); err != nil {
+			writeRelayRequestError(w, r, 500, "server_error", "key_period_unavailable", "key quota period unavailable")
 			return
 		}
 		if !readOnly && !token.UnlimitedQuota && token.RemainQuota <= 0 {
 			writeRelayRequestError(w, r, http.StatusForbidden,
-				"insufficient_quota", "token_quota_exhausted",
+				"insufficient_quota", "key_quota_exceeded",
 				"API key quota is exhausted")
 			return
 		}
@@ -216,6 +220,7 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 			common.CtxTokenID, token.ID,
 			common.CtxTokenName, token.Name,
 			common.CtxTokenUnlimited, token.UnlimitedQuota,
+			common.CtxTokenPeriodStartedAt, token.PeriodStartedAt,
 			common.CtxUsingGroup, group,
 			common.CtxUserGroup, user.Group,
 			common.CtxAutoGroups, autoGroups,

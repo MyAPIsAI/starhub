@@ -42,11 +42,11 @@ func TestTokenPasswordVerificationIsOwnerBoundReadOnlyAndCookieFree(t *testing.T
 		if response.Code == 200 {
 			var result map[string]any
 			decodeData(t, response, &result)
-			if len(result) != 3 || result["verified"] != true || result["user_id"] != float64(owner.ID) || result["token_id"] != float64(token.ID) {
+			if len(result) != 6 || result["verified"] != true || result["user_id"] != float64(owner.ID) || result["token_id"] != float64(token.ID) || result["key"] != token.Key {
 				t.Fatal("verification receipt is not bound to the original owner/token")
 			}
 		}
-		if strings.Contains(response.Body.String(), token.Key) || strings.Contains(response.Body.String(), beforeUser.Password) || strings.Contains(response.Body.String(), "secret") {
+		if response.Code != 200 && strings.Contains(response.Body.String(), token.Key) || strings.Contains(response.Body.String(), beforeUser.Password) || strings.Contains(response.Body.String(), "secret") {
 			t.Fatal("verification exposed credential material")
 		}
 	}
