@@ -459,3 +459,59 @@ func TestOptionUpsertAndSeed(t *testing.T) {
 		t.Fatalf("upsert did not update: %s", value)
 	}
 }
+
+func TestSummarizeLogsByToken(t *testing.T) {
+	newTestDB(t)
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	at := func(dayOffset, hour int) int64 {
+		return today.AddDate(0, 0, dayOffset).Add(time.Duration(hour) * time.Hour).Unix()
+	}
+	rows := []Log{
+		{UserID: 1, TokenID: 10, TokenName: "key-a", Model: "m", PromptTokens: 10, CompletionTokens: 5, Quota: 3, CreatedAt: at(0, 1)},
+		{UserID: 1, TokenID: 10, TokenName: "key-a", Model: "m", PromptTokens: 20, CompletionTokens: 5, Quota: 4, CreatedAt: at(0, 2)},
+		{UserID: 1, TokenID: 20, TokenName: "key-b", Model: "m", PromptTokens: 7, CompletionTokens: 1, Quota: 2, CreatedAt: at(0, 3)},
+		{UserID: 2, TokenID: 30, TokenName: "key-c", Model: "m", PromptTokens: 1, CompletionTokens: 1, Quota: 9, CreatedAt: at(0, 4)},
+	}
+	for i := range rows {
+		if err := InsertLog(&rows[i]); err != nil {
+			t.Fatalf("InsertLog failed: %v", err)
+		}
+	}
+
+	since := today.AddDate(0, 0, -6).Unix()
+
+	// All tokens for user 1
+	all, err := SummarizeLogsByToken(1, 0, since)
+	if err != nil {
+		t.Fatalf("SummarizeLogsByToken failed: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 rows (key-a + key-b), got %d", len(all))
+	}
+	// Ordered by token_id ASC: key-a (10) before key-b (20)
+	if all[0].TokenID != 10 || all[0].TokenName != "key-a" || all[0].Requests != 2 || all[0].Quota != 7 {
+		t.Fatalf("key-a aggregate wrong: %+v", all[0])
+	}
+	if all[1].TokenID != 20 || all[1].TokenName != "key-b" || all[1].Requests != 1 || all[1].Quota != 2 {
+		t.Fatalf("key-b aggregate wrong: %+v", all[1])
+	}
+
+	// Single token filter
+	one, err := SummarizeLogsByToken(1, 10, since)
+	if err != nil {
+		t.Fatalf("SummarizeLogsByToken(1,10) failed: %v", err)
+	}
+	if len(one) != 1 || one[0].TokenID != 10 || one[0].Requests != 2 {
+		t.Fatalf("single-token filter wrong: %+v", one)
+	}
+
+	// Token that doesn't belong to this user
+	other, err := SummarizeLogsByToken(1, 30, since)
+	if err != nil {
+		t.Fatalf("SummarizeLogsByToken(1,30) failed: %v", err)
+	}
+	if len(other) != 0 {
+		t.Fatalf("token 30 belongs to user 2, should return 0 rows, got %d", len(other))
+	}
+}

@@ -106,6 +106,41 @@ func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) 
 	return rows, err
 }
 
+// TokenDailyUsage is a per-day per-token usage summary for the
+// operational per-key consumption view.
+type TokenDailyUsage struct {
+	Date             string `json:"date"`
+	TokenID          int64  `json:"token_id"`
+	TokenName        string `json:"token_name"`
+	Requests         int64  `json:"requests"`
+	Quota            int64  `json:"quota"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+}
+
+// SummarizeLogsByToken returns daily usage broken down by token (API key).
+// When tokenID > 0 only that token's logs are aggregated; when tokenID == 0
+// all tokens for the user are included. The result is ordered by date then
+// token id for stable display.
+func SummarizeLogsByToken(userID int64, tokenID int64, since int64) ([]TokenDailyUsage, error) {
+	q := DB.Model(&Log{}).
+		Select("date(created_at, 'unixepoch') AS date, token_id AS token_id, "+
+			"MAX(token_name) AS token_name, "+
+			"COUNT(*) AS requests, SUM(quota) AS quota, "+
+			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
+		Where("created_at >= ?", since)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	if tokenID > 0 {
+		q = q.Where("token_id = ?", tokenID)
+	}
+	var rows []TokenDailyUsage
+	err := q.Group("date(created_at, 'unixepoch'), token_id").
+		Order("date ASC, token_id ASC").Scan(&rows).Error
+	return rows, err
+}
+
 func ListLogs(userID int64, page, pageSize int64, model string) ([]Log, int64, error) {
 	if page < 1 {
 		page = 1
