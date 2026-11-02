@@ -166,7 +166,6 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	actualUsage.RequestProtocol = "OpenAI"
-	actualUsage.TokenPeriodStartedAt, _ = ctx.Value(common.CtxTokenPeriodStartedAt).(int64)
 	if err := PostConsumeQuotaWithPrice(pd, userID, tokenID, tokenName, tokenUnlimited,
 		upstreamChannel.ID, modelName, actualUsage, pre,
 		fmt.Sprintf("%d", upstreamChannel.ID), 0); err != nil {

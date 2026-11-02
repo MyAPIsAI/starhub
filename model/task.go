@@ -15,20 +15,19 @@ var ErrTaskNotFound = errors.New("task not found")
 // following the submit-and-poll lifecycle of P3.3. Quota holds the
 // pre-charge reserved at submit; the terminal poll settles the difference.
 type Task struct {
-	TokenPeriodStartedAt int64  `gorm:"not null;default:0" json:"token_period_started_at,omitempty"`
-	ID                   int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	TaskPluginID         int64  `gorm:"not null;default:0;index" json:"task_plugin_id"`
-	TaskID               string `gorm:"size:128;not null;default:'';index" json:"task_id"`
-	Platform             string `gorm:"size:32;not null;default:''" json:"platform"`
-	Action               string `gorm:"size:32;not null;default:''" json:"action"`
-	Status               string `gorm:"size:32;not null;default:'submitted';index" json:"status"`
-	Progress             int    `gorm:"not null;default:0" json:"progress"`
-	Model                string `gorm:"size:128;not null;default:''" json:"model"`
-	RequestedModel       string `gorm:"size:128;not null;default:''" json:"requested_model"`
-	Protocol             string `gorm:"size:16;not null;default:''" json:"protocol"`
-	UserID               int64  `gorm:"index;not null;default:0" json:"user_id"`
-	TokenID              int64  `gorm:"not null;default:0" json:"token_id"`
-	TokenName            string `gorm:"size:64;not null;default:''" json:"token_name"`
+	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	TaskPluginID   int64  `gorm:"not null;default:0;index" json:"task_plugin_id"`
+	TaskID         string `gorm:"size:128;not null;default:'';index" json:"task_id"`
+	Platform       string `gorm:"size:32;not null;default:''" json:"platform"`
+	Action         string `gorm:"size:32;not null;default:''" json:"action"`
+	Status         string `gorm:"size:32;not null;default:'submitted';index" json:"status"`
+	Progress       int    `gorm:"not null;default:0" json:"progress"`
+	Model          string `gorm:"size:128;not null;default:''" json:"model"`
+	RequestedModel string `gorm:"size:128;not null;default:''" json:"requested_model"`
+	Protocol       string `gorm:"size:16;not null;default:''" json:"protocol"`
+	UserID         int64  `gorm:"index;not null;default:0" json:"user_id"`
+	TokenID        int64  `gorm:"not null;default:0" json:"token_id"`
+	TokenName      string `gorm:"size:64;not null;default:''" json:"token_name"`
 	// TokenUnlimited snapshots the token's unlimited flag at submit so the
 	// terminal settlement (which may happen days later) still skips the
 	// token balance correctly.

@@ -234,7 +234,7 @@ func TestStoredResponseRetrievalHonorsCurrentScopeAndExactUpstream(t *testing.T)
 				t.Fatal(err)
 			}
 		}},
-		{"token-disabled", 403, func(t *testing.T, f *responseReadFixture) {
+		{"token-disabled", 401, func(t *testing.T, f *responseReadFixture) {
 			if err := model.DB.Model(&model.Token{}).Where("id = ?", f.token.ID).Update("status", 2).Error; err != nil {
 				t.Fatal(err)
 			}

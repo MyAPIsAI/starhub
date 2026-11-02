@@ -314,7 +314,7 @@ func TestUpdateTokenForbiddenForOtherUsersToken(t *testing.T) {
 		userID: bob.ID,
 		role:   common.RoleUser,
 	})
-	expectError(t, rr, http.StatusNotFound, "token not found")
+	expectError(t, rr, http.StatusForbidden, "another user")
 	got, _ := model.GetTokenByID(tk.ID)
 	if got.Name == "stolen" {
 		t.Fatal("a user renamed another user's token")
@@ -532,7 +532,7 @@ func TestDeleteTokenForbiddenForOtherUsersToken(t *testing.T) {
 		role:   common.RoleUser,
 		path:   map[string]string{"id": itoa(tk.ID)},
 	})
-	expectError(t, rr, http.StatusNotFound, "token not found")
+	expectError(t, rr, http.StatusForbidden, "another user")
 
 	if _, err := model.GetTokenByID(tk.ID); err != nil {
 		t.Fatalf("token was deleted by a non-owner: %v", err)

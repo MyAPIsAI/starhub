@@ -316,19 +316,6 @@ describe("credential permissions, per-request routing and exact actual-model bil
       useProductPreview.getState().recordCall(key.id, false, "veyra-auto"),
     ).toMatchObject({ status: "success", actual_model: GPT });
   });
-  it("narrows smart candidates independently from direct model access", () => {
-    const key = { ...createClientKey(), smartCandidates: [CLAUDE] };
-    expect(resolveKeyModel(key, "myapis-auto")?.id).toBe(CLAUDE);
-    expect(resolveKeyModel(key, GPT)?.id).toBe(GPT);
-    expect(
-      resolveKeyModel({ ...key, smartCandidates: [DEEPSEEK] }, "myapis-auto"),
-    ).toBeNull();
-    expect(
-      getKeyModelOptions({ ...key, smartCandidates: [] }).some(
-        (option) => option.kind === "smart",
-      ),
-    ).toBe(false);
-  });
   describe.each(["myapis-auto", "veyra-auto"])("smart entry %s", (entry) => {
     it("preserves the requested entry and charges the allowed actual model once", () => {
       const key = createClientKey({ allowedModels: [GPT] });

@@ -85,7 +85,6 @@ export function Drawer({
   children,
   footer,
   initialFocus,
-  preventOutsideClose = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -94,7 +93,6 @@ export function Drawer({
   children: ReactNode;
   footer?: ReactNode;
   initialFocus?: RefObject<HTMLInputElement>;
-  preventOutsideClose?: boolean;
 }) {
   const { t } = useTranslation();
   const focusReturn = useFocusReturn();
@@ -104,9 +102,6 @@ export function Drawer({
         <DialogPrimitive.Overlay className="overlay" />
         <DialogPrimitive.Content
           className="drawer"
-          onPointerDownOutside={(event) => {
-            if (preventOutsideClose) event.preventDefault();
-          }}
           {...focusReturn}
           onOpenAutoFocus={(event) => {
             focusReturn.onOpenAutoFocus();

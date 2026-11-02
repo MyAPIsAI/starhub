@@ -248,14 +248,6 @@ curl -X POST http://localhost:3000/api/token \
 
 The `key` field in the response is the usable secret (`sk-` prefix, 48 random characters). The default quota is `500000` ($1). Optional fields: `remain_quota`, `unlimited_quota`, `expired_time` (Unix timestamp), `group`.
 
-Keys are stored with AES-256-GCM encryption and a SHA-256 lookup index. On first startup, existing plaintext rows are migrated without rotating keys or changing usage. By default, the encryption key is generated in `<database path>.key`; preserve that file separately when backing up or moving the database. Gateways sharing a database must use the same encryption key. Deployments can instead provide `STARHUB_KEY_ENCRYPTION_KEY`, a base64-encoded 32-byte secret, consistently on every instance. An incorrect key stops startup rather than replacing credentials.
-
-The console requires the owner's login password to reveal a key. Successful verification grants five minutes of access bound to that login and credential; every view or copy from the key list is audited. Key regeneration or password changes revoke existing viewing authorizations. Lists and persisted operation receipts do not contain plaintext secrets.
-
-New quota settings use `quota_limit` (quota units) and `quota_period` (`never`, `daily`, or `monthly`). Daily and monthly periods follow `region.timezone` in the startup YAML, or `STARHUB_REGION_TIMEZONE` (default `Asia/Dubai`). Lifetime usage and completed periods remain available after a reset. `allow_ips` supports up to 50 IPv4, IPv6 or CIDR entries; an empty list allows all addresses. Register trusted load balancers in `security.trusted_proxies` or `STARHUB_TRUSTED_PROXIES` (comma-separated addresses or networks). Forwarding headers from other peers are ignored.
-
-Gateway authentication reads authoritative key and owner records on every request, without a local authorization cache. With the shared SQLite database, key changes therefore apply on the next admission across instances; requests already accepted retain their captured key policy and price until settlement.
-
 ### 4. Call the Relay API
 
 ```bash

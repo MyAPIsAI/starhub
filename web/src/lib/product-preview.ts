@@ -76,7 +76,6 @@ export type PreviewRequest = Omit<RequestRecord, "source"> & {
   requested_model?: string;
   actual_model?: string | null;
   key_id?: string;
-  key_deleted?: boolean;
   request?: DemoRequest;
   response_text?: string;
   billing_status?: "charged" | "not_charged";
@@ -101,14 +100,12 @@ export interface PreviewKey {
   type: "specified" | "client" | "smart";
   modelAccess?: "all" | "custom";
   smartAccess?: boolean;
-  smartCandidates?: string[];
   smartStrategy?: "cost" | "latency" | "stability";
   allowedModels?: string[];
   quotaLimit_usd?: number | null;
   quotaLimit_nano?: string | null;
   quotaPeriod?: "never" | "daily" | "monthly";
   currentPeriodUsed_nano?: string;
-  quotaTimezone?: string;
   usagePeriodStartedAt?: string;
   credentialVersion?: string;
   totalUsed_nano?: string;
@@ -540,27 +537,6 @@ export function keyPeriodUsed(
   if (!previous) return BigInt(key.currentPeriodUsed_nano ?? "0");
   const date = billingDate(now),
     old = billingDate(previous);
-  if (key.quotaTimezone) {
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: key.quotaTimezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const dateKey = (value: string) => {
-      const parts = formatter.formatToParts(new Date(value));
-      return ["year", "month", "day"]
-        .map((type) => parts.find((part) => part.type === type)?.value ?? "")
-        .join("-");
-    };
-    const current = dateKey(now),
-      prior = dateKey(previous);
-    const matches =
-      key.quotaPeriod === "daily"
-        ? current === prior
-        : current.slice(0, 7) === prior.slice(0, 7);
-    return matches ? BigInt(key.currentPeriodUsed_nano ?? "0") : 0n;
-  }
   const matches =
     key.quotaPeriod === "daily"
       ? date === old

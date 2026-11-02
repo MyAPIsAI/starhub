@@ -21,7 +21,7 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 	if original == "" {
 		original = task.Model
 	}
-	entry := &model.Log{TokenPeriodStartedAt: task.TokenPeriodStartedAt, UserID: task.UserID, TokenID: task.TokenID, TokenName: task.TokenName,
+	entry := &model.Log{UserID: task.UserID, TokenID: task.TokenID, TokenName: task.TokenName,
 		ChannelID: task.ChannelID, Model: task.Model, RequestedModel: original, Protocol: task.Protocol,
 		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status}
 	if task.Platform == "responses" {

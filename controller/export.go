@@ -170,9 +170,6 @@ func buildLogExport(typ string, userID int64, from time.Time) ([]byte, int, erro
 	}
 	writer.Write([]string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"})
 	for _, l := range logs {
-		if l.TokenDeleted {
-			l.TokenName = "Deleted key"
-		}
 		writer.Write([]string{
 			strconv.FormatInt(l.ID, 10),
 			time.Unix(l.CreatedAt, 0).UTC().Format(time.RFC3339),

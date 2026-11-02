@@ -259,7 +259,6 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 		groups, _ = r.Context().Value(common.CtxAutoGroups).([]string)
 	}
 	limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string)
-	smartCandidates, _ := r.Context().Value(common.CtxTokenSmartCandidates).(string)
 	for _, candidateGroup := range groups {
 		candidates := model.SplitList(limits)
 		if limits == "" {
@@ -271,9 +270,6 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 		}
 		best, bestQuota := "", int64(1<<62)
 		for _, name := range candidates {
-			if smartCandidates != "" && !modelInList(name, model.SplitList(smartCandidates)) {
-				continue
-			}
 			if isAutoModel(name) || (pinned != "" && name != pinned) {
 				continue
 			}

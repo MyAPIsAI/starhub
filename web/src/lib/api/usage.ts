@@ -44,7 +44,6 @@ export interface LogRow {
   user_id: number;
   token_id: number;
   token_name: string;
-  token_deleted?: boolean;
   channel_id: number;
   model: string;
   requested_model?: string;
@@ -176,7 +175,6 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     cost_nano: quotaToNanoUsd(log.quota),
     duration_ms: log.duration_ms,
     key_id: log.token_id ? String(log.token_id) : "",
-    key_deleted: log.token_deleted,
     input_tokens: log.prompt_tokens,
     output_tokens: log.completion_tokens,
     error_code: "",
@@ -199,7 +197,6 @@ export interface PreviewRequestLike {
   cost_nano: string;
   duration_ms: number;
   key_id: string;
-  key_deleted?: boolean;
   input_tokens: number;
   output_tokens: number;
   error_code: string;

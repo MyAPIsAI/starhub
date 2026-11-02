@@ -9,10 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
-	_ "time/tzdata"
-
-	"starhub/common"
 
 	"gopkg.in/yaml.v3"
 )
@@ -22,8 +18,6 @@ type Bootstrap struct {
 	Port              string
 	RootPassword      string
 	ForceSecureCookie bool
-	TrustedProxies    []string
-	RegionTimezone    string
 }
 
 type Startup struct {
@@ -33,9 +27,6 @@ type Startup struct {
 }
 
 type fileConfig struct {
-	Region struct {
-		Timezone string `yaml:"timezone"`
-	} `yaml:"region"`
 	Version int `yaml:"version"`
 	Server  struct {
 		Port *int `yaml:"port"`
@@ -44,8 +35,7 @@ type fileConfig struct {
 		SQLitePath *string `yaml:"sqlite_path"`
 	} `yaml:"database"`
 	Security struct {
-		ForceSecureCookie *bool    `yaml:"force_secure_cookie"`
-		TrustedProxies    []string `yaml:"trusted_proxies"`
+		ForceSecureCookie *bool `yaml:"force_secure_cookie"`
 	} `yaml:"security"`
 	InitialOptions struct {
 		ChannelTestInterval *int64 `yaml:"channel_test_interval"`
@@ -69,7 +59,7 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 		return Startup{}, err
 	}
 	result := Startup{
-		Bootstrap:      Bootstrap{DBPath: "starhub.db", Port: "3000", RootPassword: getenv("STARHUB_ROOT_PASSWORD"), RegionTimezone: "Asia/Dubai"},
+		Bootstrap:      Bootstrap{DBPath: "starhub.db", Port: "3000", RootPassword: getenv("STARHUB_ROOT_PASSWORD")},
 		InitialOptions: make(map[string]string),
 	}
 	if path != "" {
@@ -118,10 +108,6 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 		if cfg.Security.ForceSecureCookie != nil {
 			result.Bootstrap.ForceSecureCookie = *cfg.Security.ForceSecureCookie
 		}
-		result.Bootstrap.TrustedProxies = cfg.Security.TrustedProxies
-		if cfg.Region.Timezone != "" {
-			result.Bootstrap.RegionTimezone = cfg.Region.Timezone
-		}
 		addInt := func(key string, value *int64) {
 			if value != nil {
 				result.InitialOptions[key] = strconv.FormatInt(*value, 10)
@@ -142,20 +128,6 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	}
 	if value := getenv("STARHUB_DB"); value != "" {
 		result.Bootstrap.DBPath = value
-	}
-	if value := getenv("STARHUB_TRUSTED_PROXIES"); value != "" {
-		result.Bootstrap.TrustedProxies = strings.Split(value, ",")
-	}
-	if value := getenv("STARHUB_REGION_TIMEZONE"); value != "" {
-		result.Bootstrap.RegionTimezone = value
-	}
-	if _, err := time.LoadLocation(result.Bootstrap.RegionTimezone); err != nil || result.Bootstrap.RegionTimezone == "Local" {
-		return Startup{}, fmt.Errorf("region.timezone must be an IANA timezone")
-	}
-	for _, value := range result.Bootstrap.TrustedProxies {
-		if _, err := common.ParseIPNetwork(strings.TrimSpace(value)); err != nil {
-			return Startup{}, fmt.Errorf("security.trusted_proxies: %w", err)
-		}
 	}
 	for env, key := range map[string]string{
 		"STARHUB_CHANNEL_TEST_INTERVAL": OptionChannelTestInterval,
@@ -214,17 +186,6 @@ func configPath(args []string, getenv func(string) string) (string, error) {
 
 // ApplyStartup sets defaults before the database seeds missing option keys.
 func ApplyStartup(startup Startup) error {
-	zone := startup.Bootstrap.RegionTimezone
-	if zone == "" {
-		zone = "Asia/Dubai"
-	}
-	if _, err := time.LoadLocation(zone); err != nil || zone == "Local" {
-		return fmt.Errorf("invalid region timezone")
-	}
-	regionTimezone.Store(zone)
-	if err := common.ConfigureTrustedProxies(startup.Bootstrap.TrustedProxies); err != nil {
-		return err
-	}
 	normalized := make(map[string]string, len(startup.InitialOptions))
 	for key, value := range startup.InitialOptions {
 		value, err := NormalizeOption(key, value)
@@ -240,13 +201,4 @@ func ApplyStartup(startup Startup) error {
 	}
 	forceSecureCookie.Store(startup.Bootstrap.ForceSecureCookie)
 	return nil
-}
-
-var regionTimezone atomic.Value
-
-func RegionTimezone() string {
-	if value := regionTimezone.Load(); value != nil {
-		return value.(string)
-	}
-	return "Asia/Dubai"
 }

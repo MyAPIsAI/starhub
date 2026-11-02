@@ -220,20 +220,19 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		originalModel = requestedModel[0]
 	}
 	entry := &model.Log{
-		UserID:               userID,
-		TokenID:              tokenID,
-		TokenName:            tokenName,
-		ChannelID:            channelID,
-		Model:                modelName,
-		RequestedModel:       originalModel,
-		Protocol:             usage.RequestProtocol,
-		TokenPeriodStartedAt: usage.TokenPeriodStartedAt,
-		PromptTokens:         usage.PromptTokens,
-		CompletionTokens:     usage.CompletionTokens,
-		Quota:                actual,
-		UsedChannels:         usedChannels,
-		DurationMs:           durationMs,
-		Status:               status,
+		UserID:           userID,
+		TokenID:          tokenID,
+		TokenName:        tokenName,
+		ChannelID:        channelID,
+		Model:            modelName,
+		RequestedModel:   originalModel,
+		Protocol:         usage.RequestProtocol,
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		Quota:            actual,
+		UsedChannels:     usedChannels,
+		DurationMs:       durationMs,
+		Status:           status,
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
@@ -270,7 +269,7 @@ func PostConsumeQuotaAmountWithStatus(userID, tokenID int64, tokenName string, t
 
 // PostConsumeQuotaAmountWithMetadata records gateway-owned request metadata.
 func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol string, periodStartedAt ...int64) error {
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol string) error {
 	if status < 1 || status > 3 {
 		return errors.New("unsupported settlement log status")
 	}
@@ -287,9 +286,6 @@ func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string,
 		UsedChannels:   usedChannels,
 		DurationMs:     durationMs,
 		Status:         status,
-	}
-	if len(periodStartedAt) > 0 {
-		entry.TokenPeriodStartedAt = periodStartedAt[0]
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
