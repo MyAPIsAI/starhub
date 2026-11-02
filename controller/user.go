@@ -219,6 +219,7 @@ func UserUsage(w http.ResponseWriter, r *http.Request) {
 			userID = v
 		}
 	}
+	tokenID, _ := strconv.ParseInt(q.Get("token_id"), 10, 64)
 	since := time.Now().UTC().AddDate(0, 0, -int(days)+1).Truncate(24 * time.Hour).Unix()
 	items, err := model.SummarizeLogsByDay(userID, since)
 	if err != nil {
@@ -234,6 +235,13 @@ func UserUsage(w http.ResponseWriter, r *http.Request) {
 				return []any{}
 			}
 			return modelItems
+		}(),
+		"by_token": func() any {
+			tokenItems, err := model.SummarizeLogsByToken(userID, tokenID, since)
+			if err != nil {
+				return []any{}
+			}
+			return tokenItems
 		}(),
 	})
 }

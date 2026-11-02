@@ -396,6 +396,50 @@ func TestUserUsageUserIDRequiresAdmin(t *testing.T) {
 	}
 }
 
+func TestUserUsageByToken(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 0)
+
+	if err := model.InsertLog(&model.Log{UserID: u.ID, TokenID: 10, TokenName: "key-a", Model: "gpt-4o", Quota: 50}); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.InsertLog(&model.Log{UserID: u.ID, TokenID: 10, TokenName: "key-a", Model: "gpt-4o", Quota: 30}); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.InsertLog(&model.Log{UserID: u.ID, TokenID: 20, TokenName: "key-b", Model: "gpt-4o", Quota: 20}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Without token_id: by_token returns all keys
+	rr := call(UserUsage, testRequest{
+		target: "/api/user/usage",
+		userID: u.ID,
+		role:   common.RoleUser,
+	})
+	var got map[string]any
+	decodeData(t, rr, &got)
+	byToken := got["by_token"].([]any)
+	if len(byToken) != 2 {
+		t.Fatalf("expected 2 token rows, got %d", len(byToken))
+	}
+
+	// With token_id=10: only key-a
+	rr = call(UserUsage, testRequest{
+		target: "/api/user/usage?token_id=10",
+		userID: u.ID,
+		role:   common.RoleUser,
+	})
+	decodeData(t, rr, &got)
+	byToken = got["by_token"].([]any)
+	if len(byToken) != 1 {
+		t.Fatalf("expected 1 token row for token_id=10, got %d", len(byToken))
+	}
+	row := byToken[0].(map[string]any)
+	if row["token_id"].(float64) != 10 || row["quota"].(float64) != 80 {
+		t.Fatalf("token 10 aggregate wrong: %+v", row)
+	}
+}
+
 func TestUpdateUserValidation(t *testing.T) {
 	newTestDB(t)
 	u := newUser(t, "alice", common.RoleUser, 100)
