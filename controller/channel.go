@@ -323,6 +323,27 @@ func modelInList(name string, models []string) bool {
 	return false
 }
 
+// GetChannelUpstreamUsage fetches per-key usage and balance from the upstream
+// new-api instance and returns a reconciliation view against the local
+// Channel.UsedQuota. Admin-only.
+func GetChannelUpstreamUsage(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	ch, err := model.GetChannelByID(id)
+	if err != nil {
+		common.ApiError(w, http.StatusNotFound, "channel not found")
+		return
+	}
+	result, err := service.FetchUpstreamTokenUsage(r.Context(), ch)
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	common.ApiSuccess(w, result)
+}
+
 // formatChannelTypes renders the supported channel types for API messages
 // (sorted by type id for a stable surface).
 func formatChannelTypes() string {

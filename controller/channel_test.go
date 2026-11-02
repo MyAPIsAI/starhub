@@ -495,3 +495,40 @@ func TestModelInList(t *testing.T) {
 		t.Fatal("partial or empty names must not match")
 	}
 }
+
+func TestGetChannelUpstreamUsageChannelNotFound(t *testing.T) {
+	newTestDB(t)
+	uid, role := admin()
+	rr := call(GetChannelUpstreamUsage, testRequest{
+		target: "/api/channel/9999/upstream-usage",
+		userID: uid,
+		role:   role,
+		path:   map[string]string{"id": "9999"},
+	})
+	expectError(t, rr, http.StatusNotFound, "channel not found")
+}
+
+func TestGetChannelUpstreamUsageUnsupportedUpstream(t *testing.T) {
+	newTestDB(t)
+	uid, role := admin()
+	ch := mustChannel(t, "test", "gpt-4o", "sk-upstream12345", common.ChannelStatusEnabled)
+	// The channel has no real upstream, so the service will report
+	// unsupported. The controller must still return 200 with supported=false.
+	rr := call(GetChannelUpstreamUsage, testRequest{
+		target: "/api/channel/" + itoa(ch.ID) + "/upstream-usage",
+		userID: uid,
+		role:   role,
+		path:   map[string]string{"id": itoa(ch.ID)},
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	decodeData(t, rr, &got)
+	if got["supported"] != false {
+		t.Fatalf("expected supported=false, got %v", got["supported"])
+	}
+	if got["channel_id"].(float64) != float64(ch.ID) {
+		t.Fatalf("expected channel_id=%d, got %v", ch.ID, got["channel_id"])
+	}
+}
