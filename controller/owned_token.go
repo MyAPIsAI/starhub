@@ -44,6 +44,16 @@ func GetOwnedTokenChoices(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range state.Choices {
 		choice := &state.Choices[i]
+		choice.Vendor, choice.VendorDisplay = model.InferVendor(choice.Model)
+		if meta := metadata[choice.Model]; meta != nil {
+			if meta.Vendor != "" {
+				choice.Vendor, choice.VendorDisplay = meta.Vendor, meta.Vendor
+			}
+			if meta.VendorDisplay != "" {
+				choice.VendorDisplay = meta.VendorDisplay
+			}
+			choice.Tags = model.SplitList(meta.Tags)
+		}
 		if item, ok := coverage[choice.Model]; ok {
 			var tags []string
 			if meta := metadata[choice.Model]; meta != nil {

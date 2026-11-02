@@ -17,6 +17,9 @@ import (
 var ErrOwnedTokenConflict = errors.New("owned token state changed")
 
 type OwnedTokenChoice struct {
+	Vendor        string   `json:"vendor,omitempty"`
+	VendorDisplay string   `json:"vendor_display,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
 	Group         string   `json:"group"`
 	Model         string   `json:"model"`
 	Protocols     []string `json:"protocols"`

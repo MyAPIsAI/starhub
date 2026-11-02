@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 
 const web = fileURLToPath(new URL("../", import.meta.url));
 const project = path.resolve(web, "..");
-const out = path.join(project, "output", "key-access-style-check");
+const out = path.join(project, "output", "key-collapsed-check");
 await mkdir(out, { recursive: true });
 const temp = await mkdtemp(path.join(out, "run-"));
 const binary = path.join(
@@ -100,6 +100,7 @@ try {
     data: { username: "root", password },
   });
   assert.equal(login.status(), 200);
+  const ownerID = (await login.json()).data.user.id;
   const rateLimit = await seed.request.put(`${base}/api/option`, {
     data: { key: "ip_rate_limit", value: "10000" },
   });
@@ -110,12 +111,46 @@ try {
       type: 1,
       key: "synthetic-browser-key",
       base_url: "https://example.invalid",
-      models: "alpha,beta,gamma",
+      models: "gpt-4.1,gpt-4.1-mini,claude-sonnet-4",
       group: "default",
       status: 1,
     },
   });
   assert.equal(channel.status(), 200);
+  const groups = await seed.request.put(`${base}/api/option`, {
+    data: { key: "group_ratio", value: '{"default":1,"vip":1}' },
+  });
+  assert.equal(groups.status(), 200);
+  const otherChannel = await seed.request.post(`${base}/api/channel/`, {
+    data: {
+      name: "Other group choices",
+      type: 1,
+      key: "synthetic-other-group-key",
+      base_url: "https://example.invalid",
+      models: "text-embedding-3-small,gpt-image-1,whisper-1",
+      group: "vip",
+      status: 1,
+    },
+  });
+  assert.equal(otherChannel.status(), 200);
+  for (const [model, vendor, tags] of [
+    ["gpt-4.1", "openai", "vision,function_call"],
+    ["gpt-4.1-mini", "openai", "function_call"],
+    ["claude-sonnet-4", "anthropic", "vision,function_call"],
+    ["text-embedding-3-small", "openai", "embedding"],
+    ["gpt-image-1", "openai", "image"],
+    ["whisper-1", "openai", "stt"],
+  ]) {
+    const metadata = await seed.request.put(`${base}/api/plaza/meta`, {
+      data: {
+        model,
+        vendor,
+        vendor_display: vendor === "openai" ? "OpenAI" : "Anthropic",
+        tags,
+      },
+    });
+    assert.equal(metadata.status(), 200);
+  }
   const storageState = await seed.storageState();
   await seed.close();
   for (const language of ["zh", "en", "ar"])
@@ -150,20 +185,94 @@ try {
           .click();
         const dialog = page.getByRole("dialog");
         await page.locator("#new-key-name").fill("Key acceptance");
-        const allowed = dialog
-          .getByText(text.allowed, { exact: true })
-          .locator("..");
+        const policy = page.locator(".native-key-model-policy");
+        assert.equal(await page.locator(".native-key-step").count(), 0);
+        assert.equal(
+          await page
+            .locator(".native-key-policy-disclosure")
+            .getAttribute("aria-expanded"),
+          "false",
+        );
+        assert.equal(
+          await page
+            .locator("#native-key-access-toggle")
+            .getAttribute("aria-expanded"),
+          "false",
+        );
+        assert.equal(
+          await page.locator("#native-key-policy-body").isVisible(),
+          false,
+        );
+        assert.equal(
+          await page.locator("#native-key-access-fields").isVisible(),
+          false,
+        );
+        const collapsedShot = `key-collapsed-${language}-${theme}-${width}.png`;
+        await page.screenshot({
+          path: path.join(out, collapsedShot),
+          fullPage: false,
+        });
+        report.screenshots.push(collapsedShot);
+        await page.locator(".native-key-policy-disclosure").click();
+        assert.equal(
+          await page
+            .locator("#native-key-scope-snapshot")
+            .getAttribute("aria-pressed"),
+          "true",
+        );
+        assert.ok((await policy.textContent()).includes("myapis-auto"));
+        assert.equal(
+          await policy.locator('input[type="checkbox"]:visible').count(),
+          0,
+        );
+        const snapshotShot = `model-snapshot-${language}-${theme}-${width}.png`;
+        await policy.screenshot({ path: path.join(out, snapshotShot) });
+        report.screenshots.push(snapshotShot);
+        await page.locator("#native-key-scope-custom").click();
+        const allowed = policy.locator(".native-key-model-list");
+        await dialog
+          .getByRole("button", { name: text.create, exact: true })
+          .click();
+        await policy.locator(".native-key-policy-error").waitFor();
+        assert.ok(
+          await allowed
+            .getByLabel("text-embedding-3-small", { exact: true })
+            .isDisabled(),
+        );
+        assert.ok(
+          await allowed.getByLabel("gpt-image-1", { exact: true }).isDisabled(),
+        );
+        await page.locator("#native-key-model-search").fill("gpt-4.1-mini");
+        assert.equal(
+          await allowed.locator('input[type="checkbox"]').count(),
+          1,
+        );
+        await allowed.getByLabel("gpt-4.1-mini", { exact: true }).check();
+        await page.locator("#native-key-model-search").fill("");
+        assert.ok(
+          await allowed.getByLabel("gpt-4.1-mini", { exact: true }).isChecked(),
+        );
+        await allowed.getByLabel("gpt-4.1-mini", { exact: true }).uncheck();
+        await allowed.getByLabel("gpt-4.1", { exact: true }).check();
+        await allowed.getByLabel("gpt-4.1-mini", { exact: true }).check();
+        await page.locator("#native-key-candidates-toggle").click();
         const candidates = dialog.getByRole("group", {
           name: text.candidates,
           exact: true,
         });
-        await allowed.getByLabel("gamma", { exact: true }).uncheck();
         assert.equal(
-          await candidates.getByLabel("gamma", { exact: true }).count(),
+          await candidates
+            .getByLabel("claude-sonnet-4", { exact: true })
+            .count(),
           0,
         );
-        await candidates.getByLabel("alpha", { exact: true }).uncheck();
-        await candidates.getByLabel("beta", { exact: true }).uncheck();
+        assert.equal(
+          await candidates.getByLabel("gpt-image-1", { exact: true }).count(),
+          0,
+        );
+        await candidates.getByLabel("gpt-4.1", { exact: true }).uncheck();
+        await candidates.getByLabel("gpt-4.1-mini", { exact: true }).uncheck();
+        await page.locator(".native-key-policy-disclosure").click();
         await dialog
           .getByRole("button", { name: text.create, exact: true })
           .click();
@@ -171,7 +280,17 @@ try {
           .getByRole("alert")
           .filter({ hasText: text.empty })
           .waitFor();
-        await candidates.getByLabel("beta", { exact: true }).check();
+        assert.equal(
+          await page
+            .locator(".native-key-policy-disclosure")
+            .getAttribute("aria-expanded"),
+          "true",
+        );
+        await candidates.getByLabel("gpt-4.1-mini", { exact: true }).check();
+        await page.locator("#native-key-candidates-toggle").click();
+        const customShot = `model-custom-${language}-${theme}-${width}.png`;
+        await policy.screenshot({ path: path.join(out, customShot) });
+        report.screenshots.push(customShot);
         let writes = 0;
         page.on("request", (request) => {
           if (
@@ -180,6 +299,7 @@ try {
           )
             writes++;
         });
+        await page.locator("#native-key-access-toggle").click();
         assert.ok(await page.locator("#native-key-expiry-never").isChecked());
         assert.equal(await page.locator("#native-key-expiry").count(), 0);
         assert.equal(await page.locator("#native-key-ips").inputValue(), "");
@@ -305,8 +425,8 @@ try {
           assert.equal(response.status(), 200);
           const created = (await response.json()).data.token;
           const body = response.request().postDataJSON();
-          assert.equal(body.payload.model_limits, "alpha,beta");
-          assert.equal(body.payload.smart_candidates, "beta");
+          assert.equal(body.payload.model_limits, "gpt-4.1,gpt-4.1-mini");
+          assert.equal(body.payload.smart_candidates, "gpt-4.1-mini");
           assert.equal(body.payload.smart_access, true);
           assert.equal(body.payload.quota_limit, 12_500_000);
           assert.equal(body.payload.quota_period, "daily");
@@ -314,9 +434,9 @@ try {
           const token = (await list.json()).data.find(
             (row) => row.name === "Key acceptance",
           );
-          assert.equal(token.smart_candidates, "beta");
+          assert.equal(token.smart_candidates, "gpt-4.1-mini");
           assert.equal(token.smart_access, true);
-          assert.equal(token.model_limits, "alpha,beta");
+          assert.equal(token.model_limits, "gpt-4.1,gpt-4.1-mini");
           assert.equal(token.quota_period, "daily");
           assert.equal(token.quota_limit, 12_500_000);
           assert.equal(token.remain_quota, 12_500_000);
@@ -360,6 +480,7 @@ try {
             "reload loses plaintext; password retrieves the encrypted key; repeated view uses audited server grant",
           );
           await row.locator('[data-key-action="edit"]').click();
+          await page.locator("#native-key-access-toggle").click();
           assert.ok(await page.locator("#native-key-expiry-date").isChecked());
           assert.equal(
             await page.locator("#native-key-ip-count").textContent(),
@@ -386,6 +507,7 @@ try {
           );
           await page.getByRole("dialog").waitFor({ state: "hidden" });
           await row.locator('[data-key-action="edit"]').click();
+          await page.locator("#native-key-access-toggle").click();
           await page.locator("#native-key-expiry-never").check();
           await page.locator("#native-key-ips").fill("");
           assert.equal(
@@ -415,11 +537,163 @@ try {
         }
         await dialog.waitFor({ state: "hidden" });
         report.checks.push(
-          `${language}/${theme}/${width}: candidate boundary, access disclosure, expiry selection, 50-entry limit, draft preservation, keyboard and viewport`,
+          `${language}/${theme}/${width}: collapsed defaults without step number, candidate boundary, access disclosure, expiry selection, 50-entry limit, draft preservation, keyboard and viewport`,
         );
         console.log(`PASS ${language}/${theme}/${width}`);
         await context.close();
       }
+  const finalContext = await browser.newContext({
+    storageState,
+    viewport: { width: 1440, height: 1000 },
+  });
+  await finalContext.addInitScript(() => {
+    localStorage.setItem("xy-language", "zh");
+    localStorage.setItem("xy-theme", "light");
+  });
+  const finalPage = await finalContext.newPage();
+  finalPage.on("pageerror", (error) => report.errors.push(String(error)));
+  await finalPage.goto(`${base}/console/keys`);
+  await finalPage
+    .locator(".key-manager-header")
+    .getByRole("button", { name: "创建密钥", exact: true })
+    .click();
+  await finalPage.locator("#new-key-name").fill("Snapshot authorization");
+  const initialChoices = (
+    await (
+      await finalContext.request.get(
+        `${base}/api/token/owned-choices?expected_user_id=${ownerID}`,
+      )
+    ).json()
+  ).data.choices.filter((choice) => choice.group === "default");
+  const expectedSnapshot = initialChoices.map((choice) => choice.model).sort();
+  const createSnapshot = finalPage.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/token/owned-action"),
+  );
+  await finalPage
+    .getByRole("dialog")
+    .getByRole("button", { name: "创建密钥", exact: true })
+    .click();
+  const snapshotResponse = await createSnapshot;
+  assert.equal(snapshotResponse.status(), 200);
+  assert.deepEqual(
+    snapshotResponse
+      .request()
+      .postDataJSON()
+      .payload.model_limits.split(",")
+      .sort(),
+    expectedSnapshot,
+  );
+  const snapshotID = (await snapshotResponse.json()).data.token.id;
+  await finalPage
+    .getByRole("dialog")
+    .getByRole("button", { name: "关闭", exact: true })
+    .last()
+    .click();
+  const addedModel = "gpt-after-snapshot";
+  const newModelChannel = await finalContext.request.post(
+    `${base}/api/channel/`,
+    {
+      data: {
+        name: "Later model",
+        type: 1,
+        key: "synthetic-later-key",
+        base_url: "https://example.invalid",
+        models: addedModel,
+        group: "default",
+        status: 1,
+      },
+    },
+  );
+  assert.equal(newModelChannel.status(), 200);
+  await finalPage.reload();
+  const snapshotRow = finalPage.locator(`[data-key-id="${snapshotID}"]`);
+  await snapshotRow.locator('[data-key-action="edit"]').click();
+  await finalPage.locator(".native-key-policy-disclosure").click();
+  await finalPage.locator("#edit-key-name").fill("Snapshot metadata edit");
+  assert.equal(
+    await finalPage
+      .locator(".native-key-model-list")
+      .getByLabel(addedModel, { exact: true })
+      .isChecked(),
+    false,
+  );
+  const metadataUpdate = finalPage.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/token/owned-action"),
+  );
+  await finalPage
+    .getByRole("dialog")
+    .getByRole("button", { name: "保存", exact: true })
+    .click();
+  const metadataResponse = await metadataUpdate;
+  assert.equal(metadataResponse.status(), 200);
+  assert.equal(
+    Object.hasOwn(
+      metadataResponse.request().postDataJSON().payload,
+      "model_limits",
+    ),
+    false,
+  );
+  let storedSnapshot = (
+    await (await finalContext.request.get(`${base}/api/token/owned`)).json()
+  ).data.find((key) => key.id === snapshotID);
+  assert.deepEqual(
+    storedSnapshot.model_limits.split(",").sort(),
+    expectedSnapshot,
+  );
+  await finalPage.getByRole("dialog").waitFor({ state: "hidden" });
+  await snapshotRow.locator('[data-key-action="edit"]').click();
+  await finalPage.locator(".native-key-policy-disclosure").click();
+  await finalPage.locator("#native-key-scope-snapshot").click();
+  const explicitUpdate = finalPage.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/token/owned-action"),
+  );
+  await finalPage
+    .getByRole("dialog")
+    .getByRole("button", { name: "保存", exact: true })
+    .click();
+  assert.equal((await explicitUpdate).status(), 200);
+  storedSnapshot = (
+    await (await finalContext.request.get(`${base}/api/token/owned`)).json()
+  ).data.find((key) => key.id === snapshotID);
+  assert.deepEqual(
+    storedSnapshot.model_limits.split(",").sort(),
+    [...expectedSnapshot, addedModel].sort(),
+  );
+  await finalPage.getByRole("dialog").waitFor({ state: "hidden" });
+  await snapshotRow.locator('[data-key-action="edit"]').click();
+  await finalPage.locator(".native-key-policy-disclosure").click();
+  await finalPage.locator("#native-key-smart-access").click();
+  const disableSmart = finalPage.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/token/owned-action"),
+  );
+  await finalPage
+    .getByRole("dialog")
+    .getByRole("button", { name: "保存", exact: true })
+    .click();
+  assert.equal((await disableSmart).status(), 200);
+  storedSnapshot = (
+    await (await finalContext.request.get(`${base}/api/token/owned`)).json()
+  ).data.find((key) => key.id === snapshotID);
+  assert.equal(storedSnapshot.smart_access, false);
+  assert.deepEqual(
+    storedSnapshot.model_limits.split(",").sort(),
+    [...expectedSnapshot, addedModel].sort(),
+  );
+  report.checks.push(
+    "all-at-save stores explicit models; later additions do not expand permissions on metadata edits; explicit snapshot update adds them",
+  );
+  report.checks.push(
+    "disabling myapis-auto preserves direct model authorization",
+  );
+  await finalContext.close();
   assert.deepEqual(report.errors, []);
 } catch (error) {
   report.errors.push(String(error));

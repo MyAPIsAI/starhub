@@ -58,7 +58,7 @@ describe("editing existing native keys", () => {
       }),
     );
     expect(html).toContain("Smart candidate models");
-    expect(html).toContain("(Unavailable)");
+    expect(html).toContain("Unavailable");
     const candidates = html
       .split("<legend>Smart candidate models</legend>")[1]
       .split("</fieldset>")[0];
@@ -97,8 +97,7 @@ describe("editing existing native keys", () => {
       expect(html).toContain('value="auto" selected=""');
       expect(html).toContain('id="new-key-quota"');
       expect(html).toContain('value="100"');
-      if (limits)
-        expect(html).toContain('type="checkbox" disabled="" checked=""');
+      if (limits) expect(html).toContain('disabled="" checked=""');
       expect(html).not.toContain(
         'type="checkbox" checked=""/><span>current-model',
       );
