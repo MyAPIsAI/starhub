@@ -100,6 +100,7 @@ export interface PreviewKey {
   type: "specified" | "client" | "smart";
   modelAccess?: "all" | "custom";
   smartAccess?: boolean;
+  smartCandidates?: string[];
   smartStrategy?: "cost" | "latency" | "stability";
   allowedModels?: string[];
   quotaLimit_usd?: number | null;

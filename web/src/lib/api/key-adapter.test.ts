@@ -25,6 +25,16 @@ const token: Token = {
   created_at: 0,
 };
 describe("backend smart-routing capability", () => {
+  it("retains a separate smart candidate list without narrowing direct access", () => {
+    const key = tokenToPreviewKey({
+      ...token,
+      model_limits: "gpt-4.1,other",
+      smart_access: true,
+      smart_candidates: "gpt-4.1",
+    });
+    expect(key.allowedModels).toEqual(["gpt-4.1", "other"]);
+    expect(key.smartCandidates).toEqual(["gpt-4.1"]);
+  });
   it("uses the explicit capability and preserves the actual-model allowlist", () => {
     const key = tokenToPreviewKey({ ...token, smart_access: true });
     expect(getClientModels(key, "openai").map((model) => model.id)).toEqual([

@@ -21,6 +21,7 @@ export interface KeyModelPolicy {
   modelAccess?: "all" | "custom";
   allowedModels?: string[];
   smartAccess?: boolean;
+  smartCandidates?: string[];
   smartStrategy?: "cost" | "latency" | "stability";
 }
 
@@ -66,7 +67,12 @@ export function getKeyModelOptions(
           kind: "specified",
         }))
       : [];
-  if (allowsSmartModel(key) && candidates.length)
+  if (
+    allowsSmartModel(key) &&
+    candidates.some(
+      (model) => !key.smartCandidates || key.smartCandidates.includes(model.id),
+    )
+  )
     options.push({
       id: SMART_MODEL_ID,
       name: "MyAPIs Auto（智能路由）",
@@ -126,7 +132,9 @@ export function resolveKeyModelResult(
     )
     .filter((model) =>
       smart
-        ? model.protocols.length > 0 && model.capabilities.includes("text")
+        ? model.protocols.length > 0 &&
+          model.capabilities.includes("text") &&
+          (!key.smartCandidates || key.smartCandidates.includes(model.id))
         : model.id === requested,
     );
   if (!candidates.length) return { error: "model_unauthorized" };

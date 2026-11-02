@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -10,14 +11,16 @@ import (
 )
 
 type tokenPayload struct {
-	Name           string `json:"name"`
-	RemainQuota    *int64 `json:"remain_quota"`
-	UnlimitedQuota *bool  `json:"unlimited_quota"`
-	ExpiredTime    *int64 `json:"expired_time"`
-	Group          string `json:"group"`
-	ModelLimits    string `json:"model_limits"`
-	AllowIps       string `json:"allow_ips"`
-	AutoGroups     string `json:"auto_groups"`
+	Name            string `json:"name"`
+	RemainQuota     *int64 `json:"remain_quota"`
+	UnlimitedQuota  *bool  `json:"unlimited_quota"`
+	ExpiredTime     *int64 `json:"expired_time"`
+	Group           string `json:"group"`
+	ModelLimits     string `json:"model_limits"`
+	AllowIps        string `json:"allow_ips"`
+	AutoGroups      string `json:"auto_groups"`
+	SmartAccess     *bool  `json:"smart_access"`
+	SmartCandidates string `json:"smart_candidates"`
 }
 
 func CreateToken(w http.ResponseWriter, r *http.Request) {
@@ -64,18 +67,28 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := &model.Token{
-		UserID:         requestUserID(r),
-		Name:           strings.TrimSpace(req.Name),
-		Status:         common.StatusEnabled,
-		Group:          group,
-		ExpiredTime:    expiredTime,
-		RemainQuota:    remainQuota,
-		UnlimitedQuota: unlimited,
-		ModelLimits:    strings.TrimSpace(req.ModelLimits),
-		AllowIps:       strings.TrimSpace(req.AllowIps),
-		AutoGroups:     autoGroups,
+		UserID:          requestUserID(r),
+		Name:            strings.TrimSpace(req.Name),
+		Status:          common.StatusEnabled,
+		Group:           group,
+		ExpiredTime:     expiredTime,
+		RemainQuota:     remainQuota,
+		UnlimitedQuota:  unlimited,
+		ModelLimits:     strings.TrimSpace(req.ModelLimits),
+		AllowIps:        strings.TrimSpace(req.AllowIps),
+		AutoGroups:      autoGroups,
+		SmartAccess:     req.SmartAccess,
+		SmartCandidates: strings.TrimSpace(req.SmartCandidates),
+	}
+	if err := model.ValidateTokenSmartPolicy(token); err != nil {
+		common.ApiError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := model.InsertToken(token); err != nil {
+		if errors.Is(err, model.ErrTokenLimitReached) {
+			common.ApiError(w, http.StatusConflict, err.Error())
+			return
+		}
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -117,6 +130,7 @@ func maskedToken(t *model.Token) map[string]any {
 		"allow_ips":           t.AllowIps,
 		"auto_groups":         t.AutoGroups,
 		"smart_access":        t.AllowsSmartRouting(),
+		"smart_candidates":    t.SmartCandidates,
 		"created_at":          t.CreatedAt,
 		"management_schema":   "owned_token_v1",
 		"management_revision": model.TokenManagementRevision(t),
@@ -124,17 +138,19 @@ func maskedToken(t *model.Token) map[string]any {
 }
 
 type tokenUpdateRequest struct {
-	ID             int64   `json:"id"`
-	Name           *string `json:"name"`
-	RemainQuota    *int64  `json:"remain_quota"`
-	ExpectedQuota  *int64  `json:"expected_quota"`
-	UnlimitedQuota *bool   `json:"unlimited_quota"`
-	ExpiredTime    *int64  `json:"expired_time"`
-	Group          *string `json:"group"`
-	ModelLimits    *string `json:"model_limits"`
-	AllowIps       *string `json:"allow_ips"`
-	AutoGroups     *string `json:"auto_groups"`
-	Status         *int    `json:"status"`
+	ID              int64   `json:"id"`
+	Name            *string `json:"name"`
+	RemainQuota     *int64  `json:"remain_quota"`
+	ExpectedQuota   *int64  `json:"expected_quota"`
+	UnlimitedQuota  *bool   `json:"unlimited_quota"`
+	ExpiredTime     *int64  `json:"expired_time"`
+	Group           *string `json:"group"`
+	ModelLimits     *string `json:"model_limits"`
+	AllowIps        *string `json:"allow_ips"`
+	AutoGroups      *string `json:"auto_groups"`
+	Status          *int    `json:"status"`
+	SmartAccess     *bool   `json:"smart_access"`
+	SmartCandidates *string `json:"smart_candidates"`
 }
 
 func UpdateToken(w http.ResponseWriter, r *http.Request) {
@@ -152,10 +168,26 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canManageToken(r, token) {
-		common.ApiError(w, http.StatusForbidden, "cannot manage a token owned by another user")
+		common.ApiError(w, http.StatusNotFound, "token not found")
 		return
 	}
 	fields := map[string]any{}
+	policy := *token
+	if req.SmartAccess != nil {
+		fields["smart_access"] = *req.SmartAccess
+		policy.SmartAccess = req.SmartAccess
+	}
+	if req.SmartCandidates != nil {
+		fields["smart_candidates"] = strings.TrimSpace(*req.SmartCandidates)
+		policy.SmartCandidates = fields["smart_candidates"].(string)
+	}
+	if req.ModelLimits != nil {
+		policy.ModelLimits = strings.TrimSpace(*req.ModelLimits)
+	}
+	if err := model.ValidateTokenSmartPolicy(&policy); err != nil {
+		common.ApiError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	// Track whether the caller explicitly set remain_quota (which needs
 	// the optimistic-concurrency guard) vs. an implicit reset caused
 	// by switching to unlimited_quota (which does not).
@@ -261,9 +293,10 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		current := token.RemainQuota
 		expected = &current
 	}
-	if err := model.UpdateTokenFieldsWithQuota(req.ID, fields, expected); err != nil {
+	// Keep policy validation bound to the row that was read, even on legacy writes.
+	if err := model.UpdateTokenFieldsWithQuota(req.ID, fields, expected, token.Revision); err != nil {
 		if err == model.ErrQuotaConflict {
-			common.ApiError(w, http.StatusConflict, "balance changed; reload and confirm again")
+			common.ApiError(w, http.StatusConflict, "key or balance changed; reload and confirm again")
 			return
 		}
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
@@ -283,7 +316,7 @@ func DeleteToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canManageToken(r, token) {
-		common.ApiError(w, http.StatusForbidden, "cannot manage a token owned by another user")
+		common.ApiError(w, http.StatusNotFound, "token not found")
 		return
 	}
 	if err := model.DeleteToken(id); err != nil {
@@ -354,7 +387,7 @@ func RegenerateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canManageToken(r, token) {
-		common.ApiError(w, http.StatusForbidden, "cannot manage a token owned by another user")
+		common.ApiError(w, http.StatusNotFound, "token not found")
 		return
 	}
 	var newKey string

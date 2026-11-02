@@ -9,11 +9,19 @@ import (
 	"starhub/common"
 )
 
-var ErrTokenNotFound = errors.New("token not found")
+var (
+	ErrTokenNotFound     = errors.New("token not found")
+	ErrTokenLimitReached = errors.New("key limit reached: maximum 200 keys per account")
+)
 
-// AllowsSmartRouting describes existing routing semantics, not an extra grant.
+const MaxTokensPerUser = 200
+
+// AllowsSmartRouting honors explicit policy while preserving legacy key behavior.
 // Virtual-only allowlists cannot authorize any actual upstream model.
 func (t *Token) AllowsSmartRouting() bool {
+	if t.SmartAccess != nil && !*t.SmartAccess {
+		return false
+	}
 	if t.ModelLimits == "" {
 		return true
 	}
@@ -39,6 +47,10 @@ type Token struct {
 	// ModelLimits is a comma-separated model whitelist; empty means no limit.
 	// A sub-key can be restricted to cheaper models only.
 	ModelLimits string `gorm:"size:1024;not null;default:''" json:"model_limits"`
+	// Nil preserves the routing permission of keys created before explicit smart policies.
+	SmartAccess *bool `json:"smart_access,omitempty"`
+	// Empty inherits the model allowlist; a nonempty list only narrows smart routing.
+	SmartCandidates string `gorm:"size:1024;not null;default:''" json:"smart_candidates"`
 	// AllowIps is a comma-separated IP whitelist; empty means no limit.
 	// Enterprise customers use it to prevent key leakage.
 	AllowIps string `gorm:"size:1024;not null;default:''" json:"allow_ips"`
@@ -50,18 +62,74 @@ type Token struct {
 }
 
 func InsertToken(t *Token) error {
-	var err error
-	for i := 0; i < 3; i++ {
-		t.Key = common.GenerateTokenKey()
-		err = DB.Create(t).Error
-		if err == nil {
-			return nil
-		}
-		if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+	if err := ValidateTokenSmartPolicy(t); err != nil {
+		return err
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := checkTokenCreationLimit(tx, t.UserID); err != nil {
 			return err
 		}
+		var err error
+		for i := 0; i < 3; i++ {
+			t.Key = common.GenerateTokenKey()
+			err = tx.Create(t).Error
+			if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				return err
+			}
+		}
+		return err
+	})
+}
+
+func checkTokenCreationLimit(tx *gorm.DB, owner int64) error {
+	// Claim the SQLite writer before counting, including when this owner has no keys.
+	if err := tx.Model(&User{}).Where("id = ?", owner).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+		return err
 	}
-	return err
+	var count int64
+	if err := tx.Model(&Token{}).Where("user_id = ?", owner).Count(&count).Error; err != nil {
+		return err
+	}
+	if count >= MaxTokensPerUser {
+		return ErrTokenLimitReached
+	}
+	return nil
+}
+
+func ValidateTokenSmartPolicy(t *Token) error {
+	if len(t.SmartCandidates) > 1024 {
+		return errors.New("smart candidate list exceeds limit")
+	}
+	seen := map[string]bool{}
+	candidates := SplitList(t.SmartCandidates)
+	if t.SmartCandidates != "" && len(candidates) == 0 {
+		return errors.New("smart candidates must contain a model")
+	}
+	for _, name := range candidates {
+		if !concreteResourceModel(name) || seen[name] || (t.ModelLimits != "" && !containsTokenModel(t.ModelLimitList(), name)) {
+			return errors.New("smart candidates must be unique concrete models within the key allowlist")
+		}
+		seen[name] = true
+	}
+	return nil
+}
+
+func containsTokenModel(models []string, name string) bool {
+	for _, allowed := range models {
+		if allowed == name {
+			return true
+		}
+	}
+	return false
+}
+
+func GetOwnedTokenByID(owner, id int64) (*Token, error) {
+	var token Token
+	err := DB.Where("id = ? AND user_id = ?", id, owner).First(&token).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrTokenNotFound
+	}
+	return &token, err
 }
 
 func GetTokenByKey(key string) (*Token, error) {

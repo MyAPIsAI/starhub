@@ -219,7 +219,9 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 			common.CtxUsingGroup, group,
 			common.CtxUserGroup, user.Group,
 			common.CtxAutoGroups, autoGroups,
-			common.CtxTokenModelLimits, token.ModelLimits)
+			common.CtxTokenModelLimits, token.ModelLimits,
+			common.CtxTokenSmartAccess, token.AllowsSmartRouting(),
+			common.CtxTokenSmartCandidates, token.SmartCandidates)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

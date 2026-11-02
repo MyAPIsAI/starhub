@@ -145,6 +145,12 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			}
 
 			requestedModel := modelName
+			if isAutoModel(requestedModel) {
+				if allowed, configured := r.Context().Value(common.CtxTokenSmartAccess).(bool); configured && !allowed {
+					fail(http.StatusForbidden, "smart_routing_not_allowed", "smart routing is disabled for this API key")
+					return
+				}
+			}
 			r, body, err = prepareResponseConversation(r, body)
 			if err != nil {
 				fail(http.StatusNotFound, "conversation_not_found", "conversation is unavailable for this API key or request state")
@@ -212,6 +218,13 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 				if !modelInList(modelName, model.SplitList(limits)) {
 					fail(http.StatusForbidden, "model_not_allowed",
 						"the model is not in the token's model whitelist")
+					return
+				}
+			}
+
+			if autoModelSelected {
+				if candidates, _ := r.Context().Value(common.CtxTokenSmartCandidates).(string); candidates != "" && !modelInList(modelName, model.SplitList(candidates)) {
+					fail(http.StatusForbidden, "model_not_allowed", "the model is not in the key's smart candidate list")
 					return
 				}
 			}

@@ -24,7 +24,9 @@ const (
 	CtxUserGroup ctxKey = "user_group"
 	// CtxTokenModelLimits carries the token's model whitelist (comma-separated)
 	// so the distributor can enforce it once the model name is parsed.
-	CtxTokenModelLimits ctxKey = "token_model_limits"
+	CtxTokenModelLimits     ctxKey = "token_model_limits"
+	CtxTokenSmartAccess     ctxKey = "token_smart_access"
+	CtxTokenSmartCandidates ctxKey = "token_smart_candidates"
 	// CtxRequestPrefixHash carries a stable hash of the prompt prefix so
 	// prefix-cache affinity can keep a conversation on the same upstream.
 	// Empty when prefix affinity is disabled or no prefix could be derived.
