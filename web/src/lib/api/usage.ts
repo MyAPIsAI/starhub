@@ -31,10 +31,21 @@ export interface ModelDailyUsage {
   completion_tokens: number;
 }
 
+export interface TokenDailyUsage {
+  date: string;
+  token_id: number;
+  token_name: string;
+  requests: number;
+  quota: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
 export interface UsageResponse {
   days: number;
   items: DailyUsage[];
   by_model?: ModelDailyUsage[];
+  by_token?: TokenDailyUsage[];
 }
 
 // --- Types matching the backend Log struct (model/log.go) ---
@@ -73,6 +84,18 @@ export function useUserUsage(days: number = 7) {
     queryKey: ["user-usage", days] as const,
     queryFn: ({ signal }) =>
       apiGet<UsageResponse>(`/api/user/usage?days=${days}`, signal),
+  });
+}
+
+export function useTokenUsage(tokenId: number, days: number = 7) {
+  return useQuery({
+    queryKey: ["token-usage", tokenId, days] as const,
+    queryFn: ({ signal }) =>
+      apiGet<UsageResponse>(
+        `/api/user/usage?days=${days}&token_id=${tokenId}`,
+        signal,
+      ),
+    enabled: tokenId > 0,
   });
 }
 

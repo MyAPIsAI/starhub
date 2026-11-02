@@ -27,6 +27,7 @@ import {
 } from "../lib/key-model-policy";
 import { modelCatalog } from "../lib/platform-catalog";
 import { useModelPricing } from "../lib/model-pricing";
+import { useTokenUsage } from "../lib/api/usage";
 import "./key-list.css";
 
 type Text = (zh: string, en: string, ar: string) => string;
@@ -737,6 +738,7 @@ export function KeyDetails({
           </p>
         )}
       </section>
+      <KeyUsageTrend itemId={item.id} text={text} />
       <section>
         <h3>{text("来源地址限制", "IP restrictions", "قيود عناوين المصدر")}</h3>
         {item.ipWhitelist?.length ? (
@@ -761,5 +763,84 @@ export function KeyDetails({
         {text("编辑密钥设置", "Edit key settings", "تعديل إعدادات المفتاح")}
       </Button>
     </div>
+  );
+}
+
+const QUOTA_PER_USD = 500_000;
+
+function KeyUsageTrend({
+  itemId,
+  text,
+}: {
+  itemId: string;
+  text: Text;
+}) {
+  const tokenId = parseInt(itemId, 10);
+  const usage = useTokenUsage(tokenId, 7);
+  if (usage.isLoading) {
+    return (
+      <section>
+        <h3>{text("近 7 天用量", "7-day usage", "استخدام 7 أيام")}</h3>
+        <p className="key-detail-hint">
+          {text("加载中…", "Loading…", "جارٍ التحميل…")}
+        </p>
+      </section>
+    );
+  }
+  if (usage.isError || !usage.data?.by_token?.length) {
+    return null;
+  }
+  const rows = usage.data.by_token;
+  const maxQuota = Math.max(...rows.map((r) => r.quota), 1);
+  return (
+    <section>
+      <h3>{text("近 7 天用量", "7-day usage", "استخدام 7 أيام")}</h3>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 4,
+          height: 80,
+          padding: "8px 0",
+        }}
+      >
+        {rows.map((r) => (
+          <div
+            key={r.date}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: 32,
+                height: `${(r.quota / maxQuota) * 60}px`,
+                minHeight: r.quota > 0 ? 2 : 0,
+                background: "var(--accent-soft, #6366f1)",
+                borderRadius: 3,
+              }}
+              title={`${r.date}: $${(r.quota / QUOTA_PER_USD).toFixed(4)} (${r.requests} requests)`}
+            />
+            <span
+              style={{ fontSize: 9, color: "var(--muted)", lineHeight: 1 }}
+            >
+              {r.date.slice(5)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="key-detail-hint">
+        {text(
+          "按 UTC 日期统计；费用以服务端记录为准。",
+          "Aggregated by UTC date; fees per server records.",
+          "مُجمّعة بتاريخ UTC؛ الرسوم حسب سجلات الخادم.",
+        )}
+      </p>
+    </section>
   );
 }
