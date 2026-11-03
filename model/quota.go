@@ -199,6 +199,9 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			if err := tx.Create(&settled).Error; err != nil {
 				return err
 			}
+			if err := queueAPICharge(tx, &settled); err != nil {
+				return err
+			}
 			return queueAffiliateRebate(tx, &settled)
 		}
 		return nil

@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"io"
+	"math/big"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/config"
 	"starhub/model"
 )
 
@@ -26,7 +28,29 @@ func GetWallet(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	owner, err := model.GetUserByID(userID)
+	if err != nil {
+		common.ApiError(w, 500, "account balance unavailable")
+		return
+	}
+	loc, _ := time.LoadLocation(config.RegionTimezone())
+	now := time.Now().In(loc)
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
+	entries, err := model.StatementLedger(userID, start.Unix(), start.AddDate(0, 1, 0).Unix(), "")
+	if err != nil {
+		common.ApiError(w, 500, "billing summary unavailable")
+		return
+	}
+	var spent big.Int
+	for _, e := range entries {
+		if e.Type == "call_summary" && e.Amount < 0 {
+			spent.Sub(&spent, big.NewInt(e.Amount))
+		}
+	}
 	common.ApiSuccess(w, map[string]any{
+		"month_spend_nano":               spent.String(),
+		"api_balance_nano":               new(big.Int).Mul(big.NewInt(owner.Quota), big.NewInt(1_000_000_000/common.QuotaPerUSD)).String(),
+		"timezone":                       config.RegionTimezone(),
 		"user_id":                        wallet.UserID,
 		"balance":                        wallet.Balance, // nano-USD
 		"balance_nano":                   strconv.FormatInt(wallet.Balance, 10),
@@ -38,15 +62,15 @@ func GetWallet(w http.ResponseWriter, r *http.Request) {
 
 // --- Ledger ---
 
-// ListLedger returns ledger entries. Admins see all; users see their own.
+// ListLedger keeps management visibility while allowing an owner-only statement.
 func ListLedger(w http.ResponseWriter, r *http.Request) {
-	userID := int64(0)
-	if !common.IsAdminRole(requestRole(r)) {
-		userID = requestUserID(r)
+	userID := requestUserID(r)
+	if common.IsAdminRole(requestRole(r)) && r.URL.Query().Get("scope") != "owned" && r.URL.Query().Get("trace") == "" {
+		userID = 0
 	}
 	// Lazily expire stale orders so the ledger reflects reality.
 	_ = model.ExpireRechargeOrders()
-	entries, err := model.ListLedger(userID)
+	entries, err := model.StatementLedger(userID, 0, 0, r.URL.Query().Get("trace"))
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -55,6 +79,7 @@ func ListLedger(w http.ResponseWriter, r *http.Request) {
 	for i := range entries {
 		e := &entries[i]
 		data = append(data, map[string]any{
+			"token_id": e.TokenID, "request_count": e.RequestCount,
 			"id":                 e.ID,
 			"user_id":            e.UserID,
 			"type":               e.Type,
@@ -139,7 +164,7 @@ func GetRechargeOrder(w http.ResponseWriter, r *http.Request) {
 // Stale pending/processing orders are lazily expired before returning.
 func ListRechargeOrders(w http.ResponseWriter, r *http.Request) {
 	userID := int64(0)
-	if !common.IsAdminRole(requestRole(r)) {
+	if !common.IsAdminRole(requestRole(r)) || r.URL.Query().Get("scope") == "owned" {
 		userID = requestUserID(r)
 	}
 	_ = model.ExpireRechargeOrders()

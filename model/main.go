@@ -47,6 +47,12 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&ChannelConfigurationState{}); err != nil {
 		return fmt.Errorf("migrate channel configuration revision: %w", err)
 	}
+	if err := db.AutoMigrate(&APIChargeEvent{}); err != nil {
+		return fmt.Errorf("migrate API billing outbox: %w", err)
+	}
+	if err := initializeExportMetadata(db); err != nil {
+		return fmt.Errorf("migrate export download metadata: %w", err)
+	}
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
 		return fmt.Errorf("migrate response ownership index: %w", err)
 	}

@@ -25,16 +25,19 @@ type Wallet struct {
 // adjustment, refund). amount is signed nano-USD; balance_after is the
 // resulting wallet balance for audit reconstruction.
 type LedgerEntry struct {
-	ID            int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID        int64  `gorm:"index;not null" json:"user_id"`
-	Type          string `gorm:"size:32;not null;default:''" json:"type"` // recharge | call_summary | adjustment | refund
-	Amount        int64  `gorm:"not null;default:0" json:"amount"`        // signed nano-USD
-	BalanceAfter  int64  `gorm:"not null;default:0" json:"balance_after"` // nano-USD
-	Description   string `gorm:"size:256;not null;default:''" json:"description"`
-	OrderID       string `gorm:"size:64;not null;default:''" json:"order_id"`
-	TraceID       string `gorm:"size:64;not null;default:''" json:"trace_id"`
-	FundingSource string `gorm:"size:32;not null;default:'legacy_unverified'" json:"funding_source"`
-	CreatedAt     int64  `gorm:"autoCreateTime;index" json:"created_at"`
+	TokenID       int64   `gorm:"index;not null;default:0" json:"token_id"`
+	RequestCount  int64   `gorm:"not null;default:0" json:"request_count"`
+	BatchKey      *string `gorm:"uniqueIndex;size:128" json:"-"`
+	ID            int64   `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID        int64   `gorm:"index;not null" json:"user_id"`
+	Type          string  `gorm:"size:32;not null;default:''" json:"type"` // recharge | call_summary | adjustment | refund
+	Amount        int64   `gorm:"not null;default:0" json:"amount"`        // signed nano-USD
+	BalanceAfter  int64   `gorm:"not null;default:0" json:"balance_after"` // nano-USD
+	Description   string  `gorm:"size:256;not null;default:''" json:"description"`
+	OrderID       string  `gorm:"size:64;not null;default:''" json:"order_id"`
+	TraceID       string  `gorm:"size:64;not null;default:''" json:"trace_id"`
+	FundingSource string  `gorm:"size:32;not null;default:'legacy_unverified'" json:"funding_source"`
+	CreatedAt     int64   `gorm:"autoCreateTime;index" json:"created_at"`
 }
 
 // RechargeOrder tracks a single top-up attempt. The state machine is:
@@ -57,10 +60,14 @@ type RechargeOrder struct {
 const (
 	FundingSourceLegacyUnverified = "legacy_unverified"
 	FundingSourceSimulation       = "simulation"
+	FundingSourceAPIQuota         = "api_quota"
 )
 
 // Existing or unrecognized provenance never becomes verified funding.
 func PublicFundingSource(source string) string {
+	if source == FundingSourceAPIQuota {
+		return source
+	}
 	if source == FundingSourceSimulation {
 		return FundingSourceSimulation
 	}
@@ -127,7 +134,7 @@ func ListLedgerSince(userID int64, since int64) ([]LedgerEntry, error) {
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)
 	}
-	err := q.Order("id DESC").Limit(10000).Find(&entries).Error
+	err := q.Order("id DESC").Find(&entries).Error
 	return entries, err
 }
 

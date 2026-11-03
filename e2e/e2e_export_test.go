@@ -69,7 +69,7 @@ func TestExportDownloadUserIsolation(t *testing.T) {
 		message string
 	}{
 		{"anonymous", "", http.StatusUnauthorized, "login required"},
-		{"other user", bobSession, http.StatusForbidden, "cannot download an export owned by another user"},
+		{"other user", bobSession, http.StatusNotFound, "export not found"},
 		{"owner", aliceSession, http.StatusOK, ""},
 	}
 	for _, tc := range cases {
@@ -145,7 +145,7 @@ func TestExportListUserIsolation(t *testing.T) {
 				}
 				want := *tc.want
 				want.Content = nil
-				want.ExpiresAt = 0
+				want.DownloadToken = ""
 				if !reflect.DeepEqual(got.Data[0], want) {
 					t.Fatalf("listed export = %+v, want owned metadata %+v", got.Data[0], want)
 				}
@@ -211,14 +211,22 @@ func TestExportRequestsContentUserIsolation(t *testing.T) {
 			if res.Status != http.StatusOK || res.Body != string(stored.Content) {
 				t.Fatalf("download differs from persisted export: %d %q", res.Status, res.Body)
 			}
-			rows, err := csv.NewReader(strings.NewReader(res.Body)).ReadAll()
+			rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(res.Body, "\ufeff"))).ReadAll()
 			if err != nil {
 				t.Fatalf("invalid CSV: %v", err)
 			}
-			want := [][]string{
-				{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"},
-				tc.row,
+			loc, _ := time.LoadLocation("Asia/Dubai")
+			old := tc.row
+			createdTime, _ := time.Parse(time.RFC3339, old[1])
+			quota := int64(23)
+			if tc.name == "bob" {
+				quota = 99
 			}
+			want := [][]string{
+				{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source"},
+				{"log_" + old[0], createdTime.In(loc).Format("2006-01-02T15:04:05-07:00"), old[3], old[4], old[9], old[5], "success", old[6], old[7], "0", "0", fmt.Sprintf("0.%09d", quota*2000), fmt.Sprint(quota * 2000), "api"},
+			}
+
 			if !reflect.DeepEqual(rows, want) {
 				t.Fatalf("CSV rows = %q, want only owned data %q", rows, want)
 			}

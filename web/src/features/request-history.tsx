@@ -16,6 +16,7 @@ import { formatMoney } from "../lib/money";
 import type { PreviewRequest } from "../lib/product-preview";
 import {
   dubaiDate,
+  requestTimeBounds,
   filterRequestHistory,
   type RequestTimeRange,
   type RequestHistoryStatus,
@@ -32,12 +33,21 @@ const statuses: RequestHistoryStatus[] = [
 const PAGE_SIZE = 20;
 export default function RequestHistory({
   requests,
+  timezone = "Asia/Dubai",
+  serverPage,
   onSelect,
   onExport,
 }: {
   requests: PreviewRequest[];
+  timezone?: string;
+  serverPage?: { total: number; loading: boolean; error?: string };
   onSelect: (row: PreviewRequest) => void;
-  onExport: () => void;
+  onExport: (selection?: {
+    start_date: string;
+    end_date: string;
+    status?: string;
+    query?: string;
+  }) => void;
 }) {
   const { t, i18n } = useTranslation();
   const c = (zh: string, en: string, ar: string) =>
@@ -50,22 +60,26 @@ export default function RequestHistory({
   const query = params.get("query") ?? "";
   const start = params.get("start") ?? "",
     end = params.get("end") ?? "";
-  const result = filterRequestHistory(requests, {
+  const localResult = filterRequestHistory(requests, {
+    timezone,
     range,
     start,
     end,
     status,
     query,
   });
-  const pages = Math.max(1, Math.ceil(result.rows.length / PAGE_SIZE));
+  const result = serverPage
+    ? { rows: requests, error: localResult.error }
+    : localResult;
+  const count = serverPage ? serverPage.total : result.rows.length;
+  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const requestedPage = Number(params.get("page"));
   const page = Number.isInteger(requestedPage)
     ? Math.max(1, Math.min(pages, requestedPage))
     : 1;
-  const visibleRows = result.rows.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE,
-  );
+  const visibleRows = serverPage
+    ? requests
+    : result.rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const change = (updates: Record<string, string | null>, replace = false) => {
     setParams(
       (previous) => {
@@ -115,15 +129,33 @@ export default function RequestHistory({
           <p>{t("requestTableNote")}</p>
         </div>
         <div className="request-export-action">
-          <Button size="small" variant="secondary" onClick={onExport}>
+          <Button
+            size="small"
+            variant="secondary"
+            onClick={() => {
+              const bounds = requestTimeBounds({ range, start, end, timezone });
+              onExport({
+                start_date: Number.isFinite(bounds.from)
+                  ? dubaiDate(bounds.from, timezone)
+                  : requests.at(-1)
+                    ? dubaiDate(requests.at(-1)!.time, timezone)
+                    : dubaiDate(Date.now(), timezone),
+                end_date: Number.isFinite(bounds.until)
+                  ? dubaiDate(bounds.until - 1, timezone)
+                  : dubaiDate(Date.now(), timezone),
+                status,
+                query,
+              });
+            }}
+          >
             <Download size={14} />
             {c("创建导出任务", "Create export task", "إنشاء مهمة تصدير")}
           </Button>
           <small>
             {c(
-              "另选协调世界时范围，不沿用本页筛选",
-              "Select an independent UTC export range",
-              "يُحدد نطاق UTC للتصدير بشكل مستقل",
+              "保留本页筛选条件，单次最多 31 天",
+              "Uses the current filters, up to 31 days",
+              "تُطبق مرشحات الصفحة، حتى 31 يومًا",
             )}
           </small>
         </div>
@@ -164,7 +196,10 @@ export default function RequestHistory({
                 change({
                   range: e.target.value,
                   ...(e.target.value === "custom"
-                    ? { start: start || dubaiDate(), end: end || dubaiDate() }
+                    ? {
+                        start: start || dubaiDate(Date.now(), timezone),
+                        end: end || dubaiDate(Date.now(), timezone),
+                      }
                     : {}),
                 })
               }
@@ -255,12 +290,8 @@ export default function RequestHistory({
         )}
         <div className="request-history-summary">
           <span aria-live="polite">
-            {c(
-              `共 ${result.rows.length} 条调用`,
-              `${result.rows.length} requests`,
-              `${result.rows.length} طلبًا`,
-            )}
-            {requests.length !== result.rows.length && (
+            {c(`共 ${count} 条调用`, `${count} requests`, `${count} طلبًا`)}
+            {!serverPage && requests.length !== count && (
               <small>
                 {c(
                   ` / 全部 ${requests.length} 条`,
@@ -272,9 +303,9 @@ export default function RequestHistory({
           </span>
           <span>
             {c(
-              "日期与时间均按迪拜时区（世界协调时 +4）",
-              "Dates and times use Dubai (UTC+4)",
-              "التواريخ والأوقات بتوقيت دبي (UTC+4)",
+              `日期与时间均按 ${timezone}`,
+              `Dates and times use ${timezone}`,
+              `التواريخ والأوقات بتوقيت ${timezone}`,
             )}
           </span>
         </div>
@@ -284,7 +315,7 @@ export default function RequestHistory({
               <thead>
                 <tr>
                   <th>
-                    {c("时间（迪拜时区）", "Time (UTC+4)", "الوقت (UTC+4)")}
+                    {c(`时间（${timezone}）`, `Time (${timezone})`, `الوقت (${timezone})`)}
                   </th>
                   <th>{c("业务编号", "Trace ID", "معرّف الطلب")}</th>
                   <th>
@@ -310,7 +341,7 @@ export default function RequestHistory({
                   <tr key={row.trace_id} onClick={() => onSelect(row)}>
                     <td className="mono">
                       {new Date(row.time).toLocaleString("en-GB", {
-                        timeZone: "Asia/Dubai",
+                        timeZone: timezone,
                         hour12: false,
                       })}
                     </td>
@@ -365,7 +396,17 @@ export default function RequestHistory({
             </table>
           </div>
         )}
-        {!visibleRows.length && (
+        {(serverPage?.loading || serverPage?.error) && (
+          <p role={serverPage.error ? "alert" : "status"}>
+            {serverPage.error ||
+              c(
+                "正在加载调用明细…",
+                "Loading requests…",
+                "جارٍ تحميل الطلبات…",
+              )}
+          </p>
+        )}
+        {!visibleRows.length && !serverPage?.loading && !serverPage?.error && (
           <div className="request-empty" role="status">
             {result.error ? (
               <>
@@ -423,11 +464,11 @@ export default function RequestHistory({
         )}
         <footer className="request-history-pagination">
           <span>
-            {result.rows.length
+            {count
               ? c(
-                  `第 ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, result.rows.length)} 条，共 ${result.rows.length} 条`,
-                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, result.rows.length)} of ${result.rows.length}`,
-                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, result.rows.length)} من ${result.rows.length}`,
+                  `第 ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, count)} 条，共 ${count} 条`,
+                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, count)} of ${count}`,
+                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, count)} من ${count}`,
                 )
               : c("0 条记录", "0 records", "0 سجلات")}
           </span>

@@ -125,7 +125,7 @@ export default function RequestInspector({
   const text = (zh: string, en: string, ar: string) =>
     lang === "zh" ? zh : lang === "ar" ? ar : en;
   const { keys } = useBackendKeys();
-  const ledgerQuery = useLedger();
+  const ledgerQuery = useLedger(record?.trace_id);
   const ledger = (ledgerQuery.data ?? []).map(adaptLedgerEntry) as any[];
   const setOutage = useProductPreview((s) => s.demoSetUpstreamOutage);
   const role = useSystemAccess((s) => s.role);

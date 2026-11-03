@@ -135,7 +135,7 @@ func ListLogs(userID int64, page, pageSize int64, model string) ([]Log, int64, e
 	var logs []Log
 	err := q.Order("id DESC").Limit(int(pageSize)).Offset(int((page - 1) * pageSize)).Find(&logs).Error
 	if err == nil {
-		err = markDeletedLogTokens(logs)
+		err = MarkDeletedLogTokens(logs)
 	}
 	return logs, total, err
 }
@@ -149,14 +149,15 @@ func ListLogsSince(userID int64, since int64) ([]Log, error) {
 		q = q.Where("user_id = ?", userID)
 	}
 	var logs []Log
-	err := q.Order("id DESC").Limit(10000).Find(&logs).Error
+	err := q.Order("id DESC").Find(&logs).Error
 	if err == nil {
-		err = markDeletedLogTokens(logs)
+		err = MarkDeletedLogTokens(logs)
 	}
 	return logs, err
 }
 
-func markDeletedLogTokens(logs []Log) error {
+// MarkDeletedLogTokens preserves usage history without restoring deleted key names.
+func MarkDeletedLogTokens(logs []Log) error {
 	ids := make([]int64, 0, len(logs))
 	for _, entry := range logs {
 		if entry.TokenID > 0 {

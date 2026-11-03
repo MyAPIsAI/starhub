@@ -173,6 +173,8 @@ func New() http.Handler {
 	mux.Handle("POST /api/export", middleware.UserAuth(http.HandlerFunc(controller.CreateExport)))
 	mux.Handle("POST /api/export/", middleware.UserAuth(http.HandlerFunc(controller.CreateExport)))
 	mux.Handle("GET /api/export/{id}/download", middleware.UserAuth(http.HandlerFunc(controller.DownloadExport)))
+	mux.Handle("GET /api/export/files/{token}/download", middleware.UserAuth(http.HandlerFunc(controller.DownloadExport)))
+	mux.Handle("GET /api/export/files/{token}/dictionary", middleware.UserAuth(http.HandlerFunc(controller.DownloadExport)))
 
 	// Service group management (admin only). The multiplier is synced
 	// to the group_ratio option so relay billing picks up changes.

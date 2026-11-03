@@ -23,6 +23,9 @@ import {
 // --- Types ---
 
 export interface Wallet {
+  api_balance_nano?: string;
+  month_spend_nano?: string;
+  timezone?: string;
   user_id: number;
   balance: number; // nano-USD
   balance_nano?: string; // Exact nano-USD; numeric balance is retained for older clients.
@@ -31,6 +34,8 @@ export interface Wallet {
 }
 
 export interface LedgerEntry {
+  token_id?: number;
+  request_count?: number;
   id: number;
   user_id: number;
   type: "recharge" | "call_summary" | "adjustment" | "refund";
@@ -142,17 +147,22 @@ export function useWallet() {
 
 // --- Hooks: Ledger ---
 
-export function useLedger() {
+export function useLedger(trace?: string) {
   const scope = useBillingScope();
   return useQuery({
-    queryKey: [...LEDGER_KEY, scope],
+    queryKey: [...LEDGER_KEY, scope, trace ?? ""],
     enabled: scope[1] !== null,
     retry: false,
     queryFn: async ({ signal }) =>
       billingRequest(scope, async () =>
-        (await apiGet<LedgerEntry[]>("/api/ledger", signal)).map(
-          normalizeLedger,
-        ),
+        (
+          await apiGet<LedgerEntry[]>(
+            trace
+              ? `/api/ledger?scope=owned&trace=${encodeURIComponent(trace)}`
+              : "/api/ledger?scope=owned",
+            signal,
+          )
+        ).map(normalizeLedger),
       ),
   });
 }
@@ -167,7 +177,7 @@ export function useRechargeOrders() {
     retry: false,
     queryFn: ({ signal }) =>
       billingRequest(scope, () =>
-        apiGet<RechargeOrder[]>("/api/recharge", signal),
+        apiGet<RechargeOrder[]>("/api/recharge?scope=owned", signal),
       ),
   });
 }
@@ -300,6 +310,8 @@ export interface FrontendRechargeOrder {
 export function adaptLedgerEntry(e: LedgerEntry): FrontendLedgerEntry {
   const amount = BigInt(billingNano(e.amount_nano, e.amount));
   return {
+    token_id: e.token_id,
+    request_count: e.request_count,
     id: String(e.id),
     time: new Date(e.created_at * 1000).toISOString(),
     type: e.type,
@@ -314,6 +326,8 @@ export function adaptLedgerEntry(e: LedgerEntry): FrontendLedgerEntry {
 }
 
 export interface FrontendLedgerEntry {
+  token_id?: number;
+  request_count?: number;
   id: string;
   time: string;
   type: "recharge" | "call_summary" | "adjustment" | "refund";

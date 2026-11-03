@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LedgerEntry, RechargeOrder } from "../src/lib/product-preview";
 import {
   billingDate,
+  regionalDayStart,
   validateBillingRange,
   filterLedger,
   filterRechargeOrders,
@@ -33,6 +34,27 @@ const order = (overrides: Partial<RechargeOrder> = {}): RechargeOrder => ({
 });
 
 describe("billing calendar ranges", () => {
+  it("uses the configured region across daylight-saving day boundaries", () => {
+    expect(billingDate("2026-03-08T03:59:59Z", "America/New_York")).toBe(
+      "2026-03-07",
+    );
+    expect(
+      regionalDayStart("2026-03-09", "America/New_York") -
+        regionalDayStart("2026-03-08", "America/New_York"),
+    ).toBe(23 * 3600000);
+    expect(
+      regionalDayStart("2026-11-02", "America/New_York") -
+        regionalDayStart("2026-11-01", "America/New_York"),
+    ).toBe(25 * 3600000);
+    const row = ledger({ time: "2026-03-09T03:59:59Z" });
+    expect(
+      filterLedger([row], {
+        from: "2026-03-08",
+        to: "2026-03-08",
+        timezone: "America/New_York",
+      }),
+    ).toEqual([row]);
+  });
   it("validates actual calendar dates, including century leap-year rules", () => {
     for (const date of ["2024-02-29", "2000-02-29", "2026-04-30"]) {
       expect(validateBillingRange(date, date)).toBe(true);

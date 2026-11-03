@@ -324,7 +324,7 @@
   "pDisable": "Disable",
   "pEnable": "Enable",
   "pDisabled": "Disabled",
-  "pPlaygroundHint": "Optional verification; choose models in your client. Results and charges are simulated.",
+  "pPlaygroundHint": "Test text conversations with your selected key. Actual usage is billed.",
   "pChooseKey": "Select key",
   "pPrompt": "Message",
   "pPromptDefault": "Explain intelligent routing in one sentence.",

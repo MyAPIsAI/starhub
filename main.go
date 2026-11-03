@@ -9,6 +9,7 @@ import (
 
 	"starhub/common"
 	"starhub/config"
+	"starhub/controller"
 	"starhub/internal/router"
 	"starhub/model"
 	"starhub/service"
@@ -50,6 +51,16 @@ func main() {
 		log.Fatalf("failed to load options: %v", err)
 	}
 	go model.WatchOptions(context.Background(), time.Second)
+	go controller.RunExportJobs(context.Background())
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := model.FlushAPICharges(context.Background(), false); err != nil {
+				log.Printf("API ledger flush failed: %v", err)
+			}
+		}
+	}()
 	startChannelTestTask()
 	startTaskPollTask()
 	go config.RunLoop(context.Background(), func(c config.Runtime) time.Duration {

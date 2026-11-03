@@ -78,10 +78,13 @@ import { placeholders, type TierId } from "../config/placeholders";
 import EditKey from "../features/edit-key";
 import CreateKey from "../features/create-key";
 import Playground from "../features/request-playground";
+import ExportHistory from "../features/export-history";
+import { validateBillingRange, billingDate } from "../lib/billing-export";
+import { writtenLanguage } from "../lib/localize";
 import AccessCenter from "../features/access-center";
 import { isSmartModelId } from "../lib/smart-model";
 import RequestDetails from "../features/request-inspector";
-import RequestHistory from "../features/request-history";
+import RequestHistoryPage from "../features/request-history-page";
 import ServiceQuality from "../features/service-quality";
 import SmartRouting from "../features/resource-routing";
 import { StandardModels } from "../features/standard-models";
@@ -106,12 +109,7 @@ import {
   readOwnedKeyReceipt,
 } from "../lib/api/tokens";
 import { useWallet } from "../lib/api/billing";
-import {
-  useExports,
-  useCreateExport,
-  downloadExport as downloadBackendExport,
-  type ExportRecord,
-} from "../lib/api/exports";
+import { useCreateExport } from "../lib/api/exports";
 import { ApiError } from "../lib/api/http";
 import AccountDeactivation from "../features/account-deactivation";
 import {
@@ -238,12 +236,12 @@ function ConsoleWorkspace() {
   // Unknown wallet state never falls back to a browser demo balance.
   const walletQuery = useWallet();
   const balanceKnown = Boolean(walletQuery.data && !walletQuery.error);
-  const balance = balanceKnown ? walletQuery.data!.balance_nano : "0";
+  const balance = balanceKnown
+    ? (walletQuery.data!.api_balance_nano ?? walletQuery.data!.balance_nano)
+    : "0";
   const requests = useProductPreview((s) => s.requests);
   // Exports come from the backend /api/export endpoints.
-  const exportsQuery = useExports();
   const createExportMut = useCreateExport();
-  const backendExports: ExportRecord[] = exportsQuery.data ?? [];
   // Overview metrics come from the backend usage summary and logs.
   const [days, setDays] = useState<"7" | "30">("7");
   const usageQuery = useUserUsage(days === "7" ? 7 : 30);
@@ -408,7 +406,16 @@ function ConsoleWorkspace() {
   const [exportType, setExportType] = useState<"requests" | "ledger" | "usage">(
     "requests",
   );
-  const [exportDays, setExportDays] = useState(7);
+  const [exportStart, setExportStart] = useState(() =>
+    billingDate(new Date(Date.now() - 6 * 86400000).toISOString()),
+  );
+  const [exportEnd, setExportEnd] = useState(() =>
+    billingDate(new Date().toISOString()),
+  );
+  const [exportSelection, setExportSelection] = useState<{
+    status?: string;
+    query?: string;
+  }>({});
   const [exportError, setExportError] = useState("");
 
   // Deactivate modal
@@ -604,26 +611,29 @@ function ConsoleWorkspace() {
 
   const handleExportSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!Number.isInteger(exportDays) || exportDays < 1 || exportDays > 31) {
+    if (!validateBillingRange(exportStart, exportEnd)) {
       setExportError(t("max31DaysWarning"));
       return;
     }
     createExportMut.mutate(
-      { type: exportType, range_days: exportDays },
+      {
+        type: exportType,
+        start_date: exportStart,
+        end_date: exportEnd,
+        language: writtenLanguage(i18n.language as any),
+        ...exportSelection,
+      },
       {
         onSuccess: () => {
           setExportModalOpen(false);
           setExportError("");
+          navigate("/console/exports");
         },
         onError: (err) => {
           setExportError(err instanceof Error ? err.message : String(err));
         },
       },
     );
-  };
-
-  const downloadExportFile = (exp: ExportRecord) => {
-    void downloadBackendExport(exp.id, exp.filename);
   };
 
   const activeSection =
@@ -2133,10 +2143,18 @@ function ConsoleWorkspace() {
 
           {/* SECTION: REQUESTS */}
           {section === "requests" && (
-            <RequestHistory
-              requests={backendRequests as any}
+            <RequestHistoryPage
+              timezone={walletQuery.data?.timezone}
               onSelect={setSelected}
-              onExport={() => {
+              onExport={(selection) => {
+                if (selection) {
+                  setExportStart(selection.start_date);
+                  setExportEnd(selection.end_date);
+                  setExportSelection({
+                    status: selection.status,
+                    query: selection.query,
+                  });
+                }
                 setExportType("requests");
                 setExportModalOpen(true);
               }}
@@ -2170,146 +2188,24 @@ function ConsoleWorkspace() {
 
           {/* SECTION: EXPORTS */}
           {section === "exports" && (
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "var(--space-6)",
-                }}
-              >
-                <div>
-                  <h1
-                    style={{
-                      fontSize: "var(--text-xl)",
-                      fontWeight: "var(--weight-bold)",
-                      margin: 0,
-                    }}
-                  >
-                    {t("exportsTitle")}
-                  </h1>
-                  <p
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "var(--text-sm)",
-                      margin: "4px 0 0 0",
-                    }}
-                  >
-                    {t("fileRetentionNote")}
-                  </p>
-                </div>
-                <Button onClick={() => setExportModalOpen(true)}>
-                  <Plus size={15} style={{ marginInlineEnd: 4 }} />
-                  {t("createExport")}
-                </Button>
-              </div>
-
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  overflow: "hidden",
-                }}
-              >
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: "var(--text-xs)",
-                  }}
-                >
-                  <thead>
-                    <tr
-                      style={{
-                        background: "var(--subtle)",
-                        borderBottom: "1px solid var(--border)",
-                      }}
-                    >
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        Export ID
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        Type
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        Date Range
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        Created
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        Status
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                        Download
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {backendExports.map((exp) => (
-                      <tr
-                        key={exp.id}
-                        style={{ borderBottom: "1px solid var(--border)" }}
-                      >
-                        <td className="mono" style={{ padding: "12px 14px" }}>
-                          {exp.id}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px 14px",
-                            fontWeight: 500,
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {exp.type}
-                        </td>
-                        <td
-                          className="mono"
-                          style={{
-                            padding: "12px 14px",
-                            color: "var(--muted)",
-                          }}
-                        >
-                          {exp.range_days}d
-                        </td>
-                        <td className="mono" style={{ padding: "12px 14px" }}>
-                          {new Date(exp.created_at * 1000).toLocaleDateString()}
-                        </td>
-                        <td style={{ padding: "12px 14px" }}>
-                          <span
-                            style={{
-                              padding: "2px 8px",
-                              borderRadius: 4,
-                              background: "var(--success-soft)",
-                              color: "var(--success)",
-                              fontWeight: 600,
-                              fontSize: 11,
-                            }}
-                          >
-                            {exp.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td style={{ padding: "12px 14px", textAlign: "end" }}>
-                          <Button
-                            size="small"
-                            variant="secondary"
-                            onClick={() => downloadExportFile(exp)}
-                          >
-                            <Download
-                              size={13}
-                              style={{ marginInlineEnd: 4 }}
-                            />
-                            {t("downloadCsv")}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <ExportHistory
+              onCreate={() => {
+                setExportSelection({});
+                setExportStart(
+                  billingDate(
+                    new Date(Date.now() - 6 * 86400000).toISOString(),
+                    walletQuery.data?.timezone,
+                  ),
+                );
+                setExportEnd(
+                  billingDate(
+                    new Date().toISOString(),
+                    walletQuery.data?.timezone,
+                  ),
+                );
+                setExportModalOpen(true);
+              }}
+            />
           )}
 
           {/* SECTION: ACCOUNT CENTER */}
@@ -2434,19 +2330,11 @@ function ConsoleWorkspace() {
         open={exportModalOpen}
         onOpenChange={setExportModalOpen}
         title={t("createExport")}
-        description={
-          exportType === "ledger"
-            ? c(
-                "流水导出按迪拜时区日期单独选择范围，不沿用页面筛选。文件保留 7 天。",
-                "Choose an independent Dubai-time date range for the ledger. Page filters do not apply. Files remain available for 7 days.",
-                "اختر نطاق تواريخ مستقلًا بتوقيت دبي للسجل المالي. لا تُطبق مرشحات الصفحة. تبقى الملفات متاحة لمدة 7 أيام.",
-              )
-            : c(
-                "导出按协调世界时日期单独选择范围，不沿用调用明细的时间、状态或搜索筛选。文件保留 7 天。",
-                "Choose an independent UTC date range. Request-list date, status and search filters do not apply. Files remain available for 7 days.",
-                "اختر نطاق تواريخ مستقلًا بتوقيت UTC. لا تُطبق مرشحات التاريخ والحالة والبحث في قائمة الطلبات. تبقى الملفات متاحة لمدة 7 أيام.",
-              )
-        }
+        description={c(
+          `按地区时区（${walletQuery.data?.timezone ?? "Asia/Dubai"}）选择最多 31 天。保留当前筛选条件，文件与字段说明保留 7 天。`,
+          `Choose up to 31 calendar days in ${walletQuery.data?.timezone ?? "Asia/Dubai"}. Current filters apply. Files and field descriptions remain available for 7 days.`,
+          `اختر حتى 31 يومًا بتوقيت ${walletQuery.data?.timezone ?? "Asia/Dubai"}. تُطبق المرشحات الحالية وتُحفظ الملفات وأوصافها 7 أيام.`,
+        )}
       >
         <form
           onSubmit={handleExportSubmit}
@@ -2485,7 +2373,12 @@ function ConsoleWorkspace() {
             <select
               id="export-task-type"
               value={exportType}
-              onChange={(e) => setExportType(e.target.value as any)}
+              onChange={(e) => {
+                setExportType(
+                  e.target.value as "requests" | "ledger" | "usage",
+                );
+                setExportSelection({});
+              }}
               className="select-trigger"
               style={{ width: "100%" }}
             >
@@ -2495,39 +2388,31 @@ function ConsoleWorkspace() {
             </select>
           </div>
 
-          <div>
-            <label
-              htmlFor="export-task-days"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {c("时间跨度（天）", "Date range (days)", "الفترة (أيام)")}
-            </label>
-            <Input
-              id="export-task-days"
-              type="number"
-              value={exportDays}
-              onChange={(e) => {
-                const val = parseInt(e.target.value) || 1;
-                setExportDays(val);
-                if (val > 31) setExportError(t("max31DaysWarning"));
-                else setExportError("");
-              }}
-              min="1"
-              max="31"
-              step="1"
-            />
-            <span style={{ fontSize: 11, color: "var(--muted)" }}>
-              {c(
-                "每份文件最多包含 31 天的数据",
-                "Up to 31 days per export file",
-                "حتى 31 يومًا لكل ملف",
-              )}
-            </span>
+          <div className="verify-field-row">
+            <div>
+              <label htmlFor="export-task-start">
+                {c("开始日期", "Start date", "تاريخ البداية")}
+              </label>
+              <Input
+                id="export-task-start"
+                type="date"
+                required
+                value={exportStart}
+                onChange={(e) => setExportStart(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="export-task-end">
+                {c("结束日期", "End date", "تاريخ النهاية")}
+              </label>
+              <Input
+                id="export-task-end"
+                type="date"
+                required
+                value={exportEnd}
+                onChange={(e) => setExportEnd(e.target.value)}
+              />
+            </div>
           </div>
 
           <Button

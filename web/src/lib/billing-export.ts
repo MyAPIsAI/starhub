@@ -2,10 +2,14 @@ import type { LedgerEntry, RechargeOrder } from "./product-preview";
 import { fundingSource } from "./funding-source";
 
 type BillingLanguage = "zh" | "en" | "ar";
-type DateRange = { from: string; to: string; query?: string };
+type DateRange = {
+  from: string;
+  to: string;
+  query?: string;
+  timezone?: string;
+};
 
 const DAY_MS = 86_400_000;
-const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1_000;
 const NANOS_PER_DOLLAR = 1_000_000_000n;
 
 // Dubai has no daylight-saving transitions. Date-only ranges are interpreted
@@ -46,17 +50,70 @@ function instantMs(iso: string): number {
   return Date.parse(iso);
 }
 
-function dubaiIso(iso: string): string {
+function regionalParts(ms: number, timezone: string) {
+  const fields = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date(ms))
+      .map((p) => [p.type, p.value]),
+  );
+  const wall = new Date(0);
+  wall.setUTCFullYear(
+    Number(fields.year),
+    Number(fields.month) - 1,
+    Number(fields.day),
+  );
+  wall.setUTCHours(
+    Number(fields.hour),
+    Number(fields.minute),
+    Number(fields.second),
+    new Date(ms).getUTCMilliseconds(),
+  );
+  return wall;
+}
+function dubaiIso(iso: string, timezone = "Asia/Dubai"): string {
   const ms = instantMs(iso);
   if (!Number.isFinite(ms)) return "";
-  const date = new Date(ms + DUBAI_OFFSET_MS);
-  if (date.getUTCFullYear() < 1 || date.getUTCFullYear() > 9999) return "";
-  return date.toISOString().replace("Z", "+04:00");
+  try {
+    const wall = regionalParts(ms, timezone);
+    const minutes = Math.round((wall.getTime() - ms) / 60000);
+    const sign = minutes < 0 ? "-" : "+";
+    const absolute = Math.abs(minutes);
+    return wall
+      .toISOString()
+      .replace(
+        "Z",
+        `${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`,
+      );
+  } catch {
+    return "";
+  }
+}
+/** Returns the account-region calendar date without depending on browser settings. */
+export function billingDate(iso: string, timezone = "Asia/Dubai"): string {
+  return dubaiIso(iso, timezone).slice(0, 10);
 }
 
-/** Returns a Dubai calendar date, or an empty string for an invalid instant. */
-export function billingDate(iso: string): string {
-  return dubaiIso(iso).slice(0, 10);
+export function regionalDayStart(day: string, timezone = "Asia/Dubai"): number {
+  const target = dateOnlyMs(day);
+  if (!Number.isFinite(target)) return NaN;
+  let instant = target;
+  try {
+    for (let i = 0; i < 4; i++) {
+      const difference = target - regionalParts(instant, timezone).getTime();
+      if (difference === 0) return instant;
+      instant += difference;
+    }
+  } catch {}
+  return NaN;
 }
 
 /** Both boundary days count toward the 31-day maximum. */
@@ -74,8 +131,11 @@ export function validateBillingRange(from: string, to: string): boolean {
 function bounds(filters: DateRange): [number, number] | null {
   if (!validateBillingRange(filters.from, filters.to)) return null;
   return [
-    dateOnlyMs(filters.from) - DUBAI_OFFSET_MS,
-    dateOnlyMs(filters.to) + DAY_MS - DUBAI_OFFSET_MS,
+    regionalDayStart(filters.from, filters.timezone),
+    regionalDayStart(
+      new Date(dateOnlyMs(filters.to) + DAY_MS).toISOString().slice(0, 10),
+      filters.timezone,
+    ),
   ];
 }
 
@@ -265,15 +325,20 @@ const rechargeHeaders: Record<BillingLanguage, string[]> = {
 export function serializeLedgerCsv(
   entries: LedgerEntry[],
   language: BillingLanguage,
+  timezone = "Asia/Dubai",
 ): string {
   return csv(
-    ledgerHeaders[language],
+    ledgerHeaders[language].map((header) =>
+      timezone === "Asia/Dubai"
+        ? header
+        : header.replace("UTC+04:00", timezone),
+    ),
     entries.map((entry) => {
       const amount = nanoValue(entry.amount_nano);
       const balance = nanoValue(entry.balance_after_nano);
       return [
         entry.id,
-        dubaiIso(entry.time),
+        dubaiIso(entry.time, timezone),
         entry.type,
         dollarValue(amount),
         amount.toString(),
@@ -293,19 +358,24 @@ export function serializeLedgerCsv(
 export function serializeRechargeCsv(
   orders: RechargeOrder[],
   language: BillingLanguage,
+  timezone = "Asia/Dubai",
 ): string {
   return csv(
-    rechargeHeaders[language],
+    rechargeHeaders[language].map((header) =>
+      timezone === "Asia/Dubai"
+        ? header
+        : header.replace("UTC+04:00", timezone),
+    ),
     orders.map((order) => {
       const amount = nanoValue(order.amount_nano);
       return [
         order.id,
-        dubaiIso(order.created_at),
+        dubaiIso(order.created_at, timezone),
         order.status,
         dollarValue(amount),
         amount.toString(),
-        order.paid_at ? dubaiIso(order.paid_at) : "",
-        order.expires_at ? dubaiIso(order.expires_at) : "",
+        order.paid_at ? dubaiIso(order.paid_at, timezone) : "",
+        order.expires_at ? dubaiIso(order.expires_at, timezone) : "",
         order.late_payment === undefined ? "" : String(order.late_payment),
         fundingSource(order.funding_source),
         "false",

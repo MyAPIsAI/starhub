@@ -39,6 +39,7 @@ import {
 } from "../lib/api/billing";
 import { useRedeemCode } from "../lib/api/redemption";
 import { ApiError } from "../lib/api/http";
+import { useCreateExport, downloadExport } from "../lib/api/exports";
 import { formatMoney } from "../lib/money";
 import {
   billingDate,
@@ -122,6 +123,7 @@ function BillingCenterView({
   const ledgerQuery = useLedger();
   const ordersQuery = useRechargeOrders();
   const walletQuery = useWallet();
+  const exportMutation = useCreateExport();
   const ledger = useMemo(
     () =>
       (ledgerQuery.error ? [] : (ledgerQuery.data ?? [])).map(
@@ -137,7 +139,9 @@ function BillingCenterView({
     [ordersQuery.data, ordersQuery.error],
   );
   const balanceKnown = Boolean(walletQuery.data && !walletQuery.error);
-  const balance = balanceKnown ? walletQuery.data!.balance_nano : "0";
+  const balance = balanceKnown
+    ? (walletQuery.data!.api_balance_nano ?? walletQuery.data!.balance_nano)
+    : "0";
   const ledgerKnown = Boolean(ledgerQuery.data && !ledgerQuery.error);
   const recordsKnown =
     tab === "orders"
@@ -152,10 +156,15 @@ function BillingCenterView({
       walletQuery.refetch(),
     ]);
   }, [ordersQuery.refetch, ledgerQuery.refetch, walletQuery.refetch]);
-  const today = billingDate(new Date().toISOString());
+  const timezone = walletQuery.data?.timezone ?? "Asia/Dubai";
+  const today = billingDate(new Date().toISOString(), timezone);
   const month = today.slice(0, 7);
   const [from, setFrom] = useState(`${month}-01`);
   const [to, setTo] = useState(today);
+  useEffect(() => {
+    setFrom(`${month}-01`);
+    setTo(today);
+  }, [timezone]);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [page, setPage] = useState(1);
@@ -184,7 +193,7 @@ function BillingCenterView({
       (order) => order.id === location.state?.billingOrder,
     );
     if (tab !== "orders" || !selected) return;
-    const created = billingDate(selected.created_at);
+    const created = billingDate(selected.created_at, timezone);
     setFrom(created);
     setTo(created);
     setKind("all");
@@ -196,8 +205,8 @@ function BillingCenterView({
     if (!trace) return;
     const matched = ledger.find((row) => row.trace_id === trace);
     if (matched) {
-      setFrom(billingDate(matched.time));
-      setTo(billingDate(matched.time));
+      setFrom(billingDate(matched.time, timezone));
+      setTo(billingDate(matched.time, timezone));
       setQuery(trace);
       setEntry(matched);
       setKind("all");
@@ -211,10 +220,11 @@ function BillingCenterView({
             from,
             to,
             status: kind === "all" ? undefined : kind,
+            timezone,
             query,
           })
         : [],
-    [orders, from, to, kind, query, validRange],
+    [orders, from, to, kind, query, validRange, timezone],
   );
   const filteredLedger = useMemo(
     () =>
@@ -223,10 +233,11 @@ function BillingCenterView({
             from,
             to,
             type: kind === "all" ? undefined : kind,
+            timezone,
             query,
           })
         : [],
-    [ledger, from, to, kind, query, validRange],
+    [ledger, from, to, kind, query, validRange, timezone],
   );
   const count =
     tab === "orders" ? filteredOrders.length : filteredLedger.length;
@@ -238,7 +249,9 @@ function BillingCenterView({
   );
   const spend = ledger
     .filter(
-      (e) => e.type === "call_summary" && billingDate(e.time).startsWith(month),
+      (e) =>
+        e.type === "call_summary" &&
+        billingDate(e.time, timezone).startsWith(month),
     )
     .reduce(
       (sum, e) =>
@@ -247,7 +260,9 @@ function BillingCenterView({
     );
   const funded = ledger
     .filter(
-      (e) => e.type === "recharge" && billingDate(e.time).startsWith(month),
+      (e) =>
+        e.type === "recharge" &&
+        billingDate(e.time, timezone).startsWith(month),
     )
     .reduce((sum, e) => sum + BigInt(e.amount_nano), 0n);
   const isLow = balanceKnown && BigInt(balance) < 5_000_000_000n;
@@ -256,7 +271,7 @@ function BillingCenterView({
     new Intl.DateTimeFormat(
       language === "zh" ? "zh-CN" : language === "ar" ? "ar-AE" : "en-GB",
       {
-        timeZone: "Asia/Dubai",
+        timeZone: timezone,
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -279,11 +294,39 @@ function BillingCenterView({
     setQuery("");
     setKind("all");
   };
-  const exportRecords = () => {
+  const exportRecords = async () => {
     if (!validRange || !count) return;
+    if (tab === "ledger") {
+      try {
+        const record = await exportMutation.mutateAsync({
+          type: "ledger",
+          start_date: from,
+          end_date: to,
+          ledger_type: kind,
+          query,
+          language: writtenLanguage(language),
+        });
+        if (record.status === "completed")
+          await downloadExport(record.id, record.filename, record.download_url);
+        setMessage(
+          c(
+            "导出任务已创建，可在导出记录中下载文件与字段说明。",
+            "Export created. Files and field descriptions are available in Exports.",
+            "أُنشئ التصدير. تتوفر الملفات وأوصاف الحقول في سجل التصدير.",
+          ),
+        );
+      } catch (err) {
+        setMessage(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
     downloadCsv(
       tab === "orders"
-        ? serializeRechargeCsv(filteredOrders, writtenLanguage(language))
+        ? serializeRechargeCsv(
+            filteredOrders,
+            writtenLanguage(language),
+            timezone,
+          )
         : serializeLedgerCsv(filteredLedger, writtenLanguage(language)),
       `veyra-${tab}-${from}-${to}.csv`,
     );
@@ -296,31 +339,45 @@ function BillingCenterView({
     );
   };
   const description = (item: LedgerEntry) =>
-    item.type === "recharge"
+    item.funding_source === "api_quota"
       ? c(
-          "在线充值到账",
-          "Online top-up credited",
-          "تمت إضافة الشحن عبر الإنترنت",
+          `模型调用 · Key（密钥）${item.token_id ?? ""} · ${item.request_count ?? 0} 次`,
+          `API usage · Key ${item.token_id ?? ""} · ${item.request_count ?? 0} requests`,
+          `استخدام API · المفتاح ${item.token_id ?? ""} · ${item.request_count ?? 0} طلبًا`,
         )
-      : item.type === "call_summary"
-        ? item.trace_id
-          ? c("模型调用扣费", "Model request charge", "رسوم طلب النموذج")
-          : c("模型用量结算", "Model usage settlement", "تسوية استخدام النماذج")
-        : item.description === "注销清零"
-          ? c(
-              "注销余额结清",
-              "Account closure settlement",
-              "تسوية رصيد الإغلاق",
-            )
-          : item.description === "Enterprise Onboarding Credit Incentive"
-            ? c("演示初始额度", "Initial demo credit", "الرصيد التجريبي الأولي")
-            : item.description === "Demo scenario balance adjustment"
+      : item.type === "recharge"
+        ? c(
+            "在线充值到账",
+            "Online top-up credited",
+            "تمت إضافة الشحن عبر الإنترنت",
+          )
+        : item.type === "call_summary"
+          ? item.trace_id
+            ? c("模型调用扣费", "Model request charge", "رسوم طلب النموذج")
+            : c(
+                "模型用量结算",
+                "Model usage settlement",
+                "تسوية استخدام النماذج",
+              )
+          : item.description === "注销清零"
+            ? c(
+                "注销余额结清",
+                "Account closure settlement",
+                "تسوية رصيد الإغلاق",
+              )
+            : item.description === "Enterprise Onboarding Credit Incentive"
               ? c(
-                  "演示场景余额调整",
-                  "Demo balance adjustment",
-                  "تعديل الرصيد التجريبي",
+                  "演示初始额度",
+                  "Initial demo credit",
+                  "الرصيد التجريبي الأولي",
                 )
-              : item.description;
+              : item.description === "Demo scenario balance adjustment"
+                ? c(
+                    "演示场景余额调整",
+                    "Demo balance adjustment",
+                    "تعديل الرصيد التجريبي",
+                  )
+                : item.description;
 
   return (
     <div className="bc-page">
@@ -361,7 +418,7 @@ function BillingCenterView({
         <section className="bc-wallet-card">
           <div className="bc-wallet-top">
             <span>
-              {c("支付钱包余额", "Payment wallet balance", "رصيد محفظة الدفع")}
+              {c("可用 API 余额", "Available API balance", "رصيد API المتاح")}
             </span>
             <span className={`bc-wallet-health ${isLow ? "is-low" : ""}`}>
               <i />
@@ -395,6 +452,16 @@ function BillingCenterView({
               "المحفظة وحصة الواجهة منفصلتان؛ لا تزيد تعبئة المحاكاة حصة الواجهة.",
             )}
           </p>
+          {walletQuery.data?.api_balance_nano !== undefined && (
+            <small>
+              {c(
+                "支付模拟钱包",
+                "Payment simulation wallet",
+                "محفظة محاكاة الدفع",
+              )}
+              : <bdi>{formatMoney(walletQuery.data.balance_nano)}</bdi>
+            </small>
+          )}
           <div className="bc-wallet-actions">
             <Button variant="primary" onClick={() => onRecharge()}>
               <CreditCard size={16} />
@@ -518,7 +585,11 @@ function BillingCenterView({
             <div>
               <span>{c("本月消费", "Usage this month", "استهلاك الشهر")}</span>
               <strong dir="ltr">
-                {ledgerKnown ? formatMoney(spend.toString(), "total") : "—"}
+                {walletQuery.data?.month_spend_nano !== undefined
+                  ? formatMoney(walletQuery.data.month_spend_nano, "total")
+                  : ledgerKnown
+                    ? formatMoney(spend.toString(), "total")
+                    : "—"}
               </strong>
             </div>
           </div>
@@ -561,9 +632,9 @@ function BillingCenterView({
           </div>
           <small>
             {c(
-              "支付钱包余额不代表 API 配额；实际调用以 API 配额和密钥授权为准。",
-              "Payment wallet balance is separate from API quota; calls require API quota and key authorization.",
-              "رصيد المحفظة منفصل عن حصة الواجهة؛ تتطلب الطلبات حصة واجهة وتفويض المفتاح.",
+              "提醒按实际 API 可用余额计算。",
+              "Alerts use the available API balance.",
+              "تعتمد التنبيهات على رصيد API المتاح.",
             )}
           </small>
         </section>
@@ -765,9 +836,9 @@ function BillingCenterView({
         <div className="bc-filter-note">
           <span>
             {c(
-              "迪拜时间 · UTC+4（协调世界时加四小时） · 单次查询最多 31 天",
-              "Dubai time · UTC+4 · Up to 31 days per query",
-              "توقيت دبي · UTC+4 · حتى 31 يومًا لكل استعلام",
+              `地区时区：${timezone} · 单次查询最多 31 天`,
+              `${timezone} · Up to 31 days per query`,
+              `${timezone} · حتى 31 يومًا لكل استعلام`,
             )}
           </span>
           <b>
@@ -780,6 +851,11 @@ function BillingCenterView({
           <p className="bc-feedback" role="status">
             <Check size={14} />
             {message}
+            {exportMutation.data && (
+              <Link to="/console/exports">
+                {c("导出记录", "Exports", "سجل التصدير")}
+              </Link>
+            )}
           </p>
         )}
         {!validRange ? (
@@ -947,7 +1023,16 @@ function BillingCenterView({
                             {item.order_id && (
                               <button
                                 className="bc-associated"
-                                onClick={() => onRecharge(item.order_id)}
+                                onClick={() =>
+                                  onRecharge(
+                                    orders.find(
+                                      (order) =>
+                                        order.id === item.order_id ||
+                                        order.provider_order_id ===
+                                          item.order_id,
+                                    )?.id ?? item.order_id,
+                                  )
+                                }
                               >
                                 {item.order_id}
                                 <ArrowUpRight size={11} />

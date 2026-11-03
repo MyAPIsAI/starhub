@@ -110,7 +110,11 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 				crossWant = 200
 			}
 			for _, path := range []string{fmt.Sprintf("/api/recharge/%d", orders[env.rootID].ID), fmt.Sprintf("/api/export/%d/download", exports[env.rootID].ID)} {
-				if response := doRequest(env.base, "GET", path, session, nil); response.Status != crossWant {
+				want := crossWant
+				if strings.HasPrefix(path, "/api/export/") && !admin {
+					want = 404
+				}
+				if response := doRequest(env.base, "GET", path, session, nil); response.Status != want {
 					t.Fatalf("role %d cross-account %s: %d", role, path, response.Status)
 				}
 			}
