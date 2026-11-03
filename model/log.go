@@ -1,6 +1,9 @@
 package model
 
 type Log struct {
+	TraceID              string `gorm:"size:64;index" json:"trace_id,omitempty"`
+	RequestSource        string `gorm:"size:32;not null;default:''" json:"request_source,omitempty"`
+	TTFTMs               int64  `gorm:"not null;default:0" json:"ttft_ms"`
 	TokenPeriodStartedAt int64  `gorm:"not null;default:0" json:"token_period_started_at,omitempty"`
 	TokenDeleted         bool   `gorm:"-" json:"token_deleted"`
 	UsageSource          string `gorm:"size:32;not null;default:''" json:"usage_source,omitempty"`

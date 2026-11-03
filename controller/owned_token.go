@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"starhub/common"
 	"starhub/model"
+	"starhub/relay/channel"
 	"strings"
 )
 
@@ -60,6 +61,12 @@ func GetOwnedTokenChoices(w http.ResponseWriter, r *http.Request) {
 				tags = model.SplitList(meta.Tags)
 			}
 			choice.Protocols = plazaProtocols(item.ChannelTypes[choice.Group], tags)
+			for _, kind := range item.ChannelTypes[choice.Group] {
+				if kind == channel.ChannelTypeGemini {
+					choice.Protocols = append(choice.Protocols, "Gemini")
+					break
+				}
+			}
 			choice.SmartEligible = len(choice.Protocols) > 0
 			for _, tag := range tags {
 				switch tag {

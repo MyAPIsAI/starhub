@@ -60,6 +60,7 @@ import {
 export type { RechargeOrder } from "./billing";
 
 export type PreviewRequest = Omit<RequestRecord, "source"> & {
+  request_source?: "playground";
   usage_source?: "upstream" | "admission_estimate";
   source: "api" | "playground";
   pricing_revision?: string;
@@ -118,6 +119,8 @@ export interface PreviewKey {
 }
 
 export interface LedgerEntry {
+  token_id?: number;
+  request_count?: number;
   id: string;
   time: string;
   type:

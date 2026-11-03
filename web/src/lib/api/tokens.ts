@@ -82,6 +82,19 @@ export interface TokenUpdateInput {
 
 const TOKENS_KEY = ["tokens"] as const;
 
+// Reveal authorizations stay in page memory and are bound to the confirmed session.
+const revealWindows = new Map<string, { grant: string; expires: number }>();
+export function currentKeyGrant(
+  id: number,
+  identity: ReturnType<typeof sessionQueryIdentity>,
+) {
+  const key = JSON.stringify([identity, id]);
+  const window = revealWindows.get(key);
+  if (window && window.expires > Date.now()) return window.grant;
+  revealWindows.delete(key);
+  return undefined;
+}
+
 function assertTokenSession(identity: ReturnType<typeof sessionQueryIdentity>) {
   if (
     identity[1] === null ||
@@ -141,7 +154,12 @@ export async function verifyTokenPassword(
     Number((result as Record<string, unknown>).expires_at) * 1000 <= Date.now()
   )
     throw Error("API key password verification was not confirmed");
-  return result as { key: string; expires_at: number; grant: string };
+  const unlocked = result as { key: string; expires_at: number; grant: string };
+  revealWindows.set(JSON.stringify([identity, tokenID]), {
+    grant: unlocked.grant,
+    expires: Math.min(unlocked.expires_at * 1000, Date.now() + 300000),
+  });
+  return unlocked;
 }
 
 export async function revealTokenSecret(

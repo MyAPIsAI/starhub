@@ -1,3 +1,10 @@
+# Playground UI-3.3 and ARC-AC-17 · 2026-11-03
+
+- Replaced masked-key simulation with direct gateway calls after owner/password-bound verification. The drawer's existing verification can be reused for five minutes through a memory-only grant; each repeat use retrieves the key through the audited reveal API. Only enabled, unexpired account keys and authorized text models are offered, with `myapis-auto` first. Added streaming and ordinary responses, parameter controls, and cURL/Python/Node.js previews without embedded credentials.
+- Gateway playground admission binds the login session, selected Key ID, credential and unexpired reveal grant before quota or upstream work. Settled records retain a server trace, playground source and measured first-text latency. The owner-only result endpoint exposes settled model/provider, retry indication, timing, tokens and exact collected cost; conversation content is never persisted by this feature. Request details visibly identify the playground source.
+- Verification: Go build/vet/full suite pass; frontend 948 passed with 4 existing skips; TypeScript and production build pass. Twelve browser combinations cover Chinese/English/Arabic, light/dark and desktop/390px, including ordinary customer accounts, wrong-password rejection, five-minute reuse, incremental output, exact settlement, request-detail source and memory-only credentials. Backend tests prove foreign/missing Key ID or session returns 404 with no upstream calls or charges, and verify IP and expired-grant rejection. Evidence: [acceptance report](../output/playground-20261103/report.md), [browser report](../output/playground-20261103/browser/browser-report.json).
+- Delivery: committed on `dev-wyc`; unrelated historical handoff edits and user files are preserved. Existing user services and databases were not restarted or replaced.
+
 # Key choices retry visibility · 2026-11-02
 
 - Removed the always-visible Reload key choices action from the create/edit drawer. A localized Retry button now appears only after choices loading fails; loading uses a status message, success removes the retry action, and drafts remain intact through recovery.

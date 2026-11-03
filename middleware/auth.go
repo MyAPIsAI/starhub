@@ -124,6 +124,9 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 				"server_error", "token_lookup_failed", err.Error())
 			return
 		}
+		if !authorizePlayground(w, r, token) {
+			return
+		}
 		if token.Status != common.StatusEnabled {
 			writeRelayRequestError(w, r, http.StatusForbidden,
 				"authentication_error", "key_disabled",

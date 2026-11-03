@@ -40,6 +40,9 @@ export interface UsageResponse {
 // --- Types matching the backend Log struct (model/log.go) ---
 
 export interface LogRow {
+  trace_id?: string;
+  request_source?: string;
+  ttft_ms?: number;
   id: number;
   user_id: number;
   token_id: number;
@@ -152,7 +155,11 @@ export function resolveVendor(modelId: string): string {
  */
 export function adaptLogRow(log: LogRow): PreviewRequestLike {
   return {
-    trace_id: `log_${log.id}`,
+    trace_id: log.trace_id || `log_${log.id}`,
+    request_source:
+      log.request_source === "playground" ? ("playground" as const) : undefined,
+    ttft_ms: log.ttft_ms ?? 0,
+    fallback: log.used_channels.includes("->"),
     source: "api",
     time: new Date(log.created_at * 1000).toISOString(),
     model: log.model,
@@ -185,6 +192,9 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
 }
 
 export interface PreviewRequestLike {
+  request_source?: "playground";
+  ttft_ms?: number;
+  fallback?: boolean;
   source?: "api";
   trace_id: string;
   time: string;

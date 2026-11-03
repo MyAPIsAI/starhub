@@ -191,6 +191,7 @@ func responsesFallbackUsage(req *dto.ResponsesRequest, output json.RawMessage, t
 }
 
 func settleNativeUsage(flow *relayFlow, ch *model.Channel, usage *relay.Usage, status int) {
+	flow.setUsageMetadata(usage)
 	usage.RequestProtocol = flow.req.protocol
 	usage.TokenPeriodStartedAt = flow.req.tokenPeriodStartedAt
 	usage.RequestStatus = status

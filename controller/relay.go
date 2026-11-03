@@ -118,6 +118,7 @@ type relayRequest struct {
 	modelName            string
 	requestedModel       string
 	protocol             string
+	requestSource        string
 	body                 []byte
 	contentType          string
 	stream               bool
@@ -144,6 +145,9 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 		prefixHash:           ctxValueString(ctx, common.CtxRequestPrefixHash),
 	}
 	req.autoGroups, _ = ctx.Value(common.CtxAutoGroups).([]string)
+	if r.Header.Get("X-MyAPIs-Source") == "playground" {
+		req.requestSource = "playground"
+	}
 	req.channelCheck, _ = ctx.Value(common.CtxSmartChannelCheck).(func(*model.Channel, string) (bool, error))
 	req.chainAdmission, _ = ctx.Value(common.CtxSmartChainAdmission).(func() error)
 	req.protocol = "OpenAI"
@@ -214,6 +218,8 @@ type relayFlow struct {
 	attempt *metric.AttemptSpan
 	sw      *statusWriter
 	mode    string // relay mode for the metric label (chat, embeddings, ...)
+	traceID string
+	ttftMs  int64
 
 	// Affinity bookkeeping per request (used by pick and noteAffinity).
 	affinityPreferred int64 // channel picked by affinity (0 when none)
@@ -228,7 +234,8 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 	}
 	sw := newStatusWriter(w)
 	flow := &relayFlow{
-		ctx: ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
+		traceID: common.GenerateSessionKey(),
+		ctx:     ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
 		startTime:      time.Now(),
 		tried:          map[int64]bool{},
 		affinityKeyIdx: -1,
@@ -240,6 +247,10 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 			Stream:  req.stream,
 			Mode:    mode,
 		}),
+	}
+	w.Header().Set("X-Request-ID", flow.traceID)
+	if req.requestSource == "playground" {
+		sw.ResponseWriter = &playgroundTimingWriter{ResponseWriter: w, flow: flow}
 	}
 	// Auto-group mode starts at the first configured group. Admission may
 	// advance the cursor before pre-charge; settlement uses the serving group.
@@ -506,6 +517,9 @@ func (f *relayFlow) refundUnlessSettled() {
 	// usage counts.
 	if len(f.trail) > 0 {
 		_ = model.InsertFailedLog(&model.Log{
+			TraceID:        f.traceID,
+			RequestSource:  f.req.requestSource,
+			TTFTMs:         f.ttftMs,
 			UserID:         f.req.userID,
 			TokenID:        f.req.tokenID,
 			TokenName:      f.req.tokenName,
@@ -965,6 +979,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 		usage = relay.EstimateIRUsage(ir, content)
 	}
 	usage.RequestProtocol = flow.req.protocol
+	flow.setUsageMetadata(usage)
 	usage.TokenPeriodStartedAt = flow.req.tokenPeriodStartedAt
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,

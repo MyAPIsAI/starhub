@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import BillingCenter from "../features/billing-center";
 import AccountCenter from "../features/account-center";
@@ -153,6 +154,7 @@ export default function ConsolePreview() {
 }
 
 function ConsoleWorkspace() {
+  const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
   const c = (zh: string, en: string, ar: string) =>
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
@@ -1846,10 +1848,10 @@ function ConsoleWorkspace() {
               </div>
 
               <Playground
-                plaintextKeys={plaintextKeys}
                 onRelayComplete={() => {
                   void refreshRequests();
                   void walletQuery.refetch();
+                  void queryClient.invalidateQueries({ queryKey: ["tokens"] });
                 }}
                 key={location.key}
                 initialModel={initialCreateModel}

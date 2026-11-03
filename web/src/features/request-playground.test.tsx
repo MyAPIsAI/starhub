@@ -4,6 +4,27 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Playground from "./request-playground";
 
+vi.mock("../lib/api/token-choices", () => ({
+  useTokenChoices: () => ({
+    data: {
+      choices: [
+        {
+          group: "standard",
+          model: "gpt-4.1",
+          protocols: ["OpenAI", "Anthropic"],
+          smart_eligible: true,
+        },
+        {
+          group: "standard",
+          model: "deepseek-chat",
+          protocols: ["OpenAI"],
+          smart_eligible: true,
+        },
+      ],
+    },
+  }),
+}));
+
 const fixture = vi.hoisted(() => ({
   smartAccess: true,
   modelAccess: "all" as "all" | "custom",

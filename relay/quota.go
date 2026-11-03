@@ -220,6 +220,9 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		originalModel = requestedModel[0]
 	}
 	entry := &model.Log{
+		TraceID:              usage.TraceID,
+		RequestSource:        usage.RequestSource,
+		TTFTMs:               usage.TTFTMs,
 		UserID:               userID,
 		TokenID:              tokenID,
 		TokenName:            tokenName,

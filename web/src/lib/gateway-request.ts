@@ -36,7 +36,7 @@ export function buildGatewayRequest(request: DemoRequest, secret: string) {
       request.protocol === "Anthropic"
         ? "/v1/messages"
         : request.protocol === "Gemini"
-          ? `/v1beta/models/${encodeURIComponent(request.model)}:generateContent`
+          ? `/v1beta/models/${encodeURIComponent(request.model)}:${request.stream ? "streamGenerateContent?alt=sse" : "generateContent"}`
           : "/v1/chat/completions",
     init: { method: "POST", headers, body: JSON.stringify(body) },
   };

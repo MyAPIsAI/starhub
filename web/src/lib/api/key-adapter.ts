@@ -163,8 +163,9 @@ export function useBackendKeys(plaintextKeys: Record<string, string> = {}): {
   keys: PreviewKey[];
   loading: boolean;
   error: Error | null;
+  refetch: () => Promise<unknown>;
 } {
-  const { data: cached, isLoading, error } = useTokens();
+  const { data: cached, isLoading, error, refetch } = useTokens();
   const data = error ? undefined : cached;
   const keys = useMemo(() => {
     if (!data) return [];
@@ -172,5 +173,5 @@ export function useBackendKeys(plaintextKeys: Record<string, string> = {}): {
       tokenToPreviewKey(token, plaintextKeys[String(token.id)]),
     );
   }, [data, plaintextKeys]);
-  return { keys, loading: isLoading, error };
+  return { keys, loading: isLoading, error, refetch };
 }

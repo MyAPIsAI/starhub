@@ -23,6 +23,23 @@ const log: LogRow = {
 };
 
 describe("backend log model attribution", () => {
+  it("retains the server trace and playground source on settled requests", () => {
+    expect(
+      adaptLogRow({
+        ...log,
+        trace_id: "server-trace",
+        request_source: "playground",
+        ttft_ms: 42,
+        used_channels: "9->10",
+      }),
+    ).toMatchObject({
+      trace_id: "server-trace",
+      request_source: "playground",
+      ttft_ms: 42,
+      fallback: true,
+      source: "api",
+    });
+  });
   it("retains an explicit estimated task bill without inventing measured tokens", () => {
     expect(
       adaptLogRow({

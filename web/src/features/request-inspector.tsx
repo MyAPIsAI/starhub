@@ -466,6 +466,12 @@ export default function RequestInspector({
                 )}
               </dd>
             </div>
+            {record.request_source === "playground" && (
+              <div>
+                <dt>{text("来源", "Source", "المصدر")}</dt>
+                <dd>{text("调试台", "Playground", "مساحة التجربة")}</dd>
+              </div>
+            )}
             <div>
               <dt>{text("时间", "Time", "الوقت")}</dt>
               <dd>
@@ -550,17 +556,21 @@ export default function RequestInspector({
                         "Admin billing simulation (no media generated)",
                         "محاكاة فوترة المسؤول دون إنشاء وسائط",
                       )
-                    : record.source === "playground"
-                      ? text(
-                          "调试台模拟",
-                          "Playground simulation",
-                          "محاكاة مساحة التجربة",
-                        )
-                      : text(
-                          "模拟客户端请求",
-                          "Simulated client request",
-                          "طلب عميل محاكى",
-                        )}
+                    : record.request_source === "playground"
+                      ? text("调试台", "Playground", "مساحة التجربة")
+                      : record.source === "api"
+                        ? text("API 调用", "API request", "طلب API")
+                        : record.source === "playground"
+                          ? text(
+                              "调试台模拟",
+                              "Playground simulation",
+                              "محاكاة مساحة التجربة",
+                            )
+                          : text(
+                              "模拟客户端请求",
+                              "Simulated client request",
+                              "طلب عميل محاكى",
+                            )}
                 </dd>
               </div>
             </dl>

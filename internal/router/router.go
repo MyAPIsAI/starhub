@@ -116,6 +116,7 @@ func New() http.Handler {
 
 	mux.Handle("GET /api/log", middleware.UserAuth(http.HandlerFunc(controller.ListLogs)))
 	mux.Handle("GET /api/log/", middleware.UserAuth(http.HandlerFunc(controller.ListLogs)))
+	mux.Handle("GET /api/playground/results/{trace}", middleware.UserAuth(http.HandlerFunc(controller.GetPlaygroundResult)))
 
 	mux.Handle("GET /api/audit", middleware.AdminAuth(http.HandlerFunc(controller.ListAuditLogs)))
 	mux.Handle("GET /api/audit/", middleware.AdminAuth(http.HandlerFunc(controller.ListAuditLogs)))

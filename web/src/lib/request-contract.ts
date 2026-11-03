@@ -3,6 +3,7 @@ import type { ModelItem } from "../config/models";
 export type DemoProtocol = ModelItem["protocols"][number];
 export type DemoCapability = ModelItem["capabilities"][number];
 export interface DemoRequest {
+  stream?: boolean;
   model: string;
   messages: { role: "system" | "user" | "assistant"; content: string }[];
   temperature: number;
@@ -110,6 +111,7 @@ export function simulateDemoResponse(
 export function requestPayload(request: DemoRequest) {
   return {
     model: request.model,
+    ...(request.stream !== undefined ? { stream: request.stream } : {}),
     messages: request.messages,
     temperature: request.temperature,
     max_tokens: request.max_tokens,
@@ -159,7 +161,7 @@ export function buildCurlRequest(
     protocol === "Anthropic"
       ? `${baseUrl.replace(/\/v1\/?$/, "")}/v1/messages`
       : protocol === "Gemini"
-        ? `${baseUrl.replace(/\/v1\/?$/, "")}/v1beta/models/${encodeURIComponent(request.model)}:generateContent`
+        ? `${baseUrl.replace(/\/v1\/?$/, "")}/v1beta/models/${encodeURIComponent(request.model)}:${request.stream ? "streamGenerateContent?alt=sse" : "generateContent"}`
         : `${baseUrl.replace(/\/$/, "")}/chat/completions`;
   let body: unknown = requestPayload(request);
   if (protocol === "Anthropic")

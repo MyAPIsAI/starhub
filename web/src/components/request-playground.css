@@ -3,6 +3,22 @@
   gap: 20px;
   min-width: 0;
 }
+.verify-stream {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+}
+.verify-result > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.verify-card form {
+  display: grid;
+  gap: 16px;
+}
 .verify-notice {
   display: flex;
   gap: 14px;
