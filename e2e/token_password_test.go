@@ -43,7 +43,7 @@ func TestTokenPasswordActualRouterNeverCreatesOrReplacesLoginSessions(t *testing
 		if status != item.status || len(headers.Values("Set-Cookie")) != 0 || !strings.Contains(headers.Get("Cache-Control"), "no-store") {
 			t.Fatalf("router verification changed session/cache behavior: %d %s", status, response)
 		}
-		if status != 200 && strings.Contains(response, env.apiKey) || strings.Contains(response, "123456") || strings.Contains(response, "\"session\"") {
+		if strings.Contains(response, env.apiKey) || strings.Contains(response, "123456") || strings.Contains(response, "\"session\"") {
 			t.Fatal("verification returned credentials or a new session")
 		}
 	}

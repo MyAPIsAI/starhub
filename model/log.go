@@ -1,20 +1,18 @@
 package model
 
 type Log struct {
-	TokenPeriodStartedAt int64  `gorm:"not null;default:0" json:"token_period_started_at,omitempty"`
-	TokenDeleted         bool   `gorm:"-" json:"token_deleted"`
-	UsageSource          string `gorm:"size:32;not null;default:''" json:"usage_source,omitempty"`
-	ID                   int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID               int64  `gorm:"index;not null;default:0" json:"user_id"`
-	TokenID              int64  `gorm:"index;not null;default:0" json:"token_id"`
-	TokenName            string `gorm:"size:64;not null;default:''" json:"token_name"`
-	ChannelID            int64  `gorm:"index;not null;default:0" json:"channel_id"`
-	Model                string `gorm:"size:128;not null;default:'';index:idx_logs_quality_window,priority:2;index:idx_logs_quality_model,priority:1" json:"model"`
-	RequestedModel       string `gorm:"size:128;not null;default:''" json:"requested_model"`
-	Protocol             string `gorm:"size:16;not null;default:''" json:"protocol"`
-	PromptTokens         int64  `gorm:"not null;default:0" json:"prompt_tokens"`
-	CompletionTokens     int64  `gorm:"not null;default:0" json:"completion_tokens"`
-	Quota                int64  `gorm:"not null;default:0;index:idx_logs_quality_window,priority:5" json:"quota"`
+	UsageSource      string `gorm:"size:32;not null;default:''" json:"usage_source,omitempty"`
+	ID               int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID           int64  `gorm:"index;not null;default:0" json:"user_id"`
+	TokenID          int64  `gorm:"index;not null;default:0" json:"token_id"`
+	TokenName        string `gorm:"size:64;not null;default:''" json:"token_name"`
+	ChannelID        int64  `gorm:"index;not null;default:0" json:"channel_id"`
+	Model            string `gorm:"size:128;not null;default:'';index:idx_logs_quality_window,priority:2;index:idx_logs_quality_model,priority:1" json:"model"`
+	RequestedModel   string `gorm:"size:128;not null;default:''" json:"requested_model"`
+	Protocol         string `gorm:"size:16;not null;default:''" json:"protocol"`
+	PromptTokens     int64  `gorm:"not null;default:0" json:"prompt_tokens"`
+	CompletionTokens int64  `gorm:"not null;default:0" json:"completion_tokens"`
+	Quota            int64  `gorm:"not null;default:0;index:idx_logs_quality_window,priority:5" json:"quota"`
 	// UnfundedQuota is the priced usage that could not be collected. Quota
 	// records the actual charge; their sum is the full priced usage.
 	UnfundedQuota int64  `gorm:"not null;default:0" json:"unfunded_quota"`
@@ -166,9 +164,6 @@ func ListLogs(userID int64, page, pageSize int64, model string) ([]Log, int64, e
 	}
 	var logs []Log
 	err := q.Order("id DESC").Limit(int(pageSize)).Offset(int((page - 1) * pageSize)).Find(&logs).Error
-	if err == nil {
-		err = markDeletedLogTokens(logs)
-	}
 	return logs, total, err
 }
 
@@ -182,32 +177,5 @@ func ListLogsSince(userID int64, since int64) ([]Log, error) {
 	}
 	var logs []Log
 	err := q.Order("id DESC").Limit(10000).Find(&logs).Error
-	if err == nil {
-		err = markDeletedLogTokens(logs)
-	}
 	return logs, err
-}
-
-func markDeletedLogTokens(logs []Log) error {
-	ids := make([]int64, 0, len(logs))
-	for _, entry := range logs {
-		if entry.TokenID > 0 {
-			ids = append(ids, entry.TokenID)
-		}
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	var existing []int64
-	if err := DB.Model(&Token{}).Where("id IN ?", ids).Pluck("id", &existing).Error; err != nil {
-		return err
-	}
-	found := map[int64]bool{}
-	for _, id := range existing {
-		found[id] = true
-	}
-	for i := range logs {
-		logs[i].TokenDeleted = logs[i].TokenID > 0 && !found[logs[i].TokenID]
-	}
-	return nil
 }

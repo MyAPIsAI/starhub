@@ -38,7 +38,7 @@ vi.mock("../lib/api/tokens", async (importOriginal) => ({
   useUpdateToken: () => ({ isPending: false }),
 }));
 vi.mock("../components/ui/overlay", () => ({
-  Drawer: ({ children }: { children: ReactNode }) =>
+  Modal: ({ children }: { children: ReactNode }) =>
     createElement("div", null, children),
 }));
 vi.mock("react-i18next", () => ({

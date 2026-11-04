@@ -107,41 +107,39 @@ type attemptResult struct {
 // relayRequest is the per-request state every relay mode shares (extracted
 // from the middleware chain context).
 type relayRequest struct {
-	userID               int64
-	tokenID              int64
-	tokenName            string
-	tokenUnlimited       bool
-	tokenPeriodStartedAt int64
-	group                string
-	userGroup            string
-	autoGroups           []string
-	modelName            string
-	requestedModel       string
-	protocol             string
-	body                 []byte
-	contentType          string
-	stream               bool
-	prefixHash           string // prompt-prefix scope for prefix-cache affinity
-	channelCheck         func(*model.Channel, string) (bool, error)
-	chainAdmission       func() error
-	pricing              map[string]relay.PriceData
+	userID         int64
+	tokenID        int64
+	tokenName      string
+	tokenUnlimited bool
+	group          string
+	userGroup      string
+	autoGroups     []string
+	modelName      string
+	requestedModel string
+	protocol       string
+	body           []byte
+	contentType    string
+	stream         bool
+	prefixHash     string // prompt-prefix scope for prefix-cache affinity
+	channelCheck   func(*model.Channel, string) (bool, error)
+	chainAdmission func() error
+	pricing        map[string]relay.PriceData
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
 	ctx := r.Context()
 	req := relayRequest{
-		userID:               ctxValueInt64(ctx, common.CtxUserID),
-		tokenID:              ctxValueInt64(ctx, common.CtxTokenID),
-		tokenName:            ctxValueString(ctx, common.CtxTokenName),
-		tokenUnlimited:       ctxValueBool(ctx, common.CtxTokenUnlimited),
-		tokenPeriodStartedAt: ctxValueInt64(ctx, common.CtxTokenPeriodStartedAt),
-		group:                ctxValueString(ctx, common.CtxUsingGroup),
-		userGroup:            ctxValueString(ctx, common.CtxUserGroup),
-		modelName:            ctxValueString(ctx, common.CtxRequestModel),
-		requestedModel:       ctxValueString(ctx, common.CtxRequestedModel),
-		contentType:          ctxValueString(ctx, common.CtxRequestContentType),
-		stream:               ctxValueBool(ctx, common.CtxRequestStream),
-		prefixHash:           ctxValueString(ctx, common.CtxRequestPrefixHash),
+		userID:         ctxValueInt64(ctx, common.CtxUserID),
+		tokenID:        ctxValueInt64(ctx, common.CtxTokenID),
+		tokenName:      ctxValueString(ctx, common.CtxTokenName),
+		tokenUnlimited: ctxValueBool(ctx, common.CtxTokenUnlimited),
+		group:          ctxValueString(ctx, common.CtxUsingGroup),
+		userGroup:      ctxValueString(ctx, common.CtxUserGroup),
+		modelName:      ctxValueString(ctx, common.CtxRequestModel),
+		requestedModel: ctxValueString(ctx, common.CtxRequestedModel),
+		contentType:    ctxValueString(ctx, common.CtxRequestContentType),
+		stream:         ctxValueBool(ctx, common.CtxRequestStream),
+		prefixHash:     ctxValueString(ctx, common.CtxRequestPrefixHash),
 	}
 	req.autoGroups, _ = ctx.Value(common.CtxAutoGroups).([]string)
 	req.channelCheck, _ = ctx.Value(common.CtxSmartChannelCheck).(func(*model.Channel, string) (bool, error))
@@ -960,7 +958,6 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 		usage = relay.EstimateIRUsage(ir, content)
 	}
 	usage.RequestProtocol = flow.req.protocol
-	usage.TokenPeriodStartedAt = flow.req.tokenPeriodStartedAt
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {

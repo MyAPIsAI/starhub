@@ -143,7 +143,7 @@ func submitPluginTask(flow *relayFlow, picked *model.Channel) bool {
 		return true
 	}
 	request, _ := json.Marshal(taskReq)
-	task := &model.Task{TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, TaskPluginID: ch.TaskPluginID, Platform: plugin.Meta.Key, Action: dto.TaskActionVideo, Status: model.TaskStatusSubmitting,
+	task := &model.Task{TaskPluginID: ch.TaskPluginID, Platform: plugin.Meta.Key, Action: dto.TaskActionVideo, Status: model.TaskStatusSubmitting,
 		Model: flow.req.modelName, RequestedModel: flow.req.requestedModel, Protocol: flow.req.protocol, UserID: flow.req.userID, TokenID: flow.req.tokenID, TokenName: flow.req.tokenName,
 		TokenUnlimited: flow.req.tokenUnlimited, ChannelID: ch.ID, Group: flow.settleGroup(), UserGroup: flow.req.userGroup, Quota: max(1, quota), RequestMeta: string(request), PricingMeta: string(pricing)}
 	if err := model.ReservePluginTask(task, ch); err != nil {

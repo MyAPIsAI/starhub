@@ -3,7 +3,6 @@ package model
 import (
 	"errors"
 	"log"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -44,13 +43,6 @@ func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amoun
 		return ErrUserQuotaShort
 	}
 	if !tokenUnlimited {
-		var token Token
-		if err := tx.First(&token, tokenID).Error; err != nil {
-			return err
-		}
-		if err := refreshTokenPeriod(tx, &token, time.Now()); err != nil {
-			return err
-		}
 		res := tx.Model(&Token{}).
 			Where("id = ? AND remain_quota >= ?", tokenID, amount).
 			Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota - ?", amount)})
@@ -118,7 +110,7 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 		}
 		var token Token
 		if err := tx.Where("id = ? AND user_id = ?", tokenID, userID).First(&token).Error; err != nil {
-			if !errors.Is(err, gorm.ErrRecordNotFound) {
+			if claim == nil || !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
 			// An accepted task outlives deletion of its key. Refund the owner,
@@ -131,25 +123,18 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 				return err
 			}
 		}
-		pastPeriod := token.ID != 0 && entry != nil && entry.TokenPeriodStartedAt > 0 && entry.TokenPeriodStartedAt < token.PeriodStartedAt
-		chargeToken := !tokenUnlimited && token.ID != 0 && !pastPeriod
-		if pastPeriod && !tokenUnlimited {
-			if err := tx.Model(&Token{}).Where("id = ?", tokenID).UpdateColumn("remain_quota", gorm.Expr("remain_quota + ?", actual-delta)).Error; err != nil {
-				return err
-			}
-		}
 		if delta > 0 {
 			var user User
 			if err := tx.First(&user, userID).Error; err != nil {
 				return err
 			}
 			collectedDelta := min(delta, max(user.Quota, 0))
-			if chargeToken {
+			if !tokenUnlimited {
 				collectedDelta = min(collectedDelta, max(token.RemainQuota, 0))
 			}
 			settled.UnfundedQuota = delta - collectedDelta
 			settled.Quota = actual - settled.UnfundedQuota
-			if chargeToken {
+			if !tokenUnlimited {
 				if err := tx.Model(&Token{}).Where("id = ?", tokenID).
 					Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota - ?", collectedDelta)}).Error; err != nil {
 					return err
@@ -160,7 +145,7 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 				return err
 			}
 		} else if delta < 0 {
-			if chargeToken {
+			if !tokenUnlimited {
 				if err := tx.Model(&Token{}).Where("id = ?", tokenID).
 					Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota + ?", -delta)}).Error; err != nil {
 					return err
@@ -172,15 +157,6 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			}
 		}
 		if settled.Quota > 0 {
-			if pastPeriod {
-				if err := tx.Model(&TokenQuotaPeriod{}).Where("token_id = ? AND started_at = ?", tokenID, entry.TokenPeriodStartedAt).UpdateColumn("used_quota", gorm.Expr("used_quota + ?", settled.Quota)).Error; err != nil {
-					return err
-				}
-			} else if token.QuotaPeriod != "never" && token.ID != 0 {
-				if err := tx.Model(&Token{}).Where("id = ?", tokenID).UpdateColumn("period_used_quota", gorm.Expr("period_used_quota + ?", settled.Quota)).Error; err != nil {
-					return err
-				}
-			}
 			// used_quota is a usage counter, not a balance. It must be
 			// updated for unlimited tokens too so the key-level consumption
 			// statistics remain accurate.

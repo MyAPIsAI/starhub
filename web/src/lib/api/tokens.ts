@@ -3,8 +3,9 @@
 //
 // Key behavior:
 //   - Create and regenerate return the FULL token with plaintext key.
-//     Lists return masked keys. Viewing an existing key requires password
-//     reauthentication and returns a five-minute reveal window.
+//     This is the ONLY time the key is visible. Callers MUST capture
+//     it from the mutation result and show a one-time dialog; they
+//     cannot rely on list (which returns masked keys).  (B10)
 //   - Update and delete return { success: true } with NO data field.
 //     Mutations invalidate the token list query instead of optimistic
 //     updates.  (B5)
@@ -35,20 +36,10 @@ export interface Token {
   allow_ips: string;
   auto_groups: string;
   smart_access?: boolean;
-  smart_candidates?: string;
   created_at: number;
-  quota_period?: "never" | "daily" | "monthly";
-  quota_limit?: number;
-  quota_timezone?: string;
-  period_used_quota?: number;
-  period_started_at?: number;
 }
 
 export interface TokenCreateInput {
-  quota_period?: "never" | "daily" | "monthly";
-  quota_limit?: number;
-  smart_access?: boolean;
-  smart_candidates?: string;
   choices_revision?: string;
   name: string;
   remain_quota?: number;
@@ -61,10 +52,6 @@ export interface TokenCreateInput {
 }
 
 export interface TokenUpdateInput {
-  quota_period?: "never" | "daily" | "monthly";
-  quota_limit?: number;
-  smart_access?: boolean;
-  smart_candidates?: string;
   choices_revision?: string;
   expected_revision?: string;
   id: number;
@@ -97,7 +84,7 @@ export async function verifyTokenPassword(
   tokenID: number,
   password: string,
   identity: ReturnType<typeof sessionQueryIdentity>,
-): Promise<{ key: string; expires_at: number; grant: string }> {
+): Promise<void> {
   assertTokenSession(identity);
   if (
     !Number.isSafeInteger(tokenID) ||
@@ -131,44 +118,9 @@ export async function verifyTokenPassword(
     typeof result !== "object" ||
     (result as Record<string, unknown>).verified !== true ||
     (result as Record<string, unknown>).user_id !== identity[1] ||
-    (result as Record<string, unknown>).token_id !== tokenID ||
-    typeof (result as Record<string, unknown>).key !== "string" ||
-    !(result as Record<string, unknown>).key ||
-    typeof (result as Record<string, unknown>).grant !== "string" ||
-    !/^[a-f0-9]{64}$/.test(String((result as Record<string, unknown>).grant)) ||
-    typeof (result as Record<string, unknown>).expires_at !== "number" ||
-    !Number.isSafeInteger((result as Record<string, unknown>).expires_at) ||
-    Number((result as Record<string, unknown>).expires_at) * 1000 <= Date.now()
+    (result as Record<string, unknown>).token_id !== tokenID
   )
     throw Error("API key password verification was not confirmed");
-  return result as { key: string; expires_at: number; grant: string };
-}
-
-export async function revealTokenSecret(
-  tokenID: number,
-  grant: string,
-  identity: ReturnType<typeof sessionQueryIdentity>,
-): Promise<{ key: string; expires_at: number }> {
-  assertTokenSession(identity);
-  const result = await apiPost<{
-    key: string;
-    token_id: number;
-    user_id: number;
-    expires_at: number;
-  }>(
-    `/api/token/${tokenID}/reveal`,
-    { expected_user_id: identity[1], grant },
-    { handleUnauthorizedLocally: true },
-  );
-  assertTokenSession(identity);
-  if (
-    result.user_id !== identity[1] ||
-    result.token_id !== tokenID ||
-    !result.key ||
-    result.expires_at * 1000 <= Date.now()
-  )
-    throw Error("Key viewing authorization expired");
-  return result;
 }
 
 export function useTokens() {

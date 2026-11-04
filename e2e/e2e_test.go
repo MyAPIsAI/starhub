@@ -377,7 +377,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	// 14. disabled token is rejected
 	_ = model.UpdateTokenFields(tokenID, map[string]any{"status": common.StatusDisabled})
 	res = doRequest(base, "POST", "/v1/chat/completions", apiKey, chatBody)
-	if res.Status != 403 || !strings.Contains(res.Body, "key_disabled") {
+	if res.Status != 401 || !strings.Contains(res.Body, "token_disabled") {
 		t.Fatalf("disabled token should 401, got %d %s", res.Status, res.Body)
 	}
 
