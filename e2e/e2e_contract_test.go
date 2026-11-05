@@ -15,11 +15,11 @@ func TestContractEnvelopeShape(t *testing.T) {
 
 	// Test cases: (name, method, path, body, expectSuccess)
 	cases := []struct {
-		name     string
-		method   string
-		path     string
-		body     string
-		anonOK   bool // true = works without auth
+		name   string
+		method string
+		path   string
+		body   string
+		anonOK bool // true = works without auth
 	}{
 		{"plaza/models GET anonymous", "GET", "/api/plaza/models", "", true},
 		{"plaza/filters GET anonymous", "GET", "/api/plaza/filters", "", true},

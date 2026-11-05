@@ -107,8 +107,8 @@ func TestBILL007RechargeThenConsume(t *testing.T) {
 	//     so the token quota check doesn't block the relay.
 	t.Logf("BILL-007: userFunded.Quota=%d, tokenID=%d", userFunded.Quota, env.tokenID)
 	res = doRequest(env.base, "PUT", "/api/token/", env.session, map[string]any{
-		"id":               env.tokenID,
-		"unlimited_quota":  true,
+		"id":              env.tokenID,
+		"unlimited_quota": true,
 	})
 	if res.Status != 200 {
 		t.Fatalf("set token to unlimited failed: %d %s", res.Status, res.Body)
