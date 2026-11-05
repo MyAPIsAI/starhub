@@ -5,11 +5,13 @@ go 1.26.0
 require (
 	github.com/dop251/goja v0.0.0-20261028213108-85be1416108e
 	github.com/glebarez/sqlite v1.11.0
+	github.com/pquerna/otp v1.5.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/gorm v1.31.2
 )
 
 require (
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/dlclark/regexp2/v2 v2.11.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
