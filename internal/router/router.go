@@ -37,6 +37,8 @@ func New() http.Handler {
 	mux.HandleFunc("POST /api/user/reset-password", controller.ResetPasswordByPhone)
 	mux.Handle("POST /api/user/change-phone", middleware.UserAuth(http.HandlerFunc(controller.ChangePhone)))
 	mux.Handle("POST /api/user/phone-verification/change", middleware.UserAuth(http.HandlerFunc(controller.SendPhoneChangeVerification)))
+	mux.HandleFunc("POST /api/user/email-verification", controller.SendEmailVerificationHandler)
+	mux.Handle("POST /api/user/email-verification/verify", middleware.UserAuth(http.HandlerFunc(controller.VerifyEmailHandler)))
 	mux.Handle("POST /api/user/logout", middleware.UserAuth(http.HandlerFunc(controller.Logout)))
 	mux.Handle("POST /api/user/logout-current", middleware.UserAuth(http.HandlerFunc(controller.LogoutCurrent)))
 	mux.Handle("GET /api/user/self", middleware.UserAuth(http.HandlerFunc(controller.GetSelf)))

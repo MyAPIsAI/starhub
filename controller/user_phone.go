@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"starhub/common"
@@ -266,3 +267,76 @@ func SendPhoneChangeVerification(w http.ResponseWriter, r *http.Request) {
 
 // Ensure errors package is used.
 var _ = errors.Is
+
+// --- Email Verification ---
+
+type sendEmailVerificationRequest struct {
+	Email string `json:"email"`
+}
+
+type verifyEmailRequest struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
+}
+
+// SendEmailVerificationHandler handles POST /api/user/email-verification.
+// Sends a verification code to the target email for binding/confirmation.
+func SendEmailVerificationHandler(w http.ResponseWriter, r *http.Request) {
+	if !service.IsEmailEnabled() {
+		common.ApiError(w, http.StatusBadRequest, "email service is not enabled")
+		return
+	}
+	var req sendEmailVerificationRequest
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	email := strings.TrimSpace(req.Email)
+	if !validEmail(email) {
+		common.ApiError(w, http.StatusBadRequest, "invalid email")
+		return
+	}
+	code, err := service.GenerateNumericVerificationCode()
+	if err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "failed to generate verification code")
+		return
+	}
+	if err := service.SendEmailVerification(email, code); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "failed to send email")
+		return
+	}
+	expiresAt := time.Now().Add(10 * time.Minute).Unix()
+	if err := model.CreateEmailVerificationChallenge(email, code, model.EmailVerificationPurposeBind, expiresAt); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, "failed to store verification challenge")
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"sent": true})
+}
+
+// VerifyEmailHandler handles POST /api/user/email-verification/verify.
+// Verifies the code and binds the email to the current user if successful.
+func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
+	var req verifyEmailRequest
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	email := strings.TrimSpace(req.Email)
+	if !validEmail(email) {
+		common.ApiError(w, http.StatusBadRequest, "invalid email")
+		return
+	}
+	if !model.IsValidPhoneVerificationCode(req.Code) {
+		common.ApiError(w, http.StatusBadRequest, "invalid verification code format")
+		return
+	}
+	if err := model.ConsumeEmailVerificationChallenge(email, req.Code, model.EmailVerificationPurposeBind); err != nil {
+		common.ApiError(w, http.StatusUnauthorized, "verification failed")
+		return
+	}
+	// Bind the email to the current user.
+	userID := requestUserID(r)
+	if err := model.UpdateUserFields(userID, map[string]any{"email": email}); err != nil {
+		common.ApiError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"verified": true})
+}
