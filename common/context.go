@@ -36,6 +36,8 @@ const (
 	CtxResponseReference         ctxKey = "response_reference"
 	CtxResponseConversation      ctxKey = "response_conversation"
 	CtxResponseConversationLease ctxKey = "response_conversation_lease"
+	// CtxRequestID carries the unique request identifier for end-to-end tracing.
+	CtxRequestID ctxKey = "request_id"
 )
 
 func WithValues(ctx context.Context, kv ...any) context.Context {

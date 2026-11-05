@@ -17,9 +17,10 @@ var alertHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // AlertEvent is the payload delivered to every configured notifier.
 type AlertEvent struct {
-	Type      string `json:"type"`       // channel_disabled, channel_enabled, error_rate_threshold
+	Type      string `json:"type"` // channel_disabled, channel_enabled, error_rate_threshold, billing_failure, etc.
 	ChannelID int64  `json:"channel_id"`
 	Message   string `json:"message"`
+	Severity  string `json:"severity"` // info, warning, critical
 	Timestamp int64  `json:"timestamp"`
 }
 
@@ -129,4 +130,50 @@ func ResetAlertThrottle() {
 	alertThrottleMu.Lock()
 	lastAlertAt = map[int64]time.Time{}
 	alertThrottleMu.Unlock()
+}
+
+// --- Business alert helpers ---
+
+// NotifyBillingFailure reports a settlement or refund failure.
+func NotifyBillingFailure(userID int64, message string) {
+	deliverAlert(AlertEvent{
+		Type:      "billing_failure",
+		Message:   message,
+		Severity:  "critical",
+		Timestamp: time.Now().Unix(),
+	})
+}
+
+// NotifyReconciliationDiff reports a daily reconciliation discrepancy.
+func NotifyReconciliationDiff(diff int64, message string) {
+	severity := "warning"
+	if diff < 0 || diff > 100000 {
+		severity = "critical"
+	}
+	deliverAlert(AlertEvent{
+		Type:      "reconciliation_diff",
+		Message:   message,
+		Severity:  severity,
+		Timestamp: time.Now().Unix(),
+	})
+}
+
+// NotifyResourceSyncError reports a resource catalog sync failure.
+func NotifyResourceSyncError(message string) {
+	deliverAlert(AlertEvent{
+		Type:      "resource_sync_error",
+		Message:   message,
+		Severity:  "warning",
+		Timestamp: time.Now().Unix(),
+	})
+}
+
+// NotifyPaymentCallbackFailed reports a payment callback verification failure.
+func NotifyPaymentCallbackFailed(orderID int64, message string) {
+	deliverAlert(AlertEvent{
+		Type:      "payment_callback_failed",
+		Message:   message,
+		Severity:  "critical",
+		Timestamp: time.Now().Unix(),
+	})
 }

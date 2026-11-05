@@ -11,6 +11,7 @@ type AuditLog struct {
 	Path      string `gorm:"size:256;not null;default:''" json:"path"`
 	Status    int    `gorm:"not null;default:0" json:"status"`
 	IP        string `gorm:"size:64;not null;default:''" json:"ip"`
+	RequestID string `gorm:"size:64;not null;default:''" json:"request_id"`
 	CreatedAt int64  `gorm:"index;autoCreateTime" json:"created_at"`
 }
 
