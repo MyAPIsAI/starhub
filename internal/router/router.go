@@ -58,6 +58,7 @@ func New() http.Handler {
 	mux.Handle("GET /api/incident/{id}", middleware.AdminAuth(http.HandlerFunc(controller.GetIncidentHandler)))
 	mux.HandleFunc("GET /api/status/incidents", controller.PublicIncidentsHandler)
 	mux.HandleFunc("GET /api/status/history", controller.StatusHistoryHandler)
+	mux.Handle("GET /api/status/system", middleware.AdminAuth(http.HandlerFunc(controller.SystemStatusHandler)))
 	mux.Handle("POST /api/user/logout", middleware.UserAuth(http.HandlerFunc(controller.Logout)))
 	mux.Handle("POST /api/user/logout-current", middleware.UserAuth(http.HandlerFunc(controller.LogoutCurrent)))
 	mux.Handle("GET /api/user/self", middleware.UserAuth(http.HandlerFunc(controller.GetSelf)))
