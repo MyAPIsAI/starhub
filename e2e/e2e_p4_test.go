@@ -220,7 +220,7 @@ func TestP4RedemptionAndAffCode(t *testing.T) {
 
 	// 6. Register with the aff code → the invitee's inviter_id is set.
 	res = doRequest(env.base, "POST", "/api/user/register", "", map[string]string{
-		"username": "invitee", "password": "invitee-pass",
+		"username": "invitee", "password": "invitee123",
 		"email": "invitee@example.com", "aff_code": root.AffCode,
 	})
 	if res.Status != 200 {
@@ -241,7 +241,7 @@ func TestP4RedemptionAndAffCode(t *testing.T) {
 	setOption(t, env, "aff_register_bonus", `100000`)
 	rootBefore, _ := model.GetUserByID(env.rootID)
 	res = doRequest(env.base, "POST", "/api/user/register", "", map[string]string{
-		"username": "invitee2", "password": "invitee2-pass",
+		"username": "invitee2", "password": "invitee123",
 		"aff_code": root.AffCode,
 	})
 	if res.Status != 200 {
@@ -261,7 +261,7 @@ func TestP4RedemptionAndAffCode(t *testing.T) {
 	})
 	// Invitee2 logs in and creates a token.
 	res = doRequest(env.base, "POST", "/api/user/login", "", map[string]string{
-		"username": "invitee2", "password": "invitee2-pass",
+		"username": "invitee2", "password": "invitee123",
 	})
 	if res.Status != 200 {
 		t.Fatalf("invitee2 login failed: %d %s", res.Status, res.Body)

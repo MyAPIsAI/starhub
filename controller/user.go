@@ -18,14 +18,15 @@ type loginRequest struct {
 }
 
 type registerRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Email    string `json:"email"`
-	AffCode  string `json:"aff_code"`
+	Username         string `json:"username"`
+	Password         string `json:"password"`
+	Email            string `json:"email"`
+	AffCode          string `json:"aff_code"`
+	AgreementVersion string `json:"agreement_version"`
 }
 
 func validUsername(name string) bool {
-	if len(name) < 3 || len(name) > 64 {
+	if len(name) < 2 || len(name) > 24 {
 		return false
 	}
 	for _, c := range name {
@@ -37,6 +38,41 @@ func validUsername(name string) bool {
 		}
 	}
 	return true
+}
+
+// validPassword checks that the password is at least 8 characters, contains
+// both letters and digits, and is not a known weak password.
+func validPassword(password string) bool {
+	if len(password) < 8 || len(password) > 64 {
+		return false
+	}
+	hasLetter := false
+	hasDigit := false
+	for _, c := range password {
+		switch {
+		case (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'):
+			hasLetter = true
+		case c >= '0' && c <= '9':
+			hasDigit = true
+		}
+	}
+	if !hasLetter || !hasDigit {
+		return false
+	}
+	return !isWeakPassword(password)
+}
+
+// weakPasswords is a small set of commonly used passwords that pass the
+// letter+digit rule but should still be rejected.
+var weakPasswords = map[string]bool{
+	"password1": true, "abc12345": true, "qwerty12": true,
+	"12345678": true, "11111111": true, "00000000": true,
+	"abcd1234": true, "test1234": true, "admin123": true,
+	"letmein1": true, "welcome1": true, "monkey12": true,
+}
+
+func isWeakPassword(password string) bool {
+	return weakPasswords[strings.ToLower(password)]
 }
 
 func validEmail(email string) bool {
@@ -58,11 +94,12 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	req.Username = strings.TrimSpace(req.Username)
 	if !validUsername(req.Username) {
 		common.ApiError(w, http.StatusBadRequest,
-			"username must be 3-64 characters of letters, digits, '_', '-', '.'")
+			"username must be 2-24 characters of letters, digits, '_', '-', '.'")
 		return
 	}
-	if len(req.Password) < 6 || len(req.Password) > 64 {
-		common.ApiError(w, http.StatusBadRequest, "password must be 6-64 characters")
+	if !validPassword(req.Password) {
+		common.ApiError(w, http.StatusBadRequest,
+			"password must be 8-64 characters with at least one letter and one digit")
 		return
 	}
 	req.Email = strings.TrimSpace(req.Email)
@@ -109,6 +146,11 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		}
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// Record agreement consent (best-effort: a failure does not roll back
+	// the registration).
+	if req.AgreementVersion != "" {
+		_ = model.RecordAgreementConsent(nil, user.ID, req.AgreementVersion)
 	}
 	// Credit the inviter's register bonus (best-effort: a failure must not
 	// roll back the registration).

@@ -20,13 +20,16 @@ func TestRegisterValidation(t *testing.T) {
 		body string
 		want string
 	}{
-		{"short username", `{"username":"ab","password":"secret1"}`, "username must be 3-64"},
-		{"long username", fmt.Sprintf(`{"username":%q,"password":"secret1"}`, repeat("a", 65)), "username must be 3-64"},
-		{"illegal username chars", `{"username":"bad name!","password":"secret1"}`, "username must be 3-64"},
-		{"short password", `{"username":"alice","password":"12345"}`, "password must be 6-64"},
-		{"long password", fmt.Sprintf(`{"username":"alice","password":%q}`, repeat("p", 65)), "password must be 6-64"},
-		{"bad email", `{"username":"alice","password":"secret1","email":"not-an-email"}`, "invalid email"},
-		{"email missing domain", `{"username":"alice","password":"secret1","email":"a@"}`, "invalid email"},
+		{"short username", `{"username":"a","password":"secret123"}`, "username must be 2-24"},
+		{"long username", fmt.Sprintf(`{"username":%q,"password":"secret123"}`, repeat("a", 25)), "username must be 2-24"},
+		{"illegal username chars", `{"username":"bad name!","password":"secret123"}`, "username must be 2-24"},
+		{"short password", `{"username":"alice","password":"12345"}`, "password must be 8-64"},
+		{"long password", fmt.Sprintf(`{"username":"alice","password":%q}`, repeat("p", 65)), "password must be 8-64"},
+		{"password no digit", `{"username":"alice","password":"abcdefgh"}`, "password must be 8-64"},
+		{"password no letter", `{"username":"alice","password":"12345678"}`, "password must be 8-64"},
+		{"weak password", `{"username":"alice","password":"password1"}`, "password must be 8-64"},
+		{"bad email", `{"username":"alice","password":"secret123","email":"not-an-email"}`, "invalid email"},
+		{"email missing domain", `{"username":"alice","password":"secret123","email":"a@"}`, "invalid email"},
 	}
 	for _, tc := range cases {
 		rr := call(Register, testRequest{
@@ -42,7 +45,7 @@ func TestRegisterValidation(t *testing.T) {
 	rr := call(Register, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/register",
-		body:   `{"username":"  alice  ","password":"secret1"}`,
+		body:   `{"username":"  alice  ","password":"secret123"}`,
 	})
 	var got map[string]any
 	decodeData(t, rr, &got)
@@ -71,7 +74,7 @@ func TestRegisterDuplicate(t *testing.T) {
 	rr := call(Register, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/register",
-		body:   `{"username":"alice","password":"secret1"}`,
+		body:   `{"username":"alice","password":"secret123"}`,
 	})
 	expectError(t, rr, http.StatusConflict, "username already exists")
 }
@@ -94,7 +97,7 @@ func TestRegisterWithAffCode(t *testing.T) {
 	rr := call(Register, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/register",
-		body:   fmt.Sprintf(`{"username":"invitee","password":"secret1","aff_code":%q}`, inviter.AffCode),
+		body:   fmt.Sprintf(`{"username":"invitee","password":"secret123","aff_code":%q}`, inviter.AffCode),
 	})
 	var got map[string]any
 	decodeData(t, rr, &got)
@@ -115,7 +118,7 @@ func TestRegisterWithAffCode(t *testing.T) {
 	rr = call(Register, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/register",
-		body:   `{"username":"loner","password":"secret1","aff_code":"no-such-code"}`,
+		body:   `{"username":"loner","password":"secret123","aff_code":"no-such-code"}`,
 	})
 	var loner map[string]any
 	decodeData(t, rr, &loner)
@@ -139,7 +142,7 @@ func TestRegisterIgnoresDisabledInviter(t *testing.T) {
 	rr := call(Register, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/register",
-		body:   fmt.Sprintf(`{"username":"invitee","password":"secret1","aff_code":%q}`, inviter.AffCode),
+		body:   fmt.Sprintf(`{"username":"invitee","password":"secret123","aff_code":%q}`, inviter.AffCode),
 	})
 	var got map[string]any
 	decodeData(t, rr, &got)
@@ -544,13 +547,13 @@ func TestListUsersHidesPasswords(t *testing.T) {
 }
 
 func TestValidUsernameAndEmailHelpers(t *testing.T) {
-	valid := []string{"abc", "a-b_c.d", "User123", repeat("x", 64)}
+	valid := []string{"ab", "a-b_c.d", "User123", repeat("x", 24)}
 	for _, name := range valid {
 		if !validUsername(name) {
 			t.Fatalf("validUsername(%q) = false, want true", name)
 		}
 	}
-	invalid := []string{"", "ab", repeat("x", 65), "has space", "has/slash", "中文"}
+	invalid := []string{"", "a", repeat("x", 25), "has space", "has/slash", "中文"}
 	for _, name := range invalid {
 		if validUsername(name) {
 			t.Fatalf("validUsername(%q) = true, want false", name)

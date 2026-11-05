@@ -402,7 +402,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	// 17. register / login closed loop (A2)
 	res = doRequest(base, "POST", "/api/user/register", "", map[string]string{
 		"username": "alice",
-		"password": "alice-pass",
+		"password": "alice123",
 		"email":    "alice@example.com",
 	})
 	if res.Status != 200 {
@@ -422,15 +422,15 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	if registerResp.Data.Role != common.RoleUser || registerResp.Data.Email != "alice@example.com" {
 		t.Fatalf("registered user should be a plain user with the given email: %s", res.Body)
 	}
-	res = doRequest(base, "POST", "/api/user/register", "", map[string]string{"username": "alice", "password": "alice-pass"})
+	res = doRequest(base, "POST", "/api/user/register", "", map[string]string{"username": "alice", "password": "alice123"})
 	if res.Status != 409 {
 		t.Fatalf("duplicate username should be 409, got %d", res.Status)
 	}
-	res = doRequest(base, "POST", "/api/user/register", "", map[string]string{"username": "x", "password": "alice-pass"})
+	res = doRequest(base, "POST", "/api/user/register", "", map[string]string{"username": "x", "password": "alice123"})
 	if res.Status != 400 {
 		t.Fatalf("short username should be 400, got %d", res.Status)
 	}
-	res = doRequest(base, "POST", "/api/user/login", "", map[string]string{"username": "alice", "password": "alice-pass"})
+	res = doRequest(base, "POST", "/api/user/login", "", map[string]string{"username": "alice", "password": "alice123"})
 	if res.Status != 200 {
 		t.Fatalf("alice login failed: %d %s", res.Status, res.Body)
 	}
