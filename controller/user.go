@@ -180,7 +180,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	const sessionTTL = 7 * 24 * time.Hour
-	token := middleware.Sessions.CreateConfirmed(user, sessionTTL)
+	token := middleware.Sessions.CreateConfirmed(user, sessionTTL, clientIP(r), r.UserAgent())
 	if token == "" {
 		common.ApiError(w, http.StatusConflict, "account changed during login; retry sign-in")
 		return

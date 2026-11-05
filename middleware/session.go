@@ -11,16 +11,22 @@ import (
 )
 
 type sessionData struct {
-	userID  int64
-	expires time.Time
-	created time.Time
+	userID     int64
+	expires    time.Time
+	created    time.Time
+	lastActive time.Time
+	ip         string
+	deviceName string
 }
 
 // SessionInfo is the public representation of a session (no token).
 type SessionInfo struct {
-	CreatedAt int64 `json:"created_at"`
-	ExpiresAt int64 `json:"expires_at"`
-	IsCurrent bool  `json:"is_current"`
+	CreatedAt  int64  `json:"created_at"`
+	ExpiresAt  int64  `json:"expires_at"`
+	IsCurrent  bool   `json:"is_current"`
+	LastActive int64  `json:"last_active"`
+	IP         string `json:"ip"`
+	DeviceName string `json:"device_name"`
 }
 
 type SessionStore struct {
@@ -30,10 +36,18 @@ type SessionStore struct {
 
 var Sessions = &SessionStore{data: map[string]*sessionData{}}
 
+// Session idle and max-lifetime constants. A session expires if it has been
+// idle (no requests) for 7 days, or if it has been alive for 30 days
+// regardless of activity.
+const (
+	SessionIdleExpiry  = 7 * 24 * time.Hour
+	SessionMaxLifetime = 30 * 24 * time.Hour
+)
+
 // CreateConfirmed serializes the final login check and session insertion with
 // account-wide revocation. A password check started before closure cannot
 // create an active session after closure has revoked the account's sessions.
-func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration) string {
+func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration, ip, deviceName string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	fresh, err := model.GetUserByID(user.ID)
@@ -42,15 +56,34 @@ func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration) stri
 	}
 	token := common.GenerateSessionKey()
 	now := time.Now()
-	s.data[token] = &sessionData{userID: user.ID, expires: now.Add(ttl), created: now}
+	s.data[token] = &sessionData{
+		userID:     user.ID,
+		expires:    now.Add(ttl),
+		created:    now,
+		lastActive: now,
+		ip:         ip,
+		deviceName: deviceName,
+	}
 	return token
 }
 
 func (s *SessionStore) Create(userID int64, ttl time.Duration) string {
+	return s.CreateWithDevice(userID, ttl, "", "")
+}
+
+// CreateWithDevice creates a session with device metadata.
+func (s *SessionStore) CreateWithDevice(userID int64, ttl time.Duration, ip, deviceName string) string {
 	token := common.GenerateSessionKey()
 	now := time.Now()
 	s.mu.Lock()
-	s.data[token] = &sessionData{userID: userID, expires: now.Add(ttl), created: now}
+	s.data[token] = &sessionData{
+		userID:     userID,
+		expires:    now.Add(ttl),
+		created:    now,
+		lastActive: now,
+		ip:         ip,
+		deviceName: deviceName,
+	}
 	s.mu.Unlock()
 	return token
 }
@@ -65,10 +98,26 @@ func (s *SessionStore) Get(token string) (int64, bool) {
 	if !ok {
 		return 0, false
 	}
-	if time.Now().After(sd.expires) {
+	now := time.Now()
+	// Check absolute expiry.
+	if now.After(sd.expires) {
 		s.Remove(token)
 		return 0, false
 	}
+	// Check 30-day max lifetime.
+	if now.Sub(sd.created) > SessionMaxLifetime {
+		s.Remove(token)
+		return 0, false
+	}
+	// Check 7-day idle expiry.
+	if now.Sub(sd.lastActive) > SessionIdleExpiry {
+		s.Remove(token)
+		return 0, false
+	}
+	// Update last-active time (write lock).
+	s.mu.Lock()
+	sd.lastActive = now
+	s.mu.Unlock()
 	return sd.userID, true
 }
 
@@ -86,13 +135,20 @@ func (s *SessionStore) ListByUser(userID int64, currentToken string) []SessionIn
 	now := time.Now()
 	var infos []SessionInfo
 	for token, sd := range s.data {
-		if sd.userID != userID || now.After(sd.expires) {
+		if sd.userID != userID {
+			continue
+		}
+		// Skip expired sessions.
+		if now.After(sd.expires) || now.Sub(sd.created) > SessionMaxLifetime || now.Sub(sd.lastActive) > SessionIdleExpiry {
 			continue
 		}
 		infos = append(infos, SessionInfo{
-			CreatedAt: sd.created.Unix(),
-			ExpiresAt: sd.expires.Unix(),
-			IsCurrent: token == currentToken,
+			CreatedAt:  sd.created.Unix(),
+			ExpiresAt:  sd.expires.Unix(),
+			IsCurrent:  token == currentToken,
+			LastActive: sd.lastActive.Unix(),
+			IP:         sd.ip,
+			DeviceName: sd.deviceName,
 		})
 	}
 	return infos

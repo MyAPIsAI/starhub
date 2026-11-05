@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 
@@ -35,4 +36,13 @@ func requestUserID(r *http.Request) int64 {
 func requestRole(r *http.Request) int {
 	v, _ := r.Context().Value(common.CtxRole).(int)
 	return v
+}
+
+// clientIP extracts the caller's IP from RemoteAddr (without the port).
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
