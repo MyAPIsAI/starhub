@@ -385,6 +385,11 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// When the user is disabled, revoke all their sessions so active
+	// sessions cannot continue to make relay calls.
+	if req.Status != nil && *req.Status == common.StatusDisabled {
+		middleware.Sessions.RemoveAllExcept(req.ID, "")
+	}
 	common.ApiSuccess(w, nil)
 }
 
