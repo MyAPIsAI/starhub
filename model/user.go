@@ -24,9 +24,12 @@ type User struct {
 	// their invitees). Auto-generated on first read when empty.
 	AffCode string `gorm:"uniqueIndex;size:32;not null;default:''" json:"aff_code"`
 	// InviterID is the user who invited this user (0 = no inviter).
-	InviterID           int64 `gorm:"index;not null;default:0" json:"inviter_id"`
-	CreatedAt           int64 `gorm:"autoCreateTime" json:"created_at"`
-	DeactivationVersion int64 `gorm:"not null;default:0" json:"-"`
+	InviterID int64 `gorm:"index;not null;default:0" json:"inviter_id"`
+	// Language is the user's preferred UI/notification language (zh, en, ar, ko).
+	// Empty means no preference; the system falls back to Accept-Language or default.
+	Language            string `gorm:"size:8;not null;default:''" json:"language"`
+	CreatedAt           int64  `gorm:"autoCreateTime" json:"created_at"`
+	DeactivationVersion int64  `gorm:"not null;default:0" json:"-"`
 }
 
 func (u *User) IsAdmin() bool {

@@ -413,6 +413,7 @@ func publicUser(u *model.User) map[string]any {
 		"group":      u.Group,
 		"aff_code":   u.AffCode,
 		"inviter_id": u.InviterID,
+		"language":   u.Language,
 		"created_at": u.CreatedAt,
 	}
 }
@@ -423,6 +424,7 @@ type updateSelfRequest struct {
 	CurrentPassword *string `json:"current_password"`
 	NewPassword     *string `json:"new_password"`
 	Email           *string `json:"email"`
+	Language        *string `json:"language"`
 }
 
 // UpdateSelf lets the authenticated user change their own password and
@@ -464,6 +466,14 @@ func UpdateSelf(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fields["email"] = email
+	}
+	if req.Language != nil {
+		lang := strings.TrimSpace(*req.Language)
+		if lang != "" && lang != "zh" && lang != "en" && lang != "ar" && lang != "ko" {
+			common.ApiError(w, http.StatusBadRequest, "unsupported language; use zh, en, ar or ko")
+			return
+		}
+		fields["language"] = lang
 	}
 	if len(fields) == 0 {
 		common.ApiError(w, http.StatusBadRequest, "nothing to update")
