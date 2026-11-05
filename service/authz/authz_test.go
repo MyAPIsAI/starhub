@@ -87,3 +87,36 @@ func TestFinanceRoleIsReadOnlyAndHasNoAdminResourceAccess(t *testing.T) {
 		t.Fatal("regular user gained finance access")
 	}
 }
+
+func TestTechRoleCanManageChannelsButNotUsersOrFinance(t *testing.T) {
+	// Tech can read and write channels
+	if !Allow(common.RoleTech, ResourceChannel, ActionRead) {
+		t.Fatal("Tech should be able to read channels")
+	}
+	if !Allow(common.RoleTech, ResourceChannel, ActionWrite) {
+		t.Fatal("Tech should be able to manage channels")
+	}
+	// Tech cannot manage users
+	if Allow(common.RoleTech, ResourceUser, ActionRead) {
+		t.Fatal("Tech should not be able to read users")
+	}
+	if Allow(common.RoleTech, ResourceUser, ActionWrite) {
+		t.Fatal("Tech should not be able to manage users")
+	}
+	// Tech cannot access finance
+	if Allow(common.RoleTech, ResourceFinance, ActionRead) {
+		t.Fatal("Tech should not be able to access finance")
+	}
+	// Tech cannot delete channels
+	if Allow(common.RoleTech, ResourceChannel, ActionDelete) {
+		t.Fatal("Tech should not be able to delete channels")
+	}
+	// Tech can manage resources and regions
+	if !Allow(common.RoleTech, ResourceInventory, ActionWrite) {
+		t.Fatal("Tech should be able to manage resources")
+	}
+	// Tech cannot access audit
+	if Allow(common.RoleTech, ResourceAudit, ActionRead) {
+		t.Fatal("Tech should not be able to access audit logs")
+	}
+}

@@ -3,6 +3,7 @@ package common
 const (
 	RoleUser    = 1
 	RoleFinance = 5
+	RoleTech    = 7
 	RoleAdmin   = 10
 	RoleRoot    = 100
 )

@@ -89,6 +89,16 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceToken:   {ActionRead: true, ActionWrite: true, ActionDelete: true},
 		ResourceLog:     {ActionRead: true},
 	},
+	common.RoleTech: {
+		ResourceChannel:      {ActionRead: true, ActionWrite: true},
+		ResourceTaskPlugin:   {ActionRead: true, ActionWrite: true},
+		ResourceOption:       {ActionRead: true},
+		ResourceLog:          {ActionRead: true},
+		ResourceInventory:    {ActionRead: true, ActionWrite: true},
+		ResourceRegion:       {ActionRead: true, ActionWrite: true},
+		ResourceServiceGroup: {ActionRead: true, ActionWrite: true},
+		ResourceModelMeta:    {ActionRead: true, ActionWrite: true},
+	},
 	common.RoleUser: {
 		ResourceToken: {ActionRead: true, ActionWrite: true, ActionDelete: true},
 		ResourceLog:   {ActionRead: true},
