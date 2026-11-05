@@ -16,7 +16,7 @@ import (
 )
 
 // TestBILL005ConcurrentPreConsume verifies that when available quota is
-// less than 2× the pre-consume estimate, only one of two concurrent
+// less than 2脳 the pre-consume estimate, only one of two concurrent
 // requests can pass the pre-consume gate; the other is rejected with
 // insufficient_quota and must NOT access the upstream. This is BILL-005.
 func TestBILL005ConcurrentPreConsume(t *testing.T) {
@@ -112,7 +112,7 @@ func TestBILL005ConcurrentPreConsume(t *testing.T) {
 		t.Fatalf("expected exactly 1 rejected request, got %d (ok=%d)", rejected, ok)
 	}
 
-	// 2. Upstream must have been hit exactly once — the rejected request
+	// 2. Upstream must have been hit exactly once 鈥?the rejected request
 	//    must NOT have reached the upstream.
 	hits := atomic.LoadInt32(&upstreamHits)
 	if hits != 1 {

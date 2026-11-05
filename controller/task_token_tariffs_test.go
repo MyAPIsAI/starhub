@@ -65,7 +65,7 @@ func TestTaskTokenTariffsNativeAndPluginRecoverWithoutRepricing(t *testing.T) {
 				user := newUser(t, "token-tariff", common.RoleUser, 1000000)
 				token := mustToken(t, user.ID, 1000000)
 				r := httptest.NewRequest("POST", "/v1/video/generations", strings.NewReader(`{"model":"sora-2","prompt":"fixture","seconds":4,"n":1,"max_output_tokens":1000}`))
-				r.Header.Set("Authorization", "Bearer "+token.Key)
+				r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 				r.Header.Set("Content-Type", "application/json")
 				w := httptest.NewRecorder()
 				middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayTaskSubmitVideo))).ServeHTTP(w, r)

@@ -1185,7 +1185,7 @@ func TestP2SettlementUsesCacheTokenDetail(t *testing.T) {
 
 func TestP2StreamWithoutUsageStillBills(t *testing.T) {
 	// upstream ignores stream_options.include_usage: no usage chunk, no
-	// usage field — the relay must fall back to local estimates
+	// usage field 鈥?the relay must fall back to local estimates
 	upstream := newP2Upstream(t, `null`, ``, 0)
 	env := setupRelayApp(t)
 	createChannelID(t, env, map[string]any{

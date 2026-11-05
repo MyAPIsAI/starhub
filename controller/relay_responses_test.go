@@ -81,7 +81,7 @@ func TestResponsesNativeJSONPreservesWireAndBillsDetails(t *testing.T) {
 	user := newUser(t, "responses-json", common.RoleUser, 1000000)
 	token := mustToken(t, user.ID, 1000000)
 	rec := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, requestBody))
+	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), requestBody))
 	if rec.Code != 200 || rec.Body.String() != responseBody || calls.Load() != 1 {
 		t.Fatalf("native response changed: %d %s calls=%d", rec.Code, rec.Body, calls.Load())
 	}
@@ -127,7 +127,7 @@ func TestResponsesNativeStreamFlushesAndPreservesFraming(t *testing.T) {
 	defer gateway.Close()
 	request, _ := http.NewRequest(http.MethodPost, gateway.URL+"/v1/responses", strings.NewReader(`{"model":"gpt-4o","input":"hello","stream":true,"max_output_tokens":16}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer "+token.Key)
+	request.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(request)
 	if err != nil {
@@ -183,7 +183,7 @@ func TestResponsesOutcomesAndMissingUsage(t *testing.T) {
 			token := mustToken(t, user.ID, 1000000)
 			rec := httptest.NewRecorder()
 			body := fmt.Sprintf(`{"model":"gpt-4o","input":"12345678","max_output_tokens":16,"stream":%t}`, tc.stream)
-			responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, body))
+			responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), body))
 			if rec.Code != 200 || rec.Body.String() != tc.response || calls.Load() != 1 {
 				t.Fatalf("outcome changed or retried: %d %s calls=%d", rec.Code, rec.Body, calls.Load())
 			}
@@ -204,7 +204,7 @@ func TestResponsesRejectUnsupportedBeforeAdmission(t *testing.T) {
 			user := newUser(t, "responses-unsupported", common.RoleUser, 1000000)
 			token := mustToken(t, user.ID, 1000000)
 			rec := httptest.NewRecorder()
-			responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, `{"model":"gpt-4o",`+field+`}`))
+			responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), `{"model":"gpt-4o",`+field+`}`))
 			want := 400
 			if strings.Contains(field, "previous_response_id") || strings.Contains(field, "conversation") {
 				want = 404
@@ -230,7 +230,7 @@ func TestResponsesNoQuotaDoesNotPinOrDispatch(t *testing.T) {
 	user := newUser(t, "responses-no-quota", common.RoleUser, 0)
 	token := mustToken(t, user.ID, 1000000)
 	rec := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, `{"model":"myapis-auto","input":"hello","max_output_tokens":16}`))
+	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), `{"model":"myapis-auto","input":"hello","max_output_tokens":16}`))
 	var count int64
 	if err := model.DB.Model(&model.RoutingChain{}).Count(&count).Error; err != nil {
 		t.Fatal(err)
@@ -260,7 +260,7 @@ func TestResponsesSmartAdmissionForwardsConcreteModel(t *testing.T) {
 	user := newUser(t, "responses-smart", common.RoleUser, 1000000)
 	token := mustToken(t, user.ID, 1000000)
 	rec := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, `{"model":"myapis-auto","input":"hello","max_output_tokens":16,"extension":9007199254740993}`))
+	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), `{"model":"myapis-auto","input":"hello","max_output_tokens":16,"extension":9007199254740993}`))
 	var chains []model.RoutingChain
 	if err := model.DB.Find(&chains).Error; err != nil {
 		t.Fatal(err)

@@ -44,7 +44,7 @@ func TestGatewayConversationReferencesAreOwnedAndAdvanceAfterSuccessfulTurns(t *
 	}
 	for i := 0; i < 2; i++ {
 		rec := httptest.NewRecorder()
-		responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, fmt.Sprintf(`{"model":"gpt-4o","conversation":%q,"input":"next"}`, conversation.ID)))
+		responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), fmt.Sprintf(`{"model":"gpt-4o","conversation":%q,"input":"next"}`, conversation.ID)))
 		if rec.Code != 200 {
 			t.Fatalf("conversation turn: %d %s", rec.Code, rec.Body)
 		}
@@ -55,7 +55,7 @@ func TestGatewayConversationReferencesAreOwnedAndAdvanceAfterSuccessfulTurns(t *
 	}
 	other := mustToken(t, u.ID, 1000000)
 	rec := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(other.Key, fmt.Sprintf(`{"model":"gpt-4o","conversation":%q,"input":"foreign"}`, conversation.ID)))
+	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(other.PlaintextKey(), fmt.Sprintf(`{"model":"gpt-4o","conversation":%q,"input":"foreign"}`, conversation.ID)))
 	if rec.Code != 404 || calls.Load() != 2 {
 		t.Fatal("another API key reused private conversation")
 	}
@@ -77,7 +77,7 @@ func TestBackgroundResponsePendingSettlementRecoversAfterRestartWithoutRepoll(t 
 	u := newUser(t, "bg-restart", 1, 1000000)
 	token := mustToken(t, u.ID, 1000000)
 	rec := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, `{"model":"gpt-4o","input":"hello","background":true,"store":true}`))
+	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), `{"model":"gpt-4o","input":"hello","background":true,"store":true}`))
 	if rec.Code != 200 {
 		t.Fatal(rec.Body.String())
 	}

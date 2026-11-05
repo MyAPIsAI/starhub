@@ -56,7 +56,7 @@ func TestSmartChatUsesAvailableAutoGroupForPrecharge(t *testing.T) {
 				}
 				r := httptest.NewRequest("POST", path, strings.NewReader(body))
 				r.Header.Set("Content-Type", "application/json")
-				r.Header.Set("Authorization", "Bearer "+tk.Key)
+				r.Header.Set("Authorization", "Bearer "+tk.PlaintextKey())
 				rec := httptest.NewRecorder()
 				middleware.TokenAuth(middleware.Distribute(inbound)(handler)).ServeHTTP(rec, r)
 				if rec.Code != 200 || calls.Load() != 1 {

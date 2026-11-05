@@ -86,7 +86,7 @@ func newResponseReadFixture(t *testing.T, stream bool, requestStore, providerSto
 func (f *responseReadFixture) create(t *testing.T) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(f.token.Key, f.request))
+	responsesTestHandler().ServeHTTP(rec, responsesTestRequest(f.token.PlaintextKey(), f.request))
 	if rec.Code != 200 || rec.Body.String() != f.wire || f.posts.Load() != 1 {
 		t.Fatalf("native create changed: %d %s", rec.Code, rec.Body)
 	}
@@ -150,7 +150,7 @@ func TestStoredResponseRetrievalPinsAccountPreservesWireAndDoesNotRebill(t *test
 			beforeUser, _ := model.GetUserByID(f.owner.ID)
 			beforeToken, _ := model.GetTokenByID(f.token.ID)
 			beforeChannel, _ := model.GetChannelByID(f.channel.ID)
-			read := readStoredResponse(f.token.Key, "resp_scoped", "include=message.output_text.logprobs&include%5B%5D=reasoning.encrypted_content&stream=false")
+			read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", "include=message.output_text.logprobs&include%5B%5D=reasoning.encrypted_content&stream=false")
 			if read.Code != 200 || read.Body.String() != f.body || read.Header().Get("Cache-Control") != "private, no-store" || f.getKey.Load() != f.postKey.Load() || f.gets.Load() != 1 {
 				t.Fatalf("original-account read changed: %d %s", read.Code, read.Body)
 			}
@@ -165,7 +165,7 @@ func TestStoredResponseRetrievalPinsAccountPreservesWireAndDoesNotRebill(t *test
 				t.Fatal("read-only retrieval moved generation quota or produced a second bill")
 			}
 			denied := httptest.NewRecorder()
-			responsesTestHandler().ServeHTTP(denied, responsesTestRequest(f.token.Key, f.request))
+			responsesTestHandler().ServeHTTP(denied, responsesTestRequest(f.token.PlaintextKey(), f.request))
 			if denied.Code != 403 || f.posts.Load() != 1 {
 				t.Fatal("generation authorization also lost its quota requirement")
 			}
@@ -179,7 +179,7 @@ func TestStoredResponseRetrievalRejectsOtherOwnersAndKeys(t *testing.T) {
 	other := newUser(t, "response-read-other", common.RoleRoot, 1_000_000)
 	otherToken := mustToken(t, other.ID, 0)
 	sameOwner := mustToken(t, f.owner.ID, 0)
-	for _, key := range []string{otherToken.Key, sameOwner.Key} {
+	for _, key := range []string{otherToken.PlaintextKey(), sameOwner.PlaintextKey()} {
 		read := readStoredResponse(key, "resp_scoped", "")
 		if read.Code != 404 || strings.Contains(read.Body.String(), "private-owner-output") {
 			t.Fatal("foreign or same-owner different key retrieved a response")
@@ -189,7 +189,7 @@ func TestStoredResponseRetrievalRejectsOtherOwnersAndKeys(t *testing.T) {
 		t.Fatal("anonymous retrieval was allowed or cacheable")
 	}
 	for _, id := range []string{"resp_unknown", "../other", "bad?secret=value"} {
-		if read := readStoredResponse(f.token.Key, id, ""); read.Code != 404 {
+		if read := readStoredResponse(f.token.PlaintextKey(), id, ""); read.Code != 404 {
 			t.Fatal("unknown or malformed IDs bypassed ownership lookup")
 		}
 	}
@@ -283,7 +283,7 @@ func TestStoredResponseRetrievalHonorsCurrentScopeAndExactUpstream(t *testing.T)
 			f := newResponseReadFixture(t, false, "true", "true")
 			f.create(t)
 			tc.change(t, f)
-			read := readStoredResponse(f.token.Key, "resp_scoped", "")
+			read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", "")
 			if read.Code != tc.status || f.gets.Load() != 0 {
 				t.Fatalf("changed scope reached upstream: %d %s calls%d", read.Code, read.Body, f.gets.Load())
 			}
@@ -311,7 +311,7 @@ func TestStoredResponseIndexOptOutAndStorageFailurePreserveNativeBilling(t *test
 			if created.Header().Get("X-StarHub-Response-Reference") != want {
 				t.Fatal("failed/opted-out index claimed persistence")
 			}
-			read := readStoredResponse(f.token.Key, "resp_scoped", "")
+			read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", "")
 			if read.Code != 404 || f.gets.Load() != 0 {
 				t.Fatal("missing ownership receipt was replaced by provider probing")
 			}
@@ -327,11 +327,11 @@ func TestStoredResponseReusedIDsAcrossPoolAccountsStayUnavailable(t *testing.T) 
 	}
 	f.create(t)
 	repeated := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(repeated, responsesTestRequest(f.token.Key, f.request))
+	responsesTestHandler().ServeHTTP(repeated, responsesTestRequest(f.token.PlaintextKey(), f.request))
 	if repeated.Code != 200 || repeated.Body.String() != f.body || repeated.Header().Get("X-StarHub-Response-Reference") != "unavailable" || f.posts.Load() != 2 {
 		t.Fatal("reused provider ID silently advertised another usable account binding")
 	}
-	read := readStoredResponse(f.token.Key, "resp_scoped", "")
+	read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", "")
 	if read.Code != 404 || f.gets.Load() != 0 {
 		t.Fatal("ambiguous provider ID was resolved by selecting a pool account")
 	}
@@ -355,19 +355,19 @@ func TestStoredResponseRetrievalHonorsFixedAndAutoGroupScopes(t *testing.T) {
 	if err := model.DB.Model(&model.Token{}).Where("id = ?", f.token.ID).Update("group", "vip").Error; err != nil {
 		t.Fatal(err)
 	}
-	if read := readStoredResponse(f.token.Key, "resp_scoped", ""); read.Code != 404 || f.gets.Load() != 0 {
+	if read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", ""); read.Code != 404 || f.gets.Load() != 0 {
 		t.Fatal("different fixed group retained the historical grant")
 	}
 	if err := model.DB.Model(&model.Token{}).Where("id = ?", f.token.ID).Updates(map[string]any{"group": "auto", "auto_groups": "vip,default"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if read := readStoredResponse(f.token.Key, "resp_scoped", ""); read.Code != 200 || f.gets.Load() != 1 {
+	if read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", ""); read.Code != 200 || f.gets.Load() != 1 {
 		t.Fatalf("eligible original auto group lost read access: %d %s", read.Code, read.Body)
 	}
 	if err := model.DB.Model(&model.Token{}).Where("id = ?", f.token.ID).Update("auto_groups", "vip").Error; err != nil {
 		t.Fatal(err)
 	}
-	if read := readStoredResponse(f.token.Key, "resp_scoped", ""); read.Code != 404 || f.gets.Load() != 1 {
+	if read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", ""); read.Code != 404 || f.gets.Load() != 1 {
 		t.Fatal("removed auto group still fetched the old response")
 	}
 }
@@ -376,24 +376,24 @@ func TestStoredResponseRetrievalRejectsUnsafeQueriesAndBadProviderObjects(t *tes
 	f := newResponseReadFixture(t, false, "true", "true")
 	f.create(t)
 	for _, query := range []string{"stream=true", "stream=false&stream=false", "include=bad%2Fpath", "include_obfuscation=1", "starting_after=0", "unknown=1", "include=" + strings.Repeat("x", 8200)} {
-		read := readStoredResponse(f.token.Key, "resp_scoped", query)
+		read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", query)
 		if read.Code != 400 || f.gets.Load() != 0 {
 			t.Fatal("unsupported query reached upstream")
 		}
 	}
 	for _, body := range []string{`{"id":"resp_other","status":"completed"}`, `{"id":"resp_scoped","status":"in_progress"}`, `not json`} {
 		f.getBody.Store(body)
-		read := readStoredResponse(f.token.Key, "resp_scoped", "")
+		read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", "")
 		if read.Code != 502 || strings.Contains(read.Body.String(), "resp_other") {
 			t.Fatal("invalid or nonterminal provider object was exposed")
 		}
 	}
 	f.getStatus.Store(404)
-	if read := readStoredResponse(f.token.Key, "resp_scoped", ""); read.Code != 404 {
+	if read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", ""); read.Code != 404 {
 		t.Fatal("provider expiration was concealed")
 	}
 	f.getStatus.Store(500)
-	if read := readStoredResponse(f.token.Key, "resp_scoped", ""); read.Code != 502 {
+	if read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", ""); read.Code != 502 {
 		t.Fatal("provider read failure was hidden")
 	}
 	_, count, _ := model.ListLogs(f.owner.ID, 1, 10, "")
@@ -415,7 +415,7 @@ func TestResponseObservationSurvivesCompletedClientCancellationAndReadAuthIsMeth
 		t.Fatal("completed response ownership was lost on client disconnect")
 	}
 	rec := httptest.NewRecorder()
-	request := responsesTestRequest(f.token.Key, f.request)
+	request := responsesTestRequest(f.token.PlaintextKey(), f.request)
 	middleware.TokenReadOnlyAuth(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("read-only auth admitted generation") })).ServeHTTP(rec, request)
 	if rec.Code != 405 {
 		t.Fatal("read-only auth accepted a non-read method")
@@ -441,11 +441,11 @@ func TestResponseIDCollisionAcrossOwnersOrDuplicateChannelsNeverFetchesPrivateCo
 				}
 			}
 			created := httptest.NewRecorder()
-			responsesTestHandler().ServeHTTP(created, responsesTestRequest(secondToken.Key, f.request))
+			responsesTestHandler().ServeHTTP(created, responsesTestRequest(secondToken.PlaintextKey(), f.request))
 			if created.Code != 200 || created.Body.String() != f.wire || created.Header().Get("X-StarHub-Response-Reference") != "unavailable" {
 				t.Fatalf("colliding creation was not preserved with an unavailable index: %d %s", created.Code, created.Body)
 			}
-			for _, key := range []string{f.token.Key, secondToken.Key} {
+			for _, key := range []string{f.token.PlaintextKey(), secondToken.PlaintextKey()} {
 				if read := readStoredResponse(key, "resp_scoped", ""); read.Code != 404 {
 					t.Fatalf("colliding ownership fetched private upstream content: %d %s", read.Code, read.Body)
 				}

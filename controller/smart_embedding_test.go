@@ -95,7 +95,7 @@ func testSmartCapabilityAdmission(t *testing.T, path, capability, fields string,
 			}
 			r := httptest.NewRequest("POST", path, strings.NewReader(`{"model":"`+tc.requested+`",`+fields+`}`))
 			r.Header.Set("Content-Type", "application/json")
-			r.Header.Set("Authorization", "Bearer "+tk.Key)
+			r.Header.Set("Authorization", "Bearer "+tk.PlaintextKey())
 			rec := httptest.NewRecorder()
 			middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(relayHandler)).ServeHTTP(rec, r)
 			if rec.Code != tc.want {

@@ -46,7 +46,7 @@ func TestTokenPasswordVerificationIsOwnerBoundReadOnlyAndCookieFree(t *testing.T
 				t.Fatal("verification receipt is not bound to the original owner/token")
 			}
 		}
-		if strings.Contains(response.Body.String(), token.Key) || strings.Contains(response.Body.String(), beforeUser.Password) || strings.Contains(response.Body.String(), "secret") {
+		if strings.Contains(response.Body.String(), token.PlaintextKey()) || strings.Contains(response.Body.String(), beforeUser.Password) || strings.Contains(response.Body.String(), "secret") {
 			t.Fatal("verification exposed credential material")
 		}
 	}
@@ -101,7 +101,10 @@ func TestTokenPasswordVerificationDetectsPasswordOrTokenRotationDuringVerificati
 				}
 				changed = true
 				if kind == "token" {
-					if err := model.UpdateTokenFields(token.ID, map[string]any{"key": common.GenerateTokenKey()}); err != nil {
+					newKey := common.GenerateTokenKey()
+					newHash := common.HashKey(newKey)
+					encrypted, _ := common.Encrypt(newKey)
+					if err := model.UpdateTokenFields(token.ID, map[string]any{"key": encrypted, "key_hash": newHash}); err != nil {
 						t.Error(err)
 					}
 				} else {

@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
 	"fmt"
@@ -290,7 +290,7 @@ func TestUpdateTokenNothingToUpdate(t *testing.T) {
 	u := newUser(t, "alice", common.RoleUser, 1000)
 	tk := mustToken(t, u.ID, 500)
 
-	// Only the id is supplied — no fields to write.
+	// Only the id is supplied -- no fields to write.
 	rr := call(UpdateToken, testRequest{
 		method: http.MethodPut,
 		target: "/api/token",
@@ -371,7 +371,7 @@ func TestUpdateTokenGroupValidation(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		}))
 		req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-		req.Header.Set("Authorization", "Bearer "+tk.Key)
+		req.Header.Set("Authorization", "Bearer "+tk.PlaintextKey())
 		resp := httptest.NewRecorder()
 		protected.ServeHTTP(resp, req)
 		if resp.Code != http.StatusForbidden || !strings.Contains(resp.Body.String(), `"code":"auto_group_empty"`) {
@@ -417,7 +417,7 @@ func TestUpdateTokenAutoGroupAcceptedAndUsable(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	req.Header.Set("Authorization", "Bearer "+tk.Key)
+	req.Header.Set("Authorization", "Bearer "+tk.PlaintextKey())
 	resp := httptest.NewRecorder()
 	protected.ServeHTTP(resp, req)
 	if resp.Code != http.StatusNoContent {
@@ -497,11 +497,13 @@ func TestMaskedTokenHidesKey(t *testing.T) {
 		t.Fatalf("len = %d, want 1", len(listed))
 	}
 	masked := listed[0]["key"].(string)
-	if masked == tk.Key {
+	if masked == tk.PlaintextKey() {
 		t.Fatal("the raw token key was returned by the API")
 	}
-	if masked != common.MaskKey(tk.Key) {
-		t.Fatalf("key = %q, want the masked form %q", masked, common.MaskKey(tk.Key))
+	// maskedToken now masks the plaintext key, not the encrypted stored value.
+	plaintext := tk.PlaintextKey()
+	if masked != common.MaskKey(plaintext) {
+		t.Fatalf("key = %q, want the masked form %q", masked, common.MaskKey(plaintext))
 	}
 }
 

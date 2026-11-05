@@ -72,7 +72,7 @@ func TestTaskModelAttribution(t *testing.T) {
 			body := fmt.Sprintf(`{"model":%q,"prompt":"a cat","seconds":8,"n":2}`, tc.requested)
 			r := httptest.NewRequest(http.MethodPost, "/v1/video/generations", strings.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
-			r.Header.Set("Authorization", "Bearer "+token.Key)
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, r)
 			var submitted dto.TaskSubmitResponse
@@ -111,7 +111,7 @@ func TestTaskModelAttribution(t *testing.T) {
 				for range 2 {
 					r := httptest.NewRequest(http.MethodGet, "/v1/video/generations/"+submitted.ID, nil)
 					r.SetPathValue("id", submitted.ID)
-					r.Header.Set("Authorization", "Bearer "+token.Key)
+					r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 					rec := httptest.NewRecorder()
 					middleware.TokenAuth(http.HandlerFunc(RelayTaskGetVideo)).ServeHTTP(rec, r)
 					if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"succeeded"`) {

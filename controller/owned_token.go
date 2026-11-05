@@ -187,7 +187,7 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"schema": "owned_token_receipt_v1", "user_id": receipt.UserID, "operation_id": receipt.OperationID, "action": receipt.Action, "token_id": receipt.TokenID, "revision": receipt.Revision}
 	if input.Action == "create" || input.Action == "regenerate" {
 		public := maskedToken(token)
-		public["key"] = token.Key
+		public["key"] = token.PlaintextKey()
 		out["token"] = public
 	}
 	common.ApiSuccess(w, out)

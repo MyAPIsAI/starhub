@@ -59,7 +59,7 @@ func TestGeminiNativeRelayPreservesWireAndAttribution(t *testing.T) {
 				user := newUser(t, "gemini-native", common.RoleUser, 1000000)
 				token := mustToken(t, user.ID, 1000000)
 				rec := httptest.NewRecorder()
-				geminiTestHandler().ServeHTTP(rec, geminiTestRequest(token.Key, "/v1beta/models/"+requested+":"+method, body))
+				geminiTestHandler().ServeHTTP(rec, geminiTestRequest(token.PlaintextKey(), "/v1beta/models/"+requested+":"+method, body))
 				logs, count, err := model.ListLogs(user.ID, 1, 10, "")
 				if rec.Code != 200 || rec.Body.String() != response || calls.Load() != 1 || err != nil || count != 1 {
 					t.Fatalf("native response corrupted or repeated: %d %s calls=%d logs=%+v %v", rec.Code, rec.Body, calls.Load(), logs, err)
@@ -110,7 +110,7 @@ func TestGeminiNativeOutcomesAndUsageFallback(t *testing.T) {
 				path = "/v1beta/models/gpt-4o:streamGenerateContent?alt=sse"
 			}
 			rec := httptest.NewRecorder()
-			geminiTestHandler().ServeHTTP(rec, geminiTestRequest(token.Key, path, `{"contents":[{"parts":[{"text":"12345678"}]}],"generationConfig":{"maxOutputTokens":16}}`))
+			geminiTestHandler().ServeHTTP(rec, geminiTestRequest(token.PlaintextKey(), path, `{"contents":[{"parts":[{"text":"12345678"}]}],"generationConfig":{"maxOutputTokens":16}}`))
 			logs, count, err := model.ListLogs(user.ID, 1, 10, "")
 			if rec.Code != 200 || rec.Body.String() != tc.response || calls.Load() != 1 || err != nil || count != 1 || logs[0].PromptTokens != tc.input || logs[0].CompletionTokens != tc.output || logs[0].Status != tc.status {
 				t.Fatalf("outcome lost: %d %s calls=%d logs=%+v %v", rec.Code, rec.Body, calls.Load(), logs, err)
@@ -136,7 +136,7 @@ func TestGeminiNativeRejectsBeforeCharge(t *testing.T) {
 			user := newUser(t, "gemini-rejected", common.RoleUser, 1000000)
 			token := mustToken(t, user.ID, 1000000)
 			rec := httptest.NewRecorder()
-			geminiTestHandler().ServeHTTP(rec, geminiTestRequest(token.Key, "/v1beta/models/"+tc.path, tc.body))
+			geminiTestHandler().ServeHTTP(rec, geminiTestRequest(token.PlaintextKey(), "/v1beta/models/"+tc.path, tc.body))
 			var body struct {
 				Error struct {
 					Code int `json:"code"`

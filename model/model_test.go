@@ -82,10 +82,11 @@ func TestTokenInsertAndQuota(t *testing.T) {
 	if err := InsertToken(token); err != nil {
 		t.Fatalf("InsertToken failed: %v", err)
 	}
-	if len(token.Key) != 51 || token.Key[:3] != "sk-" {
-		t.Fatalf("unexpected key: %q", token.Key)
+	plaintext := token.PlaintextKey()
+	if len(plaintext) != 51 || plaintext[:3] != "sk-" {
+		t.Fatalf("unexpected key: %q", plaintext)
 	}
-	got, err := GetTokenByKey(token.Key)
+	got, err := GetTokenByKey(plaintext)
 	if err != nil || got.ID != token.ID {
 		t.Fatalf("GetTokenByKey failed: %v", err)
 	}

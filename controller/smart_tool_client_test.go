@@ -73,10 +73,10 @@ func TestSmartToolClientsDoNotNeedCustomHeaders(t *testing.T) {
 					r := httptest.NewRequest("POST", path, strings.NewReader(body))
 					r.Header.Set("Content-Type", "application/json")
 					if inbound == dto.InboundClaude {
-						r.Header.Set("x-api-key", tk.Key)
+						r.Header.Set("x-api-key", tk.PlaintextKey())
 						r.Header.Set("anthropic-version", "2023-06-01")
 					} else {
-						r.Header.Set("Authorization", "Bearer "+tk.Key)
+						r.Header.Set("Authorization", "Bearer "+tk.PlaintextKey())
 					}
 					rec := httptest.NewRecorder()
 					middleware.TokenAuth(middleware.Distribute(inbound)(handler)).ServeHTTP(rec, r)

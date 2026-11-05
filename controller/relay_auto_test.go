@@ -34,7 +34,7 @@ func TestRelayAutoModelWithoutCandidatesDoesNotCharge(t *testing.T) {
 	handler := middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayChat)))
 	r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"myapis-auto","messages":[{"role":"user","content":"Hello"}],"max_tokens":64}`))
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Authorization", "Bearer "+token.Key)
+	r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 	if rec.Code != http.StatusServiceUnavailable || calls.Load() != 0 {
@@ -104,7 +104,7 @@ func TestRelayAutoModelReachesUpstream(t *testing.T) {
 			body := `{"model":"` + tc.requested + `","messages":[{"role":"user","content":"Hello"}],"max_tokens":64,"stream":false}`
 			r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
-			r.Header.Set("Authorization", "Bearer "+token.Key)
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, r)
 			if rec.Code != http.StatusOK {
@@ -199,7 +199,7 @@ func TestPassthroughModelAttribution(t *testing.T) {
 				body := `{"model":"` + requested + `",` + tc.fields + `}`
 				r := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(body))
 				r.Header.Set("Content-Type", "application/json")
-				r.Header.Set("Authorization", "Bearer "+token.Key)
+				r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 				rec := httptest.NewRecorder()
 				handler.ServeHTTP(rec, r)
 				if rec.Code != http.StatusOK || rec.Body.String() != tc.response {

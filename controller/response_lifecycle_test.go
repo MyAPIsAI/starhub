@@ -39,7 +39,7 @@ func TestBackgroundResponsesDurablePollingAndCancelSettleOnce(t *testing.T) {
 			user := newUser(t, "bg-owner", 1, 1000000)
 			token := mustToken(t, user.ID, 1000000)
 			rec := httptest.NewRecorder()
-			responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, `{"model":"gpt-4o","input":"hello","background":true,"store":true,"max_output_tokens":128}`))
+			responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), `{"model":"gpt-4o","input":"hello","background":true,"store":true,"max_output_tokens":128}`))
 			if rec.Code != 200 {
 				t.Fatalf("background: %d %s", rec.Code, rec.Body)
 			}
@@ -55,7 +55,7 @@ func TestBackgroundResponsesDurablePollingAndCancelSettleOnce(t *testing.T) {
 			if cancel {
 				req := httptest.NewRequest("POST", "/v1/responses/resp_bg/cancel", nil)
 				req.SetPathValue("id", "resp_bg")
-				req.Header.Set("Authorization", "Bearer "+token.Key)
+				req.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 				rr := httptest.NewRecorder()
 				middleware.TokenResponseControlAuth(http.HandlerFunc(CancelResponse)).ServeHTTP(rr, req)
 				if rr.Code != 200 {
@@ -110,12 +110,12 @@ func TestResponsesCompactionAndOwnedContinuation(t *testing.T) {
 	token := mustToken(t, u.ID, 1000000)
 	for _, body := range []string{`{"model":"gpt-4o","input":"first"}`, `{"model":"gpt-4o","input":"next","previous_response_id":"resp_first"}`} {
 		rec := httptest.NewRecorder()
-		responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.Key, body))
+		responsesTestHandler().ServeHTTP(rec, responsesTestRequest(token.PlaintextKey(), body))
 		if rec.Code != 200 {
 			t.Fatalf("continuation: %d %s", rec.Code, rec.Body)
 		}
 	}
-	req := responsesTestRequest(token.Key, `{"model":"gpt-4o","input":[{"role":"user","content":"hello"}]}`)
+	req := responsesTestRequest(token.PlaintextKey(), `{"model":"gpt-4o","input":[{"role":"user","content":"hello"}]}`)
 	req.URL.Path = "/v1/responses/compact"
 	rec := httptest.NewRecorder()
 	responsesTestHandler().ServeHTTP(rec, req)

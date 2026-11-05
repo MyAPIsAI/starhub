@@ -64,7 +64,7 @@ func TestSmartChainAdmissionAfterValidationAndQuota(t *testing.T) {
 			}
 			r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
-			r.Header.Set("Authorization", "Bearer "+token.Key)
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 			r.Header.Set("X-MyAPIs-Chain-Id", "admission-test")
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, r)

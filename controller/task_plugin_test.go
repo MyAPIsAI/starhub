@@ -49,7 +49,7 @@ func saveExamplePlugin(t *testing.T, suffix string) *model.TaskPlugin {
 func submitExamplePlugin(t *testing.T, token *model.Token) *httptest.ResponseRecorder {
 	t.Helper()
 	r := httptest.NewRequest("POST", "/v1/video/generations", strings.NewReader(`{"model":"sora-2","prompt":"A cat","seconds":8,"n":2,"extra":{"seed":123}}`))
-	r.Header.Set("Authorization", "Bearer "+token.Key)
+	r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayTaskSubmitVideo))).ServeHTTP(w, r)

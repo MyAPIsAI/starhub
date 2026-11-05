@@ -197,17 +197,21 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 	if res := doRequest(env.base, "GET", "/v1/models", env.apiKey, nil); res.Status != 200 || !strings.Contains(res.Body, `"alpha"`) || strings.Contains(res.Body, `"beta"`) {
 		t.Fatalf("default model list broadened published pairs: %d %s", res.Status, res.Body)
 	}
-	vipToken := publicationAPIData[model.Token](t, doRequest(env.base, "POST", "/api/token", env.session, map[string]any{"name": "Published VIP", "group": "vip", "unlimited_quota": true}))
-	if res := chat(vipToken.Key, "beta"); res.Status != 200 {
+	vipTokenResp := publicationAPIData[struct {
+		ID  int64  `json:"id"`
+		Key string `json:"key"`
+	}](t, doRequest(env.base, "POST", "/api/token", env.session, map[string]any{"name": "Published VIP", "group": "vip", "unlimited_quota": true}))
+	vipKey := vipTokenResp.Key
+	if res := chat(vipKey, "beta"); res.Status != 200 {
 		t.Fatalf("published VIP beta failed: %d %s", res.Status, res.Body)
 	}
-	deny(vipToken.Key, "alpha")
+	deny(vipKey, "alpha")
 	state = publicationAPIData[model.ResourceCatalog](t, doRequest(env.base, "GET", "/api/resource", env.session, nil))
 	placement := state.Placements["res-alpha"]
 	placement.Enabled = false
 	publicationAPIData[model.ResourceCatalog](t, doRequest(env.base, "PUT", "/api/placement/res-alpha", env.session, map[string]any{"expected_revision": state.Revision, "placement": placement}))
 	deny(env.apiKey, "alpha")
-	deny(vipToken.Key, "beta")
+	deny(vipKey, "beta")
 	currentBindings := publicationAPIData[model.ResourceBindingState](t, doRequest(env.base, "GET", "/api/resource/publication-state", env.session, nil))
 	if len(currentBindings.Bindings) != 1 || currentBindings.Bindings[0].ConfiguredActive || currentBindings.Bindings[0].StoredPairCount != 0 || currentBindings.Bindings[0].RouteEligiblePairCount != 0 || currentBindings.Bindings[0].SourceChannelID != "inventory-source" || currentBindings.Bindings[0].PublicationID != ack.PublicationID {
 		t.Fatalf("revoked ownership state lost: %+v", currentBindings)

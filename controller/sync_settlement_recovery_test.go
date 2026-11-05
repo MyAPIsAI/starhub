@@ -65,7 +65,7 @@ func TestSyncRelaySettlementRecoversWithoutCallingUpstream(t *testing.T) {
 			handler := middleware.TokenAuth(middleware.Distribute(inbound)(tc.handler))
 			r := httptest.NewRequest("POST", tc.path, strings.NewReader(tc.body))
 			r.Header.Set("Content-Type", "application/json")
-			r.Header.Set("Authorization", "Bearer "+token.Key)
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, r)
 			if rec.Code != 200 {

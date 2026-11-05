@@ -59,7 +59,7 @@ func TestImageModelAttribution(t *testing.T) {
 				body := fmt.Sprintf(`{"model":%q,"prompt":"a cat","n":2,"stream":%t}`, requested, stream)
 				r := httptest.NewRequest(http.MethodPost, "/v1/images/generations", strings.NewReader(body))
 				r.Header.Set("Content-Type", "application/json")
-				r.Header.Set("Authorization", "Bearer "+token.Key)
+				r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 				rec := httptest.NewRecorder()
 				handler.ServeHTTP(rec, r)
 				if rec.Code != http.StatusOK {

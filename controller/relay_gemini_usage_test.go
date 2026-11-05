@@ -44,7 +44,7 @@ func TestGeminiCompatibleRelayBillsFinalNativeUsage(t *testing.T) {
 			handler := middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayChat)))
 			r := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(fmt.Sprintf(`{"model":"gemini-test","messages":[{"role":"user","content":"Hi"}],"max_tokens":64,"stream":%t}`, stream)))
 			r.Header.Set("Content-Type", "application/json")
-			r.Header.Set("Authorization", "Bearer "+token.Key)
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, r)
 			logs, count, err := model.ListLogs(user.ID, 1, 10, "")

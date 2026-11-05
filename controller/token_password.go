@@ -55,7 +55,7 @@ func VerifyTokenPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	currentUser, userErr := model.GetUserByID(userID)
 	currentToken, tokenErr := model.GetTokenByID(id)
-	if userErr != nil || tokenErr != nil || currentUser.Status != common.StatusEnabled || currentUser.Password != user.Password || currentToken.UserID != userID || currentToken.Key != token.Key {
+	if userErr != nil || tokenErr != nil || currentUser.Status != common.StatusEnabled || currentUser.Password != user.Password || currentToken.UserID != userID || currentToken.KeyHash != token.KeyHash {
 		common.ApiError(w, http.StatusConflict, "account or token changed; reopen the verification")
 		return
 	}

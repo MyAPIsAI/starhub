@@ -218,7 +218,7 @@ func TestP4RedemptionAndAffCode(t *testing.T) {
 		t.Fatal("root should have an aff_code")
 	}
 
-	// 6. Register with the aff code → the invitee's inviter_id is set.
+	// 6. Register with the aff code 鈫?the invitee's inviter_id is set.
 	res = doRequest(env.base, "POST", "/api/user/register", "", map[string]string{
 		"username": "invitee", "password": "invitee123",
 		"email": "invitee@example.com", "aff_code": root.AffCode,

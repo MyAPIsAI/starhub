@@ -80,7 +80,7 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := maskedToken(token)
-	out["key"] = token.Key
+	out["key"] = token.PlaintextKey()
 	common.ApiSuccess(w, out)
 }
 
@@ -106,7 +106,7 @@ func maskedToken(t *model.Token) map[string]any {
 		"id":                  t.ID,
 		"user_id":             t.UserID,
 		"name":                t.Name,
-		"key":                 common.MaskKey(t.Key),
+		"key":                 common.MaskKey(t.PlaintextKey()),
 		"status":              t.Status,
 		"group":               t.Group,
 		"expired_time":        t.ExpiredTime,
@@ -360,7 +360,13 @@ func RegenerateToken(w http.ResponseWriter, r *http.Request) {
 	var newKey string
 	for i := 0; i < 3; i++ {
 		candidate := common.GenerateTokenKey()
-		err = model.UpdateTokenFields(id, map[string]any{"key": candidate})
+		hash := common.HashKey(candidate)
+		encrypted, encErr := common.Encrypt(candidate)
+		if encErr != nil {
+			common.ApiError(w, http.StatusInternalServerError, encErr.Error())
+			return
+		}
+		err = model.UpdateTokenFields(id, map[string]any{"key": encrypted, "key_hash": hash})
 		if err == nil {
 			newKey = candidate
 			break

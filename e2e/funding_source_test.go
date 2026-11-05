@@ -66,7 +66,7 @@ func TestFundingSourceActualSimulationCannotCertifyFundsOrMintAPIQuota(t *testin
 		t.Fatalf("ledger trust or repeated credit: %+v", ledger)
 	}
 	token := publicationAPIData[model.Token](t, doRequest(env.base, "POST", "/api/token", session, map[string]any{"name": "Unfunded API token", "group": "default", "unlimited_quota": true}))
-	response := doRequest(env.base, "POST", "/v1/chat/completions", token.Key, map[string]any{"model": "alpha", "messages": []map[string]string{{"role": "user", "content": "local"}}, "max_tokens": 10})
+	response := doRequest(env.base, "POST", "/v1/chat/completions", token.PlaintextKey(), map[string]any{"model": "alpha", "messages": []map[string]string{{"role": "user", "content": "local"}}, "max_tokens": 10})
 	owner, err := model.GetUserByID(user.ID)
 	stored, errWallet := model.GetOrCreateWallet(user.ID)
 	if response.Status < 400 || calls.Load() != 0 || err != nil || errWallet != nil || owner.Quota != 0 || stored.Balance != 10_000_000_000 {

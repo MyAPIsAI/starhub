@@ -64,7 +64,7 @@ func TestFailedRelayModelAttribution(t *testing.T) {
 			body := fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"Hello"}],"max_tokens":64}`, tc.requested)
 			r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
-			r.Header.Set("Authorization", "Bearer "+token.Key)
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, r)
 			wantStatus := http.StatusBadGateway

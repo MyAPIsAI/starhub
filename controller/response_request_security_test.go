@@ -28,7 +28,7 @@ func TestResponsesAmbiguousFieldsNeverReachProviderOrBilling(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(first, responsesTestRequest(at.Key, `{"model":"gpt-4o","input":"private"}`))
+	responsesTestHandler().ServeHTTP(first, responsesTestRequest(at.PlaintextKey(), `{"model":"gpt-4o","input":"private"}`))
 	if first.Code != 200 || calls != 1 {
 		t.Fatalf("setup: %d %s", first.Code, first.Body)
 	}
@@ -41,7 +41,7 @@ func TestResponsesAmbiguousFieldsNeverReachProviderOrBilling(t *testing.T) {
 			`{"model":"gpt-4o","input":"hello","model":"gpt-4o"}`,
 			`{"model":"myapis-auto","input":"hello","previous_response_id":"resp_owner_a","Previous_response_id":""}`,
 		} {
-			req := responsesTestRequest(bt.Key, body)
+			req := responsesTestRequest(bt.PlaintextKey(), body)
 			req.URL.Path = path
 			rec := httptest.NewRecorder()
 			responsesTestHandler().ServeHTTP(rec, req)
@@ -51,7 +51,7 @@ func TestResponsesAmbiguousFieldsNeverReachProviderOrBilling(t *testing.T) {
 		}
 	}
 	normal := httptest.NewRecorder()
-	responsesTestHandler().ServeHTTP(normal, responsesTestRequest(bt.Key, `{"model":"gpt-4o","input":"repeat","previous_response_id":"resp_owner_a"}`))
+	responsesTestHandler().ServeHTTP(normal, responsesTestRequest(bt.PlaintextKey(), `{"model":"gpt-4o","input":"repeat","previous_response_id":"resp_owner_a"}`))
 	if normal.Code != 404 || calls != 1 {
 		t.Fatalf("cross-owner reference admitted: %d %s", normal.Code, normal.Body)
 	}

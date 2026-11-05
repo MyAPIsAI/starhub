@@ -29,7 +29,8 @@ type Token struct {
 	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID         int64  `gorm:"index;not null" json:"user_id"`
 	Name           string `gorm:"size:64;not null;default:''" json:"name"`
-	Key            string `gorm:"uniqueIndex;size:64;not null" json:"key"`
+	Key            string `gorm:"uniqueIndex;size:256;not null" json:"-"` // encrypted ciphertext or legacy plaintext
+	KeyHash        string `gorm:"uniqueIndex;size:64;not null;default:''" json:"-"` // HMAC-SHA256 for lookup
 	Status         int    `gorm:"not null;default:1" json:"status"`
 	Group          string `gorm:"column:group;size:64;not null;default:''" json:"group"`
 	ExpiredTime    int64  `gorm:"not null;default:-1" json:"expired_time"`
@@ -52,7 +53,13 @@ type Token struct {
 func InsertToken(t *Token) error {
 	var err error
 	for i := 0; i < 3; i++ {
-		t.Key = common.GenerateTokenKey()
+		plaintext := common.GenerateTokenKey()
+		t.KeyHash = common.HashKey(plaintext)
+		encrypted, encErr := common.Encrypt(plaintext)
+		if encErr != nil {
+			return encErr
+		}
+		t.Key = encrypted
 		err = DB.Create(t).Error
 		if err == nil {
 			return nil
@@ -68,8 +75,18 @@ func GetTokenByKey(key string) (*Token, error) {
 	if key == "" {
 		return nil, ErrTokenNotFound
 	}
+	hash := common.HashKey(key)
 	var t Token
-	err := DB.Where("key = ?", key).First(&t).Error
+	// Try hash-based lookup first (encrypted keys).
+	err := DB.Where("key_hash = ?", hash).First(&t).Error
+	if err == nil {
+		return &t, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	// Fallback: plaintext lookup (legacy keys not yet migrated).
+	err = DB.Where("key = ?", key).First(&t).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrTokenNotFound
 	}
@@ -92,6 +109,17 @@ func GetTokenByID(id int64) (*Token, error) {
 		return nil, err
 	}
 	return &t, nil
+}
+
+// PlaintextKey decrypts the stored Key and returns the plaintext. For
+// legacy plaintext keys (not yet migrated), the value is returned as-is.
+func (t *Token) PlaintextKey() string {
+	plaintext, err := common.Decrypt(t.Key)
+	if err != nil {
+		// Decryption failed — return the raw stored value (best effort).
+		return t.Key
+	}
+	return plaintext
 }
 
 func ListTokens(userID int64) ([]Token, error) {

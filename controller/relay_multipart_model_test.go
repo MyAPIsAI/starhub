@@ -87,7 +87,7 @@ func TestRelayMultipartModelReachesUpstream(t *testing.T) {
 			}
 			r := httptest.NewRequest(http.MethodPost, tc.path, bytes.NewReader(body))
 			r.Header.Set("Content-Type", contentType)
-			r.Header.Set("Authorization", "Bearer "+token.Key)
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 			rec := httptest.NewRecorder()
 			middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(tc.handler)).ServeHTTP(rec, r)
 			if rec.Code != http.StatusOK || calls.Load() != int32(channels) {
