@@ -30,6 +30,13 @@ func New() http.Handler {
 
 	mux.HandleFunc("POST /api/user/login", controller.Login)
 	mux.HandleFunc("POST /api/user/register", controller.Register)
+	mux.HandleFunc("POST /api/user/login/phone", controller.PhoneLogin)
+	mux.HandleFunc("POST /api/user/phone-verification", controller.SendPhoneVerification)
+	mux.HandleFunc("POST /api/user/phone-verification/register", controller.SendPhoneRegistrationVerification)
+	mux.HandleFunc("POST /api/user/phone-verification/reset", controller.SendPhoneResetVerification)
+	mux.HandleFunc("POST /api/user/reset-password", controller.ResetPasswordByPhone)
+	mux.Handle("POST /api/user/change-phone", middleware.UserAuth(http.HandlerFunc(controller.ChangePhone)))
+	mux.Handle("POST /api/user/phone-verification/change", middleware.UserAuth(http.HandlerFunc(controller.SendPhoneChangeVerification)))
 	mux.Handle("POST /api/user/logout", middleware.UserAuth(http.HandlerFunc(controller.Logout)))
 	mux.Handle("POST /api/user/logout-current", middleware.UserAuth(http.HandlerFunc(controller.LogoutCurrent)))
 	mux.Handle("GET /api/user/self", middleware.UserAuth(http.HandlerFunc(controller.GetSelf)))
