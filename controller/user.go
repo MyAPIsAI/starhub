@@ -170,8 +170,15 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	// Check login lockout before any database lookup.
+	if locked, remaining := middleware.IsLocked(req.Username); locked {
+		common.ApiError(w, http.StatusTooManyRequests,
+			"account is temporarily locked due to repeated failures; try again in "+remaining.Round(time.Second).String())
+		return
+	}
 	user, err := model.GetUserByUsername(req.Username)
 	if err != nil || !common.VerifyPassword(req.Password, user.Password) {
+		middleware.RecordLoginFailure(req.Username)
 		common.ApiError(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
@@ -179,6 +186,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusForbidden, "user is disabled")
 		return
 	}
+	middleware.RecordLoginSuccess(req.Username)
 	const sessionTTL = 7 * 24 * time.Hour
 	token := middleware.Sessions.CreateConfirmed(user, sessionTTL, clientIP(r), r.UserAgent())
 	if token == "" {
