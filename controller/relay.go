@@ -119,6 +119,7 @@ type relayRequest struct {
 	requestedModel       string
 	protocol             string
 	requestSource        string
+	callType             string
 	body                 []byte
 	contentType          string
 	stream               bool
@@ -131,6 +132,7 @@ type relayRequest struct {
 func relayRequestFromContext(r *http.Request) relayRequest {
 	ctx := r.Context()
 	req := relayRequest{
+		callType:             classifyCallType(r.URL.Path),
 		userID:               ctxValueInt64(ctx, common.CtxUserID),
 		tokenID:              ctxValueInt64(ctx, common.CtxTokenID),
 		tokenName:            ctxValueString(ctx, common.CtxTokenName),
@@ -201,6 +203,7 @@ type relayFlow struct {
 	tried        map[int64]bool
 	trail        []string
 	lastErr      error
+	errorCode    string
 	unsupported  int
 	sent         int       // actual upstream send attempts (unsupported skips excluded)
 	uncertain    bool      // a side-effecting attempt may have executed upstream
@@ -249,7 +252,7 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 		}),
 	}
 	w.Header().Set("X-Request-ID", flow.traceID)
-	if req.requestSource == "playground" {
+	if req.stream || req.requestSource == "playground" {
 		sw.ResponseWriter = &playgroundTimingWriter{ResponseWriter: w, flow: flow}
 	}
 	// Auto-group mode starts at the first configured group. Admission may
@@ -278,6 +281,7 @@ func (f *relayFlow) finish() {
 
 // errorOut writes a gateway error in the inbound format.
 func (f *relayFlow) errorOut(status int, errType, code, message string) {
+	f.errorCode = code
 	dto.WriteRelayError(f.w, status, f.inbound, errType, code, message)
 }
 
@@ -516,7 +520,19 @@ func (f *relayFlow) refundUnlessSettled() {
 	// so pre-channel failures (no channel available) don't inflate
 	// usage counts.
 	if len(f.trail) > 0 {
-		_ = model.InsertFailedLog(&model.Log{
+		code := f.errorCode
+		status := 2
+		if f.ctx.Err() != nil {
+			code = "request_cancelled"
+			status = 3
+		} else if code == "" {
+			if f.sw.status >= 400 && f.sw.status < 500 {
+				code = "upstream_client_error"
+			} else {
+				code = "upstream_unavailable"
+			}
+		}
+		entry := &model.Log{
 			TraceID:        f.traceID,
 			RequestSource:  f.req.requestSource,
 			TTFTMs:         f.ttftMs,
@@ -529,7 +545,11 @@ func (f *relayFlow) refundUnlessSettled() {
 			Protocol:       f.req.protocol,
 			UsedChannels:   f.trailString(),
 			DurationMs:     time.Since(f.startTime).Milliseconds(),
-		})
+			ErrorCode:      code, Status: status,
+		}
+		model.FreezeLogLabels(entry, f.settleGroup(), f.req.callType)
+		model.FreezeRoutingEvidence(f.ctx, entry, f.affinityPreferred != 0)
+		_ = model.InsertFailedLog(entry)
 	}
 }
 

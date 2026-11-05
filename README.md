@@ -133,7 +133,8 @@ The browser tests start their own Go router, a temporary SQLite database and a l
 
 ```bash
 docker build -t starhub .
-docker run --rm -p 3000:3000 -v starhub-data:/data -e STARHUB_ROOT_PASSWORD=change-this-password starhub
+docker run --rm -v starhub-data:/data -e STARHUB_STAFF_PASSWORD starhub staff init --username root
+docker run --rm -p 3000:3000 -v starhub-data:/data starhub
 ```
 
 The container build uses the official Go module proxy by default. If the network cannot reach it, pass `--build-arg GOPROXY=https://goproxy.cn,direct` to specify the same module proxy as your local Go environment.
@@ -150,7 +151,7 @@ The console shows `quota` as actually charged, and `unfunded_quota` separately a
 
 Copy [`config.example.yml`](config.example.yml) to a private `config.yml`, then start with `./starhub --config /path/to/config.yml` or set `STARHUB_CONFIG=/path/to/config.yml`. The file is optional; startup without it retains the existing defaults and environment variables. The CLI flag takes precedence over `STARHUB_CONFIG`. The file must use `version: 1`; unknown fields, invalid values, and missing files stop startup with an error. A relative `database.sqlite_path` is resolved against the YAML file's directory.
 
-The file has `server.port`, `database.sqlite_path`, `security.force_secure_cookie`, and `initial_options` for the seven runtime keys listed below. Root credentials stay in `STARHUB_ROOT_PASSWORD`; do not put them in YAML. Environment variables override matching YAML startup and initial values. `security.force_secure_cookie: true` remains a security floor even when `STARHUB_COOKIE_SECURE=false` or the database option is false. Changes to port, database path, and this security floor require a restart. `initial_options` seeds missing database keys only; edit existing values through `PUT /api/option` for versioned hot reload.
+The file has `server.port`, `database.sqlite_path`, `security.force_secure_cookie`, and `initial_options` for the seven runtime keys listed below. Staff network access uses `security.staff_allowed_ips`. Initialize Root through the deployment CLI using `STARHUB_STAFF_PASSWORD`; do not put credentials in YAML. Environment variables override matching YAML startup and initial values. `security.force_secure_cookie: true` remains a security floor even when `STARHUB_COOKIE_SECURE=false` or the database option is false. Changes to port, database path, and this security floor require a restart. `initial_options` seeds missing database keys only; edit existing values through `PUT /api/option` for versioned hot reload.
 
 For Docker, mount the file read-only and pass `--config /etc/starhub/config.yml`. Set `database.sqlite_path: /data/starhub.db` in that file so SQLite stays on the `/data` volume. The image no longer fixes the port or database path through image environment variables.
 
@@ -160,12 +161,14 @@ For Docker, mount the file read-only and pass `--config /etc/starhub/config.yml`
 | --- | --- | --- |
 | `STARHUB_PORT` | `3000` | HTTP listen port |
 | `STARHUB_DB` | `starhub.db` | SQLite database file path |
-| `STARHUB_ROOT_PASSWORD` | `123456` | Initial password for the root user (**change this in production**) |
+| `STARHUB_STAFF_PASSWORD` | none | Temporary password supplied to `staff init`; no default Root password |
+| `STARHUB_STAFF_ALLOWED_IPS` | loopback | Company IPv4/IPv6 addresses or CIDRs, comma-separated |
+| `STARHUB_STAFF_SETUP_MODE` | `commercial` | `commercial` CLI initialization or `opensource` one-time-token installation |
 | `STARHUB_CHANNEL_TEST_INTERVAL` | `1800` | Background channel health-check interval, in seconds (`0` disables) |
 | `STARHUB_TASK_POLL_INTERVAL` | `60` | Background task poll interval, in seconds (`0` disables) |
 | `STARHUB_COOKIE_SECURE` | `false` | Set to `true` behind an HTTPS reverse proxy; direct TLS requests set the Secure cookie automatically |
 
-`STARHUB_PORT`, `STARHUB_DB`, and `STARHUB_ROOT_PASSWORD` are bootstrap settings. Changing the port or database path requires a restart; the root password variable only seeds a new database. The interval and cookie variables supply defaults when a new database is seeded. Once seeded, the option table is authoritative for hot-updatable values. `STARHUB_COOKIE_SECURE=true` remains a security floor even if the stored option is false.
+`STARHUB_PORT` and `STARHUB_DB` are bootstrap settings. Changing the port or database path requires a restart. The server no longer initializes Root through `STARHUB_ROOT_PASSWORD`. The interval and cookie variables supply defaults when a new database is seeded. Once seeded, the option table is authoritative for hot-updatable values. `STARHUB_COOKIE_SECURE=true` remains a security floor even if the stored option is false.
 
 ### Runtime Configuration and Reload
 
@@ -185,27 +188,13 @@ An option update is validated and committed with a version before it is applied 
 
 ### First Login
 
-A root account is created by default:
-
-- Username: `root`
-- Password: `123456` (or whatever `STARHUB_ROOT_PASSWORD` is set to)
+Initialize the first internal Root with `starhub staff init --username root`, supplying `STARHUB_STAFF_PASSWORD` through your deployment secret mechanism. Open `/admin/login` from an allowed company network or VPN, change the temporary password and enroll an authenticator. No default password or password-only staff session grants access. See [staff access and recovery](docs/staff-access.md).
 
 ## Usage Guide
 
 ### 1. Log In to the Management API
 
-```bash
-curl -X POST http://localhost:3000/api/user/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"root","password":"123456"}'
-```
-
-On success:
-
-- The response body carries a `session` field (valid for 7 days)
-- An HttpOnly cookie named `session` is set
-
-Subsequent management calls can carry the session via that cookie or via an `Authorization: Bearer <session>` header (see `middleware/session.go`).
+Staff authenticate through `/api/admin/auth/login`, then complete the password-change and authenticator enrollment/verification stages. The `staff_session` cookie grants management access only after verification; pending sessions cannot call protected APIs. The browser flow at `/admin/login` performs these stages. Customers continue to use `/api/user/login` and the separate `session` cookie.
 
 ### 2. Create an Upstream Channel (admin)
 

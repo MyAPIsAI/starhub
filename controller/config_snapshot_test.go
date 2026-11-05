@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"starhub/common"
 	"testing"
 
 	"starhub/setting"
@@ -15,7 +16,7 @@ import (
 // This is section 6.3 "配置快照" of the P21 test strategy.
 func TestConfigSnapshotVersionIsolation(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	// 1. Save V1: set cache_ratio (simpler key, no merge-with-defaults behavior).
 	v1 := "2.5"
@@ -139,7 +140,7 @@ func TestConfigSnapshotVersionIsolation(t *testing.T) {
 // runtime setting is not modified. This is section 6.3 "非法配置无部分生效".
 func TestConfigNoPartialApplication(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	// 1. Record the initial version.
 	rr := call(OptionStatus, testRequest{

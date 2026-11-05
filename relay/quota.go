@@ -238,6 +238,18 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		DurationMs:           durationMs,
 		Status:               status,
 	}
+	model.FreezeLogLabels(entry, pd.UsingGroup, usage.CallType)
+	entry.CacheReadTokens, entry.CacheWriteTokens = usage.CachedTokens(), usage.CacheWriteTokens()
+	entry.BillingDetail = BillingSnapshot(pd, usage)
+	entry.ResourceID, entry.ResourceIDs = usage.ResourceID, usage.ResourceIDs
+	entry.SnapshotSequence, entry.ResourceRevision = usage.SnapshotSequence, usage.ResourceRevision
+	entry.AffinityUsed, entry.RoutingRecorded = usage.AffinityUsed, usage.RoutingRecorded
+	entry.UsageSource = usage.UsageSource
+	if status == 2 {
+		entry.ErrorCode = "stream_interrupted"
+	} else if status == 3 {
+		entry.ErrorCode = "request_cancelled"
+	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"starhub/internal/testauth"
 	"strings"
 	"testing"
 )
@@ -20,7 +21,7 @@ func TestProfileStateRouteRejectsOtherCookiesAndRemainsPrivate(t *testing.T) {
 	}{{session, 200}, {other, 409}, {env.session, 409}, {"", 401}} {
 		req, _ := http.NewRequest(http.MethodGet, env.base+path, nil)
 		if test.cookie != "" {
-			req.AddCookie(&http.Cookie{Name: "session", Value: test.cookie})
+			testauth.Authorize(req, test.cookie)
 		}
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {

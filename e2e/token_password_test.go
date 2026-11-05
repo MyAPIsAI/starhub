@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"starhub/internal/testauth"
 	"strings"
 	"testing"
 
@@ -21,7 +22,7 @@ func TestTokenPasswordActualRouterNeverCreatesOrReplacesLoginSessions(t *testing
 		req, _ := http.NewRequest(http.MethodPost, env.base+path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		if session != "" {
-			req.AddCookie(&http.Cookie{Name: "session", Value: session})
+			testauth.Authorize(req, session)
 		}
 		if origin != "" {
 			req.Header.Set("Origin", origin)

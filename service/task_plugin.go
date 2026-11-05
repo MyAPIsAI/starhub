@@ -111,6 +111,8 @@ func pollPluginTask(ctx context.Context, task *model.Task, ch *model.Channel) (*
 		if err != nil {
 			return task, err
 		}
+		result.BillingDetail = relay.PluginBillingDetails(pricing, parsed)
+		metadata, _ = json.Marshal(result)
 		return recordAndSettleTask(task, result, string(metadata), quota)
 	}
 	if err := model.UpdateTaskProgress(task.ID, result.Status, result.Progress, string(metadata)); err != nil {

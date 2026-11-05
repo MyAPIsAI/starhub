@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"math/big"
 	"net/http"
@@ -49,7 +50,7 @@ func GetWallet(w http.ResponseWriter, r *http.Request) {
 	}
 	common.ApiSuccess(w, map[string]any{
 		"month_spend_nano":               spent.String(),
-		"api_balance_nano":               new(big.Int).Mul(big.NewInt(owner.Quota), big.NewInt(1_000_000_000/common.QuotaPerUSD)).String(),
+		"api_balance_nano":               model.APIBalanceNano(owner).String(),
 		"timezone":                       config.RegionTimezone(),
 		"user_id":                        wallet.UserID,
 		"balance":                        wallet.Balance, // nano-USD
@@ -65,12 +66,32 @@ func GetWallet(w http.ResponseWriter, r *http.Request) {
 // ListLedger keeps management visibility while allowing an owner-only statement.
 func ListLedger(w http.ResponseWriter, r *http.Request) {
 	userID := requestUserID(r)
-	if common.IsAdminRole(requestRole(r)) && r.URL.Query().Get("scope") != "owned" && r.URL.Query().Get("trace") == "" {
+	if common.CanReadFinancialRecords(requestRole(r)) && r.URL.Query().Get("scope") != "owned" && r.URL.Query().Get("trace") == "" {
 		userID = 0
+	}
+	var order *model.RechargeOrder
+	for _, field := range []string{"order_id", "order_number"} {
+		if values, present := r.URL.Query()[field]; present {
+			if order != nil || len(values) != 1 || values[0] == "" {
+				common.ApiError(w, 400, "specify a single order identifier")
+				return
+			}
+			var ok bool
+			order, ok = readRechargeOrder(w, r, values[0])
+			if !ok {
+				return
+			}
+		}
 	}
 	// Lazily expire stale orders so the ledger reflects reality.
 	_ = model.ExpireRechargeOrders()
-	entries, err := model.StatementLedger(userID, 0, 0, r.URL.Query().Get("trace"))
+	var entries []model.LedgerEntry
+	var err error
+	if order != nil {
+		entries, err = model.StatementLedgerForOrder(order, r.URL.Query().Get("trace"))
+	} else {
+		entries, err = model.StatementLedger(userID, 0, 0, r.URL.Query().Get("trace"))
+	}
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -144,17 +165,8 @@ func CreateRechargeOrder(w http.ResponseWriter, r *http.Request) {
 // GetRechargeOrder returns a single order. Users can only see their own;
 // admins can see any.
 func GetRechargeOrder(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r, "id")
+	o, ok := readRechargeOrder(w, r, r.PathValue("id"))
 	if !ok {
-		return
-	}
-	o, err := model.GetRechargeOrder(id)
-	if err != nil {
-		common.ApiError(w, http.StatusNotFound, "recharge order not found")
-		return
-	}
-	if !canManageOrder(r, o) {
-		common.ApiError(w, http.StatusForbidden, "cannot view a recharge order owned by another user")
 		return
 	}
 	common.ApiSuccess(w, rechargeOrderJSON(o))
@@ -164,7 +176,7 @@ func GetRechargeOrder(w http.ResponseWriter, r *http.Request) {
 // Stale pending/processing orders are lazily expired before returning.
 func ListRechargeOrders(w http.ResponseWriter, r *http.Request) {
 	userID := int64(0)
-	if !common.IsAdminRole(requestRole(r)) || r.URL.Query().Get("scope") == "owned" {
+	if !common.CanReadFinancialRecords(requestRole(r)) || r.URL.Query().Get("scope") == "owned" {
 		userID = requestUserID(r)
 	}
 	_ = model.ExpireRechargeOrders()
@@ -187,20 +199,11 @@ type resolveRechargeRequest struct {
 // BeginRechargePayment flips a pending order to processing (simulates
 // opening the cashier). Idempotent for already-processing/terminal orders.
 func BeginRechargePayment(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r, "id")
+	o, ok := readRechargeOrder(w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}
-	o, err := model.GetRechargeOrder(id)
-	if err != nil {
-		common.ApiError(w, http.StatusNotFound, "recharge order not found")
-		return
-	}
-	if !canManageOrder(r, o) {
-		common.ApiError(w, http.StatusForbidden, "cannot manage a recharge order owned by another user")
-		return
-	}
-	o, err = model.BeginRechargePayment(id)
+	o, err := model.BeginRechargePayment(o.ID)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -213,17 +216,8 @@ func BeginRechargePayment(w http.ResponseWriter, r *http.Request) {
 // Terminal states are idempotent (a repeated resolve returns the existing
 // state without double-crediting).
 func ResolveRechargeOrder(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r, "id")
+	o, ok := readRechargeOrder(w, r, r.PathValue("id"))
 	if !ok {
-		return
-	}
-	o, err := model.GetRechargeOrder(id)
-	if err != nil {
-		common.ApiError(w, http.StatusNotFound, "recharge order not found")
-		return
-	}
-	if !canManageOrder(r, o) {
-		common.ApiError(w, http.StatusForbidden, "cannot manage a recharge order owned by another user")
 		return
 	}
 	var req resolveRechargeRequest
@@ -235,7 +229,7 @@ func ResolveRechargeOrder(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "outcome must be success, failed or cancelled")
 		return
 	}
-	o, err = model.ResolveRechargeOrder(id, outcome)
+	o, err := model.ResolveRechargeOrder(o.ID, outcome)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -245,8 +239,21 @@ func ResolveRechargeOrder(w http.ResponseWriter, r *http.Request) {
 
 // --- helpers ---
 
-func canManageOrder(r *http.Request, o *model.RechargeOrder) bool {
-	return common.IsAdminRole(requestRole(r)) || o.UserID == requestUserID(r)
+func readRechargeOrder(w http.ResponseWriter, r *http.Request, reference string) (*model.RechargeOrder, bool) {
+	owner := requestUserID(r)
+	if common.CanReadFinancialRecords(requestRole(r)) && r.URL.Query().Get("scope") != "owned" && r.URL.Query().Get("trace") == "" {
+		owner = 0
+	}
+	order, err := model.FindRechargeOrder(reference, owner)
+	if errors.Is(err, model.ErrRechargeOrderNotFound) {
+		common.ApiError(w, http.StatusNotFound, "recharge order not found")
+		return nil, false
+	}
+	if err != nil {
+		common.ApiError(w, 500, "recharge order unavailable")
+		return nil, false
+	}
+	return order, true
 }
 
 // rechargeOrderJSON serializes an order to the frontend JSON shape.

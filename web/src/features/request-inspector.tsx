@@ -17,6 +17,8 @@ import { useLedger, adaptLedgerEntry } from "../lib/api/billing";
 import { copyText } from "./code-example";
 import "../components/demo-scenarios.css";
 import { PricingSnapshot } from "../components/pricing-snapshot";
+import { SettledBilling } from "../components/settled-billing";
+import { callTypeLabel } from "../lib/request-metadata";
 import { useSystemAccess, isAdmin } from "../lib/system-access";
 
 const errors: Record<string, [string, string, string]> = {
@@ -109,10 +111,12 @@ const errors: Record<string, [string, string, string]> = {
 
 export default function RequestInspector({
   record,
+  timezone = "Asia/Dubai",
   onClose,
   onRetry,
 }: {
   record: PreviewRequest | null;
+  timezone?: string;
   onClose: () => void;
   onRetry: () => void;
 }) {
@@ -129,8 +133,6 @@ export default function RequestInspector({
   const ledger = (ledgerQuery.data ?? []).map(adaptLedgerEntry) as any[];
   const setOutage = useProductPreview((s) => s.demoSetUpstreamOutage);
   const role = useSystemAccess((s) => s.role);
-  // M6 §3.5：详情抽屉不向客户显示渠道或资源实例。仅运营视角（非 customer）可见内部来源标识。
-  const isOps = isAdmin(role);
   const failed = record?.status !== "success";
   const error = record?.error_code ? errors[record.error_code] : undefined;
   const reason = error
@@ -286,7 +288,7 @@ export default function RequestInspector({
                       "النتيجة محاكاة محلية للتحقق من الاتصال والصلاحيات والفوترة.",
                     )}
             </p>
-            {failed && (
+            {failed && record.source !== "api" && (
               <div className="request-inspector-actions">
                 {record.error_code === "upstream_unavailable" ? (
                   <Button
@@ -336,7 +338,7 @@ export default function RequestInspector({
                     )}
             </span>
             <strong className="money">
-              {formatMoney(record.cost_nano, "call")}
+              {formatMoney(record.cost_nano, "detail")}
             </strong>
           </div>
           <dl className="product-detail-list">
@@ -364,16 +366,90 @@ export default function RequestInspector({
               <dd>
                 {record.key_deleted
                   ? text("已删除的 Key", "Deleted key", "مفتاح محذوف")
-                  : (key?.name ??
+                  : (record.key_name ??
+                    key?.name ??
                     record.key_id ??
                     text("历史样例", "Historical sample", "عينة سابقة"))}
               </dd>
             </div>
             <div>
               <dt>{text("服务分组", "Service group", "مجموعة الخدمة")}</dt>
-              <dd>{record.tier ? <TierBadge id={record.tier} /> : "—"}</dd>
+              <dd>
+                {record.service_group ||
+                  (record.tier ? <TierBadge id={record.tier} /> : "—")}
+              </dd>
             </div>
-            {record.pricing_snapshot ? (
+            <div>
+              <dt>{text("厂商", "Vendor", "المزوّد")}</dt>
+              <dd>{record.vendor || "—"}</dd>
+            </div>
+            <div>
+              <dt>{text("调用类型", "Call type", "نوع الطلب")}</dt>
+              <dd>{callTypeLabel(record.call_type, i18n.language)}</dd>
+            </div>
+            <div>
+              <dt>
+                {text("自动切换", "Automatic switch", "التحويل التلقائي")}
+              </dt>
+              <dd>
+                {record.fallback
+                  ? text(
+                      "已自动切换",
+                      "Automatically switched",
+                      "تم التحويل تلقائيًا",
+                    )
+                  : text(
+                      "未自动切换",
+                      "No automatic switch",
+                      "دون تحويل تلقائي",
+                    )}
+              </dd>
+            </div>
+            <div>
+              <dt>
+                {text(
+                  "缓存读取 / 写入 Token",
+                  "Cache read / write tokens",
+                  "رموز قراءة / كتابة التخزين",
+                )}
+              </dt>
+              <dd>
+                {record.cache_read_tokens ?? 0} /{" "}
+                {record.cache_write_tokens ?? 0}
+              </dd>
+            </div>
+            {record.billing_detail && (
+              <SettledBilling
+                detail={record.billing_detail}
+                timezone={timezone}
+              />
+            )}
+            {record.usage_source === "admission_estimate" && (
+              <div>
+                <dt>{text("用量来源", "Usage source", "مصدر الاستخدام")}</dt>
+                <dd>
+                  {text(
+                    "估算计费用量，上游未返回完整 Token 计数。",
+                    "Estimated billing usage; complete provider token counts were unavailable.",
+                    "استخدام تقديري للفوترة؛ لم تتوفر أعداد الرموز الكاملة من المزوّد.",
+                  )}
+                </dd>
+              </div>
+            )}
+            {record.billing_detail ? (
+              <div>
+                <dt>
+                  {text(
+                    "输入 / 输出 Token",
+                    "Input / output tokens",
+                    "رموز الإدخال / الإخراج",
+                  )}
+                </dt>
+                <dd>
+                  {record.input_tokens} / {record.output_tokens}
+                </dd>
+              </div>
+            ) : record.pricing_snapshot ? (
               <PricingSnapshot snapshot={record.pricing_snapshot} />
             ) : record.metered_demo ? (
               <div>
@@ -443,11 +519,12 @@ export default function RequestInspector({
             <div>
               <dt>{text("费率快照", "Rate snapshot", "لقطة السعر")}</dt>
               <dd className="mono" dir="ltr">
-                {record.pricing_revision ??
+                {record.billing_detail?.priced_at ??
+                  record.pricing_revision ??
                   text(
-                    "历史样例费率",
-                    "Historical sample rates",
-                    "أسعار العينة السابقة",
+                    "未记录历史费率",
+                    "Historical tariff not recorded",
+                    "السعر التاريخي غير مسجل",
                   )}
               </dd>
             </div>
@@ -477,15 +554,16 @@ export default function RequestInspector({
               <dd>
                 {new Date(record.time).toLocaleString(
                   lang === "zh" ? "zh-CN" : lang === "ar" ? "ar" : "en-GB",
+                  { timeZone: timezone, timeZoneName: "short" },
                 )}
               </dd>
             </div>
           </dl>
           <p className="request-inspector-note">
             {text(
-              "费率与金额在调用时保存。运营后续改价不会重算此记录；智能路由不会把请求模型和实际模型拆成两笔收费。",
-              "Rates and amounts were saved at request time. Later pricing changes do not recalculate this record; smart routing does not create duplicate charges.",
-              "حُفظت الأسعار والمبالغ وقت الطلب. تغيير السعر لاحقاً لا يعيد حساب هذا السجل ولا يضاعف التوجيه الذكي الرسوم.",
+              "金额以调用时保存的扣费记录为准。未记录的历史费率不会使用当前价格补算。",
+              "Charges use the saved settlement. Missing historical tariffs are never reconstructed from current prices.",
+              "تعتمد الرسوم على التسوية المحفوظة. لا يعاد إنشاء الأسعار التاريخية المفقودة من الأسعار الحالية.",
             )}
           </p>
           <details className="technical-details">
@@ -494,38 +572,6 @@ export default function RequestInspector({
               <Plus size={15} />
             </summary>
             <dl className="product-detail-list">
-              {isOps && record.resource_id && (
-                <>
-                  <div>
-                    <dt>
-                      {text(
-                        "资源实例 / 渠道",
-                        "Resource / channel",
-                        "المورد / القناة",
-                      )}
-                    </dt>
-                    <dd>
-                      <code>
-                        {record.resource_id} / {record.channel_id}
-                      </code>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>
-                      {text(
-                        "来源快照 / 上游模型",
-                        "Snapshot / upstream model",
-                        "اللقطة / نموذج المصدر",
-                      )}
-                    </dt>
-                    <dd>
-                      <code>
-                        {record.resource_snapshot_id} / {record.upstream_model}
-                      </code>
-                    </dd>
-                  </div>
-                </>
-              )}
               <div>
                 <dt>{text("错误代码", "Error code", "رمز الخطأ")}</dt>
                 <dd className="mono">{record.error_code ?? "—"}</dd>

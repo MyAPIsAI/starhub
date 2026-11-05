@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"starhub/internal/testauth"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestGuardedProfileUpdateRouteChecksCookieCSRFAndRateLimit(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodPut, env.base+"/api/user/profile-state", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		if cookie != "" {
-			req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+			testauth.Authorize(req, cookie)
 		}
 		if origin != "" {
 			req.Header.Set("Origin", origin)

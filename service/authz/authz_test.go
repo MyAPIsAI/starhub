@@ -25,8 +25,8 @@ func TestAdminCannotManageUsers(t *testing.T) {
 	if !Allow(common.RoleAdmin, ResourceUser, ActionRead) {
 		t.Fatal("Admin should be able to read users")
 	}
-	if !Allow(common.RoleAdmin, ResourceChannel, ActionWrite) {
-		t.Fatal("Admin should be able to manage channels")
+	if Allow(common.RoleAdmin, ResourceChannel, ActionWrite) {
+		t.Fatal("Operations must not manage technical channels")
 	}
 }
 
@@ -76,7 +76,7 @@ func TestFinanceRoleIsReadOnlyAndHasNoAdminResourceAccess(t *testing.T) {
 	if !Allow(common.RoleFinance, ResourceFinance, ActionRead) || Allow(common.RoleFinance, ResourceFinance, ActionWrite) || Allow(common.RoleFinance, ResourceFinance, ActionDelete) {
 		t.Fatal("finance permissions are not read-only")
 	}
-	for _, resource := range []Resource{ResourceUser, ResourceChannel, ResourceOption, ResourceAudit, ResourceRedemption} {
+	for _, resource := range []Resource{ResourceChannel, ResourceOption, ResourceRedemption} {
 		for _, action := range []Action{ActionRead, ActionWrite, ActionDelete} {
 			if Allow(common.RoleFinance, resource, action) {
 				t.Fatalf("finance role gained %s on %s", action, resource)

@@ -21,6 +21,13 @@ import (
 )
 
 type createExportRequest struct {
+	GroupBy    string `json:"group_by"`
+	KeyID      int64  `json:"key_id"`
+	Model      string `json:"model"`
+	Vendor     string `json:"vendor"`
+	CallType   string `json:"call_type"`
+	Group      string `json:"group"`
+	TraceID    string `json:"trace_id"`
 	Type       string `json:"type"`
 	RangeDays  int    `json:"range_days"`
 	StartDate  string `json:"start_date"`
@@ -43,6 +50,17 @@ type exportSpec struct {
 
 func normalizeExport(req createExportRequest, owner int64, now time.Time) (exportSpec, error) {
 	spec := exportSpec{createExportRequest: req, UserID: owner, Timezone: config.RegionTimezone()}
+	if req.KeyID < 0 {
+		return spec, errors.New("invalid key filter")
+	}
+	for _, value := range []string{req.Model, req.Vendor, req.CallType, req.Group, req.TraceID} {
+		if len(value) > 256 {
+			return spec, errors.New("filter exceeds 256 bytes")
+		}
+	}
+	if req.GroupBy != "" && !validReportDimension(req.GroupBy) {
+		return spec, errors.New("invalid report dimension")
+	}
 	if req.Type != "requests" && req.Type != "ledger" && req.Type != "usage" {
 		return spec, errors.New("type must be requests, ledger or usage")
 	}
@@ -82,6 +100,9 @@ func normalizeExport(req createExportRequest, owner int64, now time.Time) (expor
 	spec.EndDate = to.Format("2006-01-02")
 	spec.Since = from.Unix()
 	spec.Until = to.AddDate(0, 0, 1).Unix()
+	if spec.Since <= 0 {
+		return spec, errors.New("invalid export date boundary")
+	}
 	if req.Status != "" && req.Status != "all" && req.Status != "success" && req.Status != "failed" && req.Status != "cancelled" {
 		return spec, errors.New("invalid export status")
 	}
@@ -114,6 +135,10 @@ func ListExports(w http.ResponseWriter, r *http.Request) {
 func CreateExport(w http.ResponseWriter, r *http.Request) {
 	var req createExportRequest
 	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if common.IsStaffRole(requestRole(r)) && req.Type == "ledger" && !common.CanReadFinancialRecords(requestRole(r)) {
+		common.ApiError(w, 403, "Finance or Root is required for ledger exports")
 		return
 	}
 	spec, err := normalizeExport(req, requestUserID(r), time.Now())
@@ -241,20 +266,14 @@ func exportJSON(e *model.ExportRecord) map[string]any {
 		"dictionary_url": dictionaryURL}
 }
 func DownloadExport(w http.ResponseWriter, r *http.Request) {
-	var rec *model.ExportRecord
-	var err error
-	if token := r.PathValue("token"); token != "" {
-		var found model.ExportRecord
-		err = model.DB.Where("download_token = ? AND user_id = ? AND expires_at > ?", token, requestUserID(r), time.Now().Unix()).First(&found).Error
-		rec = &found
-	} else {
-		id, ok := pathID(w, r, "id")
-		if !ok {
-			return
-		}
-		rec, err = model.GetExport(id)
+	w.Header().Set("Cache-Control", "private, no-store")
+	token := r.PathValue("token")
+	if token == "" {
+		common.ApiError(w, 404, "export not found")
+		return
 	}
-	if err != nil || (r.PathValue("token") != "" && rec.UserID != requestUserID(r)) || (r.PathValue("token") == "" && !canManageExport(r, rec)) {
+	var rec model.ExportRecord
+	if err := model.DB.Where("download_token = ? AND user_id = ? AND expires_at > ?", token, requestUserID(r), time.Now().Unix()).First(&rec).Error; err != nil {
 		common.ApiError(w, 404, "export not found")
 		return
 	}
@@ -274,26 +293,13 @@ func DownloadExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	_, _ = w.Write(data)
 }
-func canManageExport(r *http.Request, e *model.ExportRecord) bool {
-	return common.IsAdminRole(requestRole(r)) || e.UserID == requestUserID(r)
-}
 func exportLogsQuery(db *gorm.DB, s exportSpec) *gorm.DB {
-	q := db.Model(&model.Log{}).Where("user_id = ? AND created_at >= ?", s.UserID, s.Since)
+	q := model.FilterLogs(db, s.UserID, model.LogFilters{Since: s.Since, Until: s.Until, KeyID: s.KeyID, Model: s.Model, Vendor: s.Vendor, CallType: s.CallType, Group: s.Group, Status: s.Status, TraceID: s.TraceID, Query: s.Query})
 	if s.Until > 0 {
 		q = q.Where("created_at < ?", s.Until)
 	}
 	if s.Snapshot {
 		q = q.Where("id <= ?", s.MaxLogID)
-	}
-	if s.Status != "" && s.Status != "all" {
-		statuses := map[string]int{"success": 1,
-			"failed":    2,
-			"cancelled": 3}
-		q = q.Where("status = ?", statuses[s.Status])
-	}
-	if s.Query != "" {
-		like := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(strings.ToLower(strings.TrimSpace(s.Query))) + "%"
-		q = q.Where(`(LOWER(trace_id) LIKE ? ESCAPE '\' OR LOWER(model) LIKE ? ESCAPE '\' OR LOWER(requested_model) LIKE ? ESCAPE '\' OR LOWER('log_' || id) LIKE ? ESCAPE '\')`, like, like, like, like)
 	}
 	return q
 }
@@ -315,6 +321,14 @@ var requestColumns = []exportColumn{
 	{"amount_usd", "Amount (USD)", "金额（美元）", "المبلغ (دولار)", "USD, nine decimal places"},
 	{"amount_nano", "Amount (nano-USD)", "金额（纳美元）", "المبلغ (نانو دولار)", "integer nano-USD"},
 	{"source", "Source", "来源", "المصدر", "api / playground"},
+	{"vendor", "Vendor", "厂商", "المزوّد", "text"},
+	{"service_group", "Service group", "服务分组", "مجموعة الخدمة", "identifier"},
+	{"call_type", "Call type", "调用类型", "نوع الطلب", "identifier"},
+	{"auto_switched", "Automatically switched", "已自动切换", "تم التحويل تلقائيًا", "boolean"},
+	{"error_code", "Error code", "错误码", "رمز الخطأ", "identifier"},
+	{"cache_read_tokens", "Cache read tokens", "缓存读取词元", "رموز قراءة التخزين", "tokens"},
+	{"cache_write_tokens", "Cache write tokens", "缓存写入词元", "رموز كتابة التخزين", "tokens"},
+	{"billing_detail", "Captured billing details", "调用时计费明细", "تفاصيل الفوترة المسجلة", "JSON: numeric metering and captured USD unit prices"},
 }
 var ledgerColumns = []exportColumn{
 	{"id", "Ledger ID", "流水编号", "معرّف الحركة", "identifier"},
@@ -424,6 +438,21 @@ func generateExport(db *gorm.DB, s exportSpec) ([]byte, []byte, int, error) {
 	loc, err := time.LoadLocation(s.Timezone)
 	if err != nil {
 		return nil, nil, 0, err
+	}
+	if s.Type == "usage" && s.GroupBy != "" {
+		f := model.LogFilters{Since: s.Since, Until: s.Until, KeyID: s.KeyID, Model: s.Model, Vendor: s.Vendor, CallType: s.CallType, Group: s.Group, Status: s.Status, TraceID: s.TraceID, Query: s.Query, Snapshot: s.Snapshot, MaxID: s.MaxLogID}
+		report, err := model.AggregateUsage(db, s.UserID, f, loc, s.GroupBy, "day")
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		columns := []exportColumn{{"dimension", "Dimension", "维度", "البعد", "identifier"}, {"name", "Name", "名称", "الاسم", "text"}, {"requests", "Requests", "调用次数", "الطلبات", "requests"}, {"successful", "Successful", "成功次数", "الناجحة", "requests"}, {"input_tokens", "Input tokens", "输入词元", "رموز الإدخال", "tokens"}, {"output_tokens", "Output tokens", "输出词元", "رموز الإخراج", "tokens"}, {"cache_read_tokens", "Cache read tokens", "缓存读取词元", "رموز قراءة التخزين", "tokens"}, {"cache_write_tokens", "Cache write tokens", "缓存写入词元", "رموز كتابة التخزين", "tokens"}, {"amount_usd", "Amount (USD)", "金额（美元）", "المبلغ (دولار)", "USD, nine decimal places"}, {"amount_nano", "Amount (nano-USD)", "金额（纳美元）", "المبلغ (نانو دولار)", "integer nano-USD"}}
+		rows := make([][]string, 0, len(report.Rows))
+		for _, r := range report.Rows {
+			nano, _ := new(big.Int).SetString(r.AmountNano, 10)
+			rows = append(rows, []string{r.ID, r.Name, strconv.FormatInt(r.Requests, 10), strconv.FormatInt(r.Successful, 10), strconv.FormatInt(r.InputTokens, 10), strconv.FormatInt(r.OutputTokens, 10), strconv.FormatInt(r.CacheReadTokens, 10), strconv.FormatInt(r.CacheWriteTokens, 10), nanoMoney(nano), r.AmountNano})
+		}
+		data, dictionary, err := writeExportCSV(columns, s.Language, rows)
+		return data, dictionary, len(rows), err
 	}
 	var rows [][]string
 	columns := requestColumns
@@ -535,7 +564,7 @@ func generateExport(db *gorm.DB, s exportSpec) ([]byte, []byte, int, error) {
 					source = "playground"
 				}
 				nano := quotaNano(e.Quota)
-				rows = append(rows, []string{trace, time.Unix(e.CreatedAt, 0).In(loc).Format("2006-01-02T15:04:05-07:00"), strconv.FormatInt(e.TokenID, 10), name, requested, e.Model, status, strconv.FormatInt(e.PromptTokens, 10), strconv.FormatInt(e.CompletionTokens, 10), strconv.FormatInt(e.DurationMs, 10), strconv.FormatInt(e.TTFTMs, 10), nanoMoney(nano), nano.String(), source})
+				rows = append(rows, []string{trace, time.Unix(e.CreatedAt, 0).In(loc).Format("2006-01-02T15:04:05-07:00"), strconv.FormatInt(e.TokenID, 10), name, requested, e.Model, status, strconv.FormatInt(e.PromptTokens, 10), strconv.FormatInt(e.CompletionTokens, 10), strconv.FormatInt(e.DurationMs, 10), strconv.FormatInt(e.TTFTMs, 10), nanoMoney(nano), nano.String(), source, e.Vendor, e.ServiceGroup, e.CallType, strconv.FormatBool(strings.Contains(e.UsedChannels, "->")), e.ErrorCode, strconv.FormatInt(e.CacheReadTokens, 10), strconv.FormatInt(e.CacheWriteTokens, 10), e.BillingDetail})
 			}
 		}
 	}

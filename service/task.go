@@ -192,6 +192,7 @@ func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.T
 		}
 	}
 	actual := relay.TaskPricingQuotaWithPriceData(priceData, pricing)
+	result.BillingDetail = relay.TaskBillingDetails(priceData, pricing)
 	return actual, nil
 }
 

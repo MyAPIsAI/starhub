@@ -1,15 +1,26 @@
 package common
 
 const (
-	RoleUser    = 1
-	RoleFinance = 5
-	RoleAdmin   = 10
-	RoleRoot    = 100
+	RoleUser      = 1
+	RoleFinance   = 5
+	RoleAdmin     = 10
+	RoleTechnical = 20
+	RoleRoot      = 100
 )
 
 // Administrative authority is assigned explicitly, never inferred from ordering.
 func IsAdminRole(role int) bool {
 	return role == RoleAdmin || role == RoleRoot
+}
+
+// Staff roles are disjoint from customer accounts even when stored together.
+func IsStaffRole(role int) bool {
+	return role == RoleRoot || role == RoleAdmin || role == RoleFinance || role == RoleTechnical
+}
+
+func CanReadFinancialRecords(role int) bool { return role == RoleRoot || role == RoleFinance }
+func CanReadCustomerCalls(role int) bool {
+	return role == RoleRoot || role == RoleAdmin || role == RoleTechnical
 }
 
 const (

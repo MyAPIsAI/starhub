@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"math"
+	"starhub/internal/testauth"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestWalletExactStringsRetainOwnerScope(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	session := middleware.Sessions.Create(owner.ID, time.Hour)
+	session := testauth.Session(t, owner.ID, time.Hour)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	res := doRequest(env.base, "GET", "/api/wallet?user_id=1", session, nil)
 	if res.Status != 200 {

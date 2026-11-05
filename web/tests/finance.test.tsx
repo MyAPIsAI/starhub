@@ -125,7 +125,7 @@ describe("finance precision and role boundaries", () => {
   it.each([0, 1, 4, 5, 10, 11, 99, 100, 101])(
     "allows exact server finance roles only: %s",
     (role) => {
-      expect(canReadFinance(role)).toBe([5, 10, 100].includes(role));
+      expect(canReadFinance(role)).toBe([5, 100].includes(role));
       expect(isAdmin(role)).toBe([10, 100].includes(role));
     },
   );

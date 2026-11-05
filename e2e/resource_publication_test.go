@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"starhub/internal/testauth"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -55,7 +56,7 @@ func TestResourcePublicationActualPolicyPreviewAndStaleContext(t *testing.T) {
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := testauth.Session(t, user.ID, time.Hour)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		for _, request := range []struct {
 			method, path string
@@ -76,11 +77,11 @@ func TestResourcePublicationActualPolicyPreviewAndStaleContext(t *testing.T) {
 			t.Fatalf("anonymous context: %d %s", res.Status, res.Body)
 		}
 	}
-	admin := &model.User{Username: "publication-admin", Role: common.RoleAdmin, Status: 1, AffCode: common.GenerateAffCode()}
+	admin := &model.User{Username: "publication-admin", Role: common.RoleTechnical, Status: 1, AffCode: common.GenerateAffCode()}
 	if err := model.CreateUser(admin); err != nil {
 		t.Fatal(err)
 	}
-	adminSession := middleware.Sessions.Create(admin.ID, time.Hour)
+	adminSession := testauth.Session(t, admin.ID, time.Hour)
 	t.Cleanup(func() { middleware.Sessions.Remove(adminSession) })
 	rootBefore, err := model.GetUserByID(env.rootID)
 	if err != nil {
@@ -120,10 +121,10 @@ func TestResourcePublicationActualPolicyPreviewAndStaleContext(t *testing.T) {
 	if res := doRequest(env.base, "POST", "/api/resource/publication-preview", env.session, payload); res.Status != 409 {
 		t.Fatalf("stale channel context accepted: %d %s", res.Status, res.Body)
 	}
-	if err := model.UpdateUserFields(admin.ID, map[string]any{"role": common.RoleUser}); err != nil {
+	if err := model.DB.Model(&model.StaffAccount{}).Where("id = ?", admin.ID).Updates(map[string]any{"role": common.RoleUser}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if res := doRequest(env.base, "POST", "/api/resource/publication-preview", adminSession, payload); res.Status != 403 {
+	if res := doRequest(env.base, "POST", "/api/resource/publication-preview", adminSession, payload); res.Status != 401 {
 		t.Fatalf("revoked admin retained preview: %d %s", res.Status, res.Body)
 	}
 }

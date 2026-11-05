@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"starhub/internal/testauth"
 	"starhub/model"
 	"testing"
 )
@@ -26,7 +27,7 @@ func TestOwnedKeyHTTPReceiptsAndRootIsolation(t *testing.T) {
 		raw, _ := json.Marshal(payload)
 		req, _ := http.NewRequest("POST", env.base+path, bytes.NewReader(raw))
 		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+		testauth.Authorize(req, cookie)
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -57,7 +58,7 @@ func TestOwnedKeyHTTPReceiptsAndRootIsolation(t *testing.T) {
 		t.Fatal("receipt recovery exposed plaintext")
 	}
 	req, _ := http.NewRequest("GET", env.base+"/api/token/owned", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: env.session})
+	testauth.Authorize(req, env.session)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

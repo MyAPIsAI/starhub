@@ -1,6 +1,21 @@
 package model
 
+import "gorm.io/gorm"
+
 type Log struct {
+	ResourceID           string `gorm:"size:128;not null;default:''" json:"resource_id,omitempty"`
+	ResourceIDs          string `gorm:"type:text;not null;default:''" json:"resource_ids,omitempty"`
+	SnapshotSequence     int64  `gorm:"not null;default:0" json:"snapshot_sequence"`
+	ResourceRevision     int64  `gorm:"not null;default:0" json:"resource_revision"`
+	AffinityUsed         bool   `gorm:"not null;default:false" json:"affinity_used"`
+	RoutingRecorded      bool   `gorm:"not null;default:false" json:"routing_recorded"`
+	ServiceGroup         string `gorm:"size:128;not null;default:'';index" json:"service_group"`
+	Vendor               string `gorm:"size:128;not null;default:'';index" json:"vendor"`
+	CallType             string `gorm:"size:32;not null;default:'';index" json:"call_type"`
+	ErrorCode            string `gorm:"size:64;not null;default:''" json:"error_code,omitempty"`
+	CacheReadTokens      int64  `gorm:"not null;default:0" json:"cache_read_tokens"`
+	CacheWriteTokens     int64  `gorm:"not null;default:0" json:"cache_write_tokens"`
+	BillingDetail        string `gorm:"type:text;not null;default:''" json:"billing_detail,omitempty"`
 	TraceID              string `gorm:"size:64;index" json:"trace_id,omitempty"`
 	RequestSource        string `gorm:"size:32;not null;default:''" json:"request_source,omitempty"`
 	TTFTMs               int64  `gorm:"not null;default:0" json:"ttft_ms"`
@@ -43,7 +58,9 @@ func InsertFailedLog(l *Log) error {
 	if l == nil || l.ChannelID == 0 {
 		return nil
 	}
-	l.Status = 2 // failed
+	if l.Status != 3 {
+		l.Status = 2
+	}
 	l.Quota = 0
 	l.UnfundedQuota = 0
 	return DB.Create(l).Error
@@ -71,19 +88,7 @@ func CountLogs(userID int64) (int64, error) {
 }
 
 func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
-	q := DB.Model(&Log{}).
-		Select("date(created_at, 'unixepoch') AS date, COUNT(*) AS requests, "+
-			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, "+
-			"SUM(completion_tokens) AS completion_tokens, "+
-			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, "+
-			"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed_count").
-		Where("created_at >= ?", since)
-	if userID > 0 {
-		q = q.Where("user_id = ?", userID)
-	}
-	rows := make([]DailyUsage, 0)
-	err := q.Group("date(created_at, 'unixepoch')").Order("date ASC").Scan(&rows).Error
-	return rows, err
+	return regionalDailyUsage(userID, since)
 }
 
 // ModelDailyUsage is a per-day per-model usage summary.
@@ -98,17 +103,7 @@ type ModelDailyUsage struct {
 
 // SummarizeLogsByModel returns daily usage broken down by model.
 func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) {
-	q := DB.Model(&Log{}).
-		Select("date(created_at, 'unixepoch') AS date, model AS model, "+
-			"COUNT(*) AS requests, SUM(quota) AS quota, "+
-			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
-		Where("created_at >= ?", since)
-	if userID > 0 {
-		q = q.Where("user_id = ?", userID)
-	}
-	var rows []ModelDailyUsage
-	err := q.Group("date(created_at, 'unixepoch'), model").Order("date ASC, model ASC").Scan(&rows).Error
-	return rows, err
+	return regionalModelUsage(userID, since)
 }
 
 func ListLogs(userID int64, page, pageSize int64, model string) ([]Log, int64, error) {
@@ -157,7 +152,9 @@ func ListLogsSince(userID int64, since int64) ([]Log, error) {
 }
 
 // MarkDeletedLogTokens preserves usage history without restoring deleted key names.
-func MarkDeletedLogTokens(logs []Log) error {
+func MarkDeletedLogTokens(logs []Log) error { return markDeletedLogTokens(DB, logs) }
+
+func markDeletedLogTokens(db *gorm.DB, logs []Log) error {
 	ids := make([]int64, 0, len(logs))
 	for _, entry := range logs {
 		if entry.TokenID > 0 {
@@ -168,7 +165,7 @@ func MarkDeletedLogTokens(logs []Log) error {
 		return nil
 	}
 	var existing []int64
-	if err := DB.Model(&Token{}).Where("id IN ?", ids).Pluck("id", &existing).Error; err != nil {
+	if err := db.Model(&Token{}).Where("id IN ?", ids).Pluck("id", &existing).Error; err != nil {
 		return err
 	}
 	found := map[int64]bool{}

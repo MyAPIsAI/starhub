@@ -34,12 +34,7 @@ func TestBILL007RechargeThenConsume(t *testing.T) {
 	env := setupRelayApp(t)
 
 	// 1. Set user quota to 0 — no relay budget.
-	userBefore, _ := model.GetUserByID(env.rootID)
-	res := doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id":             env.rootID,
-		"quota":          0,
-		"expected_quota": userBefore.Quota,
-	})
+	res := fixtureQuota(t, env.rootID, 0)
 	if res.Status != 200 {
 		t.Fatalf("set user quota to 0 failed: %d %s", res.Status, res.Body)
 	}
@@ -83,11 +78,7 @@ func TestBILL007RechargeThenConsume(t *testing.T) {
 	if rechargeAmount < expectedCharge*10 {
 		rechargeAmount = expectedCharge * 10
 	}
-	res = doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id":             env.rootID,
-		"quota":          rechargeAmount,
-		"expected_quota": userZero.Quota, // 0
-	})
+	res = fixtureQuota(t, env.rootID, rechargeAmount)
 	if res.Status != 200 {
 		t.Fatalf("admin top-up failed: %d %s", res.Status, res.Body)
 	}
@@ -107,8 +98,8 @@ func TestBILL007RechargeThenConsume(t *testing.T) {
 	//     so the token quota check doesn't block the relay.
 	t.Logf("BILL-007: userFunded.Quota=%d, tokenID=%d", userFunded.Quota, env.tokenID)
 	res = doRequest(env.base, "PUT", "/api/token/", env.session, map[string]any{
-		"id":               env.tokenID,
-		"unlimited_quota":  true,
+		"id":              env.tokenID,
+		"unlimited_quota": true,
 	})
 	if res.Status != 200 {
 		t.Fatalf("set token to unlimited failed: %d %s", res.Status, res.Body)

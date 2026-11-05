@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"starhub/internal/testauth"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -52,7 +53,7 @@ func TestResourceBindingChangeActualPolicyAndGatewayRevocation(t *testing.T) {
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := testauth.Session(t, user.ID, time.Hour)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		if res := doRequest(env.base, "PUT", path, session, command("revoke", requestID)); res.Status != 403 {
 			t.Fatalf("role%d reached binding write: %d", role, res.Status)
@@ -70,11 +71,11 @@ func TestResourceBindingChangeActualPolicyAndGatewayRevocation(t *testing.T) {
 	if res := doRequest(env.base, "GET", receiptPath, env.session, nil); res.Status != 404 {
 		t.Fatal("uncommitted binding operation has receipt")
 	}
-	admin := &model.User{Username: "binding-admin", Role: common.RoleAdmin, Status: 1, AffCode: common.GenerateAffCode()}
+	admin := &model.User{Username: "binding-admin", Role: common.RoleTechnical, Status: 1, AffCode: common.GenerateAffCode()}
 	if err := model.CreateUser(admin); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(admin.ID, time.Hour)
+	session := testauth.Session(t, admin.ID, time.Hour)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	before, _ := model.GetUserByID(env.rootID)
 	keyBefore, _ := model.GetTokenByID(env.tokenID)
@@ -137,13 +138,13 @@ func TestResourceBindingChangeActualPolicyAndGatewayRevocation(t *testing.T) {
 	if res := doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey, map[string]any{"model": "alpha", "messages": []map[string]string{{"role": "user", "content": "local"}}, "max_tokens": 10}); res.Status != 200 || calls.Load() != 1 {
 		t.Fatalf("explicit replacement unavailable: %d %s", res.Status, res.Body)
 	}
-	if err := model.UpdateUserFields(admin.ID, map[string]any{"role": common.RoleUser}); err != nil {
+	if err := model.DB.Model(&model.StaffAccount{}).Where("id = ?", admin.ID).Updates(map[string]any{"role": common.RoleUser}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if res := doRequest(env.base, "GET", receiptPath, session, nil); res.Status != 403 {
+	if res := doRequest(env.base, "GET", receiptPath, session, nil); res.Status != 401 {
 		t.Fatal("demoted admin kept receipt access")
 	}
-	if res := doRequest(env.base, "PUT", path, session, command("release", strings.Repeat("c", 32))); res.Status != 403 {
+	if res := doRequest(env.base, "PUT", path, session, command("release", strings.Repeat("c", 32))); res.Status != 401 {
 		t.Fatal("demoted admin kept binding write")
 	}
 	var changes, audits int64

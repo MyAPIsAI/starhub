@@ -126,6 +126,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 	// key index lets the terminal poll reuse the same upstream account.
 	requestMeta, _ := json.Marshal(taskReq)
 	task := &model.Task{
+		TraceID: flow.traceID, CallType: flow.req.callType,
 		TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt,
 		TaskID:               "",
 		Platform:             platform,
@@ -146,6 +147,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		RequestMeta:          string(requestMeta),
 		PricingMeta:          string(pricingMeta),
 	}
+	model.FreezeTaskRouting(flow.ctx, task, flow.affinityPreferred == task.ChannelID)
 	if err := model.InsertTask(task); err != nil {
 		log.Printf("task persistence failed before upstream submit: %v", err)
 		flow.lastErr = fmt.Errorf("task persistence failed: %v", err)

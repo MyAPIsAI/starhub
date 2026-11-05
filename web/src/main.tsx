@@ -27,7 +27,7 @@ import { usePreferences } from "./lib/preferences";
 import {
   useSystemAccess,
   sessionQueryIdentity,
-  isAdmin,
+  isStaff,
   canReadFinance,
 } from "./lib/system-access";
 import { useProductPreview } from "./lib/product-preview";
@@ -44,8 +44,9 @@ const ModelSquare = lazy(() => import("./pages/models/index"));
 const ModelDetail = lazy(() => import("./pages/models/detail"));
 const StatusPage = lazy(() => import("./pages/status"));
 const DocsPage = lazy(() => import("./pages/docs/index"));
-const LegalPage = lazy(() => import("./pages/legal/index"));
+const LegalPage = lazy(() => import("./pages/legal/published"));
 const ConsolePreview = lazy(() => import("./pages/console-preview"));
+const StaffLoginPage = lazy(() => import("./pages/staff-login-page"));
 const AdminPortal = lazy(() => import("./pages/admin"));
 const FinancePortal = lazy(() => import("./pages/finance"));
 
@@ -115,7 +116,8 @@ function RouteContext() {
  */
 function AdminOnly({ children }: { children: React.ReactNode }) {
   const role = useSystemAccess((s) => s.role);
-  if (!isAdmin(role)) return <Navigate to="/console" replace />;
+  if (!isStaff(role))
+    return <Navigate to="/admin/login?continue=admin" replace />;
   return <>{children}</>;
 }
 
@@ -131,6 +133,7 @@ function FinanceOnly({ children }: { children: React.ReactNode }) {
  * unauthenticated users are redirected to the landing page. (GAP-2)
  */
 function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
   const { status, retry } = useSessionRestore();
   const language = usePreferences((s) => s.language);
   const isLoggedIn = useSystemAccess((s) => s.session.accountId !== null);
@@ -157,7 +160,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (!isLoggedIn) return <Navigate to="/" replace />;
+  if (!isLoggedIn)
+    return (
+      <Navigate
+        to={
+          pathname.startsWith("/admin") || pathname === "/finance"
+            ? "/admin/login?continue=admin"
+            : "/"
+        }
+        replace
+      />
+    );
   return <>{children}</>;
 }
 
@@ -188,13 +201,22 @@ function App() {
   useEffect(() => {
     return onAuthLoss(
       () => {
+        const wasStaff =
+          useSystemAccess.getState().session.accountKind === "staff";
         useProductPreview.getState().logout();
         useSystemAccess.getState().setSession(null);
         queryClient.clear();
         // Hard redirect: the session is gone, so the full app state
         // must be discarded. This also avoids stale React Query caches.
-        if (window.location.pathname !== "/login") {
-          window.location.href = "/login";
+        const login =
+          window.location.pathname.startsWith("/admin") ||
+          window.location.pathname === "/finance"
+            ? "/admin/login?continue=admin"
+            : wasStaff
+              ? "/admin/login"
+              : "/login";
+        if (window.location.pathname !== login) {
+          window.location.href = login;
         }
       },
       () => JSON.stringify(sessionQueryIdentity(useSystemAccess.getState())),
@@ -209,84 +231,87 @@ function App() {
           <BrowserRouter
             future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
           >
-            <RouteContext />
-            <Suspense
-              fallback={
-                <div className="route-loading" role="status">
-                  {i18n.t("loading")}
-                </div>
-              }
-            >
-              <Routes>
-                {/* Public Marketing & Specs */}
-                <Route path="/" element={<BrandHome />} />
-                <Route path="/preview/home" element={<BrandHome />} />
-                <Route path="/models" element={<ModelSquare />} />
-                <Route path="/models/:id" element={<ModelDetail />} />
-                <Route path="/status" element={<StatusPage />} />
-                <Route path="/docs" element={<DocsPage />} />
-                <Route path="/legal/:doc" element={<LegalPage />} />
+            <PortalSession>
+              <RouteContext />
+              <Suspense
+                fallback={
+                  <div className="route-loading" role="status">
+                    {i18n.t("loading")}
+                  </div>
+                }
+              >
+                <Routes>
+                  {/* Public Marketing & Specs */}
+                  <Route path="/" element={<BrandHome />} />
+                  <Route path="/preview/home" element={<BrandHome />} />
+                  <Route path="/models" element={<ModelSquare />} />
+                  <Route path="/models/:id" element={<ModelDetail />} />
+                  <Route path="/status" element={<StatusPage />} />
+                  <Route path="/docs" element={<DocsPage />} />
+                  <Route path="/legal/:doc" element={<LegalPage />} />
 
-                {/* Authentication */}
-                <Route path="/login" element={<BrandHome />} />
-                <Route path="/register" element={<BrandHome />} />
-                <Route path="/forgot-password" element={<BrandHome />} />
+                  {/* Authentication */}
+                  <Route path="/login" element={<BrandHome />} />
+                  <Route path="/register" element={<BrandHome />} />
+                  <Route path="/forgot-password" element={<BrandHome />} />
+                  <Route path="/admin/login" element={<StaffLoginPage />} />
 
-                {/* Console */}
-                <Route
-                  path="/service-quality"
-                  element={<Navigate to="/console/service-quality" replace />}
-                />
-                <Route
-                  path="/smart-routing"
-                  element={<Navigate to="/console/smart-routing" replace />}
-                />
-                <Route
-                  path="/console/*"
-                  element={
-                    <RequireAuth>
-                      <ConsolePreview />
-                    </RequireAuth>
-                  }
-                />
-                <Route
-                  path="/preview/console/*"
-                  element={
-                    <RequireAuth>
-                      <ConsolePreview />
-                    </RequireAuth>
-                  }
-                />
+                  {/* Console */}
+                  <Route
+                    path="/service-quality"
+                    element={<Navigate to="/console/service-quality" replace />}
+                  />
+                  <Route
+                    path="/smart-routing"
+                    element={<Navigate to="/console/smart-routing" replace />}
+                  />
+                  <Route
+                    path="/console/*"
+                    element={
+                      <RequireAuth>
+                        <ConsolePreview />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/preview/console/*"
+                    element={
+                      <RequireAuth>
+                        <ConsolePreview />
+                      </RequireAuth>
+                    }
+                  />
 
-                {/* Operations back office (M9): reachable only as the system admin. */}
-                <Route
-                  path="/finance"
-                  element={
-                    <RequireAuth>
-                      <FinanceOnly>
-                        <FinancePortal />
-                      </FinanceOnly>
-                    </RequireAuth>
-                  }
-                />
-                <Route
-                  path="/admin/*"
-                  element={
-                    <RequireAuth>
-                      <AdminOnly>
-                        <AdminPortal />
-                      </AdminOnly>
-                    </RequireAuth>
-                  }
-                />
+                  {/* Operations back office (M9): reachable only as the system admin. */}
+                  <Route
+                    path="/finance"
+                    element={
+                      <RequireAuth>
+                        <FinanceOnly>
+                          <FinancePortal />
+                        </FinanceOnly>
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/admin/*"
+                    element={
+                      <RequireAuth>
+                        <AdminOnly>
+                          <AdminPortal />
+                        </AdminOnly>
+                      </RequireAuth>
+                    }
+                  />
 
-                {/* Design System */}
-                <Route path="/design-system" element={<DesignSystem />} />
+                  {/* Design System */}
+                  <Route path="/design-system" element={<DesignSystem />} />
 
-                {/* Catch-all */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
+                  {/* Catch-all */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
+            </PortalSession>
           </BrowserRouter>
 
           <Toaster
@@ -302,12 +327,23 @@ function App() {
   );
 }
 
+function PortalSession({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  const portal =
+    pathname.startsWith("/admin") || pathname === "/finance"
+      ? "staff"
+      : "customer";
+  return (
+    <SessionRestoreProvider key={portal} portal={portal}>
+      {children}
+    </SessionRestoreProvider>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <SessionRestoreProvider>
-        <App />
-      </SessionRestoreProvider>
+      <App />
     </QueryClientProvider>
   </React.StrictMode>,
 );

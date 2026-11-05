@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"starhub/internal/testauth"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func p6User(t *testing.T, name string, role int) (*model.User, string) {
 	if err := model.CreateUser(u); err != nil {
 		t.Fatal(err)
 	}
-	return u, middleware.Sessions.Create(u.ID, time.Hour)
+	return u, testauth.Session(t, u.ID, time.Hour)
 }
 
 func TestP6ManagementContract(t *testing.T) {
@@ -58,7 +59,7 @@ func TestP6ManagementContract(t *testing.T) {
 	if u.Quota != 107 || u.Status != 1 {
 		t.Fatalf("conflict changed record: %+v", u)
 	}
-	request("PUT", "/api/user/", env.session, map[string]any{"id": env.rootID, "status": 2}, 400)
+	request("PUT", "/api/user/", env.session, map[string]any{"id": env.rootID, "status": 2}, 403)
 	request("PUT", "/api/user/", env.session, map[string]any{"id": member.ID, "quota": 0, "expected_quota": 107}, 200)
 	var last model.AuditLog
 	if err := model.DB.Order("id DESC").First(&last).Error; err != nil {
@@ -93,8 +94,8 @@ func TestP6ManagementContract(t *testing.T) {
 	request("PUT", "/api/token/", memberSession, map[string]any{"id": stored.ID, "remain_quota": 10, "expected_quota": 0}, 200)
 	request("PUT", "/api/token/", memberSession, map[string]any{"id": stored.ID, "remain_quota": 20, "expected_quota": 0, "name": "stale"}, 409)
 	request("PUT", "/api/token/", memberSession, map[string]any{"id": env.tokenID, "name": "forbidden"}, 404)
-	request("PUT", "/api/token/", adminSession, map[string]any{"id": stored.ID, "unlimited_quota": true, "expected_quota": 10}, 200)
-	request("PUT", "/api/token/", adminSession, map[string]any{"id": stored.ID, "unlimited_quota": false, "remain_quota": 0, "expected_quota": 0}, 200)
+	request("PUT", "/api/token/", env.session, map[string]any{"id": stored.ID, "unlimited_quota": true, "expected_quota": 10}, 200)
+	request("PUT", "/api/token/", env.session, map[string]any{"id": stored.ID, "unlimited_quota": false, "remain_quota": 0, "expected_quota": 0}, 200)
 	stored, _ = model.GetTokenByID(stored.ID)
 	if stored.UnlimitedQuota || stored.RemainQuota != 0 {
 		t.Fatal("false and zero updates were lost")
@@ -126,7 +127,8 @@ func TestP6CookieAndCrossOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = config.ApplyStartup(config.Startup{}) })
-	login, _ := http.NewRequest("POST", env.base+"/api/user/login", strings.NewReader(`{"username":"root","password":"123456"}`))
+	_, _ = exportTestUser(t, env.base, "cookie-customer")
+	login, _ := http.NewRequest("POST", env.base+"/api/user/login", strings.NewReader(`{"username":"cookie-customer","password":"export-password"}`))
 	login.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(login)
 	if err != nil {

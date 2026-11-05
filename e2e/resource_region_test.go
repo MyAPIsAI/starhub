@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"starhub/internal/testauth"
 	"testing"
 	"time"
 
@@ -13,15 +14,15 @@ import (
 
 func TestResourceRegionRoutesUseAdminPolicyAndRevision(t *testing.T) {
 	env := setupRelayApp(t)
-	for _, role := range []int{common.RoleUser, common.RoleFinance, common.RoleAdmin, 99, 101} {
+	for _, role := range []int{common.RoleUser, common.RoleFinance, common.RoleRoot, 99, 101} {
 		user := &model.User{Username: fmt.Sprintf("region-role-%d", role), Role: role, Status: common.StatusEnabled, AffCode: common.GenerateAffCode()}
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := testauth.Session(t, user.ID, time.Hour)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		want := 403
-		if role == common.RoleAdmin {
+		if role == common.RoleRoot {
 			want = 200
 		}
 		for _, request := range []struct {

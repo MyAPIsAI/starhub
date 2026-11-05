@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"starhub/internal/testauth"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func TestPlazaTargetsFollowSessionGroupAndNeverChangeBilling(t *testing.T) {
 	if err := model.CreateUser(user); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(user.ID, time.Hour)
+	session := testauth.Session(t, user.ID, time.Hour)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	before, err := model.OptionVersion()
 	if err != nil {
@@ -48,16 +49,23 @@ func TestPlazaTargetsFollowSessionGroupAndNeverChangeBilling(t *testing.T) {
 	read := func(path, session string) struct {
 		Group string                 `json:"group"`
 		SLA   *model.ServiceGroupSLA `json:"group_sla"`
-	} { t.Helper(); res := doRequest(env.base, "GET", path, session, nil); if res.Status != 200 {
-		t.Fatalf("browse: %d %s", res.Status, res.Body)
-	}; var body struct {
-		Data struct {
-			Group string                 `json:"group"`
-			SLA   *model.ServiceGroupSLA `json:"group_sla"`
-		} `json:"data"`
-	}; if err := json.Unmarshal([]byte(res.Body), &body); err != nil {
-		t.Fatal(err)
-	}; return body.Data }
+	} {
+		t.Helper()
+		res := doRequest(env.base, "GET", path, session, nil)
+		if res.Status != 200 {
+			t.Fatalf("browse: %d %s", res.Status, res.Body)
+		}
+		var body struct {
+			Data struct {
+				Group string                 `json:"group"`
+				SLA   *model.ServiceGroupSLA `json:"group_sla"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(res.Body), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body.Data
+	}
 	for _, path := range []string{"/api/plaza/models?group=vip", "/api/plaza/models/gpt-4o?group=vip"} {
 		reply := read(path, "")
 		if reply.Group != "default" || reply.SLA == nil || reply.SLA.Targets == nil || *reply.SLA.Targets.SuccessRatePPM != 995000 || *reply.SLA.Targets.P95LatencyMS != 800 {

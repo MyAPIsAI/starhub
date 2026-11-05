@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"starhub/internal/testauth"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -127,30 +128,15 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	t.Cleanup(app.Close)
 	base := app.URL
 
-	// 1. root login
-	res := doRequest(base, "POST", "/api/user/login", "", map[string]string{"username": "root", "password": "123456"})
-	if res.Status != 200 {
-		t.Fatalf("login failed: %d %s", res.Status, res.Body)
+	// Staff authentication is exercised through the real onboarding acceptance tests.
+	root, err := model.GetStaffByUsername("root")
+	if err != nil {
+		t.Fatal(err)
 	}
-	var loginResp struct {
-		Success bool `json:"success"`
-		Data    struct {
-			Session string `json:"session"`
-			User    struct {
-				ID    int64 `json:"id"`
-				Quota int64 `json:"quota"`
-				Role  int   `json:"role"`
-			} `json:"user"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(res.Body), &loginResp); err != nil || !loginResp.Success {
-		t.Fatalf("bad login response: %s", res.Body)
-	}
-	rootID, session := loginResp.Data.User.ID, loginResp.Data.Session
-
-	res = doRequest(base, "POST", "/api/user/login", "", map[string]string{"username": "root", "password": "wrong"})
+	rootID, session := root.ID, testauth.Session(t, root.ID, time.Hour)
+	res := doRequest(base, "POST", "/api/admin/auth/login", "", map[string]string{"username": "root", "password": "wrong"})
 	if res.Status != 401 {
-		t.Fatalf("wrong password should be 401, got %d", res.Status)
+		t.Fatalf("wrong staff password: %d", res.Status)
 	}
 
 	// 2. set group_ratio (ops setting)
@@ -196,7 +182,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	}
 
 	// 4. top up user quota
-	res = doRequest(base, "PUT", "/api/user/", session, map[string]any{"id": rootID, "quota": 10000000, "expected_quota": 100000000})
+	res = fixtureQuota(t, rootID, 10000000)
 	if res.Status != 200 {
 		t.Fatalf("topup failed: %d %s", res.Status, res.Body)
 	}
@@ -633,23 +619,12 @@ func setupRelayApp(t *testing.T) p1Env {
 	app := httptest.NewServer(middleware.IPRateLimit(router.New()))
 	t.Cleanup(app.Close)
 
-	res := doRequest(app.URL, "POST", "/api/user/login", "",
-		map[string]string{"username": "root", "password": "123456"})
-	if res.Status != 200 {
-		t.Fatalf("login failed: %d %s", res.Status, res.Body)
+	root, err := model.GetStaffByUsername("root")
+	if err != nil {
+		t.Fatal(err)
 	}
-	var loginResp struct {
-		Data struct {
-			Session string `json:"session"`
-			User    struct {
-				ID int64 `json:"id"`
-			} `json:"user"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(res.Body), &loginResp); err != nil || loginResp.Data.Session == "" {
-		t.Fatalf("bad login response: %s", res.Body)
-	}
-	res = doRequest(app.URL, "POST", "/api/token/", loginResp.Data.Session, map[string]any{"name": "p1-key"})
+	session := testauth.Session(t, root.ID, time.Hour)
+	res := doRequest(app.URL, "POST", "/api/token/", session, map[string]any{"name": "p1-key"})
 	if res.Status != 200 {
 		t.Fatalf("create token failed: %d %s", res.Status, res.Body)
 	}
@@ -664,8 +639,8 @@ func setupRelayApp(t *testing.T) p1Env {
 	}
 	return p1Env{
 		base:    app.URL,
-		session: loginResp.Data.Session,
-		rootID:  loginResp.Data.User.ID,
+		session: session,
+		rootID:  root.ID,
 		tokenID: tokenResp.Data.ID,
 		apiKey:  tokenResp.Data.Key,
 	}
@@ -1250,12 +1225,7 @@ func TestP2ConcurrentPreConsumeNoOverdraft(t *testing.T) {
 	// the four concurrent requests may pass
 	budget := 2*pre + pre/2
 
-	currentUser, err := model.GetUserByID(env.rootID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res := doRequest(env.base, "PUT", "/api/user/", env.session,
-		map[string]any{"id": env.rootID, "quota": budget, "expected_quota": currentUser.Quota})
+	res := fixtureQuota(t, env.rootID, budget)
 	if res.Status != 200 {
 		t.Fatalf("tighten user quota failed: %d %s", res.Status, res.Body)
 	}
@@ -1327,4 +1297,13 @@ func TestP2ConcurrentPreConsumeNoOverdraft(t *testing.T) {
 	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-4o-mini"); total != 2 {
 		t.Fatalf("both successes must be logged, got %d rows", total)
 	}
+}
+
+// fixtureQuota prepares retained staff-owned relay Keys without customer administration.
+func fixtureQuota(t *testing.T, id, quota int64) apiResult {
+	t.Helper()
+	if err := model.UpdateUserFields(id, map[string]any{"quota": quota}); err != nil {
+		t.Fatal(err)
+	}
+	return apiResult{Status: 200}
 }

@@ -9,7 +9,7 @@ import (
 
 func TestFinanceSummaryValidatesScopeAndDays(t *testing.T) {
 	newTestDB(t)
-	for _, role := range []int{0, common.RoleUser, 99} {
+	for _, role := range []int{0, common.RoleUser, common.RoleAdmin, common.RoleTechnical, 99} {
 		if rec := call(GetFinanceSummary, testRequest{target: "/api/finance/summary", role: role}); rec.Code != 403 {
 			t.Fatalf("role %d read finance: %d", role, rec.Code)
 		}
@@ -19,7 +19,7 @@ func TestFinanceSummaryValidatesScopeAndDays(t *testing.T) {
 			t.Fatalf("invalid days %q accepted: %d", days, rec.Code)
 		}
 	}
-	for _, role := range []int{common.RoleFinance, common.RoleAdmin, common.RoleRoot} {
+	for _, role := range []int{common.RoleFinance, common.RoleRoot} {
 		rec := call(GetFinanceSummary, testRequest{target: "/api/finance/summary?days=7", role: role})
 		var body struct {
 			Data struct {

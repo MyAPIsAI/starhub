@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"starhub/internal/testauth"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ func TestLogoutCurrentRouteLeavesBrowserCookiesAndOtherDevicesUntouched(t *testi
 	env := setupRelayApp(t)
 	owner, session := exportTestUser(t, env.base, "logout-owned-http")
 	_, other := exportTestUser(t, env.base, "logout-other-http")
-	same := middleware.Sessions.Create(owner, time.Hour)
+	same := testauth.Session(t, owner, time.Hour)
 	defer middleware.Sessions.Remove(same)
 	body := fmt.Sprintf(`{"schema":"logout_current_v1","expected_user_id":%d}`, owner)
 	request := func(cookie, origin string) apiResult {
@@ -24,7 +25,7 @@ func TestLogoutCurrentRouteLeavesBrowserCookiesAndOtherDevicesUntouched(t *testi
 		req, _ := http.NewRequest(http.MethodPost, env.base+"/api/user/logout-current", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		if cookie != "" {
-			req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+			testauth.Authorize(req, cookie)
 		}
 		if origin != "" {
 			req.Header.Set("Origin", origin)

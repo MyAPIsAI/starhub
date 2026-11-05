@@ -47,9 +47,7 @@ func TestBILL005ConcurrentPreConsume(t *testing.T) {
 	// is NOT enough for a second pre-charge. So one request passes,
 	// the other is rejected.
 	budget := pre + pre/10 // 110% of one pre-charge
-	currentUser, _ := model.GetUserByID(env.rootID)
-	res := doRequest(env.base, "PUT", "/api/user/", env.session,
-		map[string]any{"id": env.rootID, "quota": budget, "expected_quota": currentUser.Quota})
+	res := fixtureQuota(t, env.rootID, budget)
 	if res.Status != 200 {
 		t.Fatalf("set user quota failed: %d %s", res.Status, res.Body)
 	}

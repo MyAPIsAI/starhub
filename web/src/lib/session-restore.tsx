@@ -31,7 +31,13 @@ export function useSessionRestore() {
   return useContext(SessionRestoreContext);
 }
 
-export function SessionRestoreProvider({ children }: { children: ReactNode }) {
+export function SessionRestoreProvider({
+  children,
+  portal = "customer",
+}: {
+  children: ReactNode;
+  portal?: "customer" | "staff";
+}) {
   const [status, setStatus] = useState<RestoreStatus>("checking");
   const [attempt, setAttempt] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
@@ -46,7 +52,7 @@ export function SessionRestoreProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     activeRequest.current = controller;
     setStatus("checking");
-    getSelf({ handleUnauthorizedLocally: true }, controller.signal)
+    getSelf({ handleUnauthorizedLocally: true }, controller.signal, portal)
       .then((user) => {
         if (controller.signal.aborted) return;
         useSystemAccess.getState().setSession(user);
@@ -57,7 +63,10 @@ export function SessionRestoreProvider({ children }: { children: ReactNode }) {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        if (error instanceof ApiError && error.status === 401) {
+        if (
+          error instanceof ApiError &&
+          (error.status === 401 || (portal === "staff" && error.status === 403))
+        ) {
           useProductPreview.getState().logout();
           useSystemAccess.getState().setSession(null);
           setStatus("ready");
@@ -67,7 +76,7 @@ export function SessionRestoreProvider({ children }: { children: ReactNode }) {
         }
       });
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, portal]);
 
   const value = useMemo(
     () => ({ status, complete, retry }),

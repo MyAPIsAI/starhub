@@ -1,8 +1,12 @@
 package controller
 
 import (
+	"encoding/json"
+	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
@@ -27,7 +31,7 @@ func ListLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	modelFilter := q.Get("model")
 	userID := int64(0)
-	if !common.IsAdminRole(requestRole(r)) {
+	if !common.CanReadCustomerCalls(requestRole(r)) {
 		userID = requestUserID(r)
 	}
 	logs, total, err := model.ListLogs(userID, page, pageSize, modelFilter)
@@ -35,8 +39,14 @@ func ListLogs(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	var items any = logs
+	if common.CanReadCustomerCalls(requestRole(r)) {
+		items = adminCallRows(logs)
+	} else {
+		items = customerLogs(logs)
+	}
 	common.ApiSuccess(w, map[string]any{
-		"items":     logs,
+		"items":     items,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -61,32 +71,18 @@ func listOwnedLogPage(w http.ResponseWriter, r *http.Request) {
 	if size > 100 {
 		size = 100
 	}
-	spec := exportSpec{UserID: requestUserID(r), createExportRequest: createExportRequest{Status: q.Get("status"), Query: q.Get("query")}}
-	if spec.Status != "" && spec.Status != "all" && spec.Status != "success" && spec.Status != "failed" && spec.Status != "cancelled" {
-		common.ApiError(w, 400, "invalid status")
-		return
-	}
-	if len(spec.Query) > 256 {
-		common.ApiError(w, 400, "search exceeds 256 bytes")
-		return
-	}
-	for name, target := range map[string]*int64{"from": &spec.Since, "until": &spec.Until} {
-		if value := q.Get(name); value != "" {
-			parsed, err := strconv.ParseInt(value, 10, 64)
-			if err != nil || parsed < 0 {
-				common.ApiError(w, 400, "invalid date boundary")
-				return
-			}
-			*target = parsed
-		}
-	}
-	if spec.Until > 0 && spec.Until <= spec.Since {
-		common.ApiError(w, 400, "invalid date range")
+	filters, err := requestLogFilters(r)
+	if err != nil {
+		common.ApiError(w, 400, err.Error())
 		return
 	}
 	var rows []model.Log
 	var total int64
-	query := exportLogsQuery(model.DB, spec)
+	cutoff := time.Now().AddDate(-1, 0, 0).Unix()
+	if filters.Since < cutoff {
+		filters.Since = cutoff
+	}
+	query := model.FilterLogs(model.DB, requestUserID(r), filters)
 	if err := query.Count(&total).Error; err != nil {
 		common.ApiError(w, 500, "request count unavailable")
 		return
@@ -100,5 +96,43 @@ func listOwnedLogPage(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, 500, "request key metadata unavailable")
 		return
 	}
-	common.ApiSuccess(w, map[string]any{"items": rows, "total": total, "page": page, "page_size": size})
+	common.ApiSuccess(w, map[string]any{"items": customerLogs(rows), "total": total, "page": page, "page_size": size})
+}
+
+// GetOwnedLog resolves a deep link without relying on the first history page.
+func GetOwnedLog(w http.ResponseWriter, r *http.Request) {
+	f := model.LogFilters{TraceID: r.PathValue("trace"), Since: time.Now().AddDate(-1, 0, 0).Unix()}
+	var row model.Log
+	if err := model.FilterLogs(model.DB, requestUserID(r), f).First(&row).Error; err != nil {
+		common.ApiError(w, 404, "request not found")
+		return
+	}
+	rows := []model.Log{row}
+	if err := model.MarkDeletedLogTokens(rows); err != nil {
+		common.ApiError(w, 500, "request metadata unavailable")
+		return
+	}
+	common.ApiSuccess(w, customerLogs(rows)[0])
+}
+func customerLogs(rows []model.Log) []map[string]any {
+	result := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		data, _ := json.Marshal(row)
+		var item map[string]any
+		decoder := json.NewDecoder(strings.NewReader(string(data)))
+		decoder.UseNumber()
+		_ = decoder.Decode(&item)
+		delete(item, "channel_id")
+		delete(item, "used_channels")
+		for _, key := range []string{"resource_id", "resource_ids", "snapshot_sequence", "resource_revision", "affinity_used", "routing_recorded"} {
+			delete(item, key)
+		}
+		item["auto_switched"] = strings.Contains(row.UsedChannels, "->")
+		item["amount_nano"] = new(big.Int).Mul(big.NewInt(row.Quota), big.NewInt(1_000_000_000/common.QuotaPerUSD)).String()
+		if row.TokenDeleted {
+			item["token_name"] = "Deleted key"
+		}
+		result = append(result, item)
+	}
+	return result
 }

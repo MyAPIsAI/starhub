@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"starhub/internal/testauth"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -84,7 +85,7 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := testauth.Session(t, user.ID, time.Hour)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		for _, request := range []struct {
 			method, path string
@@ -104,11 +105,11 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 	if res := doRequest(env.base, "GET", "/api/resource/publication-state", "", nil); res.Status != 401 {
 		t.Fatalf("anonymous binding state: %d %s", res.Status, res.Body)
 	}
-	admin := &model.User{Username: "publication-admin", Role: common.RoleAdmin, Status: common.StatusEnabled, AffCode: common.GenerateAffCode()}
+	admin := &model.User{Username: "publication-admin", Role: common.RoleTechnical, Status: common.StatusEnabled, AffCode: common.GenerateAffCode()}
 	if err := model.CreateUser(admin); err != nil {
 		t.Fatal(err)
 	}
-	adminSession := middleware.Sessions.Create(admin.ID, time.Hour)
+	adminSession := testauth.Session(t, admin.ID, time.Hour)
 	t.Cleanup(func() { middleware.Sessions.Remove(adminSession) })
 	before, err := model.GetUserByID(env.rootID)
 	if err != nil {
@@ -215,16 +216,16 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 	if again := publicationAPIData[model.ResourcePublicationReceipt](t, doRequest(env.base, "GET", receiptPath, env.session, nil)); !reflect.DeepEqual(receipt, again) {
 		t.Fatal("revocation rewrote the publication receipt")
 	}
-	if err := model.UpdateUserFields(admin.ID, map[string]any{"role": common.RoleUser}); err != nil {
+	if err := model.DB.Model(&model.StaffAccount{}).Where("id = ?", admin.ID).Updates(map[string]any{"role": common.RoleUser}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if res := doRequest(env.base, "GET", receiptPath, adminSession, nil); res.Status != 403 {
+	if res := doRequest(env.base, "GET", receiptPath, adminSession, nil); res.Status != 401 {
 		t.Fatalf("revoked admin retained receipt access: %d %s", res.Status, res.Body)
 	}
-	if res := doRequest(env.base, "GET", "/api/resource/publication-state", adminSession, nil); res.Status != 403 {
+	if res := doRequest(env.base, "GET", "/api/resource/publication-state", adminSession, nil); res.Status != 401 {
 		t.Fatalf("revoked admin retained binding state access: %d %s", res.Status, res.Body)
 	}
-	if res := doRequest(env.base, "PUT", "/api/resource/publication", adminSession, payload); res.Status != 403 {
+	if res := doRequest(env.base, "PUT", "/api/resource/publication", adminSession, payload); res.Status != 401 {
 		t.Fatalf("revoked admin retained publication access: %d %s", res.Status, res.Body)
 	}
 	var receipts, audits int64

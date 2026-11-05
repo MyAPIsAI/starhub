@@ -16,14 +16,14 @@ export interface TaskPluginVersion {
   enabled: boolean;
 }
 
-export function useTaskPlugins() {
+export function useTaskPlugins(enabled = true) {
   const identity = useSessionQueryIdentity();
   const role = useSystemAccess((s) => s.role);
   const accountId = useSystemAccess((s) => s.session.accountId);
   return useQuery({
     queryKey: ["task-plugins", ...identity],
     queryFn: () => apiGet<TaskPluginVersion[]>("/api/task-plugin"),
-    enabled: accountId !== null && isAdmin(role),
+    enabled: enabled && accountId !== null && isAdmin(role),
   });
 }
 

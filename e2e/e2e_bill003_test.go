@@ -71,11 +71,7 @@ func TestBILL003UnderfundedSettlement(t *testing.T) {
 	}
 
 	userBefore, _ := model.GetUserByID(env.rootID)
-	res := doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id":             env.rootID,
-		"quota":          userQuota,
-		"expected_quota": userBefore.Quota,
-	})
+	res := fixtureQuota(t, env.rootID, userQuota)
 	if res.Status != 200 {
 		t.Fatalf("set user quota failed: %d %s", res.Status, res.Body)
 	}

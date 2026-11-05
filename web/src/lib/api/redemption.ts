@@ -36,8 +36,9 @@ const REDEMPTION_KEY = ["redemptions"] as const;
 
 // --- Admin hooks ---
 
-export function useRedemptions() {
+export function useRedemptions(enabled = true) {
   return useQuery({
+    enabled,
     queryKey: REDEMPTION_KEY,
     queryFn: ({ signal }) => apiGet<Redemption[]>("/api/redemption", signal),
   });

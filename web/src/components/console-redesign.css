@@ -112,7 +112,8 @@
 .xy-workspace > svg {
   color: var(--muted);
 }
-.xy-sidebar-nav {
+.xy-sidebar-nav,
+.xy-sidebar-nav > .workspace-nav-group {
   display: flex;
   flex-direction: column;
   gap: 5px;

@@ -16,9 +16,15 @@ import (
 )
 
 func (f *relayFlow) setUsageMetadata(usage *relay.Usage) {
+	usage.CallType = f.req.callType
 	usage.TraceID = f.traceID
 	usage.RequestSource = f.req.requestSource
 	usage.TTFTMs = f.ttftMs
+	entry := &model.Log{ChannelID: f.lastChannelID, Model: f.req.modelName, ServiceGroup: f.settleGroup()}
+	model.FreezeRoutingEvidence(f.ctx, entry, f.affinityPreferred != 0)
+	usage.ResourceID, usage.ResourceIDs = entry.ResourceID, entry.ResourceIDs
+	usage.SnapshotSequence, usage.ResourceRevision = entry.SnapshotSequence, entry.ResourceRevision
+	usage.AffinityUsed, usage.RoutingRecorded = entry.AffinityUsed, entry.RoutingRecorded
 }
 
 // GetPlaygroundResult returns only settled metadata owned by the current account.

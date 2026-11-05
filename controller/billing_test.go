@@ -236,7 +236,7 @@ func TestResolveRechargeOrderFailedDoesNotCredit(t *testing.T) {
 	}
 }
 
-func TestGetRechargeOrderForbiddenForOtherUser(t *testing.T) {
+func TestGetRechargeOrderNotFoundForOtherUser(t *testing.T) {
 	newTestDB(t)
 	alice := newUser(t, "alice", common.RoleUser, 1000)
 	bob := newUser(t, "bob", common.RoleUser, 1000)
@@ -260,7 +260,7 @@ func TestGetRechargeOrderForbiddenForOtherUser(t *testing.T) {
 		role:   common.RoleUser,
 		path:   map[string]string{"id": itoa(orderID)},
 	})
-	expectError(t, rr, http.StatusForbidden, "another user")
+	expectError(t, rr, http.StatusNotFound, "recharge order not found")
 }
 
 func TestListRechargeOrdersUserSeesOwnOnly(t *testing.T) {
@@ -361,7 +361,7 @@ func TestResolveRechargeOrderInvalidOutcome(t *testing.T) {
 func TestAdminCanListAllRechargeOrders(t *testing.T) {
 	newTestDB(t)
 	alice := newUser(t, "alice", common.RoleUser, 1000)
-	admin := newUser(t, "admin", common.RoleAdmin, 1000)
+	admin := newUser(t, "admin", common.RoleFinance, 1000)
 
 	call(CreateRechargeOrder, testRequest{
 		method: http.MethodPost,
@@ -371,12 +371,12 @@ func TestAdminCanListAllRechargeOrders(t *testing.T) {
 		role:   common.RoleUser,
 	})
 
-	// Admin sees all orders.
+	// Finance sees all orders.
 	rr := call(ListRechargeOrders, testRequest{
 		method: http.MethodGet,
 		target: "/api/recharge",
 		userID: admin.ID,
-		role:   common.RoleAdmin,
+		role:   common.RoleFinance,
 	})
 	var orders []map[string]any
 	decodeData(t, rr, &orders)

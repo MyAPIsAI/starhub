@@ -16,21 +16,28 @@ func Audit(next http.Handler) http.Handler {
 		// the request context or the operation changes the actor's account.
 		var actorID int64
 		var actorName string
-		if uid, ok := Sessions.Get(SessionToken(r)); ok {
+		var actorRole int
+		token := SessionToken(r)
+		if state, ok := Sessions.StaffState(StaffSessionToken(r)); ok && state.Verified {
+			token = StaffSessionToken(r)
+		}
+		if uid, ok := Sessions.Get(token); ok {
 			if actor, err := model.GetUserByID(uid); err == nil {
 				actorID, actorName = actor.ID, actor.Username
+				actorRole = actor.Role
 			}
 		}
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
 		if shouldAudit(r) {
 			entry := &model.AuditLog{
-				UserID:   actorID,
-				Username: actorName,
-				Method:   r.Method,
-				Path:     r.URL.Path,
-				Status:   rec.status,
-				IP:       clientIP(r),
+				UserID:    actorID,
+				ActorRole: actorRole,
+				Username:  actorName,
+				Method:    r.Method,
+				Path:      r.URL.Path,
+				Status:    rec.status,
+				IP:        clientIP(r),
 			}
 			// Best-effort: an audit failure must not change the response.
 			_ = model.InsertAuditLog(entry)

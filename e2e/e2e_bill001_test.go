@@ -39,11 +39,7 @@ func TestBILL001NormalSettlement(t *testing.T) {
 
 	// 1. Set user quota to a known value (10,000,000 = $20).
 	userBefore, _ := model.GetUserByID(env.rootID)
-	res := doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id":             env.rootID,
-		"quota":          10000000,
-		"expected_quota": userBefore.Quota,
-	})
+	res := fixtureQuota(t, env.rootID, 10000000)
 	if res.Status != 200 {
 		t.Fatalf("set user quota failed: %d %s", res.Status, res.Body)
 	}

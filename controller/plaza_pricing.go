@@ -252,7 +252,14 @@ func buildPlazaRows(ctx context.Context, group, userGroup string, userID int64) 
 	prices := setting.ResolvePricingModels(names, group, userGroup)
 
 	rows := make([]plazaRow, 0, len(names))
+	hidden, hiddenErr := model.HiddenStandardModels(context.Background())
+	if hiddenErr != nil {
+		return nil, hiddenErr
+	}
 	for _, name := range names {
+		if hidden[name] {
+			continue
+		}
 		cov := coverage[name]
 		m := meta[name]
 

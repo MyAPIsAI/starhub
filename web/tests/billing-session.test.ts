@@ -71,6 +71,25 @@ beforeEach(() => {
 });
 
 describe("real-session billing requests", () => {
+  it("pins personal order reads and payment actions to owned scope", async () => {
+    fake.get.mockResolvedValue({ id: 9, user_id: 7, status: "pending" });
+    fake.post.mockResolvedValue({ id: 9, user_id: 7, status: "processing" });
+    await (useRechargeOrder(9) as any).queryFn({});
+    expect(fake.get).toHaveBeenCalledWith(
+      "/api/recharge/9?scope=owned",
+      undefined,
+    );
+    await (useBeginRechargePayment() as any).mutationFn(9);
+    expect(fake.post).toHaveBeenCalledWith("/api/recharge/9/begin?scope=owned");
+    await (useResolveRechargeOrder() as any).mutationFn({
+      id: 9,
+      outcome: "success",
+    });
+    expect(fake.post).toHaveBeenCalledWith(
+      "/api/recharge/9/resolve?scope=owned",
+      { outcome: "success" },
+    );
+  });
   it("keys all four reads by server epoch, account, group and exact role", () => {
     const before = queries();
     for (const q of before) {

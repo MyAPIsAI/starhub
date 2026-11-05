@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"starhub/common"
 
 	"gorm.io/gorm"
 )
@@ -89,10 +90,23 @@ func mutateModelMetadata(ctx context.Context, meta *ModelMeta, removed string, e
 			return ErrModelMetadataConflict
 		}
 		if meta != nil {
+			var old ModelMeta
+			if err := tx.First(&old, "model = ?", meta.Model).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			meta.CreatedAt = old.CreatedAt
 			if err := tx.Save(meta).Error; err != nil {
 				return err
 			}
+			if actor, _ := ctx.Value(common.CtxUserID).(int64); actor > 0 {
+				if err := RecordAdminChange(tx, actor, "model_reference_updated", "models", meta.Model, old, *meta, "", ""); err != nil {
+					return err
+				}
+			}
 		} else {
+			if err := standardModelReferences(tx, removed); err != nil {
+				return err
+			}
 			deleted := tx.Where("model = ?", removed).Delete(&ModelMeta{})
 			if deleted.Error != nil {
 				return deleted.Error

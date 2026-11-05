@@ -325,6 +325,10 @@ func settleModeAttempt(flow *relayFlow, ch *model.Channel, usage *relay.Usage) a
 		usage = &relay.Usage{}
 	}
 	usage.RequestProtocol = flow.req.protocol
+	flow.setUsageMetadata(usage)
+	if flow.req.callType == "audio" {
+		usage.UsageSource = "admission_estimate"
+	}
 	usage.TokenPeriodStartedAt = flow.req.tokenPeriodStartedAt
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,

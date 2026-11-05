@@ -11,6 +11,8 @@
 import { apiGet, apiPost, type ApiRequestOptions } from "./http";
 
 export interface AuthUser {
+  platform_admin?: boolean;
+  account_kind?: "customer" | "staff";
   id: number;
   username: string;
   email: string;
@@ -52,8 +54,13 @@ export function registerUser(
 export function getSelf(
   options?: ApiRequestOptions,
   signal?: AbortSignal,
+  portal: "customer" | "staff" = "customer",
 ): Promise<AuthUser> {
-  return apiGet<AuthUser>("/api/user/self", signal, options);
+  return apiGet<AuthUser>(
+    portal === "staff" ? "/api/admin/auth/self" : "/api/user/self",
+    signal,
+    { ...options, portal: portal === "staff" ? "staff" : "workspace" },
+  );
 }
 
 export function logoutUser(): Promise<null> {

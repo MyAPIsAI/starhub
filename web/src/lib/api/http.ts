@@ -19,7 +19,7 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 /** Auth pages handle their own unauthorized responses to avoid redirect loops. */
-const AUTH_PATHS = ["/login", "/register", "/forgot-password"];
+const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/admin/login"];
 
 /** Listener notified once when the session is lost (401). The auth
  *  layer subscribes to clear local state and navigate to /login. */
@@ -46,6 +46,7 @@ export const onAuthLoss = (
 export interface ApiRequestOptions {
   /** Session probes handle anonymous visitors without a global redirect. */
   handleUnauthorizedLocally?: boolean;
+  portal?: "workspace" | "staff";
 }
 
 export class ApiError extends Error {
@@ -74,7 +75,9 @@ export async function apiRequest<T>(
     (pathname === "/api/user/self" &&
       (init.method ?? "GET").toUpperCase() === "GET") ||
     pathname === "/api/user/login" ||
-    pathname === "/api/user/register";
+    pathname === "/api/user/register" ||
+    pathname.startsWith("/api/admin/auth/") ||
+    pathname === "/api/admin/install";
   const owner =
     pathname.startsWith("/api/") && !discoversIdentity
       ? subscription?.readOwner?.()
@@ -86,6 +89,13 @@ export async function apiRequest<T>(
     );
   }
   const headers = new Headers(init.headers);
+  if (options.portal) headers.set("X-StarHub-Portal", options.portal);
+  else if (
+    window.location.pathname.startsWith("/admin") ||
+    window.location.pathname === "/finance"
+  )
+    headers.set("X-StarHub-Portal", "staff");
+  else headers.set("X-StarHub-Portal", "workspace");
   if (!headers.has("Accept")) headers.set("Accept", "application/json");
   if (init.body && !headers.has("Content-Type"))
     headers.set("Content-Type", "application/json");

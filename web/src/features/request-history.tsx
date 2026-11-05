@@ -14,6 +14,7 @@ import { Button } from "../components/ui/button";
 import { TierBadge } from "../components/tier-badge";
 import { formatMoney } from "../lib/money";
 import type { PreviewRequest } from "../lib/product-preview";
+import { callTypeLabel } from "../lib/request-metadata";
 import {
   dubaiDate,
   requestTimeBounds,
@@ -35,18 +36,23 @@ export default function RequestHistory({
   requests,
   timezone = "Asia/Dubai",
   serverPage,
+  options,
   onSelect,
   onExport,
 }: {
   requests: PreviewRequest[];
   timezone?: string;
   serverPage?: { total: number; loading: boolean; error?: string };
+  options?: Record<string, { id: string; name: string }[]>;
   onSelect: (row: PreviewRequest) => void;
   onExport: (selection?: {
     start_date: string;
     end_date: string;
     status?: string;
     query?: string;
+    key_id?: number;
+    model?: string;
+    trace_id?: string;
   }) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -94,14 +100,27 @@ export default function RequestHistory({
     );
   };
   const clear = () =>
-    change({ range: "all", start: null, end: null, query: null, status: null });
-  const hasFilters = range !== "all" || status !== "all" || !!query.trim();
+    change({
+      range: "all",
+      start: null,
+      end: null,
+      query: null,
+      status: null,
+      key_id: null,
+      model: null,
+    });
+  const hasFilters =
+    range !== "all" ||
+    status !== "all" ||
+    !!query.trim() ||
+    !!params.get("key_id") ||
+    !!params.get("model");
   const rangeLabel = {
     today: c("今日", "Today", "اليوم"),
     "7d": c("近 7 天", "Last 7 days", "آخر 7 أيام"),
     "30d": c("近 30 天", "Last 30 days", "آخر 30 يومًا"),
     custom: c("自定义日期", "Custom dates", "تواريخ مخصصة"),
-    all: c("全部时间", "All time", "كل الأوقات"),
+    all: c("近一年", "Last year", "آخر سنة"),
   };
   const errorText =
     result.error === "missing_dates"
@@ -137,14 +156,17 @@ export default function RequestHistory({
               onExport({
                 start_date: Number.isFinite(bounds.from)
                   ? dubaiDate(bounds.from, timezone)
-                  : requests.at(-1)
-                    ? dubaiDate(requests.at(-1)!.time, timezone)
-                    : dubaiDate(Date.now(), timezone),
+                  : "",
                 end_date: Number.isFinite(bounds.until)
                   ? dubaiDate(bounds.until - 1, timezone)
                   : dubaiDate(Date.now(), timezone),
                 status,
                 query,
+                trace_id: query,
+                key_id: params.get("key_id")
+                  ? Number(params.get("key_id"))
+                  : undefined,
+                model: params.get("model") ?? undefined,
               });
             }}
           >
@@ -173,12 +195,47 @@ export default function RequestHistory({
               value={query}
               onChange={(e) => change({ query: e.target.value }, true)}
               placeholder={c(
-                "搜索业务编号、模型或错误代码",
-                "Search ID, model or error code",
-                "بحث المعرّف أو النموذج أو الخطأ",
+                "精确搜索 Trace ID（追踪编号）",
+                "Exact Trace ID",
+                "معرّف التتبع المطابق",
               )}
             />
           </label>
+          {serverPage &&
+            ["key", "model"].map((dim) => (
+              <label className="request-history-field" key={dim}>
+                <span className="sr-only">
+                  {dim === "key"
+                    ? c("筛选密钥", "Filter key", "تصفية المفتاح")
+                    : c("筛选模型", "Filter model", "تصفية النموذج")}
+                </span>
+                <select
+                  className="select-trigger"
+                  aria-label={
+                    dim === "key"
+                      ? c("筛选密钥", "Filter key", "تصفية المفتاح")
+                      : c("筛选模型", "Filter model", "تصفية النموذج")
+                  }
+                  value={params.get(dim === "key" ? "key_id" : "model") ?? ""}
+                  onChange={(e) =>
+                    change({
+                      [dim === "key" ? "key_id" : "model"]: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">
+                    {dim === "key"
+                      ? c("全部密钥", "All keys", "كل المفاتيح")
+                      : c("全部模型", "All models", "كل النماذج")}
+                  </option>
+                  {(options?.[dim] ?? []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name || v.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
           <label className="request-history-field">
             <CalendarDays size={15} aria-hidden="true" />
             <span className="sr-only">
@@ -315,9 +372,16 @@ export default function RequestHistory({
               <thead>
                 <tr>
                   <th>
-                    {c(`时间（${timezone}）`, `Time (${timezone})`, `الوقت (${timezone})`)}
+                    {c(
+                      `时间（${timezone}）`,
+                      `Time (${timezone})`,
+                      `الوقت (${timezone})`,
+                    )}
                   </th>
                   <th>{c("业务编号", "Trace ID", "معرّف الطلب")}</th>
+                  <th>
+                    {c("密钥 / 调用类型", "Key / type", "المفتاح / النوع")}
+                  </th>
                   <th>
                     {c(
                       "请求模型 → 实际模型",
@@ -328,6 +392,21 @@ export default function RequestHistory({
                   <th>{c("厂商", "Vendor", "المزوّد")}</th>
                   <th>{c("分组", "Group", "المجموعة")}</th>
                   <th>{c("状态", "Status", "الحالة")}</th>
+                  <th>
+                    {c(
+                      "自动切换 / 错误码",
+                      "Switch / error",
+                      "التحويل / الخطأ",
+                    )}
+                  </th>
+                  <th>
+                    {c(
+                      "输入 / 输出 / 缓存读写 Token",
+                      "Input / output / cache tokens",
+                      "رموز الإدخال / الإخراج / التخزين",
+                    )}
+                  </th>
+                  <th>{c("首 Token 延迟", "First token", "أول رمز")}</th>
                   <th className="request-number">
                     {c("耗时", "Duration", "المدة")}
                   </th>
@@ -357,6 +436,14 @@ export default function RequestHistory({
                       </button>
                     </td>
                     <td>
+                      {row.key_deleted
+                        ? c("已删除的 Key", "Deleted key", "مفتاح محذوف")
+                        : row.key_name || row.key_id || "—"}
+                      <small>
+                        {callTypeLabel(row.call_type, i18n.language)}
+                      </small>
+                    </td>
+                    <td>
                       <strong>{row.requested_model || row.model}</strong>
                       <small>
                         →{" "}
@@ -365,7 +452,10 @@ export default function RequestHistory({
                       </small>
                     </td>
                     <td>{row.vendor}</td>
-                    <td>{row.tier ? <TierBadge id={row.tier} /> : "—"}</td>
+                    <td>
+                      {row.service_group ||
+                        (row.tier ? <TierBadge id={row.tier} /> : "—")}
+                    </td>
                     <td>
                       <span
                         className={`result-pill ${row.status === "failed" ? "is-failed" : ""}`}
@@ -383,6 +473,34 @@ export default function RequestHistory({
                                 : "pSucceeded",
                             )}
                       </span>
+                    </td>
+                    <td>
+                      {row.fallback
+                        ? c(
+                            "已自动切换",
+                            "Automatically switched",
+                            "تم التحويل تلقائيًا",
+                          )
+                        : "—"}
+                      <small>{row.error_code || "—"}</small>
+                    </td>
+                    <td className="mono">
+                      {row.input_tokens} / {row.output_tokens}
+                      <small>
+                        {row.cache_read_tokens ?? 0} /{" "}
+                        {row.cache_write_tokens ?? 0}
+                      </small>
+                      {row.billing_detail?.mode !== "tokens" &&
+                        row.call_type !== "chat" && (
+                          <small>
+                            {row.billing_detail?.parts
+                              .map((p) => `${p.quantity} ${p.unit}`)
+                              .join(" · ")}
+                          </small>
+                        )}
+                    </td>
+                    <td className="mono">
+                      {row.ttft_ms ? `${row.ttft_ms} ms` : "—"}
                     </td>
                     <td className="mono request-number">
                       {row.duration_ms} {c("毫秒", "ms", "مللي ثانية")}

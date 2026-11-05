@@ -60,6 +60,12 @@ import {
 export type { RechargeOrder } from "./billing";
 
 export type PreviewRequest = Omit<RequestRecord, "source"> & {
+  key_name?: string;
+  service_group?: string;
+  call_type?: string;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
+  billing_detail?: import("./request-metadata").StoredBillingDetail;
   request_source?: "playground";
   usage_source?: "upstream" | "admission_estimate";
   source: "api" | "playground";

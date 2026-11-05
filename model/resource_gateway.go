@@ -34,7 +34,7 @@ type ResourceGatewayRoute struct {
 // resourceGatewayAbilityCondition is applied in SQL before candidate limits.
 // Aliases come only from static queries in this package, never request values.
 func resourceGatewayAbilityCondition(alias string) string {
-	return fmt.Sprintf(`(NOT EXISTS (
+	condition := fmt.Sprintf(`(NOT EXISTS (
 		SELECT 1 FROM resource_gateway_managed_channels rgm WHERE rgm.channel_id = %[1]s.channel_id
 	) OR EXISTS (
 		SELECT 1 FROM resource_gateway_managed_channels rgm
@@ -46,6 +46,7 @@ func resourceGatewayAbilityCondition(alias string) string {
 		AND `+resourceGatewayGroupCondition("rgr")+`
 		AND rgr.model = %[1]s.model AND rgr."group" = %[1]s."group"
 	))`, alias)
+	return fmt.Sprintf("(NOT EXISTS (SELECT 1 FROM standard_models sm WHERE sm.model = %s.model AND sm.listed = 0) AND %s)", alias, condition)
 }
 
 func resourceGatewayGroupCondition(alias string) string {

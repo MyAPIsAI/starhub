@@ -213,6 +213,17 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			}
 
 			// Token model whitelist: a sub-key can be restricted to a subset of
+			listed, lookupErr := model.StandardModelListed(r.Context(), modelName)
+			if lookupErr != nil {
+				fail(500, "model_lookup_failed", "model status unavailable")
+				return
+			}
+			if !listed {
+				fail(404, "model_not_found", "model is not listed")
+				return
+			}
+
+			// Token model whitelist: a sub-key can be restricted to a subset of
 			// models. The limits string is set by TokenAuth; empty means no limit.
 			if limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string); limits != "" {
 				if !modelInList(modelName, model.SplitList(limits)) {
@@ -291,7 +302,13 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			// request on alternative channels, and every attempt needs a fresh
 			// pick. The body stays cached in the context so each attempt can
 			// replay it.
+			evidence, evidenceErr := model.CaptureRoutingEvidence(r.Context())
+			if evidenceErr != nil {
+				fail(500, "routing_evidence_unavailable", "routing metadata unavailable")
+				return
+			}
 			ctx := common.WithValues(r.Context(),
+				common.CtxAdmissionRouting, evidence,
 				common.CtxRequestModel, modelName,
 				common.CtxRequestedModel, requestedModel,
 				common.CtxRequestBody, body,

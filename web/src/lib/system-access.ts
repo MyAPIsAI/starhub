@@ -6,15 +6,18 @@ import { create } from "zustand";
 export const ROLE_USER = 1;
 export const ROLE_FINANCE = 5;
 export const ROLE_ADMIN = 10;
+export const ROLE_TECHNICAL = 20;
 export const ROLE_ROOT = 100;
 
 export type SystemRole = number;
 
 export interface SessionIdentity {
+  platformAdmin?: boolean;
   accountId: number | null;
   group: string | null;
   epoch: number;
   username?: string | null;
+  accountKind?: "customer" | "staff" | null;
 }
 
 // Display only the username supplied by a confirmed server session. Legacy or
@@ -51,7 +54,22 @@ export function useSessionQueryIdentity() {
 export const isAdmin = (role: SystemRole): boolean =>
   role === ROLE_ADMIN || role === ROLE_ROOT;
 export const canReadFinance = (role: SystemRole): boolean =>
-  role === ROLE_FINANCE || role === ROLE_ADMIN || role === ROLE_ROOT;
+  role === ROLE_FINANCE || role === ROLE_ROOT;
+export const isStaff = (role: SystemRole): boolean =>
+  [ROLE_ADMIN, ROLE_FINANCE, ROLE_TECHNICAL, ROLE_ROOT].includes(role);
+
+export const canManagePlatform = ({
+  role,
+  session,
+}: {
+  role: SystemRole;
+  session: SessionIdentity;
+}): boolean =>
+  session.accountId !== null &&
+  Number.isSafeInteger(session.accountId) &&
+  session.accountId > 0 &&
+  session.accountKind === "staff" &&
+  (session.platformAdmin ?? isStaff(role));
 
 // In-memory only — no localStorage persistence. The role is set by
 // session-restore.tsx from GET /api/user/self on every page load, so
@@ -62,7 +80,14 @@ export const useSystemAccess = create<{
   session: SessionIdentity;
   setRole: (role: SystemRole) => void;
   setSession: (
-    user: { id: number; group: string; role: number; username?: string } | null,
+    user: {
+      id: number;
+      group: string;
+      role: number;
+      username?: string;
+      platform_admin?: boolean;
+      account_kind?: "customer" | "staff";
+    } | null,
   ) => void;
 }>((set) => ({
   role: ROLE_USER,
@@ -77,6 +102,8 @@ export const useSystemAccess = create<{
         group: user?.group ?? null,
         epoch: state.session.epoch + 1,
         username: user?.username ?? null,
+        platformAdmin: user?.platform_admin,
+        accountKind: user?.account_kind ?? null,
       },
     })),
 }));

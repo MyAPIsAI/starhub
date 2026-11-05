@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"starhub/internal/testauth"
 	"strings"
 	"testing"
 	"time"
@@ -18,8 +19,8 @@ func TestGuardedDeviceRoutesRejectStaleCookieOwnersAndKeepOtherAccountsActive(t 
 	bobID, bob := exportTestUser(t, env.base, "guarded-device-bob")
 	middleware.Sessions.RemoveAllExcept(aliceID, alice)
 	middleware.Sessions.RemoveAllExcept(bobID, bob)
-	aliceOther := middleware.Sessions.Create(aliceID, 2*time.Hour)
-	bobOther := middleware.Sessions.Create(bobID, 3*time.Hour)
+	aliceOther := testauth.Session(t, aliceID, 2*time.Hour)
+	bobOther := testauth.Session(t, bobID, 3*time.Hour)
 	defer middleware.Sessions.Remove(aliceOther)
 	defer middleware.Sessions.Remove(bobOther)
 	request := func(method, path, cookie, body string) apiResult {
@@ -29,7 +30,7 @@ func TestGuardedDeviceRoutesRejectStaleCookieOwnersAndKeepOtherAccountsActive(t 
 			req.Header.Set("Content-Type", "application/json")
 		}
 		if cookie != "" {
-			req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+			testauth.Authorize(req, cookie)
 		}
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {

@@ -1,0 +1,138 @@
+.usage-reports {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.usage-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.usage-heading h1 {
+  margin: 0;
+  font-size: 24px;
+}
+.usage-heading p {
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+.usage-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  background: var(--surface);
+  min-width: 0;
+}
+.usage-card h2 {
+  font-size: 15px;
+  margin: 0 0 16px;
+}
+.usage-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+.usage-filters label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--secondary);
+  min-width: 0;
+}
+.usage-filters select,
+.usage-filters input {
+  width: 100%;
+  min-width: 0;
+}
+.usage-filters input {
+  padding: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 7px;
+}
+.usage-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.usage-summary-value {
+  display: block;
+  margin-top: 12px;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.usage-muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+.usage-error {
+  color: var(--danger);
+}
+.usage-summary-value,
+.usage-share strong,
+.usage-table-scroll td.mono {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.usage-trend {
+  min-width: 0;
+  direction: ltr;
+}
+.usage-shares {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.usage-share {
+  margin-block: 14px;
+}
+.usage-share > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.usage-share progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--brand);
+}
+.usage-table-scroll {
+  overflow-x: auto;
+}
+.usage-table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.usage-table-scroll th,
+.usage-table-scroll td {
+  padding: 12px;
+  text-align: start;
+  border-bottom: 1px solid var(--border);
+}
+@media (max-width: 650px) {
+  .usage-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .usage-shares {
+    grid-template-columns: 1fr;
+  }
+  .usage-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .usage-card {
+    padding: 14px;
+  }
+  .usage-heading h1 {
+    font-size: 21px;
+  }
+}

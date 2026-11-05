@@ -68,7 +68,7 @@ func UpsertModelMeta(w http.ResponseWriter, r *http.Request) {
 		common.ApiSuccess(w, map[string]any{"meta": meta, "revision": revision})
 		return
 	}
-	if err := model.UpsertModelMeta(&meta); err != nil {
+	if err := model.UpsertModelMetaContext(r.Context(), &meta); err != nil {
 		modelMetadataError(w, err)
 		return
 	}
@@ -119,6 +119,8 @@ func GetModelMetadataCatalog(w http.ResponseWriter, r *http.Request) {
 
 func modelMetadataError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, model.ErrModelReferenced):
+		common.ApiError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, model.ErrModelMetadataConflict):
 		common.ApiError(w, http.StatusConflict, "model metadata catalog changed; reload and review again")
 	case errors.Is(err, model.ErrInvalidModelMetadataRevision):
@@ -132,6 +134,9 @@ func modelMetadataError(w http.ResponseWriter, err error) {
 // the plaza never has to defend against negative prices or a discount that
 // would render as a negative savings figure.
 func validateModelMeta(m *model.ModelMeta) error {
+	if err := model.ValidateOfficialReference(m); err != nil {
+		return err
+	}
 	if m.ContextLength < 0 || m.MaxOutput < 0 {
 		return errPlaza("context_length and max_output must not be negative")
 	}

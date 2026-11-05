@@ -212,15 +212,17 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
           <div className="ac-meta">
             <span>{c("账号身份", "Account role", "دور الحساب")}</span>
             <strong>
-              {profile?.role === 100
-                ? c("超级管理员", "Root", "المسؤول الأعلى")
-                : profile?.role === 10
-                  ? c("平台管理员", "Administrator", "مدير المنصة")
-                  : profile?.role === 5
-                    ? c("财务", "Finance", "المالية")
-                    : profile?.role === 1
-                      ? c("普通用户", "User", "مستخدم")
-                      : c("未确认", "Unconfirmed", "غير مؤكد")}
+              {session.platformAdmin
+                ? c("平台管理员", "Platform administrator", "مسؤول المنصة")
+                : profile?.role === 100
+                  ? c("超级管理员", "Root", "المسؤول الأعلى")
+                  : profile?.role === 10
+                    ? c("平台管理员", "Administrator", "مدير المنصة")
+                    : profile?.role === 5
+                      ? c("财务", "Finance", "المالية")
+                      : profile?.role === 1
+                        ? c("普通用户", "User", "مستخدم")
+                        : c("未确认", "Unconfirmed", "غير مؤكد")}
             </strong>
             <small>
               {c(
@@ -297,7 +299,7 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
           </Button>
         </div>
       </section>
-      <AccountSecurity profile={profile} />
+      {session.accountKind !== "staff" && <AccountSecurity profile={profile} />}
       <div className="ac-lower-grid">
         <section className="ac-card" aria-labelledby="ac-devices-title">
           <div className="ac-section-heading">
@@ -459,21 +461,23 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
         </section>
         <AccountSecurityHistory />
       </div>
-      <section className="ac-close">
-        <div>
-          <h2>{c("注销账号", "Close account", "إغلاق الحساب")}</h2>
-          <p>
-            {c(
-              "注销前需处理余额和未完成订单，确认后将无法继续调用。",
-              "Resolve your balance and pending orders before closing. Model access stops after confirmation.",
-              "سوِّ الرصيد والطلبات المعلقة قبل الإغلاق. سيتوقف استخدام النماذج بعد التأكيد.",
-            )}
-          </p>
-        </div>
-        <Button size="small" variant="ghost" onClick={onDeactivate}>
-          {c("申请注销", "Close account", "طلب الإغلاق")}
-        </Button>
-      </section>
+      {session.accountKind !== "staff" && (
+        <section className="ac-close">
+          <div>
+            <h2>{c("注销账号", "Close account", "إغلاق الحساب")}</h2>
+            <p>
+              {c(
+                "注销前需处理余额和未完成订单，确认后将无法继续调用。",
+                "Resolve your balance and pending orders before closing. Model access stops after confirmation.",
+                "سوِّ الرصيد والطلبات المعلقة قبل الإغلاق. سيتوقف استخدام النماذج بعد التأكيد.",
+              )}
+            </p>
+          </div>
+          <Button size="small" variant="ghost" onClick={onDeactivate}>
+            {c("申请注销", "Close account", "طلب الإغلاق")}
+          </Button>
+        </section>
+      )}
     </div>
   );
 }

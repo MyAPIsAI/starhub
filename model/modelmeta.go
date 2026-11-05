@@ -27,7 +27,11 @@ import (
 // length). The plaza is a projection over the channel graph, so a missing
 // metadata row must never hide a model that can actually be served.
 type ModelMeta struct {
-	Model string `gorm:"primaryKey;size:128" json:"model"`
+	OfficialSourceURL    string `gorm:"size:2048;not null;default:''" json:"official_source_url"`
+	OfficialVerifiedDate string `gorm:"size:10;not null;default:''" json:"official_verified_date"`
+	OfficialConditions   string `gorm:"type:text;not null;default:''" json:"official_conditions"`
+	OfficialHistorical   bool   `gorm:"not null;default:false" json:"official_historical"`
+	Model                string `gorm:"primaryKey;size:128" json:"model"`
 
 	Vendor        string `gorm:"size:64;not null;default:''" json:"vendor"`
 	VendorDisplay string `gorm:"size:128;not null;default:''" json:"vendor_display"`
@@ -97,6 +101,11 @@ func (m *ModelMeta) Groups() []string {
 // UpsertModelMeta inserts or replaces a metadata row.
 func UpsertModelMeta(m *ModelMeta) error {
 	_, err := saveModelMetadata(context.Background(), m, nil)
+	return err
+}
+
+func UpsertModelMetaContext(ctx context.Context, m *ModelMeta) error {
+	_, err := saveModelMetadata(ctx, m, nil)
 	return err
 }
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"starhub/internal/testauth"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -36,7 +37,7 @@ func playgroundCall(t *testing.T, env p1Env, session, secret, grant, id, path st
 	req.Header.Set("X-MyAPIs-Key-ID", id)
 	req.Header.Set("X-MyAPIs-Key-Grant", grant)
 	if session != "" {
-		req.AddCookie(&http.Cookie{Name: "session", Value: session})
+		testauth.Authorize(req, session)
 	}
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {

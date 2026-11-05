@@ -79,7 +79,7 @@ func ReadFinanceSummary(ctx context.Context, since, until int64) (*FinanceSummar
 		if err := tx.Model(&RechargeOrder{}).Where("status = ? AND paid_at <= 0", RechargePaid).Count(&result.PaidOrdersWithoutTimestamp).Error; err != nil {
 			return err
 		}
-		if err := readFinanceRows(tx.Model(&LedgerEntry{}).Select("amount").Where("created_at >= ? AND created_at < ? AND funding_source <> ?", since, until, FundingSourceAPIQuota), func(rows *sql.Rows) error {
+		if err := readFinanceRows(tx.Model(&LedgerEntry{}).Select("amount").Where("created_at >= ? AND created_at < ? AND funding_source NOT IN ?", since, until, []string{FundingSourceAPIQuota, FundingSourceStaffAdjustment}), func(rows *sql.Rows) error {
 			var amount int64
 			if err := rows.Scan(&amount); err != nil {
 				return err

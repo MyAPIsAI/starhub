@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"starhub/internal/testauth"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -28,7 +29,7 @@ func TestFundingSourceActualSimulationCannotCertifyFundsOrMintAPIQuota(t *testin
 	if err := model.CreateUser(user); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(user.ID, time.Hour)
+	session := testauth.Session(t, user.ID, time.Hour)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	for _, claim := range []map[string]any{{"funding_source": "verified_provider"}, {"api_quota_eligible": true}, {"trusted": true}, {"provider_transaction_id": "invented"}} {
 		body := map[string]any{"amount_usd": "10.00", "channel": "card"}
@@ -72,8 +73,10 @@ func TestFundingSourceActualSimulationCannotCertifyFundsOrMintAPIQuota(t *testin
 	if response.Status < 400 || calls.Load() != 0 || err != nil || errWallet != nil || owner.Quota != 0 || stored.Balance != 10_000_000_000 {
 		t.Fatalf("simulated funds bypassed API funding: status%d calls%d quota%d wallet%d", response.Status, calls.Load(), owner.Quota, stored.Balance)
 	}
-	export := publicationAPIData[model.ExportRecord](t, doRequest(env.base, "POST", "/api/export", session, map[string]any{"type": "ledger", "range_days": 1}))
-	csv := doRequest(env.base, "GET", "/api/export/"+strconv.FormatInt(export.ID, 10)+"/download", session, nil)
+	export := publicationAPIData[struct {
+		URL string `json:"download_url"`
+	}](t, doRequest(env.base, "POST", "/api/export", session, map[string]any{"type": "ledger", "range_days": 1}))
+	csv := doRequest(env.base, "GET", export.URL, session, nil)
 	if csv.Status != 200 || !strings.Contains(csv.Body, "Funding Source,API Quota Eligible") || !strings.Contains(csv.Body, ",simulation,false") {
 		t.Fatalf("export lost funding source: %d %s", csv.Status, csv.Body)
 	}

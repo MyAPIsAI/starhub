@@ -37,11 +37,7 @@ func TestBILL002FullFailureRefund(t *testing.T) {
 	// 2. Set user quota to a known value (1000 quota = $0.002).
 	//    Use the admin update endpoint with optimistic lock.
 	userBefore, _ := model.GetUserByID(env.rootID)
-	res := doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id":             env.rootID,
-		"quota":          1000,
-		"expected_quota": userBefore.Quota,
-	})
+	res := fixtureQuota(t, env.rootID, 1000)
 	if res.Status != 200 {
 		t.Fatalf("set user quota failed: %d %s", res.Status, res.Body)
 	}

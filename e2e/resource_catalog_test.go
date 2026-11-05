@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"starhub/internal/testauth"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestResourceCatalogUsesActualAdminPolicyAndPersistsPlacement(t *testing.T) 
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := testauth.Session(t, user.ID, time.Hour)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		for _, request := range []struct {
 			method, path string
@@ -52,11 +53,11 @@ func TestResourceCatalogUsesActualAdminPolicyAndPersistsPlacement(t *testing.T) 
 	if state.Revision != 1 || state.Placements["resource"].Enabled || state.AffectsGatewayRouting {
 		t.Fatalf("import changed authorization: %+v", state)
 	}
-	admin := &model.User{Username: "inventory-admin", Role: common.RoleAdmin, Status: common.StatusEnabled, AffCode: common.GenerateAffCode()}
+	admin := &model.User{Username: "inventory-admin", Role: common.RoleTechnical, Status: common.StatusEnabled, AffCode: common.GenerateAffCode()}
 	if err := model.CreateUser(admin); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(admin.ID, time.Hour)
+	session := testauth.Session(t, admin.ID, time.Hour)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	standard := "gpt-4o"
 	placement := model.ResourcePlacement{ModelID: &standard, GroupIDs: []string{"default"}, Enabled: true}
@@ -75,10 +76,10 @@ func TestResourceCatalogUsesActualAdminPolicyAndPersistsPlacement(t *testing.T) 
 	if err := model.DB.Model(&model.AuditLog{}).Where("path IN ? AND status = 200", []string{"/api/resource", "/api/placement/resource"}).Count(&audits).Error; err != nil || audits != 2 {
 		t.Fatalf("inventory audit: %d %v", audits, err)
 	}
-	if err := model.UpdateUserFields(admin.ID, map[string]any{"role": common.RoleUser}); err != nil {
+	if err := model.DB.Model(&model.StaffAccount{}).Where("id = ?", admin.ID).Updates(map[string]any{"role": common.RoleUser}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if res := doRequest(env.base, "GET", "/api/resource", session, nil); res.Status != 403 {
+	if res := doRequest(env.base, "GET", "/api/resource", session, nil); res.Status != 401 {
 		t.Fatalf("revoked admin retained inventory access: %d %s", res.Status, res.Body)
 	}
 }

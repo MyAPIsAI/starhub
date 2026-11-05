@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/config"
 	"starhub/middleware"
 	"starhub/model"
 	"starhub/setting"
@@ -137,12 +138,17 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusForbidden, "user is disabled")
 		return
 	}
+	if user.AccountKind != "customer" || common.IsStaffRole(user.Role) {
+		common.ApiError(w, 403, "staff accounts must use the staff login")
+		return
+	}
 	const sessionTTL = 7 * 24 * time.Hour
 	token := middleware.Sessions.CreateConfirmed(user, sessionTTL)
 	if token == "" {
 		common.ApiError(w, http.StatusConflict, "account changed during login; retry sign-in")
 		return
 	}
+	middleware.ClearOtherPortalSession(w, r, "staff_session")
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    token,
@@ -200,6 +206,9 @@ func GetSelf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := publicUser(user)
+	if user.AccountKind == "staff" && requestRole(r) == common.RoleUser {
+		data["role"] = common.RoleUser
+	}
 	data["request_count"] = requestCount
 	common.ApiSuccess(w, data)
 }
@@ -210,8 +219,8 @@ func UserUsage(w http.ResponseWriter, r *http.Request) {
 	if days < 1 {
 		days = 7
 	}
-	if days > 90 {
-		days = 90
+	if days > 365 {
+		days = 365
 	}
 	userID := requestUserID(r)
 	if raw := q.Get("user_id"); raw != "" && common.IsAdminRole(requestRole(r)) {
@@ -219,7 +228,9 @@ func UserUsage(w http.ResponseWriter, r *http.Request) {
 			userID = v
 		}
 	}
-	since := time.Now().UTC().AddDate(0, 0, -int(days)+1).Truncate(24 * time.Hour).Unix()
+	loc, _ := time.LoadLocation(config.RegionTimezone())
+	now := time.Now().In(loc)
+	since := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1-int(days)).Unix()
 	items, err := model.SummarizeLogsByDay(userID, since)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
@@ -246,6 +257,9 @@ func ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	data := make([]map[string]any, 0, len(users))
 	for i := range users {
+		if users[i].AccountKind != "customer" {
+			continue
+		}
 		data = append(data, publicUser(&users[i]))
 	}
 	common.ApiSuccess(w, data)
@@ -269,8 +283,13 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "user id is required")
 		return
 	}
-	if _, err := model.GetUserByID(req.ID); err != nil {
+	target, err := model.GetUserByID(req.ID)
+	if err != nil {
 		common.ApiError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if target.AccountKind != "customer" {
+		common.ApiError(w, 403, "internal accounts use staff management")
 		return
 	}
 	fields := map[string]any{}
@@ -332,17 +351,20 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 func publicUser(u *model.User) map[string]any {
 	return map[string]any{
-		"id":         u.ID,
-		"username":   u.Username,
-		"email":      u.Email,
-		"role":       u.Role,
-		"status":     u.Status,
-		"quota":      u.Quota,
-		"used_quota": u.UsedQuota,
-		"group":      u.Group,
-		"aff_code":   u.AffCode,
-		"inviter_id": u.InviterID,
-		"created_at": u.CreatedAt,
+		"api_balance_nano": model.APIBalanceNano(u).String(),
+		"platform_admin":   u.HasPlatformWorkspace(),
+		"account_kind":     u.AccountKind,
+		"id":               u.ID,
+		"username":         u.Username,
+		"email":            u.Email,
+		"role":             u.Role,
+		"status":           u.Status,
+		"quota":            u.Quota,
+		"used_quota":       u.UsedQuota,
+		"group":            u.Group,
+		"aff_code":         u.AffCode,
+		"inviter_id":       u.InviterID,
+		"created_at":       u.CreatedAt,
 	}
 }
 

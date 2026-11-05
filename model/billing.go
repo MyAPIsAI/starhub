@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -61,11 +63,12 @@ const (
 	FundingSourceLegacyUnverified = "legacy_unverified"
 	FundingSourceSimulation       = "simulation"
 	FundingSourceAPIQuota         = "api_quota"
+	FundingSourceStaffAdjustment  = "staff_adjustment"
 )
 
 // Existing or unrecognized provenance never becomes verified funding.
 func PublicFundingSource(source string) string {
-	if source == FundingSourceAPIQuota {
+	if source == FundingSourceAPIQuota || source == FundingSourceStaffAdjustment {
 		return source
 	}
 	if source == FundingSourceSimulation {
@@ -180,6 +183,35 @@ func GetRechargeOrder(id int64) (*RechargeOrder, error) {
 		return nil, err
 	}
 	return &o, nil
+}
+
+// FindRechargeOrder resolves either a numeric ID or a business order number.
+// A positive userID binds the lookup to that owner in the database query.
+func FindRechargeOrder(reference string, userID int64) (*RechargeOrder, error) {
+	q := DB.Model(&RechargeOrder{})
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	if len(reference) > 64 || reference == "" {
+		return nil, ErrRechargeOrderNotFound
+	}
+	if strings.HasPrefix(reference, "ord_") {
+		q = q.Where("order_number = ?", reference)
+	} else {
+		id, err := strconv.ParseInt(reference, 10, 64)
+		if err != nil || id <= 0 || strconv.FormatInt(id, 10) != reference {
+			return nil, ErrRechargeOrderNotFound
+		}
+		q = q.Where("id = ?", id)
+	}
+	var order RechargeOrder
+	if err := q.First(&order).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrRechargeOrderNotFound
+		}
+		return nil, err
+	}
+	return &order, nil
 }
 
 // ListRechargeOrders returns orders for a user (or all for admin),

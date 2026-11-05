@@ -8,6 +8,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { apiGet } from "./http";
 import { catalogModels } from "../../config/models";
+import {
+  readBillingDetail,
+  type StoredBillingDetail,
+} from "../request-metadata";
 
 // --- Types matching the backend DailyUsage struct (model/log.go) ---
 
@@ -40,6 +44,15 @@ export interface UsageResponse {
 // --- Types matching the backend Log struct (model/log.go) ---
 
 export interface LogRow {
+  service_group?: string;
+  vendor?: string;
+  call_type?: string;
+  error_code?: string;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
+  billing_detail?: string;
+  auto_switched?: boolean;
+  amount_nano?: string;
   trace_id?: string;
   request_source?: string;
   ttft_ms?: number;
@@ -48,7 +61,7 @@ export interface LogRow {
   token_id: number;
   token_name: string;
   token_deleted?: boolean;
-  channel_id: number;
+  channel_id?: number;
   model: string;
   requested_model?: string;
   protocol?: string;
@@ -57,7 +70,7 @@ export interface LogRow {
   completion_tokens: number;
   quota: number;
   unfunded_quota: number;
-  used_channels: string;
+  used_channels?: string;
   duration_ms: number;
   status: number; // 1=success, 2=failed
   created_at: number; // unix seconds
@@ -159,7 +172,13 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     request_source:
       log.request_source === "playground" ? ("playground" as const) : undefined,
     ttft_ms: log.ttft_ms ?? 0,
-    fallback: log.used_channels.includes("->"),
+    fallback: log.auto_switched ?? (log.used_channels ?? "").includes("->"),
+    key_name: log.token_name,
+    service_group: log.service_group,
+    call_type: log.call_type,
+    cache_read_tokens: log.cache_read_tokens,
+    cache_write_tokens: log.cache_write_tokens,
+    billing_detail: readBillingDetail(log.billing_detail),
     source: "api",
     time: new Date(log.created_at * 1000).toISOString(),
     model: log.model,
@@ -176,22 +195,28 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
       log.protocol === "Gemini"
         ? log.protocol
         : undefined,
-    vendor: resolveVendor(log.model),
+    vendor: log.vendor || resolveVendor(log.model),
     status: log.status === 1 ? "success" : "failed",
     outcome:
       log.status === 3 ? "cancelled" : log.status === 1 ? "success" : "failed",
-    cost_nano: quotaToNanoUsd(log.quota),
+    cost_nano: log.amount_nano ?? quotaToNanoUsd(log.quota),
     duration_ms: log.duration_ms,
     key_id: log.token_id ? String(log.token_id) : "",
     key_deleted: log.token_deleted,
     input_tokens: log.prompt_tokens,
     output_tokens: log.completion_tokens,
-    error_code: "",
+    error_code: log.error_code ?? "",
     error_message: "",
   };
 }
 
 export interface PreviewRequestLike {
+  key_name?: string;
+  service_group?: string;
+  call_type?: string;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
+  billing_detail?: StoredBillingDetail;
   request_source?: "playground";
   ttft_ms?: number;
   fallback?: boolean;

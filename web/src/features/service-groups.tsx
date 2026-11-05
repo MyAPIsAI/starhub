@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Layers3, Plus, Search } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { Modal } from "../components/ui/overlay";
+import { PricingHistory } from "./admin-operations";
+import { Drawer, Modal } from "../components/ui/overlay";
 import { ApiError } from "../lib/api/http";
 import {
   useServiceGroupCatalog,
@@ -47,6 +48,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
   const upsert = useUpsertServiceGroup();
   const remove = useDeleteServiceGroup();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [history, setHistory] = useState<string | null>(null);
   const [review, setReview] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -118,12 +120,11 @@ export function ServiceGroups({ role: _role }: { role: number }) {
       name: original?.name ?? id,
       description: original?.description ?? "",
       multiplier:
-        original?.multiplier ??
-        (ratio !== undefined && ratio >= 0 && ratio <= 100
+        ratio !== undefined && ratio >= 0 && ratio <= 100
           ? String(ratio)
           : id
             ? ""
-            : "1"),
+            : "1",
       enabled: original?.enabled ?? true,
       visibility: original?.visibility ?? "common",
       accountText: original?.account_ids.join("\n") ?? "",
@@ -224,7 +225,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
           <h1>{text("服务分组", "Service groups", "مجموعات الخدمة")}</h1>
           <p>
             {text(
-              "管理数据库中的分组定义与倍率。保存会修改服务器配置；表格中的选项倍率与分组定义分别展示。",
+              "管理服务分组与售价倍率。新请求立即使用保存后的倍率，已受理请求保留原倍率。",
               "Manage database group definitions and ratios. Saving changes server configuration; option ratios and stored definitions are shown separately.",
               "أدر تعريفات مجموعات قاعدة البيانات ومعاملاتها. يغيّر الحفظ إعدادات الخادم؛ تُعرض معاملات الخيارات والتعريفات بشكل منفصل.",
             )}
@@ -354,11 +355,8 @@ export function ServiceGroups({ role: _role }: { role: number }) {
             <tr>
               <th>{text("分组", "Group", "المجموعة")}</th>
               <th>{text("定义状态", "Definition state", "حالة التعريف")}</th>
-              <th>{text("定义倍率", "Definition ratio", "معامل التعريف")}</th>
-              <th>{text("选项倍率", "Option ratio", "معامل الخيار")}</th>
-              <th>
-                {text("元数据版本", "Metadata revision", "إصدار البيانات")}
-              </th>
+              <th>{text("售价倍率", "Sale multiplier", "معامل البيع")}</th>
+
               <th>{text("操作", "Actions", "الإجراءات")}</th>
             </tr>
           </thead>
@@ -398,16 +396,30 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                     )}
                   </td>
                   <td>
-                    <bdi>{group?.multiplier ?? "—"}</bdi>
-                  </td>
-                  <td>
                     <bdi>{ratio === undefined ? unknown : ratio}</bdi>
-                  </td>
-                  <td>
-                    <bdi>{group ? `v${group.revision}` : "—"}</bdi>
+                    {group &&
+                      ratio !== undefined &&
+                      Number(group.multiplier) !== ratio && (
+                        <small>
+                          {text(
+                            "定义记录",
+                            "Stored definition",
+                            "التعريف المحفوظ",
+                          )}
+                          : {group.multiplier} ·{" "}
+                          {text(
+                            "保存后对齐",
+                            "Aligned on save",
+                            "تتم المزامنة عند الحفظ",
+                          )}
+                        </small>
+                      )}
                   </td>
                   <td>
                     <div className="cm-actions">
+                      <Button onClick={() => setHistory(id)}>
+                        {text("倍率历史", "Multiplier history", "سجل المعامل")}
+                      </Button>
                       <Button disabled={!editable} onClick={() => begin(id)}>
                         {group
                           ? text("编辑定义", "Edit definition", "تحرير التعريف")
@@ -453,6 +465,16 @@ export function ServiceGroups({ role: _role }: { role: number }) {
         </div>
       )}
       <ServiceGroupTargets />
+      <Drawer
+        open={!!history}
+        onOpenChange={(v) => {
+          if (!v) setHistory(null);
+        }}
+        title={text("倍率历史", "Multiplier history", "سجل المعامل")}
+        description={history ?? ""}
+      >
+        {history && <PricingHistory kind="service-group" id={history} />}
+      </Drawer>
       <Modal
         className="service-group-dialog"
         open={!!draft}

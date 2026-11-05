@@ -15,8 +15,11 @@ const alternateRegion = process.env.STARHUB_BILL_BROWSER_REGION;
 const out = path.join(
   project,
   "output",
-  "billing-export-repair-20261103",
-  alternateRegion ? "browser-new-york" : "browser",
+  process.env.STARHUB_BILL_BROWSER_OUTPUT ??
+    path.join(
+      "billing-export-repair-20261103",
+      alternateRegion ? "browser-new-york" : "browser",
+    ),
 );
 await mkdir(out, { recursive: true });
 const temp = await mkdtemp(path.join(out, "run-"));

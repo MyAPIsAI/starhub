@@ -196,7 +196,7 @@ func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, b
 	bill.Group = flow.settleGroup()
 	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(count, usage)
-	settleImageAttempt(flow, ch, actual)
+	settleImageAttempt(flow, ch, actual, bill)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
@@ -297,7 +297,7 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 	bill.Group = flow.settleGroup()
 	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(completed, streamUsage)
-	settleImageAttempt(flow, ch, actual)
+	settleImageAttempt(flow, ch, actual, bill)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
@@ -329,7 +329,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 		bill.Group = flow.settleGroup()
 		bill.Pricing = flow.req.priceFor(bill.Group)
 		actual := bill.SettleQuota(0, nil)
-		settleImageAttempt(flow, ch, actual)
+		settleImageAttempt(flow, ch, actual, bill)
 		return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 	}
 	count := max(urls, b64s)
@@ -363,7 +363,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 	bill.Group = flow.settleGroup()
 	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(count, usage)
-	settleImageAttempt(flow, ch, actual)
+	settleImageAttempt(flow, ch, actual, bill)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
@@ -403,9 +403,15 @@ var (
 
 // settleImageAttempt balances the image bill (unit-based: the amount was
 // computed by ImageBill with the count/usage guards).
-func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64) {
-	if err := relay.PostConsumeQuotaAmountWithMetadata(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
-		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, actual, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), 1, flow.req.requestedModel, flow.req.protocol, flow.req.tokenPeriodStartedAt); err != nil {
+func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64, bill *relay.ImageBill) {
+	entry := &model.Log{TraceID: flow.traceID, RequestSource: flow.req.requestSource, TTFTMs: flow.ttftMs, UserID: flow.req.userID, TokenID: flow.req.tokenID, TokenName: flow.req.tokenName, TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, ChannelID: ch.ID, Model: flow.req.modelName, RequestedModel: flow.req.requestedModel, Protocol: flow.req.protocol, Quota: actual, UsedChannels: flow.trailString(), DurationMs: time.Since(flow.startTime).Milliseconds(), Status: 1, BillingDetail: bill.BillingDetail, UsageSource: bill.UsageSource}
+	model.FreezeLogLabels(entry, flow.settleGroup(), "images")
+	model.FreezeRoutingEvidence(flow.ctx, entry, flow.affinityPreferred != 0)
+	if bill.SettledUsage != nil {
+		entry.PromptTokens = bill.SettledUsage.PromptTokens
+		entry.CompletionTokens = bill.SettledUsage.CompletionTokens
+	}
+	if err := relay.PostConsumeRecordedQuota(entry, flow.req.tokenUnlimited, actual, flow.preQuota); err != nil {
 		log.Printf("post consume image quota failed: %v", err)
 	}
 	flow.settled = true

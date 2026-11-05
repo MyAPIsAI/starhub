@@ -338,7 +338,7 @@ func TestUserUsageDaysClamping(t *testing.T) {
 		{"?days=0", 7},
 		{"?days=-3", 7},
 		{"?days=30", 30},
-		{"?days=1000", 90},
+		{"?days=1000", 365},
 		{"?days=abc", 7},
 	}
 	for _, tc := range cases {
@@ -475,16 +475,18 @@ func TestListUsersHidesPasswords(t *testing.T) {
 	var got []map[string]any
 	decodeData(t, rr, &got)
 
-	// newTestDB seeds the root account, so expect it alongside the two users
-	// created here.
+	// Internal staff accounts are listed separately from customers.
 	names := map[string]bool{}
 	for _, item := range got {
 		names[item["username"].(string)] = true
 	}
-	for _, want := range []string{common.DefaultRootUser, "alice", "bob"} {
+	for _, want := range []string{"alice", "bob"} {
 		if !names[want] {
 			t.Fatalf("user %q missing from the listing: %v", want, names)
 		}
+	}
+	if names[common.DefaultRootUser] {
+		t.Fatal("staff Root leaked into the customer list")
 	}
 	for _, item := range got {
 		if _, present := item["password"]; present {

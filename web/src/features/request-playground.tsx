@@ -234,6 +234,7 @@ export default function Playground({
       const headers = {
         ...call.init.headers,
         "X-MyAPIs-Source": "playground",
+        "X-StarHub-Portal": "workspace",
         "X-MyAPIs-Key-ID": String(id),
         "X-MyAPIs-Key-Grant": grant!,
       };

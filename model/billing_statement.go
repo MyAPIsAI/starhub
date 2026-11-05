@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"time"
 
 	"gorm.io/gorm"
@@ -34,13 +35,17 @@ func queueAPICharge(tx *gorm.DB, entry *Log) error {
 		return errors.New("API charge exceeds the nano-dollar ledger range")
 	}
 	var owner User
-	if err := tx.Select("id", "quota").First(&owner, entry.UserID).Error; err != nil {
+	if err := tx.Select("id", "quota", "quota_nano_remainder").First(&owner, entry.UserID).Error; err != nil {
 		return err
 	}
 	if owner.Quota > math.MaxInt64/factor || owner.Quota < math.MinInt64/factor {
 		return errors.New("API balance exceeds the nano-dollar ledger range")
 	}
-	return tx.Create(&APIChargeEvent{LogID: entry.ID, UserID: entry.UserID, TokenID: entry.TokenID, Amount: entry.Quota * factor, BalanceAfter: owner.Quota * factor, CreatedAt: entry.CreatedAt}).Error
+	balance := APIBalanceNano(&owner)
+	if !balance.IsInt64() {
+		return errors.New("API balance exceeds the nano-dollar ledger range")
+	}
+	return tx.Create(&APIChargeEvent{LogID: entry.ID, UserID: entry.UserID, TokenID: entry.TokenID, Amount: entry.Quota * factor, BalanceAfter: balance.Int64(), CreatedAt: entry.CreatedAt}).Error
 }
 
 // FlushAPICharges atomically claims durable events into append-only minute batches.
@@ -98,12 +103,24 @@ func FlushAPICharges(ctx context.Context, includeOpenMinute bool) error {
 // StatementLedger groups API batches by regional calendar day and key for display.
 // Raw batches and source logs remain immutable and retain independent provenance.
 func StatementLedger(userID int64, since, until int64, trace string) ([]LedgerEntry, error) {
+	return statementLedger(userID, since, until, trace, nil)
+}
+
+// StatementLedgerForOrder is called only after the order's owner is authorized.
+func StatementLedgerForOrder(order *RechargeOrder, trace string) ([]LedgerEntry, error) {
+	return statementLedger(order.UserID, 0, 0, trace, []string{order.OrderNumber, strconv.FormatInt(order.ID, 10)})
+}
+
+func statementLedger(userID int64, since, until int64, trace string, orderRefs []string) ([]LedgerEntry, error) {
 	if err := FlushAPICharges(context.Background(), true); err != nil {
 		return nil, err
 	}
 	q := DB.Model(&LedgerEntry{})
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)
+	}
+	if len(orderRefs) > 0 {
+		q = q.Where("order_id IN ?", orderRefs)
 	}
 	if since > 0 {
 		q = q.Where("created_at >= ?", since)

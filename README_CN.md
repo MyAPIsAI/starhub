@@ -67,7 +67,7 @@ node scripts/build-release.mjs
 
 Windows 11 的 PowerShell/CMD、Linux 和 macOS 的终端都使用同一条命令，无需 Bash 或 PowerShell 作为额外依赖。先安装 Node.js 24+（含 npm）和 Go 1.26+ 并加入 PATH；脚本可从任意工作目录通过完整路径调用。
 
-默认安装锁定依赖、验证前端、执行本机 Go build/vet/test，再生成 `release/starhub`（Windows 为 `release/starhub.exe`），包含控制台。运行后访问 `http://localhost:3000/`，自动进入控制台；首次使用 root 账号登录。任何步骤失败都会返回非零退出码。
+默认安装锁定依赖、验证前端、执行本机 Go build/vet/test，再生成 `release/starhub`（Windows 为 `release/starhub.exe`），包含控制台。运行后访问 `http://localhost:3000/`，自动进入控制台；首次通过部署 CLI 初始化内部 Root，再从 `/admin/login` 完成改密和双重验证。任何步骤失败都会返回非零退出码。
 
 指定目标或一次编译所有支持的平台：
 
@@ -133,7 +133,8 @@ npm run test:e2e
 
 ```bash
 docker build -t starhub .
-docker run --rm -p 3000:3000 -v starhub-data:/data -e STARHUB_ROOT_PASSWORD=change-this-password starhub
+docker run --rm -v starhub-data:/data -e STARHUB_STAFF_PASSWORD starhub staff init --username root
+docker run --rm -p 3000:3000 -v starhub-data:/data starhub
 ```
 
 容器构建默认使用 Go 官方模块代理。若网络无法访问，可通过 `--build-arg GOPROXY=https://goproxy.cn,direct` 指定与本机 Go 环境一致的模块代理。
@@ -150,7 +151,7 @@ docker run --rm -p 3000:3000 -v starhub-data:/data -e STARHUB_ROOT_PASSWORD=chan
 
 复制 [`config.example.yml`](config.example.yml) 为私有 `config.yml`，用 `./starhub --config /path/to/config.yml` 启动，或设置 `STARHUB_CONFIG=/path/to/config.yml`。不指定文件时保持原有默认值和环境变量行为。命令行参数优先于 `STARHUB_CONFIG`。文件必须声明 `version: 1`；未知字段、无效值或文件不存在时会报错并停止启动。相对路径的 `database.sqlite_path` 以 YAML 文件所在目录为基准。
 
-文件包含 `server.port`、`database.sqlite_path`、`security.force_secure_cookie`，以及下表七项运行选项的 `initial_options`。root 初始密码仍通过 `STARHUB_ROOT_PASSWORD` 提供，不放进 YAML。环境变量覆盖对应的 YAML 启动值和初始值。只要 `security.force_secure_cookie: true`，即使 `STARHUB_COOKIE_SECURE=false` 或数据库中的选项为 false，Cookie 仍必须使用 Secure。端口、数据库路径和这个安全下限变更后需重启；`initial_options` 只填充数据库缺失的键，已有值通过 `PUT /api/option` 修改并按版本热重载。
+文件包含 `server.port`、`database.sqlite_path`、`security.force_secure_cookie`，以及下表七项运行选项的 `initial_options`。员工来源网络由 `security.staff_allowed_ips` 指定；首次 Root 通过部署 CLI 初始化，临时密码从 `STARHUB_STAFF_PASSWORD` 读取，不放进 YAML。环境变量覆盖对应的 YAML 启动值和初始值。只要 `security.force_secure_cookie: true`，即使 `STARHUB_COOKIE_SECURE=false` 或数据库中的选项为 false，Cookie 仍必须使用 Secure。端口、数据库路径和这个安全下限变更后需重启；`initial_options` 只填充数据库缺失的键，已有值通过 `PUT /api/option` 修改并按版本热重载。
 
 Docker 部署可只读挂载该文件并传入 `--config /etc/starhub/config.yml`；文件中的 `database.sqlite_path` 应设为 `/data/starhub.db`，使 SQLite 保留在 `/data` 数据卷。镜像不再通过内置环境变量固定端口和数据库路径。
 
@@ -160,12 +161,14 @@ Docker 部署可只读挂载该文件并传入 `--config /etc/starhub/config.yml
 | --- | --- | --- |
 | `STARHUB_PORT` | `3000` | HTTP 监听端口 |
 | `STARHUB_DB` | `starhub.db` | SQLite 数据库文件路径 |
-| `STARHUB_ROOT_PASSWORD` | `123456` | root 用户初始密码(**生产环境务必修改**) |
+| `STARHUB_STAFF_PASSWORD` | 无 | `staff init` 使用的临时密码，不提供默认 Root 密码 |
+| `STARHUB_STAFF_ALLOWED_IPS` | 仅本机 | 公司 IPv4、IPv6 或 CIDR，以逗号分隔 |
+| `STARHUB_STAFF_SETUP_MODE` | `commercial` | 商业部署 CLI 初始化；`opensource` 为一次性令牌安装 |
 | `STARHUB_CHANNEL_TEST_INTERVAL` | `1800` | 渠道后台测活间隔(秒,`0` 关闭) |
 | `STARHUB_TASK_POLL_INTERVAL` | `60` | 任务后台轮询间隔(秒,`0` 关闭) |
 | `STARHUB_COOKIE_SECURE` | `false` | HTTPS 反向代理后设为 `true`；直接 TLS 请求自动设置 Secure Cookie |
 
-`STARHUB_PORT`、`STARHUB_DB`、`STARHUB_ROOT_PASSWORD` 属于启动配置。修改端口或数据库路径需要重启；root 密码变量只在新数据库初始化时使用。测活、轮询和 Cookie 变量是新数据库首次初始化时的默认值；初始化后以数据库选项为准。若部署环境设置 `STARHUB_COOKIE_SECURE=true`，后台不能将其降低为不安全的 Cookie。
+`STARHUB_PORT`、`STARHUB_DB` 属于启动配置。修改端口或数据库路径需要重启；服务端不再通过 `STARHUB_ROOT_PASSWORD` 自动创建 Root。测活、轮询和 Cookie 变量是新数据库首次初始化时的默认值；初始化后以数据库选项为准。若部署环境设置 `STARHUB_COOKIE_SECURE=true`，后台不能将其降低为不安全的 Cookie。
 
 ### 运行配置与热重载
 
@@ -185,27 +188,13 @@ Docker 部署可只读挂载该文件并传入 `--config /etc/starhub/config.yml
 
 ### 首次登录
 
-默认内置超级管理员账号:
-
-- 用户名:`root`
-- 密码:`123456`(或 `STARHUB_ROOT_PASSWORD` 设置的值)
+通过部署终端执行 `starhub staff init --username root`，从部署密钥机制提供 `STARHUB_STAFF_PASSWORD` 临时密码。通过公司网络或 VPN 打开 `/admin/login`，完成临时密码修改和验证器绑定后进入后台。不提供默认密码，只有密码的员工会话不能访问受保护接口。详见[员工访问与恢复](docs/staff-access.md)。
 
 ## 使用指南
 
 ### 1. 登录管理后台 API
 
-```bash
-curl -X POST http://localhost:3000/api/user/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"root","password":"123456"}'
-```
-
-登录成功后:
-
-- 响应体中返回 `session` 字段(有效期 7 天)
-- 同时设置名为 `session` 的 HttpOnly Cookie
-
-后续管理接口可通过 Cookie 携带会话,也可使用 `Authorization: Bearer <session>` 头(见 `middleware/session.go`)。
+员工通过 `/api/admin/auth/login` 登录，再完成改密、验证器绑定及验证码验证。只有验证完成的 `staff_session` Cookie 能访问后台接口；待验证会话不能跳过步骤。`/admin/login` 提供完整浏览器流程。客户继续通过 `/api/user/login` 和独立的 `session` Cookie 登录。
 
 ### 2. 创建上游渠道(管理员)
 

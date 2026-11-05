@@ -57,11 +57,7 @@ func Test6xxClientCancellation(t *testing.T) {
 
 	// 1. Set user quota to a known value.
 	userBefore, _ := model.GetUserByID(env.rootID)
-	res := doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id":             env.rootID,
-		"quota":          10000000,
-		"expected_quota": userBefore.Quota,
-	})
+	res := fixtureQuota(t, env.rootID, 10000000)
 	if res.Status != 200 {
 		t.Fatalf("set user quota failed: %d %s", res.Status, res.Body)
 	}
@@ -150,7 +146,7 @@ func Test6xxClientCancellation(t *testing.T) {
 
 	// 11. Assert: cancellation is observable without charging quota.
 	logs, total, err := model.ListLogs(env.rootID, 1, 10, "gpt-cancel-test")
-	if err != nil || total != 1 || len(logs) != 1 || logs[0].Status != 2 || logs[0].Quota != 0 || logs[0].ChannelID != slowChannelID || logs[0].RequestedModel != "gpt-cancel-test" {
+	if err != nil || total != 1 || len(logs) != 1 || logs[0].Status != 3 || logs[0].ErrorCode != "request_cancelled" || logs[0].Quota != 0 || logs[0].ChannelID != slowChannelID || logs[0].RequestedModel != "gpt-cancel-test" {
 		t.Fatalf("cancel must write one unbilled log: total=%d logs=%+v err=%v", total, logs, err)
 	}
 

@@ -166,10 +166,10 @@ func TestRequestExportModelAttribution(t *testing.T) {
 	}
 	rr = call(DownloadExport, testRequest{
 		method: http.MethodGet,
-		target: "/api/export/" + itoa(exp.ID) + "/download",
+		target: "/api/export/files/" + testExportDownloadToken(t, exp.ID) + "/download",
 		userID: u.ID,
 		role:   common.RoleUser,
-		path:   map[string]string{"id": itoa(exp.ID)},
+		path:   map[string]string{"token": testExportDownloadToken(t, exp.ID)},
 	})
 	if rr.Code != http.StatusOK || rr.Body.String() != string(stored.Content) {
 		t.Fatalf("download status = %d, body differs from persisted export = %t", rr.Code, rr.Body.String() != string(stored.Content))
@@ -178,7 +178,7 @@ func TestRequestExportModelAttribution(t *testing.T) {
 	if err != nil || len(rows) != 4 {
 		t.Fatalf("CSV rows = %q, err = %v, want a header and 3 user rows", rows, err)
 	}
-	want := [][]string{[]string{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source"}}
+	want := [][]string{[]string{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source", "Vendor", "Service group", "Call type", "Automatically switched", "Error code", "Cache read tokens", "Cache write tokens", "Captured billing details"}}
 	loc, _ := time.LoadLocation("Asia/Dubai")
 	for i := 2; i >= 0; i-- {
 		l := logs[i]
@@ -187,7 +187,7 @@ func TestRequestExportModelAttribution(t *testing.T) {
 			requested = l.Model
 		}
 		nano := l.Quota * 2000
-		want = append(want, []string{"log_" + itoa(l.ID), time.Unix(l.CreatedAt, 0).In(loc).Format("2006-01-02T15:04:05-07:00"), "0", "", requested, l.Model, "success", "0", "0", "0", "0", fmt.Sprintf("0.%09d", nano), itoa(nano), "api"})
+		want = append(want, []string{"log_" + itoa(l.ID), time.Unix(l.CreatedAt, 0).In(loc).Format("2006-01-02T15:04:05-07:00"), "0", "", requested, l.Model, "success", "0", "0", "0", "0", fmt.Sprintf("0.%09d", nano), itoa(nano), "api", "", "", "", "false", "", "0", "0", ""})
 	}
 
 	if !reflect.DeepEqual(rows, want) {
@@ -328,7 +328,7 @@ func TestEmptyExportContainsOnlyHeader(t *testing.T) {
 		typ    string
 		header []string
 	}{
-		{"requests", []string{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source"}},
+		{"requests", []string{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source", "Vendor", "Service group", "Call type", "Automatically switched", "Error code", "Cache read tokens", "Cache write tokens", "Captured billing details"}},
 		{"usage", []string{"Date", "Model", "Key ID", "Requests", "Input tokens", "Output tokens", "Amount (USD)", "Amount (nano-USD)"}},
 		{"ledger", []string{"Ledger ID", "Time", "Type", "Amount (USD)", "Amount (nano-USD)", "Balance after (USD)", "Balance after (nano-USD)", "Description", "Order ID", "Key ID", "Requests", "Funding Source", "API Quota Eligible"}},
 	}
@@ -358,10 +358,10 @@ func TestEmptyExportContainsOnlyHeader(t *testing.T) {
 
 			rr = call(DownloadExport, testRequest{
 				method: http.MethodGet,
-				target: "/api/export/" + itoa(exp.ID) + "/download",
+				target: "/api/export/files/" + testExportDownloadToken(t, exp.ID) + "/download",
 				userID: u.ID,
 				role:   common.RoleUser,
-				path:   map[string]string{"id": itoa(exp.ID)},
+				path:   map[string]string{"token": testExportDownloadToken(t, exp.ID)},
 			})
 			if rr.Code != http.StatusOK {
 				t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
@@ -450,10 +450,10 @@ func TestDownloadExport(t *testing.T) {
 	// Download the CSV.
 	rr = call(DownloadExport, testRequest{
 		method: http.MethodGet,
-		target: "/api/export/" + itoa(exportID) + "/download",
+		target: "/api/export/files/" + testExportDownloadToken(t, exportID) + "/download",
 		userID: u.ID,
 		role:   common.RoleUser,
-		path:   map[string]string{"id": itoa(exportID)},
+		path:   map[string]string{"token": testExportDownloadToken(t, exportID)},
 	})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rr.Code)
@@ -510,10 +510,10 @@ func TestDownloadExportRequestsCSVEscaping(t *testing.T) {
 
 	rr = call(DownloadExport, testRequest{
 		method: http.MethodGet,
-		target: "/api/export/" + itoa(exp.ID) + "/download",
+		target: "/api/export/files/" + testExportDownloadToken(t, exp.ID) + "/download",
 		userID: u.ID,
 		role:   common.RoleUser,
-		path:   map[string]string{"id": itoa(exp.ID)},
+		path:   map[string]string{"token": testExportDownloadToken(t, exp.ID)},
 	})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %q)", rr.Code, rr.Body.String())
@@ -529,7 +529,7 @@ func TestDownloadExportRequestsCSVEscaping(t *testing.T) {
 		t.Fatalf("invalid CSV: %v (body %q)", err, rr.Body.String())
 	}
 	loc, _ := time.LoadLocation("Asia/Dubai")
-	want := [][]string{[]string{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source"}, {"log_" + itoa(l.ID), createdAt.In(loc).Format("2006-01-02T15:04:05-07:00"), itoa(token.ID), tokenName, requestedModel, modelName, "success", "100", "50", "0", "0", "0.000046000", "46000", "api"}}
+	want := [][]string{[]string{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source", "Vendor", "Service group", "Call type", "Automatically switched", "Error code", "Cache read tokens", "Cache write tokens", "Captured billing details"}, {"log_" + itoa(l.ID), createdAt.In(loc).Format("2006-01-02T15:04:05-07:00"), itoa(token.ID), tokenName, requestedModel, modelName, "success", "100", "50", "0", "0", "0.000046000", "46000", "api", "", "", "", "false", "", "0", "0", ""}}
 
 	if !reflect.DeepEqual(rows, want) {
 		t.Fatalf("CSV rows = %q, want %q", rows, want)
@@ -554,10 +554,10 @@ func TestDownloadExportForbiddenForOtherUser(t *testing.T) {
 
 	rr = call(DownloadExport, testRequest{
 		method: http.MethodGet,
-		target: "/api/export/" + itoa(exportID) + "/download",
+		target: "/api/export/files/" + testExportDownloadToken(t, exportID) + "/download",
 		userID: bob.ID,
 		role:   common.RoleUser,
-		path:   map[string]string{"id": itoa(exportID)},
+		path:   map[string]string{"token": testExportDownloadToken(t, exportID)},
 	})
 	expectError(t, rr, http.StatusNotFound, "export not found")
 }
@@ -568,10 +568,10 @@ func TestDownloadExportNotFound(t *testing.T) {
 
 	rr := call(DownloadExport, testRequest{
 		method: http.MethodGet,
-		target: "/api/export/9999/download",
+		target: "/api/export/files/" + strings.Repeat("0", 64) + "/download",
 		userID: u.ID,
 		role:   common.RoleUser,
-		path:   map[string]string{"id": "9999"},
+		path:   map[string]string{"token": strings.Repeat("0", 64)},
 	})
 	expectError(t, rr, http.StatusNotFound, "export not found")
 }
@@ -600,4 +600,13 @@ func TestExportHistoryIsOwnerBoundForAdmins(t *testing.T) {
 	if len(exports) != 0 {
 		t.Fatalf("admin sees %d foreign exports, want 0", len(exports))
 	}
+}
+
+func testExportDownloadToken(t *testing.T, id int64) string {
+	t.Helper()
+	row, err := model.GetExport(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return row.DownloadToken
 }

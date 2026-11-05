@@ -35,19 +35,28 @@ const (
 type Resource string
 
 const (
-	ResourceUser         Resource = "user"
-	ResourceChannel      Resource = "channel"
-	ResourceTaskPlugin   Resource = "task_plugin"
-	ResourceToken        Resource = "token"
-	ResourceOption       Resource = "option"
-	ResourceLog          Resource = "log"
-	ResourceAudit        Resource = "audit"
-	ResourceRedemption   Resource = "redemption"
-	ResourceFinance      Resource = "finance"
-	ResourceInventory    Resource = "inventory"
-	ResourceRegion       Resource = "region"
-	ResourceServiceGroup Resource = "service_group"
-	ResourceModelMeta    Resource = "model_metadata"
+	ResourceUser            Resource = "user"
+	ResourceChannel         Resource = "channel"
+	ResourceTaskPlugin      Resource = "task_plugin"
+	ResourceToken           Resource = "token"
+	ResourceOption          Resource = "option"
+	ResourceLog             Resource = "log"
+	ResourceAudit           Resource = "audit"
+	ResourceRedemption      Resource = "redemption"
+	ResourceFinance         Resource = "finance"
+	ResourceInventory       Resource = "inventory"
+	ResourceRegion          Resource = "region"
+	ResourceServiceGroup    Resource = "service_group"
+	ResourceModelMeta       Resource = "model_metadata"
+	ResourceStaff           Resource = "staff_accounts"
+	ResourceSync            Resource = "resource_sync"
+	ResourceAdjustment      Resource = "financial_adjustment"
+	ResourceBilling         Resource = "billing"
+	ResourceExport          Resource = "export"
+	ResourceMetrics         Resource = "metrics"
+	ResourceSystem          Resource = "system"
+	ResourceCustomerControl Resource = "customer_control"
+	ResourceReconciliation  Resource = "reconciliation"
 )
 
 // policy maps role -> resource -> allowed actions. An empty action set means
@@ -55,6 +64,8 @@ const (
 // denied.
 var policy = map[int]map[Resource]map[Action]bool{
 	common.RoleRoot: {
+		ResourceReconciliation: {},
+		ResourceStaff:          {}, ResourceSync: {}, ResourceAdjustment: {}, ResourceBilling: {}, ResourceExport: {}, ResourceMetrics: {}, ResourceSystem: {}, ResourceCustomerControl: {},
 		ResourceUser:         {}, // all actions
 		ResourceChannel:      {}, // all actions
 		ResourceTaskPlugin:   {ActionRead: true, ActionWrite: true},
@@ -70,24 +81,26 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceModelMeta:    {ActionRead: true, ActionWrite: true, ActionDelete: true},
 	},
 	common.RoleAdmin: {
-		ResourceUser:         {ActionRead: true},
-		ResourceChannel:      {ActionRead: true, ActionWrite: true, ActionDelete: true},
-		ResourceTaskPlugin:   {ActionRead: true, ActionWrite: true},
-		ResourceToken:        {ActionRead: true, ActionWrite: true, ActionDelete: true},
-		ResourceOption:       {ActionRead: true, ActionWrite: true},
-		ResourceLog:          {ActionRead: true},
-		ResourceAudit:        {ActionRead: true},
-		ResourceRedemption:   {ActionRead: true, ActionWrite: true, ActionDelete: true},
-		ResourceFinance:      {ActionRead: true},
-		ResourceInventory:    {ActionRead: true, ActionWrite: true},
-		ResourceRegion:       {ActionRead: true, ActionWrite: true, ActionDelete: true},
+		ResourceUser:      {ActionRead: true},
+		ResourceChannel:   {ActionRead: true},
+		ResourceToken:     {ActionRead: true},
+		ResourceOption:    {ActionRead: true, ActionWrite: true},
+		ResourceLog:       {ActionRead: true},
+		ResourceAudit:     {ActionRead: true},
+		ResourceInventory: {ActionRead: true},
+		ResourceExport:    {ActionRead: true, ActionWrite: true}, ResourceMetrics: {ActionRead: true}, ResourceCustomerControl: {ActionRead: true, ActionWrite: true},
 		ResourceServiceGroup: {ActionRead: true, ActionWrite: true, ActionDelete: true},
 		ResourceModelMeta:    {ActionRead: true, ActionWrite: true, ActionDelete: true},
 	},
 	common.RoleFinance: {
+		ResourceReconciliation:  {ActionRead: true, ActionWrite: true},
+		ResourceCustomerControl: {ActionRead: true},
+		ResourceUser:            {ActionRead: true}, ResourceAudit: {ActionRead: true}, ResourceBilling: {ActionRead: true}, ResourceAdjustment: {ActionWrite: true}, ResourceExport: {ActionRead: true, ActionWrite: true}, ResourceMetrics: {ActionRead: true},
 		ResourceFinance: {ActionRead: true},
-		ResourceToken:   {ActionRead: true, ActionWrite: true, ActionDelete: true},
-		ResourceLog:     {ActionRead: true},
+	},
+	common.RoleTechnical: {
+		ResourceCustomerControl: {ActionRead: true},
+		ResourceUser:            {ActionRead: true}, ResourceLog: {ActionRead: true}, ResourceAudit: {ActionRead: true}, ResourceChannel: {ActionRead: true, ActionWrite: true, ActionDelete: true}, ResourceInventory: {ActionRead: true, ActionWrite: true}, ResourceRegion: {ActionRead: true}, ResourceSync: {ActionRead: true, ActionWrite: true}, ResourceSystem: {ActionRead: true}, ResourceExport: {ActionRead: true, ActionWrite: true},
 	},
 	common.RoleUser: {
 		ResourceToken: {ActionRead: true, ActionWrite: true, ActionDelete: true},
@@ -131,6 +144,32 @@ func methodAction(method string) Action {
 func pathResource(path string) (Resource, bool) {
 	path = strings.TrimSuffix(path, "/")
 	switch {
+	case path == "/api/admin/models" || strings.HasPrefix(path, "/api/admin/models/"):
+		return ResourceModelMeta, true
+	case path == "/api/admin/region-profile" || path == "/api/admin/legal" || strings.HasPrefix(path, "/api/admin/region-profile/"):
+		return ResourceStaff, true
+	case path == "/api/admin/pricing-history":
+		return ResourceModelMeta, true
+	case path == "/api/admin/reconciliation":
+		return ResourceReconciliation, true
+	case path == "/api/admin/customers":
+		return ResourceUser, true
+	case path == "/api/admin/staff" || strings.HasPrefix(path, "/api/admin/staff/"):
+		return ResourceStaff, true
+	case path == "/api/admin/resource-sync":
+		return ResourceSync, true
+	case path == "/api/admin/system":
+		return ResourceSystem, true
+	case strings.HasPrefix(path, "/api/admin/customers/") && strings.HasSuffix(path, "/adjustments"):
+		return ResourceAdjustment, true
+	case strings.HasPrefix(path, "/api/admin/customers/"):
+		return ResourceCustomerControl, true
+	case path == "/api/metrics" || path == "/api/admin/dashboard":
+		return ResourceMetrics, true
+	case strings.HasPrefix(path, "/api/ledger") || strings.HasPrefix(path, "/api/wallet") || strings.HasPrefix(path, "/api/recharge"):
+		return ResourceBilling, true
+	case strings.HasPrefix(path, "/api/export"):
+		return ResourceExport, true
 	case path == "/api/task-plugin" || strings.HasPrefix(path, "/api/task-plugin/"):
 		return ResourceTaskPlugin, true
 	case strings.HasPrefix(path, "/api/user"):
@@ -166,8 +205,14 @@ func pathResource(path string) (Resource, bool) {
 // traffic (non-/api paths) is always allowed (the relay chain enforces its
 // own auth).
 func CheckRequest(role int, r *http.Request) bool {
+	if role == common.RoleAdmin && (r.URL.Path == "/api/option/rollback" || r.URL.Path == "/api/option/history") {
+		return false
+	}
 	resource, ok := pathResource(r.URL.Path)
 	if !ok {
+		if strings.HasPrefix(r.URL.Path, "/api/admin/") {
+			return false
+		}
 		return true // not a management API resource
 	}
 	return Allow(role, resource, methodAction(r.Method))

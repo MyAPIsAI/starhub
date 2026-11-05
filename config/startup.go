@@ -18,12 +18,16 @@ import (
 )
 
 type Bootstrap struct {
-	DBPath            string
-	Port              string
-	RootPassword      string
-	ForceSecureCookie bool
-	TrustedProxies    []string
-	RegionTimezone    string
+	DBPath                string
+	Port                  string
+	RootPassword          string
+	ForceSecureCookie     bool
+	TrustedProxies        []string
+	RegionTimezone        string
+	StaffAllowedIPs       []string
+	ResourceSnapshotURL   string
+	ResourceSnapshotToken string
+	StaffSetupMode        string
 }
 
 type Startup struct {
@@ -46,6 +50,7 @@ type fileConfig struct {
 	Security struct {
 		ForceSecureCookie *bool    `yaml:"force_secure_cookie"`
 		TrustedProxies    []string `yaml:"trusted_proxies"`
+		StaffAllowedIPs   []string `yaml:"staff_allowed_ips"`
 	} `yaml:"security"`
 	InitialOptions struct {
 		ChannelTestInterval *int64 `yaml:"channel_test_interval"`
@@ -72,6 +77,9 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 		Bootstrap:      Bootstrap{DBPath: "starhub.db", Port: "3000", RootPassword: getenv("STARHUB_ROOT_PASSWORD"), RegionTimezone: "Asia/Dubai"},
 		InitialOptions: make(map[string]string),
 	}
+	result.Bootstrap.ResourceSnapshotURL = getenv("STARHUB_RESOURCE_SNAPSHOT_URL")
+	result.Bootstrap.StaffSetupMode = getenv("STARHUB_STAFF_SETUP_MODE")
+	result.Bootstrap.ResourceSnapshotToken = getenv("STARHUB_RESOURCE_SNAPSHOT_TOKEN")
 	if path != "" {
 		absolute, err := filepath.Abs(path)
 		if err != nil {
@@ -119,6 +127,7 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 			result.Bootstrap.ForceSecureCookie = *cfg.Security.ForceSecureCookie
 		}
 		result.Bootstrap.TrustedProxies = cfg.Security.TrustedProxies
+		result.Bootstrap.StaffAllowedIPs = cfg.Security.StaffAllowedIPs
 		if cfg.Region.Timezone != "" {
 			result.Bootstrap.RegionTimezone = cfg.Region.Timezone
 		}
@@ -148,6 +157,15 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	}
 	if value := getenv("STARHUB_REGION_TIMEZONE"); value != "" {
 		result.Bootstrap.RegionTimezone = value
+	}
+	if value, ok := func() (string, bool) { value := getenv("STARHUB_STAFF_ALLOWED_IPS"); return value, value != "" }(); ok {
+		result.Bootstrap.StaffAllowedIPs = strings.Split(value, ",")
+	}
+	for i, value := range result.Bootstrap.StaffAllowedIPs {
+		result.Bootstrap.StaffAllowedIPs[i] = strings.TrimSpace(value)
+		if _, err := common.ParseIPNetwork(strings.TrimSpace(value)); err != nil {
+			return Startup{}, fmt.Errorf("security.staff_allowed_ips: %w", err)
+		}
 	}
 	if _, err := time.LoadLocation(result.Bootstrap.RegionTimezone); err != nil || result.Bootstrap.RegionTimezone == "Local" {
 		return Startup{}, fmt.Errorf("region.timezone must be an IANA timezone")
@@ -214,6 +232,19 @@ func configPath(args []string, getenv func(string) string) (string, error) {
 
 // ApplyStartup sets defaults before the database seeds missing option keys.
 func ApplyStartup(startup Startup) error {
+	if err := ConfigureStaffSetup(startup.Bootstrap.StaffSetupMode); err != nil {
+		return err
+	}
+	if err := ConfigureSnapshotSource(startup.Bootstrap.ResourceSnapshotURL, startup.Bootstrap.ResourceSnapshotToken); err != nil {
+		return err
+	}
+	networks := startup.Bootstrap.StaffAllowedIPs
+	if len(networks) == 0 {
+		networks = []string{"127.0.0.1/32", "::1/128"}
+	}
+	if err := ConfigureStaffNetworks(networks); err != nil {
+		return err
+	}
 	zone := startup.Bootstrap.RegionTimezone
 	if zone == "" {
 		zone = "Asia/Dubai"
@@ -243,6 +274,14 @@ func ApplyStartup(startup Startup) error {
 }
 
 var regionTimezone atomic.Value
+
+func SetRegionTimezone(zone string) error {
+	if _, err := time.LoadLocation(zone); err != nil {
+		return err
+	}
+	regionTimezone.Store(zone)
+	return nil
+}
 
 func RegionTimezone() string {
 	if value := regionTimezone.Load(); value != nil {

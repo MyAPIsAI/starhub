@@ -76,6 +76,9 @@ func sizeRatio(model, size string) float64 {
 
 // ImageBill carries the billing inputs of one image request.
 type ImageBill struct {
+	BillingDetail string
+	SettledUsage  *Usage
+	UsageSource   string
 	Model, Group  string
 	UserGroup     string // user's own group (for the group x group matrix)
 	Size, Quality string
@@ -176,6 +179,7 @@ func (b *ImageBill) SettleQuota(actualCount int, usage *dto.ImageUsage) int64 {
 	if count <= 0 || count > dto.MaxImageN {
 		count = b.Count
 	}
+	defer b.rememberBilling(count, usage, actualCount > 0 && actualCount <= dto.MaxImageN)
 	if pd.IsExpression() {
 		// Expression path: settle uses the actual delivered count and
 		// the real usage (if the upstream reports tokens).

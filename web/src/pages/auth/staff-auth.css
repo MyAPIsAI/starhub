@@ -1,0 +1,56 @@
+.auth-staff-verification {
+  display: grid;
+  gap: 18px;
+}
+.auth-staff-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-inline-start: 3px solid var(--brand);
+  background: var(--subtle);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.auth-staff-verification .auth-error {
+  margin: 0;
+}
+.auth-staff-verification .staff-secret {
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--subtle);
+  user-select: all;
+}
+.staff-login-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: var(--bg);
+}
+.auth-dialog.staff-login-card,
+[dir="rtl"] .auth-dialog.staff-login-card {
+  position: static;
+  transform: none;
+  width: min(460px, 100%);
+  max-height: none;
+}
+.staff-login-card h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.45;
+}
+.staff-login-card .auth-wordmark {
+  color: inherit;
+  text-decoration: none;
+  width: fit-content;
+  margin-bottom: 0;
+}
+.staff-login-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 26px;
+}

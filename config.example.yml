@@ -16,6 +16,8 @@ security:
   force_secure_cookie: false
   # Only these connection peers may supply X-Forwarded-For chains.
   trusted_proxies: []
+  # Replace loopback with the company's public egress IPs or VPN CIDRs.
+  staff_allowed_ips: ["127.0.0.1/32", "::1/128"]
 
 # These values seed only missing database options. Change existing options
 # through the management API so updates are versioned and reloaded.

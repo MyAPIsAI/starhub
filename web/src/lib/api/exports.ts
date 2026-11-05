@@ -26,6 +26,13 @@ export interface ExportRecord {
   failure?: string;
 }
 export interface ExportInput {
+  key_id?: number;
+  model?: string;
+  vendor?: string;
+  call_type?: string;
+  group?: string;
+  trace_id?: string;
+  group_by?: string;
   type: "requests" | "ledger" | "usage";
   range_days?: number;
   start_date?: string;
@@ -55,7 +62,10 @@ export function useExports() {
         : false,
     queryFn: async ({ signal }) => {
       unchanged(scope);
-      const rows = await apiGet<ExportRecord[]>("/api/export?scope=owned", signal);
+      const rows = await apiGet<ExportRecord[]>(
+        "/api/export?scope=owned",
+        signal,
+      );
       unchanged(scope);
       if (rows.some((row) => row.user_id !== scope[1]))
         throw Error("Export response belongs to another account");
@@ -91,17 +101,19 @@ export async function downloadExport(
 ) {
   const scope = sessionQueryIdentity(useSystemAccess.getState());
   unchanged(scope);
-  const url = downloadURL ?? `/api/export/${id}/download`;
+  const url = downloadURL;
   if (
-    !/^\/api\/export\/(?:files\/[a-f0-9]{64}\/(?:download|dictionary)|\d+\/download)$/.test(
-      url,
-    )
+    !Number.isSafeInteger(id) ||
+    id <= 0 ||
+    !url ||
+    !/^\/api\/export\/files\/[a-f0-9]{64}\/(?:download|dictionary)$/.test(url)
   )
     throw Error("Invalid export download location");
   const response = await fetch(url, {
     credentials: "same-origin",
     headers: {
       Accept: "text/csv",
+      "X-StarHub-Portal": "workspace",
       "X-StarHub-Expected-User-ID": String(scope[1]),
     },
   });

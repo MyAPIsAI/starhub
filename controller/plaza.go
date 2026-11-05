@@ -38,6 +38,12 @@ func plazaSession(r *http.Request) (userGroup string, userID int64) {
 			return group, u.ID
 		}
 	}
+	if user, ok := middleware.PlatformWorkspaceOwner(r); ok {
+		if user.Group == "" {
+			return common.DefaultGroup, user.ID
+		}
+		return user.Group, user.ID
+	}
 	return common.DefaultGroup, 0
 }
 

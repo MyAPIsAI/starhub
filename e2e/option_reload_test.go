@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"starhub/internal/testauth"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestOptionReloadUsesAdminPolicyAndAudit(t *testing.T) {
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := testauth.Session(t, user.ID, time.Hour)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		res := doRequest(env.base, "POST", "/api/option/reload", session, nil)
 		if role == common.RoleAdmin {

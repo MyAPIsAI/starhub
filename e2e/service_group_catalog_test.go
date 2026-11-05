@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"starhub/internal/testauth"
 	"testing"
 	"time"
 
@@ -56,7 +57,7 @@ func TestGroupCatalogPolicyAndIndependentPriceRevisionGuard(t *testing.T) {
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := testauth.Session(t, user.ID, time.Hour)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		want := 403
 		if role == common.RoleAdmin {

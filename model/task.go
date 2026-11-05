@@ -15,6 +15,9 @@ var ErrTaskNotFound = errors.New("task not found")
 // following the submit-and-poll lifecycle of P3.3. Quota holds the
 // pre-charge reserved at submit; the terminal poll settles the difference.
 type Task struct {
+	RoutingEvidence      string `gorm:"type:text;not null;default:''" json:"-"`
+	TraceID              string `gorm:"size:64;not null;default:''" json:"trace_id,omitempty"`
+	CallType             string `gorm:"size:32;not null;default:''" json:"call_type,omitempty"`
 	TokenPeriodStartedAt int64  `gorm:"not null;default:0" json:"token_period_started_at,omitempty"`
 	ID                   int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	TaskPluginID         int64  `gorm:"not null;default:0;index" json:"task_plugin_id"`

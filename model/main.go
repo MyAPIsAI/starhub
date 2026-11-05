@@ -41,11 +41,29 @@ func InitDB(path string) error {
 	}()
 	db = db.Set(tokenCipherSetting, aead).Session(&gorm.Session{})
 	legacyQuotaLimits := !db.Migrator().HasColumn(&Token{}, "quota_limit")
+	legacyStaffAccounts := !db.Migrator().HasColumn(&User{}, "account_kind")
 	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 	if err := db.AutoMigrate(&ChannelConfigurationState{}); err != nil {
 		return fmt.Errorf("migrate channel configuration revision: %w", err)
+	}
+	if err := db.AutoMigrate(&DeploymentProfileState{}, &DeploymentProfileVersion{}, &LegalDocumentVersion{}, &StandardModel{}, &StandardModelHistory{}, &CustomerRequestLease{}, &ReconciliationReport{}); err != nil {
+		return err
+	}
+	if err := db.FirstOrCreate(&DeploymentProfileState{}, DeploymentProfileState{ID: 1}).Error; err != nil {
+		return err
+	}
+	if legacyStaffAccounts {
+		if err := db.Model(&User{}).Where("role IN ?", []int{common.RoleAdmin, common.RoleFinance, common.RoleTechnical, common.RoleRoot}).Updates(map[string]any{"account_kind": "staff", "must_change_password": true, "security_version": gorm.Expr("security_version + 1")}).Error; err != nil {
+			return err
+		}
+	}
+	if err := db.AutoMigrate(&StaffAccount{}); err != nil {
+		return fmt.Errorf("migrate staff schema: %w", err)
+	}
+	if err := migrateStaffIdentities(db); err != nil {
+		return fmt.Errorf("migrate staff identities: %w", err)
 	}
 	if err := db.AutoMigrate(&APIChargeEvent{}); err != nil {
 		return fmt.Errorf("migrate API billing outbox: %w", err)
@@ -150,7 +168,7 @@ func seedRootAndGroups(tx *gorm.DB, rootPassword string) error {
 			Group:    common.DefaultGroup,
 			AffCode:  common.GenerateAffCode(),
 		}
-		if err := tx.Create(root).Error; err != nil {
+		if err := createStaffIdentity(tx, root); err != nil {
 			return err
 		}
 		return seedDefaultServiceGroups(tx)

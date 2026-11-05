@@ -21,7 +21,7 @@ func GetProfileState(w http.ResponseWriter, r *http.Request) {
 	}
 	common.ApiSuccess(w, map[string]any{
 		"schema":          "profile_state_v1",
-		"guarded_updates": true,
+		"guarded_updates": user.AccountKind != "staff",
 		"user": map[string]any{
 			"id": user.ID, "username": user.Username, "email": user.Email,
 			"role": user.Role, "status": user.Status, "created_at": user.CreatedAt,

@@ -61,14 +61,14 @@ func TestExportDownloadUserIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := fmt.Sprintf("/api/export/%d/download", created.Data.ID)
+	path := "/api/export/files/" + stored.DownloadToken + "/download"
 	cases := []struct {
 		name    string
 		session string
 		status  int
 		message string
 	}{
-		{"anonymous", "", http.StatusUnauthorized, "login required"},
+		{"anonymous", "", http.StatusNotFound, "export not found"},
 		{"other user", bobSession, http.StatusNotFound, "export not found"},
 		{"owner", aliceSession, http.StatusOK, ""},
 	}
@@ -206,7 +206,7 @@ func TestExportRequestsContentUserIsolation(t *testing.T) {
 			if stored.UserID != tc.userID || stored.RowCount != 1 {
 				t.Fatalf("unexpected persisted export metadata: %+v", stored)
 			}
-			path := fmt.Sprintf("/api/export/%d/download", created.Data.ID)
+			path := "/api/export/files/" + stored.DownloadToken + "/download"
 			res = doRequest(env.base, http.MethodGet, path, tc.session, nil)
 			if res.Status != http.StatusOK || res.Body != string(stored.Content) {
 				t.Fatalf("download differs from persisted export: %d %q", res.Status, res.Body)
@@ -223,8 +223,8 @@ func TestExportRequestsContentUserIsolation(t *testing.T) {
 				quota = 99
 			}
 			want := [][]string{
-				{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source"},
-				{"log_" + old[0], createdTime.In(loc).Format("2006-01-02T15:04:05-07:00"), old[3], old[4], old[9], old[5], "success", old[6], old[7], "0", "0", fmt.Sprintf("0.%09d", quota*2000), fmt.Sprint(quota * 2000), "api"},
+				{"Trace ID", "Time", "Key ID", "Key name", "Requested model", "Actual model", "Status", "Input tokens", "Output tokens", "Duration (ms)", "First token (ms)", "Amount (USD)", "Amount (nano-USD)", "Source", "Vendor", "Service group", "Call type", "Automatically switched", "Error code", "Cache read tokens", "Cache write tokens", "Captured billing details"},
+				{"log_" + old[0], createdTime.In(loc).Format("2006-01-02T15:04:05-07:00"), old[3], old[4], old[9], old[5], "success", old[6], old[7], "0", "0", fmt.Sprintf("0.%09d", quota*2000), fmt.Sprint(quota * 2000), "api", "", "", "", "false", "", "0", "0", ""},
 			}
 
 			if !reflect.DeepEqual(rows, want) {

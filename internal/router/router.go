@@ -27,6 +27,43 @@ import (
 // retries with failover).
 func New() http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("GET /api/admin/reconciliation", middleware.AdminAuth(http.HandlerFunc(controller.AdminReconciliation)))
+	mux.Handle("POST /api/admin/reconciliation", middleware.AdminAuth(http.HandlerFunc(controller.AdminReconciliation)))
+	mux.Handle("GET /api/admin/customers", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerList)))
+	mux.Handle("GET /api/admin/customers/{id}", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerDetail)))
+	mux.Handle("GET /api/admin/customers/{id}/activity", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerActivity)))
+	mux.Handle("GET /api/admin/customers/{id}/calls/{trace}", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerCall)))
+	mux.Handle("POST /api/admin/customers/{id}/control", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerControl)))
+	mux.Handle("POST /api/admin/customers/{id}/sessions/revoke", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerRevokeSessions)))
+	mux.Handle("GET /api/admin/models", middleware.AdminAuth(http.HandlerFunc(controller.GetStandardModels)))
+	mux.Handle("PUT /api/admin/models", middleware.AdminAuth(http.HandlerFunc(controller.PutStandardModel)))
+	mux.Handle("DELETE /api/admin/models/{model...}", middleware.AdminAuth(http.HandlerFunc(controller.RemoveStandardModel)))
+	mux.Handle("GET /api/admin/region-profile", middleware.AdminAuth(http.HandlerFunc(controller.GetDeploymentProfile)))
+	mux.Handle("PUT /api/admin/region-profile", middleware.AdminAuth(http.HandlerFunc(controller.PutDeploymentProfile)))
+	mux.Handle("GET /api/admin/legal", middleware.AdminAuth(http.HandlerFunc(controller.GetLegalVersions)))
+	mux.Handle("POST /api/admin/legal", middleware.AdminAuth(http.HandlerFunc(controller.PostLegalVersion)))
+	mux.HandleFunc("GET /api/legal/{kind}", controller.GetPublishedLegal)
+	mux.Handle("GET /api/admin/pricing-history", middleware.AdminAuth(http.HandlerFunc(controller.ListPricingHistory)))
+	staffPublic := func(handler http.HandlerFunc) http.Handler { return middleware.StaffNetwork(handler) }
+	mux.Handle("GET /api/admin/install", staffPublic(controller.StaffInstallationState))
+	mux.Handle("POST /api/admin/install", middleware.StaffNetwork(middleware.StaffLoginRateLimit(http.HandlerFunc(controller.InstallStaffRoot))))
+	mux.Handle("POST /api/admin/auth/login", middleware.StaffNetwork(middleware.StaffLoginRateLimit(http.HandlerFunc(controller.StaffLogin))))
+	mux.Handle("GET /api/admin/auth/state", staffPublic(controller.GetStaffAuthState))
+	mux.Handle("POST /api/admin/auth/password", staffPublic(controller.StaffChangePassword))
+	mux.Handle("POST /api/admin/auth/enroll", staffPublic(controller.StaffBeginEnrollment))
+	mux.Handle("POST /api/admin/auth/verify", staffPublic(controller.StaffVerifyOTP))
+	mux.Handle("POST /api/admin/auth/logout", staffPublic(controller.StaffLogout))
+	mux.Handle("GET /api/admin/auth/self", middleware.StaffAuth(http.HandlerFunc(controller.GetStaffSelf)))
+	mux.Handle("GET /api/admin/staff", middleware.AdminAuth(http.HandlerFunc(controller.ListStaffAccounts)))
+	mux.Handle("POST /api/admin/staff", middleware.AdminAuth(http.HandlerFunc(controller.CreateStaffAccount)))
+	mux.Handle("PUT /api/admin/staff/{id}", middleware.AdminAuth(http.HandlerFunc(controller.UpdateStaffAccount)))
+	mux.Handle("POST /api/admin/customers/{id}/disable", middleware.AdminAuth(http.HandlerFunc(controller.StaffDisableCustomer)))
+	mux.Handle("GET /api/admin/customers/{id}/keys", middleware.AdminAuth(http.HandlerFunc(controller.StaffCustomerKeys)))
+	mux.Handle("POST /api/admin/customers/{id}/keys/{keyid}/disable", middleware.AdminAuth(http.HandlerFunc(controller.StaffDisableKey)))
+	mux.Handle("POST /api/admin/customers/{id}/adjustments", middleware.AdminAuth(http.HandlerFunc(controller.StaffAdjustBalance)))
+	mux.Handle("GET /api/admin/resource-sync", middleware.AdminAuth(http.HandlerFunc(controller.StaffResourceSyncStatus)))
+	mux.Handle("POST /api/admin/resource-sync", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.StaffForceResourceSync))))
+	mux.Handle("GET /api/admin/system", middleware.AdminAuth(http.HandlerFunc(controller.StaffSystemInfo)))
 
 	mux.HandleFunc("POST /api/user/login", controller.Login)
 	mux.HandleFunc("POST /api/user/register", controller.Register)
@@ -44,6 +81,7 @@ func New() http.Handler {
 	mux.Handle("PUT /api/user/profile-state", middleware.UserAuth(middleware.PasswordVerificationRateLimit(http.HandlerFunc(controller.UpdateProfileState))))
 	mux.Handle("POST /api/user/sessions/terminate-others", middleware.UserAuth(http.HandlerFunc(controller.TerminateOtherSessions)))
 	mux.Handle("GET /api/user/usage", middleware.UserAuth(http.HandlerFunc(controller.UserUsage)))
+	mux.Handle("GET /api/user/reports", middleware.UserAuth(http.HandlerFunc(controller.GetUsageReport)))
 	mux.Handle("GET /api/user", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
 	mux.Handle("GET /api/user/", middleware.AdminAuth(http.HandlerFunc(controller.ListUsers)))
 	mux.Handle("PUT /api/user", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser))))
@@ -116,12 +154,14 @@ func New() http.Handler {
 
 	mux.Handle("GET /api/log", middleware.UserAuth(http.HandlerFunc(controller.ListLogs)))
 	mux.Handle("GET /api/log/", middleware.UserAuth(http.HandlerFunc(controller.ListLogs)))
+	mux.Handle("GET /api/log/{trace}", middleware.UserAuth(http.HandlerFunc(controller.GetOwnedLog)))
 	mux.Handle("GET /api/playground/results/{trace}", middleware.UserAuth(http.HandlerFunc(controller.GetPlaygroundResult)))
 
 	mux.Handle("GET /api/audit", middleware.AdminAuth(http.HandlerFunc(controller.ListAuditLogs)))
 	mux.Handle("GET /api/audit/", middleware.AdminAuth(http.HandlerFunc(controller.ListAuditLogs)))
 
 	mux.Handle("GET /api/metrics", middleware.AdminAuth(http.HandlerFunc(controller.GetMetrics)))
+	mux.Handle("GET /api/admin/dashboard", middleware.AdminAuth(http.HandlerFunc(controller.GetOperatingDashboard)))
 	mux.Handle("GET /api/metrics/", middleware.AdminAuth(http.HandlerFunc(controller.GetMetrics)))
 
 	// Model plaza: a read-only browse surface over the channel graph, the
@@ -172,9 +212,10 @@ func New() http.Handler {
 	mux.Handle("GET /api/export/", middleware.UserAuth(http.HandlerFunc(controller.ListExports)))
 	mux.Handle("POST /api/export", middleware.UserAuth(http.HandlerFunc(controller.CreateExport)))
 	mux.Handle("POST /api/export/", middleware.UserAuth(http.HandlerFunc(controller.CreateExport)))
-	mux.Handle("GET /api/export/{id}/download", middleware.UserAuth(http.HandlerFunc(controller.DownloadExport)))
-	mux.Handle("GET /api/export/files/{token}/download", middleware.UserAuth(http.HandlerFunc(controller.DownloadExport)))
-	mux.Handle("GET /api/export/files/{token}/dictionary", middleware.UserAuth(http.HandlerFunc(controller.DownloadExport)))
+	// Keep the retired numeric route as a 404 instead of serving the SPA fallback.
+	mux.Handle("GET /api/export/{id}/download", middleware.ExportDownloadAuth(http.HandlerFunc(controller.DownloadExport)))
+	mux.Handle("GET /api/export/files/{token}/download", middleware.ExportDownloadAuth(http.HandlerFunc(controller.DownloadExport)))
+	mux.Handle("GET /api/export/files/{token}/dictionary", middleware.ExportDownloadAuth(http.HandlerFunc(controller.DownloadExport)))
 
 	// Service group management (admin only). The multiplier is synced
 	// to the group_ratio option so relay billing picks up changes.

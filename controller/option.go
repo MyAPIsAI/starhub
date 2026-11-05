@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"starhub/common"
 	"starhub/model"
@@ -16,12 +17,17 @@ func ListOptions(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	visible := opts[:0]
 	for i := range opts {
+		if strings.HasPrefix(opts[i].Key, "staff_installation_") {
+			continue
+		}
 		if opts[i].Key == setting.OptionKeyAlertWebhookURL && opts[i].Value != `""` {
 			opts[i].Value = "[redacted]"
 		}
+		visible = append(visible, opts[i])
 	}
-	common.ApiSuccess(w, opts)
+	common.ApiSuccess(w, visible)
 }
 
 func OptionStatus(w http.ResponseWriter, r *http.Request) {
@@ -102,6 +108,10 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	if requestRole(r) == common.RoleAdmin && !staffPricingOption(req.Key) {
+		common.ApiError(w, 403, "Operations may change model and group pricing only")
+		return
+	}
 	if !setting.IsOptionKey(req.Key) {
 		common.ApiError(w, http.StatusBadRequest, "unknown option key")
 		return
@@ -117,7 +127,7 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 	}
 	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
 	if req.ExpectedVersion != nil {
-		if _, err := model.SaveOptionIfVersion(req.Key, value, actorID, *req.ExpectedVersion); err != nil {
+		if _, err := model.SaveOptionContext(r.Context(), req.Key, value, actorID, *req.ExpectedVersion); err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, model.ErrOptionVersionConflict) {
 				status = http.StatusConflict
@@ -127,7 +137,7 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, status, err.Error())
 			return
 		}
-	} else if _, err := model.SaveOption(req.Key, value, actorID); err != nil {
+	} else if _, err := model.SaveOptionContext(r.Context(), req.Key, value, actorID, -1); err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, setting.ErrTokenPriceMode) {
 			status = http.StatusBadRequest
@@ -140,4 +150,14 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.ApiSuccess(w, nil)
+}
+
+func staffPricingOption(key string) bool {
+	switch key {
+	case setting.OptionKeyGroupRatio, setting.OptionKeyModelRatio, setting.OptionKeyCompletionRatio,
+		setting.OptionKeyModelPrice, setting.OptionKeyModelPriceExpr, setting.OptionKeyCacheRatio,
+		setting.OptionKeyAudioRatio, setting.OptionKeyModelTimePricing, setting.OptionKeyModelTimeTokenPrices:
+		return true
+	}
+	return false
 }

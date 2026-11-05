@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"starhub/internal/testauth"
 	"strconv"
 	"strings"
 	"testing"
@@ -23,7 +24,7 @@ func TestSessionOwnerHeaderRejectsBeforeLegacyKeyWrites(t *testing.T) {
 			req.Header.Add("X-StarHub-Expected-User-ID", value)
 		}
 		if cookie != "" {
-			req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+			testauth.Authorize(req, cookie)
 		}
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {

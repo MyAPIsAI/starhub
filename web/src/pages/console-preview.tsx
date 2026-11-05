@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import BillingCenter from "../features/billing-center";
 import AccountCenter from "../features/account-center";
@@ -30,12 +30,9 @@ import {
   Copy,
   Network,
   KeyRound,
-  LayoutDashboard,
   Plus,
   Terminal,
   Wallet,
-  BarChart3,
-  Download,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -64,9 +61,6 @@ import { formatMoney } from "../lib/money";
 import {
   useProductPreview,
   periodRequests,
-  summarizeRequests,
-  breakdownByModel,
-  activityFor,
   type PreviewKey,
   type PreviewRequest,
 } from "../lib/product-preview";
@@ -85,6 +79,7 @@ import AccessCenter from "../features/access-center";
 import { isSmartModelId } from "../lib/smart-model";
 import RequestDetails from "../features/request-inspector";
 import RequestHistoryPage from "../features/request-history-page";
+import UsageReports from "../features/usage-reports";
 import ServiceQuality from "../features/service-quality";
 import SmartRouting from "../features/resource-routing";
 import { StandardModels } from "../features/standard-models";
@@ -94,6 +89,7 @@ import {
   useSystemAccess,
   isAdmin,
   canReadFinance,
+  canManagePlatform,
   sessionUsername,
   sessionQueryIdentity,
   useSessionQueryIdentity,
@@ -110,31 +106,22 @@ import {
 } from "../lib/api/tokens";
 import { useWallet } from "../lib/api/billing";
 import { useCreateExport } from "../lib/api/exports";
-import { ApiError } from "../lib/api/http";
+import { ApiError, apiGet } from "../lib/api/http";
 import AccountDeactivation from "../features/account-deactivation";
 import {
   useUserUsage,
+  adaptLogRow,
   useLogs,
   useBackendRequests,
   quotaToNanoUsd,
-  resolveVendor,
   type LogRow,
 } from "../lib/api/usage";
 import { useAdminMetrics } from "../lib/api/admin";
 
-const navigation = [
-  { path: "", key: "pOverview", Icon: LayoutDashboard },
-  { path: "models", key: "navModels", Icon: Boxes },
-  { path: "keys", key: "pKeys", Icon: KeyRound },
-  { path: "connect", key: "navConnect", Icon: BookOpen },
-  { path: "playground", key: "pPlayground", Icon: Terminal },
-  { path: "service-quality", key: "navServiceQuality", Icon: ShieldCheck },
-  { path: "usage", key: "usageReportsTitle", Icon: BarChart3 },
-  { path: "requests", key: "pUsage", Icon: Activity },
-  { path: "billing", key: "billingTitle", Icon: Wallet },
-  { path: "exports", key: "exportsTitle", Icon: Download },
-  { path: "settings", key: "settingsTitle", Icon: Settings },
-];
+import {
+  WorkspaceLinks,
+  workspaceNavigation,
+} from "../features/workspace-navigation";
 
 function ResultPill({ failed }: { failed: boolean }) {
   const { t } = useTranslation();
@@ -180,6 +167,10 @@ function ConsoleWorkspace() {
   }, [section, role, mobileNavOpen]);
 
   const session = useSystemAccess((s) => s.session);
+  const platformAdmin = canManagePlatform({ role, session });
+  const workspaceRoleLabel = platformAdmin
+    ? c("平台管理员", "Platform administrator", "مسؤول المنصة")
+    : c("普通用户", "Customer", "مستخدم");
   const sessionScope = sessionQueryIdentity({ session, role });
   const isCurrentSession = () =>
     JSON.stringify(sessionScope) ===
@@ -302,17 +293,28 @@ function ConsoleWorkspace() {
   >("requests");
   const [selected, setSelected] = useState<PreviewRequest | null>(null);
   const previousTrace = useRef<string | null>(null);
-  useEffect(() => {
-    const trace = new URLSearchParams(location.search).get("trace");
-    if (trace && section === "requests")
-      setSelected(
-        (backendRequests as any[]).find(
-          (r) => r.trace_id === trace,
-        ) as PreviewRequest | null,
+  const linkedTrace = new URLSearchParams(location.search).get("trace");
+  const linkedRequest = useQuery({
+    queryKey: ["request-detail", sessionScope, linkedTrace],
+    enabled: section === "requests" && !!linkedTrace,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const row = await apiGet<LogRow>(
+        `/api/log/${encodeURIComponent(linkedTrace!)}`,
+        signal,
       );
-    else if (previousTrace.current) setSelected(null);
-    previousTrace.current = section === "requests" ? trace : null;
-  }, [location.search, section, backendRequests]);
+      if (!isCurrentSession()) throw Error("Request account changed");
+      return adaptLogRow(row) as PreviewRequest;
+    },
+  });
+  useEffect(() => {
+    if (linkedTrace && section === "requests") {
+      setSelected(linkedRequest.data ?? null);
+    } else if (previousTrace.current) {
+      setSelected(null);
+    }
+    previousTrace.current = section === "requests" ? linkedTrace : null;
+  }, [linkedTrace, section, linkedRequest.data]);
   const [createOpen, setCreateOpen] = useState(false);
   const requestedModel = new URLSearchParams(location.search).get("model");
   const initialCreateModel =
@@ -415,21 +417,26 @@ function ConsoleWorkspace() {
   const [exportSelection, setExportSelection] = useState<{
     status?: string;
     query?: string;
+    key_id?: number;
+    model?: string;
+    trace_id?: string;
   }>({});
   const [exportError, setExportError] = useState("");
 
   // Deactivate modal
   const [deactivateOpen, setDeactivateOpen] = useState(false);
 
-  // Overview metrics derived from the backend usage summary
-  // (GET /api/user/usage). Falls back to demo store data when the
-  // query is loading or errors so the overview degrades gracefully.
+  // Overview metrics use only the authenticated backend usage summary.
   const usageItems = usageQuery.data?.items ?? [];
-  // periodRows from demo store — used as fallback for model breakdown
-  // and latency when the backend usage API has no data.
-  const periodRows = useMemo(() => {
-    return periodRequests(requests, days === "7" ? 7 : 30);
-  }, [requests, days]);
+  // Recent backend rows supply the optional latency display.
+  const periodRows = useMemo(
+    () =>
+      periodRequests(
+        backendRequests as PreviewRequest[],
+        days === "7" ? 7 : 30,
+      ),
+    [backendRequests, days],
+  );
   const chartActivity = useMemo(() => {
     if (usageItems.length) {
       return usageItems.map((item) => ({
@@ -443,11 +450,8 @@ function ConsoleWorkspace() {
         latency: 0,
       }));
     }
-    // Fallback to demo data.
-    return activityFor(
-      periodRequests(requests, days === "7" ? 7 : 30),
-      days === "7" ? 7 : 30,
-    );
+    // No backend records are available.
+    return [];
   }, [usageItems, requests, days]);
 
   const summary = useMemo(() => {
@@ -461,55 +465,16 @@ function ConsoleWorkspace() {
       return {
         count: totalRequests,
         cost: quotaToNanoUsd(totalQuota),
-        // Compute the real success rate from the backend's per-day
-        // success_count. Falls back to 100% when success_count is 0
-        // (old logs without the status field).
+        // Zero successful requests must remain a zero success rate.
         success:
           totalRequests > 0
-            ? totalSuccess > 0
-              ? Number(((totalSuccess / totalRequests) * 100).toFixed(2))
-              : 100
+            ? Number(((totalSuccess / totalRequests) * 100).toFixed(2))
             : 0,
       };
     }
-    // Fallback to demo data.
-    return summarizeRequests(periodRequests(requests, days === "7" ? 7 : 30));
+    // No backend records are available.
+    return { count: 0, cost: "0", success: 0 };
   }, [usageItems, requests, days]);
-
-  const modelRows = useMemo(() => {
-    // Use backend by_model when available; fall back to demo store.
-    const byModel = usageQuery.data?.by_model;
-    if (byModel && byModel.length > 0) {
-      const buckets = new Map<
-        string,
-        { count: number; quota: number; tokens: number }
-      >();
-      for (const row of byModel) {
-        const existing = buckets.get(row.model);
-        if (existing) {
-          existing.count += row.requests;
-          existing.quota += row.quota;
-          existing.tokens += row.prompt_tokens + row.completion_tokens;
-        } else {
-          buckets.set(row.model, {
-            count: row.requests,
-            quota: row.quota,
-            tokens: row.prompt_tokens + row.completion_tokens,
-          });
-        }
-      }
-      return [...buckets.entries()]
-        .map(([model, agg]) => ({
-          model,
-          vendor: resolveVendor(model),
-          count: agg.count,
-          cost: quotaToNanoUsd(agg.quota),
-          success: agg.count > 0 ? "100" : "—",
-        }))
-        .sort((a, b) => b.count - a.count);
-    }
-    return breakdownByModel(periodRequests(requests, days === "7" ? 7 : 30));
-  }, [usageQuery.data, requests, days]);
 
   const isLowBalance = balanceKnown && BigInt(balance) < 5000000000n; // < $5.00
   const isZeroBalance = balanceKnown && BigInt(balance) <= 0n;
@@ -637,7 +602,8 @@ function ConsoleWorkspace() {
   };
 
   const activeSection =
-    navigation.find((item) => item.path === section) || navigation[0];
+    workspaceNavigation.find((item) => item.path === section) ||
+    workspaceNavigation[0];
   const systemNavigation = [
     {
       path: "model-pricing",
@@ -663,7 +629,7 @@ function ConsoleWorkspace() {
       : chartMetric === "latency"
         ? `${periodRows.length ? Math.round(periodRows.reduce((total, row) => total + row.duration_ms, 0) / periodRows.length) : 0} ms`
         : summary.count.toLocaleString();
-  // Model breakdown: use backend by_model when available, else demo.
+  // Usage reports load their own owner-scoped aggregate query.
   const byModel = usageQuery.data?.by_model ?? [];
   const modelBreakdown = byModel.length
     ? Object.entries(
@@ -721,15 +687,7 @@ function ConsoleWorkspace() {
           <span className="xy-workspace-avatar">V</span>
           <div>
             <strong>{c("工作台", "Console", "لوحة العمل")}</strong>
-            <small>
-              {isSystemAdmin
-                ? c(
-                    "系统管理员 · 演示",
-                    "System admin · demo",
-                    "مسؤول النظام · عرض",
-                  )
-                : c("普通用户 · 演示", "Customer · demo", "مستخدم · عرض")}
-            </small>
+            <small>{workspaceRoleLabel}</small>
           </div>
         </div>
         <nav
@@ -737,43 +695,11 @@ function ConsoleWorkspace() {
           className="xy-sidebar-nav"
           aria-label={t("pNavigation")}
         >
-          <span className="xy-nav-label">
-            {c("工作台", "CONSOLE", "لوحة العمل")}
-          </span>
-          {navigation.map(({ path, key, Icon }) => (
-            <div key={path}>
-              {path === "service-quality" && (
-                <span className="xy-nav-label xy-nav-divider">
-                  {t("navObservability")}
-                </span>
-              )}
-              {path === "billing" && (
-                <span className="xy-nav-label xy-nav-divider">
-                  {c("账号", "ACCOUNT", "الحساب")}
-                </span>
-              )}
-              <Link
-                to={
-                  path === "models"
-                    ? "/models"
-                    : `/console${path ? `/${path}` : ""}`
-                }
-                onClick={() => setMobileNavOpen(false)}
-                className={`xy-nav-link ${section === path || (path === "" && section === "console") ? "is-active" : ""}`}
-                aria-current={
-                  section === path || (path === "" && section === "console")
-                    ? "page"
-                    : undefined
-                }
-              >
-                <Icon size={18} />
-                <span>{path === "settings" ? settingsLabel : t(key)}</span>
-                {path === "keys" && keysNearQuota.length > 0 && (
-                  <span className="xy-nav-badge">{keysNearQuota.length}</span>
-                )}
-              </Link>
-            </div>
-          ))}
+          <WorkspaceLinks
+            section={section}
+            keysNearQuota={keysNearQuota.length}
+            onNavigate={() => setMobileNavOpen(false)}
+          />
           {canReadFinance(role) && (
             <Link
               to="/finance"
@@ -783,6 +709,27 @@ function ConsoleWorkspace() {
               <CircleDollarSign size={18} />
               <span>{c("财务概览", "Finance overview", "نظرة مالية")}</span>
             </Link>
+          )}
+          {platformAdmin && (
+            <>
+              <span className="xy-nav-label xy-nav-divider">
+                {c("平台管理", "Platform management", "إدارة المنصة")}
+              </span>
+              <Link
+                to="/admin"
+                className="xy-nav-link"
+                data-platform-management
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <Settings size={18} />
+                <span>
+                  {c("平台管理", "Platform management", "إدارة المنصة")}
+                </span>
+                <span className="xy-nav-badge">
+                  {c("管理员", "Administrator", "مسؤول")}
+                </span>
+              </Link>
+            </>
           )}
           {isSystemAdmin && (
             <>
@@ -839,7 +786,7 @@ function ConsoleWorkspace() {
             </span>
             <div>
               <strong>{profileName}</strong>
-              <small>{settingsLabel}</small>
+              <small>{workspaceRoleLabel}</small>
             </div>
             <MoreHorizontal size={17} />
           </Link>
@@ -1872,274 +1819,7 @@ function ConsoleWorkspace() {
           )}
 
           {/* SECTION: USAGE REPORTS */}
-          {section === "usage" && (
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "var(--space-6)",
-                }}
-              >
-                <div>
-                  <h1
-                    style={{
-                      fontSize: "var(--text-xl)",
-                      fontWeight: "var(--weight-bold)",
-                      margin: 0,
-                    }}
-                  >
-                    {t("usageReportsTitle")}
-                  </h1>
-                  <p
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "var(--text-sm)",
-                      margin: "4px 0 0 0",
-                    }}
-                  >
-                    {c(
-                      "按模型、服务等级与时间查看用量和消费。",
-                      "Explore usage and spend by model, service tier and time.",
-                      "استكشف الاستخدام والإنفاق حسب النموذج والمستوى والوقت.",
-                    )}
-                  </p>
-                </div>
-                <Button
-                  size="small"
-                  variant="secondary"
-                  onClick={() => setExportModalOpen(true)}
-                >
-                  <Download size={14} style={{ marginInlineEnd: 4 }} />
-                  {t("createExport")}
-                </Button>
-              </div>
-
-              {/* Aggregated dimension breakdown */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: "var(--space-4)",
-                  marginBottom: "var(--space-6)",
-                }}
-              >
-                <div
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: "var(--space-4)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {t("aggregateCalls")}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{ fontSize: "var(--text-2xl)", fontWeight: 700 }}
-                  >
-                    {summary.count.toLocaleString()}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: "var(--space-4)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {t("aggregateCost")}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: "var(--text-2xl)",
-                      fontWeight: 700,
-                      color: "var(--brand)",
-                    }}
-                  >
-                    {formatMoney(summary.cost, "total")}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: "var(--space-4)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {t("successRate")}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: "var(--text-2xl)",
-                      fontWeight: 700,
-                      color: "var(--success)",
-                    }}
-                  >
-                    {summary.count ? `${summary.success}%` : "—"}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: "var(--space-4)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {c("平均延迟", "Avg latency", "متوسط الاستجابة")}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{ fontSize: "var(--text-2xl)", fontWeight: 700 }}
-                  >
-                    {periodRows.length
-                      ? `${Math.round(periodRows.reduce((total, row) => total + row.duration_ms, 0) / periodRows.length)}ms`
-                      : "—"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Grouped Table by Model */}
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    padding: "var(--space-4)",
-                    borderBottom: "1px solid var(--border)",
-                    background: "var(--subtle)",
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: "var(--text-base)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {t("breakdownByModel")}
-                  </h3>
-                </div>
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: "var(--text-xs)",
-                  }}
-                >
-                  <thead>
-                    <tr
-                      style={{
-                        borderBottom: "1px solid var(--border)",
-                        background: "var(--subtle)",
-                      }}
-                    >
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        Model
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                        Vendor
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                        Calls
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                        Success
-                      </th>
-                      <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                        Total Spend (4 dec)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modelRows.map((m) => (
-                      <tr
-                        key={m.model}
-                        style={{ borderBottom: "1px solid var(--border)" }}
-                      >
-                        <td style={{ padding: "12px 14px", fontWeight: 600 }}>
-                          {m.model}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px 14px",
-                            color: "var(--secondary)",
-                          }}
-                        >
-                          {m.vendor}
-                        </td>
-                        <td
-                          className="mono"
-                          style={{ padding: "12px 14px", textAlign: "end" }}
-                        >
-                          {m.count.toLocaleString()}
-                        </td>
-                        <td
-                          className="mono"
-                          style={{
-                            padding: "12px 14px",
-                            textAlign: "end",
-                            color: "var(--success)",
-                          }}
-                        >
-                          {m.success === "—" ? "—" : `${m.success}%`}
-                        </td>
-                        <td
-                          className="mono"
-                          style={{
-                            padding: "12px 14px",
-                            textAlign: "end",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {formatMoney(m.cost, "total")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          {section === "usage" && <UsageReports />}
 
           {/* SECTION: REQUESTS */}
           {section === "requests" && (
@@ -2153,6 +1833,9 @@ function ConsoleWorkspace() {
                   setExportSelection({
                     status: selection.status,
                     query: selection.query,
+                    key_id: selection.key_id,
+                    model: selection.model,
+                    trace_id: selection.trace_id,
                   });
                 }
                 setExportType("requests");
@@ -2551,6 +2234,7 @@ function ConsoleWorkspace() {
       </Modal>
       {/* Drawer and Modal Components */}
       <RequestDetails
+        timezone={walletQuery.data?.timezone}
         record={selected}
         onClose={() => {
           setSelected(null);

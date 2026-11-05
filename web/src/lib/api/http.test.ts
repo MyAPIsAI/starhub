@@ -38,7 +38,7 @@ describe("unauthorized responses", () => {
     },
   );
 
-  it.each(["/login", "/register", "/forgot-password"])(
+  it.each(["/login", "/register", "/forgot-password", "/admin/login"])(
     "avoids redirect loops on %s",
     async (pathname) => {
       window.location.pathname = pathname;
@@ -64,6 +64,25 @@ describe("unauthorized responses", () => {
     );
     expect(authLoss).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["/admin/login", "customer", "/api/user/self", "workspace"],
+    ["/console", "staff", "/api/admin/auth/self", "staff"],
+  ] as const)(
+    "selects the requested realm on %s",
+    async (pathname, portal, endpoint, header) => {
+      window.location.pathname = pathname;
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { id: 7 } })),
+      );
+      await getSelf({ handleUnauthorizedLocally: true }, undefined, portal);
+      const [url, options] = vi.mocked(fetch).mock.calls.at(-1)!;
+      expect(url).toBe(endpoint);
+      expect(new Headers(options?.headers).get("X-StarHub-Portal")).toBe(
+        header,
+      );
+    },
+  );
 
   it("lets a session-bound password POST handle an old unauthorized response locally", async () => {
     await expect(

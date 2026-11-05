@@ -7,21 +7,57 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/config"
 	"starhub/model"
-	"starhub/service/authz"
 	"starhub/setting"
 )
 
 func UserAuth(next http.Handler) http.Handler {
+	return userAuth(next, false)
+}
+
+// ExportDownloadAuth conceals private files from unauthenticated callers.
+func ExportDownloadAuth(next http.Handler) http.Handler {
+	return userAuth(next, true)
+}
+
+func userAuth(next http.Handler, privateFile bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		staffToken := StaffSessionToken(r)
+		if state, ok := Sessions.StaffState(staffToken); ok && (r.Header.Get("X-StarHub-Portal") == "staff" || strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")) == staffToken) {
+			if privateFile {
+				user, err := model.GetUserByID(state.UserID)
+				if err != nil || !state.Verified || user.AccountKind != "staff" || !common.IsStaffRole(user.Role) || user.Status != common.StatusEnabled || user.SecurityVersion != state.Version || user.MustChangePassword || user.TOTPSecret == "" || !config.StaffIPAllowed(common.ClientIP(r)) {
+					w.Header().Set("Cache-Control", "private, no-store")
+					common.ApiError(w, 404, "export not found")
+					return
+				}
+			}
+			StaffPermission(next).ServeHTTP(w, r)
+			return
+		}
+		if token, ok := workspaceCookie(r); ok && r.Header.Get("Authorization") == "" {
+			servePlatformWorkspace(w, r, next, token, privateFile)
+			return
+		}
+		if privateFile {
+			w.Header().Set("Cache-Control", "private, no-store")
+		}
+		reject := func(message string) {
+			status := http.StatusUnauthorized
+			if privateFile {
+				status, message = http.StatusNotFound, "export not found"
+			}
+			common.ApiError(w, status, message)
+		}
 		uid, ok := Sessions.Get(SessionToken(r))
 		if !ok {
-			common.ApiError(w, http.StatusUnauthorized, "login required")
+			reject("login required")
 			return
 		}
 		user, err := model.GetUserByID(uid)
-		if err != nil || user.Status != common.StatusEnabled {
-			common.ApiError(w, http.StatusUnauthorized, "user unavailable")
+		if err != nil || user.AccountKind != "customer" || common.IsStaffRole(user.Role) || user.Status != common.StatusEnabled {
+			reject("user unavailable")
 			return
 		}
 		if !guardSessionOwner(w, r, user.ID) {
@@ -35,18 +71,7 @@ func UserAuth(next http.Handler) http.Handler {
 }
 
 func AdminAuth(next http.Handler) http.Handler {
-	return UserAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		role, _ := r.Context().Value(common.CtxRole).(int)
-		if !common.IsAdminRole(role) {
-			common.ApiError(w, http.StatusForbidden, "admin privilege required")
-			return
-		}
-		if !authz.CheckRequest(role, r) {
-			common.ApiError(w, http.StatusForbidden, "operation is not permitted for this role")
-			return
-		}
-		next.ServeHTTP(w, r)
-	}))
+	return StaffPermission(next)
 }
 
 func TokenAuth(next http.Handler) http.Handler {
@@ -158,10 +183,14 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 			return
 		}
 		user, err := model.GetUserByID(token.UserID)
-		if err != nil || user.Status != common.StatusEnabled {
+		if err != nil {
 			writeRelayRequestError(w, r, http.StatusUnauthorized,
 				"authentication_error", "user_unavailable",
 				"API key owner is unavailable")
+			return
+		}
+		if user.Status != common.StatusEnabled {
+			writeRelayRequestError(w, r, http.StatusUnauthorized, "authentication_error", "account_disabled", "account is disabled")
 			return
 		}
 		// Model whitelist is enforced after the body is parsed (the model
@@ -231,6 +260,20 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 			common.CtxTokenModelLimits, token.ModelLimits,
 			common.CtxTokenSmartAccess, token.AllowsSmartRouting(),
 			common.CtxTokenSmartCandidates, token.SmartCandidates)
+		if r.Method == http.MethodPost {
+			release, err := model.AcquireCustomerRequest(ctx, user.ID)
+			if err != nil {
+				if err == model.ErrCustomerConcurrency {
+					writeRelayRequestError(w, r, 429, "rate_limit_error", "account_concurrency_exceeded", "account concurrent request limit reached")
+				} else if err == model.ErrUserNotFound {
+					writeRelayRequestError(w, r, 401, "authentication_error", "account_disabled", "account is disabled")
+				} else {
+					writeRelayRequestError(w, r, 503, "server_error", "account_admission_unavailable", "account concurrency state unavailable")
+				}
+				return
+			}
+			defer release()
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

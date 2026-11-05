@@ -1,50 +1,41 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Plus } from "lucide-react";
+import { StaffWorkspace } from "../../components/staff-workspace";
 import {
-  Users,
-  Cpu,
-  BarChart3,
-  RefreshCw,
-  Radio,
-  History,
-  Plus,
-  CircleDollarSign,
-} from "lucide-react";
-import {
-  ProductBrand,
-  Preferences,
-  PreviewNote,
-} from "../../components/product-shell";
+  staffNavigationFor,
+  defaultStaffTab,
+  type StaffTab,
+} from "../../features/staff-navigation";
+import { ServiceGroups } from "../../features/service-groups";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/primitives";
 import { Modal } from "../../components/ui/overlay";
-import { StandardModels } from "../../features/standard-models";
-import {
-  useSystemAccess,
-  isAdmin,
-  canReadFinance,
-  ROLE_ROOT,
-  ROLE_FINANCE,
-} from "../../lib/system-access";
+import { useSystemAccess, isAdmin, ROLE_ROOT } from "../../lib/system-access";
 import { FinanceOverview } from "../../features/finance-overview";
-import { ConfigurationSync } from "../../features/configuration-sync";
-import { ServerTokenPricing } from "../../features/server-token-pricing";
-import { ResourceRegions } from "../../features/resource-regions";
-import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
-import { FinanceRoleControl } from "../../features/finance-role-control";
+import { OperatingDashboard } from "../../features/operating-dashboard";
+import { AdminCustomers } from "../../features/admin-customers";
+import { AdminModels } from "../../features/admin-models";
+import { AdminRegionProfile } from "../../features/admin-profile";
 import {
-  useAdminUsers,
-  useUpdateUser,
-  useAdminAudit,
+  AdminAudit,
+  AdminReconciliation,
+  AdminSystem,
+} from "../../features/admin-operations";
+import { ConfigurationSync } from "../../features/configuration-sync";
+import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
+import {
+  StaffAccounts,
+  StaffSync,
+  StaffCalls,
+} from "../../features/staff-management";
+import {
+  quotaToUsd,
   useAdminMetrics,
   useAdminChannels,
   useTestChannel,
   useUpstreamUsage,
-  userIsActive,
-  userStatusText,
-  quotaToUsd,
-  type AdminUser,
   type ChannelTestResult,
   type UpstreamUsageResult,
 } from "../../lib/api/admin";
@@ -80,61 +71,31 @@ export default function AdminPortal() {
 
   const authRole = useSystemAccess((s) => s.role);
   const isRoot = authRole === ROLE_ROOT;
-  const validTabs = [
-    "customers",
-    "models",
-    "analytics",
-    "resources",
-    "incidents",
-    "audit",
-    "redemption",
-    "finance",
-    "plugins",
-  ] as const;
-  type AdminTab = (typeof validTabs)[number];
-  const [tab, setTab] = useState<AdminTab>(() => {
-    const urlTab = searchParams.get("tab");
-    return validTabs.includes(urlTab as AdminTab)
-      ? (urlTab as AdminTab)
-      : "customers";
-  });
-  const [modelCatalogVisited, setModelCatalogVisited] = useState(
-    tab === "models",
-  );
+  const validTabs = staffNavigationFor(authRole).map((item) => item.id);
+  const requestedTab = searchParams.get("tab") as StaffTab | null;
+  const tab: StaffTab =
+    requestedTab && validTabs.includes(requestedTab)
+      ? requestedTab
+      : defaultStaffTab(authRole);
   useEffect(() => {
-    if (tab === "models") setModelCatalogVisited(true);
-  }, [tab]);
-  // Sync tab changes to the URL so admin sections are shareable and refresh-safe.
-  useEffect(() => {
-    const urlTab = searchParams.get("tab");
-    const current = tab === "customers" ? null : tab;
-    if (urlTab === current) return;
-    const next = new URLSearchParams(searchParams);
-    if (tab === "customers") next.delete("tab");
-    else next.set("tab", tab);
-    setSearchParams(next, { replace: true });
-  }, [tab]);
-  // React to browser back/forward navigation.
-  useEffect(() => {
-    const urlTab = searchParams.get("tab");
-    const target: AdminTab = validTabs.includes(urlTab as AdminTab)
-      ? (urlTab as AdminTab)
-      : "customers";
-    if (target !== tab) setTab(target);
-  }, [searchParams]);
-
+    const requested = searchParams.get("tab");
+    if (requested && !validTabs.includes(requested as StaffTab)) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, authRole]);
   // Backend API hooks.
-  const usersQuery = useAdminUsers();
-  const updateUserMut = useUpdateUser();
-  const auditQuery = useAdminAudit(1, 20);
-  const metricsQuery = useAdminMetrics();
-  const channelsQuery = useAdminChannels();
-  const pluginsQuery = useTaskPlugins();
+  const channelsQuery = useAdminChannels(tab === "resources");
+  const metricsQuery = useAdminMetrics(tab === "resources");
+  const pluginsQuery = useTaskPlugins(
+    isRoot && (tab === "plugins" || tab === "resources"),
+  );
   const testChannelMut = useTestChannel();
   const createChannelMut = useCreateChannel();
   const updateChannelMut = useUpdateChannel();
   const deleteChannelMut = useDeleteChannel();
-  const redemptionsQuery = useRedemptions();
+  const redemptionsQuery = useRedemptions(isRoot && tab === "redemption");
   const createRedemptionMut = useCreateRedemption();
   const deleteRedemptionMut = useDeleteRedemption();
 
@@ -145,7 +106,8 @@ export default function AdminPortal() {
 
   // Upstream usage reconciliation modal state.
   const upstreamMut = useUpstreamUsage();
-  const [upstreamModal, setUpstreamModal] = useState<UpstreamUsageResult | null>(null);
+  const [upstreamModal, setUpstreamModal] =
+    useState<UpstreamUsageResult | null>(null);
   const [upstreamLoading, setUpstreamLoading] = useState(false);
   const [upstreamError, setUpstreamError] = useState<string | null>(null);
 
@@ -183,94 +145,11 @@ export default function AdminPortal() {
     }[]
   >([]);
 
-  // Top-up modal state — targets a specific user.
-  const [topUpOpen, setTopUpOpen] = useState(false);
-  const [topUpTarget, setTopUpTarget] = useState<AdminUser | null>(null);
-  const [detailUser, setDetailUser] = useState<AdminUser | null>(null);
-  // Sync the account detail modal to the ?user= URL param so the detail view
-  // is shareable and survives a refresh. Resolve the id against the loaded
-  // users list; an invalid or missing id closes the modal.
-  const users = usersQuery.data;
-  useEffect(() => {
-    const userId = searchParams.get("user");
-    if (!userId) {
-      setDetailUser(null);
-      return;
-    }
-    const match = users?.find((u) => String(u.id) === userId);
-    setDetailUser(match ?? null);
-  }, [searchParams, users]);
-  const openDetailUser = (u: AdminUser) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("user", String(u.id));
-    setSearchParams(next, { replace: true });
-  };
-  const closeDetailUser = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete("user");
-    setSearchParams(next, { replace: true });
-  };
-  const [topUpAmount, setTopUpAmount] = useState("1200");
-  const [topUpType, setTopUpType] = useState<
-    "gift" | "compensation" | "offline_payment" | "clawback"
-  >("offline_payment");
-  const [topUpReason, setTopUpReason] = useState(
-    "Account payment reference #XY-2026-108",
-  );
-  const [topUpNotice, setTopUpNotice] = useState("");
-
   // Incident modal state
   const [incidentOpen, setIncidentOpen] = useState(false);
   const [incTitle, setIncTitle] = useState("");
   const [incVendor, setIncVendor] = useState("OpenAI");
   const [incContent, setIncContent] = useState("");
-
-  const handleTopUpSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!topUpTarget) return;
-    const amt = parseFloat(topUpAmount);
-    if (isNaN(amt) || amt === 0) return;
-
-    const currentQuota = topUpTarget.quota;
-    const deltaNano = Math.round(amt * 1e9);
-    const newQuota =
-      topUpType === "clawback"
-        ? Math.max(0, currentQuota + deltaNano)
-        : currentQuota + deltaNano;
-
-    setTopUpNotice("");
-    updateUserMut.mutate(
-      {
-        id: topUpTarget.id,
-        quota: newQuota,
-        expected_quota: currentQuota,
-      },
-      {
-        onSuccess: () => {
-          setTopUpNotice(
-            text(
-              `已为 ${topUpTarget.username} ${topUpType === "clawback" ? "扣除" : "入账"} $${Math.abs(amt).toFixed(2)}。`,
-              `Credited $${Math.abs(amt).toFixed(2)} to ${topUpTarget.username}.`,
-              `تم إيداع $${Math.abs(amt).toFixed(2)} في حساب ${topUpTarget.username}.`,
-            ),
-          );
-          setTopUpOpen(false);
-        },
-        onError: (err) => {
-          const msg =
-            err instanceof ApiError
-              ? err.message
-              : text("操作失败", "Operation failed", "فشلت العملية");
-          setTopUpNotice(msg);
-        },
-      },
-    );
-  };
-
-  const handleToggleStatus = (user: AdminUser) => {
-    const nextStatus = userIsActive(user.status) ? 2 : 1;
-    updateUserMut.mutate({ id: user.id, status: nextStatus });
-  };
 
   const handlePublishIncidentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,713 +171,24 @@ export default function AdminPortal() {
   };
 
   return (
-    <div
-      className="brand-home public-refined admin-refined"
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--neutral-2)",
-      }}
-    >
-      <PreviewNote />
-
-      {/* Admin Darker Professional Header */}
-      <header
-        className="admin-header"
-        style={{
-          background: "var(--surface)",
-          color: "var(--text)",
-          padding: "var(--space-3) var(--space-6)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--space-4)",
-          }}
-        >
-          <ProductBrand />
-          <span
-            style={{
-              fontSize: "var(--text-xs)",
-              background: "var(--brand)",
-              color: "#fff",
-              padding: "2px 8px",
-              borderRadius: "var(--radius-sm)",
-              fontWeight: 600,
-            }}
-          >
-            {t("adminPortal")}
-          </span>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--space-4)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--space-2)",
-              fontSize: "var(--text-xs)",
-            }}
-          >
-            <span>{isRoot ? "Root" : "Admin"}</span>
-          </div>
-
-          <Preferences />
-
-          <Button
-            asChild
-            size="small"
-            variant="secondary"
-            style={{ height: 28, fontSize: 12 }}
-          >
-            <Link to="/console">{t("pConsole")}</Link>
-          </Button>
-        </div>
-      </header>
-
-      {/* Admin Navigation Tabs */}
-      <div
-        className="admin-tabbar"
-        style={{
-          background: "var(--surface)",
-          borderBottom: "1px solid var(--border)",
-          padding: "0 var(--space-6)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: "var(--space-4)",
-            maxWidth: 1200,
-            margin: "0 auto",
-            overflowX: "auto",
-          }}
-        >
-          {[
-            { id: "customers", label: t("adminCustomers"), Icon: Users },
-            { id: "models", label: t("adminModels"), Icon: Cpu },
-            {
-              id: "finance",
-              label: text("财务", "Finance", "المالية"),
-              Icon: CircleDollarSign,
-            },
-            { id: "analytics", label: t("adminAnalytics"), Icon: BarChart3 },
-            { id: "resources", label: t("adminResources"), Icon: RefreshCw },
-            {
-              id: "plugins",
-              label: text("视频插件", "Video plugins", "إضافات الفيديو"),
-              Icon: Cpu,
-            },
-            { id: "incidents", label: t("adminIncidents"), Icon: Radio },
-            { id: "audit", label: t("adminAudit"), Icon: History },
-            {
-              id: "redemption",
-              label: text("兑换码", "Redemption", "استرداد"),
-              Icon: CircleDollarSign,
-            },
-          ]
-            .filter(({ id }) => id !== "finance" || canReadFinance(authRole))
-            .map(({ id, label, Icon }) => {
-              const active = tab === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setTab(id as any)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "12px 4px",
-                    background: "transparent",
-                    border: "none",
-                    borderBottom: active
-                      ? "2px solid var(--brand)"
-                      : "2px solid transparent",
-                    color: active ? "var(--brand)" : "var(--secondary)",
-                    fontWeight: active ? 600 : 500,
-                    fontSize: "var(--text-sm)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <Icon size={15} />
-                  <span>{label}</span>
-                </button>
-              );
-            })}
-        </div>
-      </div>
-
-      <main
-        className="admin-content"
-        style={{
-          maxWidth: 1200,
-          width: "100%",
-          margin: "0 auto",
-          padding: "var(--space-6)",
-          flex: 1,
-        }}
-      >
-        {topUpNotice && (
-          <div
-            style={{
-              padding: "var(--space-3) var(--space-4)",
-              background: "var(--warning-soft)",
-              border: "1px solid var(--warning)",
-              borderRadius: "var(--radius-md)",
-              color: "var(--warning)",
-              fontSize: "var(--text-sm)",
-              marginBottom: "var(--space-6)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span>{topUpNotice}</span>
-            <button
-              onClick={() => setTopUpNotice("")}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "inherit",
-                fontWeight: "bold",
-              }}
-            >
-              ×
-            </button>
-          </div>
-        )}
-
+    <StaffWorkspace active={tab}>
+      <div className="admin-content">
         {tab === "plugins" && <TaskPlugins />}
-        {/* Tab 1: Customers */}
-        {tab === "customers" && (
-          <div>
-            <div
-              className="admin-section-heading"
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "var(--space-6)",
-              }}
-            >
-              <div>
-                <h1
-                  style={{
-                    fontSize: "var(--text-xl)",
-                    fontWeight: "var(--weight-bold)",
-                    margin: 0,
-                  }}
-                >
-                  {t("adminCustomers")}
-                </h1>
-                <p
-                  style={{
-                    color: "var(--muted)",
-                    fontSize: "var(--text-sm)",
-                    margin: "4px 0 0 0",
-                  }}
-                >
-                  {text(
-                    "管理账号、额度、并发限制与手动加款。",
-                    "Manage accounts, quotas, concurrency, and manual top-ups.",
-                    "إدارة الحسابات والحصص والتزامن والشحن اليدوي.",
-                  )}
-                </p>
-              </div>
-
-              {isRoot && (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    const first = usersQuery.data?.[0];
-                    if (first) {
-                      setTopUpTarget(first);
-                      setTopUpAmount("");
-                      setTopUpReason("");
-                      setTopUpOpen(true);
-                    }
-                  }}
-                >
-                  <Plus size={15} style={{ marginInlineEnd: 4 }} />
-                  {t("manualTopUp")}
-                </Button>
-              )}
-            </div>
-
-            {/* Backend user list table */}
-            <section
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                overflowX: "auto",
-              }}
-            >
-              <div
-                style={{
-                  padding: "var(--space-4)",
-                  borderBottom: "1px solid var(--border)",
-                  background: "var(--subtle)",
-                }}
-              >
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "var(--text-base)",
-                    fontWeight: 600,
-                  }}
-                >
-                  {text("用户列表", "User list", "قائمة المستخدمين")} (
-                  {usersQuery.data?.length ?? 0})
-                </h3>
-              </div>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: "var(--text-sm)",
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      borderBottom: "1px solid var(--border)",
-                      background: "var(--subtle)",
-                    }}
-                  >
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("用户名", "Username", "اسم المستخدم")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("邮箱", "Email", "البريد")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {t("status")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("余额", "Balance", "الرصيد")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("已用", "Used", "المستخدم")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("分组", "Group", "المجموعة")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                      {text("操作", "Actions", "الإجراءات")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usersQuery.isLoading && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        style={{
-                          padding: "24px",
-                          textAlign: "center",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {text("加载中…", "Loading…", "جارٍ التحميل…")}
-                      </td>
-                    </tr>
-                  )}
-                  {usersQuery.isError && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        style={{
-                          padding: "24px",
-                          textAlign: "center",
-                          color: "var(--danger)",
-                        }}
-                      >
-                        {text("加载失败", "Failed to load", "فشل التحميل")}
-                      </td>
-                    </tr>
-                  )}
-                  {usersQuery.data?.map((u) => (
-                    <tr
-                      key={u.id}
-                      style={{ borderBottom: "1px solid var(--border)" }}
-                    >
-                      <td
-                        style={{
-                          padding: "10px 14px",
-                          fontWeight: 500,
-                        }}
-                      >
-                        {u.username}
-                      </td>
-                      <td
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: "var(--text-xs)",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {u.email || "—"}
-                      </td>
-                      <td style={{ padding: "10px 14px" }}>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                            fontWeight: 600,
-                            background: userIsActive(u.status)
-                              ? "var(--success-soft)"
-                              : "var(--danger-soft)",
-                            color: userIsActive(u.status)
-                              ? "var(--success)"
-                              : "var(--danger)",
-                          }}
-                        >
-                          {userStatusText(u.status)}
-                        </span>
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          padding: "10px 14px",
-                          fontWeight: 600,
-                          color: "var(--brand)",
-                        }}
-                      >
-                        ${quotaToUsd(u.quota)}
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: "var(--text-xs)",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        ${quotaToUsd(u.used_quota)}
-                      </td>
-                      <td style={{ padding: "10px 14px" }}>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: "2px 6px",
-                            background: "var(--subtle)",
-                            borderRadius: 3,
-                          }}
-                        >
-                          {u.group || "default"}
-                        </span>
-                      </td>
-                      <td style={{ padding: "10px 14px", textAlign: "end" }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 4,
-                            justifyContent: "flex-end",
-                          }}
-                        >
-                          <Button
-                            size="small"
-                            variant="secondary"
-                            onClick={() => {
-                              setTopUpTarget(u);
-                              setTopUpAmount("");
-                              setTopUpReason("");
-                              setTopUpOpen(true);
-                            }}
-                          >
-                            <Plus size={12} style={{ marginInlineEnd: 2 }} />
-                            {text("加款", "Top-up", "شحن")}
-                          </Button>
-                          <Button
-                            size="small"
-                            variant={
-                              userIsActive(u.status) ? "danger" : "primary"
-                            }
-                            onClick={() => handleToggleStatus(u)}
-                            disabled={
-                              updateUserMut.isPending &&
-                              updateUserMut.variables?.id === u.id
-                            }
-                          >
-                            {userIsActive(u.status)
-                              ? t("disableAccount")
-                              : t("enableAccount")}
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="secondary"
-                            onClick={() => {
-                              openDetailUser(u);
-                            }}
-                          >
-                            {text("详情", "Details", "التفاصيل")}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          </div>
+        {tab === "customers" && <AdminCustomers />}
+        {tab === "staff" && isRoot && <StaffAccounts />}
+        {tab === "sync" && (
+          <>
+            <StaffSync />
+            {isRoot && <ConfigurationSync />}
+          </>
         )}
+        {tab === "regions" && isRoot && <AdminRegionProfile />}
+        {tab === "groups" && <ServiceGroups role={authRole} />}
+        {tab === "calls" && <StaffCalls />}
+        {tab === "models" && <AdminModels />}
+        {tab === "system" && <AdminSystem />}
 
-        {/* Load the real catalog on first visit and preserve its draft across tabs. */}
-        <div hidden={tab !== "models"}>
-          {modelCatalogVisited && <StandardModels role={authRole} />}
-        </div>
-
-        {/* Tab 3: Analytics */}
-        {tab === "analytics" && (
-          <div>
-            <h1
-              style={{
-                fontSize: "var(--text-xl)",
-                fontWeight: "var(--weight-bold)",
-                marginBottom: "var(--space-4)",
-              }}
-            >
-              {t("adminAnalytics")}
-            </h1>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "var(--space-4)",
-                marginBottom: "var(--space-6)",
-              }}
-            >
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--muted)",
-                    marginBottom: 4,
-                  }}
-                >
-                  {text("总请求数", "Total requests", "إجمالي الطلبات")}
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-2xl)",
-                    fontWeight: "var(--weight-bold)",
-                    color: "var(--brand)",
-                  }}
-                >
-                  {(
-                    metricsQuery.data?.requests?.reduce(
-                      (sum, r) => sum + r.count,
-                      0,
-                    ) ?? 0
-                  ).toLocaleString()}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--muted)",
-                    marginBottom: 4,
-                  }}
-                >
-                  {text("活跃用户", "Active users", "المستخدمون النشطون")}
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-2xl)",
-                    fontWeight: "var(--weight-bold)",
-                  }}
-                >
-                  {(
-                    usersQuery.data?.filter((u) => userIsActive(u.status))
-                      .length ?? 0
-                  ).toLocaleString()}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--muted)",
-                    marginBottom: 4,
-                  }}
-                >
-                  {text("渠道数", "Channels", "القنوات")}
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-2xl)",
-                    fontWeight: "var(--weight-bold)",
-                  }}
-                >
-                  {channelsQuery.data?.length ?? 0}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "var(--space-4)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--muted)",
-                    marginBottom: 4,
-                  }}
-                >
-                  {text(
-                    "请求成功率",
-                    "Request success rate",
-                    "معدل نجاح الطلبات",
-                  )}
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-2xl)",
-                    fontWeight: "var(--weight-bold)",
-                    color: "var(--success)",
-                  }}
-                >
-                  {(() => {
-                    const reqs = metricsQuery.data?.requests ?? [];
-                    const total = reqs.reduce((s, r) => s + r.count, 0);
-                    const success =
-                      reqs.find((r) => r.class === "success")?.count ?? 0;
-                    return total > 0
-                      ? ((success / total) * 100).toFixed(2) + "%"
-                      : "—";
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            {/* Request breakdown by class */}
-            {metricsQuery.data &&
-              (metricsQuery.data.requests?.length ?? 0) > 0 && (
-                <section
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    overflowX: "auto",
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: "var(--space-4)",
-                      borderBottom: "1px solid var(--border)",
-                      background: "var(--subtle)",
-                    }}
-                  >
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: "var(--text-base)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {text(
-                        "请求分类统计",
-                        "Request breakdown by class",
-                        "تصنيف الطلبات حسب الفئة",
-                      )}
-                    </h3>
-                  </div>
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "var(--text-sm)",
-                    }}
-                  >
-                    <thead>
-                      <tr
-                        style={{
-                          borderBottom: "1px solid var(--border)",
-                          background: "var(--subtle)",
-                        }}
-                      >
-                        <th
-                          style={{ padding: "10px 14px", textAlign: "start" }}
-                        >
-                          {text("分类", "Class", "الفئة")}
-                        </th>
-                        <th
-                          style={{ padding: "10px 14px", textAlign: "start" }}
-                        >
-                          {text("次数", "Count", "العدد")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(metricsQuery.data.requests ?? []).map((r) => (
-                        <tr
-                          key={r.class}
-                          style={{ borderBottom: "1px solid var(--border)" }}
-                        >
-                          <td
-                            style={{
-                              padding: "10px 14px",
-                              fontWeight: 500,
-                            }}
-                          >
-                            {r.class}
-                          </td>
-                          <td className="mono" style={{ padding: "10px 14px" }}>
-                            {r.count.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </section>
-              )}
-          </div>
-        )}
+        {tab === "analytics" && <OperatingDashboard />}
 
         {/* Tab 4: Resources & Sync */}
         {tab === "resources" && (
@@ -1037,10 +227,6 @@ export default function AdminPortal() {
                 </p>
               </div>
             </div>
-
-            <ServerTokenPricing />
-            <ConfigurationSync />
-            <ResourceRegions />
 
             {/* Channel list from backend */}
             <section
@@ -1309,7 +495,10 @@ export default function AdminPortal() {
                             <Button
                               size="small"
                               variant="secondary"
-                              disabled={upstreamLoading && upstreamModal?.channel_id === ch.id}
+                              disabled={
+                                upstreamLoading &&
+                                upstreamModal?.channel_id === ch.id
+                              }
                               onClick={() => {
                                 setUpstreamModal(null);
                                 setUpstreamError(null);
@@ -1323,14 +512,19 @@ export default function AdminPortal() {
                                     setUpstreamError(
                                       err instanceof ApiError
                                         ? err.message
-                                        : text("查询失败", "Query failed", "فشل الاستعلام"),
+                                        : text(
+                                            "查询失败",
+                                            "Query failed",
+                                            "فشل الاستعلام",
+                                          ),
                                     );
                                     setUpstreamLoading(false);
                                   },
                                 });
                               }}
                             >
-                              {upstreamLoading && upstreamMut.variables === ch.id
+                              {upstreamLoading &&
+                              upstreamMut.variables === ch.id
                                 ? text("查询中…", "Querying…", "استعلام…")
                                 : text("上游对账", "Reconcile", "مطابقة")}
                             </Button>
@@ -1462,7 +656,11 @@ export default function AdminPortal() {
                     }}
                   >
                     <h3 style={{ margin: 0, fontSize: "var(--text-lg)" }}>
-                      {text("上游对账", "Upstream Reconciliation", "مطابقة المنبع")}
+                      {text(
+                        "上游对账",
+                        "Upstream Reconciliation",
+                        "مطابقة المنبع",
+                      )}
                     </h3>
                     <Button
                       size="small"
@@ -1472,8 +670,15 @@ export default function AdminPortal() {
                       {text("关闭", "Close", "إغلاق")}
                     </Button>
                   </div>
-                  <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)", margin: "0 0 16px 0" }}>
-                    {upstreamModal.channel_name} (ID: {upstreamModal.channel_id})
+                  <p
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "var(--text-sm)",
+                      margin: "0 0 16px 0",
+                    }}
+                  >
+                    {upstreamModal.channel_name} (ID: {upstreamModal.channel_id}
+                    )
                   </p>
                   {!upstreamModal.supported ? (
                     <p style={{ color: "var(--muted)" }}>
@@ -1497,7 +702,10 @@ export default function AdminPortal() {
                           <div style={{ fontSize: 11, color: "var(--muted)" }}>
                             {text("本地累计", "Local Used", "المحلي")}
                           </div>
-                          <div className="mono" style={{ fontSize: "var(--text-lg)" }}>
+                          <div
+                            className="mono"
+                            style={{ fontSize: "var(--text-lg)" }}
+                          >
                             {quotaToUsd(upstreamModal.local_used_quota)}
                           </div>
                         </div>
@@ -1505,7 +713,10 @@ export default function AdminPortal() {
                           <div style={{ fontSize: 11, color: "var(--muted)" }}>
                             {text("上游累计", "Upstream Used", "المنبع")}
                           </div>
-                          <div className="mono" style={{ fontSize: "var(--text-lg)" }}>
+                          <div
+                            className="mono"
+                            style={{ fontSize: "var(--text-lg)" }}
+                          >
                             {quotaToUsd(upstreamModal.upstream_total_used)}
                           </div>
                         </div>
@@ -1536,15 +747,30 @@ export default function AdminPortal() {
                         }}
                       >
                         <thead>
-                          <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                            <th style={{ textAlign: "start", padding: "8px 12px" }}>Key</th>
-                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                          <tr
+                            style={{ borderBottom: "1px solid var(--border)" }}
+                          >
+                            <th
+                              style={{
+                                textAlign: "start",
+                                padding: "8px 12px",
+                              }}
+                            >
+                              Key
+                            </th>
+                            <th
+                              style={{ textAlign: "end", padding: "8px 12px" }}
+                            >
                               {text("已用", "Used", "مستخدم")}
                             </th>
-                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                            <th
+                              style={{ textAlign: "end", padding: "8px 12px" }}
+                            >
                               {text("剩余", "Available", "متاح")}
                             </th>
-                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                            <th
+                              style={{ textAlign: "end", padding: "8px 12px" }}
+                            >
                               {text("过期", "Expires", "تنتهي")}
                             </th>
                           </tr>
@@ -1553,7 +779,9 @@ export default function AdminPortal() {
                           {upstreamModal.keys.map((k) => (
                             <tr
                               key={k.key_index}
-                              style={{ borderBottom: "1px solid var(--border)" }}
+                              style={{
+                                borderBottom: "1px solid var(--border)",
+                              }}
                             >
                               <td
                                 className="mono"
@@ -1571,13 +799,17 @@ export default function AdminPortal() {
                                       color: "var(--danger)",
                                     }}
                                   >
-                                    {k.error || text("不可用", "N/A", "غير متاح")}
+                                    {k.error ||
+                                      text("不可用", "N/A", "غير متاح")}
                                   </span>
                                 )}
                               </td>
                               <td
                                 className="mono"
-                                style={{ padding: "8px 12px", textAlign: "end" }}
+                                style={{
+                                  padding: "8px 12px",
+                                  textAlign: "end",
+                                }}
                               >
                                 {k.available ? quotaToUsd(k.total_used) : "—"}
                               </td>
@@ -1602,17 +834,28 @@ export default function AdminPortal() {
                               </td>
                               <td
                                 className="mono"
-                                style={{ padding: "8px 12px", textAlign: "end" }}
+                                style={{
+                                  padding: "8px 12px",
+                                  textAlign: "end",
+                                }}
                               >
                                 {k.available && k.expires_at > 0
-                                  ? new Date(k.expires_at * 1000).toLocaleDateString()
+                                  ? new Date(
+                                      k.expires_at * 1000,
+                                    ).toLocaleDateString()
                                   : "—"}
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 16 }}>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "var(--muted)",
+                          marginTop: 16,
+                        }}
+                      >
                         {text(
                           "差异可能来自倍率不同、精度差异或退款同步延迟，不一定代表计费错误。",
                           "The diff may stem from different multipliers, rounding, or refund sync delays, and does not necessarily indicate a billing error.",
@@ -1657,9 +900,9 @@ export default function AdminPortal() {
                   }}
                 >
                   {text(
-                    "管理展示在公开服务状态页的事件公告。",
-                    "Manage incident notices on the public status page.",
-                    "إدارة إشعارات الحوادث في صفحة الحالة العامة.",
+                    "当前为页面内演示；发布不会更新公开服务状态页。",
+                    "Local page demonstration; publishing does not update the public status page.",
+                    "عرض محلي داخل الصفحة؛ لا يحدّث النشر صفحة حالة الخدمة العامة.",
                   )}
                 </p>
               </div>
@@ -1738,176 +981,23 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {/* Tab 6: Audit Logs */}
-        {tab === "audit" && (
-          <div>
-            <h1
-              style={{
-                fontSize: "var(--text-xl)",
-                fontWeight: "var(--weight-bold)",
-                marginBottom: "var(--space-4)",
-              }}
-            >
-              {t("adminAudit")}
-            </h1>
-            <div
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                overflowX: "auto",
-              }}
-            >
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: "var(--text-sm)",
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      background: "var(--subtle)",
-                      borderBottom: "1px solid var(--border)",
-                    }}
-                  >
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("时间", "Time", "الوقت")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("用户", "User", "المستخدم")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("方法", "Method", "الأسلوب")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("路径", "Path", "المسار")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("状态码", "Status", "الحالة")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("IP", "IP", "IP")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditQuery.isLoading && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        style={{
-                          padding: "24px",
-                          textAlign: "center",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {text("加载中…", "Loading…", "جارٍ التحميل…")}
-                      </td>
-                    </tr>
-                  )}
-                  {auditQuery.data?.items.map((log) => (
-                    <tr
-                      key={log.id}
-                      style={{ borderBottom: "1px solid var(--border)" }}
-                    >
-                      <td
-                        className="mono"
-                        style={{ padding: "10px 14px", fontSize: 12 }}
-                      >
-                        {new Date(log.created_at * 1000).toLocaleString()}
-                      </td>
-                      <td style={{ padding: "10px 14px", fontWeight: 500 }}>
-                        {log.username || `#${log.user_id}`}
-                      </td>
-                      <td
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: 12,
-                        }}
-                      >
-                        {log.method}
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: 12,
-                          color: "var(--secondary)",
-                        }}
-                      >
-                        {log.path}
-                      </td>
-                      <td style={{ padding: "10px 14px" }}>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                            fontWeight: 600,
-                            background:
-                              log.status >= 200 && log.status < 300
-                                ? "var(--success-soft)"
-                                : "var(--danger-soft)",
-                            color:
-                              log.status >= 200 && log.status < 300
-                                ? "var(--success)"
-                                : "var(--danger)",
-                          }}
-                        >
-                          {log.status || "—"}
-                        </span>
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: 12,
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {log.ip || "—"}
-                      </td>
-                    </tr>
-                  ))}
-                  {auditQuery.data && auditQuery.data.items.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        style={{
-                          padding: "24px",
-                          textAlign: "center",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {text("暂无记录", "No records", "لا سجلات")}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {auditQuery.data && auditQuery.data.total > 20 && (
-              <p
-                style={{
-                  textAlign: "center",
-                  color: "var(--muted)",
-                  fontSize: "var(--text-xs)",
-                  marginTop: "var(--space-3)",
-                }}
-              >
-                {text(
-                  `显示前 20 条（共 ${auditQuery.data.total} 条）`,
-                  `Showing 20 of ${auditQuery.data.total}`,
-                  `عرض 20 من ${auditQuery.data.total}`,
-                )}
-              </p>
-            )}
-          </div>
-        )}
+        {tab === "audit" && <AdminAudit />}
 
-        {tab === "finance" && <FinanceOverview />}
+        {tab === "finance" && (
+          <>
+            <AdminReconciliation />
+            <details className="adm-card">
+              <summary>
+                {text(
+                  "账务汇总与订单",
+                  "Financial summary and orders",
+                  "الملخص المالي والطلبات",
+                )}
+              </summary>
+              <FinanceOverview />
+            </details>
+          </>
+        )}
 
         {/* Tab: Redemption codes */}
         {tab === "redemption" && (
@@ -2136,168 +1226,7 @@ export default function AdminPortal() {
             </section>
           </div>
         )}
-      </main>
-
-      {/* Manual Top-up Modal */}
-      <Modal
-        size="default"
-        preventOutsideClose
-        open={topUpOpen}
-        onOpenChange={setTopUpOpen}
-        title={t("manualTopUp")}
-        description={text(
-          "加款提交即入账，操作人、金额、类型与原因全部写入审计日志。",
-          "The credit is applied immediately; operator, amount, type and reason are written to the audit log.",
-          "يُحتسب الرصيد فور الإرسال، ويُسجَّل المشغّل والمبلغ والنوع والسبب في سجل التدقيق.",
-        )}
-        footer={
-          <>
-            <Button onClick={() => setTopUpOpen(false)}>{t("cancel")}</Button>
-            <Button
-              variant="primary"
-              type="submit"
-              form="admin-top-up-form"
-              disabled={updateUserMut.isPending}
-            >
-              {text("提交充值", "Submit top-up", "إرسال الشحن")}
-            </Button>
-          </>
-        }
-      >
-        <form
-          id="admin-top-up-form"
-          onSubmit={handleTopUpSubmit}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--space-4)",
-          }}
-        >
-          {topUpTarget && (
-            <div
-              style={{
-                padding: "var(--space-3) var(--space-4)",
-                background: "var(--subtle)",
-                borderRadius: "var(--radius-md)",
-                fontSize: "var(--text-sm)",
-              }}
-            >
-              <strong>{topUpTarget.username}</strong>
-              <span
-                style={{
-                  marginInlineStart: 8,
-                  color: "var(--muted)",
-                  fontSize: "var(--text-xs)",
-                }}
-              >
-                {text("当前余额", "Current balance", "الرصيد الحالي")}: $
-                {quotaToUsd(topUpTarget.quota)}
-              </span>
-            </div>
-          )}
-          <div>
-            <label
-              htmlFor="admin-top-up-amount"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {t("topUpAmount")}
-            </label>
-            <Input
-              id="admin-top-up-amount"
-              type="number"
-              value={topUpAmount}
-              onChange={(e) => setTopUpAmount(e.target.value)}
-              placeholder={text(
-                "例如 500 或 2500",
-                "e.g. 500 or 2500",
-                "مثل 500 أو 2500",
-              )}
-              required
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="admin-top-up-type"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {text("交易类型", "Transaction type", "نوع المعاملة")}
-            </label>
-            <select
-              id="admin-top-up-type"
-              value={topUpType}
-              onChange={(e) => setTopUpType(e.target.value as any)}
-              className="select-trigger"
-              style={{ width: "100%" }}
-            >
-              <option value="offline_payment">
-                {text(
-                  "线下银行付款 / 转账",
-                  "Offline bank payment / wire transfer",
-                  "دفع مصرفي دون اتصال / تحويل",
-                )}
-              </option>
-              <option value="gift">
-                {text(
-                  "活动奖励 / 赠送额度",
-                  "Incentive / free credit",
-                  "مكافأة / رصيد مجاني",
-                )}
-              </option>
-              <option value="compensation">
-                {text(
-                  "服务异常补偿",
-                  "Service incident compensation",
-                  "تعويض حادث الخدمة",
-                )}
-              </option>
-              <option value="clawback">
-                {text(
-                  "拒付追回（负数）",
-                  "Chargeback clawback (negative)",
-                  "استرداد رد المبلغ (سالب)",
-                )}
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="admin-top-up-reason"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {t("topUpReason")}
-            </label>
-            <Input
-              id="admin-top-up-reason"
-              type="text"
-              value={topUpReason}
-              onChange={(e) => setTopUpReason(e.target.value)}
-              placeholder={text(
-                "填写具体原因及合同或凭证编号",
-                "Detailed justification and contract or reference number",
-                "سبب مفصل ورقم العقد أو المرجع",
-              )}
-              required
-            />
-          </div>
-        </form>
-      </Modal>
+      </div>
 
       {/* Incident Modal */}
       <Modal
@@ -2790,193 +1719,6 @@ export default function AdminPortal() {
           </div>
         </form>
       </Modal>
-
-      {/* Account detail modal */}
-      <Modal
-        size="default"
-        open={!!detailUser}
-        onOpenChange={(open) => {
-          if (!open) closeDetailUser();
-        }}
-        title={text("账户详情", "Account details", "تفاصيل الحساب")}
-        description={detailUser ? detailUser.username : ""}
-        footer={
-          <>
-            {isRoot && (
-              <>
-                <Button
-                  onClick={() => {
-                    if (detailUser) {
-                      setTopUpTarget(detailUser);
-                      setTopUpAmount("");
-                      setTopUpReason("");
-                      setTopUpOpen(true);
-                      closeDetailUser();
-                    }
-                  }}
-                >
-                  {t("manualTopUp")}
-                </Button>
-                <Button
-                  variant={
-                    detailUser && userIsActive(detailUser.status)
-                      ? "danger"
-                      : "primary"
-                  }
-                  onClick={() => {
-                    if (detailUser) {
-                      handleToggleStatus(detailUser);
-                      closeDetailUser();
-                    }
-                  }}
-                >
-                  {detailUser && userIsActive(detailUser.status)
-                    ? t("disableAccount")
-                    : t("enableAccount")}
-                </Button>
-              </>
-            )}
-            <Button variant="secondary" onClick={closeDetailUser}>
-              {text("关闭", "Close", "إغلاق")}
-            </Button>
-          </>
-        }
-      >
-        {detailUser && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--space-3)",
-            }}
-          >
-            <FinanceRoleControl
-              user={detailUser}
-              onUpdated={(role) =>
-                setDetailUser((current) =>
-                  current ? { ...current, role } : current,
-                )
-              }
-            />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "var(--space-3)",
-              }}
-            >
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("用户名", "Username", "اسم المستخدم")}
-                </small>
-                <div style={{ fontWeight: 600 }}>{detailUser.username}</div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("邮箱", "Email", "البريد")}
-                </small>
-                <div>{detailUser.email || "—"}</div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("角色", "Role", "الدور")}
-                </small>
-                <div>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                      fontWeight: 600,
-                      background: "var(--subtle)",
-                    }}
-                  >
-                    {detailUser.role >= 100
-                      ? "Root"
-                      : detailUser.role >= 10
-                        ? "Admin"
-                        : detailUser.role === ROLE_FINANCE
-                          ? text(
-                              "财务（只读）",
-                              "Finance (read-only)",
-                              "المالية (للقراءة فقط)",
-                            )
-                          : "User"}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>{t("status")}</small>
-                <div>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                      fontWeight: 600,
-                      background: userIsActive(detailUser.status)
-                        ? "var(--success-soft)"
-                        : "var(--danger-soft)",
-                      color: userIsActive(detailUser.status)
-                        ? "var(--success)"
-                        : "var(--danger)",
-                    }}
-                  >
-                    {userStatusText(detailUser.status)}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("余额", "Balance", "الرصيد")}
-                </small>
-                <div
-                  className="mono"
-                  style={{ fontWeight: 600, color: "var(--brand)" }}
-                >
-                  ${quotaToUsd(detailUser.quota)}
-                </div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("已用", "Used", "المستخدم")}
-                </small>
-                <div className="mono" style={{ color: "var(--muted)" }}>
-                  ${quotaToUsd(detailUser.used_quota)}
-                </div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("分组", "Group", "المجموعة")}
-                </small>
-                <div>{detailUser.group || "default"}</div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("邀请码", "Affiliate code", "رمز الإحالة")}
-                </small>
-                <div className="mono">{detailUser.aff_code || "—"}</div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("邀请人", "Inviter", "الداعي")}
-                </small>
-                <div>
-                  {detailUser.inviter_id ? `#${detailUser.inviter_id}` : "—"}
-                </div>
-              </div>
-              <div>
-                <small style={{ color: "var(--muted)" }}>
-                  {text("注册时间", "Registered", "مسجل")}
-                </small>
-                <div className="mono" style={{ fontSize: "var(--text-xs)" }}>
-                  {new Date(detailUser.created_at * 1000).toLocaleString()}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
+    </StaffWorkspace>
   );
 }

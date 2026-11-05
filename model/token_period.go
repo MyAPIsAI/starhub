@@ -87,11 +87,18 @@ func refreshTokenPeriod(tx *gorm.DB, token *Token, now time.Time) error {
 		}
 	}
 	reserved := max(int64(0), token.QuotaLimit-token.PeriodUsedQuota-token.RemainQuota)
+	var profile DeploymentProfileVersion
+	if err := tx.Order("revision DESC").First(&profile).Error; err == nil && profile.Profile.Timezone != token.QuotaTimezone {
+		token.QuotaTimezone = profile.Profile.Timezone
+		start = max(start, tokenPeriodStart(token.QuotaPeriod, token.QuotaTimezone, now))
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
 	token.PeriodStartedAt, token.PeriodUsedQuota = start, 0
 	if !token.UnlimitedQuota {
 		token.RemainQuota = max(int64(0), token.QuotaLimit-reserved)
 	}
-	return tx.Model(&Token{}).Where("id = ?", token.ID).Updates(map[string]any{"period_started_at": start, "period_used_quota": 0, "remain_quota": token.RemainQuota}).Error
+	return tx.Model(&Token{}).Where("id = ?", token.ID).Updates(map[string]any{"period_started_at": start, "period_used_quota": 0, "remain_quota": token.RemainQuota, "quota_timezone": token.QuotaTimezone}).Error
 }
 
 func prepareTokenPeriodUpdate(tx *gorm.DB, token *Token, fields map[string]any) error {

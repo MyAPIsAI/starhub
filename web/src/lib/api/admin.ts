@@ -7,11 +7,13 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut, apiPost } from "./http";
+import { useSessionQueryIdentity } from "../system-access";
 
 // --- Types: Users ---
 
 /** Backend publicUser shape (controller/user.go publicUser). */
 export interface AdminUser {
+  api_balance_nano?: string;
   id: number;
   username: string;
   email: string;
@@ -148,9 +150,11 @@ const ADMIN_CHANNELS_KEY = ["admin-channels"] as const;
 
 // --- Hooks: Users ---
 
-export function useAdminUsers() {
+export function useAdminUsers(enabled = true) {
+  const identity = useSessionQueryIdentity();
   return useQuery({
-    queryKey: ADMIN_USERS_KEY,
+    enabled,
+    queryKey: [...ADMIN_USERS_KEY, ...identity],
     queryFn: ({ signal }) => apiGet<AdminUser[]>("/api/user", signal),
   });
 }
@@ -167,9 +171,11 @@ export function useUpdateUser() {
 
 // --- Hooks: Audit ---
 
-export function useAdminAudit(page = 1, pageSize = 20) {
+export function useAdminAudit(page = 1, pageSize = 20, enabled = true) {
+  const identity = useSessionQueryIdentity();
   return useQuery({
-    queryKey: [...ADMIN_AUDIT_KEY, page, pageSize],
+    enabled,
+    queryKey: [...ADMIN_AUDIT_KEY, ...identity, page, pageSize],
     queryFn: ({ signal }) =>
       apiGet<AuditLogPage>(
         `/api/audit?p=${page}&page_size=${pageSize}`,
@@ -180,9 +186,11 @@ export function useAdminAudit(page = 1, pageSize = 20) {
 
 // --- Hooks: Metrics ---
 
-export function useAdminMetrics() {
+export function useAdminMetrics(enabled = true) {
+  const identity = useSessionQueryIdentity();
   return useQuery({
-    queryKey: ADMIN_METRICS_KEY,
+    enabled,
+    queryKey: [...ADMIN_METRICS_KEY, ...identity],
     queryFn: ({ signal }) => apiGet<MetricsSnapshot>("/api/metrics", signal),
     refetchInterval: 15000,
   });
@@ -190,9 +198,11 @@ export function useAdminMetrics() {
 
 // --- Hooks: Channels ---
 
-export function useAdminChannels() {
+export function useAdminChannels(enabled = true) {
+  const identity = useSessionQueryIdentity();
   return useQuery({
-    queryKey: ADMIN_CHANNELS_KEY,
+    enabled,
+    queryKey: [...ADMIN_CHANNELS_KEY, ...identity],
     queryFn: ({ signal }) => apiGet<AdminChannel[]>("/api/channel", signal),
   });
 }

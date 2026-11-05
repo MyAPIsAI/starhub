@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/config"
 )
 
 func newTestDB(t *testing.T) {
@@ -383,7 +384,12 @@ func TestLogInsertAndQuery(t *testing.T) {
 func TestSummarizeLogsByDay(t *testing.T) {
 	newTestDB(t)
 
-	today := time.Now().UTC().Truncate(24 * time.Hour)
+	loc, err := time.LoadLocation(config.RegionTimezone())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().In(loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	at := func(dayOffset, hour int) int64 {
 		return today.AddDate(0, 0, dayOffset).Add(time.Duration(hour) * time.Hour).Unix()
 	}

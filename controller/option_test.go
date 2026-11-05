@@ -12,7 +12,7 @@ import (
 
 func TestUpdateOptionRejectsUnknownKey(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	rr := call(UpdateOption, testRequest{
 		method: http.MethodPut,
@@ -26,7 +26,7 @@ func TestUpdateOptionRejectsUnknownKey(t *testing.T) {
 
 func TestUpdateOptionRejectsInvalidBody(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	rr := call(UpdateOption, testRequest{
 		method: http.MethodPut,
@@ -42,7 +42,7 @@ func TestUpdateOptionRejectsInvalidBody(t *testing.T) {
 // through to the option table.
 func TestUpdateOptionRejectsInvalidValue(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	// Every option key is seeded on startup, so capture the pre-update value
 	// and assert it is untouched rather than assuming an empty table.
@@ -77,7 +77,7 @@ func TestUpdateOptionRejectsInvalidValue(t *testing.T) {
 
 func TestUpdateOptionDatabaseFailureLeavesMemoryUnchanged(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 	before, _, err := model.GetOption(setting.OptionKeyCacheRatio)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestUpdateOptionDatabaseFailureLeavesMemoryUnchanged(t *testing.T) {
 
 func TestOptionVersionHistoryAndRollback(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 	rr := call(UpdateOption, testRequest{method: http.MethodPut, target: "/api/option",
 		body:   fmt.Sprintf(`{"key":%q,"value":"2.5","expected_version":0}`, setting.OptionKeyCacheRatio),
 		userID: uid, role: role})
@@ -134,7 +134,7 @@ func TestOptionVersionHistoryAndRollback(t *testing.T) {
 
 func TestWebhookOptionIsRedacted(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 	rr := call(UpdateOption, testRequest{method: http.MethodPut, target: "/api/option",
 		body: `{"key":"alert_webhook_url","value":"https://example.test/secret"}`, userID: uid, role: role})
 	expectStatus(t, rr, http.StatusOK)
@@ -156,7 +156,7 @@ func TestWebhookOptionIsRedacted(t *testing.T) {
 
 func TestUpdateOptionPersistsAndReloads(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	rr := call(UpdateOption, testRequest{
 		method: http.MethodPut,
@@ -194,7 +194,7 @@ func TestUpdateOptionPersistsAndReloads(t *testing.T) {
 // raw request value, so the persisted map always covers every built-in model.
 func TestUpdateOptionRatioRoundTripsThroughSnapshot(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	rr := call(UpdateOption, testRequest{
 		method: http.MethodPut,
@@ -228,7 +228,7 @@ func TestUpdateOptionRatioRoundTripsThroughSnapshot(t *testing.T) {
 // mention, otherwise a partial update would silently reset them.
 func TestUpdateOptionRatioKeepsUnmentionedModels(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	before := setting.ModelRatioValue("gpt-4o-mini")
 
@@ -248,7 +248,7 @@ func TestUpdateOptionRatioKeepsUnmentionedModels(t *testing.T) {
 
 func TestListOptionsReturnsSeededKeys(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	rr := call(ListOptions, testRequest{target: "/api/option", userID: uid, role: role})
 	var got []map[string]string
@@ -271,7 +271,7 @@ func TestListOptionsReturnsSeededKeys(t *testing.T) {
 
 func TestUpdateOptionAffiliateRoundTrip(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	rr := call(UpdateOption, testRequest{
 		method: http.MethodPut,
@@ -304,7 +304,7 @@ func TestUpdateOptionAffiliateRoundTrip(t *testing.T) {
 // inviter earn more than the invitee spends.
 func TestUpdateOptionRebateRatioBounds(t *testing.T) {
 	newTestDB(t)
-	uid, role := admin()
+	uid, role := int64(1), common.RoleRoot
 
 	for _, value := range []string{"-0.1", "1.5"} {
 		rr := call(UpdateOption, testRequest{
@@ -328,5 +328,5 @@ func TestUpdateOptionRebateRatioBounds(t *testing.T) {
 	if got := setting.AffRebateRatioValue(); got != 0.25 {
 		t.Fatalf("rebate ratio = %v, want 0.25", got)
 	}
-	_ = common.RoleAdmin
+	_ = common.RoleRoot
 }

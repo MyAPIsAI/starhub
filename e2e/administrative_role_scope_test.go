@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"starhub/internal/testauth"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 	if err := model.CreateUser(actor); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(actor.ID, time.Hour)
+	session := testauth.Session(t, actor.ID, time.Hour)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	ownedToken := &model.Token{UserID: actor.ID, Name: "Owned key", Status: common.StatusEnabled, UnlimitedQuota: true, ExpiredTime: -1}
 	if err := model.InsertToken(ownedToken); err != nil {
@@ -59,11 +60,11 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, role := range []int{common.RoleUser, common.RoleFinance, 11, 99, 101, 1000, common.RoleAdmin, common.RoleRoot, 99} {
+	for _, role := range []int{common.RoleUser, 11, 99, 101, 1000, 99} {
 		t.Run(fmt.Sprint(role), func(t *testing.T) {
 			// Each case verifies authorization rather than accumulated IP throttling.
 			middleware.ResetRateLimits()
-			if err := model.UpdateUserFields(actor.ID, map[string]any{"role": role}); err != nil {
+			if err := model.DB.Model(&model.StaffAccount{}).Where("id = ?", actor.ID).Updates(map[string]any{"role": role}).Error; err != nil {
 				t.Fatal(err)
 			}
 			admin := common.IsAdminRole(role)
@@ -105,13 +106,13 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 			if usage.Status != 200 || !strings.Contains(usage.Body, wanted) || (!admin && strings.Contains(usage.Body, "other-private-marker")) {
 				t.Fatalf("role %d usage query bypassed ownership: %d %s", role, usage.Status, usage.Body)
 			}
-			crossWant := 403
+			crossWant := 404
 			if admin {
 				crossWant = 200
 			}
 			for _, path := range []string{fmt.Sprintf("/api/recharge/%d", orders[env.rootID].ID), fmt.Sprintf("/api/export/%d/download", exports[env.rootID].ID)} {
 				want := crossWant
-				if strings.HasPrefix(path, "/api/export/") && !admin {
+				if strings.HasPrefix(path, "/api/export/") {
 					want = 404
 				}
 				if response := doRequest(env.base, "GET", path, session, nil); response.Status != want {
@@ -129,10 +130,7 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 					{"POST", fmt.Sprintf("/api/recharge/%d/begin", orders[env.rootID].ID), nil},
 					{"POST", fmt.Sprintf("/api/recharge/%d/resolve", orders[env.rootID].ID), map[string]any{"outcome": "success"}},
 				} {
-					want := 403
-					if strings.HasPrefix(request.path, "/api/token") {
-						want = 404
-					}
+					want := 404
 					if response := doRequest(env.base, request.method, request.path, session, request.body); response.Status != want {
 						t.Fatalf("role %d could mutate another owner's resource: %s %s status=%d", role, request.method, request.path, response.Status)
 					}
@@ -141,7 +139,7 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 			if response := doRequest(env.base, "PUT", "/api/token", session, map[string]any{"id": ownedToken.ID, "name": "Owned key"}); response.Status != 200 {
 				t.Fatal("ordinary owner lost own-token editing")
 			}
-			if response := doRequest(env.base, "GET", fmt.Sprintf("/api/export/%d/download", exports[actor.ID].ID), session, nil); response.Status != 200 || !strings.Contains(response.Body, "owned-private-marker") {
+			if response := doRequest(env.base, "GET", "/api/export/files/"+exports[actor.ID].DownloadToken+"/download", session, nil); response.Status != 200 || !strings.Contains(response.Body, "owned-private-marker") {
 				t.Fatal("ordinary owner lost own export access")
 			}
 		})

@@ -93,6 +93,12 @@ describe("owner-bound export jobs", () => {
       (useCreateExport() as any).mutationFn({ type: "ledger", range_days: 31 }),
     ).rejects.toThrow("another account");
   });
+  it("requires an opaque URL without a numeric download fallback", async () => {
+    await expect(downloadExport(1, "x.csv")).rejects.toThrow("Invalid export");
+    await expect(
+      downloadExport(1, "x.csv", "/api/export/1/download"),
+    ).rejects.toThrow("Invalid export");
+  });
   it("does not download arbitrary locations or use a signed-out identity", async () => {
     await expect(
       downloadExport(1, "x.csv", "https://outside.example/x"),

@@ -13,6 +13,8 @@ import {
   useSystemAccess,
 } from "../lib/system-access";
 import type { PreviewRequest } from "../lib/product-preview";
+import { useUsageReport } from "../lib/api/usage-report";
+import type { ExportInput } from "../lib/api/exports";
 
 export default function RequestHistoryPage({
   timezone = "Asia/Dubai",
@@ -21,12 +23,14 @@ export default function RequestHistoryPage({
 }: {
   timezone?: string;
   onSelect: (row: PreviewRequest) => void;
-  onExport: (selection?: {
-    start_date: string;
-    end_date: string;
-    status?: string;
-    query?: string;
-  }) => void;
+  onExport: (
+    selection?: {
+      start_date: string;
+      end_date: string;
+      status?: string;
+      query?: string;
+    } & Pick<ExportInput, "key_id" | "model" | "trace_id">,
+  ) => void;
 }) {
   const [params] = useSearchParams();
   const scope = useSessionQueryIdentity();
@@ -46,13 +50,16 @@ export default function RequestHistoryPage({
     ? rawStatus
     : "all";
   const query = params.get("query") ?? "";
+  const options = useUsageReport("range=7d").data?.options;
   const search = new URLSearchParams({
     scope: "owned",
     p: String(Math.max(1, Math.trunc(page))),
     page_size: "20",
     status,
-    query,
+    trace_id: query,
   });
+  for (const name of ["key_id", "model"])
+    if (params.get(name)) search.set(name, params.get(name)!);
   if (Number.isFinite(bounds.from))
     search.set("from", String(Math.floor(bounds.from / 1000)));
   if (Number.isFinite(bounds.until))
@@ -87,6 +94,7 @@ export default function RequestHistoryPage({
       timezone={timezone}
       onSelect={onSelect}
       onExport={onExport}
+      options={options}
       serverPage={{
         total: state.isError ? 0 : (state.data?.total ?? 0),
         loading: state.isFetching,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"starhub/internal/testauth"
 	"starhub/middleware"
 	"starhub/model"
 	"strings"
@@ -16,7 +17,7 @@ func TestGuardedAccountClosureReceiptRecoveryAndCookieIsolation(t *testing.T) {
 	env := setupRelayApp(t)
 	owner, session := exportTestUser(t, env.base, "closure-http")
 	_, other := exportTestUser(t, env.base, "closure-other")
-	second := middleware.Sessions.Create(owner, time.Hour)
+	second := testauth.Session(t, owner, time.Hour)
 	defer middleware.Sessions.Remove(second)
 	if err := model.DB.Create(&model.Wallet{UserID: owner, Balance: 9999999}).Error; err != nil {
 		t.Fatal(err)
@@ -28,7 +29,7 @@ func TestGuardedAccountClosureReceiptRecoveryAndCookieIsolation(t *testing.T) {
 		req, _ := http.NewRequest("POST", env.base+path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		if cookie != "" {
-			req.AddCookie(&http.Cookie{Name: "session", Value: cookie})
+			testauth.Authorize(req, cookie)
 		}
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {

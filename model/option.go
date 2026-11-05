@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"starhub/common"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,9 +39,11 @@ type OptionChange struct {
 }
 
 type OptionInstance struct {
-	ID       string `gorm:"primaryKey;size:32" json:"id"`
-	Version  int64  `gorm:"not null" json:"version"`
-	LastSeen int64  `gorm:"index;not null" json:"last_seen"`
+	BuildVersion    string `gorm:"size:128;not null;default:''" json:"build_version"`
+	DatabaseHealthy bool   `gorm:"not null;default:false" json:"database_healthy"`
+	ID              string `gorm:"primaryKey;size:32" json:"id"`
+	Version         int64  `gorm:"not null" json:"version"`
+	LastSeen        int64  `gorm:"index;not null" json:"last_seen"`
 }
 
 var loadedOptionVersion atomic.Int64
@@ -107,7 +110,9 @@ func WatchOptions(ctx context.Context, interval time.Duration) {
 }
 
 func recordOptionInstance(id string) error {
-	instance := OptionInstance{ID: id, Version: LoadedOptionVersion(), LastSeen: time.Now().Unix()}
+	connection, err := DB.DB()
+	healthy := err == nil && connection.Ping() == nil
+	instance := OptionInstance{ID: id, Version: LoadedOptionVersion(), LastSeen: time.Now().Unix(), BuildVersion: common.Version, DatabaseHealthy: healthy}
 	return DB.Clauses(clause.OnConflict{UpdateAll: true}).Create(&instance).Error
 }
 
@@ -128,8 +133,12 @@ func SaveOptionIfVersion(key, value string, actorID, expectedVersion int64) (int
 }
 
 func saveOption(key, value string, actorID, expectedVersion int64) (int64, error) {
+	return SaveOptionContext(context.Background(), key, value, actorID, expectedVersion)
+}
+
+func SaveOptionContext(ctx context.Context, key, value string, actorID, expectedVersion int64) (int64, error) {
 	var version int64
-	err := DB.Transaction(func(tx *gorm.DB) error {
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
 		version, err = saveOptionTx(tx, key, value, actorID, expectedVersion)
 		return err
@@ -189,6 +198,9 @@ func saveOptionTx(tx *gorm.DB, key, value string, actorID, expectedVersion int64
 	}
 	err = tx.Create(&OptionChange{Version: version, Key: key, OldValue: before,
 		NewValue: after, ActorID: actorID, CreatedAt: time.Now().Unix()}).Error
+	if err == nil {
+		err = recordPricingChange(tx, key, before, after, actorID)
+	}
 	return version, err
 }
 

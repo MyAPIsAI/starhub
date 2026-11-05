@@ -153,11 +153,32 @@ export default function AuthDialog() {
           "The account or password is incorrect. Please try again.",
           "الحساب أو كلمة المرور غير صحيحة. حاول مجددًا.",
         );
-      if (caught.status === 403)
+      if (caught.status === 403 && caught.message === "user is disabled")
         return c(
           "该账户已被禁用，请联系管理员。",
           "This account is disabled. Contact the administrator.",
           "هذا الحساب معطل. اتصل بالمسؤول.",
+        );
+      if (
+        caught.status === 403 &&
+        caught.message === "staff access requires the company network or VPN"
+      )
+        return c(
+          "该账号需通过公司网络或 VPN 登录。",
+          "Connect through the company network or VPN to sign in with this account.",
+          "اتصل بشبكة الشركة أو VPN لتسجيل الدخول بهذا الحساب.",
+        );
+      if (caught.status === 429)
+        return c(
+          "尝试次数过多，请稍后再试。",
+          "Too many attempts. Please try later.",
+          "محاولات كثيرة. حاول لاحقًا.",
+        );
+      if (caught.status === 403)
+        return c(
+          "登录请求被拒绝，请联系管理员。",
+          "Sign-in was denied. Contact the administrator.",
+          "تم رفض تسجيل الدخول. اتصل بالمسؤول.",
         );
       if (caught.status === 409)
         return c(
@@ -234,7 +255,9 @@ export default function AuthDialog() {
         replace: true,
       });
     } catch (caught) {
-      if (ticket === operation.current) setError(explain(caught));
+      if (ticket === operation.current) {
+        setError(explain(caught));
+      }
     } finally {
       if (ticket === operation.current) {
         setBusy(false);
@@ -301,7 +324,7 @@ export default function AuthDialog() {
             }
             required
             minLength={isNew ? 6 : undefined}
-            maxLength={64}
+            maxLength={isNew ? 64 : 72}
             placeholder={
               id === "auth-confirm-password"
                 ? c(
@@ -651,20 +674,6 @@ export default function AuthDialog() {
                           setPassword,
                         )}
                         <div className="auth-helper-row">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAccount("root");
-                              setPassword("123456");
-                              setError("");
-                            }}
-                          >
-                            {c(
-                              "填入管理员账号",
-                              "Use admin account",
-                              "استخدم حساب المسؤول",
-                            )}
-                          </button>
                           <button
                             type="button"
                             onClick={() => {

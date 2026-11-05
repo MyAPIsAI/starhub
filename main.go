@@ -11,12 +11,19 @@ import (
 	"starhub/config"
 	"starhub/controller"
 	"starhub/internal/router"
+	"starhub/internal/staffcli"
 	"starhub/model"
 	"starhub/service"
 	"starhub/web"
 )
 
 func main() {
+	if handled, err := staffcli.Run(os.Args[1:], os.Getenv, os.Stdout); handled {
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if executable, err := os.Executable(); err == nil {
 		log.Printf("executable: %s", executable)
 	}
@@ -39,18 +46,27 @@ func main() {
 	if err := model.InitDB(bootstrap.DBPath); err != nil {
 		log.Fatalf("failed to init database: %v", err)
 	}
-	rootPassword := bootstrap.RootPassword
-	if rootPassword == "" {
-		rootPassword = common.DefaultRootPasswd
-		log.Print("WARNING: using default root password; set STARHUB_ROOT_PASSWORD to override")
+	if err := model.SeedOptions(); err != nil {
+		log.Fatal(err)
 	}
-	if err := model.Seed(rootPassword); err != nil {
-		log.Fatalf("failed to seed database: %v", err)
+	if exists, err := model.StaffRootExists(); err != nil {
+		log.Fatal(err)
+	} else if !exists {
+		if config.StaffOpenSourceSetup() {
+			token, err := model.NewStaffInstallationToken()
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Print("One-time staff installation token (15 minutes): ", token)
+		} else {
+			log.Print("Initialize the internal Root with: starhub staff init --username root (STARHUB_STAFF_PASSWORD required)")
+		}
 	}
 	if err := model.LoadOptionsToSettings(); err != nil {
 		log.Fatalf("failed to load options: %v", err)
 	}
 	go model.WatchOptions(context.Background(), time.Second)
+	go model.WatchAdministration(context.Background())
 	go controller.RunExportJobs(context.Background())
 	go func() {
 		ticker := time.NewTicker(time.Minute)

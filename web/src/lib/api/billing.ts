@@ -190,7 +190,10 @@ export function useRechargeOrder(id?: number) {
     queryKey: [...RECHARGE_KEY, scope, "single", id] as const,
     queryFn: ({ signal }) =>
       billingRequest(scope, () =>
-        apiGet<RechargeOrder>(`/api/recharge/${rechargeID(id)}`, signal),
+        apiGet<RechargeOrder>(
+          `/api/recharge/${rechargeID(id)}?scope=owned`,
+          signal,
+        ),
       ),
     enabled:
       scope[1] !== null && id != null && Number.isSafeInteger(id) && id > 0,
@@ -228,7 +231,9 @@ export function useBeginRechargePayment() {
     retry: false,
     mutationFn: (id: number) =>
       billingRequest(scope, () =>
-        apiPost<RechargeOrder>(`/api/recharge/${rechargeID(id)}/begin`),
+        apiPost<RechargeOrder>(
+          `/api/recharge/${rechargeID(id)}/begin?scope=owned`,
+        ),
       ),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: RECHARGE_KEY });
@@ -249,9 +254,12 @@ export function useResolveRechargeOrder() {
       outcome: "success" | "failed" | "cancelled";
     }) =>
       billingRequest(scope, () =>
-        apiPost<RechargeOrder>(`/api/recharge/${rechargeID(id)}/resolve`, {
-          outcome,
-        }),
+        apiPost<RechargeOrder>(
+          `/api/recharge/${rechargeID(id)}/resolve?scope=owned`,
+          {
+            outcome,
+          },
+        ),
       ),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: RECHARGE_KEY });
