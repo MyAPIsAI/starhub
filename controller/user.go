@@ -432,8 +432,9 @@ func UpdateSelf(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pw := strings.TrimSpace(*req.NewPassword)
-		if len(pw) < 6 || len(pw) > 64 {
-			common.ApiError(w, http.StatusBadRequest, "password must be 6-64 characters")
+		if !validPassword(pw) {
+			common.ApiError(w, http.StatusBadRequest,
+				"password must be 8-64 characters with at least one letter and one digit")
 			return
 		}
 		hashed, err := common.HashPassword(pw)
@@ -458,6 +459,12 @@ func UpdateSelf(w http.ResponseWriter, r *http.Request) {
 	if err := model.UpdateUserFields(user.ID, fields); err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// When the password changes, revoke all other sessions so the user must
+	// re-authenticate on other devices. The current session stays active.
+	if _, ok := fields["password"]; ok {
+		currentToken := middleware.SessionToken(r)
+		middleware.Sessions.RemoveAllExcept(user.ID, currentToken)
 	}
 	// Return the updated public user so the caller can refresh state.
 	updated, err := model.GetUserByID(user.ID)

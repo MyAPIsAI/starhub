@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"starhub/common"
+	"starhub/middleware"
 	"starhub/model"
 )
 
@@ -13,12 +15,17 @@ func TestUpdateSelfChangePassword(t *testing.T) {
 	newTestDB(t)
 	u := newUser(t, "alice", common.RoleUser, 1000)
 
+	// Create two sessions — one "current" and one "other".
+	current := middleware.Sessions.Create(u.ID, time.Hour)
+	other := middleware.Sessions.Create(u.ID, time.Hour)
+
 	rr := call(UpdateSelf, testRequest{
-		method: http.MethodPut,
-		target: "/api/user/self",
-		body:   `{"current_password":"secret","new_password":"newpass123"}`,
-		userID: u.ID,
-		role:   common.RoleUser,
+		method:  http.MethodPut,
+		target:  "/api/user/self",
+		body:    `{"current_password":"secret","new_password":"newpass123"}`,
+		userID:  u.ID,
+		role:    common.RoleUser,
+		headers: map[string]string{"Cookie": "session=" + current},
 	})
 	var got map[string]any
 	decodeData(t, rr, &got)
@@ -33,6 +40,14 @@ func TestUpdateSelfChangePassword(t *testing.T) {
 	}
 	if common.VerifyPassword("secret", user.Password) {
 		t.Fatal("old password should no longer verify")
+	}
+
+	// The other session should be revoked; the current session should survive.
+	if _, ok := middleware.Sessions.Get(other); ok {
+		t.Fatal("other session should have been revoked after password change")
+	}
+	if _, ok := middleware.Sessions.Get(current); !ok {
+		t.Fatal("current session should survive password change")
 	}
 }
 
