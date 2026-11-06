@@ -1,0 +1,29 @@
+# StarHub
+
+Copyright (c) 2026 StarHub Contributors
+
+This software is licensed under the GNU Affero General Public License v3.0
+(AGPL-3.0). See the LICENSE file for the full license text.
+
+## Additional Terms (AGPL Section 7)
+
+1. Attribution Preservation: Modified versions must retain prominent
+   attribution to the original project (StarHub) in the user interface,
+   documentation, and About pages.
+
+2. Origin Link: The source code repository link must be preserved or
+   clearly indicated in distributions that include interactive user
+   interfaces.
+
+3. Change Marking: Modified files must be marked with a brief notice
+   stating that they were changed and the date of change.
+
+## Commercial Licensing
+
+For commercial licensing inquiries (including private deployment without
+AGPL obligations), contact the project maintainers.
+
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind, express or
+implied. See the LICENSE file for details.
