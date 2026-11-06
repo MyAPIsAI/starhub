@@ -118,6 +118,12 @@ func NormalizeOption(key, value string) (string, error) {
 			return "", fmt.Errorf("invalid value for %s: %w", key, err)
 		}
 		return strconv.FormatBool(v), nil
+	case OptionKeyResourceProviderMode:
+		v := strings.TrimSpace(value)
+		if v != ResourceProviderModeLocal && v != ResourceProviderModeCommercial {
+			return "", fmt.Errorf("invalid value for %s: must be %q or %q", key, ResourceProviderModeLocal, ResourceProviderModeCommercial)
+		}
+		return v, nil
 	default:
 		return "", fmt.Errorf("unknown option key: %s", key)
 	}

@@ -8,7 +8,16 @@ import (
 	"starhub/common"
 	"starhub/metric"
 	"starhub/model"
+	"starhub/setting"
 )
+
+// PublicStatusHandler handles GET /api/status (public, no auth).
+// Returns the resource provider mode and whether the system is operational.
+func PublicStatusHandler(w http.ResponseWriter, r *http.Request) {
+	common.ApiSuccess(w, map[string]any{
+		"resource_provider_mode": setting.ResourceProviderModeValue(),
+	})
+}
 
 // StatusHistoryHandler handles GET /api/status/history?months=3 (public).
 // Returns monthly availability aggregated from the Log table.
@@ -94,10 +103,11 @@ func SystemStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.ApiSuccess(w, map[string]any{
-		"resource_catalog": catalogInfo,
-		"channel_stats":    channelStats,
-		"request_counts":   requests,
-		"channels":         channelList,
-		"generated_at":     snap.GeneratedAt,
+		"resource_catalog":       catalogInfo,
+		"channel_stats":          channelStats,
+		"request_counts":         requests,
+		"channels":               channelList,
+		"resource_provider_mode": setting.ResourceProviderModeValue(),
+		"generated_at":           snap.GeneratedAt,
 	})
 }

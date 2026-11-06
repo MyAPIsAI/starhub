@@ -46,13 +46,15 @@ var (
 // OptionKeys lists every option key the setting package owns, for seeding
 // and persistence.
 func OptionKeys() []string {
-	return append(append(append(append(append(append(RatioOptionKeys(),
+	return append(append(append(append(append(append(append(RatioOptionKeys(),
 		OptionKeyModelPrice, OptionKeyModelPriceExpr,
 		OptionKeyCacheRatio, OptionKeyAudioRatio, OptionKeyModelTimePricing, OptionKeyModelTimeTokenPrices),
 		GroupGroupRatioKeys()...),
 		AffiliateOptionKeys()...),
 		AlertOptionKeys()...),
-		AffinityOptionKeys()...), config.OptionKeys()...)
+		AffinityOptionKeys()...),
+		ResourceProviderModeKeys()...),
+		config.OptionKeys()...)
 }
 
 // IsOptionKey reports whether the key is a known ratio / pricing option.
@@ -60,7 +62,7 @@ func IsOptionKey(key string) bool {
 	if config.IsOptionKey(key) {
 		return true
 	}
-	if IsGroupGroupRatioKey(key) || IsAffiliateOptionKey(key) || IsAlertOptionKey(key) || IsAffinityOptionKey(key) {
+	if IsGroupGroupRatioKey(key) || IsAffiliateOptionKey(key) || IsAlertOptionKey(key) || IsAffinityOptionKey(key) || IsResourceProviderModeKey(key) {
 		return true
 	}
 	switch key {
@@ -114,6 +116,9 @@ func updateOption(key, value string) error {
 	if IsAlertOptionKey(key) {
 		return UpdateAlert(key, value)
 	}
+	if IsResourceProviderModeKey(key) {
+		return UpdateResourceProviderMode(key, value)
+	}
 	if IsAffinityOptionKey(key) {
 		return UpdateAffinity(key, value)
 	}
@@ -142,6 +147,9 @@ func snapshotOption(key string) (string, error) {
 	}
 	if IsAlertOptionKey(key) {
 		return SnapshotAlert(key)
+	}
+	if IsResourceProviderModeKey(key) {
+		return SnapshotResourceProviderMode(key)
 	}
 	if IsAffinityOptionKey(key) {
 		return SnapshotAffinity(key)

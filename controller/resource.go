@@ -9,6 +9,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/setting"
 )
 
 func ListResources(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +191,11 @@ func decodeResourceBody(w http.ResponseWriter, r *http.Request, value any) bool 
 }
 
 func UpdateResources(w http.ResponseWriter, r *http.Request) {
+	if setting.IsCommercialMode() {
+		common.ApiError(w, http.StatusForbidden,
+			"resource catalog is read-only in commercial mode; data is synced from the external resource platform")
+		return
+	}
 	var request struct {
 		ExpectedRevision *int64                  `json:"expected_revision"`
 		Snapshot         *model.ResourceSnapshot `json:"snapshot"`
