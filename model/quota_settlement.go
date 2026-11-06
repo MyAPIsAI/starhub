@@ -31,9 +31,7 @@ func RecordQuotaSettlement(userID, tokenID int64, unlimited bool, delta, actual 
 	frozen := *entry
 	frozen.UserID, frozen.TokenID = userID, tokenID
 	frozen.Quota = actual
-	if frozen.CreatedAt == 0 {
-		frozen.CreatedAt = time.Now().Unix()
-	}
+	normalizeBillingTime(&frozen)
 	payload, err := json.Marshal(frozen)
 	if err != nil {
 		return nil, err

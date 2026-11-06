@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState } from "react";
 import { useSettingsText } from "./settings-text";
 export { useSettingsText } from "./settings-text";
@@ -86,14 +87,14 @@ export function usePricingDraft(
       setNotice(
         result.reason === "conflict"
           ? text(
-              "另一页面已发布新版本。请放弃草稿，加载最新配置后重新修改。",
-              "A newer version was published. Discard this draft and reload before editing.",
-              "نُشر إصدار أحدث. تجاهل المسودة وأعد التحميل قبل التعديل.",
+              ...translatedMessage(
+                "a_newer_version_was_published_discard_this_dr_8c7296a96f",
+              ),
             )
           : text(
-              "未发布。请检查输入、管理员身份和浏览器存储权限，草稿已保留。",
-              "Not published. Check values, administrator access and browser storage. Your draft is retained.",
-              "لم يتم النشر. تحقق من القيم والصلاحية والتخزين. احتُفظ بالمسودة.",
+              ...translatedMessage(
+                "not_published_check_values_administrator_acce_804d2c5aa6",
+              ),
             ),
       );
       return false;
@@ -103,9 +104,9 @@ export function usePricingDraft(
     setReviewOpen(false);
     setNotice(
       text(
-        "已保存到此浏览器的演示定价。后续模拟使用新配置；服务器计费配置未变更。",
-        "Saved to this browser’s Demo pricing. Future simulations use the new configuration; server billing configuration is unchanged.",
-        "حُفظ التسعير التجريبي في هذا المتصفح. تستخدم المحاكاة القادمة الإعداد الجديد؛ ولم تتغير إعدادات فوترة الخادم.",
+        ...translatedMessage(
+          "saved_to_this_browser_s_demo_pricing_future_s_0ba87d14bb",
+        ),
       ),
     );
     return true;

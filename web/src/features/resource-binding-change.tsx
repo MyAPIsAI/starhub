@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "../components/ui/button";
@@ -55,20 +56,20 @@ export function ResourceBindingChangeDialog({
         setError(
           cause instanceof ApiError && cause.status === 409
             ? text(
-                "绑定或版本已变化。关闭后刷新，核对新状态再操作；本次草稿已保留。",
-                "The binding or versions changed. Close and refresh before reviewing a new action; this draft is retained.",
-                "تغير الرابط أو إصداراته. أغلق وحدّث قبل مراجعة إجراء جديد؛ تُحفظ المسودة الحالية.",
+                ...translatedMessage(
+                  "the_binding_or_versions_changed_close_and_ref_b963a6ed0a",
+                ),
               )
             : cause instanceof ApiError && cause.status === 400
               ? text(
-                  "服务器拒绝此操作。关闭后核对当前绑定，再重新确认。",
-                  "The server rejected this action. Close, check the current binding and review again.",
-                  "رفض الخادم هذا الإجراء. أغلق وتحقق من الرابط الحالي وراجعه مجددًا.",
+                  ...translatedMessage(
+                    "the_server_rejected_this_action_close_check_t_65adc1286e",
+                  ),
                 )
               : text(
-                  "尚未确认操作结果。请核对操作记录，暂勿重复提交。",
-                  "The action outcome is unconfirmed. Check its record before submitting again.",
-                  "لم تُؤكد نتيجة الإجراء. تحقق من سجله قبل الإرسال مجددًا.",
+                  ...translatedMessage(
+                    "the_action_outcome_is_unconfirmed_check_its_r_4d394a79e5",
+                  ),
                 ),
         );
     } finally {
@@ -91,14 +92,14 @@ export function ResourceBindingChangeDialog({
         setError(
           cause instanceof ApiError && cause.status === 404
             ? text(
-                "暂未找到操作记录。这不证明之前的请求一定失败；请稍后核对或关闭后刷新当前状态。",
-                "No action record was found yet. This does not prove the earlier request failed; check later or close and refresh current state.",
-                "لم يُعثر على سجل للإجراء بعد. هذا لا يثبت فشل الطلب السابق؛ تحقق لاحقًا أو أغلق وحدّث الحالة.",
+                ...translatedMessage(
+                  "no_action_record_was_found_yet_this_does_not__5e164cc023",
+                ),
               )
             : text(
-                "无法核对操作记录，请稍后再查或刷新当前状态。",
-                "The action record could not be verified. Check again later or refresh current state.",
-                "تعذر التحقق من سجل الإجراء. أعد التحقق لاحقًا أو حدّث الحالة الحالية.",
+                ...translatedMessage(
+                  "the_action_record_could_not_be_verified_check_162686485c",
+                ),
               ),
         );
     } finally {
@@ -115,27 +116,25 @@ export function ResourceBindingChangeDialog({
       title={
         review?.operation === "release"
           ? text(
-              "确认释放来源绑定",
-              "Confirm source binding release",
-              "تأكيد تحرير رابط المصدر",
+              ...translatedMessage("confirm_source_binding_release_8732662172"),
             )
           : text(
-              "确认撤销托管路由",
-              "Confirm managed route revocation",
-              "تأكيد إلغاء المسارات المُدارة",
+              ...translatedMessage(
+                "confirm_managed_route_revocation_514159cfde",
+              ),
             )
       }
       description={text(
-        "请核对来源、目标和冻结版本后确认。",
-        "Check the source, target and captured versions before confirming.",
-        "تحقق من المصدر والهدف والإصدارات المسجلة قبل التأكيد.",
+        ...translatedMessage(
+          "check_the_source_target_and_captured_versions_153f658686",
+        ),
       )}
       className="rp-publish-dialog"
       preventOutsideClose
       footer={
         <>
           <Button disabled={mutation.isPending || checking} onClick={onClose}>
-            {text("关闭", "Close", "إغلاق")}
+            {text(...translatedMessage("close_6bf477426b"))}
           </Button>
           {attempted && (
             <Button
@@ -143,11 +142,7 @@ export function ResourceBindingChangeDialog({
               disabled={mutation.isPending}
               onClick={() => void check()}
             >
-              {text(
-                "核对操作记录",
-                "Check action record",
-                "تحقق من سجل الإجراء",
-              )}
+              {text(...translatedMessage("check_action_record_43ad8024cc"))}
             </Button>
           )}
           <Button
@@ -157,15 +152,9 @@ export function ResourceBindingChangeDialog({
             onClick={() => void confirm()}
           >
             {review?.operation === "release"
-              ? text(
-                  "确认释放绑定",
-                  "Confirm binding release",
-                  "تأكيد تحرير الرابط",
-                )
+              ? text(...translatedMessage("confirm_binding_release_e8dcdb5b95"))
               : text(
-                  "确认撤销路由",
-                  "Confirm route revocation",
-                  "تأكيد إلغاء المسارات",
+                  ...translatedMessage("confirm_route_revocation_b07278bf3f"),
                 )}
           </Button>
         </>
@@ -182,9 +171,7 @@ export function ResourceBindingChangeDialog({
             <strong>
               {review.row.gateway_name ||
                 text(
-                  "已删除或未命名渠道",
-                  "Deleted or unnamed gateway",
-                  "بوابة محذوفة أو بلا اسم",
+                  ...translatedMessage("deleted_or_unnamed_gateway_75592ec3f3"),
                 )}
             </strong>
             <br />
@@ -195,35 +182,37 @@ export function ResourceBindingChangeDialog({
           <p>
             {review.operation === "release"
               ? text(
-                  "清除该渠道的全部托管路线及能力，并释放来源归属，允许之后显式绑定其他渠道。目标渠道保留保护记录，不恢复旧的模型/分组权限。",
-                  "Clear all managed routes and abilities on this channel and release source ownership for a later explicit binding elsewhere. The target retains a protective marker; legacy model/group grants do not return.",
-                  "يمسح هذا جميع المسارات والقدرات المُدارة للقناة ويحرر ملكية المصدر لربط صريح لاحق في موضع آخر. يحتفظ الهدف بعلامة وقائية ولا تعود صلاحيات النماذج والمجموعات القديمة.",
+                  ...translatedMessage(
+                    "clear_all_managed_routes_and_abilities_on_thi_55b16a3ed1",
+                  ),
                 )
               : text(
-                  "清除该渠道的全部托管路线及能力；保留来源归属。后续请求将不能使用这些路线，恢复须重新预览并明确发布。",
-                  "Clear all managed routes and abilities on this channel while retaining source ownership. Future requests cannot use these routes; restoration requires a new review and explicit publication.",
-                  "يمسح هذا جميع المسارات والقدرات المُدارة للقناة مع الاحتفاظ بملكية المصدر. لا يمكن للطلبات اللاحقة استخدام هذه المسارات؛ تتطلب الاستعادة مراجعة ونشرًا صريحًا جديدين.",
+                  ...translatedMessage(
+                    "clear_all_managed_routes_and_abilities_on_thi_49e416f3a1",
+                  ),
                 )}
           </p>
           <p>
-            {text("已存组合", "Stored pairs", "الأزواج المخزنة")}:{" "}
+            {text(...translatedMessage("stored_pairs_b8a06ed7f7"))}:{" "}
             {review.row.stored_pair_count} → 0 ·{" "}
-            {text("最近发布记录", "Last publication record", "آخر سجل نشر")}:{" "}
+            {text(...translatedMessage("last_publication_record_59e2458727"))}:{" "}
             <code dir="ltr">{review.row.publication_id}</code>
           </p>
           <p>
             {text(
-              "已准入调用及历史记录不回溯修改；凭证、密钥授权范围、价格及资金不变。收据只证明历史提交，当前状态应刷新核对。",
-              "Already admitted calls and history are unchanged. Credentials, token scopes, prices and funds remain unchanged. A receipt proves a historical commit; refresh to verify current state.",
-              "لا تتغير الطلبات المقبولة مسبقًا أو السجلات. تبقى بيانات الاعتماد ونطاقات المفاتيح والأسعار والأموال كما هي. يثبت الإيصال اعتمادًا تاريخيًا؛ حدّث للتحقق من الحالة الحالية.",
+              ...translatedMessage(
+                "already_admitted_calls_and_history_are_unchan_d77d4c0830",
+              ),
             )}
           </p>
           <p className="rp-versions">
-            {text("资源", "Resources", "الموارد")} v{review.resource_revision} ·{" "}
-            {text("渠道", "Channels", "القنوات")} v{review.channel_revision}
+            {text(...translatedMessage("resources_dd59219f36"))} v
+            {review.resource_revision} ·{" "}
+            {text(...translatedMessage("channels_40b918ebad"))} v
+            {review.channel_revision}
           </p>
           <p>
-            {text("请求标识", "Request ID", "معرّف الطلب")}:{" "}
+            {text(...translatedMessage("request_id_d598531376"))}:{" "}
             <code dir="ltr">{review.request_id}</code>
           </p>
         </div>

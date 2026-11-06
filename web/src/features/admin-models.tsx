@@ -1,3 +1,4 @@
+import { messagePair } from "../i18n/messages";
 import { PricingHistory, ChangeSummary } from "./admin-operations";
 import { useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -120,11 +121,11 @@ export function AdminModels() {
       })
     : undefined;
   const kinds = [
-    ["chat", t("文本对话", "Chat")],
-    ["embedding", t("向量", "Embeddings")],
-    ["image", t("图片", "Images")],
-    ["audio", t("音频", "Audio")],
-    ["video", t("视频", "Video")],
+    ["chat", t(...messagePair("chat_0d6200e32c"))],
+    ["embedding", t(...messagePair("embeddings_39146bd60b"))],
+    ["image", t(...messagePair("images_afc737e9b3"))],
+    ["audio", t(...messagePair("audio_812b6825a4"))],
+    ["video", t(...messagePair("video_133c2b69bf"))],
     ["rerank", "Rerank"],
   ];
   const refresh = async () => {
@@ -160,8 +161,9 @@ export function AdminModels() {
           )
             throw Error(
               t(
-                "请检查词元单价；输入价为零但输出收费时，请使用独立词元价格。",
-                "Check token prices. Use independent token pricing for zero input with paid output.",
+                ...messagePair(
+                  "check_token_prices_use_independent_token_pric_674feec840",
+                ),
               ),
             );
           options = replaceServerModelPricing(draft.pricing, draft.row.model, {
@@ -280,30 +282,32 @@ export function AdminModels() {
   const summary = (name: string) => {
     if (!prices) return "—";
     if (data?.advanced_pricing[name])
-      return t("独立词元价格", "Independent token prices");
+      return t(...messagePair("independent_token_prices_0997c36e91"));
     const mode = serverPricingMode(prices, name);
-    if (mode === "expression") return t("按表达式计费", "Expression pricing");
+    if (mode === "expression")
+      return t(...messagePair("expression_pricing_9b06d58458"));
     if (mode === "per_request")
-      return `$${prices.perRequest[name]} / ${t("次", "request")}`;
+      return `$${prices.perRequest[name]} / ${t(...messagePair("request_3689ebc447"))}`;
     if (prices.input[name] === undefined)
-      return t("尚未配置", "Not configured");
+      return t(...messagePair("not_configured_23f1d5464b"));
     return `$${prices.input[name] * 2} / $${prices.input[name] * 2 * (prices.completion[name] ?? 1)}`;
   };
   return (
     <section className="adm-page">
       <header className="adm-heading">
         <div>
-          <h1>{t("标准模型与价格", "Models and pricing")}</h1>
+          <h1>{t(...messagePair("models_and_pricing_4debb4201e"))}</h1>
           <p>
             {t(
-              "对客的调用身份与计费基准。可用性由资源映射与投放决定。",
-              "Customer-facing identities and base prices. Availability follows resource mapping and placement.",
+              ...messagePair(
+                "customer_facing_identities_and_base_prices_av_a847fe435d",
+              ),
             )}
           </p>
         </div>
         <Button variant="primary" disabled={!data} onClick={() => begin()}>
           <Plus size={15} />
-          {t("新建标准模型", "New standard model")}
+          {t(...messagePair("new_standard_model_8c487445ac"))}
         </Button>
       </header>
       <AdminFeedback
@@ -315,8 +319,8 @@ export function AdminModels() {
         <div>
           <div className="adm-filters">
             <Input
-              aria-label={t("搜索模型", "Search models")}
-              placeholder={t("搜索模型", "Search models")}
+              aria-label={t(...messagePair("search_models_64bd2df7c3"))}
+              placeholder={t(...messagePair("search_models_64bd2df7c3"))}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -324,14 +328,16 @@ export function AdminModels() {
               }}
             />
             <select
-              aria-label={t("模型类型", "Model type")}
+              aria-label={t(...messagePair("model_type_68ecffa04b"))}
               value={kind}
               onChange={(e) => {
                 setKind(e.target.value);
                 setPage(1);
               }}
             >
-              <option value="">{t("全部类型", "All types")}</option>
+              <option value="">
+                {t(...messagePair("all_types_a5e050dcc5"))}
+              </option>
               {kinds.map(([id, label]) => (
                 <option key={id} value={id}>
                   {label}
@@ -339,18 +345,20 @@ export function AdminModels() {
               ))}
             </select>
           </div>
-          <AdminTable label={t("标准模型列表", "Standard model list")}>
+          <AdminTable
+            label={t(...messagePair("standard_model_list_9f106a2738"))}
+          >
             <thead>
               <tr>
                 {[
-                  t("模型", "Model"),
-                  t("类型", "Type"),
-                  t("平台基准价", "Platform base price"),
-                  t("实例投放汇总", "Resource placement"),
-                  t("可用 / 映射实例", "Available / mapped"),
-                  t("官方参考", "Official reference"),
-                  t("上架", "Listed"),
-                  t("操作", "Actions"),
+                  t(...messagePair("model_b80025508f")),
+                  t(...messagePair("type_be00a90d64")),
+                  t(...messagePair("platform_base_price_f2e6a77078")),
+                  t(...messagePair("resource_placement_9fef55b672")),
+                  t(...messagePair("available_mapped_8a8d05d364")),
+                  t(...messagePair("official_reference_c3da545a24")),
+                  t(...messagePair("listed_cbb84e921f")),
+                  t(...messagePair("actions_2806edaa15")),
                 ].map((s) => (
                   <th key={s}>{s}</th>
                 ))}
@@ -370,8 +378,9 @@ export function AdminModels() {
                       {row.revision === 0 && (
                         <span className="adm-meta">
                           {t(
-                            "历史渠道模型 · 待登记",
-                            "Legacy channel model · pending registration",
+                            ...messagePair(
+                              "legacy_channel_model_pending_registration_c2b870f137",
+                            ),
                           )}
                         </span>
                       )}
@@ -387,7 +396,7 @@ export function AdminModels() {
                         ))}
                       </div>
                       {!inventory?.groups.length &&
-                        t("暂无实例投放", "No resource placement")}
+                        t(...messagePair("no_resource_placement_3fbf3ae173"))}
                     </td>
                     <td>
                       <bdi>
@@ -398,17 +407,21 @@ export function AdminModels() {
                       {meta?.official_verified_date ? (
                         <>
                           <span>
-                            {t("核验于", "Checked")}{" "}
+                            {t(...messagePair("checked_8e7e4d0ec7"))}{" "}
                             {meta.official_verified_date}
                           </span>
                           {meta.official_historical && (
                             <small className="adm-meta">
-                              {t("历史参考", "Historical reference")}
+                              {t(
+                                ...messagePair(
+                                  "historical_reference_3559ec5ca6",
+                                ),
+                              )}
                             </small>
                           )}
                         </>
                       ) : (
-                        t("未填写", "Not supplied")
+                        t(...messagePair("not_supplied_7e96d46eeb"))
                       )}
                     </td>
                     <td>
@@ -416,20 +429,20 @@ export function AdminModels() {
                         className={`adm-status ${row.listed ? "is-active" : "is-disabled"}`}
                       >
                         {row.listed
-                          ? t("已上架", "Listed")
-                          : t("未上架", "Unlisted")}
+                          ? t(...messagePair("listed_58b7e232c5"))
+                          : t(...messagePair("unlisted_d7d5c259ae"))}
                       </span>
                     </td>
                     <td>
                       <div className="adm-actions">
                         <button className="adm-link" onClick={() => begin(row)}>
-                          {t("编辑", "Edit")}
+                          {t(...messagePair("edit_abd2648b80"))}
                         </button>
                         <button
                           className="adm-link"
                           onClick={() => setHistory(row.model)}
                         >
-                          {t("历史", "History")}
+                          {t(...messagePair("history_57902a31ac"))}
                         </button>
                         {row.revision > 0 && (
                           <button
@@ -439,7 +452,7 @@ export function AdminModels() {
                               setRemoving(row);
                             }}
                           >
-                            {t("删除", "Delete")}
+                            {t(...messagePair("delete_1f0f118a6e"))}
                           </button>
                         )}
                       </div>
@@ -452,8 +465,9 @@ export function AdminModels() {
           {!filtered.length && (
             <p>
               {t(
-                "暂无标准模型。请先创建调用身份，再映射并投放资源。",
-                "No standard models. Create an identity, then map and place resources.",
+                ...messagePair(
+                  "no_standard_models_create_an_identity_then_ma_83344058b3",
+                ),
               )}
             </p>
           )}
@@ -467,12 +481,15 @@ export function AdminModels() {
       {prices && (
         <details className="adm-card">
           <summary>
-            {t("高级计费与分时设置", "Advanced billing and time schedules")}
+            {t(
+              ...messagePair("advanced_billing_and_time_schedules_5a9f19e174"),
+            )}
           </summary>
           <p className="adm-meta">
             {t(
-              "独立词元单价、分时系数与条件单位价使用同一套服务器结算规则。",
-              "Independent token rates, time multipliers and conditional unit prices use the server settlement rules.",
+              ...messagePair(
+                "independent_token_rates_time_multipliers_and__a7097473d1",
+              ),
             )}
           </p>
           <ServerTokenTimePricingEditor />
@@ -487,25 +504,26 @@ export function AdminModels() {
         }}
         title={
           draft?.row.revision
-            ? t("编辑标准模型", "Edit standard model")
-            : t("新建标准模型", "New standard model")
+            ? t(...messagePair("edit_standard_model_5c00e5889a"))
+            : t(...messagePair("new_standard_model_8c487445ac"))
         }
         description={t(
-          "保存后立即生效，操作与价格变更保留历史。",
-          "Changes take effect on save and retain an audit and pricing history.",
+          ...messagePair(
+            "changes_take_effect_on_save_and_retain_an_aud_8d63e3bb33",
+          ),
         )}
         preventOutsideClose
         footer={
           <div className="adm-actions">
             <Button disabled={mutation.isPending} onClick={close}>
-              {t("取消", "Cancel")}
+              {t(...messagePair("cancel_82ac496be8"))}
             </Button>
             <Button
               variant="primary"
               disabled={!draft?.row.model || mutation.isPending}
               onClick={() => mutation.mutate()}
             >
-              {t("保存", "Save")}
+              {t(...messagePair("save_c4fd729724"))}
             </Button>
           </div>
         }
@@ -518,9 +536,15 @@ export function AdminModels() {
             >
               <Tabs.List className="adm-tabs">
                 {[
-                  ["basic", t("基本信息", "Basic information")],
-                  ["price", t("平台基准价", "Platform base price")],
-                  ["official", t("官方参考价", "Official reference")],
+                  ["basic", t(...messagePair("basic_information_c3acdfaec2"))],
+                  [
+                    "price",
+                    t(...messagePair("platform_base_price_f2e6a77078")),
+                  ],
+                  [
+                    "official",
+                    t(...messagePair("official_reference_86d3f723f6")),
+                  ],
                 ].map(([id, label]) => (
                   <Tabs.Trigger className="adm-tab" key={id} value={id}>
                     {label}
@@ -530,7 +554,7 @@ export function AdminModels() {
               <Tabs.Content value="basic">
                 <div className="adm-form">
                   <label>
-                    {t("显示名称", "Display name")}
+                    {t(...messagePair("display_name_c360ad46a1"))}
                     <Input
                       value={draft.row.name}
                       maxLength={128}
@@ -538,7 +562,7 @@ export function AdminModels() {
                     />
                   </label>
                   <label>
-                    {t("稳定调用标识", "Stable model ID")}
+                    {t(...messagePair("stable_model_id_cb7e0f3e05"))}
                     <Input
                       dir="ltr"
                       readOnly={draft.existing}
@@ -548,13 +572,14 @@ export function AdminModels() {
                     />
                     <span className="adm-meta">
                       {t(
-                        "创建后不可修改，客户在请求中填写。",
-                        "Immutable after creation; customers send this value in requests.",
+                        ...messagePair(
+                          "immutable_after_creation_customers_send_this__9ee2be71b7",
+                        ),
                       )}
                     </span>
                   </label>
                   <label>
-                    {t("厂商", "Vendor")}
+                    {t(...messagePair("vendor_02b6ea9581"))}
                     <Input
                       value={draft.row.vendor}
                       maxLength={64}
@@ -562,7 +587,7 @@ export function AdminModels() {
                     />
                   </label>
                   <label>
-                    {t("能力类型", "Capability type")}
+                    {t(...messagePair("capability_type_91467f56e6"))}
                     <select
                       value={draft.row.kind}
                       onChange={(e) => patch({ kind: e.target.value })}
@@ -575,7 +600,7 @@ export function AdminModels() {
                     </select>
                   </label>
                   <label>
-                    {t("上下文长度（词元）", "Context length (tokens)")}
+                    {t(...messagePair("context_length_tokens_18a5628082"))}
                     <Input
                       type="number"
                       min={0}
@@ -588,8 +613,7 @@ export function AdminModels() {
                   </label>
                   <label>
                     {t(
-                      "能力标签（逗号分隔）",
-                      "Capabilities (comma separated)",
+                      ...messagePair("capabilities_comma_separated_f080821e09"),
                     )}
                     <Input
                       defaultValue={draft.row.capabilities.join(",")}
@@ -604,7 +628,7 @@ export function AdminModels() {
                     />
                   </label>
                   <div className="adm-wide">
-                    <p>{t("支持协议", "Supported protocols")}</p>
+                    <p>{t(...messagePair("supported_protocols_1e88846c16"))}</p>
                     <div className="adm-checks">
                       {protocolNames.map(([id, label]) => (
                         <label className="adm-check" key={id}>
@@ -625,7 +649,7 @@ export function AdminModels() {
                     </div>
                   </div>
                   <label className="adm-wide">
-                    {t("简介", "Description")}
+                    {t(...messagePair("description_a2be8d4775"))}
                     <textarea
                       rows={3}
                       maxLength={8192}
@@ -634,7 +658,7 @@ export function AdminModels() {
                     />
                   </label>
                   <label>
-                    {t("显示顺序", "Display order")}
+                    {t(...messagePair("display_order_03732aba4b"))}
                     <Input
                       type="number"
                       step={1}
@@ -650,12 +674,13 @@ export function AdminModels() {
                       checked={draft.row.listed}
                       onChange={(e) => patch({ listed: e.target.checked })}
                     />
-                    {t("上架", "Listed")}
+                    {t(...messagePair("listed_cbb84e921f"))}
                   </label>
                   <p className="adm-wide adm-meta">
                     {t(
-                      "上架须有符合地区和厂商限制的对应资源。下架后从模型广场隐藏，新调用返回 model_not_found。",
-                      "Listing requires corresponding resources in the permitted region/vendor scope. Unlisting hides the model and rejects new calls with model_not_found.",
+                      ...messagePair(
+                        "listing_requires_corresponding_resources_in_t_5f50406ad7",
+                      ),
                     )}
                   </p>
                 </div>
@@ -663,7 +688,7 @@ export function AdminModels() {
               <Tabs.Content value="price">
                 <div className="adm-form">
                   <label className="adm-wide">
-                    {t("计费方式", "Billing mode")}
+                    {t(...messagePair("billing_mode_3109b0fd6d"))}
                     <select
                       disabled={!!data?.advanced_pricing[draft.row.model]}
                       value={draft.mode}
@@ -680,24 +705,27 @@ export function AdminModels() {
                       }
                     >
                       <option value="per_token">
-                        {t("按词元", "Per token")}
+                        {t(...messagePair("per_token_e04996a530"))}
                       </option>
                       <option value="per_request">
                         {t(
-                          "按次 / 图片基础价",
-                          "Per request / base image price",
+                          ...messagePair(
+                            "per_request_base_image_price_5fd9266603",
+                          ),
                         )}
                       </option>
                       <option value="expression">
                         {t(
-                          "安全算术表达式（含阶梯）",
-                          "Safe expression (including tiers)",
+                          ...messagePair(
+                            "safe_expression_including_tiers_8de2b5a5bc",
+                          ),
                         )}
                       </option>
                       <option value="independent">
                         {t(
-                          "保留独立词元价格",
-                          "Keep independent token pricing",
+                          ...messagePair(
+                            "keep_independent_token_pricing_d7af7e02f8",
+                          ),
                         )}
                       </option>
                     </select>
@@ -706,8 +734,7 @@ export function AdminModels() {
                     <>
                       <label>
                         {t(
-                          "输入价（USD / 百万词元）",
-                          "Input USD / million tokens",
+                          ...messagePair("input_usd_million_tokens_51251ae8c0"),
                         )}
                         <Input
                           inputMode="decimal"
@@ -727,8 +754,9 @@ export function AdminModels() {
                       </label>
                       <label>
                         {t(
-                          "输出价（USD / 百万词元）",
-                          "Output USD / million tokens",
+                          ...messagePair(
+                            "output_usd_million_tokens_8f390928fa",
+                          ),
                         )}
                         <Input
                           inputMode="decimal"
@@ -750,7 +778,7 @@ export function AdminModels() {
                   )}
                   {draft.mode === "per_request" && (
                     <label>
-                      {t("基础单价（USD）", "Base unit price (USD)")}
+                      {t(...messagePair("base_unit_price_usd_133a5db3f1"))}
                       <Input
                         inputMode="decimal"
                         value={draft.request}
@@ -770,7 +798,7 @@ export function AdminModels() {
                   )}
                   {draft.mode === "expression" && (
                     <label className="adm-wide">
-                      {t("计费表达式", "Billing expression")}
+                      {t(...messagePair("billing_expression_2d2eda60b8"))}
                       <textarea
                         rows={5}
                         dir="ltr"
@@ -789,8 +817,9 @@ export function AdminModels() {
                       />
                       <span className="adm-meta">
                         {t(
-                          "使用 prompt_tokens、completion_tokens 等计量变量，结果单位为美元。保存时由服务器校验。",
-                          "Use metering variables such as prompt_tokens and completion_tokens; the result is USD. The server validates the expression.",
+                          ...messagePair(
+                            "use_metering_variables_such_as_prompt_tokens__d175ec8975",
+                          ),
                         )}
                       </span>
                     </label>
@@ -798,15 +827,17 @@ export function AdminModels() {
                   {draft.mode === "independent" && (
                     <p className="adm-wide">
                       {t(
-                        "独立词元价格在页面下方“高级计费与分时设置”中维护。此处保留已经保存的规则。",
-                        "Maintain independent token rates in Advanced billing and time schedules below the model list. This form preserves the saved rules.",
+                        ...messagePair(
+                          "maintain_independent_token_rates_in_advanced__f5de173d71",
+                        ),
                       )}
                     </p>
                   )}
                   <p className="adm-wide adm-meta">
                     {t(
-                      "这里只修改平台基准价；服务分组倍率另行维护，已受理调用和历史账单保留原价。",
-                      "This changes platform base prices. Group multipliers are managed separately; accepted calls and historical charges keep their original rates.",
+                      ...messagePair(
+                        "this_changes_platform_base_prices_group_multi_00a1485d06",
+                      ),
                     )}
                   </p>
                 </div>
@@ -815,8 +846,9 @@ export function AdminModels() {
                 <div className="adm-form">
                   <p className="adm-wide adm-meta">
                     {t(
-                      "人工维护的参考值，与平台基准价、采购成本分开。系统不自动核验官网价格。",
-                      "Manually maintained references, separate from platform prices and procurement costs. The system does not automatically verify vendor prices.",
+                      ...messagePair(
+                        "manually_maintained_references_separate_from__4bc64cb9e6",
+                      ),
                     )}
                   </p>
                   {(
@@ -824,30 +856,39 @@ export function AdminModels() {
                       [
                         "official_input_per_m",
                         t(
-                          "官方输入价（USD / 百万词元）",
-                          "Reference input USD / million",
+                          ...messagePair(
+                            "reference_input_usd_million_b0d736806e",
+                          ),
                         ),
                       ],
                       [
                         "official_output_per_m",
                         t(
-                          "官方输出价（USD / 百万词元）",
-                          "Reference output USD / million",
+                          ...messagePair(
+                            "reference_output_usd_million_531c0cc621",
+                          ),
                         ),
                       ],
                       [
                         "official_cache_read_per_m",
-                        t("官方缓存读取价", "Reference cache-read price"),
+                        t(
+                          ...messagePair(
+                            "reference_cache_read_price_8b4ef400fd",
+                          ),
+                        ),
                       ],
                       [
                         "official_cache_write_per_m",
-                        t("官方缓存写入价", "Reference cache-write price"),
+                        t(
+                          ...messagePair(
+                            "reference_cache_write_price_686d0ef315",
+                          ),
+                        ),
                       ],
                       [
                         "official_per_request",
                         t(
-                          "官方按次 / 单位价（USD）",
-                          "Reference unit price (USD)",
+                          ...messagePair("reference_unit_price_usd_36e0a9cb87"),
                         ),
                       ],
                     ] as const
@@ -871,7 +912,7 @@ export function AdminModels() {
                     </label>
                   ))}
                   <label className="adm-wide">
-                    {t("来源地址", "Source URL")}
+                    {t(...messagePair("source_url_206f5408ad"))}
                     <Input
                       type="url"
                       dir="ltr"
@@ -882,7 +923,7 @@ export function AdminModels() {
                     />
                   </label>
                   <label>
-                    {t("核验日期", "Verification date")}
+                    {t(...messagePair("verification_date_b219ec5269"))}
                     <Input
                       type="date"
                       value={draft.metadata.official_verified_date ?? ""}
@@ -899,10 +940,10 @@ export function AdminModels() {
                         patchMeta({ official_historical: e.target.checked })
                       }
                     />
-                    {t("历史参考（退役模型等）", "Historical reference")}
+                    {t(...messagePair("historical_reference_dfcc47ed73"))}
                   </label>
                   <label className="adm-wide">
-                    {t("适用条件", "Applicable conditions")}
+                    {t(...messagePair("applicable_conditions_48905d9727"))}
                     <textarea
                       rows={3}
                       value={draft.metadata.official_conditions ?? ""}
@@ -925,10 +966,9 @@ export function AdminModels() {
           setDiscard(false);
           setDraft(null);
         }}
-        title={t("放弃未保存的修改？", "Discard unsaved changes?")}
+        title={t(...messagePair("discard_unsaved_changes_a37928adaf"))}
         description={t(
-          "关闭后，本次修改不会保存。",
-          "Closing discards the current changes.",
+          ...messagePair("closing_discards_the_current_changes_ef13183f1a"),
         )}
       />
       <ConfirmDialog
@@ -937,10 +977,11 @@ export function AdminModels() {
           if (!open) setRemoving(null);
         }}
         onConfirm={() => deletion.mutate()}
-        title={t("删除标准模型？", "Delete standard model?")}
+        title={t(...messagePair("delete_standard_model_35abdf1cb6"))}
         description={t(
-          "存在资源映射、Key 或历史引用时，服务器会拒绝删除。可使用下架保留追溯。",
-          "The server rejects deletion while resource, Key or historical references exist. Unlist the model to preserve traceability.",
+          ...messagePair(
+            "the_server_rejects_deletion_while_resource_ke_87f1e682c2",
+          ),
         )}
       />
       <AdminFeedback error={deletion.error} />
@@ -949,7 +990,7 @@ export function AdminModels() {
         onOpenChange={(open) => {
           if (!open) setHistory(null);
         }}
-        title={t("模型变更历史", "Model change history")}
+        title={t(...messagePair("model_change_history_a65b0a06ba"))}
         description={history ?? ""}
       >
         <div className="adm-page">
@@ -959,20 +1000,19 @@ export function AdminModels() {
             .map((h) => (
               <article className="adm-card" key={h.id}>
                 <strong>
-                  {adminDate(h.created_at)} · {t("操作人", "Actor")}{" "}
-                  {h.actor_id}
+                  {adminDate(h.created_at)} ·{" "}
+                  {t(...messagePair("actor_965092921e"))} {h.actor_id}
                 </strong>
-                <p>{t("修改前", "Before")}</p>
+                <p>{t(...messagePair("before_761653b175"))}</p>
                 <ChangeSummary value={h.before} />
-                <p>{t("修改后", "After")}</p>
+                <p>{t(...messagePair("after_d9e2277599"))}</p>
                 <ChangeSummary value={h.after} />
               </article>
             ))}
           {!data?.history.some((h) => h.model === history) && (
             <p>
               {t(
-                "暂无该模型的变更记录。",
-                "No recorded changes for this model.",
+                ...messagePair("no_recorded_changes_for_this_model_86105c529a"),
               )}
             </p>
           )}

@@ -1,3 +1,6 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
@@ -37,8 +40,6 @@ import {
   adaptRechargeOrder,
   adaptLedgerEntry,
 } from "../lib/api/billing";
-import { useRedeemCode } from "../lib/api/redemption";
-import { ApiError } from "../lib/api/http";
 import { useCreateExport, downloadExport } from "../lib/api/exports";
 import { formatMoney } from "../lib/money";
 import {
@@ -55,22 +56,22 @@ import "../components/billing-center.css";
 type CopyFn = (zh: string, en: string, ar: string) => string;
 export function billingStatus(status: string, c: CopyFn) {
   const labels: Record<string, [string, string, string]> = {
-    pending: ["待支付", "Awaiting payment", "بانتظار الدفع"],
-    processing: ["支付确认中", "Confirming payment", "تأكيد الدفع"],
-    paid: ["已到账", "Credited", "تمت الإضافة"],
-    expired: ["已过期", "Expired", "منتهي"],
-    failed: ["支付失败", "Payment failed", "فشل الدفع"],
-    cancelled: ["已取消", "Cancelled", "ملغى"],
-    disputed: ["争议处理中", "Disputed", "نزاع قيد المعالجة"],
+    pending: translatedMessage("awaiting_payment_4166815c6e"),
+    processing: translatedMessage("confirming_payment_7ae473563c"),
+    paid: translatedMessage("credited_c144ccc983"),
+    expired: translatedMessage("expired_3a836b996f"),
+    failed: translatedMessage("payment_failed_54d80406b3"),
+    cancelled: translatedMessage("cancelled_544275e39b"),
+    disputed: translatedMessage("disputed_8003689954"),
   };
   return labels[status] ? c(...labels[status]) : status;
 }
 function entryType(type: string, c: CopyFn) {
   const words: Record<string, [string, string, string]> = {
-    recharge: ["账户充值", "Top-up", "شحن الرصيد"],
-    call_summary: ["调用消费", "Model usage", "استخدام النماذج"],
-    adjustment: ["账户调整", "Adjustment", "تعديل"],
-    refund: ["退款扣回", "Refund", "استرداد"],
+    recharge: translatedMessage("top_up_009650f075"),
+    call_summary: translatedMessage("model_usage_f384a76fff"),
+    adjustment: translatedMessage("adjustment_dbc206baf1"),
+    refund: translatedMessage("refund_70c2f58395"),
   };
   return words[type] ? c(...words[type]) : type;
 }
@@ -79,11 +80,7 @@ function Status({ order, c }: { order: RechargeOrder; c: CopyFn }) {
     <span className={`bc-status is-${order.status}`}>
       <i />
       {order.status === "paid" && order.late_payment
-        ? c(
-            "已到账 · 延迟确认",
-            "Credited · confirmed late",
-            "تمت الإضافة · تأكيد متأخر",
-          )
+        ? c(...translatedMessage("credited_confirmed_late_8fa2dba581"))
         : billingStatus(order.status, c)}
     </span>
   );
@@ -171,10 +168,6 @@ function BillingCenterView({
   const [guide, setGuide] = useState<"help" | "transfer" | null>(null);
   const [entry, setEntry] = useState<LedgerEntry | null>(null);
   const [message, setMessage] = useState("");
-  // Redemption code input state.
-  const redeemMut = useRedeemCode();
-  const [redeemCode, setRedeemCode] = useState("");
-  const [redeemMsg, setRedeemMsg] = useState("");
   useEffect(() => {
     void expireOrders();
     const timer = setInterval(() => void expireOrders(), 15000);
@@ -268,18 +261,15 @@ function BillingCenterView({
   const isLow = balanceKnown && BigInt(balance) < 5_000_000_000n;
   const isEmpty = balanceKnown && BigInt(balance) <= 0n;
   const date = (value: string) =>
-    new Intl.DateTimeFormat(
-      language === "zh" ? "zh-CN" : language === "ar" ? "ar-AE" : "en-GB",
-      {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      },
-    ).format(new Date(value));
+    new Intl.DateTimeFormat(regionalLocale(language), {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(value));
   const changeTab = (next: string) => {
     setKind("all");
     setQuery("");
@@ -310,9 +300,9 @@ function BillingCenterView({
           await downloadExport(record.id, record.filename, record.download_url);
         setMessage(
           c(
-            "导出任务已创建，可在导出记录中下载文件与字段说明。",
-            "Export created. Files and field descriptions are available in Exports.",
-            "أُنشئ التصدير. تتوفر الملفات وأوصاف الحقول في سجل التصدير.",
+            ...translatedMessage(
+              "export_created_files_and_field_descriptions_a_8a2ad986b6",
+            ),
           ),
         );
       } catch (err) {
@@ -332,51 +322,32 @@ function BillingCenterView({
     );
     setMessage(
       c(
-        `已导出当前筛选的 ${count} 条记录。`,
-        `Exported ${count} matching records.`,
-        `تم تصدير ${count} سجلًا مطابقًا.`,
+        ...translatedMessage("exported_matching_records_703f168361", {
+          p0: count,
+        }),
       ),
     );
   };
   const description = (item: LedgerEntry) =>
     item.funding_source === "api_quota"
       ? c(
-          `模型调用 · Key（密钥）${item.token_id ?? ""} · ${item.request_count ?? 0} 次`,
-          `API usage · Key ${item.token_id ?? ""} · ${item.request_count ?? 0} requests`,
-          `استخدام API · المفتاح ${item.token_id ?? ""} · ${item.request_count ?? 0} طلبًا`,
+          ...translatedMessage("api_usage_key_requests_97f12ce347", {
+            p0: item.token_id ?? "",
+            p1: item.request_count ?? 0,
+          }),
         )
       : item.type === "recharge"
-        ? c(
-            "在线充值到账",
-            "Online top-up credited",
-            "تمت إضافة الشحن عبر الإنترنت",
-          )
+        ? c(...translatedMessage("online_top_up_credited_6ebc06d35b"))
         : item.type === "call_summary"
           ? item.trace_id
-            ? c("模型调用扣费", "Model request charge", "رسوم طلب النموذج")
-            : c(
-                "模型用量结算",
-                "Model usage settlement",
-                "تسوية استخدام النماذج",
-              )
+            ? c(...translatedMessage("model_request_charge_2fea2623dd"))
+            : c(...translatedMessage("model_usage_settlement_95e9db14cf"))
           : item.description === "注销清零"
-            ? c(
-                "注销余额结清",
-                "Account closure settlement",
-                "تسوية رصيد الإغلاق",
-              )
+            ? c(...translatedMessage("account_closure_settlement_c2b71cfe83"))
             : item.description === "Enterprise Onboarding Credit Incentive"
-              ? c(
-                  "演示初始额度",
-                  "Initial demo credit",
-                  "الرصيد التجريبي الأولي",
-                )
+              ? c(...translatedMessage("initial_demo_credit_a8f44c82eb"))
               : item.description === "Demo scenario balance adjustment"
-                ? c(
-                    "演示场景余额调整",
-                    "Demo balance adjustment",
-                    "تعديل الرصيد التجريبي",
-                  )
+                ? c(...translatedMessage("demo_balance_adjustment_d8ab0473d6"))
                 : item.description;
 
   return (
@@ -385,20 +356,20 @@ function BillingCenterView({
         <div>
           <div className="bc-eyebrow">
             <Wallet size={13} />
-            {c("账户与资金", "ACCOUNT & BILLING", "الحساب والفوترة")}
+            {c(...translatedMessage("account_billing_2dc8658792"))}
           </div>
-          <h1>{c("余额与充值", "Balance & top-ups", "الرصيد والشحن")}</h1>
+          <h1>{c(...translatedMessage("balance_top_ups_3762ef545e"))}</h1>
           <p>
             {c(
-              "为下一次创造，准备充足的算力。",
-              "Keep your next idea powered and ready.",
-              "جهّز رصيدك لفكرتك القادمة.",
+              ...translatedMessage(
+                "keep_your_next_idea_powered_and_ready_300b4871b7",
+              ),
             )}
           </p>
         </div>
         <Button className="bc-help-button" onClick={() => setGuide("help")}>
           <CircleHelp size={15} />
-          {c("充值说明", "How top-ups work", "دليل الشحن")}
+          {c(...translatedMessage("how_top_ups_work_3fd4817914"))}
         </Button>
       </header>
       {(walletQuery.error || ledgerQuery.error || ordersQuery.error) && (
@@ -408,9 +379,9 @@ function BillingCenterView({
           data-ledger-error={Boolean(ledgerQuery.error)}
         >
           {c(
-            "部分账务数据无法读取，请刷新重试；未确认的金额不显示为零。",
-            "Some billing data is unavailable. Refresh to retry; unconfirmed amounts are not shown as zero.",
-            "بعض بيانات الفوترة غير متاحة. حدّث لإعادة المحاولة؛ لا تُعرض المبالغ غير المؤكدة كصفر.",
+            ...translatedMessage(
+              "some_billing_data_is_unavailable_refresh_to_r_1cc358029d",
+            ),
           )}
         </p>
       )}
@@ -418,17 +389,17 @@ function BillingCenterView({
         <section className="bc-wallet-card">
           <div className="bc-wallet-top">
             <span>
-              {c("可用 API 余额", "Available API balance", "رصيد API المتاح")}
+              {c(...translatedMessage("available_api_balance_76c092280b"))}
             </span>
             <span className={`bc-wallet-health ${isLow ? "is-low" : ""}`}>
               <i />
               {!balanceKnown
-                ? c("余额未知", "Balance unknown", "الرصيد غير معروف")
+                ? c(...translatedMessage("balance_unknown_e5b16838b6"))
                 : isEmpty
-                  ? c("余额不足", "Balance depleted", "الرصيد غير كافٍ")
+                  ? c(...translatedMessage("balance_depleted_73bdc5960b"))
                   : isLow
-                    ? c("余额偏低", "Low balance", "الرصيد منخفض")
-                    : c("余额充足", "Wallet funded", "المحفظة ممولة")}
+                    ? c(...translatedMessage("low_balance_55e25339db"))
+                    : c(...translatedMessage("wallet_funded_8c2c898f6a"))}
             </span>
           </div>
           <div className="bc-balance">
@@ -443,139 +414,45 @@ function BillingCenterView({
             >
               {balanceKnown ? formatMoney(balance) : "—"}
             </strong>
-            <span>{c("USD（美元）", "USD", "USD (دولار)")}</span>
+            <span>{c(...translatedMessage("usd_ed29d2d0f6"))}</span>
           </div>
           <p>
             {c(
-              "支付钱包与 API 配额分别记账；模拟充值不会增加 API 配额。",
-              "Payment wallet and API quota are separate; simulated top-ups do not add API quota.",
-              "المحفظة وحصة الواجهة منفصلتان؛ لا تزيد تعبئة المحاكاة حصة الواجهة.",
+              ...translatedMessage(
+                "payment_wallet_and_api_quota_are_separate_sim_89279fac4d",
+              ),
             )}
           </p>
           {walletQuery.data?.api_balance_nano !== undefined && (
             <small>
-              {c(
-                "支付模拟钱包",
-                "Payment simulation wallet",
-                "محفظة محاكاة الدفع",
-              )}
-              : <bdi>{formatMoney(walletQuery.data.balance_nano)}</bdi>
+              {c(...translatedMessage("payment_simulation_wallet_f427feb46e"))}:{" "}
+              <bdi>{formatMoney(walletQuery.data.balance_nano)}</bdi>
             </small>
           )}
           <div className="bc-wallet-actions">
             <Button variant="primary" onClick={() => onRecharge()}>
               <CreditCard size={16} />
-              {c("在线充值", "Add funds", "شحن الرصيد")}
+              {c(...translatedMessage("add_funds_8dc21b313b"))}
               <ArrowRight size={14} />
             </Button>
             <Link to="/console/usage">
-              {c("查看用量", "View usage", "عرض الاستخدام")}
+              {c(...translatedMessage("view_usage_93bffc290a"))}
               <ArrowUpRight size={14} />
             </Link>
           </div>
           <div className="bc-wallet-footer">
             <ShieldCheck size={14} />
             {c(
-              "模拟支付不产生真实扣款；真实费用与到账须由支付供应商确认。",
-              "Simulated payments do not charge real funds; actual fees and payment confirmation depend on the provider.",
-              "لا تخصم المحاكاة أموالًا فعلية؛ تعتمد الرسوم وتأكيد الدفع الفعليان على المزود.",
+              ...translatedMessage(
+                "simulated_payments_do_not_charge_real_funds_a_3e2458ca28",
+              ),
             )}
           </div>
         </section>
 
-        {/* Redemption code input */}
-        <section
-          className="bc-redeem-card"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            padding: "var(--space-4)",
-            marginBottom: "var(--space-4)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              gap: "var(--space-2)",
-              alignItems: "flex-end",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <label
-                htmlFor="redeem-code-input"
-                style={{
-                  display: "block",
-                  fontSize: "var(--text-xs)",
-                  fontWeight: 600,
-                  marginBottom: 4,
-                }}
-              >
-                {c("兑换码", "Redemption code", "رمز الاسترداد")}
-              </label>
-              <input
-                id="redeem-code-input"
-                className="input"
-                value={redeemCode}
-                onChange={(e) => {
-                  setRedeemCode(e.target.value);
-                  setRedeemMsg("");
-                }}
-                placeholder="RD-xxxxxxxxxxxx"
-                style={{ width: "100%" }}
-              />
-            </div>
-            <Button
-              variant="secondary"
-              disabled={!redeemCode.trim() || redeemMut.isPending}
-              onClick={() => {
-                setRedeemMsg("");
-                redeemMut.mutate(redeemCode.trim(), {
-                  onSuccess: (res) => {
-                    setRedeemMsg(
-                      c(
-                        "兑换成功",
-                        `Redeemed $${(res.quota / 1e9).toFixed(2)}`,
-                        "تم الاسترداد",
-                      ),
-                    );
-                    setRedeemCode("");
-                  },
-                  onError: (err) => {
-                    setRedeemMsg(
-                      err instanceof ApiError
-                        ? err.message
-                        : c("兑换失败", "Redemption failed", "فشل الاسترداد"),
-                    );
-                  },
-                });
-              }}
-            >
-              {c("兑换", "Redeem", "استرد")}
-            </Button>
-          </div>
-          {redeemMsg && (
-            <p
-              style={{
-                margin: "8px 0 0 0",
-                fontSize: "var(--text-sm)",
-                color:
-                  redeemMsg.includes("失败") ||
-                  redeemMsg.includes("failed") ||
-                  redeemMsg.includes("فشل")
-                    ? "var(--danger)"
-                    : "var(--success)",
-              }}
-            >
-              {redeemMsg}
-            </p>
-          )}
-        </section>
-
         <section className="bc-month-card">
           <div className="bc-small-heading">
-            <span>{c("本月资金概览", "This month", "هذا الشهر")}</span>
+            <span>{c(...translatedMessage("this_month_1b6c48aebc"))}</span>
             <bdi>{month}</bdi>
           </div>
           <div className="bc-month-metric">
@@ -583,7 +460,9 @@ function BillingCenterView({
               <ArrowUpRight size={17} />
             </span>
             <div>
-              <span>{c("本月消费", "Usage this month", "استهلاك الشهر")}</span>
+              <span>
+                {c(...translatedMessage("usage_this_month_da9da6acf0"))}
+              </span>
               <strong dir="ltr">
                 {walletQuery.data?.month_spend_nano !== undefined
                   ? formatMoney(walletQuery.data.month_spend_nano, "total")
@@ -599,7 +478,7 @@ function BillingCenterView({
             </span>
             <div>
               <span>
-                {c("本月充值到账", "Top-ups credited", "الشحن المضاف")}
+                {c(...translatedMessage("top_ups_credited_3dc4153f2a"))}
               </span>
               <strong dir="ltr">
                 {ledgerKnown ? formatMoney(funded.toString()) : "—"}
@@ -607,34 +486,30 @@ function BillingCenterView({
             </div>
           </div>
           <p>
-            {c(
-              "按迪拜时区的自然月统计",
-              "Calendar month in Dubai time",
-              "الشهر التقويمي بتوقيت دبي",
-            )}
+            {c(...translatedMessage("calendar_month_in_dubai_time_b5ee9fc18a"))}
           </p>
         </section>
         <section className="bc-protection-card">
           <span className="bc-protection-icon">
             <BellRing size={20} />
           </span>
-          <h2>{c("低余额提醒", "Balance protection", "تنبيه الرصيد")}</h2>
+          <h2>{c(...translatedMessage("balance_protection_fcaefdce7b"))}</h2>
           <p>
             {c(
-              "余额低于 $5 时，控制台会提醒你及时充值。",
-              "The console alerts you when your balance drops below $5.",
-              "تنبهك اللوحة عندما يقل الرصيد عن 5 دولارات.",
+              ...translatedMessage(
+                "the_console_alerts_you_when_your_balance_drop_fb6bde686b",
+              ),
             )}
           </p>
           <div>
-            <span>{c("提醒阈值", "Alert threshold", "حد التنبيه")}</span>
+            <span>{c(...translatedMessage("alert_threshold_a4a91891cb"))}</span>
             <strong dir="ltr">$5.00</strong>
           </div>
           <small>
             {c(
-              "提醒按实际 API 可用余额计算。",
-              "Alerts use the available API balance.",
-              "تعتمد التنبيهات على رصيد API المتاح.",
+              ...translatedMessage(
+                "alerts_use_the_available_api_balance_908d362826",
+              ),
             )}
           </small>
         </section>
@@ -643,9 +518,9 @@ function BillingCenterView({
         <Info size={14} />
         <span>
           {c(
-            "充值与余额已联通后端；支付确认由手动模拟，不产生真实扣款。",
-            "Balance and recharge are backed by the server; payment confirmation is manually simulated — no real charges.",
-            "الرصيد والشحن مدعومان من الخادم؛ تأكيد الدفع محاكى يدويًا بلا خصم حقيقي.",
+            ...translatedMessage(
+              "balance_and_recharge_are_backed_by_the_server_4b55b4e56d",
+            ),
           )}
         </span>
       </div>
@@ -655,34 +530,36 @@ function BillingCenterView({
           <div>
             <strong>
               {c(
-                `你有 ${pending.length} 笔充值尚未完成`,
-                `${pending.length} top-up${pending.length > 1 ? "s" : ""} still in progress`,
-                `لديك ${pending.length} عملية شحن غير مكتملة`,
+                ...translatedMessage("top_ups_still_in_progress_999adc57d8", {
+                  p0: pending.length,
+                }),
               )}
             </strong>
             <span>
               {c(
-                "关闭支付页不会代表支付成功，到账结果以订单状态为准。",
-                "Closing the payment window does not confirm payment. Check the order status.",
-                "إغلاق صفحة الدفع لا يؤكد نجاحه. تحقق من حالة الطلب.",
+                ...translatedMessage(
+                  "closing_the_payment_window_does_not_confirm_p_40ee9cabfd",
+                ),
               )}
             </span>
           </div>
           <Button size="small" onClick={() => onRecharge(pending[0].id)}>
-            {c("继续查看", "View order", "عرض الطلب")}
+            {c(...translatedMessage("view_order_dd72f0dcb4"))}
             <ArrowRight size={13} />
           </Button>
         </div>
       )}
       <section className="bc-history-card">
         <div className="bc-history-heading">
-          <nav aria-label={c("账务记录", "Billing records", "السجلات المالية")}>
+          <nav
+            aria-label={c(...translatedMessage("billing_records_9ad2848531"))}
+          >
             <button
               aria-pressed={tab === "orders"}
               onClick={() => changeTab("orders")}
             >
               <ReceiptText size={16} />
-              {c("充值记录", "Top-up history", "سجل الشحن")}
+              {c(...translatedMessage("top_up_history_2c057b93c4"))}
               <span>{orders.length}</span>
             </button>
             <button
@@ -690,7 +567,7 @@ function BillingCenterView({
               onClick={() => changeTab("ledger")}
             >
               <FileText size={16} />
-              {c("资金流水", "Transactions", "حركات الرصيد")}
+              {c(...translatedMessage("transactions_df2cc45b7b"))}
             </button>
           </nav>
           <div className="bc-history-actions">
@@ -706,21 +583,19 @@ function BillingCenterView({
                 setMessage(
                   results.every((result) => !result.isError)
                     ? c(
-                        "已读取钱包、订单与流水。",
-                        "Wallet, orders and transactions refreshed.",
-                        "تم تحديث المحفظة والطلبات والحركات.",
+                        ...translatedMessage(
+                          "wallet_orders_and_transactions_refreshed_045f065b7e",
+                        ),
                       )
                     : c(
-                        "部分账务数据读取失败，请稍后重试。",
-                        "Some billing data could not be refreshed. Retry later.",
-                        "تعذر تحديث بعض بيانات الفوترة. حاول لاحقًا.",
+                        ...translatedMessage(
+                          "some_billing_data_could_not_be_refreshed_retr_817ab8c769",
+                        ),
                       ),
                 );
               }}
               aria-label={c(
-                "刷新账务数据",
-                "Refresh billing data",
-                "تحديث بيانات الفوترة",
+                ...translatedMessage("refresh_billing_data_253c943648"),
               )}
             >
               <RefreshCw size={15} />
@@ -731,13 +606,13 @@ function BillingCenterView({
               onClick={exportRecords}
             >
               <ArrowDownToLine size={14} />
-              {c("导出记录", "Export", "تصدير")}
+              {c(...translatedMessage("export_83098582f0"))}
             </Button>
           </div>
         </div>
         <div className="bc-filters">
           <label className="bc-search">
-            <span>{c("搜索", "Search", "بحث")}</span>
+            <span>{c(...translatedMessage("search_e31c158f20"))}</span>
             <div>
               <Search size={14} />
               <input
@@ -745,23 +620,23 @@ function BillingCenterView({
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={
                   tab === "orders"
-                    ? c("搜索订单编号", "Search order ID", "ابحث برقم الطلب")
+                    ? c(...translatedMessage("search_order_id_ff8b3e9404"))
                     : c(
-                        "搜索流水或关联订单",
-                        "Search transaction or order",
-                        "ابحث عن حركة أو طلب",
+                        ...translatedMessage(
+                          "search_transaction_or_order_ec9d4bec81",
+                        ),
                       )
                 }
                 aria-label={c(
-                  "搜索账务记录",
-                  "Search billing records",
-                  "بحث في السجلات",
+                  ...translatedMessage("search_billing_records_38b5bebd02"),
                 )}
               />
               {query && (
                 <button
                   onClick={() => setQuery("")}
-                  aria-label={c("清空搜索", "Clear search", "مسح البحث")}
+                  aria-label={c(
+                    ...translatedMessage("clear_search_99d00f5436"),
+                  )}
                 >
                   <X size={13} />
                 </button>
@@ -771,19 +646,19 @@ function BillingCenterView({
           <label>
             <span>
               {tab === "orders"
-                ? c("订单状态", "Order status", "حالة الطلب")
-                : c("流水类型", "Transaction type", "نوع الحركة")}
+                ? c(...translatedMessage("order_status_a9f703c47a"))
+                : c(...translatedMessage("transaction_type_4c1254794c"))}
             </span>
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value)}
               aria-label={c(
-                "记录类型或状态",
-                "Record type or status",
-                "نوع السجل أو حالته",
+                ...translatedMessage("record_type_or_status_bf01df8196"),
               )}
             >
-              <option value="all">{c("全部", "All", "الكل")}</option>
+              <option value="all">
+                {c(...translatedMessage("all_ac49939df0"))}
+              </option>
               {(tab === "orders"
                 ? [
                     "pending",
@@ -812,39 +687,39 @@ function BillingCenterView({
             </select>
           </label>
           <label>
-            <span>{c("开始日期", "From", "من")}</span>
+            <span>{c(...translatedMessage("from_7a16d6bf6a"))}</span>
             <input
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              aria-label={c("开始日期", "From date", "تاريخ البدء")}
+              aria-label={c(...translatedMessage("from_date_13a58e62e4"))}
             />
           </label>
           <label>
-            <span>{c("结束日期", "To", "إلى")}</span>
+            <span>{c(...translatedMessage("to_493a80b247"))}</span>
             <input
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              aria-label={c("结束日期", "To date", "تاريخ الانتهاء")}
+              aria-label={c(...translatedMessage("to_date_771f3e3bb3"))}
             />
           </label>
           <button className="bc-reset" onClick={resetFilters}>
-            {c("重置", "Reset", "إعادة ضبط")}
+            {c(...translatedMessage("reset_e2dc2cf181"))}
           </button>
         </div>
         <div className="bc-filter-note">
           <span>
             {c(
-              `地区时区：${timezone} · 单次查询最多 31 天`,
-              `${timezone} · Up to 31 days per query`,
-              `${timezone} · حتى 31 يومًا لكل استعلام`,
+              ...translatedMessage("up_to_31_days_per_query_dc62f3294b", {
+                p0: timezone,
+              }),
             )}
           </span>
           <b>
             {recordsKnown
-              ? c(`${count} 条记录`, `${count} records`, `${count} سجلًا`)
-              : c("记录尚未确认", "Records unconfirmed", "السجلات غير مؤكدة")}
+              ? c(...translatedMessage("records_2b9560427a", { p0: count }))
+              : c(...translatedMessage("records_unconfirmed_6a813c423e"))}
           </b>
         </div>
         {message && (
@@ -853,7 +728,7 @@ function BillingCenterView({
             {message}
             {exportMutation.data && (
               <Link to="/console/exports">
-                {c("导出记录", "Exports", "سجل التصدير")}
+                {c(...translatedMessage("exports_b2df1f0c09"))}
               </Link>
             )}
           </p>
@@ -862,21 +737,17 @@ function BillingCenterView({
           <div className="bc-empty" role="alert">
             <Clock3 size={30} />
             <h3>
-              {c(
-                "请调整日期范围",
-                "Adjust the date range",
-                "عدّل النطاق الزمني",
-              )}
+              {c(...translatedMessage("adjust_the_date_range_543d35f759"))}
             </h3>
             <p>
               {c(
-                "结束日期不能早于开始日期，且含首尾最多 31 天。",
-                "The end date must follow the start date, with no more than 31 days inclusive.",
-                "يجب أن يلي تاريخ الانتهاء البداية وألا تتجاوز المدة 31 يومًا شاملة.",
+                ...translatedMessage(
+                  "the_end_date_must_follow_the_start_date_with__c4052d5ec4",
+                ),
               )}
             </p>
             <Button onClick={resetFilters}>
-              {c("回到本月", "Return to this month", "العودة إلى هذا الشهر")}
+              {c(...translatedMessage("return_to_this_month_06201b7fa4"))}
             </Button>
           </div>
         ) : !count ? (
@@ -884,36 +755,32 @@ function BillingCenterView({
             <ReceiptText size={34} />
             <h3>
               {recordsKnown
-                ? c(
-                    "当前条件下暂无记录",
-                    "No matching records",
-                    "لا توجد سجلات مطابقة",
-                  )
+                ? c(...translatedMessage("no_matching_records_a5e6395ad2"))
                 : c(
-                    "账务记录尚未确认",
-                    "Billing records are unconfirmed",
-                    "سجلات الفوترة غير مؤكدة",
+                    ...translatedMessage(
+                      "billing_records_are_unconfirmed_f5f2ba5a14",
+                    ),
                   )}
             </h3>
             <p>
               {recordsKnown
                 ? c(
-                    "你可以调整筛选条件，或完成第一笔充值。",
-                    "Try another filter or complete your first top-up.",
-                    "جرّب تصفية أخرى أو أكمل أول عملية شحن.",
+                    ...translatedMessage(
+                      "try_another_filter_or_complete_your_first_top_ca3d627810",
+                    ),
                   )
                 : c(
-                    "数据正在读取或暂不可用，请刷新核对。",
-                    "Data is loading or unavailable. Refresh to check.",
-                    "البيانات قيد التحميل أو غير متاحة. حدّث للتحقق.",
+                    ...translatedMessage(
+                      "data_is_loading_or_unavailable_refresh_to_che_3df441ffd4",
+                    ),
                   )}
             </p>
             <div>
               <Button onClick={resetFilters}>
-                {c("重置筛选", "Reset filters", "إعادة ضبط التصفية")}
+                {c(...translatedMessage("reset_filters_a7e85112c6"))}
               </Button>
               <Button variant="primary" onClick={() => onRecharge()}>
-                {c("去充值", "Add funds", "شحن الرصيد")}
+                {c(...translatedMessage("add_funds_cfb6bb4a87"))}
               </Button>
             </div>
           </div>
@@ -925,32 +792,26 @@ function BillingCenterView({
                   <tr>
                     {(tab === "orders"
                       ? [
-                          c(
-                            "订单 / 创建时间",
-                            "Order / Created",
-                            "الطلب / الإنشاء",
-                          ),
-                          c("支付方式", "Payment method", "طريقة الدفع"),
-                          c("充值金额", "Amount", "المبلغ"),
-                          c("到账状态", "Status", "الحالة"),
-                          c("到账时间", "Credited at", "وقت الإضافة"),
-                          c("操作", "Action", "الإجراء"),
+                          c(...translatedMessage("order_created_80c64b5680")),
+                          c(...translatedMessage("payment_method_3283479ba3")),
+                          c(...translatedMessage("amount_6139a36f94")),
+                          c(...translatedMessage("status_9c1a8aa41d")),
+                          c(...translatedMessage("credited_at_2b093e265f")),
+                          c(...translatedMessage("action_2a8e78b55a")),
                         ]
                       : [
                           c(
-                            "时间 / 流水编号",
-                            "Time / Transaction",
-                            "الوقت / الحركة",
+                            ...translatedMessage("time_transaction_9a2a5ed91a"),
                           ),
-                          c("类型", "Type", "النوع"),
+                          c(...translatedMessage("type_b91a24e5ad")),
                           c(
-                            "说明 / 关联订单",
-                            "Description / Order",
-                            "الوصف / الطلب",
+                            ...translatedMessage(
+                              "description_order_4eb2a99819",
+                            ),
                           ),
-                          c("变动金额", "Amount", "المبلغ"),
-                          c("变动后余额", "Balance after", "الرصيد بعد"),
-                          c("操作", "Action", "الإجراء"),
+                          c(...translatedMessage("amount_5a46f9925f")),
+                          c(...translatedMessage("balance_after_56f6e55ff1")),
+                          c(...translatedMessage("action_2a8e78b55a")),
                         ]
                     ).map((label) => (
                       <th key={label}>{label}</th>
@@ -974,7 +835,7 @@ function BillingCenterView({
                           <td>
                             <span className="bc-method">
                               <CreditCard size={15} />
-                              {c("银行卡", "Card", "بطاقة")}
+                              {c(...translatedMessage("card_27832da56e"))}
                             </span>
                             <small className="bc-funding-source">
                               {fundingSourceLabel(order.funding_source, c)}
@@ -997,8 +858,8 @@ function BillingCenterView({
                               onClick={() => onRecharge(order.id)}
                             >
                               {["pending", "processing"].includes(order.status)
-                                ? c("继续支付", "Continue", "متابعة")
-                                : c("订单详情", "Details", "التفاصيل")}
+                                ? c(...translatedMessage("continue_760d61dca0"))
+                                : c(...translatedMessage("details_d35ec1ed25"))}
                               <ChevronRight size={13} />
                             </button>
                           </td>
@@ -1060,7 +921,7 @@ function BillingCenterView({
                               className="bc-text-button"
                               onClick={() => setEntry(item)}
                             >
-                              {c("查看明细", "Details", "التفاصيل")}
+                              {c(...translatedMessage("details_a91e8f9bea"))}
                               <ChevronRight size={13} />
                             </button>
                           </td>
@@ -1072,14 +933,18 @@ function BillingCenterView({
             <div className="bc-pagination">
               <span>
                 {c(
-                  `显示 ${start + 1}–${Math.min(start + 6, count)} 条，共 ${count} 条`,
-                  `${start + 1}–${Math.min(start + 6, count)} of ${count}`,
-                  `${start + 1}–${Math.min(start + 6, count)} من ${count}`,
+                  ...translatedMessage("of_f84b3309ed", {
+                    p0: start + 1,
+                    p1: Math.min(start + 6, count),
+                    p2: count,
+                  }),
                 )}
               </span>
               <div>
                 <button
-                  aria-label={c("上一页", "Previous page", "الصفحة السابقة")}
+                  aria-label={c(
+                    ...translatedMessage("previous_page_69cac17b46"),
+                  )}
                   disabled={currentPage === 1}
                   onClick={() => setPage(currentPage - 1)}
                 >
@@ -1089,7 +954,7 @@ function BillingCenterView({
                   {currentPage} / {pages}
                 </span>
                 <button
-                  aria-label={c("下一页", "Next page", "الصفحة التالية")}
+                  aria-label={c(...translatedMessage("next_page_8a29f0d0d2"))}
                   disabled={currentPage === pages}
                   onClick={() => setPage(currentPage + 1)}
                 >
@@ -1111,16 +976,16 @@ function BillingCenterView({
           <div>
             <h3>
               {c(
-                "大额充值与线下付款",
-                "Large top-ups & offline payments",
-                "الشحن بمبالغ كبيرة والدفع خارج المنصة",
+                ...translatedMessage(
+                  "large_top_ups_offline_payments_cbe5005247",
+                ),
               )}
             </h3>
             <p>
               {c(
-                "查看汇款核验、入账及退款处理说明",
-                "Learn about verification, crediting and refunds",
-                "التعرف على التحقق والإضافة والاسترداد",
+                ...translatedMessage(
+                  "learn_about_verification_crediting_and_refund_44083a2326",
+                ),
               )}
             </p>
           </div>
@@ -1130,9 +995,9 @@ function BillingCenterView({
           <ReceiptText size={19} />
           <p>
             {c(
-              "支付收据由支付渠道提供。资金流水导出用于对账，不作为税务发票。",
-              "Payment receipts come from the payment provider. Transaction exports are reconciliation records, not tax invoices.",
-              "إيصالات الدفع من مزود الدفع. تصدير الحركات للمطابقة وليس فاتورة ضريبية.",
+              ...translatedMessage(
+                "payment_receipts_come_from_the_payment_provid_dea7263571",
+              ),
             )}
           </p>
         </div>
@@ -1145,13 +1010,13 @@ function BillingCenterView({
         }}
         title={
           guide === "transfer"
-            ? c("付款与退款", "Payments & refunds", "الدفع والاسترداد")
-            : c("充值与到账说明", "Top-ups & crediting", "الشحن وإضافة الرصيد")
+            ? c(...translatedMessage("payments_refunds_e7182d948a"))
+            : c(...translatedMessage("top_ups_crediting_ff976683cf"))
         }
         description={c(
-          "按当前平台的美元预付费规则说明。",
-          "Based on the platform’s USD prepaid policy.",
-          "وفق سياسة الرصيد المسبق بالدولار للمنصة.",
+          ...translatedMessage(
+            "based_on_the_platform_s_usd_prepaid_policy_c67a98704d",
+          ),
         )}
       >
         <div className="bc-guide">
@@ -1159,78 +1024,78 @@ function BillingCenterView({
             <ShieldCheck size={22} />
             <p>
               {c(
-                "支付钱包与 API 配额分别记账，当前不会自动互通。",
-                "Payment wallet balance and API quota are recorded separately and are not automatically linked.",
-                "تُسجّل المحفظة وحصة الواجهة بشكل منفصل ولا ترتبطان تلقائيًا حاليًا.",
+                ...translatedMessage(
+                  "payment_wallet_balance_and_api_quota_are_reco_deaea7346e",
+                ),
               )}
             </p>
           </div>
           {(guide === "transfer"
             ? [
                 [
-                  c("线下付款", "Offline payments", "الدفع خارج المنصة"),
+                  c(...translatedMessage("offline_payments_f808a64147")),
                   c(
-                    "先与商务或财务确认收款主体、账户信息及金额，再完成汇款。财务核验实际到账后记入平台余额。",
-                    "Confirm the receiving entity, banking details and amount with the finance or sales team before transferring. The balance is credited after finance verifies receipt.",
-                    "أكد جهة الاستلام والتفاصيل المصرفية والمبلغ مع المالية أو المبيعات أولًا. يُضاف الرصيد بعد التحقق من وصول الحوالة.",
+                    ...translatedMessage(
+                      "confirm_the_receiving_entity_banking_details__3e253f80ef",
+                    ),
                   ),
                 ],
                 [
                   c(
-                    "保留核验资料",
-                    "Keep verification records",
-                    "احتفظ بمستندات التحقق",
+                    ...translatedMessage(
+                      "keep_verification_records_7755af29ca",
+                    ),
                   ),
                   c(
-                    "保留汇款凭证、付款主体、金额与日期。当前演示不会创建真实汇款申请，也不提供收款账户。",
-                    "Keep the transfer receipt, payer, amount and date. This demo does not submit a real transfer request or provide banking details.",
-                    "احتفظ بإيصال التحويل والدافع والمبلغ والتاريخ. هذا العرض لا يرسل طلب تحويل حقيقيًا ولا يوفر حسابات مصرفية.",
+                    ...translatedMessage(
+                      "keep_the_transfer_receipt_payer_amount_and_da_b72da61980",
+                    ),
                   ),
                 ],
                 [
                   c(
-                    "退款由人工处理",
-                    "Refunds are handled manually",
-                    "تُعالج المبالغ المستردة يدويًا",
+                    ...translatedMessage(
+                      "refunds_are_handled_manually_c0003d35a5",
+                    ),
                   ),
                   c(
-                    "联系客户支持核对付款订单和未使用余额；可退金额由财务核验，赠送额度不可退款。处理完成后可在资金流水查看扣回记录。",
-                    "Contact support to review the payment order and unused balance. Finance determines the refundable amount; promotional credits are non-refundable. The resulting debit appears in transactions.",
-                    "تواصل مع الدعم لمراجعة الطلب والرصيد غير المستخدم. تحدد المالية المبلغ القابل للاسترداد؛ الرصيد الممنوح غير قابل للاسترداد. يظهر الخصم في الحركات.",
+                    ...translatedMessage(
+                      "contact_support_to_review_the_payment_order_a_375a7150b4",
+                    ),
                   ),
                 ],
               ]
             : [
                 [
-                  c("金额与费用", "Amounts & fees", "المبالغ والرسوم"),
+                  c(...translatedMessage("amounts_fees_0ea3385b4f")),
                   c(
-                    "单笔 $10–$10,000，最多两位小数。平台不收额外手续费，支付渠道手续费由平台承担。",
-                    "$10–$10,000 per top-up, with up to two decimal places. The platform absorbs payment processing fees.",
-                    "من 10 إلى 10,000 دولار للعملية بخانتين عشريتين كحد أقصى. تتحمل المنصة رسوم معالجة الدفع.",
+                    ...translatedMessage(
+                      "10_10_000_per_top_up_with_up_to_two_decimal_p_4dece3e3ba",
+                    ),
                   ),
                 ],
                 [
-                  c("何时到账", "When funds are credited", "متى يُضاف الرصيد"),
+                  c(...translatedMessage("when_funds_are_credited_de82d611c6")),
                   c(
-                    "完成支付后，等待渠道确认。返回平台或关闭支付窗口都不会直接增加余额；可在充值记录查看进度。",
-                    "After payment, wait for provider confirmation. Returning to the platform or closing the window does not itself credit your balance. Check top-up history for progress.",
-                    "بعد الدفع انتظر تأكيد المزود. العودة إلى المنصة أو إغلاق النافذة لا يضيف الرصيد تلقائيًا. راجع السجل لمعرفة التقدم.",
+                    ...translatedMessage(
+                      "after_payment_wait_for_provider_confirmation__fd4e9bf577",
+                    ),
                   ),
                 ],
                 [
-                  c("订单有效期", "Order validity", "صلاحية الطلب"),
+                  c(...translatedMessage("order_validity_a7586b4ea7")),
                   c(
-                    "订单有效期为 30 分钟，超时未支付会过期。若支付确认晚到，核实成功后仍会入账，无需重复付款。",
-                    "Orders are valid for 30 minutes. Unpaid orders expire. A successful payment confirmed late will still be credited; do not pay twice.",
-                    "الطلب صالح لمدة 30 دقيقة ثم ينتهي إن لم يُدفع. يُضاف الدفع الناجح المتأخر تأكيده؛ لا تدفع مرتين.",
+                    ...translatedMessage(
+                      "orders_are_valid_for_30_minutes_unpaid_orders_f36f82594e",
+                    ),
                   ),
                 ],
                 [
-                  c("收据与账单", "Receipts & records", "الإيصالات والسجلات"),
+                  c(...translatedMessage("receipts_records_f8e409545e")),
                   c(
-                    "收据由支付渠道发送；平台提供订单详情与资金流水。首发版本不提供在线税务发票。",
-                    "Receipts are sent by the payment provider. The platform supplies order details and transactions. Online tax invoices are not available in the initial release.",
-                    "يرسل مزود الدفع الإيصال. توفر المنصة تفاصيل الطلب والحركات. الفواتير الضريبية عبر الإنترنت غير متاحة في الإصدار الأول.",
+                    ...translatedMessage(
+                      "receipts_are_sent_by_the_payment_provider_the_7adb8b4913",
+                    ),
                   ),
                 ],
               ]
@@ -1250,7 +1115,7 @@ function BillingCenterView({
         onOpenChange={(open) => {
           if (!open) setEntry(null);
         }}
-        title={c("资金流水明细", "Transaction details", "تفاصيل الحركة")}
+        title={c(...translatedMessage("transaction_details_05aee18152"))}
         description={entry ? entryType(entry.type, c) : ""}
       >
         {entry && (
@@ -1259,7 +1124,7 @@ function BillingCenterView({
               className={`bc-entry-value ${BigInt(entry.amount_nano) > 0n ? "is-positive" : ""}`}
             >
               <small>
-                {c("变动金额", "Transaction amount", "مبلغ الحركة")}
+                {c(...translatedMessage("transaction_amount_cf28f76ab7"))}
               </small>
               <strong dir="ltr" tabIndex={0}>
                 {BigInt(entry.amount_nano) > 0n ? "+" : ""}
@@ -1267,31 +1132,37 @@ function BillingCenterView({
               </strong>
               <span>
                 {c(
-                  "USD（美元） · 完整记账精度",
-                  "USD · Full accounting precision",
-                  "USD (دولار) · الدقة المحاسبية الكاملة",
+                  ...translatedMessage(
+                    "usd_full_accounting_precision_6b2db5ffcd",
+                  ),
                 )}
               </span>
             </div>
             <dl>
               {[
-                [c("流水编号", "Transaction ID", "رقم الحركة"), entry.id],
                 [
-                  c("发生时间（迪拜）", "Time (Dubai)", "الوقت (دبي)"),
+                  c(...translatedMessage("transaction_id_e8037d3348")),
+                  entry.id,
+                ],
+                [
+                  c(...translatedMessage("time_dubai_330adba455")),
                   `${date(entry.time)} · UTC+4`,
                 ],
                 [
-                  c("变动后余额", "Balance after", "الرصيد بعد"),
+                  c(...translatedMessage("balance_after_56f6e55ff1")),
                   formatMoney(entry.balance_after_nano, "detail"),
                 ],
-                [c("说明", "Description", "الوصف"), description(entry)],
                 [
-                  c("资金来源", "Funding source", "مصدر الأموال"),
+                  c(...translatedMessage("description_c6bae5d4e7")),
+                  description(entry),
+                ],
+                [
+                  c(...translatedMessage("funding_source_355341b128")),
                   fundingSourceLabel(entry.funding_source, c),
                 ],
                 [
-                  c("API 配额兑换", "API quota conversion", "تحويل رصيد API"),
-                  c("当前不可兑换", "Currently unavailable", "غير متاح حاليًا"),
+                  c(...translatedMessage("api_quota_conversion_78f6b675e2")),
+                  c(...translatedMessage("currently_unavailable_fff1a9e4ff")),
                 ],
               ].map(([label, value]) => (
                 <div key={label}>
@@ -1305,11 +1176,7 @@ function BillingCenterView({
                 <Link
                   to={`/console/requests?trace=${encodeURIComponent(entry.trace_id)}`}
                 >
-                  {c(
-                    "查看关联调用",
-                    "View related request",
-                    "عرض الطلب المرتبط",
-                  )}
+                  {c(...translatedMessage("view_related_request_e89d2a2267"))}
                   <ArrowRight size={14} />
                 </Link>
               </Button>
@@ -1323,11 +1190,7 @@ function BillingCenterView({
                 }}
               >
                 <ReceiptText size={15} />
-                {c(
-                  "查看关联充值订单",
-                  "View related top-up",
-                  "عرض طلب الشحن المرتبط",
-                )}
+                {c(...translatedMessage("view_related_top_up_6917f11f8d"))}
                 <ArrowRight size={14} />
               </Button>
             )}
@@ -1335,19 +1198,19 @@ function BillingCenterView({
               onClick={() =>
                 copyText(
                   entry.id,
-                  c("编号已复制", "ID copied", "تم نسخ الرقم"),
-                  c("复制失败", "Copy failed", "فشل النسخ"),
+                  c(...translatedMessage("id_copied_2c36a64426")),
+                  c(...translatedMessage("copy_failed_45c59affcc")),
                 )
               }
             >
               <Copy size={14} />
-              {c("复制流水编号", "Copy transaction ID", "نسخ رقم الحركة")}
+              {c(...translatedMessage("copy_transaction_id_272961d02f"))}
             </Button>
             <p>
               {c(
-                "此明细用于账户核对，不是支付收据或税务发票。",
-                "This record is for reconciliation, not a payment receipt or tax invoice.",
-                "هذا السجل للمطابقة وليس إيصال دفع أو فاتورة ضريبية.",
+                ...translatedMessage(
+                  "this_record_is_for_reconciliation_not_a_payme_d9eefacf65",
+                ),
               )}
             </p>
           </div>

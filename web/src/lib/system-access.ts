@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { bindAccountLanguage } from "./preferences";
 
 // Role codes mirror the Go backend (common/config.go): user=1,
 // finance=5, admin=10, root=100. The numeric form lets the frontend compare
@@ -87,6 +88,7 @@ export const useSystemAccess = create<{
       username?: string;
       platform_admin?: boolean;
       account_kind?: "customer" | "staff";
+      preferred_language?: string;
     } | null,
   ) => void;
 }>((set) => ({
@@ -94,7 +96,8 @@ export const useSystemAccess = create<{
   session: { accountId: null, group: null, epoch: 0, username: null },
   setRole: (role) => set({ role }),
   // Only confirmed session events rotate this identity, never Demo profile edits.
-  setSession: (user) =>
+  setSession: (user) => {
+    bindAccountLanguage(user);
     set((state) => ({
       role: user?.role ?? ROLE_USER,
       session: {
@@ -105,5 +108,6 @@ export const useSystemAccess = create<{
         platformAdmin: user?.platform_admin,
         accountKind: user?.account_kind ?? null,
       },
-    })),
+    }));
+  },
 }));

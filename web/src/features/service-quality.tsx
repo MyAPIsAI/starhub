@@ -1,3 +1,5 @@
+import { message as translatedMessage } from "../i18n/messages";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -45,12 +47,12 @@ import { placeholders, type TierId } from "../config/placeholders";
 
 type Copy = (zh: string, en: string, ar: string) => string;
 const statusWords: Record<QualityStatus, [string, string, string]> = {
-  pass: ["达到目标", "Meets target", "يحقق الهدف"],
-  near: ["接近阈值", "Near threshold", "قريب من الحد"],
-  below: ["当前低于目标", "Currently below target", "أقل من الهدف حاليًا"],
-  insufficient: ["样本不足", "Insufficient samples", "عينات غير كافية"],
-  incomplete: ["数据待核验", "Evidence unverified", "البيانات غير متحققة"],
-  unconfigured: ["未配置合同目标", "No contract target", "لا يوجد هدف تعاقدي"],
+  pass: translatedMessage("meets_target_9d67fb7463"),
+  near: translatedMessage("near_threshold_cfb9f88dd1"),
+  below: translatedMessage("currently_below_target_b93d9ffb66"),
+  insufficient: translatedMessage("insufficient_samples_c012179ddb"),
+  incomplete: translatedMessage("evidence_unverified_732b4a0836"),
+  unconfigured: translatedMessage("no_contract_target_dad1dc3d11"),
 };
 const number = (value: number) => new Intl.NumberFormat("en-US").format(value);
 const percent = (value: number) => `${value.toFixed(2)}%`;
@@ -114,15 +116,17 @@ function TrendChart({
             ? format(values[activeIndex])
             : "—"}
         </strong>
-        <span>{text("日度观测值", "Daily observation", "رصد يومي")}</span>
+        <span>
+          {text(...translatedMessage("daily_observation_eb8ccec574"))}
+        </span>
       </div>
       <svg
         viewBox="0 0 672 221"
         role="img"
         aria-label={text(
-          "每日运行趋势，虚线为合同目标",
-          "Daily operating trend; dashed line marks the contract target",
-          "الاتجاه اليومي؛ الخط المتقطع هو الهدف التعاقدي",
+          ...translatedMessage(
+            "daily_operating_trend_dashed_line_marks_the_c_e02d7a6730",
+          ),
         )}
       >
         {[0, 1, 2, 3].map((tick) => {
@@ -159,7 +163,7 @@ function TrendChart({
               textAnchor="end"
               className="sq-target-label"
             >
-              {text("目标", "Target", "الهدف")} {format(target)}
+              {text(...translatedMessage("target_4ee8b0a32e"))} {format(target)}
             </text>
           </>
         )}
@@ -199,20 +203,16 @@ function TrendChart({
       <div className="sq-chart-legend">
         <span>
           <i />
-          {text("实际观测", "Observed", "القيمة المرصودة")}
+          {text(...translatedMessage("observed_4211a76613"))}
         </span>
         {target !== null && (
           <span>
             <i className="is-target" />
-            {text("合同目标", "Contract target", "الهدف التعاقدي")}
+            {text(...translatedMessage("contract_target_2289ca3587"))}
           </span>
         )}
         <small>
-          {text(
-            "纵轴根据数据自动缩放",
-            "Vertical axis auto-scales",
-            "مقياس رأسي تلقائي",
-          )}
+          {text(...translatedMessage("vertical_axis_auto_scales_44d4f1cc56"))}
         </small>
       </div>
     </div>
@@ -458,8 +458,8 @@ export default function ServiceQuality({
     };
   const requestLabel = (unit: QualityUnit) =>
     unit.stream
-      ? text("流式", "Streaming", "متدفق")
-      : text("非流式", "Non-streaming", "غير متدفق");
+      ? text(...translatedMessage("streaming_b104d369da"))
+      : text(...translatedMessage("non_streaming_30b0b5fa15"));
   const groupLabel = (value: string) => {
     const tier = placeholders.tiers.find((item) => item.id === value);
     return tier?.name[writtenLanguage(language)] ?? value;
@@ -481,46 +481,30 @@ export default function ServiceQuality({
   };
   const exportReport = () => {
     const header = [
-      text("账期", "Period", "الفترة"),
-      text("统计起始日", "Period start", "بداية الفترة"),
-      text("数据截至日", "Data as of", "البيانات حتى"),
-      text("核验状态", "Reconciliation status", "حالة المطابقة"),
-      text("用户编号", "User ID", "معرّف المستخدم"),
-      text("分组", "Group", "المجموعة"),
-      text("标准模型", "Standard model", "النموذج"),
-      text("请求类型", "Request type", "نوع الطلب"),
-      text("合同版本", "Contract version", "نسخة العقد"),
-      text("最终成功率", "Final success rate", "معدل النجاح"),
-      text("成功率目标", "Success target", "هدف النجاح"),
-      text("逻辑请求数", "Logical requests", "الطلبات المنطقية"),
-      text(
-        "G0 第95百分位（毫秒）",
-        "G0 P95 (ms)",
-        "G0 الشريحة 95 (مللي ثانية)",
-      ),
-      text(
-        "G1 第95百分位（毫秒）",
-        "G1 P95 (ms)",
-        "G1 الشريحة 95 (مللي ثانية)",
-      ),
-      text(
-        "G2 第95百分位（毫秒）",
-        "G2 P95 (ms)",
-        "G2 الشريحة 95 (مللي ثانية)",
-      ),
-      text("总体状态", "Overall status", "الحالة العامة"),
-      text("数据来源", "Data source", "مصدر البيانات"),
+      text(...translatedMessage("period_7709fd631e")),
+      text(...translatedMessage("period_start_7fc96fa14f")),
+      text(...translatedMessage("data_as_of_6841eec7bf")),
+      text(...translatedMessage("reconciliation_status_fc9f3a80b7")),
+      text(...translatedMessage("user_id_cf211a0bf6")),
+      text(...translatedMessage("group_528d77dde5")),
+      text(...translatedMessage("standard_model_7e296caf71")),
+      text(...translatedMessage("request_type_881c7ae173")),
+      text(...translatedMessage("contract_version_8271dccca7")),
+      text(...translatedMessage("final_success_rate_beac9517b2")),
+      text(...translatedMessage("success_target_363d8b54c8")),
+      text(...translatedMessage("logical_requests_175a71490c")),
+      text(...translatedMessage("g0_p95_ms_c823f97ec6")),
+      text(...translatedMessage("g1_p95_ms_9d27b86312")),
+      text(...translatedMessage("g2_p95_ms_8c33c6d1ea")),
+      text(...translatedMessage("overall_status_014db241c3")),
+      text(...translatedMessage("data_source_9e4e61f0d7")),
     ];
     const reportUnits = selectedId ? (selected ? [selected] : []) : units;
     const rows = reportUnits.map((unit) => [
       month,
       `${month}-01`,
       periodEnd,
-      text(
-        "演示数据 / 未最终核验",
-        "Demo data / not finally reconciled",
-        "بيانات تجريبية / لم تتم المطابقة النهائية",
-      ),
+      text(...translatedMessage("demo_data_not_finally_reconciled_9d4e318cd6")),
       unit.userId,
       groupLabel(unit.group),
       unit.model,
@@ -532,9 +516,9 @@ export default function ServiceQuality({
       ...[0, 1, 2].map((index) => unit.buckets[index]?.p95 ?? ""),
       text(...statusWords[unit.status]),
       text(
-        "前端演示数据，非真实交付记录",
-        "Frontend demo, not production delivery records",
-        "بيانات تجريبية وليست سجلات إنتاج",
+        ...translatedMessage(
+          "frontend_demo_not_production_delivery_records_77ef44aaa5",
+        ),
       ),
     ]);
     const csv = serializeQualityCsv([header, ...rows]);
@@ -550,61 +534,53 @@ export default function ServiceQuality({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setExportMessage(
       text(
-        `已导出 ${reportUnits.length} 个核算单元。`,
-        `Exported ${reportUnits.length} accounting units.`,
-        `تم تصدير ${reportUnits.length} وحدة محاسبية.`,
+        ...translatedMessage("exported_accounting_units_1868844832", {
+          p0: reportUnits.length,
+        }),
       ),
     );
   };
   const summaries = [
     {
-      label: text("合同核算单元", "Accounting units", "الوحدات المحاسبية"),
+      label: text(...translatedMessage("accounting_units_1dd223488b")),
       value: number(summary.total),
       description: text(
-        "按合同范围独立核算",
-        "Calculated by contract scope",
-        "محسوبة حسب نطاق العقد",
+        ...translatedMessage("calculated_by_contract_scope_960b09b93e"),
       ),
       Icon: Layers3,
       tone: "blue",
     },
     {
-      label: text(
-        "成功率待关注",
-        "Success needs attention",
-        "النجاح بحاجة للمراجعة",
-      ),
+      label: text(...translatedMessage("success_needs_attention_1e2495426c")),
       value: number(summary.successAttention),
       description: text(
-        "接近阈值、低于目标或证据不足",
-        "Near target, below target, or unverified",
-        "قريب من الحد أو دونه أو غير متحقق",
+        ...translatedMessage(
+          "near_target_below_target_or_unverified_4b5652add5",
+        ),
       ),
       Icon: ShieldCheck,
       tone: "amber",
     },
     {
       label: text(
-        "性能待关注",
-        "Performance needs attention",
-        "الأداء بحاجة للمراجعة",
+        ...translatedMessage("performance_needs_attention_9b2bff4208"),
       ),
       value: number(summary.performanceAttention),
       description: text(
-        "任一词元桶需关注或样本不足",
-        "Buckets requiring review or more samples",
-        "حاويات تحتاج مراجعة أو عينات إضافية",
+        ...translatedMessage(
+          "buckets_requiring_review_or_more_samples_a6ebe21154",
+        ),
       ),
       Icon: Clock3,
       tone: "purple",
     },
     {
-      label: text("本期逻辑请求", "Logical requests", "الطلبات المنطقية"),
+      label: text(...translatedMessage("logical_requests_cbda782b3e")),
       value: number(summary.logicalRequests),
       description: text(
-        "按最终状态计数，重试不重复计入",
-        "Final requests; retries are not duplicated",
-        "الطلبات النهائية دون تكرار المحاولات",
+        ...translatedMessage(
+          "final_requests_retries_are_not_duplicated_9500860441",
+        ),
       ),
       Icon: Activity,
       tone: "green",
@@ -616,25 +592,19 @@ export default function ServiceQuality({
       {selectedId && (
         <nav
           className="sq-detail-breadcrumb"
-          aria-label={text("详情导航", "Detail navigation", "تنقل التفاصيل")}
+          aria-label={text(
+            ...translatedMessage("detail_navigation_4bdef7f019"),
+          )}
         >
           <Button variant="ghost" size="small" onClick={returnToList}>
             <ArrowLeft size={15} />
-            {text(
-              "返回交付列表",
-              "Back to delivery list",
-              "العودة لقائمة التسليم",
-            )}
+            {text(...translatedMessage("back_to_delivery_list_0ff83705b1"))}
           </Button>
           <span>/</span>
           <span>
             {selected
               ? `${modelLabel(selected.model)} · ${groupLabel(selected.group)} · ${requestLabel(selected)} · ${month}`
-              : text(
-                  "单元交付详情",
-                  "Unit delivery details",
-                  "تفاصيل تسليم الوحدة",
-                )}
+              : text(...translatedMessage("unit_delivery_details_79a6a639fc"))}
           </span>
         </nav>
       )}
@@ -642,16 +612,12 @@ export default function ServiceQuality({
         <div>
           <span className="sq-eyebrow">
             <ShieldCheck size={14} />
-            {text("服务观测", "SERVICE OBSERVABILITY", "مراقبة الخدمة")}
+            {text(...translatedMessage("service_observability_a6336cdfb3"))}
           </span>
           <h1 ref={detailHeading} tabIndex={-1}>
             {selectedId
-              ? text(
-                  "单元交付详情",
-                  "Unit delivery details",
-                  "تفاصيل تسليم الوحدة",
-                )
-              : text("服务质量", "Service quality", "جودة الخدمة")}
+              ? text(...translatedMessage("unit_delivery_details_79a6a639fc"))
+              : text(...translatedMessage("service_quality_87d4d242c9"))}
           </h1>
           <p>
             {text(
@@ -670,7 +636,7 @@ export default function ServiceQuality({
         <div className="sq-heading-actions">
           <Button size="small" onClick={() => setGuideOpen(true)}>
             <BookOpen size={15} />
-            {text("指标说明", "Metric guide", "دليل المقاييس")}
+            {text(...translatedMessage("metric_guide_b1722c2adc"))}
           </Button>
           <Button
             variant="primary"
@@ -680,38 +646,36 @@ export default function ServiceQuality({
           >
             <ArrowDownToLine size={15} />
             {selectedId
-              ? text("导出本单元", "Export this unit", "تصدير هذه الوحدة")
-              : text(
-                  "下载月报",
-                  "Export monthly report",
-                  "تصدير التقرير الشهري",
-                )}
+              ? text(...translatedMessage("export_this_unit_1c962e840f"))
+              : text(...translatedMessage("export_monthly_report_a00078c37e"))}
           </Button>
         </div>
       </header>
       <div className="sq-demo-banner">
         <span>
           <Info size={14} />
-          <strong>{text("前端演示", "Frontend demo", "عرض تجريبي")}</strong>
+          <strong>
+            {text(...translatedMessage("frontend_demo_fe7f06c736"))}
+          </strong>
           {text(
-            "指标、合同及目标均为示例，不代表真实服务表现或最终结算。",
-            "Metrics, contracts, and targets are illustrative, not production results or final settlement.",
-            "المقاييس والعقود والأهداف أمثلة وليست نتائج فعلية أو تسوية نهائية.",
+            ...translatedMessage(
+              "metrics_contracts_and_targets_are_illustrativ_9a8714d236",
+            ),
           )}
         </span>
         {!selectedId && (
           <label>
-            {text("演示视角", "Demo view", "وضع العرض")}
+            {text(...translatedMessage("demo_view_c976909d72"))}
             <select
-              aria-label={text("演示视角", "Demo view", "وضع العرض")}
+              aria-label={text(...translatedMessage("demo_view_c976909d72"))}
               value={view}
               onChange={changeFilter("view")}
             >
               <option value="enterprise">
-                {text("我的账号", "My account", "حسابي")}
+                {text(...translatedMessage("my_account_960c2b2794"))}
               </option>
               <option value="admin">
-                {text("平台视角", "Platform view", "عرض المنصة")}
+                {text(...translatedMessage("platform_view_4c2504c37e"))}
               </option>
             </select>
           </label>
@@ -728,9 +692,7 @@ export default function ServiceQuality({
           <section
             className="sq-card sq-filter-card"
             aria-label={text(
-              "服务质量筛选",
-              "Service quality filters",
-              "تصفية جودة الخدمة",
+              ...translatedMessage("service_quality_filters_977f25bfc6"),
             )}
           >
             <div className="sq-card-heading">
@@ -738,50 +700,44 @@ export default function ServiceQuality({
                 <h2>
                   <Filter size={15} />
                   {text(
-                    "合同交付总览",
-                    "Contract delivery overview",
-                    "نظرة عامة على التسليم",
+                    ...translatedMessage(
+                      "contract_delivery_overview_200886336b",
+                    ),
                   )}
                 </h2>
                 <p>
                   {text(
-                    "按客户、分组、模型、请求类型和自然月分别核算。",
-                    "Account separately by customer, group, model, request type, and calendar month.",
-                    "حساب مستقل حسب العميل والمجموعة والنموذج ونوع الطلب والشهر.",
+                    ...translatedMessage(
+                      "account_separately_by_customer_group_model_re_16ccb6943c",
+                    ),
                   )}
                 </p>
               </div>
               <div className="sq-as-of">
                 <span>
-                  {text(
-                    "演示数据截至",
-                    "Demo data as of",
-                    "البيانات التجريبية حتى",
-                  )}{" "}
+                  {text(...translatedMessage("demo_data_as_of_5748618226"))}{" "}
                   <b>{periodEnd}</b>
                 </span>
                 <small>
                   {text(
-                    "演示结果尚未最终核验",
-                    "Demo results have not been finally reconciled",
-                    "لم تُطابق النتائج التجريبية نهائيًا",
+                    ...translatedMessage(
+                      "demo_results_have_not_been_finally_reconciled_07ee39162a",
+                    ),
                   )}
                 </small>
               </div>
             </div>
             <div className="sq-filters">
               <label>
-                <span>{text("用户编号", "User ID", "معرّف المستخدم")}</span>
+                <span>{text(...translatedMessage("user_id_cf211a0bf6"))}</span>
                 <input
                   type="text"
                   inputMode="numeric"
-                  aria-label={text("用户编号", "User ID", "معرّف المستخدم")}
+                  aria-label={text(...translatedMessage("user_id_cf211a0bf6"))}
                   value={view === "enterprise" ? userId : customer}
                   disabled={view === "enterprise"}
                   placeholder={text(
-                    "所有演示客户",
-                    "All demo customers",
-                    "كل العملاء التجريبيين",
+                    ...translatedMessage("all_demo_customers_c447d3e1c3"),
                   )}
                   onChange={(event) => {
                     if (/^\d*$/.test(event.target.value)) {
@@ -795,13 +751,11 @@ export default function ServiceQuality({
               </label>
               <label>
                 <span>
-                  {text("核算账期", "Accounting period", "الفترة المحاسبية")}
+                  {text(...translatedMessage("accounting_period_b55b69782a"))}
                 </span>
                 <select
                   aria-label={text(
-                    "核算账期",
-                    "Accounting period",
-                    "الفترة المحاسبية",
+                    ...translatedMessage("accounting_period_b55b69782a"),
                   )}
                   value={month}
                   onChange={changeFilter("month")}
@@ -814,9 +768,9 @@ export default function ServiceQuality({
                 </select>
               </label>
               <label>
-                <span>{text("分组", "Group", "المجموعة")}</span>
+                <span>{text(...translatedMessage("group_528d77dde5"))}</span>
                 <select
-                  aria-label={text("分组", "Group", "المجموعة")}
+                  aria-label={text(...translatedMessage("group_528d77dde5"))}
                   value={group}
                   onChange={(event) => {
                     const value = event.target.value;
@@ -834,7 +788,7 @@ export default function ServiceQuality({
                   }}
                 >
                   <option value="all">
-                    {text("全部分组", "All groups", "كل المجموعات")}
+                    {text(...translatedMessage("all_groups_051837cdeb"))}
                   </option>
                   {placeholders.tiers
                     .map((item) => item.id)
@@ -847,19 +801,17 @@ export default function ServiceQuality({
               </label>
               <label>
                 <span>
-                  {text("标准模型", "Standard model", "النموذج القياسي")}
+                  {text(...translatedMessage("standard_model_18b603bd24"))}
                 </span>
                 <select
                   aria-label={text(
-                    "标准模型",
-                    "Standard model",
-                    "النموذج القياسي",
+                    ...translatedMessage("standard_model_18b603bd24"),
                   )}
                   value={model}
                   onChange={changeFilter("model")}
                 >
                   <option value="all">
-                    {text("全部模型", "All models", "كل النماذج")}
+                    {text(...translatedMessage("all_models_aa0962e85e"))}
                   </option>
                   {catalogModels
                     .filter(
@@ -877,20 +829,24 @@ export default function ServiceQuality({
                 </select>
               </label>
               <label>
-                <span>{text("请求类型", "Request type", "نوع الطلب")}</span>
+                <span>
+                  {text(...translatedMessage("request_type_881c7ae173"))}
+                </span>
                 <select
-                  aria-label={text("请求类型", "Request type", "نوع الطلب")}
+                  aria-label={text(
+                    ...translatedMessage("request_type_881c7ae173"),
+                  )}
                   value={requestType}
                   onChange={changeFilter("type")}
                 >
                   <option value="all">
-                    {text("全部类型", "All types", "كل الأنواع")}
+                    {text(...translatedMessage("all_types_a17f90eb5e"))}
                   </option>
                   <option value="streaming">
-                    {text("流式", "Streaming", "متدفق")}
+                    {text(...translatedMessage("streaming_b104d369da"))}
                   </option>
                   <option value="non-streaming">
-                    {text("非流式", "Non-streaming", "غير متدفق")}
+                    {text(...translatedMessage("non_streaming_30b0b5fa15"))}
                   </option>
                 </select>
               </label>
@@ -915,21 +871,21 @@ export default function ServiceQuality({
               <div>
                 <h2>
                   {text(
-                    "合同核算单元",
-                    "Contract accounting units",
-                    "وحدات المحاسبة التعاقدية",
+                    ...translatedMessage(
+                      "contract_accounting_units_e8b119504d",
+                    ),
                   )}
                 </h2>
                 <p>
                   {text(
-                    "每个核算单元独立判断；不同单元、不同词元桶的结果不能互相抵消。",
-                    "Each accounting unit stands alone; results cannot offset across units or buckets.",
-                    "تُقيّم كل وحدة بشكل مستقل ولا تتعادل نتائج الوحدات والحاويات.",
+                    ...translatedMessage(
+                      "each_accounting_unit_stands_alone_results_can_54cb7a6497",
+                    ),
                   )}
                 </p>
               </div>
               <span className="sq-count">
-                {units.length} {text("个核算单元", "units", "وحدة")}
+                {units.length} {text(...translatedMessage("units_87cfe69ca2"))}
               </span>
             </div>
             {!units.length ? (
@@ -937,20 +893,20 @@ export default function ServiceQuality({
                 <Layers3 size={34} />
                 <h3>
                   {text(
-                    "当前筛选下没有核算单元",
-                    "No matching accounting units",
-                    "لا توجد وحدات مطابقة",
+                    ...translatedMessage(
+                      "no_matching_accounting_units_0257bb964d",
+                    ),
                   )}
                 </h3>
                 <p>
                   {text(
-                    "试试调整客户、分组或模型，重新查看这个账期。",
-                    "Try another customer, group, or model for this period.",
-                    "جرّب عميلًا أو مجموعة أو نموذجًا آخر لهذه الفترة.",
+                    ...translatedMessage(
+                      "try_another_customer_group_or_model_for_this__495971175c",
+                    ),
                   )}
                 </p>
                 <Button onClick={resetFilters}>
-                  {text("重置筛选", "Reset filters", "إعادة ضبط التصفية")}
+                  {text(...translatedMessage("reset_filters_a7e85112c6"))}
                 </Button>
               </div>
             ) : (
@@ -961,25 +917,29 @@ export default function ServiceQuality({
                       <tr>
                         {[
                           text(
-                            "分组 / 服务等级",
-                            "Group / Service tier",
-                            "المجموعة / المستوى",
-                          ),
-                          text("标准模型", "Standard model", "النموذج"),
-                          text("请求类型", "Request type", "نوع الطلب"),
-                          text(
-                            "最终成功率",
-                            "Final success rate",
-                            "معدل النجاح",
+                            ...translatedMessage(
+                              "group_service_tier_62e2a9c6ed",
+                            ),
                           ),
                           text(
-                            "首词时延 · 三档分桶",
-                            "First-token time · 3 buckets",
-                            "زمن أول رمز · 3 حاويات",
+                            ...translatedMessage("standard_model_7e296caf71"),
                           ),
-                          text("样本数", "Samples", "العينات"),
-                          text("总体状态", "Overall status", "الحالة"),
-                          text("操作", "Action", "الإجراء"),
+                          text(...translatedMessage("request_type_881c7ae173")),
+                          text(
+                            ...translatedMessage(
+                              "final_success_rate_beac9517b2",
+                            ),
+                          ),
+                          text(
+                            ...translatedMessage(
+                              "first_token_time_3_buckets_3b98bd9f7e",
+                            ),
+                          ),
+                          text(...translatedMessage("samples_03a4a40574")),
+                          text(
+                            ...translatedMessage("overall_status_bf18e4a396"),
+                          ),
+                          text(...translatedMessage("action_2a8e78b55a")),
                         ].map((label) => (
                           <th key={label}>{label}</th>
                         ))}
@@ -1022,8 +982,12 @@ export default function ServiceQuality({
                             </strong>
                             <small>
                               {unit.successTarget
-                                ? `${text("目标", "Target", "الهدف")} ≥ ${percent(unit.successTarget)}`
-                                : text("未配置", "Not configured", "غير مكوّن")}
+                                ? `${text(...translatedMessage("target_4ee8b0a32e"))} ≥ ${percent(unit.successTarget)}`
+                                : text(
+                                    ...translatedMessage(
+                                      "not_configured_57e6a4a78d",
+                                    ),
+                                  )}
                             </small>
                           </td>
                           <td>
@@ -1057,11 +1021,13 @@ export default function ServiceQuality({
                           <td>
                             <button
                               className="sq-row-view"
-                              aria-label={`${text("查看", "View", "عرض")} ${unitLabel(unit)}`}
+                              aria-label={`${text(...translatedMessage("view_baad6e0094"))} ${unitLabel(unit)}`}
                               data-unit-id={unit.id}
                               onClick={() => openUnit(unit)}
                             >
-                              {text("查看详情", "View details", "عرض التفاصيل")}
+                              {text(
+                                ...translatedMessage("view_details_8c9210e282"),
+                              )}
                               <ArrowRight size={14} />
                             </button>
                           </td>
@@ -1087,15 +1053,17 @@ export default function ServiceQuality({
                         <div>
                           <dt>
                             {text(
-                              "最终成功率",
-                              "Final success rate",
-                              "معدل النجاح",
+                              ...translatedMessage(
+                                "final_success_rate_beac9517b2",
+                              ),
                             )}
                           </dt>
                           <dd>{percent(unit.successRate)}</dd>
                         </div>
                         <div>
-                          <dt>{text("样本数", "Samples", "العينات")}</dt>
+                          <dt>
+                            {text(...translatedMessage("samples_03a4a40574"))}
+                          </dt>
                           <dd>{number(unit.requests)}</dd>
                         </div>
                       </dl>
@@ -1104,7 +1072,7 @@ export default function ServiceQuality({
                         data-unit-id={unit.id}
                         onClick={() => openUnit(unit)}
                       >
-                        {text("查看详情", "View details", "عرض التفاصيل")}
+                        {text(...translatedMessage("view_details_8c9210e282"))}
                         <ArrowRight size={14} />
                       </Button>
                     </article>
@@ -1113,15 +1081,17 @@ export default function ServiceQuality({
                 <div className="sq-pagination">
                   <span>
                     {text(
-                      `共 ${units.length} 条`,
-                      `${units.length} units`,
-                      `${units.length} وحدة`,
+                      ...translatedMessage("units_ef2a7b9ca7", {
+                        p0: units.length,
+                      }),
                     )}
                   </span>
                   <label>
-                    {text("每页", "Per page", "لكل صفحة")}
+                    {text(...translatedMessage("per_page_339ed6f784"))}
                     <select
-                      aria-label={text("每页", "Per page", "لكل صفحة")}
+                      aria-label={text(
+                        ...translatedMessage("per_page_339ed6f784"),
+                      )}
                       value={pageSize}
                       onChange={(event) => {
                         change({ size: event.target.value, page: null });
@@ -1136,9 +1106,7 @@ export default function ServiceQuality({
                       disabled={currentPage === 1}
                       onClick={() => change({ page: String(currentPage - 1) })}
                       aria-label={text(
-                        "上一页",
-                        "Previous page",
-                        "الصفحة السابقة",
+                        ...translatedMessage("previous_page_69cac17b46"),
                       )}
                     >
                       <ChevronLeft size={15} />
@@ -1150,7 +1118,9 @@ export default function ServiceQuality({
                     <button
                       disabled={currentPage * pageSize >= units.length}
                       onClick={() => change({ page: String(currentPage + 1) })}
-                      aria-label={text("下一页", "Next page", "الصفحة التالية")}
+                      aria-label={text(
+                        ...translatedMessage("next_page_8a29f0d0d2"),
+                      )}
                     >
                       <ChevronRight size={15} />
                     </button>
@@ -1166,16 +1136,14 @@ export default function ServiceQuality({
           <CircleHelp size={32} />
           <h2>
             {text(
-              "无法找到该核算单元",
-              "Accounting unit unavailable",
-              "الوحدة غير متاحة",
+              ...translatedMessage("accounting_unit_unavailable_7e1b66df85"),
             )}
           </h2>
           <p>
             {text(
-              "账期或单元标识无效，或不在当前客户可见范围内。请返回列表重新选择。",
-              "The period or unit is invalid, or outside this customer's scope. Return to the list to choose a unit.",
-              "الفترة أو الوحدة غير صالحة أو خارج نطاق العميل. عد إلى القائمة للاختيار.",
+              ...translatedMessage(
+                "the_period_or_unit_is_invalid_or_outside_this_09f81e6034",
+              ),
             )}
           </p>
           <Button
@@ -1184,7 +1152,7 @@ export default function ServiceQuality({
               setExportMessage("");
             }}
           >
-            {text("重置并返回列表", "Reset and return", "إعادة الضبط والعودة")}
+            {text(...translatedMessage("reset_and_return_2ea4d4f41c"))}
           </Button>
         </section>
       )}
@@ -1193,9 +1161,7 @@ export default function ServiceQuality({
           <section
             className="sq-detail-identity"
             aria-label={text(
-              "当前核算单元",
-              "Current accounting unit",
-              "الوحدة الحالية",
+              ...translatedMessage("current_accounting_unit_4c0688ccd2"),
             )}
           >
             <div className="sq-detail-identity-main">
@@ -1210,18 +1176,24 @@ export default function ServiceQuality({
             </div>
             <dl>
               {[
-                [text("客户", "Customer", "العميل"), `#${selected.userId}`],
                 [
-                  text("服务分组", "Service group", "مجموعة الخدمة"),
+                  text(...translatedMessage("customer_b6fee18c46")),
+                  `#${selected.userId}`,
+                ],
+                [
+                  text(...translatedMessage("service_group_1c6f8adf41")),
                   groupLabel(selected.group),
                 ],
                 [
-                  text("请求类型", "Request type", "نوع الطلب"),
+                  text(...translatedMessage("request_type_881c7ae173")),
                   requestLabel(selected),
                 ],
-                [text("核算账期", "Accounting period", "الفترة"), month],
                 [
-                  text("合同版本", "Contract version", "نسخة العقد"),
+                  text(...translatedMessage("accounting_period_0429b35b74")),
+                  month,
+                ],
+                [
+                  text(...translatedMessage("contract_version_8271dccca7")),
                   selected.version,
                 ],
               ].map(([label, value]) => (
@@ -1233,58 +1205,40 @@ export default function ServiceQuality({
             </dl>
             <p>
               {text(
-                "本单元演示数据截至",
-                "This unit's demo data as of",
-                "بيانات الوحدة التجريبية حتى",
+                ...translatedMessage("this_unit_s_demo_data_as_of_e5a2ceacc9"),
               )}{" "}
               <b>{periodEnd}</b> ·{" "}
-              {text(
-                "未最终核验",
-                "Not finally reconciled",
-                "لم تتم المطابقة النهائية",
-              )}
+              {text(...translatedMessage("not_finally_reconciled_9d3aeeeac9"))}
             </p>
           </section>
           <div className="sq-unit-summary">
             <section className="sq-card">
               <span>
-                {text("最终成功率", "Final success rate", "معدل النجاح")}
+                {text(...translatedMessage("final_success_rate_beac9517b2"))}
               </span>
               <strong>{percent(selected.successRate)}</strong>
               <small>
                 {selected.successTarget
-                  ? `${text("合同目标", "Contract target", "الهدف")} ≥ ${percent(selected.successTarget)}`
-                  : text(
-                      "未配置合同目标",
-                      "No contract target",
-                      "لا يوجد هدف تعاقدي",
-                    )}
+                  ? `${text(...translatedMessage("contract_target_43987ff4ae"))} ≥ ${percent(selected.successTarget)}`
+                  : text(...translatedMessage("no_contract_target_dad1dc3d11"))}
               </small>
             </section>
             <section className="sq-card">
               <span>
-                {text("逻辑请求数", "Logical requests", "الطلبات المنطقية")}
+                {text(...translatedMessage("logical_requests_175a71490c"))}
               </span>
               <strong>{number(selected.requests)}</strong>
               <small>
-                {text(
-                  "重试不重复计数",
-                  "Retries counted once",
-                  "لا تكرر المحاولات العد",
-                )}
+                {text(...translatedMessage("retries_counted_once_41737dd2da"))}
               </small>
             </section>
             <section className="sq-card">
               <span>
-                {text(
-                  "成功交付请求",
-                  "Successful deliveries",
-                  "الطلبات الناجحة",
-                )}
+                {text(...translatedMessage("successful_deliveries_85d8e6c7c7"))}
               </span>
               <strong>{number(selected.successes)}</strong>
               <small>
-                {text("仅统计当前单元", "This unit only", "هذه الوحدة فقط")}
+                {text(...translatedMessage("this_unit_only_277a88f71b"))}
               </small>
             </section>
           </div>
@@ -1293,16 +1247,16 @@ export default function ServiceQuality({
               <div>
                 <h2>
                   {text(
-                    "首词时延分桶表现",
-                    "First-token latency by bucket",
-                    "زمن أول رمز حسب الحاوية",
+                    ...translatedMessage(
+                      "first_token_latency_by_bucket_8ccb96d93d",
+                    ),
                   )}
                 </h2>
                 <p>
                   {text(
-                    "按实际输入长度分为三档，分别计算自然月第95百分位时延。",
-                    "Three input-length buckets, each with a calendar-month 95th-percentile latency.",
-                    "ثلاث حاويات لطول الإدخال، لكل منها زمن الشريحة المئوية 95 الشهري.",
+                    ...translatedMessage(
+                      "three_input_length_buckets_each_with_a_calend_aba008e17d",
+                    ),
                   )}
                 </p>
               </div>
@@ -1317,9 +1271,9 @@ export default function ServiceQuality({
                         <small>
                           {
                             [
-                              text("短输入", "Short", "قصير"),
-                              text("中输入", "Medium", "متوسط"),
-                              text("长输入", "Long", "طويل"),
+                              text(...translatedMessage("short_c6d2f76fc1")),
+                              text(...translatedMessage("medium_8a4f8f4071")),
+                              text(...translatedMessage("long_5238b324a7")),
                             ][index]
                           }
                         </small>
@@ -1328,22 +1282,20 @@ export default function ServiceQuality({
                     </div>
                     <p className="sq-bucket-range">
                       {["≤ 8,192", "8,193 – 32,768", "> 32,768"][index]}{" "}
-                      {text("输入词元", "input tokens", "رمز إدخال")}
+                      {text(...translatedMessage("input_tokens_f6e9c8023d"))}
                     </p>
                     <div className="sq-bucket-values">
                       <div>
                         <span>
-                          {text(
-                            "当前第95百分位",
-                            "Current P95",
-                            "الشريحة المئوية 95",
-                          )}
+                          {text(...translatedMessage("current_p95_5a853e1bd1"))}
                         </span>
                         <strong>{seconds(bucket.p95)}</strong>
                       </div>
                       <div>
                         <span>
-                          {text("合同上限", "Contract limit", "الحد التعاقدي")}
+                          {text(
+                            ...translatedMessage("contract_limit_9fc9c2cdec"),
+                          )}
                         </span>
                         <b>
                           {selected.successTarget
@@ -1354,16 +1306,16 @@ export default function ServiceQuality({
                     </div>
                     <div className="sq-bucket-sample">
                       <span>
-                        {text("有效样本", "Valid samples", "العينات الصالحة")}{" "}
+                        {text(...translatedMessage("valid_samples_acdba769e3"))}{" "}
                         <b>{number(bucket.samples)}</b>
                       </span>
                       <span>
                         {selected.successTarget
-                          ? `${Math.round((bucket.p95 / bucket.limit) * 100)}% ${text("上限占比", "of limit", "من الحد")}`
+                          ? `${Math.round((bucket.p95 / bucket.limit) * 100)}% ${text(...translatedMessage("of_limit_63350724dc"))}`
                           : text(
-                              "观测模式",
-                              "Observation only",
-                              "للمراقبة فقط",
+                              ...translatedMessage(
+                                "observation_only_ef0b1bf5e8",
+                              ),
                             )}
                       </span>
                     </div>
@@ -1390,16 +1342,16 @@ export default function ServiceQuality({
                 <div>
                   <h3>
                     {text(
-                      "非流式请求不计算首词时延",
-                      "First-token latency does not apply",
-                      "زمن أول رمز لا ينطبق",
+                      ...translatedMessage(
+                        "first_token_latency_does_not_apply_960445f28b",
+                      ),
                     )}
                   </h3>
                   <p>
                     {text(
-                      "当前单元仅展示最终成功率，避免将非流式响应与流式指标混合。",
-                      "This non-streaming unit reports final success rate only.",
-                      "تعرض هذه الوحدة غير المتدفقة معدل النجاح النهائي فقط.",
+                      ...translatedMessage(
+                        "this_non_streaming_unit_reports_final_success_77fa16b458",
+                      ),
                     )}
                   </p>
                 </div>
@@ -1410,14 +1362,15 @@ export default function ServiceQuality({
               <span>
                 {selected.stream
                   ? text(
-                      `从请求开始计时，到网关收到生成内容。每档至少需 ${selected.minSamples} 个样本；${selected.unknownInputs} 个输入长度未知的请求不进入分桶。`,
-                      `Measured from request start to generated content reaching the gateway. Each bucket needs ${selected.minSamples} samples; ${selected.unknownInputs} requests with unknown input length are excluded.`,
-                      `من بدء الطلب حتى وصول المحتوى إلى البوابة. تحتاج كل حاوية إلى ${selected.minSamples} عينة؛ استُبعد ${selected.unknownInputs} طلبًا بطول مجهول.`,
+                      ...translatedMessage(
+                        "measured_from_request_start_to_generated_cont_c30e38b8e0",
+                        { p0: selected.minSamples, p1: selected.unknownInputs },
+                      ),
                     )
                   : text(
-                      "已知失败且未生成内容的请求计入失败，不生成首词时延样本。",
-                      "Known failures without generated content count as failures, not first-token samples.",
-                      "الفشل دون محتوى مولّد يُحسب فشلًا وليس عينة لزمن أول رمز.",
+                      ...translatedMessage(
+                        "known_failures_without_generated_content_coun_e22db5ff1c",
+                      ),
                     )}
               </span>
             </div>
@@ -1428,16 +1381,14 @@ export default function ServiceQuality({
                 <div>
                   <h2>
                     {text(
-                      "每日运行趋势",
-                      "Daily operating trend",
-                      "الاتجاه التشغيلي اليومي",
+                      ...translatedMessage("daily_operating_trend_ccdcef2497"),
                     )}
                   </h2>
                   <p>
                     {text(
-                      "用于提前发现变化，月度结论仍以同一单元的月度数据为准。",
-                      "An early signal; monthly conclusions use this unit’s monthly data.",
-                      "إشارة مبكرة؛ تستند النتائج الشهرية إلى بيانات الوحدة الشهرية.",
+                      ...translatedMessage(
+                        "an_early_signal_monthly_conclusions_use_this__d913c28810",
+                      ),
                     )}
                   </p>
                 </div>
@@ -1445,7 +1396,9 @@ export default function ServiceQuality({
               <div
                 className="sq-trend-tabs"
                 role="group"
-                aria-label={text("趋势指标", "Trend metric", "مقياس الاتجاه")}
+                aria-label={text(
+                  ...translatedMessage("trend_metric_fed8d6b3e6"),
+                )}
               >
                 {(["success", "g0", "g1", "g2"] as QualityMetric[]).map(
                   (value) => (
@@ -1457,7 +1410,7 @@ export default function ServiceQuality({
                       onClick={() => change({ metric: value }, true)}
                     >
                       {value === "success"
-                        ? text("成功率", "Success rate", "معدل النجاح")
+                        ? text(...translatedMessage("success_rate_b8e8689749"))
                         : value.toUpperCase()}
                     </button>
                   ),
@@ -1475,14 +1428,14 @@ export default function ServiceQuality({
                 <div>
                   <h2>
                     {text(
-                      "截至当前的核算结果",
-                      "Current accounting result",
-                      "نتيجة المحاسبة الحالية",
+                      ...translatedMessage(
+                        "current_accounting_result_2392524d74",
+                      ),
                     )}
                   </h2>
                   <p>
                     {selected.version} ·{" "}
-                    {text("演示合同", "Demo contract", "عقد تجريبي")}
+                    {text(...translatedMessage("demo_contract_a34b9ebb8b"))}
                   </p>
                 </div>
                 <ShieldCheck size={21} />
@@ -1495,9 +1448,7 @@ export default function ServiceQuality({
                   <div>
                     <h3>
                       {text(
-                        "成功交付合同状态",
-                        "Successful delivery",
-                        "التسليم الناجح",
+                        ...translatedMessage("successful_delivery_d7aae6863c"),
                       )}
                     </h3>
                     <StatusPill status={selected.successStatus} text={text} />
@@ -1510,9 +1461,9 @@ export default function ServiceQuality({
                   <div>
                     <h3>
                       {text(
-                        "首词时延性能状态",
-                        "First-token performance",
-                        "أداء أول رمز",
+                        ...translatedMessage(
+                          "first_token_performance_01d68cbd34",
+                        ),
                       )}
                     </h3>
                     {selected.performanceStatus ? (
@@ -1523,9 +1474,9 @@ export default function ServiceQuality({
                     ) : (
                       <span className="sq-muted">
                         {text(
-                          "非流式，不适用",
-                          "Not applicable to non-streaming",
-                          "لا ينطبق على غير المتدفق",
+                          ...translatedMessage(
+                            "not_applicable_to_non_streaming_98aaf87bf3",
+                          ),
                         )}
                       </span>
                     )}
@@ -1535,9 +1486,7 @@ export default function ServiceQuality({
                   <div>
                     <span>
                       {text(
-                        "剩余错误预算",
-                        "Error budget left",
-                        "ميزانية الأخطاء المتبقية",
+                        ...translatedMessage("error_budget_left_434d0b013e"),
                       )}
                     </span>
                     <strong>
@@ -1558,9 +1507,7 @@ export default function ServiceQuality({
                   <div>
                     <span>
                       {text(
-                        "数据完整性",
-                        "Data completeness",
-                        "اكتمال البيانات",
+                        ...translatedMessage("data_completeness_5b07bf51f0"),
                       )}
                     </span>
                     <strong>
@@ -1571,23 +1518,23 @@ export default function ServiceQuality({
                     <small>
                       {selected.completeness === null
                         ? text(
-                            "请求证据待核验",
-                            "Evidence needs reconciliation",
-                            "الأدلة بحاجة للمطابقة",
+                            ...translatedMessage(
+                              "evidence_needs_reconciliation_0716f4b1f8",
+                            ),
                           )
                         : text(
-                            "演示数据已关联",
-                            "Demo evidence correlated",
-                            "الأدلة التجريبية مرتبطة",
+                            ...translatedMessage(
+                              "demo_evidence_correlated_0ead02c172",
+                            ),
                           )}
                     </small>
                   </div>
                 </div>
                 <p className="sq-result-note">
                   {text(
-                    "当前低于目标不等同于确认违约。完成月末数据核验后，才可形成正式交付结论。",
-                    "A result below target is not a confirmed breach. Formal delivery conclusions require month-end reconciliation.",
-                    "النتيجة الأقل من الهدف ليست إخلالًا مؤكدًا؛ تتطلب النتيجة الرسمية مطابقة نهاية الشهر.",
+                    ...translatedMessage(
+                      "a_result_below_target_is_not_a_confirmed_brea_b9632ad710",
+                    ),
                   )}
                 </p>
               </div>
@@ -1599,64 +1546,56 @@ export default function ServiceQuality({
         size="wide"
         open={guideOpen}
         onOpenChange={setGuideOpen}
-        title={text(
-          "字段与状态说明",
-          "Field and status guide",
-          "دليل الحقول والحالات",
-        )}
+        title={text(...translatedMessage("field_and_status_guide_ecd6df75c6"))}
         description={text(
-          "理解核算范围、指标口径与合同判断边界。",
-          "Understand accounting scope, metrics, and contract conclusions.",
-          "فهم نطاق المحاسبة والمقاييس وحدود النتائج التعاقدية.",
+          ...translatedMessage(
+            "understand_accounting_scope_metrics_and_contr_8d1f48e750",
+          ),
         )}
       >
         <div className="sq-guide">
           <div className="sq-guide-intro">
             <CircleHelp size={18} />
             {text(
-              "本页为前端演示。所有合同版本、阈值及观测数值均是演示配置。",
-              "This is a frontend demo. All contracts, thresholds, and observations are illustrative.",
-              "هذا عرض تجريبي. العقود والحدود والقيم المرصودة كلها أمثلة.",
+              ...translatedMessage(
+                "this_is_a_frontend_demo_all_contracts_thresho_7ff32d65b9",
+              ),
             )}
           </div>
           <h3>
-            {text("核算口径", "Accounting definitions", "تعريفات المحاسبة")}
+            {text(...translatedMessage("accounting_definitions_112a433242"))}
           </h3>
           {[
             [
-              text("核算单元", "Accounting unit", "الوحدة المحاسبية"),
+              text(...translatedMessage("accounting_unit_68dc8a2e92")),
               text(
-                "客户 + 分组 + 标准模型 + 请求类型 + 合同版本 + 自然月。各单元独立计算，不能相互抵消。",
-                "Customer + group + model + request type + contract version + calendar month. Units cannot offset one another.",
-                "العميل والمجموعة والنموذج ونوع الطلب ونسخة العقد والشهر. تُحسب الوحدات بشكل مستقل.",
+                ...translatedMessage(
+                  "customer_group_model_request_type_contract_ve_f7f2fd69eb",
+                ),
               ),
             ],
             [
-              text("最终成功率", "Final success rate", "معدل النجاح النهائي"),
+              text(...translatedMessage("final_success_rate_a798c0798b")),
               text(
-                "成功交付的逻辑请求占比。重试不重复计数；本地校验拒绝、纯客户端取消不进入合同统计。",
-                "Share of countable logical requests delivered successfully. Retries are not duplicated; local rejections and pure client cancellations are excluded.",
-                "نسبة الطلبات المنطقية الناجحة دون تكرار المحاولات؛ تُستبعد الرفض المحلي وإلغاءات العميل.",
+                ...translatedMessage(
+                  "share_of_countable_logical_requests_delivered_c77070c178",
+                ),
               ),
             ],
             [
+              text(...translatedMessage("ttft_and_p95_03be46a1ab")),
               text(
-                "首词时延与第95百分位",
-                "TTFT and P95",
-                "زمن أول رمز والشريحة 95",
-              ),
-              text(
-                "从请求开始到网关收到首个生成内容。同一分桶中 95% 的有效时延不高于此值。仅适用于流式文本请求。",
-                "Time from request start to generated content received by the gateway. 95% of valid observations in a bucket do not exceed P95. Streaming text only.",
-                "الزمن من بدء الطلب حتى أول محتوى مولّد. لا تتجاوز 95% من القيم هذا الحد؛ للنص المتدفق فقط.",
+                ...translatedMessage(
+                  "time_from_request_start_to_generated_content__e7bef158c9",
+                ),
               ),
             ],
             [
-              text("密钥诊断边界", "Key diagnostics", "تشخيص المفاتيح"),
+              text(...translatedMessage("key_diagnostics_d31a279d1c")),
               text(
-                "密钥用于定位同一核算单元内的差异；未约定密钥级合同目标时，不据此形成正式交付结论。",
-                "Keys help diagnose differences within a unit. Without key-level contractual targets, diagnostics do not establish a delivery conclusion.",
-                "تساعد المفاتيح على تشخيص الفروق داخل الوحدة ولا تنشئ نتيجة تعاقدية دون أهداف خاصة بالمفتاح.",
+                ...translatedMessage(
+                  "keys_help_diagnose_differences_within_a_unit__6288d652f0",
+                ),
               ),
             ],
           ].map(([title, content]) => (
@@ -1665,55 +1604,55 @@ export default function ServiceQuality({
               <p>{content}</p>
             </section>
           ))}
-          <h3>{text("总体状态", "Overall statuses", "الحالات العامة")}</h3>
+          <h3>{text(...translatedMessage("overall_statuses_1f1bc78703"))}</h3>
           {(
             [
               [
                 "pass",
                 text(
-                  "成功率与各有效分桶均达到合同目标。",
-                  "Success rate and each valid bucket meet their contract targets.",
-                  "يحقق معدل النجاح وكل حاوية صالحة الهدف التعاقدي.",
+                  ...translatedMessage(
+                    "success_rate_and_each_valid_bucket_meet_their_e64ed3f4a2",
+                  ),
                 ),
               ],
               [
                 "near",
                 text(
-                  "接近合同阈值，需要关注；告警容差不会降低合同目标。",
-                  "Close to a threshold; warning tolerance does not lower the contract target.",
-                  "قريب من الحد؛ هامش التحذير لا يخفض الهدف التعاقدي.",
+                  ...translatedMessage(
+                    "close_to_a_threshold_warning_tolerance_does_n_c33a2c0508",
+                  ),
                 ),
               ],
               [
                 "below",
                 text(
-                  "成功率低于目标或任一分桶超过上限；这不是确认违约。",
-                  "Success is below target or a bucket exceeds its limit; this is not a confirmed breach.",
-                  "النجاح دون الهدف أو حاوية فوق الحد؛ ليس إخلالًا مؤكدًا.",
+                  ...translatedMessage(
+                    "success_is_below_target_or_a_bucket_exceeds_i_b1fd76c1e3",
+                  ),
                 ),
               ],
               [
                 "insufficient",
                 text(
-                  "至少一档分桶样本数少于演示合同要求，尚不足以判断。",
-                  "At least one bucket lacks the minimum samples required by the demo contract.",
-                  "حاوية واحدة على الأقل لا تملك الحد الأدنى من العينات.",
+                  ...translatedMessage(
+                    "at_least_one_bucket_lacks_the_minimum_samples_2edbd247f5",
+                  ),
                 ),
               ],
               [
                 "incomplete",
                 text(
-                  "请求、最终状态与性能事件尚未完成关联核验。",
-                  "Request, final-state, and performance evidence has not been reconciled.",
-                  "لم تتم مطابقة أدلة الطلب والحالة النهائية والأداء.",
+                  ...translatedMessage(
+                    "request_final_state_and_performance_evidence__7fe506cabd",
+                  ),
                 ),
               ],
               [
                 "unconfigured",
                 text(
-                  "未设置合同成功率目标，数据仅作观测。",
-                  "No success-rate target is configured; data is observational only.",
-                  "لم يحدد هدف للنجاح؛ البيانات للمراقبة فقط.",
+                  ...translatedMessage(
+                    "no_success_rate_target_is_configured_data_is__928fb95108",
+                  ),
                 ),
               ],
             ] as [QualityStatus, string][]
@@ -1726,16 +1665,12 @@ export default function ServiceQuality({
           {selected && (
             <>
               <h3>
-                {text(
-                  "当前演示合同速查",
-                  "Current demo contract",
-                  "العقد التجريبي الحالي",
-                )}
+                {text(...translatedMessage("current_demo_contract_e5d09db873"))}
               </h3>
               <section>
                 <h4>{selected.version}</h4>
                 <p>
-                  {text("成功率目标", "Success target", "هدف النجاح")}:{" "}
+                  {text(...translatedMessage("success_target_363d8b54c8"))}:{" "}
                   {selected.successTarget
                     ? `≥ ${percent(selected.successTarget)}`
                     : "—"}
@@ -1750,9 +1685,9 @@ export default function ServiceQuality({
                 ))}
                 <p>
                   {text(
-                    "每档最低样本数",
-                    "Minimum samples per bucket",
-                    "الحد الأدنى للعينات لكل حاوية",
+                    ...translatedMessage(
+                      "minimum_samples_per_bucket_2246d2bed6",
+                    ),
                   )}
                   : {selected.minSamples}
                 </p>

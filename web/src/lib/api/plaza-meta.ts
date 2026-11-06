@@ -15,10 +15,10 @@ import {
 // --- Backend response type (mirrors model/modelmeta.go:27-73) ---
 
 export interface ModelMeta {
-	 official_source_url?: string;
-	 official_verified_date?: string;
-	 official_conditions?: string;
-	 official_historical?: boolean;
+  official_source_url?: string;
+  official_verified_date?: string;
+  official_conditions?: string;
+  official_historical?: boolean;
   model: string;
   vendor: string;
   vendor_display: string;

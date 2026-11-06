@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import {
   quotePricingRule,
   examplePricingAttributes,
@@ -82,14 +83,14 @@ const modeName = (
   text: (zh: string, en: string, ar: string) => string,
 ) =>
   rule.mode === "tokens"
-    ? text("按词元", "Per token", "لكل رمز")
+    ? text(...translatedMessage("per_token_7f44ff66c4"))
     : rule.mode === "unit"
       ? {
-          request: text("按次", "Per request", "لكل طلب"),
-          image: text("按张", "Per image", "لكل صورة"),
-          second: text("按秒", "Per second", "لكل ثانية"),
+          request: text(...translatedMessage("per_request_63e05e97c4")),
+          image: text(...translatedMessage("per_image_5919d8daf4")),
+          second: text(...translatedMessage("per_second_7be6dbed21")),
         }[rule.unit]
-      : text("表达式", "Expression", "تعبير");
+      : text(...translatedMessage("expression_396d42fc66"));
 
 export function ModelPricingAdmin({
   role,
@@ -220,17 +221,17 @@ export function ModelPricingAdmin({
     entry.source === "manual-official" &&
     (!entry.sourceUrl || !entry.verifiedAt)
       ? text(
-          "官方参考报价需要填写来源地址和核验日期。",
-          "An official reference needs a source URL and verification date.",
-          "يتطلب المرجع الرسمي رابط المصدر وتاريخ التحقق.",
+          ...translatedMessage(
+            "an_official_reference_needs_a_source_url_and__dc09676778",
+          ),
         )
       : [entry.verifiedAt, entry.effectiveAt].some(
             (date) => date && Date.parse(date) > Date.now(),
           )
         ? text(
-            "核验日期与来源生效日期不能晚于今天。",
-            "Verification and reference dates cannot be in the future.",
-            "لا يمكن أن تكون تواريخ التحقق والمرجع في المستقبل.",
+            ...translatedMessage(
+              "verification_and_reference_dates_cannot_be_in_4021289355",
+            ),
           )
         : "";
   const valid =
@@ -274,20 +275,14 @@ export function ModelPricingAdmin({
   const setRule = (next: PricingRule) => setEntry({ rule: next });
   const labels: Record<keyof ModelPricing, string> = {
     input_per_million_usd: text(
-      "普通输入",
-      "Uncached input",
-      "الإدخال غير المخزن",
+      ...translatedMessage("uncached_input_a3745282fd"),
     ),
-    output_per_million_usd: text("模型输出", "Output", "الإخراج"),
+    output_per_million_usd: text(...translatedMessage("output_98e2ff69c4")),
     cache_read_per_million_usd: text(
-      "缓存读取（可选）",
-      "Cache read (optional)",
-      "قراءة الذاكرة (اختياري)",
+      ...translatedMessage("cache_read_optional_0abf93cac3"),
     ),
     cache_write_per_million_usd: text(
-      "缓存写入（可选）",
-      "Cache write (optional)",
-      "كتابة الذاكرة (اختياري)",
+      ...translatedMessage("cache_write_optional_db6ed0d992"),
     ),
   };
   const eligibleKeys = keys.filter(
@@ -305,9 +300,9 @@ export function ModelPricingAdmin({
       return {
         amount: "—",
         error: text(
-          "请填写有效时间后试算。",
-          "Choose an eligible key and a valid time to quote.",
-          "اختر مفتاحا متاحا ووقتا صالحا للحساب.",
+          ...translatedMessage(
+            "choose_an_eligible_key_and_a_valid_time_to_qu_a7cb71b184",
+          ),
         ),
       };
     try {
@@ -345,9 +340,9 @@ export function ModelPricingAdmin({
           error instanceof Error
             ? error.message
             : text(
-                "无法试算，请检查规则和用量。",
-                "Unable to quote. Check the rule and usage.",
-                "تعذر الحساب. تحقق من القاعدة والاستخدام.",
+                ...translatedMessage(
+                  "unable_to_quote_check_the_rule_and_usage_c3c7a6483b",
+                ),
               ),
       };
     }
@@ -401,7 +396,7 @@ export function ModelPricingAdmin({
               "call",
             );
           } catch {
-            return text("无法报价", "Not quotable", "تعذر التسعير");
+            return text(...translatedMessage("not_quotable_3d02114fd7"));
           }
         };
         return {
@@ -423,21 +418,17 @@ export function ModelPricingAdmin({
       ),
     });
   const usageLabels: Record<keyof Usage, string> = {
-    input_tokens: text("普通输入词元", "Input tokens", "رموز الإدخال"),
-    output_tokens: text("输出词元", "Output tokens", "رموز الإخراج"),
+    input_tokens: text(...translatedMessage("input_tokens_2470592d0d")),
+    output_tokens: text(...translatedMessage("output_tokens_e8729227cd")),
     cache_read_tokens: text(
-      "缓存读取词元",
-      "Cache read tokens",
-      "رموز قراءة الذاكرة",
+      ...translatedMessage("cache_read_tokens_7e8333794a"),
     ),
     cache_write_tokens: text(
-      "缓存写入词元",
-      "Cache write tokens",
-      "رموز كتابة الذاكرة",
+      ...translatedMessage("cache_write_tokens_c1d36f2888"),
     ),
-    images: text("图片张数", "Images", "الصور"),
-    seconds: text("时长（秒）", "Duration (seconds)", "المدة بالثواني"),
-    requests: text("请求次数", "Requests", "الطلبات"),
+    images: text(...translatedMessage("images_0cc4309f02")),
+    seconds: text(...translatedMessage("duration_seconds_7aa2eff257")),
+    requests: text(...translatedMessage("requests_de8ae6d124")),
   };
   const usageFields: (keyof Usage)[] =
     rule.mode === "tokens"
@@ -473,11 +464,12 @@ export function ModelPricingAdmin({
       message:
         record.status === "success"
           ? text(
-              `已提交模拟用量并扣除 ${formatMoney(record.cost_nano, "call")}。未生成真实模型内容。`,
-              `Simulated usage submitted; ${formatMoney(record.cost_nano, "call")} charged. No real model output was generated.`,
-              `تم إرسال الاستخدام المحاكى وخصم ${formatMoney(record.cost_nano, "call")}. لم ينتج محتوى حقيقي.`,
+              ...translatedMessage(
+                "simulated_usage_submitted_charged_no_real_mod_1b6e631d2b",
+                { p0: formatMoney(record.cost_nano, "call") },
+              ),
             )
-          : `${record.error_message ?? text("模拟调用失败。", "Simulated call failed.", "فشل الطلب المحاكى.")} ${record.recovery_action ?? ""} ${text("未计费；当前输入已保留。", "Not charged; your inputs are retained.", "لم تحتسب رسوم واحتفظ بالمدخلات.")}`,
+          : `${record.error_message ?? text(...translatedMessage("simulated_call_failed_91b73ad796"))} ${record.recovery_action ?? ""} ${text(...translatedMessage("not_charged_your_inputs_are_retained_7d7f89dffd"))}`,
     });
   };
   return (
@@ -486,24 +478,20 @@ export function ModelPricingAdmin({
         <div>
           <span className="pricing-eyebrow">
             <CircleDollarSign size={15} />
-            {text("系统设置", "System settings", "إعدادات النظام")}
+            {text(...translatedMessage("system_settings_966a9e1755"))}
           </span>
-          <h1>{text("模型定价", "Model pricing", "تسعير النماذج")}</h1>
+          <h1>{text(...translatedMessage("model_pricing_4a65297d67"))}</h1>
           <p>
             {text(
-              "维护此浏览器的演示定价与分时规则，确认前查看模拟影响。服务器完整定价管理仍待接入。",
-              "Manage this browser’s Demo pricing and time rules, reviewing simulated impact before saving. Complete server pricing management is still pending.",
-              "أدر التسعير التجريبي وقواعد الوقت في هذا المتصفح وراجع أثر المحاكاة قبل الحفظ. لا تزال إدارة تسعير الخادم الكاملة قيد التنفيذ.",
+              ...translatedMessage(
+                "manage_this_browser_s_demo_pricing_and_time_r_751c26a7cd",
+              ),
             )}
           </p>
         </div>
         <Button asChild variant="secondary">
           <Link to="/console/service-groups">
-            {text(
-              "管理服务分组",
-              "Manage service groups",
-              "إدارة مجموعات الخدمة",
-            )}
+            {text(...translatedMessage("manage_service_groups_2b5ad01162"))}
             <ArrowUpRight size={15} />
           </Link>
         </Button>
@@ -513,16 +501,16 @@ export function ModelPricingAdmin({
         <div>
           <strong>
             {text(
-              "参考报价有来源，历史费用有快照",
-              "Reference sources and immutable historical rates",
-              "مصادر مرجعية وأسعار تاريخية محفوظة",
+              ...translatedMessage(
+                "reference_sources_and_immutable_historical_ra_2f0b07f1da",
+              ),
             )}
           </strong>
           <p>
             {text(
-              "此处规则保存在本浏览器，仅用于演示模拟，不发布到服务器计费。分组管理和下方服务器配置历史使用独立的真实接口；厂商官方参考价也单独维护。",
-              "Rules here are stored in this browser for Demo simulations and are not published to server billing. Group management and the server configuration history below use separate real APIs; official provider references are managed separately.",
-              "تُحفظ هذه القواعد في المتصفح للمحاكاة التجريبية ولا تُنشر لفوترة الخادم. تستخدم إدارة المجموعات وسجل إعدادات الخادم أدناه واجهات فعلية مستقلة، وتُدار المراجع الرسمية منفصلة.",
+              ...translatedMessage(
+                "rules_here_are_stored_in_this_browser_for_dem_a22a527a5b",
+              ),
             )}
           </p>
         </div>
@@ -535,9 +523,9 @@ export function ModelPricingAdmin({
       {conflict && dirty && (
         <div className="pricing-notice settings-error" role="alert">
           {text(
-            "配置已有新版本。当前草稿仍保留，需放弃后重新修改，避免覆盖其他已发布设置。",
-            "A newer configuration exists. Discard this retained draft before editing to avoid overwriting published settings.",
-            "يوجد إصدار أحدث. تجاهل المسودة المحفوظة قبل التعديل لتجنب الكتابة فوق الإعدادات المنشورة.",
+            ...translatedMessage(
+              "a_newer_configuration_exists_discard_this_ret_14465c3a98",
+            ),
           )}
         </div>
       )}
@@ -546,9 +534,7 @@ export function ModelPricingAdmin({
           hidden={embedded}
           className="pricing-model-tabs"
           aria-label={text(
-            "选择计费模型",
-            "Choose billing model",
-            "اختر نموذج الفوترة",
+            ...translatedMessage("choose_billing_model_32050d8ded"),
           )}
         >
           {catalogModels.map((item) => (
@@ -572,15 +558,19 @@ export function ModelPricingAdmin({
             <code>{model.id}</code>
           </div>
           <span>
-            {text("演示参考价格", "Demo reference price", "سعر مرجعي تجريبي")} ·{" "}
+            {text(...translatedMessage("demo_reference_price_4724362246"))} ·{" "}
             {modeName(rule, text)}
           </span>
         </div>
         <div className="settings-fields settings-source-fields">
           <label>
-            <span>{text("基准来源", "Reference source", "مصدر المرجع")}</span>
+            <span>
+              {text(...translatedMessage("reference_source_e502ebb6d4"))}
+            </span>
             <select
-              aria-label={text("基准来源", "Reference source", "مصدر المرجع")}
+              aria-label={text(
+                ...translatedMessage("reference_source_e502ebb6d4"),
+              )}
               value={entry.source}
               disabled={!canEdit}
               onChange={(event) =>
@@ -589,27 +579,21 @@ export function ModelPricingAdmin({
             >
               <option value="sample">
                 {text(
-                  "演示样例 · 未核实",
-                  "Demo sample · unverified",
-                  "عينة تجريبية · غير موثقة",
+                  ...translatedMessage("demo_sample_unverified_e93da2d57c"),
                 )}
               </option>
               <option value="manual-official">
                 {text(
-                  "参考官方报价的基准 · 人工录入",
-                  "Base informed by official rates · manual",
-                  "أساس يسترشد بالسعر الرسمي · يدوي",
+                  ...translatedMessage(
+                    "base_informed_by_official_rates_manual_9768efeebb",
+                  ),
                 )}
               </option>
             </select>
           </label>
           <label>
             <span>
-              {text(
-                "官方来源地址",
-                "Official source URL",
-                "رابط المصدر الرسمي",
-              )}
+              {text(...translatedMessage("official_source_url_d26ccde037"))}
             </span>
             <input
               type="url"
@@ -620,7 +604,9 @@ export function ModelPricingAdmin({
             />
           </label>
           <label>
-            <span>{text("核验日期", "Verification date", "تاريخ التحقق")}</span>
+            <span>
+              {text(...translatedMessage("verification_date_e695c40f81"))}
+            </span>
             <input
               type="date"
               max={new Date().toISOString().slice(0, 10)}
@@ -634,9 +620,7 @@ export function ModelPricingAdmin({
           <label>
             <span>
               {text(
-                "来源价格生效日期",
-                "Reference effective date",
-                "تاريخ سريان المرجع",
+                ...translatedMessage("reference_effective_date_3d446faf1a"),
               )}
             </span>
             <input
@@ -652,9 +636,9 @@ export function ModelPricingAdmin({
         </div>
         <p className="pricing-help settings-version">
           {text(
-            "计价版本（发布自动生成）：",
-            "Pricing version (generated on publish): ",
-            "إصدار التسعير (ينشأ عند النشر): ",
+            ...translatedMessage(
+              "pricing_version_generated_on_publish_9478aa7e57",
+            ),
           )}
           <code>{entry.version}</code>
         </p>
@@ -665,20 +649,22 @@ export function ModelPricingAdmin({
         )}
         <p className="pricing-help">
           {text(
-            "适用日期记录供应商报价口径，发布后立即用于新演示调用；不代表定时发布。美元是本演示的统一结算币种。",
-            "The effective date documents the reference; publishing applies immediately to new demo calls, not on a schedule. USD is this demo’s settlement currency.",
-            "يوثق التاريخ سريان المرجع؛ يطبق النشر فورا على الطلبات الجديدة وليس في موعد مجدول. الدولار عملة التسوية التجريبية.",
+            ...translatedMessage(
+              "the_effective_date_documents_the_reference_pu_d878934b48",
+            ),
           )}
         </p>
         <div className="settings-editor-grid">
           <div>
             <div className="settings-block-heading">
-              <h3>{text("计费方式", "Billing method", "طريقة الفوترة")}</h3>
-              <span>{text("基础规则", "Base rule", "القاعدة الأساسية")}</span>
+              <h3>{text(...translatedMessage("billing_method_cfacfdecf2"))}</h3>
+              <span>{text(...translatedMessage("base_rule_768c2b7470"))}</span>
             </div>
             <div
               className="settings-segment"
-              aria-label={text("计费方式", "Billing method", "طريقة الفوترة")}
+              aria-label={text(
+                ...translatedMessage("billing_method_cfacfdecf2"),
+              )}
             >
               {(["tokens", "unit", "expression"] as const).map((mode) => (
                 <button
@@ -715,13 +701,13 @@ export function ModelPricingAdmin({
                   }}
                 >
                   {mode === "tokens"
-                    ? text("按词元", "Tokens", "الرموز")
+                    ? text(...translatedMessage("tokens_8ded6f9478"))
                     : mode === "unit"
-                      ? text("按单位", "Units", "الوحدات")
+                      ? text(...translatedMessage("units_11b53c4b95"))
                       : text(
-                          "表达式 · 高级",
-                          "Expression · advanced",
-                          "تعبير · متقدم",
+                          ...translatedMessage(
+                            "expression_advanced_4f8914ede0",
+                          ),
                         )}
                 </button>
               ))}
@@ -742,7 +728,11 @@ export function ModelPricingAdmin({
                             value={entry.pricing[field] ?? ""}
                             placeholder={
                               index > 1
-                                ? text("未配置", "Not configured", "غير محدد")
+                                ? text(
+                                    ...translatedMessage(
+                                      "not_configured_e0aac6ee6f",
+                                    ),
+                                  )
                                 : "0.00"
                             }
                             aria-invalid={
@@ -769,9 +759,9 @@ export function ModelPricingAdmin({
                 </div>
                 <p className="pricing-help">
                   {text(
-                    "单位：美元 / 百万词元。四类用量独立计费；0 表示免费，缓存留空表示未配置。支持最多 6 位小数。",
-                    "Unit: USD / million tokens. Buckets bill separately. Zero is free; empty cache rates are unconfigured. Up to 6 decimals.",
-                    "الوحدة: دولار لكل مليون رمز. كل فئة مستقلة. الصفر مجاني وأسعار الذاكرة الفارغة غير محددة. حتى 6 منازل عشرية.",
+                    ...translatedMessage(
+                      "unit_usd_million_tokens_buckets_bill_separate_39d5b7f6ac",
+                    ),
                   )}
                 </p>
               </>
@@ -781,13 +771,11 @@ export function ModelPricingAdmin({
                 <div className="settings-fields">
                   <label>
                     <span>
-                      {text("计量单位", "Metering unit", "وحدة القياس")}
+                      {text(...translatedMessage("metering_unit_a0d15bd3d2"))}
                     </span>
                     <select
                       aria-label={text(
-                        "计量单位",
-                        "Metering unit",
-                        "وحدة القياس",
+                        ...translatedMessage("metering_unit_a0d15bd3d2"),
                       )}
                       value={rule.unit}
                       disabled={!canEdit}
@@ -800,13 +788,13 @@ export function ModelPricingAdmin({
                       }
                     >
                       <option value="request">
-                        {text("次（请求）", "Request", "طلب")}
+                        {text(...translatedMessage("request_81434bae0d"))}
                       </option>
                       <option value="image">
-                        {text("张（图片）", "Image", "صورة")}
+                        {text(...translatedMessage("image_e45355d245"))}
                       </option>
                       <option value="second">
-                        {text("秒（时长）", "Second", "ثانية")}
+                        {text(...translatedMessage("second_2554d8a6ff"))}
                       </option>
                     </select>
                   </label>
@@ -815,20 +803,20 @@ export function ModelPricingAdmin({
                       <span>
                         {field === "priceUsd"
                           ? text(
-                              "每单位价格（美元）",
-                              "Price per unit (USD)",
-                              "سعر الوحدة بالدولار",
+                              ...translatedMessage(
+                                "price_per_unit_usd_531d9e583a",
+                              ),
                             )
                           : field === "minimum"
                             ? text(
-                                "最低计费数量",
-                                "Minimum billed quantity",
-                                "الحد الأدنى للكمية",
+                                ...translatedMessage(
+                                  "minimum_billed_quantity_3697a776cc",
+                                ),
                               )
                             : text(
-                                "向上取整步长",
-                                "Rounding increment",
-                                "خطوة التقريب للأعلى",
+                                ...translatedMessage(
+                                  "rounding_increment_48dac58947",
+                                ),
                               )}
                       </span>
                       <input
@@ -844,9 +832,9 @@ export function ModelPricingAdmin({
                 </div>
                 <p className="pricing-help">
                   {text(
-                    "按所选单位计价，不换算为百万词元。实际用量先与最低数量取较大值，再按步长向上取整。",
-                    "Bills the selected unit, not tokens. Apply the minimum quantity, then round up to the increment.",
-                    "تُحسب الوحدة المحددة لا الرموز. يطبق الحد الأدنى أولا ثم تقرب الكمية للأعلى بالخطوة.",
+                    ...translatedMessage(
+                      "bills_the_selected_unit_not_tokens_apply_the__7056463681",
+                    ),
                   )}
                 </p>
               </>
@@ -863,16 +851,16 @@ export function ModelPricingAdmin({
                 <label>
                   <span>
                     {text(
-                      "计费表达式（结果单位：美元）",
-                      "Billing expression (result: USD)",
-                      "تعبير الفوترة (الناتج بالدولار)",
+                      ...translatedMessage(
+                        "billing_expression_result_usd_bcbd9e5318",
+                      ),
                     )}
                   </span>
                   <textarea
                     aria-label={text(
-                      "计费表达式（结果单位：美元）",
-                      "Billing expression (result: USD)",
-                      "تعبير الفوترة (الناتج بالدولار)",
+                      ...translatedMessage(
+                        "billing_expression_result_usd_bcbd9e5318",
+                      ),
                     )}
                     dir="ltr"
                     rows={3}
@@ -886,17 +874,15 @@ export function ModelPricingAdmin({
                 </label>
                 <p className="pricing-help">
                   {text(
-                    "仅支持四则运算、括号、min（最小值）、max（最大值）、ceil（向上取整）。不执行脚本；除零、负费用、缺少变量均拒绝计费。",
-                    "Supports arithmetic, parentheses, min, max and ceil only. No scripts; division by zero, negative cost and missing variables are rejected.",
-                    "يدعم العمليات والأقواس وmin وmax وceil فقط. لا ينفذ نصوصا؛ ترفض القسمة على صفر والرسوم السالبة والمتغيرات الناقصة.",
+                    ...translatedMessage(
+                      "supports_arithmetic_parentheses_min_max_and_c_b462fdc941",
+                    ),
                   )}
                 </p>
                 <details className="settings-details">
                   <summary>
                     {text(
-                      "查看变量与单位",
-                      "Variables and units",
-                      "المتغيرات والوحدات",
+                      ...translatedMessage("variables_and_units_1e247ecede"),
                     )}
                     <ChevronDown size={16} />
                   </summary>
@@ -910,9 +896,9 @@ export function ModelPricingAdmin({
                   </div>
                   <p className="pricing-help">
                     {text(
-                      "表达式先产生基准费用，再由系统应用分时与所属服务分组规则；勿在表达式内重复叠加。",
-                      "The expression returns the base charge; time and service group rules are then applied by the system. Do not duplicate them in the formula.",
-                      "يعيد التعبير الرسوم الأساسية ثم يطبق النظام قواعد الوقت والمجموعة. لا تكررها داخل الصيغة.",
+                      ...translatedMessage(
+                        "the_expression_returns_the_base_charge_time_a_b453cbcfb7",
+                      ),
                     )}
                   </p>
                 </details>
@@ -928,23 +914,21 @@ export function ModelPricingAdmin({
             <div className="settings-block-heading">
               <h3>
                 <FlaskConical size={16} />
-                {text("报价试算", "Quote simulator", "محاكي التسعير")}
+                {text(...translatedMessage("quote_simulator_896d222d19"))}
               </h3>
               <span>
                 {dirty
-                  ? text("使用草稿", "Using draft", "باستخدام المسودة")
-                  : text("已发布规则", "Published rules", "القواعد المنشورة")}
+                  ? text(...translatedMessage("using_draft_2348a91d1a"))
+                  : text(...translatedMessage("published_rules_2e66826ec2"))}
               </span>
             </div>
             <label>
               <span>
-                {text("用于试算的密钥", "Key for quotation", "مفتاح الحساب")}
+                {text(...translatedMessage("key_for_quotation_87eb68843d"))}
               </span>
               <select
                 aria-label={text(
-                  "用于试算的密钥",
-                  "Key for quotation",
-                  "مفتاح الحساب",
+                  ...translatedMessage("key_for_quotation_87eb68843d"),
                 )}
                 value={key?.id ?? ""}
                 onChange={(event) => {
@@ -954,9 +938,7 @@ export function ModelPricingAdmin({
               >
                 <option value="" disabled>
                   {text(
-                    "请选择可用密钥",
-                    "Choose an eligible key",
-                    "اختر مفتاحا متاحا",
+                    ...translatedMessage("choose_an_eligible_key_7ade59c1c2"),
                   )}
                 </option>
                 {eligibleKeys.map((item) => (
@@ -969,12 +951,12 @@ export function ModelPricingAdmin({
             {!key && (
               <p className="pricing-help">
                 {text(
-                  "当前只试算模型基准费用，不含分组倍率、不能入账。需要结算验证时，请先映射投放资源并创建兼容密钥。",
-                  "No enabled key is authorized for this model. Map and place a resource in Channels or adjust key permissions.",
-                  "لا يوجد مفتاح نشط مخول لهذا النموذج. أتحه في المجموعات أو عدل صلاحية المفتاح.",
+                  ...translatedMessage(
+                    "no_enabled_key_is_authorized_for_this_model_m_ee7da4c8e0",
+                  ),
                 )}{" "}
                 <Link to="/console/keys">
-                  {text("管理密钥", "Manage keys", "إدارة المفاتيح")}
+                  {text(...translatedMessage("manage_keys_2620f30141"))}
                 </Link>
               </p>
             )}
@@ -1009,9 +991,9 @@ export function ModelPricingAdmin({
             <label>
               <span>
                 {text(
-                  "计价模拟时间（本地时区）",
-                  "Pricing simulation time (local timezone)",
-                  "وقت محاكاة التسعير (التوقيت المحلي)",
+                  ...translatedMessage(
+                    "pricing_simulation_time_local_timezone_abd01ea568",
+                  ),
                 )}
               </span>
               <input
@@ -1037,14 +1019,15 @@ export function ModelPricingAdmin({
               <small>
                 {quote.quoted.snapshot.matchedWindow
                   ? text(
-                      `命中时段：${quote.quoted.snapshot.matchedWindow.label}（${quote.quoted.snapshot.timeMultiplier}×）`,
-                      `Time window: ${quote.quoted.snapshot.matchedWindow.label} (${quote.quoted.snapshot.timeMultiplier}×)`,
-                      `الفترة: ${quote.quoted.snapshot.matchedWindow.label} (${quote.quoted.snapshot.timeMultiplier}×)`,
+                      ...translatedMessage("time_window_5f0e372ee8", {
+                        p0: quote.quoted.snapshot.matchedWindow.label,
+                        p1: quote.quoted.snapshot.timeMultiplier,
+                      }),
                     )
                   : text(
-                      "未命中分时时段，使用基础规则。",
-                      "No time window matched; base rules apply.",
-                      "لا توجد فترة مطابقة؛ تطبق القواعد الأساسية.",
+                      ...translatedMessage(
+                        "no_time_window_matched_base_rules_apply_379920c018",
+                      ),
                     )}
               </small>
             )}
@@ -1055,9 +1038,10 @@ export function ModelPricingAdmin({
             )}
             <small>
               {text(
-                `当前演示余额 ${formatMoney(balance, "balance")}。试算不会扣款；提交后的记录时间和额度周期仍按当前时间。`,
-                `Demo balance ${formatMoney(balance, "balance")}. Quoting does not charge. Submitted records and quota periods use the current real time.`,
-                `الرصيد التجريبي ${formatMoney(balance, "balance")}. الحساب لا يخصم الرسوم. وقت السجلات ودورات الحصة هو الوقت الحالي.`,
+                ...translatedMessage(
+                  "demo_balance_quoting_does_not_charge_submitte_8c556a40e3",
+                  { p0: formatMoney(balance, "balance") },
+                ),
               )}
             </small>
             <Button
@@ -1073,17 +1057,15 @@ export function ModelPricingAdmin({
               onClick={submitUsage}
             >
               {text(
-                "提交模拟用量并计费",
-                "Submit simulated usage & bill",
-                "إرسال استخدام محاكى واحتساب الرسوم",
+                ...translatedMessage("submit_simulated_usage_bill_9644ff1933"),
               )}
             </Button>
             {dirty && (
               <small>
                 {text(
-                  "先发布规则，再按已发布价格提交用量。",
-                  "Publish first to submit usage at the published price.",
-                  "انشر أولا لإرسال الاستخدام بالسعر المنشور.",
+                  ...translatedMessage(
+                    "publish_first_to_submit_usage_at_the_publishe_3b19d1b25c",
+                  ),
                 )}
               </small>
             )}
@@ -1096,19 +1078,15 @@ export function ModelPricingAdmin({
                 <Link
                   to={`/console/requests?trace=${encodeURIComponent(result.trace)}`}
                 >
-                  {text(
-                    "查看关联调用明细",
-                    "View linked request",
-                    "عرض تفاصيل الطلب المرتبط",
-                  )}
+                  {text(...translatedMessage("view_linked_request_c351c5b092"))}
                 </Link>
               </div>
             )}
             <small>
               {text(
-                "此操作只提交人工输入的模拟用量并联动演示余额，不调用图片、视频或其他真实服务。",
-                "This bills manually entered simulated usage against the demo balance. No image, video or other real service is called.",
-                "يحتسب الاستخدام المدخل يدويا على الرصيد التجريبي. لا يستدعي خدمات صور أو فيديو أو خدمات حقيقية.",
+                ...translatedMessage(
+                  "this_bills_manually_entered_simulated_usage_a_c6843ac01d",
+                ),
               )}
             </small>
           </aside>
@@ -1117,7 +1095,7 @@ export function ModelPricingAdmin({
           <div className="settings-block-heading">
             <h3>
               <Clock3 size={16} />
-              {text("分时计价", "Time-based pricing", "تسعير حسب الوقت")}
+              {text(...translatedMessage("time_based_pricing_f0c570de16"))}
             </h3>
             <Button
               size="small"
@@ -1130,9 +1108,7 @@ export function ModelPricingAdmin({
                     {
                       id: crypto.randomUUID(),
                       label: text(
-                        "低峰时段",
-                        "Off-peak window",
-                        "وقت خارج الذروة",
+                        ...translatedMessage("off_peak_window_f09dbb30f4"),
                       ),
                       timezone: "Asia/Shanghai",
                       days: [0, 1, 2, 3, 4, 5, 6],
@@ -1145,22 +1121,22 @@ export function ModelPricingAdmin({
               }
             >
               <Plus size={15} />
-              {text("添加时段", "Add time window", "إضافة فترة")}
+              {text(...translatedMessage("add_time_window_95291dd8b0"))}
             </Button>
           </div>
           <p className="pricing-help">
             {text(
-              "分时规则可以叠加到任一种计费方式。未命中时使用原价；时间窗必须不重叠。跨午夜时段归属于开始日，结束时刻不包含在内。",
-              "Time rules apply to any billing mode. Outside windows the base rate applies. Windows must not overlap; overnight windows belong to their start day and exclude the end time.",
-              "تطبق قواعد الوقت على كل الطرق. خارج الفترات يطبق السعر الأساسي. لا تتداخل الفترات؛ تنسب العابرة لمنتصف الليل ليوم البدء ولا تشمل النهاية.",
+              ...translatedMessage(
+                "time_rules_apply_to_any_billing_mode_outside__1be868205a",
+              ),
             )}
           </p>
           {windows.length === 0 && (
             <div className="settings-empty">
               {text(
-                "未设置分时规则 · 全天使用同一基准",
-                "No time rules · same base price all day",
-                "لا توجد قواعد وقت · سعر أساسي موحد طوال اليوم",
+                ...translatedMessage(
+                  "no_time_rules_same_base_price_all_day_e1c50d3289",
+                ),
               )}
             </div>
           )}
@@ -1168,9 +1144,11 @@ export function ModelPricingAdmin({
             <div key={window.id} className="settings-window">
               <div className="settings-fields settings-window-fields">
                 <label>
-                  <span>{text("时段名称", "Window name", "اسم الفترة")}</span>
+                  <span>
+                    {text(...translatedMessage("window_name_54b8c619aa"))}
+                  </span>
                   <input
-                    aria-label={`${text("时段名称", "Window name", "اسم الفترة")} ${index + 1}`}
+                    aria-label={`${text(...translatedMessage("window_name_54b8c619aa"))} ${index + 1}`}
                     value={window.label}
                     disabled={!canEdit}
                     onChange={(event) =>
@@ -1179,9 +1157,13 @@ export function ModelPricingAdmin({
                   />
                 </label>
                 <label>
-                  <span>{text("时区", "Timezone", "المنطقة الزمنية")}</span>
+                  <span>
+                    {text(...translatedMessage("timezone_589797f8d4"))}
+                  </span>
                   <select
-                    aria-label={text("时区", "Timezone", "المنطقة الزمنية")}
+                    aria-label={text(
+                      ...translatedMessage("timezone_589797f8d4"),
+                    )}
                     value={window.timezone}
                     disabled={!canEdit}
                     onChange={(event) =>
@@ -1202,7 +1184,9 @@ export function ModelPricingAdmin({
                   </select>
                 </label>
                 <label>
-                  <span>{text("开始时刻", "Start time", "وقت البدء")}</span>
+                  <span>
+                    {text(...translatedMessage("start_time_74b416f5bd"))}
+                  </span>
                   <input
                     type="time"
                     value={window.start}
@@ -1213,7 +1197,9 @@ export function ModelPricingAdmin({
                   />
                 </label>
                 <label>
-                  <span>{text("结束时刻", "End time", "وقت الانتهاء")}</span>
+                  <span>
+                    {text(...translatedMessage("end_time_72a4d845fc"))}
+                  </span>
                   <input
                     type="time"
                     value={window.end}
@@ -1225,7 +1211,7 @@ export function ModelPricingAdmin({
                 </label>
                 <label>
                   <span>
-                    {text("时段系数", "Time coefficient", "معامل الفترة")}
+                    {text(...translatedMessage("time_coefficient_c698caf1bc"))}
                   </span>
                   <input
                     inputMode="decimal"
@@ -1295,9 +1281,7 @@ export function ModelPricingAdmin({
                 <div
                   className="settings-weekdays"
                   aria-label={text(
-                    "适用星期",
-                    "Applicable days",
-                    "الأيام المعنية",
+                    ...translatedMessage("applicable_days_5f47296f3c"),
                   )}
                 >
                   {[1, 2, 3, 4, 5, 6, 0].map((day) => (
@@ -1347,7 +1331,7 @@ export function ModelPricingAdmin({
                   }
                 >
                   <Trash2 size={14} />
-                  {text("删除时段", "Remove window", "حذف الفترة")}
+                  {text(...translatedMessage("remove_window_12fc906094"))}
                 </Button>
               </div>
             </div>
@@ -1365,43 +1349,42 @@ export function ModelPricingAdmin({
           <strong>
             {dirty
               ? text(
-                  `${changedModels.length} 个模型有待发布修改`,
-                  `${changedModels.length} models have unpublished changes`,
-                  `${changedModels.length} نماذج بتغييرات غير منشورة`,
+                  ...translatedMessage(
+                    "models_have_unpublished_changes_15b71f1fb5",
+                    { p0: changedModels.length },
+                  ),
                 )
               : text(
-                  "浏览器演示定价已保存",
-                  "Browser Demo pricing saved",
-                  "حُفظ التسعير التجريبي في المتصفح",
+                  ...translatedMessage("browser_demo_pricing_saved_6b5d9bd299"),
                 )}
           </strong>
           <small>
             {text(
-              "切换设置模块可恢复草稿；发布前检查影响。",
-              "Drafts survive switching settings modules; review impact before publishing.",
-              "تبقى المسودات عند تبديل وحدات الإعداد؛ راجع الأثر قبل النشر.",
+              ...translatedMessage(
+                "drafts_survive_switching_settings_modules_rev_1f0a2f2c1e",
+              ),
             )}
           </small>
           {!valid && (
             <small className="settings-error">
               {text(
-                "有无效规则或来源信息，请修正后发布。",
-                "Correct invalid rules or reference metadata before publishing.",
-                "صحح القواعد أو بيانات المصدر غير الصالحة قبل النشر.",
+                ...translatedMessage(
+                  "correct_invalid_rules_or_reference_metadata_b_ea08c09882",
+                ),
               )}
             </small>
           )}
         </div>
         <div>
           <Button disabled={!dirty} onClick={discard}>
-            {text("放弃修改", "Discard changes", "تجاهل التغييرات")}
+            {text(...translatedMessage("discard_changes_042b3275d7"))}
           </Button>
           <Button
             variant="primary"
             disabled={!canEdit || !dirty || !valid || conflict}
             onClick={() => setReviewOpen(true)}
           >
-            {text("检查并发布", "Review & publish", "مراجعة ونشر")}
+            {text(...translatedMessage("review_publish_cab25aec1d"))}
           </Button>
         </div>
       </div>
@@ -1423,9 +1406,9 @@ export function ModelPricingAdmin({
             <div>
               <strong>
                 {text(
-                  "服务器配置版本（独立于演示）",
-                  "Server config version (separate from Demo)",
-                  "إصدار إعدادات الخادم (مستقل عن العرض)",
+                  ...translatedMessage(
+                    "server_config_version_separate_from_demo_8bb72912c1",
+                  ),
                 )}
               </strong>
               {optionStatusQuery.data && (
@@ -1435,14 +1418,14 @@ export function ModelPricingAdmin({
                   v{optionStatusQuery.data.database_version}
                   {optionStatusQuery.data.in_sync
                     ? text(
-                        " · 响应进程已加载",
-                        " · loaded by response process",
-                        " · محمّل في العملية المستجيبة",
+                        ...translatedMessage(
+                          "loaded_by_response_process_7063fd13c7",
+                        ),
                       )
                     : text(
-                        " · 响应进程版本滞后",
-                        " · response process behind",
-                        " · العملية المستجيبة متأخرة",
+                        ...translatedMessage(
+                          "response_process_behind_1ffc8bd8ab",
+                        ),
                       )}
                 </span>
               )}
@@ -1455,11 +1438,7 @@ export function ModelPricingAdmin({
               }}
             >
               <Clock3 size={15} style={{ marginInlineEnd: 4 }} />
-              {text(
-                "服务器历史与回滚",
-                "Server history & rollback",
-                "سجل الخادم والتراجع",
-              )}
+              {text(...translatedMessage("server_history_rollback_c1f73e6cfe"))}
             </Button>
           </div>
           {rollbackNotice && (
@@ -1477,21 +1456,19 @@ export function ModelPricingAdmin({
         open={reviewOpen}
         onOpenChange={setReviewOpen}
         title={text(
-          "保存浏览器演示定价",
-          "Save browser Demo pricing",
-          "حفظ التسعير التجريبي في المتصفح",
+          ...translatedMessage("save_browser_demo_pricing_d38e01e044"),
         )}
         description={text(
-          "仅影响此浏览器的后续模拟。不会更新服务器模型倍率、分组或真实密钥权限。",
-          "Affects future simulations in this browser. Server model ratios, groups and actual key permissions are unchanged.",
-          "يؤثر في المحاكاة القادمة بهذا المتصفح. لا تتغير معاملات نماذج الخادم أو المجموعات أو صلاحيات المفاتيح الفعلية.",
+          ...translatedMessage(
+            "affects_future_simulations_in_this_browser_se_01a390bdca",
+          ),
         )}
         size="wide"
         preventOutsideClose
         footer={
           <>
             <Button onClick={() => setReviewOpen(false)}>
-              {text("继续编辑", "Continue editing", "متابعة التعديل")}
+              {text(...translatedMessage("continue_editing_779481a437"))}
             </Button>
             <Button
               variant="primary"
@@ -1499,7 +1476,7 @@ export function ModelPricingAdmin({
               onClick={publish}
             >
               <Check size={16} />
-              {text("确认发布", "Publish now", "تأكيد النشر")}
+              {text(...translatedMessage("publish_now_52d9a772d6"))}
             </Button>
           </>
         }
@@ -1507,9 +1484,10 @@ export function ModelPricingAdmin({
         <div className="settings-review-summary">
           <strong>
             {text(
-              `${changedModels.length} 个模型 · ${affectedKeys.length} 把启用密钥受影响`,
-              `${changedModels.length} models · ${affectedKeys.length} active keys affected`,
-              `${changedModels.length} نماذج · ${affectedKeys.length} مفاتيح نشطة متأثرة`,
+              ...translatedMessage("models_active_keys_affected_549427e7a7", {
+                p0: changedModels.length,
+                p1: affectedKeys.length,
+              }),
             )}
           </strong>
           <p>
@@ -1522,30 +1500,31 @@ export function ModelPricingAdmin({
           </p>
           <p>
             {text(
-              `${billingChangedModels.length} 个模型的计费规则变化。官方参考价只影响广场展示，不参与费用计算。`,
-              `${billingChangedModels.length} models have billing changes. Official references affect catalog display only, never charges.`,
-              `${billingChangedModels.length} نماذج بتغييرات فوترة. المراجع الرسمية للعرض فقط ولا تحتسب في الرسوم.`,
+              ...translatedMessage(
+                "models_have_billing_changes_official_referenc_9906cc7dc7",
+                { p0: billingChangedModels.length },
+              ),
             )}
           </p>
         </div>
         <p className="pricing-help">
           {text(
-            "统一示例用量：1,000 输入词元、500 输出词元、无缓存、1 张图、5 秒、1 次请求。仅取规则实际使用的变量，计费时间沿用试算面板。",
-            "Example usage: 1,000 input, 500 output tokens, no cache, 1 image, 5 seconds, 1 request. Only relevant variables are used; time follows the simulator.",
-            "الاستخدام المثال: 1000 إدخال و500 إخراج بلا ذاكرة وصورة واحدة و5 ثوان وطلب واحد. تستخدم المتغيرات المعنية فقط ووقت المحاكي.",
+            ...translatedMessage(
+              "example_usage_1_000_input_500_output_tokens_n_141e20030c",
+            ),
           )}
         </p>
         <div className="pricing-table-scroll">
           <table>
             <thead>
               <tr>
-                <th>{text("模型", "Model", "النموذج")}</th>
-                <th>{text("受影响密钥", "Affected key", "المفتاح المتأثر")}</th>
+                <th>{text(...translatedMessage("model_9c2e5b5065"))}</th>
+                <th>{text(...translatedMessage("affected_key_8b626ab6e6"))}</th>
                 <th>
                   {text(
-                    "示例费用：当前 → 发布后",
-                    "Example charge: current → published",
-                    "التكلفة: الحالية ← المنشورة",
+                    ...translatedMessage(
+                      "example_charge_current_published_3126739753",
+                    ),
                   )}
                 </th>
               </tr>
@@ -1574,9 +1553,9 @@ export function ModelPricingAdmin({
                 <tr>
                   <td colSpan={3}>
                     {text(
-                      "暂无启用密钥受影响，后续获授权的请求仍使用新规则。",
-                      "No active keys affected; future authorized requests will use the new rules.",
-                      "لا تتأثر مفاتيح نشطة؛ تستخدم الطلبات المخولة القادمة القواعد الجديدة.",
+                      ...translatedMessage(
+                        "no_active_keys_affected_future_authorized_req_d748fab9e2",
+                      ),
                     )}
                   </td>
                 </tr>
@@ -1592,31 +1571,29 @@ export function ModelPricingAdmin({
         open={historyOpen}
         onOpenChange={setHistoryOpen}
         title={text(
-          "服务器配置变更历史",
-          "Server config change history",
-          "سجل تغييرات إعدادات الخادم",
+          ...translatedMessage("server_config_change_history_95c88532a9"),
         )}
         description={text(
-          "此处操作真实服务器配置，与浏览器演示定价独立。回滚恢复所选变更前的配置值，并校验当前服务器版本。",
-          "These actions change real server configuration independently of browser Demo pricing. Rollback restores the selected pre-change value and checks the current server version.",
-          "تغيّر هذه الإجراءات إعدادات الخادم الفعلية مستقلة عن التسعير التجريبي. يستعيد التراجع القيمة السابقة المحددة ويتحقق من إصدار الخادم الحالي.",
+          ...translatedMessage(
+            "these_actions_change_real_server_configuratio_fd6fc2d527",
+          ),
         )}
         size="wide"
       >
         {optionHistoryQuery.isLoading ? (
           <p style={{ color: "var(--muted)" }}>
-            {text("加载中…", "Loading…", "جارٍ التحميل…")}
+            {text(...translatedMessage("loading_4c20385375"))}
           </p>
         ) : (
           <table className="pricing-table-scroll">
             <thead>
               <tr>
-                <th>{text("版本", "Version", "الإصدار")}</th>
-                <th>{text("键", "Key", "المفتاح")}</th>
-                <th>{text("旧值", "Old value", "القيمة القديمة")}</th>
-                <th>{text("新值", "New value", "القيمة الجديدة")}</th>
-                <th>{text("时间", "Time", "الوقت")}</th>
-                <th>{text("操作", "Action", "الإجراء")}</th>
+                <th>{text(...translatedMessage("version_d07f8f123e"))}</th>
+                <th>{text(...translatedMessage("key_ed5ae126a5"))}</th>
+                <th>{text(...translatedMessage("old_value_bce1550409"))}</th>
+                <th>{text(...translatedMessage("new_value_815ed9e198"))}</th>
+                <th>{text(...translatedMessage("time_d70a9315f6"))}</th>
+                <th>{text(...translatedMessage("action_2a8e78b55a"))}</th>
               </tr>
             </thead>
             <tbody>
@@ -1687,9 +1664,9 @@ export function ModelPricingAdmin({
                             onSuccess: () =>
                               setRollbackNotice(
                                 text(
-                                  "已回滚到此版本。",
-                                  "Rolled back.",
-                                  "تم التراجع.",
+                                  ...translatedMessage(
+                                    "rolled_back_eae267c75c",
+                                  ),
                                 ),
                               ),
                             onError: (err) =>
@@ -1697,16 +1674,16 @@ export function ModelPricingAdmin({
                                 err instanceof ApiError
                                   ? err.message
                                   : text(
-                                      "回滚失败",
-                                      "Rollback failed",
-                                      "فشل التراجع",
+                                      ...translatedMessage(
+                                        "rollback_failed_975389f448",
+                                      ),
                                     ),
                               ),
                           },
                         );
                       }}
                     >
-                      {text("回滚到此版本", "Rollback", "تراجع")}
+                      {text(...translatedMessage("rollback_08f071d9f7"))}
                     </Button>
                   </td>
                 </tr>
@@ -1722,7 +1699,7 @@ export function ModelPricingAdmin({
                         color: "var(--muted)",
                       }}
                     >
-                      {text("暂无变更记录", "No changes", "لا تغييرات")}
+                      {text(...translatedMessage("no_changes_d1b732d4c2"))}
                     </td>
                   </tr>
                 )}

@@ -7,6 +7,7 @@ package router
 import (
 	"net/http"
 
+	"starhub/common"
 	"starhub/controller"
 	"starhub/middleware"
 	"starhub/relay"
@@ -27,8 +28,22 @@ import (
 // retries with failover).
 func New() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/localization", controller.GetLocalizationPolicy)
+	mux.Handle("PUT /api/user/language", middleware.UserAuth(http.HandlerFunc(controller.PutAccountLanguage)))
+	mux.Handle("PUT /api/admin/auth/language", middleware.StaffAuth(http.HandlerFunc(controller.PutAccountLanguage)))
+	// PRD exclusions remain unavailable to every identity, including Root.
+	retiredFeature := func(w http.ResponseWriter, r *http.Request) {
+		common.ApiError(w, http.StatusGone, "This feature is not available in this product")
+	}
+	for _, path := range []string{"/api/task-plugin", "/api/task-plugin/", "/api/redemption", "/api/redemption/", "/api/user/redeem", "/api/user/redeem/{$}"} {
+		for _, method := range []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"} {
+			mux.HandleFunc(method+" "+path, retiredFeature)
+		}
+	}
 	mux.Handle("GET /api/admin/reconciliation", middleware.AdminAuth(http.HandlerFunc(controller.AdminReconciliation)))
 	mux.Handle("POST /api/admin/reconciliation", middleware.AdminAuth(http.HandlerFunc(controller.AdminReconciliation)))
+	mux.Handle("GET /api/admin/reconciliation/statements", middleware.AdminAuth(http.HandlerFunc(controller.AdminPaymentStatements)))
+	mux.Handle("POST /api/admin/reconciliation/statements", middleware.AdminAuth(http.HandlerFunc(controller.AdminPaymentStatements)))
 	mux.Handle("GET /api/admin/customers", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerList)))
 	mux.Handle("GET /api/admin/customers/{id}", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerDetail)))
 	mux.Handle("GET /api/admin/customers/{id}/activity", middleware.AdminAuth(http.HandlerFunc(controller.AdminCustomerActivity)))
@@ -62,8 +77,14 @@ func New() http.Handler {
 	mux.Handle("POST /api/admin/customers/{id}/keys/{keyid}/disable", middleware.AdminAuth(http.HandlerFunc(controller.StaffDisableKey)))
 	mux.Handle("POST /api/admin/customers/{id}/adjustments", middleware.AdminAuth(http.HandlerFunc(controller.StaffAdjustBalance)))
 	mux.Handle("GET /api/admin/resource-sync", middleware.AdminAuth(http.HandlerFunc(controller.StaffResourceSyncStatus)))
+	mux.Handle("GET /api/admin/resource-instances", middleware.AdminAuth(http.HandlerFunc(controller.StaffResourceInstances)))
+	mux.Handle("GET /api/admin/resource-monitoring", middleware.AdminAuth(http.HandlerFunc(controller.StaffResourceMonitoring)))
 	mux.Handle("POST /api/admin/resource-sync", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.StaffForceResourceSync))))
 	mux.Handle("GET /api/admin/system", middleware.AdminAuth(http.HandlerFunc(controller.StaffSystemInfo)))
+	mux.Handle("GET /api/admin/announcements", middleware.AdminAuth(http.HandlerFunc(controller.GetServiceAnnouncements)))
+	mux.Handle("POST /api/admin/announcements", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.PutServiceAnnouncement))))
+	mux.Handle("PUT /api/admin/announcements/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.PutServiceAnnouncement))))
+	mux.HandleFunc("GET /api/status/announcements", controller.GetPublishedAnnouncements)
 
 	mux.HandleFunc("POST /api/user/login", controller.Login)
 	mux.HandleFunc("POST /api/user/register", controller.Register)
@@ -88,11 +109,6 @@ func New() http.Handler {
 	mux.Handle("PUT /api/user/{id}/finance-role", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.SetUserFinanceRole))))
 	mux.Handle("GET /api/finance/summary", middleware.FinanceAuth(http.HandlerFunc(controller.GetFinanceSummary)))
 	mux.Handle("PUT /api/user/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateUser))))
-
-	mux.Handle("GET /api/task-plugin", middleware.AdminAuth(http.HandlerFunc(controller.ListTaskPlugins)))
-	mux.Handle("POST /api/task-plugin", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UploadTaskPlugin))))
-	mux.Handle("PUT /api/task-plugin/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.SetTaskPluginEnabled))))
-	mux.Handle("POST /api/task-plugin/{id}/test", middleware.AdminAuth(http.HandlerFunc(controller.TestTaskPlugin)))
 
 	mux.Handle("POST /api/channel", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))
 	mux.Handle("POST /api/channel/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))
@@ -184,15 +200,6 @@ func New() http.Handler {
 	mux.Handle("GET /api/plaza/meta/configuration", middleware.AdminAuth(http.HandlerFunc(controller.GetModelMetadataCatalog)))
 	mux.Handle("PUT /api/plaza/meta", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpsertModelMeta))))
 	mux.Handle("DELETE /api/plaza/meta/{model...}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteModelMeta))))
-
-	mux.Handle("POST /api/redemption", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateRedemption))))
-	mux.Handle("POST /api/redemption/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateRedemption))))
-	mux.Handle("GET /api/redemption", middleware.AdminAuth(http.HandlerFunc(controller.ListRedemptions)))
-	mux.Handle("GET /api/redemption/", middleware.AdminAuth(http.HandlerFunc(controller.ListRedemptions)))
-	mux.Handle("DELETE /api/redemption/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteRedemption))))
-
-	// User self-service: redeem a prepaid code.
-	mux.Handle("POST /api/user/redeem", middleware.UserAuth(http.HandlerFunc(controller.RedeemCode)))
 
 	// Wallet & billing: balance, ledger, recharge orders. All require an
 	// authenticated user; admins see all records, users see their own.

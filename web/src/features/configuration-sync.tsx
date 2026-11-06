@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -15,7 +17,7 @@ export function ConfigurationSync() {
   if (role !== ROLE_ADMIN && role !== ROLE_ROOT) return null;
   const data = query.error ? undefined : query.data;
   const date = (timestamp: number) =>
-    new Intl.DateTimeFormat(i18n.language, {
+    new Intl.DateTimeFormat(regionalLocale(i18n.language), {
       dateStyle: "short",
       timeStyle: "medium",
       timeZone: "UTC",
@@ -26,16 +28,14 @@ export function ConfigurationSync() {
         <div>
           <h2>
             {text(
-              "配置同步状态",
-              "Configuration synchronization",
-              "مزامنة الإعدادات",
+              ...translatedMessage("configuration_synchronization_b4b31c40e6"),
             )}
           </h2>
           <p>
             {text(
-              "重载操作作用于处理本次请求的进程；表格显示近期心跳上报。",
-              "Reload applies to the process serving this request. The table shows recent heartbeat reports.",
-              "تطبق إعادة التحميل على العملية التي تعالج الطلب. يعرض الجدول تقارير النبض الحديثة.",
+              ...translatedMessage(
+                "reload_applies_to_the_process_serving_this_re_3c0d4856a1",
+              ),
             )}
           </p>
         </div>
@@ -45,53 +45,51 @@ export function ConfigurationSync() {
             disabled={query.isFetching}
             onClick={() => void query.refetch()}
           >
-            {text("刷新状态", "Refresh status", "تحديث الحالة")}
+            {text(...translatedMessage("refresh_status_df30c1cf9e"))}
           </Button>
           <Button disabled={reload.isPending} onClick={() => reload.mutate()}>
             <RefreshCw size={15} />
             {reload.isPending
-              ? text("正在重载…", "Reloading…", "جارٍ إعادة التحميل…")
-              : text(
-                  "重载本进程配置",
-                  "Reload serving process",
-                  "إعادة تحميل العملية الحالية",
-                )}
+              ? text(...translatedMessage("reloading_9600c93ad7"))
+              : text(...translatedMessage("reload_serving_process_fe504ada26"))}
           </Button>
         </div>
       </header>
       {query.isLoading && (
         <p role="status">
           {text(
-            "正在读取配置状态…",
-            "Loading configuration status…",
-            "جارٍ تحميل حالة الإعدادات…",
+            ...translatedMessage("loading_configuration_status_109e14a0e7"),
           )}
         </p>
       )}
       {query.error && (
         <p role="alert">
           {text(
-            "无法读取配置状态，请稍后重试。",
-            "Configuration status is unavailable. Retry later.",
-            "حالة الإعدادات غير متاحة. حاول لاحقًا.",
+            ...translatedMessage(
+              "configuration_status_is_unavailable_retry_lat_3776a46719",
+            ),
           )}
         </p>
       )}
       {reload.error && (
         <p role="alert">
           {text(
-            "无法确认重载结果，请刷新状态核对；其他实例以各自上报为准。",
-            "The reload result could not be confirmed. Refresh status to check; other instances report independently.",
-            "تعذر تأكيد نتيجة إعادة التحميل. حدّث الحالة للتحقق؛ وتبلغ العمليات الأخرى بشكل مستقل.",
+            ...translatedMessage(
+              "the_reload_result_could_not_be_confirmed_refr_7b6e1876c2",
+            ),
           )}
         </p>
       )}
       {reload.data && !reload.error && (
         <p className="configuration-sync-notice" role="status">
           {text(
-            `上次重载响应：进程加载版本 v${reload.data.loaded_version}，数据库版本 v${reload.data.database_version}。`,
-            `Last reload response: process loaded v${reload.data.loaded_version}; database v${reload.data.database_version}.`,
-            `آخر استجابة: حمّلت العملية v${reload.data.loaded_version}؛ وقاعدة البيانات v${reload.data.database_version}.`,
+            ...translatedMessage(
+              "last_reload_response_process_loaded_v_databas_43630b262e",
+              {
+                p0: reload.data.loaded_version,
+                p1: reload.data.database_version,
+              },
+            ),
           )}
         </p>
       )}
@@ -100,30 +98,30 @@ export function ConfigurationSync() {
           <dl className="configuration-sync-versions">
             <div>
               <dt>
-                {text("数据库版本", "Database version", "إصدار قاعدة البيانات")}
+                {text(...translatedMessage("database_version_7331c145d8"))}
               </dt>
               <dd>v{data.database_version}</dd>
             </div>
             <div>
               <dt>
                 {text(
-                  "当前响应进程的加载版本",
-                  "Serving process loaded version",
-                  "إصدار العملية المستجيبة",
+                  ...translatedMessage(
+                    "serving_process_loaded_version_2a52048ae9",
+                  ),
                 )}
               </dt>
               <dd>v{data.loaded_version}</dd>
               <small data-local-sync={data.in_sync ? "current" : "different"}>
                 {data.in_sync
                   ? text(
-                      "本响应进程与数据库一致",
-                      "Serving process matches database",
-                      "العملية مطابقة لقاعدة البيانات",
+                      ...translatedMessage(
+                        "serving_process_matches_database_b7fbb0d965",
+                      ),
                     )
                   : text(
-                      "本响应进程尚未加载当前数据库版本",
-                      "Serving process has a different version",
-                      "للعملية إصدار مختلف",
+                      ...translatedMessage(
+                        "serving_process_has_a_different_version_0fecefe6e9",
+                      ),
                     )}
               </small>
             </div>
@@ -131,9 +129,9 @@ export function ConfigurationSync() {
           {data.instances.length === 0 ? (
             <p className="configuration-sync-empty">
               {text(
-                "暂无活跃实例心跳，整体同步状态未知。",
-                "No active instance heartbeats; overall synchronization is unknown.",
-                "لا توجد نبضات نشطة؛ حالة المزامنة العامة غير معروفة.",
+                ...translatedMessage(
+                  "no_active_instance_heartbeats_overall_synchro_41913a1f2b",
+                ),
               )}
             </p>
           ) : (
@@ -142,30 +140,30 @@ export function ConfigurationSync() {
               tabIndex={0}
               role="region"
               aria-label={text(
-                "实例配置心跳",
-                "Instance configuration heartbeats",
-                "نبضات إعدادات العمليات",
+                ...translatedMessage(
+                  "instance_configuration_heartbeats_eb3112553a",
+                ),
               )}
             >
               <table>
                 <thead>
                   <tr>
-                    <th>{text("实例标识", "Instance ID", "معرّف العملية")}</th>
+                    <th>
+                      {text(...translatedMessage("instance_id_971e658e35"))}
+                    </th>
                     <th>
                       {text(
-                        "上报版本",
-                        "Reported version",
-                        "الإصدار المبلغ عنه",
+                        ...translatedMessage("reported_version_e6c2c4a3fb"),
                       )}
                     </th>
                     <th>
-                      {text("版本比较", "Version comparison", "مقارنة الإصدار")}
+                      {text(
+                        ...translatedMessage("version_comparison_4463c6e733"),
+                      )}
                     </th>
                     <th>
                       {text(
-                        "最后心跳（UTC）",
-                        "Last heartbeat (UTC)",
-                        "آخر نبضة (UTC)",
+                        ...translatedMessage("last_heartbeat_utc_ef8bf50fd2"),
                       )}
                     </th>
                   </tr>
@@ -186,14 +184,14 @@ export function ConfigurationSync() {
                       >
                         {instance.version === data.database_version
                           ? text(
-                              "与数据库一致",
-                              "Matches database",
-                              "مطابق لقاعدة البيانات",
+                              ...translatedMessage(
+                                "matches_database_bd5bac129d",
+                              ),
                             )
                           : text(
-                              "与数据库版本不同",
-                              "Different version",
-                              "إصدار مختلف",
+                              ...translatedMessage(
+                                "different_version_f030486034",
+                              ),
                             )}
                       </td>
                       <td>{date(instance.last_seen)}</td>

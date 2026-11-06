@@ -7,6 +7,28 @@
 .adm-page > * {
   min-width: 0;
 }
+.reconciliation-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.reconciliation-warning {
+  color: var(--danger, #c44324);
+}
+.adm-reconciliation .adm-table {
+  min-width: 960px;
+}
+.adm-reconciliation .adm-table td {
+  vertical-align: top;
+}
+.reconciliation-money {
+  overflow-wrap: anywhere;
+}
+.reconciliation-money small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
 .adm-table small {
   display: block;
   margin-top: 5px;

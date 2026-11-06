@@ -1,3 +1,5 @@
+import { message as translatedMessage } from "../i18n/messages";
+
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -29,17 +31,13 @@ import "./console-redesign.css";
 import "./staff-workspace.css";
 
 const groups = [
-  { id: "business", label: ["经营", "Business", "الأعمال"] },
+  { id: "business", label: translatedMessage("business_d01b2f330b") },
   {
     id: "models",
-    label: ["模型与资源", "Models and resources", "النماذج والموارد"],
+    label: translatedMessage("models_and_resources_b73ed9af15"),
   },
-  { id: "operations", label: ["运维", "Operations", "التشغيل"] },
-  { id: "system", label: ["系统", "System", "النظام"] },
-  {
-    id: "tools",
-    label: ["更多管理工具", "More management tools", "أدوات الإدارة الإضافية"],
-  },
+  { id: "operations", label: translatedMessage("operations_f9cd9ee8bf") },
+  { id: "system", label: translatedMessage("system_b6cf77aa49") },
 ] as const;
 
 export function StaffWorkspace({
@@ -53,11 +51,11 @@ export function StaffWorkspace({
     role = useSystemAccess((s) => s.role),
     session = useSystemAccess((s) => s.session);
   const username =
-    sessionUsername(session) ?? text("内部员工", "Staff", "موظف");
+    sessionUsername(session) ?? text(...translatedMessage("staff_1777523a13"));
   const platformAdmin = canManagePlatform({ role, session });
   const workspaceLabel = platformAdmin
-    ? text("平台管理", "Platform management", "إدارة المنصة")
-    : text("后台工作台", "Staff workspace", "مساحة الموظفين");
+    ? text(...translatedMessage("platform_management_4b7a0c4faa"))
+    : text(...translatedMessage("staff_workspace_1992abaa9a"));
   const items = staffNavigationFor(role),
     current = items.find((item) => item.id === active);
   const [mobile, setMobile] = useState(
@@ -102,7 +100,9 @@ export function StaffWorkspace({
         {drawer && (
           <Dialog.Close
             className="staff-icon-button"
-            aria-label={text("关闭导航", "Close navigation", "إغلاق التنقل")}
+            aria-label={text(
+              ...translatedMessage("close_navigation_d80a778122"),
+            )}
           >
             <X size={18} />
           </Dialog.Close>
@@ -112,15 +112,13 @@ export function StaffWorkspace({
         ref={navigation}
         className="staff-shell-nav"
         aria-label={text(
-          "平台管理导航",
-          "Platform management navigation",
-          "التنقل في إدارة المنصة",
+          ...translatedMessage("platform_management_navigation_146719958c"),
         )}
       >
         {platformAdmin && (
           <details className="staff-shell-workspace-switch">
             <summary className="staff-shell-group-toggle">
-              <span>{text("工作空间", "Workspace", "مساحة العمل")}</span>
+              <span>{text(...translatedMessage("workspace_05e85246b8"))}</span>
               <ChevronDown size={14} />
             </summary>
             <WorkspaceLinks onNavigate={() => setOpen(false)} />
@@ -128,22 +126,22 @@ export function StaffWorkspace({
         )}
         <div className="staff-shell-resources">
           <span className="staff-shell-label">
-            {text("资源", "Resources", "الموارد")}
+            {text(...translatedMessage("resources_dd59219f36"))}
           </span>
           {[
             {
               to: "/models",
-              label: ["模型广场", "Model plaza", "ساحة النماذج"] as const,
+              label: translatedMessage("model_plaza_0921c9eaa2"),
               Icon: Grid2X2,
             },
             {
               to: "/docs",
-              label: ["开发文档", "Documentation", "الوثائق"] as const,
+              label: translatedMessage("documentation_fdf95da9be"),
               Icon: BookOpen,
             },
             {
               to: "/status",
-              label: ["服务状态", "Service status", "حالة الخدمة"] as const,
+              label: translatedMessage("service_status_b6209e14c8"),
               Icon: Activity,
             },
           ].map(({ to, label, Icon }) => (
@@ -169,7 +167,9 @@ export function StaffWorkspace({
             >
               <SlidersHorizontal size={17} />
               <span>{workspaceLabel}</span>
-              <small>{text("管理员", "Administrator", "مسؤول")}</small>
+              <small>
+                {text(...translatedMessage("administrator_5ccdea960a"))}
+              </small>
             </Link>
           </>
         )}
@@ -220,7 +220,7 @@ export function StaffWorkspace({
           <strong>{username}</strong>
           <small>
             {platformAdmin
-              ? text("平台管理员", "Platform administrator", "مسؤول المنصة")
+              ? text(...translatedMessage("platform_administrator_489c68ad11"))
               : staffRoleName(role, text)}
           </small>
         </div>
@@ -241,9 +241,7 @@ export function StaffWorkspace({
                   <button
                     className="staff-icon-button"
                     aria-label={text(
-                      "打开导航",
-                      "Open navigation",
-                      "افتح التنقل",
+                      ...translatedMessage("open_navigation_77b8073ea6"),
                     )}
                   >
                     <Menu size={20} />
@@ -273,16 +271,16 @@ export function StaffWorkspace({
           <Dialog.Content className="xy-console staff-workspace staff-navigation-dialog">
             <Dialog.Title className="staff-visually-hidden">
               {text(
-                "平台管理导航",
-                "Platform management navigation",
-                "التنقل في إدارة المنصة",
+                ...translatedMessage(
+                  "platform_management_navigation_146719958c",
+                ),
               )}
             </Dialog.Title>
             <Dialog.Description className="staff-visually-hidden">
               {text(
-                "选择有权限访问的后台页面。",
-                "Choose an authorized management page.",
-                "اختر صفحة إدارة مصرحًا بها.",
+                ...translatedMessage(
+                  "choose_an_authorized_management_page_efefe90f09",
+                ),
               )}
             </Dialog.Description>
             {sidebar(true)}

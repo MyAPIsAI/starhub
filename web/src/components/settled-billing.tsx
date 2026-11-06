@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { useTranslation } from "react-i18next";
 import type { StoredBillingDetail } from "../lib/request-metadata";
 import "./settled-billing.css";
@@ -17,61 +19,41 @@ export function SettledBilling({
         ? ar
         : en;
   const labels: Record<string, string> = {
-    billable_units: c("计费量", "Billable quantity", "الكمية المفوترة"),
-    input_tokens: c("普通输入 Token", "Uncached input", "رموز الإدخال"),
-    output_tokens: c("输出 Token", "Output tokens", "رموز الإخراج"),
-    cache_read_tokens: c(
-      "缓存读取 Token",
-      "Cache read tokens",
-      "رموز قراءة التخزين",
-    ),
+    billable_units: c(...translatedMessage("billable_quantity_334cd7e05b")),
+    input_tokens: c(...translatedMessage("uncached_input_6aa7dc96f3")),
+    output_tokens: c(...translatedMessage("output_tokens_e7f8d19e9f")),
+    cache_read_tokens: c(...translatedMessage("cache_read_tokens_312e947278")),
     cache_write_tokens: c(
-      "缓存写入 Token",
-      "Cache write tokens",
-      "رموز كتابة التخزين",
+      ...translatedMessage("cache_write_tokens_59ac22bb34"),
     ),
     input_audio_tokens: c(
-      "音频输入 Token",
-      "Audio input tokens",
-      "رموز إدخال الصوت",
+      ...translatedMessage("audio_input_tokens_bb0687e630"),
     ),
     output_audio_tokens: c(
-      "音频输出 Token",
-      "Audio output tokens",
-      "رموز إخراج الصوت",
+      ...translatedMessage("audio_output_tokens_2fe31e8a17"),
     ),
-    requests: c("请求", "Requests", "الطلبات"),
-    images: c("图片", "Images", "الصور"),
-    seconds: c("秒", "Seconds", "الثواني"),
+    requests: c(...translatedMessage("requests_2d568af110")),
+    images: c(...translatedMessage("images_0693f36c63")),
+    seconds: c(...translatedMessage("seconds_6ecd15ac6b")),
   };
   const units: Record<string, string> = {
-    request: c("次", "request", "طلب"),
-    image: c("张", "image", "صورة"),
-    second: c("秒", "second", "ثانية"),
-    unit: c("单位", "unit", "وحدة"),
+    request: c(...translatedMessage("request_1084482b61")),
+    image: c(...translatedMessage("image_3ac6426300")),
+    second: c(...translatedMessage("second_458c9c7655")),
+    unit: c(...translatedMessage("unit_9d80d4a6b3")),
   };
   return (
     <div className="settled-billing">
-      <dt>
-        {c(
-          "调用时计费明细",
-          "Billing at request time",
-          "تفاصيل الفوترة وقت الطلب",
-        )}
-      </dt>
+      <dt>{c(...translatedMessage("billing_at_request_time_28ce99eee6"))}</dt>
       <dd>
         <div className="usage-table-scroll">
           <table>
             <thead>
               <tr>
-                <th>{c("计费单位", "Meter", "الوحدة")}</th>
-                <th>{c("数量", "Quantity", "الكمية")}</th>
+                <th>{c(...translatedMessage("meter_867b0c4eee"))}</th>
+                <th>{c(...translatedMessage("quantity_ef0e0d42fd"))}</th>
                 <th>
-                  {c(
-                    "调用时单价（美元）",
-                    "Captured price (USD)",
-                    "السعر المسجل (دولار)",
-                  )}
+                  {c(...translatedMessage("captured_price_usd_a9c89d3921"))}
                 </th>
               </tr>
             </thead>
@@ -83,7 +65,7 @@ export function SettledBilling({
                   <td className="mono">
                     {part.unit_price_usd ? `$${part.unit_price_usd}` : "—"}
                     {part.unit === "million_tokens"
-                      ? c(" / 百万 Token", " / 1M tokens", " / مليون رمز")
+                      ? c(...translatedMessage("1m_tokens_082e554cf2"))
                       : part.unit_price_usd
                         ? ` / ${units[part.unit] ?? part.unit}`
                         : ""}
@@ -95,17 +77,21 @@ export function SettledBilling({
         </div>
         <small className="request-rate-note">
           {c(
-            "单价已包含本次系数；金额按完整用量舍入结算。",
-            "Rates include captured multipliers; the complete usage is rounded at settlement.",
-            "تشمل الأسعار المعاملات المسجلة؛ يتم تقريب إجمالي الاستخدام عند التسوية.",
+            ...translatedMessage(
+              "rates_include_captured_multipliers_the_comple_2a2930e657",
+            ),
           )}
         </small>
         <small>
-          {new Date(detail.priced_at).toLocaleString(i18n.language, {
-            timeZone: timezone,
-            timeZoneName: "short",
-          })}{" "}
-          · {c("系数", "Multiplier", "المعامل")} {detail.group_multiplier}
+          {new Date(detail.priced_at).toLocaleString(
+            regionalLocale(i18n.language),
+            {
+              timeZone: timezone,
+              timeZoneName: "short",
+            },
+          )}{" "}
+          · {c(...translatedMessage("multiplier_20c44388ab"))}{" "}
+          {detail.group_multiplier}
         </small>
         {detail.formula && (
           <code style={{ display: "block", overflowWrap: "anywhere" }}>

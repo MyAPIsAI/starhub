@@ -43,12 +43,6 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 		}
 		flow.begin(ch)
 		flow.unsupported++
-		if ch.Type == channel.ChannelTypeTaskPlugin {
-			if !submitPluginTask(flow, ch) {
-				continue
-			}
-			return
-		}
 		adaptor, err := relay.GetTaskAdaptor(ch.Type)
 		if err != nil {
 			continue
@@ -125,7 +119,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 	// and tracks the task if the upstream call is uncertain. The stored
 	// key index lets the terminal poll reuse the same upstream account.
 	requestMeta, _ := json.Marshal(taskReq)
-	task := &model.Task{
+	task := &model.Task{SubmitTime: flow.startTime.Unix(),
 		TraceID: flow.traceID, CallType: flow.req.callType,
 		TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt,
 		TaskID:               "",

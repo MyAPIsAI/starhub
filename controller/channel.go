@@ -105,9 +105,11 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 		Priority: priority,
 		Weight:   weight,
 	}
-	if req.TaskPluginID != nil {
-		ch.TaskPluginID = *req.TaskPluginID
+	if req.TaskPluginID != nil && *req.TaskPluginID != 0 {
+		common.ApiError(w, http.StatusBadRequest, "task plugins are not supported")
+		return
 	}
+	ch.TaskPluginID = 0
 	if err := model.InsertChannel(ch); err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, model.ErrTaskPluginConfiguration) {
@@ -165,15 +167,21 @@ func UpdateChannel(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusNotFound, "channel not found")
 		return
 	}
-	if req.TaskPluginID != nil {
-		ch.TaskPluginID = *req.TaskPluginID
+	if req.TaskPluginID != nil && *req.TaskPluginID != 0 {
+		common.ApiError(w, http.StatusBadRequest, "task plugins are not supported")
+		return
 	}
+	ch.TaskPluginID = 0
 	if req.Type != nil && *req.Type != 0 {
 		if _, ok := relay.SupportedChannelTypes()[*req.Type]; !ok {
 			common.ApiError(w, http.StatusBadRequest, "unsupported channel type")
 			return
 		}
 		ch.Type = *req.Type
+	}
+	if ch.Type == channel.ChannelTypeTaskPlugin {
+		common.ApiError(w, http.StatusBadRequest, "task plugin channels are no longer supported")
+		return
 	}
 	if req.Name != "" {
 		ch.Name = strings.TrimSpace(req.Name)
@@ -278,13 +286,8 @@ func TestChannel(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusNotFound, "channel not found")
 		return
 	}
-	if ch.Type == channel.ChannelTypeTaskPlugin {
-		_, err := relay.LoadTaskPlugin(r.Context(), ch.TaskPluginID, false)
-		if err != nil {
-			common.ApiError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		common.ApiSuccess(w, channelTestResult{OK: true, Status: ch.Status, Message: "Plugin validated locally; no upstream task was submitted"})
+	if ch.Type == channel.ChannelTypeTaskPlugin || ch.TaskPluginID != 0 {
+		common.ApiError(w, http.StatusGone, "task plugin channels are no longer supported")
 		return
 	}
 	if _, err := relay.GetChatAdaptor(ch.Type); err != nil {

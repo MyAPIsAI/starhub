@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import type { DirectoryModel } from "../config/model-directory";
 import type { PricingCatalogConfig } from "../config/models";
 import {
@@ -52,34 +53,26 @@ export function CatalogPriceComparison({
   const sample = model.id.startsWith("veyra-demo-");
   const officialLabel =
     reference?.status === "legacy"
-      ? text("历史官方参考", "Historical official", "مرجع رسمي تاريخي")
-      : text("官方参考价", "Official reference", "المرجع الرسمي");
+      ? text(...translatedMessage("historical_official_2796a345c9"))
+      : text(...translatedMessage("official_reference_7896199b9d"));
   const publicLabel = plazaQuote
-    ? text("当前分组报价", "Current group price", "سعر المجموعة الحالية")
+    ? text(...translatedMessage("current_group_price_b2976b5609"))
     : offer.mode === "expression"
-      ? text("公开最低示例费用", "Lowest public example", "أقل تكلفة مثال عامة")
+      ? text(...translatedMessage("lowest_public_example_07e49dac28"))
       : model.kind === "smart"
-        ? text("公开路由估算", "Public routing estimate", "تقدير التوجيه العام")
-        : text("平台公开最低价", "Lowest public price", "أقل سعر عام");
+        ? text(...translatedMessage("public_routing_estimate_209ae9c5ed"))
+        : text(...translatedMessage("lowest_public_price_711c110703"));
   const noOfficial =
     model.kind === "smart"
-      ? text("无独立官价", "No standalone rate", "لا يوجد سعر مستقل")
+      ? text(...translatedMessage("no_standalone_rate_77f7d40322"))
       : sample
-        ? text("平台计费样例", "Platform billing sample", "مثال فوترة المنصة")
-        : text("尚未核实", "Not verified", "غير موثق");
+        ? text(...translatedMessage("platform_billing_sample_8018811053"))
+        : text(...translatedMessage("not_verified_ef7f7c9dda"));
   const statusLabels = {
-    unknown: text("模型不存在", "Model not found", "النموذج غير موجود"),
-    offline: text("已下架", "Retired", "متوقف"),
-    "no-public-group": text(
-      "暂无公开报价",
-      "No public offer",
-      "لا يوجد عرض عام",
-    ),
-    "no-resource": text(
-      "暂无公开可用资源",
-      "No public resource",
-      "لا يوجد مورد عام متاح",
-    ),
+    unknown: text(...translatedMessage("model_not_found_d96fc188df")),
+    offline: text(...translatedMessage("retired_e4771f7b44")),
+    "no-public-group": text(...translatedMessage("no_public_offer_0104dbd32f")),
+    "no-resource": text(...translatedMessage("no_public_resource_c1206fa683")),
     "quote-error": text(
       plazaQuote ? "报价暂不可用" : "暂无法确定最低价",
       plazaQuote ? "Quote unavailable" : "Minimum unavailable",
@@ -115,12 +108,12 @@ export function CatalogPriceComparison({
     value === undefined ? "—" : `$${value}`;
   const rows = [
     {
-      label: text("输入", "Input", "إدخال"),
+      label: text(...translatedMessage("input_b79be3e58a")),
       official: referenceTokens?.input_per_million_usd,
       platform: tokenRate ? amounts?.input : undefined,
     },
     {
-      label: text("输出", "Output", "إخراج"),
+      label: text(...translatedMessage("output_a7b8383921")),
       official: referenceTokens?.output_per_million_usd,
       platform: tokenRate ? amounts?.output : undefined,
     },
@@ -128,7 +121,7 @@ export function CatalogPriceComparison({
     (tokenRate && amounts?.cacheRead !== undefined)
       ? [
           {
-            label: text("缓存读", "Cache read", "قراءة الذاكرة"),
+            label: text(...translatedMessage("cache_read_718a34a974")),
             official: referenceTokens?.cache_read_per_million_usd,
             platform: tokenRate ? amounts?.cacheRead : undefined,
           },
@@ -139,7 +132,7 @@ export function CatalogPriceComparison({
       (tokenRate && amounts?.cacheWrite !== undefined))
       ? [
           {
-            label: text("缓存写", "Cache write", "كتابة الذاكرة"),
+            label: text(...translatedMessage("cache_write_953608f06c")),
             official: referenceTokens?.cache_write_per_million_usd,
             platform: tokenRate ? amounts?.cacheWrite : undefined,
           },
@@ -154,17 +147,13 @@ export function CatalogPriceComparison({
         : noOfficial;
   const unit = (value: "request" | "image" | "second") =>
     ({
-      request: text("美元 / 次", "USD / request", "دولار / طلب"),
-      image: text("美元 / 张", "USD / image", "دولار / صورة"),
-      second: text("美元 / 秒", "USD / second", "دولار / ثانية"),
+      request: text(...translatedMessage("usd_request_5265075e68")),
+      image: text(...translatedMessage("usd_image_efd0385640")),
+      second: text(...translatedMessage("usd_second_b4496726da")),
     })[value];
   const officialUnit =
     reference?.rate.mode === "tokens"
-      ? text(
-          "输入 / 输出 · 美元 / 百万词元",
-          "Input / output · USD / million tokens",
-          "إدخال / إخراج · دولار / مليون رمز",
-        )
+      ? text(...translatedMessage("input_output_usd_million_tokens_f00f399943"))
       : reference?.rate.mode === "unit"
         ? unit(reference.rate.unit)
         : "";
@@ -187,9 +176,7 @@ export function CatalogPriceComparison({
           <span className="price-comparison-label" data-price-kind="official">
             {noOfficial} ·{" "}
             {text(
-              "按实际模型计费",
-              "Billed at actual model rates",
-              "بسعر النموذج الفعلي",
+              ...translatedMessage("billed_at_actual_model_rates_78e112a0e8"),
             )}
           </span>
           <div data-price-kind="public">
@@ -223,23 +210,21 @@ export function CatalogPriceComparison({
       ) : tokens ? (
         <>
           <div className="price-comparison-unit">
-            {text(
-              "美元 / 百万词元",
-              "USD / million tokens",
-              "دولار / مليون رمز",
-            )}
+            {text(...translatedMessage("usd_million_tokens_6f08728512"))}
           </div>
           <table className="price-comparison-table">
             <caption className="sr-only">
               {text(
-                `${model.name} 价格对照`,
-                `${model.name} price comparison`,
-                `مقارنة أسعار ${model.name}`,
+                ...translatedMessage("price_comparison_2b07fe7ea5", {
+                  p0: model.name,
+                }),
               )}
             </caption>
             <thead>
               <tr>
-                <th scope="col">{text("用量", "Usage", "الاستخدام")}</th>
+                <th scope="col">
+                  {text(...translatedMessage("usage_3404499089"))}
+                </th>
                 <th scope="col">{officialLabel}</th>
                 <th scope="col">{publicLabel}</th>
               </tr>
@@ -287,11 +272,11 @@ export function CatalogPriceComparison({
             {reference && "sourceUrl" in reference ? (
               <>
                 <a href={reference.sourceUrl} target="_blank" rel="noreferrer">
-                  {text("官方来源", "Official source", "المصدر الرسمي")}
+                  {text(...translatedMessage("official_source_8d6474e2d0"))}
                   <ExternalLink size={10} />
                 </a>
                 <span>
-                  {text("核验", "Verified", "تم التحقق")}{" "}
+                  {text(...translatedMessage("verified_04056797df"))}{" "}
                   <time dateTime={reference.verifiedAt}>
                     {reference.verifiedAt}
                   </time>
@@ -299,21 +284,21 @@ export function CatalogPriceComparison({
                 {reference.status === "legacy" && (
                   <span className="price-legacy">
                     {text(
-                      "已退役 · 历史报价",
-                      "Retired · historical rate",
-                      "متوقف · سعر تاريخي",
+                      ...translatedMessage(
+                        "retired_historical_rate_3f3a2df50c",
+                      ),
                     )}
                   </span>
                 )}
               </>
             ) : (
               <span>
-                {text("官方参考：", "Official reference: ", "المرجع الرسمي: ")}
+                {text(...translatedMessage("official_reference_9e908bc965"))}
                 {plazaQuote && reference
                   ? text(
-                      "管理员维护，适用条件请向平台确认。",
-                      "Maintained by the platform; confirm applicable conditions.",
-                      "يديره المسؤول؛ تحقق من الشروط مع المنصة.",
+                      ...translatedMessage(
+                        "maintained_by_the_platform_confirm_applicable_576bbf7554",
+                      ),
                     )
                   : noOfficial}
               </span>
@@ -347,9 +332,7 @@ export function CatalogPriceComparison({
             <details className="price-conditions">
               <summary>
                 {text(
-                  "官价适用条件",
-                  "Official rate conditions",
-                  "شروط السعر الرسمي",
+                  ...translatedMessage("official_rate_conditions_d5097dbaf5"),
                 )}
               </summary>
               <p className="price-reference-scope">
@@ -365,11 +348,7 @@ export function CatalogPriceComparison({
             )) && (
             <details className="price-conditions">
               <summary>
-                {text(
-                  "候选估算条件",
-                  "Candidate assumptions",
-                  "افتراضات المرشحين",
-                )}
+                {text(...translatedMessage("candidate_assumptions_b94277c5de"))}
               </summary>
               {offer.price.rates.map((candidate) => {
                 const candidateInfo = describeDirectoryRate(candidate, lang);
@@ -385,9 +364,9 @@ export function CatalogPriceComparison({
         {isModeMismatch && (
           <p className="price-reference-scope">
             {text(
-              "两侧计费方式或单位不同，仅分别参考，不计算折扣。",
-              "Different billing modes or units; shown separately, no discount comparison.",
-              "طرق أو وحدات فوترة مختلفة؛ للمراجعة المنفصلة دون مقارنة خصم.",
+              ...translatedMessage(
+                "different_billing_modes_or_units_shown_separa_0db9759778",
+              ),
             )}
           </p>
         )}
@@ -405,16 +384,16 @@ export function CatalogPriceComparison({
         {model.kind === "smart" && offer.groupId && (
           <p className="price-reference-scope">
             {text(
-              "区间仅含上述分组候选；按示例费用选择公开分组，实际还受密钥授权与请求能力约束。",
-              "Range covers candidates in this group, selected by example cost. Key permissions and request capabilities still apply.",
-              "النطاق لمرشحي هذه المجموعة المختارة بتكلفة المثال؛ تخضع النتيجة لصلاحيات المفتاح وقدرات الطلب.",
+              ...translatedMessage(
+                "range_covers_candidates_in_this_group_selecte_49a1ffe4e1",
+              ),
             )}
           </p>
         )}
         {offer.status === "quote-error" && (
           <details className="price-error-details">
             <summary>
-              {text("查看报价原因", "Quote details", "تفاصيل التسعير")}
+              {text(...translatedMessage("quote_details_32de235f56"))}
             </summary>
             <ul>
               {offer.errors.map((error, index) => (

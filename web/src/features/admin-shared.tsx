@@ -1,3 +1,4 @@
+import { messagePair } from "../i18n/messages";
 import type { ReactNode } from "react";
 import { useStaffText } from "../lib/api/staff";
 import { Button } from "../components/ui/button";
@@ -31,7 +32,7 @@ export function AdminFeedback({
   const t = useAdminText();
   if (pending)
     return (
-      <p role="status">{t("正在读取服务器数据…", "Loading server data…")}</p>
+      <p role="status">{t(...messagePair("loading_server_data_08213f1cd6"))}</p>
     );
   if (!error) return null;
   return (
@@ -40,13 +41,14 @@ export function AdminFeedback({
         {error instanceof Error
           ? error.message
           : t(
-              "无法完成操作，请重试。",
-              "Unable to complete this operation. Please retry.",
+              ...messagePair(
+                "unable_to_complete_this_operation_please_retr_ad0859978d",
+              ),
             )}
       </span>
       {retry && (
         <Button variant="secondary" onClick={retry}>
-          {t("重试", "Retry")}
+          {t(...messagePair("retry_fd4ad9ebcc"))}
         </Button>
       )}
     </div>
@@ -85,14 +87,14 @@ export function AdminPagination({
   return (
     <div className="adm-pagination">
       <span>
-        {t("共", "Total")} {total}
+        {t(...messagePair("total_d3fa05cdbf"))} {total}
       </span>
       <Button
         variant="ghost"
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
       >
-        {t("上一页", "Previous")}
+        {t(...messagePair("previous_7e6f8cc209"))}
       </Button>
       <span>
         {page} / {Math.max(1, Math.ceil(total / size))}
@@ -102,7 +104,7 @@ export function AdminPagination({
         disabled={page * size >= total}
         onClick={() => onChange(page + 1)}
       >
-        {t("下一页", "Next")}
+        {t(...messagePair("next_60869bad82"))}
       </Button>
     </div>
   );

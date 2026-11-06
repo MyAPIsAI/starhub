@@ -1,9 +1,10 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { AdminCallDrawer } from "./admin-customers";
 import type { AdminCall } from "./admin-shared";
 import { useState, type FormEvent } from "react";
 import { Search } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { Modal } from "../components/ui/overlay";
@@ -50,15 +51,11 @@ export function StaffLogout() {
           }
         }}
       >
-        {text("退出后台", "Sign out", "تسجيل الخروج")}
+        {text(...translatedMessage("sign_out_85a15f8738"))}
       </Button>
       {error && (
         <span role="alert">
-          {text(
-            "退出失败，请重试。",
-            "Sign out failed. Retry.",
-            "فشل تسجيل الخروج. حاول مجددًا.",
-          )}
+          {text(...translatedMessage("sign_out_failed_retry_5fd5b113ec"))}
         </span>
       )}
     </>
@@ -77,39 +74,39 @@ function staffSaveMessage(
         "the last active Root account cannot be disabled or demoted"
     )
       return text(
-        "最后一位启用的超级管理员不能被停用或降权。",
-        "The last active Root cannot be disabled or demoted.",
-        "لا يمكن تعطيل آخر مسؤول أعلى نشط أو تخفيض دوره.",
+        ...translatedMessage(
+          "the_last_active_root_cannot_be_disabled_or_de_4e1cb81091",
+        ),
       );
     if (creating && error.message.includes("username may already exist"))
       return text(
-        "未能创建账号。账号名可能已被使用，请检查账号列表或换一个名称。",
-        "Could not create the account. This username may already be in use. Check the account list or choose another name.",
-        "تعذّر إنشاء الحساب. قد يكون اسم المستخدم مستخدمًا. تحقق من قائمة الحسابات أو اختر اسمًا آخر.",
+        ...translatedMessage(
+          "could_not_create_the_account_this_username_ma_9347240a18",
+        ),
       );
     if (error.message === "fresh password and 2FA verification required")
       return text(
-        "请重新核对你的密码和当前 2FA 验证码。",
-        "Check your password and current 2FA code.",
-        "تحقق من كلمة مرورك ورمز المصادقة الحالي.",
+        ...translatedMessage(
+          "check_your_password_and_current_2fa_code_4764793318",
+        ),
       );
     if (error.status === 403)
       return text(
-        "此操作需要超级管理员权限和允许的网络。",
-        "This action requires Root access and an allowed network.",
-        "يتطلب هذا الإجراء صلاحية المسؤول الأعلى وشبكة مسموحًا بها.",
+        ...translatedMessage(
+          "this_action_requires_root_access_and_an_allow_f5b767594e",
+        ),
       );
     if (error.status === 409)
       return text(
-        "账号资料或会话已变化，请刷新账号列表后再试。",
-        "The account or session has changed. Refresh the account list and try again.",
-        "تغير الحساب أو الجلسة. حدّث قائمة الحسابات وحاول مجددًا.",
+        ...translatedMessage(
+          "the_account_or_session_has_changed_refresh_th_753b4a041f",
+        ),
       );
   }
   return text(
-    "未能确认保存结果，请刷新账号列表后再试。",
-    "Could not confirm the save. Refresh the account list before retrying.",
-    "تعذّر تأكيد الحفظ. حدّث قائمة الحسابات قبل إعادة المحاولة.",
+    ...translatedMessage(
+      "could_not_confirm_the_save_refresh_the_accoun_66ee6112e1",
+    ),
   );
 }
 
@@ -133,9 +130,9 @@ export function StaffAccounts() {
   const [search, setSearch] = useState("");
   const [fieldIssue, setFieldIssue] = useState("");
   const usernameRule = text(
-    "账号名须为 3–64 位，只能使用英文字母、数字、点、下划线或连字符。",
-    "Use 3–64 letters (A–Z), digits, periods, underscores or hyphens.",
-    "أدخل من 3 إلى 64 حرفًا لاتينيًا أو رقمًا أو نقطة أو شرطة أو شرطة سفلية.",
+    ...translatedMessage(
+      "use_3_64_letters_a_z_digits_periods_underscor_c7a5b66145",
+    ),
   );
   const [filterStatus, setFilterStatus] = useState("all");
   const visibleAccounts = query.data?.filter(
@@ -186,111 +183,110 @@ export function StaffAccounts() {
   return (
     <section className="staff-card staff-grid">
       <div className="staff-actions">
-        <h1>{text("后台账号", "Staff accounts", "حسابات الموظفين")}</h1>
+        <h1>{text(...translatedMessage("staff_accounts_0df2bf0fa6"))}</h1>
         <Button onClick={() => open("create")}>
-          {text("新增员工", "Add staff", "إضافة موظف")}
+          {text(...translatedMessage("add_staff_6d25b85759"))}
         </Button>
       </div>
       <p>
         {text(
-          "新账号首次登录须改密并绑定 2FA。停用或更改角色会立即注销已有会话；账号与审计身份保留。",
-          "New accounts must change their temporary password and set up 2FA. Disabling or changing a role revokes existing sessions; account and audit identities are retained.",
-          "يجب تغيير كلمة المرور المؤقتة وإعداد المصادقة الثنائية. يؤدي التعطيل أو تغيير الدور إلى إلغاء الجلسات مع الاحتفاظ بهوية الحساب والتدقيق.",
+          ...translatedMessage(
+            "new_accounts_must_change_their_temporary_pass_2a45f450a0",
+          ),
         )}
       </p>
       {query.isError && (
         <p role="alert">
-          {text(
-            "账号加载失败。",
-            "Unable to load accounts.",
-            "تعذر تحميل الحسابات.",
-          )}
+          {text(...translatedMessage("unable_to_load_accounts_4b777d2415"))}
           <Button onClick={() => void query.refetch()}>
-            {text("重试", "Retry", "إعادة المحاولة")}
+            {text(...translatedMessage("retry_c16455021c"))}
           </Button>
         </p>
       )}
       {query.isPending && (
-        <p role="status">{text("加载中…", "Loading…", "جارٍ التحميل…")}</p>
+        <p role="status">{text(...translatedMessage("loading_4c20385375"))}</p>
       )}
       <div className="staff-list-toolbar">
         <label className="staff-list-search">
           <Search size={16} aria-hidden="true" />
           <Input
             aria-label={text(
-              "搜索后台账号",
-              "Search staff accounts",
-              "البحث في حسابات الموظفين",
+              ...translatedMessage("search_staff_accounts_77a3dab258"),
             )}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={text(
-              "搜索用户名",
-              "Search username",
-              "البحث باسم المستخدم",
+              ...translatedMessage("search_username_99e8a61c4c"),
             )}
           />
         </label>
         <label>
           <span className="staff-visually-hidden">
-            {text(
-              "按状态筛选后台账号",
-              "Filter staff status",
-              "تصفية حالة الموظفين",
-            )}
+            {text(...translatedMessage("filter_staff_status_a6a32ad2f1"))}
           </span>
           <select
             value={filterStatus}
             onChange={(event) => setFilterStatus(event.target.value)}
           >
             <option value="all">
-              {text("全部状态", "All statuses", "جميع الحالات")}
+              {text(...translatedMessage("all_statuses_11324f8057"))}
             </option>
-            <option value="1">{text("启用", "Enabled", "مفعّل")}</option>
-            <option value="2">{text("停用", "Disabled", "معطّل")}</option>
+            <option value="1">
+              {text(...translatedMessage("enabled_5b579584c4"))}
+            </option>
+            <option value="2">
+              {text(...translatedMessage("disabled_2fdba07e0b"))}
+            </option>
           </select>
         </label>
         <span className="staff-list-count">
-          {text("共", "Total", "المجموع")} {visibleAccounts?.length ?? 0}
+          {text(...translatedMessage("total_710d94671b"))}{" "}
+          {visibleAccounts?.length ?? 0}
         </span>
       </div>
       <div className="staff-table-wrap">
         <table className="staff-table">
           <thead>
             <tr>
-              <th>{text("账号", "Account", "الحساب")}</th>
-              <th>{text("角色", "Role", "الدور")}</th>
-              <th>{text("状态", "Status", "الحالة")}</th>
+              <th>{text(...translatedMessage("account_b00965aefc"))}</th>
+              <th>{text(...translatedMessage("role_5b688c6fd8"))}</th>
+              <th>{text(...translatedMessage("status_dda39dcd63"))}</th>
               <th>2FA</th>
-              <th>{text("操作", "Actions", "الإجراءات")}</th>
+              <th>{text(...translatedMessage("actions_d83f4ed14a"))}</th>
             </tr>
           </thead>
           <tbody>
             {visibleAccounts?.map((account) => (
               <tr key={account.id}>
-                <td data-label={text("账号", "Account", "الحساب")}>
+                <td
+                  data-label={text(...translatedMessage("account_b00965aefc"))}
+                >
                   {account.username}
                 </td>
-                <td data-label={text("角色", "Role", "الدور")}>
+                <td data-label={text(...translatedMessage("role_5b688c6fd8"))}>
                   {staffRoleName(account.role, text)}
                 </td>
-                <td data-label={text("状态", "Status", "الحالة")}>
+                <td
+                  data-label={text(...translatedMessage("status_dda39dcd63"))}
+                >
                   {account.status === 1
-                    ? text("启用", "Enabled", "مفعّل")
-                    : text("停用", "Disabled", "معطّل")}
+                    ? text(...translatedMessage("enabled_5b579584c4"))
+                    : text(...translatedMessage("disabled_2fdba07e0b"))}
                 </td>
                 <td data-label="2FA">
                   {account.two_factor_bound
-                    ? text("已绑定", "Enrolled", "مُعدّة")
-                    : text("待绑定", "Setup required", "يلزم الإعداد")}
+                    ? text(...translatedMessage("enrolled_788ece79e7"))
+                    : text(...translatedMessage("setup_required_673dc5df52"))}
                 </td>
-                <td data-label={text("操作", "Actions", "الإجراءات")}>
+                <td
+                  data-label={text(...translatedMessage("actions_d83f4ed14a"))}
+                >
                   <Button
                     size="small"
                     variant="secondary"
                     onClick={() => open(account)}
                   >
-                    {text("管理", "Manage", "إدارة")}
+                    {text(...translatedMessage("manage_e3761d66d9"))}
                   </Button>
                 </td>
               </tr>
@@ -300,18 +296,14 @@ export function StaffAccounts() {
       </div>
       {query.isSuccess && visibleAccounts?.length === 0 && (
         <p role="status">
-          {text(
-            "没有匹配的后台账号。",
-            "No matching staff accounts.",
-            "لا توجد حسابات موظفين مطابقة.",
-          )}
+          {text(...translatedMessage("no_matching_staff_accounts_4f86bc0b12"))}
         </p>
       )}
       <Modal
         description={text(
-          "内部员工账号与客户账号分开管理。",
-          "Staff and customer accounts are managed separately.",
-          "تُدار حسابات الموظفين والعملاء بشكل منفصل.",
+          ...translatedMessage(
+            "staff_and_customer_accounts_are_managed_separ_5ff15423f3",
+          ),
         )}
         open={editing !== null}
         onOpenChange={(open) => {
@@ -323,8 +315,8 @@ export function StaffAccounts() {
         }}
         title={
           editing === "create"
-            ? text("新增内部账号", "Add staff account", "إضافة حساب موظف")
-            : text("管理内部账号", "Manage staff account", "إدارة حساب موظف")
+            ? text(...translatedMessage("add_staff_account_5ed5199f94"))
+            : text(...translatedMessage("manage_staff_account_150a5b8df1"))
         }
         preventOutsideClose
         footer={
@@ -338,14 +330,14 @@ export function StaffAccounts() {
                 setCode("");
               }}
             >
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             <Button
               form="staff-account-form"
               type="submit"
               disabled={mutation.isPending}
             >
-              {text("保存", "Save", "حفظ")}
+              {text(...translatedMessage("save_6774e725d1"))}
             </Button>
           </>
         }
@@ -376,9 +368,9 @@ export function StaffAccounts() {
                 size >= 12 && size <= 72
                   ? ""
                   : text(
-                      "临时密码须为 12–72 个 UTF-8 字节。",
-                      "The temporary password must be 12–72 UTF-8 bytes.",
-                      "يجب أن تكون كلمة المرور المؤقتة بين 12 و72 بايت بترميز UTF-8.",
+                      ...translatedMessage(
+                        "the_temporary_password_must_be_12_72_utf_8_by_e7ff8bd8c3",
+                      ),
                     ),
               );
             }
@@ -393,9 +385,9 @@ export function StaffAccounts() {
               validReason
                 ? ""
                 : text(
-                    "请填写单行原因，最多 500 个 UTF-8 字节。",
-                    "Enter a single-line reason of up to 500 UTF-8 bytes.",
-                    "أدخل سببًا في سطر واحد لا يتجاوز 500 بايت بترميز UTF-8.",
+                    ...translatedMessage(
+                      "enter_a_single_line_reason_of_up_to_500_utf_8_71f8148b2d",
+                    ),
                   ),
             );
             if (!form.reportValidity()) {
@@ -411,13 +403,13 @@ export function StaffAccounts() {
           {editing === "create" ? (
             <>
               <label>
-                {text("账号名", "Username", "اسم المستخدم")}
+                {text(...translatedMessage("username_3274482a04"))}
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   name="username"
                   maxLength={64}
-                  aria-label={text("账号名", "Username", "اسم المستخدم")}
+                  aria-label={text(...translatedMessage("username_3274482a04"))}
                   aria-describedby="staff-username-rule"
                   required
                   autoComplete="off"
@@ -426,9 +418,9 @@ export function StaffAccounts() {
               </label>
               <label>
                 {text(
-                  "临时密码（12–72 字节）",
-                  "Temporary password (12–72 bytes)",
-                  "كلمة المرور المؤقتة (12–72 بايت)",
+                  ...translatedMessage(
+                    "temporary_password_12_72_bytes_b220057ac3",
+                  ),
                 )}
                 <Input
                   type="password"
@@ -444,9 +436,9 @@ export function StaffAccounts() {
             <p>{typeof editing === "object" && editing?.username}</p>
           )}
           <label>
-            {text("角色", "Role", "الدور")}
+            {text(...translatedMessage("role_5b688c6fd8"))}
             <select
-              aria-label={text("角色", "Role", "الدور")}
+              aria-label={text(...translatedMessage("role_5b688c6fd8"))}
               value={role}
               onChange={(e) => setRole(Number(e.target.value))}
             >
@@ -460,18 +452,20 @@ export function StaffAccounts() {
           {editing !== "create" && (
             <>
               <label>
-                {text("状态", "Status", "الحالة")}
+                {text(...translatedMessage("status_dda39dcd63"))}
                 <select
-                  aria-label={text("状态", "Status", "الحالة")}
+                  aria-label={text(...translatedMessage("status_dda39dcd63"))}
                   value={status}
                   onChange={(e) => setStatus(Number(e.target.value))}
                 >
-                  <option value={1}>{text("启用", "Enabled", "مفعّل")}</option>
+                  <option value={1}>
+                    {text(...translatedMessage("enabled_5b579584c4"))}
+                  </option>
                   <option value={2}>
                     {text(
-                      "停用并注销会话",
-                      "Disable and revoke sessions",
-                      "تعطيل وإلغاء الجلسات",
+                      ...translatedMessage(
+                        "disable_and_revoke_sessions_3e403d85a0",
+                      ),
                     )}
                   </option>
                 </select>
@@ -485,9 +479,9 @@ export function StaffAccounts() {
                     onChange={(e) => setReset(e.target.checked)}
                   />
                   {text(
-                    "身份核验后重置该员工 2FA",
-                    "Reset this employee's 2FA after identity verification",
-                    "إعادة ضبط المصادقة الثنائية بعد التحقق من الهوية",
+                    ...translatedMessage(
+                      "reset_this_employee_s_2fa_after_identity_veri_529cdda33d",
+                    ),
                   )}
                 </label>
               )}
@@ -495,13 +489,13 @@ export function StaffAccounts() {
                 <>
                   <p>
                     {text(
-                      "确认已通过线下流程核验员工身份，并重新验证你的密码与新的 2FA 验证码。",
-                      "Confirm the employee's identity through your offline process, then verify your own password and a fresh 2FA code.",
-                      "أكّد هوية الموظف عبر الإجراء المعتمد ثم أدخل كلمة مرورك ورمز مصادقة جديدًا.",
+                      ...translatedMessage(
+                        "confirm_the_employee_s_identity_through_your__f37d451022",
+                      ),
                     )}
                   </p>
                   <label>
-                    {text("你的密码", "Your password", "كلمة مرورك")}
+                    {text(...translatedMessage("your_password_82167a2918"))}
                     <Input
                       type="password"
                       value={password}
@@ -512,9 +506,9 @@ export function StaffAccounts() {
                   </label>
                   <label>
                     {text(
-                      "你的新验证码",
-                      "Your fresh verification code",
-                      "رمز التحقق الجديد الخاص بك",
+                      ...translatedMessage(
+                        "your_fresh_verification_code_2368ba8c66",
+                      ),
                     )}
                     <Input
                       value={code}
@@ -530,7 +524,7 @@ export function StaffAccounts() {
             </>
           )}
           <label>
-            {text("原因", "Reason", "السبب")}
+            {text(...translatedMessage("reason_7dbf24f62e"))}
             <textarea
               name="reason"
               value={reason}
@@ -626,91 +620,86 @@ export function StaffCustomers() {
   };
   return (
     <section className="staff-card staff-grid">
-      <h1>{text("账号管理", "Customer accounts", "حسابات العملاء")}</h1>
+      <h1>{text(...translatedMessage("customer_accounts_86a2111562"))}</h1>
       {query.isError && (
         <p role="alert">
-          {text(
-            "客户列表加载失败。",
-            "Customer list unavailable.",
-            "تعذّر تحميل العملاء.",
-          )}
+          {text(...translatedMessage("customer_list_unavailable_88a8ceb67b"))}
           <Button onClick={() => void query.refetch()}>
-            {text("重试", "Retry", "إعادة المحاولة")}
+            {text(...translatedMessage("retry_c16455021c"))}
           </Button>
         </p>
       )}
       {query.isPending && (
-        <p role="status">{text("加载中…", "Loading…", "جارٍ التحميل…")}</p>
+        <p role="status">{text(...translatedMessage("loading_4c20385375"))}</p>
       )}
       <div className="staff-list-toolbar">
         <label className="staff-list-search">
           <Search size={16} aria-hidden="true" />
           <Input
             aria-label={text(
-              "搜索客户账号",
-              "Search customer accounts",
-              "البحث في حسابات العملاء",
+              ...translatedMessage("search_customer_accounts_a059378d06"),
             )}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={text(
-              "搜索用户名、标识或邮箱",
-              "Search username, ID or email",
-              "البحث بالاسم أو المعرّف أو البريد",
+              ...translatedMessage("search_username_id_or_email_bc6183ef15"),
             )}
           />
         </label>
         <label>
           <span className="staff-visually-hidden">
-            {text(
-              "按状态筛选客户账号",
-              "Filter customer status",
-              "تصفية حالة العملاء",
-            )}
+            {text(...translatedMessage("filter_customer_status_7d14c63b9c"))}
           </span>
           <select
             value={filterStatus}
             onChange={(event) => setFilterStatus(event.target.value)}
           >
             <option value="all">
-              {text("全部状态", "All statuses", "جميع الحالات")}
+              {text(...translatedMessage("all_statuses_11324f8057"))}
             </option>
-            <option value="1">{text("启用", "Enabled", "مفعّل")}</option>
-            <option value="2">{text("停用", "Disabled", "معطّل")}</option>
+            <option value="1">
+              {text(...translatedMessage("enabled_5b579584c4"))}
+            </option>
+            <option value="2">
+              {text(...translatedMessage("disabled_2fdba07e0b"))}
+            </option>
           </select>
         </label>
         <span className="staff-list-count">
-          {text("共", "Total", "المجموع")} {visibleCustomers?.length ?? 0}
+          {text(...translatedMessage("total_710d94671b"))}{" "}
+          {visibleCustomers?.length ?? 0}
         </span>
       </div>
       <div className="staff-table-wrap">
         <table className="staff-table">
           <thead>
             <tr>
-              <th>{text("客户", "Customer", "العميل")}</th>
-              <th>{text("状态", "Status", "الحالة")}</th>
-              <th>{text("余额（USD）", "Balance (USD)", "الرصيد (USD)")}</th>
-              <th>{text("操作", "Actions", "الإجراءات")}</th>
+              <th>{text(...translatedMessage("customer_b6fee18c46"))}</th>
+              <th>{text(...translatedMessage("status_dda39dcd63"))}</th>
+              <th>{text(...translatedMessage("balance_usd_01de08312c"))}</th>
+              <th>{text(...translatedMessage("actions_d83f4ed14a"))}</th>
             </tr>
           </thead>
           <tbody>
             {visibleCustomers?.map((user) => (
               <tr key={user.id}>
-                <td data-label={text("客户", "Customer", "العميل")}>
+                <td
+                  data-label={text(...translatedMessage("customer_b6fee18c46"))}
+                >
                   {user.username}
                   <br />
                   <small>{user.email}</small>
                 </td>
-                <td data-label={text("状态", "Status", "الحالة")}>
+                <td
+                  data-label={text(...translatedMessage("status_dda39dcd63"))}
+                >
                   {user.status === 1
-                    ? text("启用", "Enabled", "مفعّل")
-                    : text("停用", "Disabled", "معطّل")}
+                    ? text(...translatedMessage("enabled_5b579584c4"))
+                    : text(...translatedMessage("disabled_2fdba07e0b"))}
                 </td>
                 <td
                   data-label={text(
-                    "余额（USD）",
-                    "Balance (USD)",
-                    "الرصيد (USD)",
+                    ...translatedMessage("balance_usd_01de08312c"),
                   )}
                 >
                   {typeof user.api_balance_nano === "string" &&
@@ -718,7 +707,9 @@ export function StaffCustomers() {
                     ? formatMoney(user.api_balance_nano, "detail")
                     : "—"}
                 </td>
-                <td data-label={text("操作", "Actions", "الإجراءات")}>
+                <td
+                  data-label={text(...translatedMessage("actions_d83f4ed14a"))}
+                >
                   <div className="staff-actions">
                     {isAdmin(role) && (
                       <>
@@ -731,7 +722,7 @@ export function StaffCustomers() {
                             setReason("");
                           }}
                         >
-                          {text("查看 Key", "View keys", "عرض المفاتيح")}
+                          {text(...translatedMessage("view_keys_da3047157a"))}
                         </Button>
                         {user.status === 1 && (
                           <Button
@@ -740,9 +731,9 @@ export function StaffCustomers() {
                             onClick={() => begin(user, "disable")}
                           >
                             {text(
-                              "停用客户",
-                              "Disable customer",
-                              "تعطيل العميل",
+                              ...translatedMessage(
+                                "disable_customer_ba364899b8",
+                              ),
                             )}
                           </Button>
                         )}
@@ -753,12 +744,14 @@ export function StaffCustomers() {
                         size="small"
                         onClick={() => begin(user, "adjust")}
                       >
-                        {text("调整余额", "Adjust balance", "تعديل الرصيد")}
+                        {text(
+                          ...translatedMessage("adjust_balance_b29cbcf25c"),
+                        )}
                       </Button>
                     )}
                     {!isAdmin(role) &&
                       !canReadFinance(role) &&
-                      text("只读", "Read only", "للقراءة فقط")}
+                      text(...translatedMessage("read_only_a501d9edeb"))}
                   </div>
                 </td>
               </tr>
@@ -767,7 +760,7 @@ export function StaffCustomers() {
         </table>
       </div>
       {query.isSuccess && visibleCustomers?.length === 0 && (
-        <p>{text("暂无客户。", "No customers yet.", "لا يوجد عملاء بعد.")}</p>
+        <p>{text(...translatedMessage("no_customers_yet_644eb34b1d"))}</p>
       )}
       <Modal
         open={!!selected}
@@ -780,10 +773,10 @@ export function StaffCustomers() {
         }}
         title={
           action === "adjust"
-            ? text("调整余额", "Adjust balance", "تعديل الرصيد")
+            ? text(...translatedMessage("adjust_balance_b29cbcf25c"))
             : action === "disable"
-              ? text("停用客户", "Disable customer", "تعطيل العميل")
-              : text("客户 Key", "Customer keys", "مفاتيح العميل")
+              ? text(...translatedMessage("disable_customer_ba364899b8"))
+              : text(...translatedMessage("customer_keys_4d038aaf7a"))
         }
         description={selected?.username ?? ""}
         footer={
@@ -796,7 +789,7 @@ export function StaffCustomers() {
             }}
             disabled={mutation.isPending}
           >
-            {text("关闭", "Close", "إغلاق")}
+            {text(...translatedMessage("close_6bf477426b"))}
           </Button>
         }
       >
@@ -811,20 +804,28 @@ export function StaffCustomers() {
             {action === "adjust" && (
               <>
                 <label>
-                  {text("类型", "Type", "النوع")}
+                  {text(...translatedMessage("type_b91a24e5ad"))}
                   <select
-                    aria-label={text("类型", "Type", "النوع")}
+                    aria-label={text(...translatedMessage("type_b91a24e5ad"))}
                     value={kind}
                     onChange={(e) => setKind(e.target.value)}
                   >
                     {[
-                      ["gift", text("赠送", "Gift", "هدية")],
-                      ["compensation", text("补偿", "Compensation", "تعويض")],
+                      ["gift", text(...translatedMessage("gift_7e12bff87d"))],
+                      [
+                        "compensation",
+                        text(...translatedMessage("compensation_f4a2152f83")),
+                      ],
                       [
                         "offline_payment",
-                        text("线下付款", "Offline payment", "دفع غير متصل"),
+                        text(
+                          ...translatedMessage("offline_payment_41b40d81a0"),
+                        ),
                       ],
-                      ["deduction", text("扣减", "Deduction", "خصم")],
+                      [
+                        "deduction",
+                        text(...translatedMessage("deduction_09d825b922")),
+                      ],
                     ].map(([value, label]) => (
                       <option value={value} key={value}>
                         {label}
@@ -834,9 +835,9 @@ export function StaffCustomers() {
                 </label>
                 <label>
                   {text(
-                    "有符号金额（USD，最多 9 位小数）",
-                    "Signed amount (USD, up to 9 decimal places)",
-                    "المبلغ بإشارته (USD، حتى 9 منازل عشرية)",
+                    ...translatedMessage(
+                      "signed_amount_usd_up_to_9_decimal_places_aead24dbc8",
+                    ),
                   )}
                   <Input
                     value={amount}
@@ -848,21 +849,21 @@ export function StaffCustomers() {
                 </label>
                 <p>
                   {text(
-                    "立即记账；扣减填写负数，允许账户余额变为负数。",
-                    "Posted immediately. Enter a negative amount for a deduction; the balance may become negative.",
-                    "يُسجّل فورًا. أدخل مبلغًا سالبًا للخصم؛ يمكن أن يصبح الرصيد سالبًا.",
+                    ...translatedMessage(
+                      "posted_immediately_enter_a_negative_amount_fo_79f1c1c349",
+                    ),
                   )}
                 </p>
               </>
             )}
             {keyTarget && (
               <p>
-                {text("停用 Key", "Disable key", "تعطيل المفتاح")}:{" "}
+                {text(...translatedMessage("disable_key_85671cf1c7"))}:{" "}
                 {keyTarget.name}
               </p>
             )}
             <label>
-              {text("原因（必填）", "Reason (required)", "السبب (مطلوب)")}
+              {text(...translatedMessage("reason_required_49162ff107"))}
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -874,32 +875,28 @@ export function StaffCustomers() {
             {mutation.isError && (
               <p role="alert" className="staff-error">
                 {text(
-                  "操作失败，请检查金额、权限和原因后重试。",
-                  "Action failed. Check the amount, permissions and reason, then retry.",
-                  "فشل الإجراء. تحقّق من المبلغ والصلاحيات والسبب وأعد المحاولة.",
+                  ...translatedMessage(
+                    "action_failed_check_the_amount_permissions_an_934ea9d9d4",
+                  ),
                 )}
               </p>
             )}
             <Button type="submit" disabled={mutation.isPending}>
-              {text("确认", "Confirm", "تأكيد")}
+              {text(...translatedMessage("confirm_f2ab6dbf01"))}
             </Button>
           </form>
         ) : (
           <div className="staff-grid">
             <p>
               {text(
-                "仅显示 Key 名称与状态，不显示客户完整 Key。",
-                "Key names and status only; full customer keys are not shown.",
-                "تُعرض أسماء المفاتيح وحالتها فقط، دون المفاتيح الكاملة.",
+                ...translatedMessage(
+                  "key_names_and_status_only_full_customer_keys__4b40db5381",
+                ),
               )}
             </p>
             {keys.isError && (
               <p role="alert">
-                {text(
-                  "加载失败。",
-                  "Unable to load keys.",
-                  "تعذّر تحميل المفاتيح.",
-                )}
+                {text(...translatedMessage("unable_to_load_keys_f8cfb5ade2"))}
               </p>
             )}
             {keys.data?.map((key) => (
@@ -907,8 +904,8 @@ export function StaffCustomers() {
                 <span>
                   {key.name} · {key.group} ·{" "}
                   {key.status === 1
-                    ? text("启用", "Enabled", "مفعّل")
-                    : text("停用", "Disabled", "معطّل")}
+                    ? text(...translatedMessage("enabled_5b579584c4"))
+                    : text(...translatedMessage("disabled_2fdba07e0b"))}
                 </span>
                 {key.status === 1 && (
                   <Button
@@ -920,7 +917,7 @@ export function StaffCustomers() {
                       mutation.reset();
                     }}
                   >
-                    {text("停用", "Disable", "تعطيل")}
+                    {text(...translatedMessage("disable_300dc72531"))}
                   </Button>
                 )}
               </div>
@@ -932,188 +929,72 @@ export function StaffCustomers() {
   );
 }
 
-export function StaffSync() {
-  const text = useStaffText(),
-    identity = useSessionQueryIdentity();
-  const status = useQuery({
-    queryKey: ["staff-sync", ...identity],
-    queryFn: () =>
-      apiGet<{
-        configured: boolean;
-        revision: number;
-        sequence: number;
-        updated_at: number;
-      }>("/api/admin/resource-sync"),
-  });
-  const system = useQuery({
-    queryKey: ["staff-system", ...identity],
-    queryFn: () =>
-      apiGet<{ version: string; go_version: string; timezone: string }>(
-        "/api/admin/system",
-      ),
-  });
-  const mutation = useMutation({
-    mutationFn: () =>
-      apiPost<{ revision: number; sequence: number }>(
-        "/api/admin/resource-sync",
-      ),
-    onSuccess: () => void status.refetch(),
-  });
-  return (
-    <section className="staff-card staff-grid">
-      <div className="staff-actions">
-        <h1>
-          {text(
-            "同步与路由状态",
-            "Sync and routing status",
-            "حالة المزامنة والتوجيه",
-          )}
-        </h1>
-        <Button
-          disabled={!status.data?.configured || mutation.isPending}
-          onClick={() => mutation.mutate()}
-        >
-          {mutation.isPending
-            ? text("同步中…", "Syncing…", "جارٍ المزامنة…")
-            : text("强制全量同步", "Force full sync", "فرض مزامنة كاملة")}
-        </Button>
-      </div>
-      <p>
-        {text(
-          "查看上游快照同步情况。只有全量同步成功后才替换已发布快照。",
-          "Inspect upstream snapshot synchronization. Published snapshots change only after a successful full sync.",
-          "تابع مزامنة لقطات المصدر. لا تتغير اللقطة المنشورة إلا بعد نجاح المزامنة الكاملة.",
-        )}
-      </p>
-      {status.isPending && (
-        <p role="status">{text("加载中…", "Loading…", "جارٍ التحميل…")}</p>
-      )}
-      {status.data && (
-        <div className="staff-sync-summary">
-          <div>
-            <span>
-              {text("上游快照来源", "Upstream snapshot source", "مصدر اللقطات")}
-            </span>
-            <strong>
-              {status.data.configured
-                ? text("已配置", "Configured", "مُعدّ")
-                : text("未配置", "Not configured", "غير مُعدّ")}
-            </strong>
-            <small>
-              {status.data.configured
-                ? text(
-                    "可请求全量同步",
-                    "Full sync available",
-                    "المزامنة الكاملة متاحة",
-                  )
-                : text(
-                    "需在部署端配置快照来源",
-                    "Configure the source in deployment",
-                    "يلزم إعداد المصدر في النشر",
-                  )}
-            </small>
-          </div>
-          <div>
-            <span>
-              {text(
-                "已发布快照序号",
-                "Published snapshot sequence",
-                "تسلسل اللقطة المنشورة",
-              )}
-            </span>
-            <strong>{status.data.sequence}</strong>
-          </div>
-          <div>
-            <span>
-              {text(
-                "资源配置版本",
-                "Resource configuration revision",
-                "إصدار إعداد الموارد",
-              )}
-            </span>
-            <strong>{status.data.revision}</strong>
-          </div>
-        </div>
-      )}
-      {mutation.isSuccess && (
-        <p role="status">
-          {text("同步完成。", "Sync completed.", "اكتملت المزامنة.")}
-        </p>
-      )}
-      {(status.isError || system.isError || mutation.isError) && (
-        <p role="alert" className="staff-error">
-          {text(
-            "加载或同步失败，已发布快照保持不变。",
-            "Loading or sync failed. The published snapshot is unchanged.",
-            "فشل التحميل أو المزامنة. لم تتغير اللقطة المنشورة.",
-          )}
-          {mutation.error instanceof ApiError &&
-            mutation.error.status === 409 &&
-            text(
-              " 请检查上游快照序号与内容。",
-              " Check the upstream sequence and content.",
-              " تحقّق من تسلسل المصدر ومحتواه.",
-            )}
-        </p>
-      )}
-      {system.data && (
-        <p>
-          StarHub {system.data.version} · {system.data.go_version} ·{" "}
-          {system.data.timezone}
-        </p>
-      )}
-    </section>
-  );
-}
+export { AdminResourceStatus as StaffSync } from "./admin-resource-status";
 
 export function StaffCalls() {
   const text = useStaffText(),
-    identity = useSessionQueryIdentity(),
-    [page, setPage] = useState(1);
+    identity = useSessionQueryIdentity();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const resourceId = searchParams.get("resource_id") || "";
+  const [pagination, setPagination] = useState({ resourceId, page: 1 });
+  const page = pagination.resourceId === resourceId ? pagination.page : 1;
+  const setPage = (value: number) => setPagination({ resourceId, page: value });
   const [selectedCall, setSelectedCall] = useState<AdminCall | null>(null);
   const query = useQuery({
-    queryKey: ["staff-calls", ...identity, page],
+    queryKey: ["staff-calls", ...identity, resourceId, page],
     queryFn: () =>
       apiGet<{
         items: AdminCall[];
         total: number;
-      }>(`/api/log?p=${page}&page_size=20`),
+      }>(
+        `/api/log?${new URLSearchParams({ p: String(page), page_size: "20", ...(resourceId ? { resource_id: resourceId } : {}) })}`,
+      ),
   });
   return (
     <section className="staff-card staff-grid">
-      <h1>
-        {text(
-          "调用明细",
-          "Call details",
-          "تفاصيل الاستدعاءات",
-        )}
-      </h1>
+      <h1>{text(...translatedMessage("call_details_50e18ac31f"))}</h1>
+      {resourceId && (
+        <div className="staff-actions" data-testid="calls-resource-filter">
+          <span>
+            {text(...translatedMessage("resource_68017d94a7"))}:{" "}
+            <bdi>{resourceId}</bdi>
+          </span>
+          <Button
+            size="small"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete("resource_id");
+              setSearchParams(next);
+            }}
+          >
+            {text(...translatedMessage("clear_filter_b4e85f7420"))}
+          </Button>
+        </div>
+      )}
       {query.isError && (
         <p role="alert">
-          {text(
-            "调用记录加载失败。",
-            "Calls unavailable.",
-            "تعذّر تحميل الاستدعاءات.",
-          )}
+          {text(...translatedMessage("calls_unavailable_a1a91d2fc4"))}
         </p>
       )}
       <div className="staff-table-wrap">
         <table className="staff-table">
           <thead>
             <tr>
-              <th>{text("客户", "Customer", "العميل")}</th>
-              <th>{text("模型", "Model", "النموذج")}</th>
+              <th>{text(...translatedMessage("customer_b6fee18c46"))}</th>
+              <th>{text(...translatedMessage("model_9c2e5b5065"))}</th>
               <th>Trace ID</th>
-              <th>{text("状态", "Status", "الحالة")}</th>
+              <th>{text(...translatedMessage("status_dda39dcd63"))}</th>
             </tr>
           </thead>
           <tbody>
             {query.data?.items?.map((row) => (
               <tr key={row.id}>
-                <td data-label={text("客户", "Customer", "العميل")}>
+                <td
+                  data-label={text(...translatedMessage("customer_b6fee18c46"))}
+                >
                   {row.user_id}
                 </td>
-                <td data-label={text("模型", "Model", "النموذج")}>
+                <td data-label={text(...translatedMessage("model_9c2e5b5065"))}>
                   {row.model}
                 </td>
                 <td data-label="Trace ID">
@@ -1124,18 +1005,28 @@ export function StaffCalls() {
                     {row.trace_id}
                   </button>
                 </td>
-                <td data-label={text("状态", "Status", "الحالة")}>
+                <td
+                  data-label={text(...translatedMessage("status_dda39dcd63"))}
+                >
                   {row.status === 1
-                    ? text("成功", "Succeeded", "نجح")
+                    ? text(...translatedMessage("succeeded_1a524ac49d"))
                     : row.status === 3
-                      ? text("已取消", "Cancelled", "ملغى")
-                      : text("失败", "Failed", "فشل")}
+                      ? text(...translatedMessage("cancelled_544275e39b"))
+                      : text(...translatedMessage("failed_5da76a883a"))}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {query.isPending && (
+        <p role="status">{text(...translatedMessage("loading_4c20385375"))}</p>
+      )}
+      {query.isSuccess && !query.data.items.length && (
+        <p role="status">
+          {text(...translatedMessage("no_matching_calls_59bac795a9"))}
+        </p>
+      )}
       <AdminCallDrawer
         call={selectedCall}
         onClose={() => setSelectedCall(null)}
@@ -1144,17 +1035,17 @@ export function StaffCalls() {
         <Button
           variant="secondary"
           disabled={page === 1}
-          onClick={() => setPage((p) => p - 1)}
+          onClick={() => setPage(page - 1)}
         >
-          {text("上一页", "Previous", "السابق")}
+          {text(...translatedMessage("previous_2672646f39"))}
         </Button>
         <span>{page}</span>
         <Button
           variant="secondary"
           disabled={!query.data || page * 20 >= query.data.total}
-          onClick={() => setPage((p) => p + 1)}
+          onClick={() => setPage(page + 1)}
         >
-          {text("下一页", "Next", "التالي")}
+          {text(...translatedMessage("next_c0fd39244f"))}
         </Button>
       </div>
     </section>

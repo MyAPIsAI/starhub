@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 export type FundingSource =
   "simulation" | "legacy_unverified" | "api_quota" | "staff_adjustment";
 
@@ -16,18 +17,10 @@ export function fundingSourceLabel(
   text: (zh: string, en: string, ar: string) => string,
 ): string {
   if (value === "staff_adjustment")
-    return text(
-      "后台余额调整",
-      "Staff balance adjustment",
-      "تعديل الرصيد الإداري",
-    );
+    return text(...translatedMessage("staff_balance_adjustment_62e08ca719"));
   if (value === "api_quota")
-    return text("API 调用", "API usage", "استخدام API");
+    return text(...translatedMessage("api_usage_8b6a67406f"));
   return fundingSource(value) === "simulation"
-    ? text("支付模拟", "Payment simulation", "محاكاة دفع")
-    : text(
-        "历史来源未核验",
-        "Legacy source unverified",
-        "مصدر تاريخي غير متحقق منه",
-      );
+    ? text(...translatedMessage("payment_simulation_834cdcde7e"))
+    : text(...translatedMessage("legacy_source_unverified_b2b8b994cc"));
 }

@@ -1,3 +1,4 @@
+import { localizedMessage } from "./i18n/messages";
 import React, { useEffect, useRef, lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import {
@@ -23,7 +24,11 @@ import "./components/product.css";
 import "./components/refinement.css";
 import "./components/select-controls.css";
 import i18n from "./i18n";
-import { usePreferences } from "./lib/preferences";
+import {
+  usePreferences,
+  refreshLanguagePolicy,
+  setLanguagePortal,
+} from "./lib/preferences";
 import {
   useSystemAccess,
   sessionQueryIdentity,
@@ -138,12 +143,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const language = usePreferences((s) => s.language);
   const isLoggedIn = useSystemAccess((s) => s.session.accountId !== null);
   if (status === "unavailable") {
-    const message =
-      language === "zh"
-        ? "暂时无法确认登录状态，请重试。"
-        : language === "ar"
-          ? "تعذر التحقق من حالة تسجيل الدخول مؤقتًا. حاول مجددًا."
-          : "Unable to check your session. Please retry.";
+    const message = localizedMessage(
+      "unable_to_check_your_session_please_retry_225504554f",
+      language,
+    );
     return (
       <div className="route-loading" role="alert">
         {message}
@@ -333,6 +336,20 @@ function PortalSession({ children }: { children: React.ReactNode }) {
     pathname.startsWith("/admin") || pathname === "/finance"
       ? "staff"
       : "customer";
+  React.useLayoutEffect(() => {
+    setLanguagePortal(portal === "staff");
+  }, [portal]);
+  useEffect(() => {
+    const refresh = () => {
+      void refreshLanguagePolicy().catch(() => {});
+    };
+    window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refresh, 60_000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.clearInterval(timer);
+    };
+  }, []);
   return (
     <SessionRestoreProvider key={portal} portal={portal}>
       {children}
@@ -340,10 +357,14 @@ function PortalSession({ children }: { children: React.ReactNode }) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </React.StrictMode>,
-);
+void refreshLanguagePolicy()
+  .catch(() => {})
+  .finally(() =>
+    ReactDOM.createRoot(document.getElementById("root")!).render(
+      <React.StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </React.StrictMode>,
+    ),
+  );

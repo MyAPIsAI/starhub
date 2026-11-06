@@ -1,3 +1,4 @@
+import { localizedMessage } from "../i18n/messages";
 import { useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -583,11 +584,10 @@ export default function BrandHome() {
                       </span>
                       <span>
                         {quote
-                          ? language === "zh"
-                            ? "示例费用 / 次起"
-                            : language === "ar"
-                              ? "تقدير لكل طلب من"
-                              : "Estimate / call from"
+                          ? localizedMessage(
+                              "estimate_call_from_cd5060ca64",
+                              language,
+                            )
                           : c.unavailable}
                         <b>
                           {quote ? formatMoney(quote.amountNano, "call") : "—"}
@@ -604,11 +604,10 @@ export default function BrandHome() {
               })}
             </div>
             <p className="xy-section-note">
-              {language === "zh"
-                ? "模拟价格。按当前时刻、1,000 输入 + 300 输出词元、无缓存估算，已包含对应分组及时段系数；实际费用取决于用量与模型规则。"
-                : language === "ar"
-                  ? "أسعار تجريبية: 1000 رمز إدخال و300 إخراج بلا تخزين، تشمل معامل المجموعة والفترة الحالية."
-                  : "Sample prices: 1,000 input + 300 output tokens, no cache, current time and group multipliers included. Actual cost depends on usage and model rules."}
+              {localizedMessage(
+                "sample_prices_1_000_input_300_output_tokens_n_84e3538c64",
+                language,
+              )}
             </p>
           </section>
           <section className="xy-integration xy-width">
@@ -671,11 +670,10 @@ export default function BrandHome() {
               <div className="xy-code-note" role="status">
                 <i />
                 {copyFailed
-                  ? language === "zh"
-                    ? "复制失败，请选中代码手动复制。"
-                    : language === "ar"
-                      ? "تعذر النسخ. حدد الرمز وانسخه يدوياً."
-                      : "Copy failed. Select the code and copy it manually."
+                  ? localizedMessage(
+                      "copy_failed_select_the_code_and_copy_it_manua_2e5b040244",
+                      language,
+                    )
                   : c.codeNote}
               </div>
             </div>
@@ -726,20 +724,11 @@ export default function BrandHome() {
       <Modal
         open={scenariosOpen}
         onOpenChange={setScenariosOpen}
-        title={
-          language === "zh"
-            ? "选择演示场景"
-            : language === "ar"
-              ? "اختر سيناريو العرض"
-              : "Choose a demo scenario"
-        }
-        description={
-          language === "zh"
-            ? "仅重置本地演示数据；服务器账号、权限和真实调用仍由后端控制。"
-            : language === "ar"
-              ? "تعيد السيناريوهات بيانات العرض المحلية؛ تظل الحسابات والصلاحيات والطلبات الفعلية خاضعة للخادم."
-              : "Scenarios reset local Demo data; server accounts, permissions and live API calls remain controlled by the backend."
-        }
+        title={localizedMessage("choose_a_demo_scenario_086766b71d", language)}
+        description={localizedMessage(
+          "scenarios_reset_local_demo_data_server_accoun_3ad0589e14",
+          language,
+        )}
       >
         <DemoScenarios onSelect={() => setScenariosOpen(false)} />
       </Modal>

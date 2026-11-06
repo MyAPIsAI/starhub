@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import type {
   ModelPricing,
@@ -31,47 +32,45 @@ export function OfficialReferenceEditor({
   const labels: [keyof ModelPricing, string][] = [
     [
       "input_per_million_usd",
-      text("官方普通输入", "Official input", "إدخال رسمي"),
+      text(...translatedMessage("official_input_2b23659fc8")),
     ],
     [
       "output_per_million_usd",
-      text("官方模型输出", "Official output", "إخراج رسمي"),
+      text(...translatedMessage("official_output_6dcc5c2b44")),
     ],
     [
       "cache_read_per_million_usd",
-      text("官方缓存读取", "Official cache read", "قراءة ذاكرة رسمية"),
+      text(...translatedMessage("official_cache_read_2cf63dbb84")),
     ],
     [
       "cache_write_per_million_usd",
-      text("官方缓存写入", "Official cache write", "كتابة ذاكرة رسمية"),
+      text(...translatedMessage("official_cache_write_72ad659923")),
     ],
   ];
   const error = reference ? officialReferenceError(reference) : null;
   const errors = {
     shape: text(
-      "请检查币种、报价状态和计价方式。",
-      "Check currency, reference status and billing unit.",
-      "تحقق من العملة وحالة المرجع ووحدة التسعير.",
+      ...translatedMessage(
+        "check_currency_reference_status_and_billing_u_78f90a1364",
+      ),
     ),
     source: text(
-      "请填写有效的 https（安全链接）官方来源地址。",
-      "Enter a valid HTTPS official source URL.",
-      "أدخل رابط HTTPS صالحا للمصدر الرسمي.",
+      ...translatedMessage(
+        "enter_a_valid_https_official_source_url_db98543c1b",
+      ),
     ),
     date: text(
-      "请填写有效核验日期，不能晚于今天。",
-      "Enter a valid verification date no later than today.",
-      "أدخل تاريخ تحقق صالحا لا يتجاوز اليوم.",
+      ...translatedMessage(
+        "enter_a_valid_verification_date_no_later_than_fa00a22dd8",
+      ),
     ),
     scope: text(
-      "请填写适用条件，最多 1,200 字。",
-      "Enter the scope, up to 1,200 characters.",
-      "أدخل نطاق التطبيق حتى 1,200 حرف.",
+      ...translatedMessage("enter_the_scope_up_to_1_200_characters_3223e7ab2a"),
     ),
     price: text(
-      "请填写非负报价，最多 6 位小数；未单独报价的缓存项留空。",
-      "Enter non-negative prices with up to 6 decimals; leave unquoted cache items blank.",
-      "أدخل أسعارا غير سالبة حتى 6 منازل عشرية واترك بنود الذاكرة غير المسعرة فارغة.",
+      ...translatedMessage(
+        "enter_non_negative_prices_with_up_to_6_decima_a2385d2c85",
+      ),
     ),
   };
   const enable = () => {
@@ -99,21 +98,13 @@ export function OfficialReferenceEditor({
     >
       <summary>
         <span>
-          {text(
-            "厂商官方参考价",
-            "Official provider reference",
-            "مرجع المورد الرسمي",
-          )}
+          {text(...translatedMessage("official_provider_reference_fe8af7214a"))}
           <small>
             {reference
               ? reference.status === "legacy"
-                ? text("历史参考", "Historical reference", "مرجع تاريخي")
-                : text("已配置", "Configured", "محدد")
-              : text(
-                  "未核实 / 未展示",
-                  "Unverified / hidden",
-                  "غير موثق / مخفي",
-                )}
+                ? text(...translatedMessage("historical_reference_7d6c6acd22"))
+                : text(...translatedMessage("configured_3b32afda4a"))
+              : text(...translatedMessage("unverified_hidden_b778b63a1e"))}
           </small>
         </span>
         <ChevronDown size={16} />
@@ -123,16 +114,16 @@ export function OfficialReferenceEditor({
           <div>
             <strong>
               {text(
-                "在模型广场展示官方参考价",
-                "Show the official reference in the catalog",
-                "اعرض المرجع الرسمي في الكتالوج",
+                ...translatedMessage(
+                  "show_the_official_reference_in_the_catalog_e17d4d121c",
+                ),
               )}
             </strong>
             <p>
               {text(
-                "与上方平台计费基准分开维护；不乘分组倍率，不参与扣费。",
-                "Maintained separately from platform billing; no group multiplier and no effect on charges.",
-                "يدار منفصلا عن فوترة المنصة دون معامل مجموعة أو أثر على الرسوم.",
+                ...translatedMessage(
+                  "maintained_separately_from_platform_billing_n_cf5b14697c",
+                ),
               )}
             </p>
           </div>
@@ -141,9 +132,7 @@ export function OfficialReferenceEditor({
             role="switch"
             aria-checked={Boolean(reference)}
             aria-label={text(
-              "展示官方参考价",
-              "Show official reference",
-              "عرض المرجع الرسمي",
+              ...translatedMessage("show_official_reference_e03a764e99"),
             )}
             disabled={disabled}
             className="official-reference-switch"
@@ -156,21 +145,17 @@ export function OfficialReferenceEditor({
           <fieldset disabled={disabled}>
             <legend className="sr-only">
               {text(
-                "官方参考价配置",
-                "Official reference settings",
-                "إعدادات المرجع الرسمي",
+                ...translatedMessage("official_reference_settings_7ed1ad2bf3"),
               )}
             </legend>
             <div className="settings-fields">
               <label>
                 <span>
-                  {text("报价状态", "Reference status", "حالة المرجع")}
+                  {text(...translatedMessage("reference_status_da6ebb3f4a"))}
                 </span>
                 <select
                   aria-label={text(
-                    "报价状态",
-                    "Reference status",
-                    "حالة المرجع",
+                    ...translatedMessage("reference_status_da6ebb3f4a"),
                   )}
                   value={reference.status}
                   onChange={(event) =>
@@ -182,16 +167,14 @@ export function OfficialReferenceEditor({
                 >
                   <option value="current">
                     {text(
-                      "核验时在售参考",
-                      "Available at verification",
-                      "متاح عند التحقق",
+                      ...translatedMessage(
+                        "available_at_verification_dad21bf32b",
+                      ),
                     )}
                   </option>
                   <option value="legacy">
                     {text(
-                      "历史参考 / 已退役",
-                      "Historical / retired",
-                      "تاريخي / متقاعد",
+                      ...translatedMessage("historical_retired_d7e8413ef0"),
                     )}
                   </option>
                 </select>
@@ -199,16 +182,12 @@ export function OfficialReferenceEditor({
               <label>
                 <span>
                   {text(
-                    "官方计价单位",
-                    "Official pricing unit",
-                    "وحدة السعر الرسمي",
+                    ...translatedMessage("official_pricing_unit_3f5d41a5dc"),
                   )}
                 </span>
                 <select
                   aria-label={text(
-                    "官方计价单位",
-                    "Official pricing unit",
-                    "وحدة السعر الرسمي",
+                    ...translatedMessage("official_pricing_unit_3f5d41a5dc"),
                   )}
                   value={
                     reference.rate.mode === "tokens"
@@ -237,19 +216,17 @@ export function OfficialReferenceEditor({
                 >
                   <option value="tokens">
                     {text(
-                      "美元 / 百万词元",
-                      "USD / million tokens",
-                      "دولار / مليون رمز",
+                      ...translatedMessage("usd_million_tokens_6f08728512"),
                     )}
                   </option>
                   <option value="image">
-                    {text("美元 / 张", "USD / image", "دولار / صورة")}
+                    {text(...translatedMessage("usd_image_efd0385640"))}
                   </option>
                   <option value="second">
-                    {text("美元 / 秒", "USD / second", "دولار / ثانية")}
+                    {text(...translatedMessage("usd_second_b4496726da"))}
                   </option>
                   <option value="request">
-                    {text("美元 / 次", "USD / request", "دولار / طلب")}
+                    {text(...translatedMessage("usd_request_5265075e68"))}
                   </option>
                 </select>
               </label>
@@ -268,9 +245,9 @@ export function OfficialReferenceEditor({
                         placeholder={
                           index > 1
                             ? text(
-                                "不适用 / 未单独报价",
-                                "Not applicable / unquoted",
-                                "غير منطبق / غير مسعر",
+                                ...translatedMessage(
+                                  "not_applicable_unquoted_6ff90a2245",
+                                ),
                               )
                             : "0.00"
                         }
@@ -296,9 +273,9 @@ export function OfficialReferenceEditor({
                 <label>
                   <span>
                     {text(
-                      "官方每单位价格（美元）",
-                      "Official unit price (USD)",
-                      "السعر الرسمي للوحدة بالدولار",
+                      ...translatedMessage(
+                        "official_unit_price_usd_6b29c183a6",
+                      ),
                     )}
                   </span>
                   <input
@@ -321,9 +298,9 @@ export function OfficialReferenceEditor({
               <label>
                 <span>
                   {text(
-                    "官方参考来源地址",
-                    "Official reference source URL",
-                    "رابط المصدر المرجعي الرسمي",
+                    ...translatedMessage(
+                      "official_reference_source_url_70716d5fbc",
+                    ),
                   )}
                 </span>
                 <input
@@ -336,9 +313,9 @@ export function OfficialReferenceEditor({
               <label>
                 <span>
                   {text(
-                    "官方参考核验日期",
-                    "Official reference verification date",
-                    "تاريخ تحقق المرجع الرسمي",
+                    ...translatedMessage(
+                      "official_reference_verification_date_e5b1c98044",
+                    ),
                   )}
                 </span>
                 <input
@@ -354,9 +331,9 @@ export function OfficialReferenceEditor({
             <label className="official-reference-scope">
               <span>
                 {text(
-                  "适用条件（修改内容按原文展示）",
-                  "Scope (edits are displayed as entered)",
-                  "النطاق (تعرض التعديلات كما أدخلت)",
+                  ...translatedMessage(
+                    "scope_edits_are_displayed_as_entered_64213469f4",
+                  ),
                 )}
               </span>
               <textarea
@@ -364,9 +341,9 @@ export function OfficialReferenceEditor({
                 maxLength={1200}
                 value={reference.scope[lang]}
                 placeholder={text(
-                  "例如：标准付费、输入≤200,000词元、5分钟缓存、指定图片分辨率；写清排除项。",
-                  "For example: standard paid tier, prompts ≤200,000 tokens, 5-minute cache or image resolution. State exclusions.",
-                  "مثال: فئة مدفوعة قياسية ومدخلات حتى 200,000 رمز وذاكرة 5 دقائق أو دقة الصورة. اذكر الاستثناءات.",
+                  ...translatedMessage(
+                    "for_example_standard_paid_tier_prompts_200_00_895029e4f5",
+                  ),
                 )}
                 onChange={(event) =>
                   patch({
@@ -381,9 +358,9 @@ export function OfficialReferenceEditor({
             </label>
             <p className="pricing-help">
               {text(
-                "只展示已核验的一种明确口径；不同上下文、地区、缓存时长和媒体规格不能混比。复杂阶梯价请写明当前范围并附官方来源，不使用表达式推算官价。",
-                "Show one verified scope. Do not mix context lengths, regions, cache durations or media specifications. For complex tiers, state the displayed scope and link the source; do not derive official rates from expressions.",
-                "اعرض نطاقا موثقا واحدا ولا تخلط أطوال السياق أو المناطق أو مدد الذاكرة أو مواصفات الوسائط. وضح نطاق الشرائح المعقدة واربط المصدر ولا تستنتج الأسعار من تعبيرات.",
+                ...translatedMessage(
+                  "show_one_verified_scope_do_not_mix_context_le_126b5b6337",
+                ),
               )}
             </p>
             {!error && (
@@ -393,11 +370,7 @@ export function OfficialReferenceEditor({
                 target="_blank"
                 rel="noreferrer"
               >
-                {text(
-                  "核对官方来源",
-                  "Check official source",
-                  "تحقق من المصدر الرسمي",
-                )}
+                {text(...translatedMessage("check_official_source_f0d96b58bd"))}
                 <ExternalLink size={13} />
               </a>
             )}
@@ -411,9 +384,9 @@ export function OfficialReferenceEditor({
         {!reference && (
           <p className="pricing-help">
             {text(
-              "未配置时显示“未核实”，平台基准价不会被当成官价。关闭展示会随草稿发布保存，不会在刷新后自动恢复。",
-              "When unconfigured, the catalog says unverified; platform base prices are never treated as official. A published removal survives refresh.",
-              "عند غياب الإعداد يعرض غير موثق ولا تعتبر أسعار المنصة رسمية. يبقى الإخفاء المنشور بعد التحديث.",
+              ...translatedMessage(
+                "when_unconfigured_the_catalog_says_unverified_9e405d3275",
+              ),
             )}
           </p>
         )}

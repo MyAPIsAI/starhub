@@ -36,7 +36,7 @@ func ReserveQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) erro
 func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amount int64) error {
 	res := tx.Model(&User{}).
 		Where("id = ? AND quota >= ?", userID, amount).
-		Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount)})
+		Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount), "reserved_quota": gorm.Expr("reserved_quota + ?", amount)})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -78,7 +78,7 @@ func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) erro
 			}
 		}
 		return tx.Model(&User{}).Where("id = ?", userID).
-			Updates(map[string]any{"quota": gorm.Expr("quota + ?", amount)}).Error
+			Updates(map[string]any{"quota": gorm.Expr("quota + ?", amount), "reserved_quota": gorm.Expr("reserved_quota - ?", amount)}).Error
 	})
 }
 
@@ -115,6 +115,9 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			if err := claim(tx); err != nil {
 				return err
 			}
+		}
+		if err := tx.Model(&User{}).Where("id = ?", userID).UpdateColumn("reserved_quota", gorm.Expr("reserved_quota - ?", actual-delta)).Error; err != nil {
+			return err
 		}
 		var token Token
 		if err := tx.Where("id = ? AND user_id = ?", tokenID, userID).First(&token).Error; err != nil {
@@ -196,10 +199,14 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			}
 		}
 		if entry != nil || settled.UnfundedQuota > 0 {
+			normalizeBillingTime(&settled)
 			if err := tx.Create(&settled).Error; err != nil {
 				return err
 			}
 			if err := queueAPICharge(tx, &settled); err != nil {
+				return err
+			}
+			if err := markReconciliationDirty(tx, settled.UserID, settled.CreatedAt); err != nil {
 				return err
 			}
 			return queueAffiliateRebate(tx, &settled)

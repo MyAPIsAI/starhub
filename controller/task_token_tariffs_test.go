@@ -68,7 +68,12 @@ func TestTaskTokenTariffsNativeAndPluginRecoverWithoutRepricing(t *testing.T) {
 				r.Header.Set("Authorization", "Bearer "+token.Key)
 				r.Header.Set("Content-Type", "application/json")
 				w := httptest.NewRecorder()
-				middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayTaskSubmitVideo))).ServeHTTP(w, r)
+				admit := RelayTaskSubmitVideo
+				if plugin {
+					// Recreate pre-retirement tasks to verify frozen settlement after restart.
+					admit = legacyPluginAdmission
+				}
+				middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(admit))).ServeHTTP(w, r)
 				if w.Code != 200 {
 					t.Fatalf("admission: %d %s", w.Code, w.Body.String())
 				}

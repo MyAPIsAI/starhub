@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import {
   Bar,
@@ -28,28 +29,26 @@ export function ModelRequestTrend({ model }: { model: string }) {
   const title =
     metric === "latency"
       ? text(
-          "最近 30 天每日 P95 延迟",
-          "Daily P95 latency over the last 30 days",
-          "زمن P95 اليومي خلال آخر 30 يومًا",
+          ...translatedMessage(
+            "daily_p95_latency_over_the_last_30_days_12d1fe226a",
+          ),
         )
       : metric === "success"
         ? text(
-            "最近 30 天每日成功率",
-            "Daily success rate over the last 30 days",
-            "معدل النجاح اليومي خلال آخر 30 يومًا",
+            ...translatedMessage(
+              "daily_success_rate_over_the_last_30_days_82cda47fb5",
+            ),
           )
         : text(
-            "最近 30 天每日请求数",
-            "Daily requests over the last 30 days",
-            "الطلبات اليومية خلال آخر 30 يومًا",
+            ...translatedMessage(
+              "daily_requests_over_the_last_30_days_7295fcaa02",
+            ),
           );
-  const requests = text("请求数", "Requests", "الطلبات");
-  const successRate = text("成功率", "Success rate", "معدل النجاح");
-  const latency = text("P95 延迟", "P95 latency", "زمن P95");
+  const requests = text(...translatedMessage("requests_fe89af9421"));
+  const successRate = text(...translatedMessage("success_rate_b8e8689749"));
+  const latency = text(...translatedMessage("p95_latency_dc1e193e2a"));
   const noLatencyData = text(
-    "暂无耗时数据",
-    "No latency data",
-    "لا توجد بيانات زمن الاستجابة",
+    ...translatedMessage("no_latency_data_3d1e009af8"),
   );
   const rows = (query.isError ? [] : (query.data?.by_day ?? [])).map((day) => ({
     ...day,
@@ -70,13 +69,13 @@ export function ModelRequestTrend({ model }: { model: string }) {
       <h2>{title}</h2>
       <p className="access-muted">
         {text(
-          "仅统计当前模型；按 UTC 日期展示有请求记录的日期。",
-          "Current model only; dates with recorded requests are shown in UTC.",
-          "للنموذج الحالي فقط؛ تُعرض تواريخ الطلبات المسجلة بتوقيت UTC.",
+          ...translatedMessage(
+            "current_model_only_dates_with_recorded_reques_6792f03d28",
+          ),
         )}
       </p>
       <label className="access-inline-label">
-        {text("指标", "Metric", "المقياس")}
+        {text(...translatedMessage("metric_369adc4737"))}
         <select
           value={metric}
           onChange={(event) =>
@@ -98,23 +97,19 @@ export function ModelRequestTrend({ model }: { model: string }) {
         <p className="access-muted">
           <Link to="/login">
             {text(
-              "登录后查看请求趋势",
-              "Sign in to view request trends",
-              "سجّل الدخول لعرض اتجاه الطلبات",
+              ...translatedMessage("sign_in_to_view_request_trends_7c349249a1"),
             )}
           </Link>
         </p>
       ) : query.isPending ? (
         <p className="access-muted" role="status">
-          {text("正在加载趋势…", "Loading trend…", "جارٍ تحميل الاتجاه…")}
+          {text(...translatedMessage("loading_trend_346a990c10"))}
         </p>
       ) : query.isError ? (
         <div role="alert">
           <p>
             {text(
-              "请求趋势暂不可用。",
-              "Request trend is unavailable.",
-              "اتجاه الطلبات غير متاح حاليًا.",
+              ...translatedMessage("request_trend_is_unavailable_d6ded7236d"),
             )}
           </p>
           <Button
@@ -123,15 +118,15 @@ export function ModelRequestTrend({ model }: { model: string }) {
             disabled={query.isFetching}
             onClick={() => void query.refetch()}
           >
-            {text("重试", "Retry", "إعادة المحاولة")}
+            {text(...translatedMessage("retry_c16455021c"))}
           </Button>
         </div>
       ) : rows.length === 0 ? (
         <p className="access-muted">
           {text(
-            "最近 30 天暂无请求数据。",
-            "No request data in the last 30 days.",
-            "لا توجد بيانات طلبات خلال آخر 30 يومًا.",
+            ...translatedMessage(
+              "no_request_data_in_the_last_30_days_24419e47f6",
+            ),
           )}
         </p>
       ) : (
@@ -139,9 +134,9 @@ export function ModelRequestTrend({ model }: { model: string }) {
           {metric === "latency" && (
             <p className="access-muted">
               {text(
-                "纵轴单位为秒，数据表与提示为毫秒；无有效耗时的日期不绘制延迟柱。",
-                "Axis in seconds; table and tooltips in milliseconds. Days without measured latency have no bar.",
-                "المحور بالثواني والجدول والتلميحات بالمللي ثانية؛ لا تظهر أعمدة للأيام بلا قياس.",
+                ...translatedMessage(
+                  "axis_in_seconds_table_and_tooltips_in_millise_6c6d0fe316",
+                ),
               )}
             </p>
           )}
@@ -159,12 +154,14 @@ export function ModelRequestTrend({ model }: { model: string }) {
                 >
                   <CartesianGrid vertical={false} stroke="var(--border)" />
                   <XAxis
+                    reversed={language === "ar"}
                     dataKey="date"
                     tickFormatter={(date: string) => date.slice(5)}
                     minTickGap={24}
                     tick={{ fill: "var(--muted)", fontSize: 11 }}
                   />
                   <YAxis
+                    orientation={language === "ar" ? "right" : "left"}
                     allowDecimals={false}
                     width={metric === "latency" ? 56 : 44}
                     domain={metric === "success" ? [0, 100] : [0, "auto"]}
@@ -212,7 +209,7 @@ export function ModelRequestTrend({ model }: { model: string }) {
           )}
           <details className="access-details">
             <summary>
-              {text("查看每日数据", "View daily data", "عرض البيانات اليومية")}
+              {text(...translatedMessage("view_daily_data_ad82e67c6c"))}
             </summary>
             <div
               className="access-table-wrap"
@@ -223,9 +220,7 @@ export function ModelRequestTrend({ model }: { model: string }) {
               <table className="access-table">
                 <thead>
                   <tr>
-                    <th>
-                      {text("日期（UTC）", "Date (UTC)", "التاريخ (UTC)")}
-                    </th>
+                    <th>{text(...translatedMessage("date_utc_1d822f1aa7"))}</th>
                     <th>{requests}</th>
                     <th>{successRate}</th>
                     <th>{latency} (ms)</th>

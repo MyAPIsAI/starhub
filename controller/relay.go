@@ -217,12 +217,13 @@ type relayFlow struct {
 	// Observability (P5): the request-level span and the current attempt
 	// span. The attempt span is set by runChannels before each attempt
 	// and read by callUpstream / the streaming loops to record TTFT.
-	span    *metric.RequestSpan
-	attempt *metric.AttemptSpan
-	sw      *statusWriter
-	mode    string // relay mode for the metric label (chat, embeddings, ...)
-	traceID string
-	ttftMs  int64
+	span        *metric.RequestSpan
+	attempt     *metric.AttemptSpan
+	attemptSent bool
+	sw          *statusWriter
+	mode        string // relay mode for the metric label (chat, embeddings, ...)
+	traceID     string
+	ttftMs      int64
 
 	// Affinity bookkeeping per request (used by pick and noteAffinity).
 	affinityPreferred int64 // channel picked by affinity (0 when none)
@@ -291,6 +292,7 @@ func (f *relayFlow) errorOut(status int, errType, code, message string) {
 // pricier on failure). It also populates affinityPreferred for metrics and
 // noteAffinity.
 func (f *relayFlow) pick() (*model.Channel, error) {
+	deferred := map[int64]*model.Channel{}
 	for {
 		preferred, hashKey := int64(0), ""
 		if f.affinityEligible() {
@@ -308,10 +310,17 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			ch  *model.Channel
 			err error
 		)
+		excluded := make(map[int64]bool, len(f.tried)+len(deferred))
+		for id, tried := range f.tried {
+			excluded[id] = tried
+		}
+		for id := range deferred {
+			excluded[id] = true
+		}
 		if hashKey != "" {
-			ch, err = model.GetSatisfiedChannelHashed(f.currentGroup, f.req.modelName, f.tried, hashKey)
+			ch, err = model.GetSatisfiedChannelHashed(f.currentGroup, f.req.modelName, excluded, hashKey)
 		} else {
-			ch, err = model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred)
+			ch, err = model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, excluded, preferred)
 		}
 		if err == nil {
 			if f.req.channelCheck != nil {
@@ -321,6 +330,16 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 				}
 				if !allowed {
 					f.tried[ch.ID] = true
+					continue
+				}
+			}
+			if resource, ok := model.AdmissionResource(f.ctx, ch.ID, f.req.modelName, f.currentGroup); ok {
+				switch model.LocalResources.State(resource, time.Now()) {
+				case "open":
+					f.tried[ch.ID] = true
+					continue
+				case "degraded":
+					deferred[ch.ID] = ch
 					continue
 				}
 			}
@@ -340,6 +359,10 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		}
 		if !errors.Is(err, model.ErrNoChannel) {
 			return nil, err
+		}
+		for _, fallback := range deferred {
+			f.affinityPreferred = 0
+			return fallback, nil
 		}
 		// Current group exhausted: advance to the next auto group, if any.
 		if f.req.group != common.AutoGroup || f.groupIdx >= len(f.req.autoGroups)-1 {
@@ -533,6 +556,9 @@ func (f *relayFlow) refundUnlessSettled() {
 			}
 		}
 		entry := &model.Log{
+			AcceptedAt:     f.startTime.Unix(),
+			CreatedAt:      f.startTime.Unix(),
+			SettledAt:      time.Now().Unix(),
 			TraceID:        f.traceID,
 			RequestSource:  f.req.requestSource,
 			TTFTMs:         f.ttftMs,
@@ -611,6 +637,7 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 			cause: fmt.Errorf("channel %d: prepare request: %v", ch.ID, err)}
 	}
 
+	f.attemptSent = true
 	resp, err := upstreamHTTPClient.Do(req)
 	if err != nil {
 		if call.sideEffect {
@@ -681,8 +708,22 @@ loop:
 		}
 		f.begin(ch)
 		f.attempt = f.span.BeginAttempt(ch.ID)
+		f.attemptSent = false
 		res := attempt(ch)
 		f.span.EndAttempt(f.attempt, attemptOutcomeToMetric(res.outcome), res.statusCode)
+		if resource, ok := model.AdmissionResource(f.ctx, ch.ID, f.req.modelName, f.currentGroup); ok && f.attemptSent && res.outcome != attemptUnsupported {
+			outcome, ttft := "ignored", float64(0)
+			if res.outcome == attemptSuccess {
+				outcome = "success"
+			}
+			if res.outcome == attemptUpstreamError && f.ctx.Err() == nil {
+				outcome = "failure"
+			}
+			if res.usage != nil && res.usage.PromptTokens <= 2000 {
+				ttft = f.attempt.TTFTMilliseconds()
+			}
+			model.LocalResources.Record(resource, ch.ID, time.Now(), outcome, ttft)
+		}
 		f.attempt = nil
 		f.applyOutcome(res)
 		f.noteAffinity(ch, res.outcome)
@@ -1001,6 +1042,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	usage.RequestProtocol = flow.req.protocol
 	flow.setUsageMetadata(usage)
 	usage.TokenPeriodStartedAt = flow.req.tokenPeriodStartedAt
+	usage.AcceptedAt = flow.startTime.Unix()
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {

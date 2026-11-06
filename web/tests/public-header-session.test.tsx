@@ -12,9 +12,11 @@ vi.mock("../src/lib/session-restore", () => ({
   useSessionRestore: () => ({ status: fake.status, retry: () => {} }),
 }));
 vi.mock("../src/lib/preferences", () => ({
+  bindAccountLanguage: () => {},
   usePreferences: (select?: (state: { language: string }) => unknown) => {
     const state = {
       language: "en",
+      languages: ["en", "zh", "ar"],
       theme: "light",
       setTheme: () => {},
       setLanguage: () => {},

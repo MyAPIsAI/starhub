@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -83,9 +84,9 @@ export default function Playground({
   const [prompt, setPrompt] = useState<string>(
     draft.prompt ||
       c(
-        "请简要说明如何开始使用 MyAPIs。",
-        "Briefly explain how to get started with MyAPIs.",
-        "اشرح بإيجاز كيفية بدء استخدام MyAPIs.",
+        ...translatedMessage(
+          "briefly_explain_how_to_get_started_with_myapi_c2d229c2d7",
+        ),
       ),
   );
   const [system, setSystem] = useState<string>(draft.system || "");
@@ -292,9 +293,9 @@ export default function Playground({
       if (!requestTrace)
         throw new Error(
           c(
-            "缺少调用标识，请查看调用明细。",
-            "Request trace unavailable. Check request history.",
-            "معرّف الطلب غير متاح. راجع السجل.",
+            ...translatedMessage(
+              "request_trace_unavailable_check_request_histo_4597e426d3",
+            ),
           ),
         );
     } catch (err) {
@@ -304,9 +305,9 @@ export default function Playground({
         setPasswordOpen(true);
         setPasswordError(
           c(
-            "无法解锁所选密钥，请验证登录密码。",
-            "Unable to unlock this key. Verify your login password.",
-            "تعذر فتح المفتاح. تحقق من كلمة مرور الدخول.",
+            ...translatedMessage(
+              "unable_to_unlock_this_key_verify_your_login_p_75e13e927e",
+            ),
           ),
         );
       } else
@@ -314,9 +315,9 @@ export default function Playground({
           err instanceof Error
             ? err.message
             : c(
-                "调用结果未知，请查看调用明细后再决定是否重试。",
-                "Request outcome unknown. Check history before retrying.",
-                "نتيجة الطلب غير معروفة. راجع السجل قبل إعادة المحاولة.",
+                ...translatedMessage(
+                  "request_outcome_unknown_check_history_before__594bad066c",
+                ),
               ),
         );
     } finally {
@@ -338,35 +339,37 @@ export default function Playground({
         <Terminal size={19} />
         <div>
           <strong>
-            {c("文本对话调试", "Text chat playground", "تجربة المحادثة النصية")}
+            {c(...translatedMessage("text_chat_playground_d82514594e"))}
           </strong>
           <p>
             {c(
-              "通过所选 Key 直接调用网关，按实际用量计费；IP 白名单照常生效。密钥仅在页面内存中使用，对话草稿保存在当前标签页。",
-              "Calls the gateway with your selected key and charges actual usage. IP restrictions apply. Credentials stay in page memory; drafts stay in this tab.",
-              "يستدعي البوابة بالمفتاح المختار ويحاسب الاستخدام الفعلي. تنطبق قيود IP. تبقى بيانات المفتاح في ذاكرة الصفحة والمسودات في علامة التبويب.",
+              ...translatedMessage(
+                "calls_the_gateway_with_your_selected_key_and__af174ebb92",
+              ),
             )}
           </p>
         </div>
         <Link
           to={`/console/connect?key=${encodeURIComponent(keyId)}&model=${encodeURIComponent(model)}`}
         >
-          {c("接入中心", "Connections", "الاتصال")}
+          {c(...translatedMessage("connections_83e40faf19"))}
           <ArrowRight size={14} />
         </Link>
       </div>
       <div className="verify-columns">
         <section className="verify-card">
           <div className="verify-card-heading">
-            <h2>{c("请求配置", "Request configuration", "إعداد الطلب")}</h2>
+            <h2>
+              {c(...translatedMessage("request_configuration_32b0653457"))}
+            </h2>
             {currentKey && <TierBadge id={currentKey.tier} />}
           </div>
           {(keysError || choices.isError) && (
             <p role="alert">
               {c(
-                "无法加载密钥或模型，请重试。",
-                "Unable to load keys or models. Retry.",
-                "تعذر تحميل المفاتيح أو النماذج. أعد المحاولة.",
+                ...translatedMessage(
+                  "unable_to_load_keys_or_models_retry_5f7d38abf6",
+                ),
               )}{" "}
               <Button
                 onClick={() => {
@@ -374,33 +377,34 @@ export default function Playground({
                   void refetchKeys();
                 }}
               >
-                {c("重试", "Retry", "إعادة المحاولة")}
+                {c(...translatedMessage("retry_c16455021c"))}
               </Button>
             </p>
           )}
           {loading && (
             <p role="status">
-              {c("正在加载密钥…", "Loading keys…", "جارٍ تحميل المفاتيح…")}
+              {c(...translatedMessage("loading_keys_a7ac88f41a"))}
             </p>
           )}
           {!loading && !validKeys.length && (
             <div className="verify-empty">
-              <h3>
-                {c("暂无有效密钥", "No active keys", "لا توجد مفاتيح صالحة")}
-              </h3>
+              <h3>{c(...translatedMessage("no_active_keys_e117479d2f"))}</h3>
               <p>
                 {c(
-                  "请创建或启用一把未过期的 Key。",
-                  "Create or enable an unexpired key.",
-                  "أنشئ مفتاحًا غير منتهي الصلاحية أو فعّله.",
+                  ...translatedMessage(
+                    "create_or_enable_an_unexpired_key_88660033b1",
+                  ),
                 )}
               </p>
               <Button onClick={onCreate}>
-                {c("创建密钥", "Create key", "إنشاء مفتاح")}
+                {c(...translatedMessage("create_key_06433c30b0"))}
               </Button>
             </div>
           )}
-          <Field id="verify-key" label={c("Key（密钥）", "Key", "المفتاح")}>
+          <Field
+            id="verify-key"
+            label={c(...translatedMessage("key_82ee8b617e"))}
+          >
             <select
               id="verify-key"
               className="select-trigger"
@@ -410,11 +414,7 @@ export default function Playground({
             >
               {!currentKey && (
                 <option value={keyId}>
-                  {c(
-                    "请选择有效密钥",
-                    "Select an active key",
-                    "اختر مفتاحًا صالحًا",
-                  )}
+                  {c(...translatedMessage("select_an_active_key_10677a92e9"))}
                 </option>
               )}
               {validKeys.map((key) => (
@@ -427,7 +427,7 @@ export default function Playground({
           <div className="verify-field-row">
             <Field
               id="verify-protocol"
-              label={c("请求协议", "Protocol", "البروتوكول")}
+              label={c(...translatedMessage("protocol_35e80b8457"))}
             >
               <select
                 id="verify-protocol"
@@ -443,7 +443,7 @@ export default function Playground({
             </Field>
             <Field
               id="verify-model"
-              label={c("本次模型", "Request model", "نموذج الطلب")}
+              label={c(...translatedMessage("request_model_177665bff5"))}
             >
               <select
                 id="verify-model"
@@ -454,15 +454,16 @@ export default function Playground({
               >
                 {!selectedModel && (
                   <option value={model}>
-                    {model} · {c("当前不可用", "Unavailable", "غير متاح")}
+                    {model} ·{" "}
+                    {c(...translatedMessage("unavailable_018e9b5757"))}
                   </option>
                 )}
                 {options.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.id} ·{" "}
                     {option.kind === "smart"
-                      ? c("智能路由", "Smart routing", "توجيه ذكي")
-                      : c("指定模型", "Specified model", "نموذج محدد")}
+                      ? c(...translatedMessage("smart_routing_34b9b06792"))
+                      : c(...translatedMessage("specified_model_19254d43b3"))}
                   </option>
                 ))}
               </select>
@@ -471,15 +472,15 @@ export default function Playground({
           {selectedModel?.kind === "smart" && (
             <p className="verify-hint">
               {c(
-                "智能入口按最低成本策略在授权文本候选中选择，按实际模型计费。",
-                "Cost routing selects an authorized, compatible candidate and charges its actual model rate.",
-                "يختار التوجيه الأقل تكلفة نموذجًا نصيًا متوافقًا ومصرحًا به ويحاسب سعره الفعلي.",
+                ...translatedMessage(
+                  "cost_routing_selects_an_authorized_compatible_53bb805f6f",
+                ),
               )}
             </p>
           )}
           <Field
             id="verify-prompt"
-            label={c("请求内容", "Message", "محتوى الطلب")}
+            label={c(...translatedMessage("message_1f77e94bb4"))}
           >
             <textarea
               id="verify-prompt"
@@ -491,10 +492,12 @@ export default function Playground({
             />
           </Field>
           <details className="verify-advanced">
-            <summary>{c("参数设置", "Parameters", "المعلمات")}</summary>
+            <summary>
+              {c(...translatedMessage("parameters_e2a1266467"))}
+            </summary>
             <Field
               id="verify-system"
-              label={c("系统提示", "System prompt", "تعليمات النظام")}
+              label={c(...translatedMessage("system_prompt_8eacc1e898"))}
             >
               <textarea
                 id="verify-system"
@@ -508,7 +511,7 @@ export default function Playground({
             <div className="verify-field-row">
               <Field
                 id="verify-temperature"
-                label={c("温度", "Temperature", "درجة الحرارة")}
+                label={c(...translatedMessage("temperature_5cd567cbc8"))}
               >
                 <Input
                   id="verify-temperature"
@@ -523,11 +526,7 @@ export default function Playground({
               </Field>
               <Field
                 id="verify-max"
-                label={c(
-                  "最大输出词元",
-                  "Max output tokens",
-                  "الحد الأقصى للرموز",
-                )}
+                label={c(...translatedMessage("max_output_tokens_c478d69b7b"))}
               >
                 <Input
                   id="verify-max"
@@ -548,24 +547,24 @@ export default function Playground({
                 disabled={busy}
                 onChange={(e) => setStream(e.target.checked)}
               />
-              {c("流式输出", "Stream response", "إخراج متدفق")}
+              {c(...translatedMessage("stream_response_da18895327"))}
             </label>
           </details>
           {!validParameters && (
             <p role="alert">
               {c(
-                "温度须为 0–2，最大输出须为 1–16384 的整数。",
-                "Temperature must be 0–2; max output must be an integer from 1–16384.",
-                "درجة الحرارة من 0 إلى 2 وحد الإخراج عدد صحيح من 1 إلى 16384.",
+                ...translatedMessage(
+                  "temperature_must_be_0_2_max_output_must_be_an_0ffb28e13c",
+                ),
               )}
             </p>
           )}
           <div className="verify-send">
             <span>
               {c(
-                "按所选 Key 的分组、权限和额度调用",
-                "Uses this key’s group, permissions and quota",
-                "يستخدم مجموعة المفتاح وصلاحياته وحصته",
+                ...translatedMessage(
+                  "uses_this_key_s_group_permissions_and_quota_68d373b116",
+                ),
               )}
             </span>
             <Button
@@ -575,16 +574,16 @@ export default function Playground({
             >
               <Play size={14} />
               {busy
-                ? c("正在调用…", "Running…", "جارٍ التنفيذ…")
-                : c("发送请求", "Send request", "إرسال الطلب")}
+                ? c(...translatedMessage("running_df0e221215"))
+                : c(...translatedMessage("send_request_97662035e5"))}
             </Button>
           </div>
         </section>
         <section className="verify-card verify-result">
           <div className="verify-card-heading">
-            <h2>{c("调用结果", "Result", "نتيجة الطلب")}</h2>
+            <h2>{c(...translatedMessage("result_8bf4743b85"))}</h2>
             <span className="verify-demo-label">
-              {c("实际调用", "LIVE", "فعلي")}
+              {c(...translatedMessage("live_44ed0ed37e"))}
             </span>
           </div>
           {error && (
@@ -596,16 +595,16 @@ export default function Playground({
           {busy && (
             <p role="status">
               {c(
-                "正在接收响应并等待结算…",
-                "Receiving response and awaiting settlement…",
-                "جارٍ تلقي الاستجابة وانتظار التسوية…",
+                ...translatedMessage(
+                  "receiving_response_and_awaiting_settlement_1554b32117",
+                ),
               )}
             </p>
           )}
           {output && (
             <pre
               className="verify-output"
-              aria-label={c("响应内容", "Response", "الاستجابة")}
+              aria-label={c(...translatedMessage("response_5ded1f2cd9"))}
             >
               {output}
             </pre>
@@ -614,42 +613,40 @@ export default function Playground({
             <dl className="verify-metrics">
               {[
                 [
-                  c("实际模型", "Actual model", "النموذج الفعلي"),
+                  c(...translatedMessage("actual_model_87fe7e61b2")),
                   result.actual_model,
                 ],
                 [
-                  c("厂商", "Provider", "المزود"),
+                  c(...translatedMessage("provider_efd2d07eac")),
                   result.vendor_display || result.vendor,
                 ],
                 [
-                  c("自动切换", "Fallback", "تبديل تلقائي"),
-                  result.fallback ? c("是", "Yes", "نعم") : c("否", "No", "لا"),
+                  c(...translatedMessage("fallback_5d371dc968")),
+                  result.fallback
+                    ? c(...translatedMessage("yes_3445b9ddec"))
+                    : c(...translatedMessage("no_b02901acfa")),
                 ],
                 [
-                  c("首 Token 延迟", "Time to first token", "زمن أول رمز"),
+                  c(...translatedMessage("time_to_first_token_88b0726bc5")),
                   `${result.ttft_ms} ms`,
                 ],
                 [
-                  c("总耗时", "Total time", "المدة الكلية"),
+                  c(...translatedMessage("total_time_c519957b3a")),
                   `${result.duration_ms} ms`,
                 ],
                 [
-                  c(
-                    "输入 / 输出词元",
-                    "Input / output tokens",
-                    "رموز الإدخال / الإخراج",
-                  ),
+                  c(...translatedMessage("input_output_tokens_57071059f4")),
                   `${result.input_tokens} / ${result.output_tokens}`,
                 ],
                 [
-                  c("本次费用", "Charge", "الرسوم"),
+                  c(...translatedMessage("charge_4440ece1ce")),
                   formatMoney(result.cost_nano, "detail"),
                 ],
                 [
-                  c("状态", "Status", "الحالة"),
+                  c(...translatedMessage("status_dda39dcd63")),
                   result.status === 1
-                    ? c("成功", "Succeeded", "نجح")
-                    : c("未成功", "Failed", "فشل"),
+                    ? c(...translatedMessage("succeeded_1a524ac49d"))
+                    : c(...translatedMessage("failed_b8a1e467e3")),
                 ],
               ].map(([label, value]) => (
                 <div key={label}>
@@ -664,9 +661,9 @@ export default function Playground({
           {!busy && !output && !error && (
             <p className="verify-hint">
               {c(
-                "发送后在此查看响应与实际结算信息。",
-                "Send a request to see its response and settled usage.",
-                "أرسل طلبًا لعرض الاستجابة والاستخدام الفعلي.",
+                ...translatedMessage(
+                  "send_a_request_to_see_its_response_and_settle_3a5e895579",
+                ),
               )}
             </p>
           )}
@@ -677,16 +674,16 @@ export default function Playground({
           )}
           {(result || error) && (
             <Link to="/console/requests">
-              {c("查看调用明细", "View request history", "عرض سجل الطلبات")}
+              {c(...translatedMessage("view_request_history_5e59ba4557"))}
               <ArrowRight size={14} />
             </Link>
           )}
           <details className="verify-code">
             <summary>
-              {c("请求预览", "Request preview", "معاينة الطلب")}
+              {c(...translatedMessage("request_preview_fb4f66d60f"))}
             </summary>
             <Segmented
-              label={c("代码语言", "Code language", "لغة الشفرة")}
+              label={c(...translatedMessage("code_language_414510bdc4"))}
               value={language}
               onChange={setLanguage}
               options={[
@@ -697,9 +694,9 @@ export default function Playground({
             />
             <p className="verify-hint">
               {c(
-                "设置环境变量 MYAPIS_API_KEY 后运行，实际调用按用量计费。",
-                "Set MYAPIS_API_KEY before running. Actual usage is billed.",
-                "عيّن MYAPIS_API_KEY قبل التشغيل. يُحاسب الاستخدام الفعلي.",
+                ...translatedMessage(
+                  "set_myapis_api_key_before_running_actual_usag_a999d73a42",
+                ),
               )}
             </p>
             <Button
@@ -711,8 +708,8 @@ export default function Playground({
             >
               <Copy size={13} />
               {copied
-                ? c("已复制", "Copied", "تم النسخ")
-                : c("复制代码", "Copy code", "نسخ الشفرة")}
+                ? c(...translatedMessage("copied_e6bf924fa2"))
+                : c(...translatedMessage("copy_code_f09930b305"))}
             </Button>
             <pre dir="ltr" tabIndex={0}>
               <code>{code}</code>
@@ -729,15 +726,11 @@ export default function Playground({
             setPasswordError("");
           }
         }}
-        title={c(
-          "验证登录密码",
-          "Verify login password",
-          "تحقق من كلمة مرور الدخول",
-        )}
+        title={c(...translatedMessage("verify_login_password_c03eb83bf5"))}
         description={c(
-          "调用所选密钥前验证身份，验证有效期为 5 分钟。",
-          "Verify before using this key. Verification lasts five minutes.",
-          "تحقق قبل استخدام المفتاح. يسري التحقق لخمس دقائق.",
+          ...translatedMessage(
+            "verify_before_using_this_key_verification_las_61a0f711ac",
+          ),
         )}
         initialFocus={passwordInput}
       >
@@ -749,7 +742,7 @@ export default function Playground({
         >
           <Field
             id="playground-password"
-            label={c("登录密码", "Login password", "كلمة مرور الدخول")}
+            label={c(...translatedMessage("login_password_e69bc15f89"))}
             error={passwordError}
           >
             <Input
@@ -763,7 +756,7 @@ export default function Playground({
             />
           </Field>
           <Button type="submit" variant="primary" disabled={busy || !password}>
-            {c("验证并调用", "Verify and send", "تحقق وأرسل")}
+            {c(...translatedMessage("verify_and_send_3d7c3706d3"))}
           </Button>
         </form>
       </Modal>

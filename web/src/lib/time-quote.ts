@@ -1,3 +1,4 @@
+import { regionalLocale } from "./locale-format";
 export interface TimeQuote {
   multiplier: number;
   window_id: string;
@@ -70,7 +71,7 @@ export function formatTimeQuoteInstant(
   language: string,
 ): string {
   try {
-    return new Intl.DateTimeFormat(language, {
+    return new Intl.DateTimeFormat(regionalLocale(language), {
       timeZone: timezone,
       dateStyle: "medium",
       timeStyle: "long",

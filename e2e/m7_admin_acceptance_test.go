@@ -43,6 +43,9 @@ func TestM7AdministrationAcceptance(t *testing.T) {
 	if err := model.CreateUser(user); err != nil {
 		t.Fatal(err)
 	}
+	if err := model.DB.Create(&model.LedgerEntry{UserID: user.ID, Type: "adjustment", FundingSource: model.FundingSourceStaffAdjustment, Amount: user.Quota * 2000, BalanceAfter: user.Quota * 2000, Description: "Synthetic opening credit"}).Error; err != nil {
+		t.Fatal(err)
+	}
 	key := &model.Token{UserID: user.ID, Name: "Acceptance key", Status: 1, Group: "default", UnlimitedQuota: true, ModelLimits: "m7-model"}
 	if err := model.InsertToken(key); err != nil {
 		t.Fatal(err)

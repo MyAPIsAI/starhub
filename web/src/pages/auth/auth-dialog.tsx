@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../../i18n/messages";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -149,49 +150,47 @@ export default function AuthDialog() {
     if (caught instanceof ApiError) {
       if (caught.status === 401)
         return c(
-          "账号或密码不正确，请检查后重试。",
-          "The account or password is incorrect. Please try again.",
-          "الحساب أو كلمة المرور غير صحيحة. حاول مجددًا.",
+          ...translatedMessage(
+            "the_account_or_password_is_incorrect_please_t_f7b96c4cf8",
+          ),
         );
       if (caught.status === 403 && caught.message === "user is disabled")
         return c(
-          "该账户已被禁用，请联系管理员。",
-          "This account is disabled. Contact the administrator.",
-          "هذا الحساب معطل. اتصل بالمسؤول.",
+          ...translatedMessage(
+            "this_account_is_disabled_contact_the_administ_17dabe2605",
+          ),
         );
       if (
         caught.status === 403 &&
         caught.message === "staff access requires the company network or VPN"
       )
         return c(
-          "该账号需通过公司网络或 VPN 登录。",
-          "Connect through the company network or VPN to sign in with this account.",
-          "اتصل بشبكة الشركة أو VPN لتسجيل الدخول بهذا الحساب.",
+          ...translatedMessage(
+            "connect_through_the_company_network_or_vpn_to_a19511ca91",
+          ),
         );
       if (caught.status === 429)
         return c(
-          "尝试次数过多，请稍后再试。",
-          "Too many attempts. Please try later.",
-          "محاولات كثيرة. حاول لاحقًا.",
+          ...translatedMessage("too_many_attempts_please_try_later_81d78c1669"),
         );
       if (caught.status === 403)
         return c(
-          "登录请求被拒绝，请联系管理员。",
-          "Sign-in was denied. Contact the administrator.",
-          "تم رفض تسجيل الدخول. اتصل بالمسؤول.",
+          ...translatedMessage(
+            "sign_in_was_denied_contact_the_administrator_a218135410",
+          ),
         );
       if (caught.status === 409)
         return c(
-          "该用户名已被使用，请换一个。",
-          "This username is already taken. Choose another.",
-          "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر.",
+          ...translatedMessage(
+            "this_username_is_already_taken_choose_another_8a9b4220fc",
+          ),
         );
       return caught.message;
     }
     return c(
-      "暂时无法完成，请重试。输入已保留。",
-      "Unable to continue. Your inputs are preserved; please retry.",
-      "تعذر المتابعة. تم الاحتفاظ بالمدخلات؛ حاول مجددًا.",
+      ...translatedMessage(
+        "unable_to_continue_your_inputs_are_preserved__865306b2d9",
+      ),
     );
   }
   async function submit(event: FormEvent) {
@@ -205,9 +204,9 @@ export default function AuthDialog() {
     if (!agreed) {
       setError(
         c(
-          "请阅读并勾选服务协议与隐私政策后继续。",
-          "Read and accept the terms and privacy notice to continue.",
-          "اقرأ اتفاقية الخدمة وسياسة الخصوصية ووافق عليهما للمتابعة.",
+          ...translatedMessage(
+            "read_and_accept_the_terms_and_privacy_notice__73d6050598",
+          ),
         ),
       );
       return;
@@ -216,9 +215,9 @@ export default function AuthDialog() {
       setConfirmError(true);
       setError(
         c(
-          "两次输入的密码不一致，请重新确认。",
-          "Passwords do not match. Please confirm your password again.",
-          "كلمتا المرور غير متطابقتين. أكّد كلمة المرور مجددًا.",
+          ...translatedMessage(
+            "passwords_do_not_match_please_confirm_your_pa_745e3fae3a",
+          ),
         ),
       );
       return;
@@ -266,36 +265,36 @@ export default function AuthDialog() {
   }
   const title =
     policy === "terms"
-      ? c("服务协议", "Terms of service", "اتفاقية الخدمة")
+      ? c(...translatedMessage("terms_of_service_d38598ca08"))
       : policy === "privacy"
-        ? c("隐私政策", "Privacy notice", "سياسة الخصوصية")
+        ? c(...translatedMessage("privacy_notice_a66b0d4095"))
         : mode === "register"
-          ? c("创建你的账户", "Create your account", "أنشئ حسابك")
+          ? c(...translatedMessage("create_your_account_061afa15ea"))
           : mode === "reset"
-            ? c("重置密码", "Reset your password", "إعادة تعيين كلمة المرور")
-            : c("欢迎回来", "Welcome back", "مرحبًا بعودتك");
+            ? c(...translatedMessage("reset_your_password_928072b65e"))
+            : c(...translatedMessage("welcome_back_1d9c0d500a"));
   const description = policy
     ? c(
-        "演示草案 · 仅展示阅读与勾选流程",
-        "Demo draft · for the reading and consent flow only",
-        "مسودة تجريبية · لعرض القراءة والموافقة فقط",
+        ...translatedMessage(
+          "demo_draft_for_the_reading_and_consent_flow_o_9920278644",
+        ),
       )
     : mode === "register"
       ? c(
-          "一把密钥，开始你的多模型之旅。",
-          "One key to start working with multiple models.",
-          "مفتاح واحد لبدء العمل مع نماذج متعددة.",
+          ...translatedMessage(
+            "one_key_to_start_working_with_multiple_models_123d687c0c",
+          ),
         )
       : mode === "reset"
         ? c(
-            "密码找回暂不可用，请联系管理员。",
-            "Password recovery is unavailable. Contact the administrator.",
-            "استعادة كلمة المرور غير متاحة. تواصل مع المسؤول.",
+            ...translatedMessage(
+              "password_recovery_is_unavailable_contact_the__f5a8455096",
+            ),
           )
         : c(
-            "登录后，在熟悉的工具中自由切换模型。",
-            "Sign in and switch models in the tools you know.",
-            "سجّل الدخول وبدّل النماذج في أدواتك المفضلة.",
+            ...translatedMessage(
+              "sign_in_and_switch_models_in_the_tools_you_kn_d9de79fafc",
+            ),
           );
 
   function passwordField(
@@ -328,13 +327,13 @@ export default function AuthDialog() {
             placeholder={
               id === "auth-confirm-password"
                 ? c(
-                    "请再次输入密码",
-                    "Enter your password again",
-                    "أدخل كلمة المرور مجددًا",
+                    ...translatedMessage(
+                      "enter_your_password_again_1251a73d19",
+                    ),
                   )
                 : isNew
-                  ? c("至少 6 位", "At least 6 characters", "6 أحرف على الأقل")
-                  : c("请输入密码", "Enter your password", "أدخل كلمة المرور")
+                  ? c(...translatedMessage("at_least_6_characters_f73ef16def"))
+                  : c(...translatedMessage("enter_your_password_aca4207a72"))
             }
           />
           <button
@@ -342,8 +341,8 @@ export default function AuthDialog() {
             className="auth-password-toggle"
             aria-label={
               visiblePasswords[id]
-                ? c("隐藏密码", "Hide password", "إخفاء كلمة المرور")
-                : c("显示密码", "Show password", "إظهار كلمة المرور")
+                ? c(...translatedMessage("hide_password_fde939f99a"))
+                : c(...translatedMessage("show_password_4090d99064"))
             }
             aria-pressed={Boolean(visiblePasswords[id])}
             onClick={() =>
@@ -364,9 +363,9 @@ export default function AuthDialog() {
       <input
         id="auth-consent"
         aria-label={c(
-          "我已阅读并同意服务协议，并知悉隐私政策",
-          "I have read and agree to the terms of service and acknowledge the privacy notice",
-          "قرأت وأوافق على اتفاقية الخدمة وأقر بالاطلاع على سياسة الخصوصية",
+          ...translatedMessage(
+            "i_have_read_and_agree_to_the_terms_of_service_1125a13a5a",
+          ),
         )}
         type="checkbox"
         checked={agreed}
@@ -377,24 +376,24 @@ export default function AuthDialog() {
       />
       <div className="auth-consent-text">
         <label htmlFor="auth-consent">
-          {c("我已阅读并同意", "I have read and agree to ", "قرأت وأوافق على ")}
+          {c(...translatedMessage("i_have_read_and_agree_to_3f74b32eb6"))}
         </label>
         <button
           type="button"
           data-auth-policy="terms"
           onClick={() => showPolicy("terms")}
         >
-          {c("《服务协议》", "Terms of service", "اتفاقية الخدمة")}
+          {c(...translatedMessage("terms_of_service_e7dc68d3c2"))}
         </button>
         <label htmlFor="auth-consent">
-          {c("，并知悉", ", and acknowledge ", "، وأقر بالاطلاع على ")}
+          {c(...translatedMessage("and_acknowledge_c2cfb94798"))}
         </label>
         <button
           type="button"
           data-auth-policy="privacy"
           onClick={() => showPolicy("privacy")}
         >
-          {c("《隐私政策》", "Privacy notice", "سياسة الخصوصية")}
+          {c(...translatedMessage("privacy_notice_b9265574bf"))}
         </button>
       </div>
     </div>
@@ -447,9 +446,7 @@ export default function AuthDialog() {
               className="auth-close"
               onClick={close}
               aria-label={c(
-                "关闭并返回主页",
-                "Close and return home",
-                "إغلاق والعودة للرئيسية",
+                ...translatedMessage("close_and_return_home_cc6606707d"),
               )}
             >
               <X size={20} />
@@ -457,7 +454,7 @@ export default function AuthDialog() {
             {policy && (
               <button type="button" className="auth-back" onClick={backToForm}>
                 <ArrowLeft size={14} className="directional" />
-                {c("返回表单", "Back to form", "العودة للنموذج")}
+                {c(...translatedMessage("back_to_form_76ccd28ef6"))}
               </button>
             )}
             <Dialog.Title ref={heading} tabIndex={-1}>
@@ -472,97 +469,87 @@ export default function AuthDialog() {
                   <Info size={16} />
                   <span>
                     {c(
-                      "这不是正式法律文本，不代表已完成上线合规审核。",
-                      "This is not a legal document or a production compliance review.",
-                      "هذا ليس نصًا قانونيًا أو مراجعة امتثال للإنتاج.",
+                      ...translatedMessage(
+                        "this_is_not_a_legal_document_or_a_production__30d94bd9fb",
+                      ),
                     )}
                   </span>
                 </div>
                 {policy === "terms" ? (
                   <>
                     <h3>
-                      {c("1. 当前范围", "1. Current scope", "1. النطاق الحالي")}
+                      {c(...translatedMessage("1_current_scope_c6c3998666"))}
                     </h3>
                     <p>
                       {c(
-                        "用户名注册与密码登录使用服务器接口。模型调用取决于部署中的上游渠道、权限和配额；当前充值收银台仍为模拟流程，短信及验证邮件尚未接入。",
-                        "Username registration and password login use server APIs. Model calls depend on configured upstream channels, permissions and quota. The current recharge checkout is simulated; SMS and verification email are unavailable.",
-                        "يستخدم التسجيل والدخول واجهات الخادم. تعتمد طلبات النماذج على القنوات والصلاحيات والحصة. الدفع الحالي محاكاة؛ الرسائل النصية ورسائل التحقق غير متاحة.",
+                        ...translatedMessage(
+                          "username_registration_and_password_login_use__a62e7e5ced",
+                        ),
                       )}
                     </p>
                     <h3>
                       {c(
-                        "2. 账户与预付费",
-                        "2. Accounts and prepaid balance",
-                        "2. الحساب والرصيد المسبق",
+                        ...translatedMessage(
+                          "2_accounts_and_prepaid_balance_f7d87d3f36",
+                        ),
                       )}
                     </h3>
                     <p>
                       {c(
-                        "注册成功后仍需登录。当前新账号 API 配额默认是零；支付钱包与 API 配额分别记账。创建充值订单不代表付款确认，模拟充值不能兑换真实 API 配额。",
-                        "Registration must be followed by login. New accounts currently default to zero API quota; payment wallet and API quota are separate. Creating an order is not payment confirmation, and simulated recharge cannot be exchanged for live API quota.",
-                        "يلزم تسجيل الدخول بعد إنشاء الحساب. تبدأ الحصة الافتراضية للحسابات الجديدة بصفر؛ المحفظة والحصة منفصلتان. إنشاء طلب ليس تأكيد دفع ولا يتحول الشحن التجريبي إلى حصة فعلية.",
+                        ...translatedMessage(
+                          "registration_must_be_followed_by_login_new_ac_1caf302eb9",
+                        ),
                       )}
                     </p>
                     <h3>
-                      {c("3. 数据范围", "3. Data scope", "3. نطاق البيانات")}
+                      {c(...translatedMessage("3_data_scope_e7f8bb57e3"))}
                     </h3>
                     <p>
                       {c(
-                        "服务器账户数据与浏览器中的演示场景数据分开。注册不会替换现有账本、密钥或演示场景；登录后的实际权限由服务器校验。此说明仍为界面草案。",
-                        "Server account data is separate from browser Demo scenarios. Registration does not replace existing ledgers, keys or scenarios. The server checks actual permissions after login. This notice remains a UI draft.",
-                        "بيانات حساب الخادم منفصلة عن سيناريوهات المتصفح. التسجيل لا يستبدل السجلات أو المفاتيح أو السيناريوهات. يتحقق الخادم من الصلاحيات الفعلية. يظل هذا الإشعار مسودة واجهة.",
+                        ...translatedMessage(
+                          "server_account_data_is_separate_from_browser__dab9f4d9e4",
+                        ),
                       )}
                     </p>
                   </>
                 ) : (
                   <>
                     <h3>
-                      {c(
-                        "1. 当前保存的内容",
-                        "1. What is stored",
-                        "1. ما يُحفظ",
-                      )}
+                      {c(...translatedMessage("1_what_is_stored_e1adc7b74e"))}
                     </h3>
                     <p>
                       {c(
-                        "服务器保存用户名与口令哈希；登录使用 HttpOnly Cookie 和服务器会话，不将会话密钥写入浏览器本地存储。浏览器仍保存账号显示资料、偏好和其余演示数据。当前注册表单不收集手机号。",
-                        "The server stores usernames and password hashes. Login uses an HttpOnly cookie and a server session; session keys are not saved to browser local storage. Display profiles, preferences and remaining Demo data are stored in the browser. This registration form collects no phone number.",
-                        "يحفظ الخادم أسماء المستخدمين وتجزئات كلمات المرور. يستخدم الدخول ملف ارتباط HttpOnly وجلسة خادم، دون حفظ مفتاح الجلسة في التخزين المحلي. تُحفظ ملفات العرض والتفضيلات وبيانات العرض المتبقية في المتصفح. لا يجمع النموذج رقم هاتف.",
+                        ...translatedMessage(
+                          "the_server_stores_usernames_and_password_hash_f9d4d25011",
+                        ),
                       )}
                     </p>
                     <h3>
                       {c(
-                        "2. 验证码与资料",
-                        "2. Codes and details",
-                        "2. الرموز والبيانات",
+                        ...translatedMessage("2_codes_and_details_b81e5f7b22"),
                       )}
                     </h3>
                     <p>
                       {c(
-                        "短信和验证邮件尚未接入，当前不提供手机号认证或验证码登录。阅读与勾选状态仍只在界面处理，服务器没有保存版本化的同意记录。",
-                        "SMS and verification email are unavailable; phone verification and code login are not supported. Reading and consent state are handled in the UI; the server does not retain a versioned consent record.",
-                        "الرسائل النصية ورسائل التحقق غير متاحة؛ لا يُدعم توثيق الهاتف أو الدخول برمز. تُعالج الموافقة في الواجهة ولا يحفظ الخادم سجل موافقة بإصدار محدد.",
+                        ...translatedMessage(
+                          "sms_and_verification_email_are_unavailable_ph_31ad9f500a",
+                        ),
                       )}
                     </p>
                     <h3>
-                      {c("3. 清理方式", "3. Clearing data", "3. مسح البيانات")}
+                      {c(...translatedMessage("3_clearing_data_7ebe3b96ed"))}
                     </h3>
                     <p>
                       {c(
-                        "请使用退出登录来结束当前服务器会话；仅关闭标签页不会注销。清除浏览器网站数据不会删除服务器账户或账本。正式隐私政策仍需由部署方另行提供。",
-                        "Use Sign out to end the current server session; closing a tab does not log out. Clearing browser data does not delete server accounts or ledgers. The deployment operator must provide the final privacy policy separately.",
-                        "استخدم تسجيل الخروج لإنهاء جلسة الخادم؛ إغلاق التبويب لا ينهيها. مسح بيانات المتصفح لا يحذف حسابات الخادم أو السجلات. يقدّم مشغّل النشر سياسة الخصوصية النهائية بشكل منفصل.",
+                        ...translatedMessage(
+                          "use_sign_out_to_end_the_current_server_sessio_6296ae743f",
+                        ),
                       )}
                     </p>
                   </>
                 )}
                 <Button className="auth-submit" onClick={backToForm}>
-                  {c(
-                    "返回继续填写",
-                    "Return to the form",
-                    "العودة لإكمال النموذج",
-                  )}
+                  {c(...translatedMessage("return_to_the_form_89781f8952"))}
                 </Button>
               </article>
             ) : (
@@ -570,9 +557,9 @@ export default function AuthDialog() {
                 {mode === "login" && registered && (
                   <p className="auth-field-hint" role="status">
                     {c(
-                      "账户已创建。请使用用户名和密码登录；尚未建立新会话。",
-                      "Account created. Sign in with your username and password; no new session has been established.",
-                      "أُنشئ الحساب. سجّل الدخول باسم المستخدم وكلمة المرور؛ لم تُنشأ جلسة جديدة بعد.",
+                      ...translatedMessage(
+                        "account_created_sign_in_with_your_username_an_8b3bc540d1",
+                      ),
                     )}
                   </p>
                 )}
@@ -580,7 +567,9 @@ export default function AuthDialog() {
                   <div
                     className="auth-methods"
                     role="group"
-                    aria-label={c("登录方式", "Login method", "طريقة الدخول")}
+                    aria-label={c(
+                      ...translatedMessage("login_method_ab6c5314b3"),
+                    )}
                   >
                     <button
                       type="button"
@@ -588,7 +577,7 @@ export default function AuthDialog() {
                       data-state={method === "password" ? "active" : "inactive"}
                       onClick={() => setMethod("password")}
                     >
-                      {c("账号密码", "Password", "كلمة المرور")}
+                      {c(...translatedMessage("password_15c90631ef"))}
                     </button>
                     <button
                       type="button"
@@ -596,7 +585,7 @@ export default function AuthDialog() {
                       data-state={method === "phone" ? "active" : "inactive"}
                       onClick={() => setMethod("phone")}
                     >
-                      {c("手机号验证码", "Phone code", "رمز الهاتف")}
+                      {c(...translatedMessage("phone_code_958ce3021c"))}
                     </button>
                   </div>
                 )}
@@ -609,25 +598,21 @@ export default function AuthDialog() {
                     <p>
                       {mode === "reset"
                         ? c(
-                            "密码找回尚未接入，请联系管理员协助恢复。当前页面不会收集手机号、发送验证码或修改密码。",
-                            "Password recovery is unavailable. Contact the administrator for help. This page does not collect phone numbers, send codes or change passwords.",
-                            "استعادة كلمة المرور غير متاحة. تواصل مع المسؤول للمساعدة. لا تجمع هذه الصفحة أرقام هواتف ولا ترسل رموزًا ولا تغيّر كلمات المرور.",
+                            ...translatedMessage(
+                              "password_recovery_is_unavailable_contact_the__020bb77c9b",
+                            ),
                           )
                         : c(
-                            "手机号验证码登录尚未接入。请使用用户名和密码登录；当前页面不会发送或校验验证码。",
-                            "Phone-code login is unavailable. Use your username and password; this page does not send or verify codes.",
-                            "الدخول برمز الهاتف غير متاح. استخدم اسم المستخدم وكلمة المرور؛ لا ترسل هذه الصفحة رموزًا ولا تتحقق منها.",
+                            ...translatedMessage(
+                              "phone_code_login_is_unavailable_use_your_user_fbb542e006",
+                            ),
                           )}
                     </p>
                     <Button
                       variant="primary"
                       onClick={() => changeMode("login")}
                     >
-                      {c(
-                        "使用账号密码登录",
-                        "Use password login",
-                        "الدخول بكلمة المرور",
-                      )}
+                      {c(...translatedMessage("use_password_login_ce48f27728"))}
                     </Button>
                   </div>
                 ) : (
@@ -646,7 +631,7 @@ export default function AuthDialog() {
                       <>
                         <div className="auth-field">
                           <label htmlFor="auth-account">
-                            {c("账号", "Account", "الحساب")}
+                            {c(...translatedMessage("account_b00965aefc"))}
                           </label>
                           <Input
                             id="auth-account"
@@ -660,16 +645,14 @@ export default function AuthDialog() {
                             required
                             maxLength={254}
                             placeholder={c(
-                              "用户名",
-                              "Username",
-                              "اسم المستخدم",
+                              ...translatedMessage("username_52bf46ce51"),
                             )}
                             dir="ltr"
                           />
                         </div>
                         {passwordField(
                           "auth-password",
-                          c("密码", "Password", "كلمة المرور"),
+                          c(...translatedMessage("password_02b393215e")),
                           password,
                           setPassword,
                         )}
@@ -681,9 +664,9 @@ export default function AuthDialog() {
                             }}
                           >
                             {c(
-                              "忘记密码？",
-                              "Forgot password?",
-                              "نسيت كلمة المرور؟",
+                              ...translatedMessage(
+                                "forgot_password_dabee5bde1",
+                              ),
                             )}
                           </button>
                         </div>
@@ -693,7 +676,7 @@ export default function AuthDialog() {
                       <>
                         <div className="auth-field">
                           <label htmlFor="auth-username">
-                            {c("用户名", "Username", "اسم المستخدم")}
+                            {c(...translatedMessage("username_52bf46ce51"))}
                           </label>
                           <Input
                             id="auth-username"
@@ -709,9 +692,9 @@ export default function AuthDialog() {
                             pattern="(?:[a-zA-Z0-9_.]|-){3,64}"
                             autoComplete="username"
                             placeholder={c(
-                              "请输入用户名",
-                              "Choose a username",
-                              "اختر اسم مستخدم",
+                              ...translatedMessage(
+                                "choose_a_username_028c5b33e5",
+                              ),
                             )}
                             aria-describedby="auth-username-hint"
                           />
@@ -720,15 +703,15 @@ export default function AuthDialog() {
                             className="auth-field-hint"
                           >
                             {c(
-                              "3–64 位英文字母、数字、下划线、短横线或点号",
-                              "3–64 ASCII letters, digits, underscores, hyphens or dots",
-                              "3–64 حرفًا لاتينيًا أو رقمًا أو شرطة سفلية أو شرطة أو نقطة",
+                              ...translatedMessage(
+                                "3_64_ascii_letters_digits_underscores_hyphens_e165c8cd66",
+                              ),
                             )}
                           </p>
                         </div>
                         {passwordField(
                           "auth-new-password",
-                          c("设置密码", "Create password", "إنشاء كلمة مرور"),
+                          c(...translatedMessage("create_password_5636ea0f66")),
                           newPassword,
                           setNewPassword,
                           true,
@@ -736,9 +719,7 @@ export default function AuthDialog() {
                         {passwordField(
                           "auth-confirm-password",
                           c(
-                            "确认密码",
-                            "Confirm password",
-                            "تأكيد كلمة المرور",
+                            ...translatedMessage("confirm_password_db65e83f31"),
                           ),
                           confirmPassword,
                           setConfirmPassword,
@@ -746,9 +727,9 @@ export default function AuthDialog() {
                         )}
                         <p className="auth-field-hint">
                           {c(
-                            "当前仅支持用户名与密码注册，不收集或验证手机号。短信验证尚未接入。",
-                            "Registration currently uses a username and password. Phone numbers are neither collected nor verified; SMS verification is unavailable.",
-                            "التسجيل حاليًا باسم مستخدم وكلمة مرور. لا تُجمع أرقام الهواتف ولا تُتحقق؛ التحقق بالرسائل غير متاح.",
+                            ...translatedMessage(
+                              "registration_currently_uses_a_username_and_pa_e5acd7e3b6",
+                            ),
                           )}
                         </p>
                       </>
@@ -757,9 +738,9 @@ export default function AuthDialog() {
                     {mode === "register" && (
                       <p className="auth-registration-note">
                         {c(
-                          "创建账号不会清空当前演示数据；注册成功后需要登录。新账号 API 配额默认是零。",
-                          "Creating an account does not clear current Demo data. Sign in after registration; new accounts default to zero API quota.",
-                          "إنشاء الحساب لا يمسح بيانات العرض الحالية. سجّل الدخول بعد التسجيل؛ تبدأ حصة الحساب الجديد بصفر.",
+                          ...translatedMessage(
+                            "creating_an_account_does_not_clear_current_de_6c698381a5",
+                          ),
                         )}
                       </p>
                     )}
@@ -770,8 +751,8 @@ export default function AuthDialog() {
                       loading={busy}
                     >
                       {mode === "register"
-                        ? c("创建账户", "Create account", "إنشاء حساب")
-                        : c("登录", "Log in", "تسجيل الدخول")}
+                        ? c(...translatedMessage("create_account_7a5f6b2b53"))
+                        : c(...translatedMessage("log_in_432aa7fcba"))}
                       <ArrowRight size={16} className="directional" />
                     </Button>
                   </form>
@@ -780,27 +761,27 @@ export default function AuthDialog() {
                   <div className="auth-switch">
                     {mode === "login" ? (
                       <>
-                        {c("还没有账户？", "New to MyAPIs?", "ليس لديك حساب؟")}
+                        {c(...translatedMessage("new_to_myapis_0be912aed4"))}
                         <button
                           type="button"
                           onClick={() => changeMode("register")}
                         >
-                          {c("立即注册", "Sign up", "إنشاء حساب")}
+                          {c(...translatedMessage("sign_up_2648aa5036"))}
                         </button>
                       </>
                     ) : (
                       <>
                         {mode === "register" &&
                           c(
-                            "已有账户？",
-                            "Already have an account?",
-                            "لديك حساب؟",
+                            ...translatedMessage(
+                              "already_have_an_account_f18c9abb50",
+                            ),
                           )}
                         <button
                           type="button"
                           onClick={() => changeMode("login")}
                         >
-                          {c("返回登录", "Back to login", "العودة للدخول")}
+                          {c(...translatedMessage("back_to_login_5ad34b7a60"))}
                         </button>
                       </>
                     )}
@@ -813,9 +794,9 @@ export default function AuthDialog() {
             <Info size={14} />
             <span>
               {c(
-                "账户由服务器保存，登录会话使用 Cookie。当前不发送短信或验证邮件。",
-                "Accounts are saved on the server; login sessions use cookies. SMS and verification email are unavailable.",
-                "تُحفظ الحسابات على الخادم وتستخدم الجلسات ملفات الارتباط. الرسائل النصية ورسائل التحقق غير متاحة.",
+                ...translatedMessage(
+                  "accounts_are_saved_on_the_server_login_sessio_cfa27a3775",
+                ),
               )}
             </span>
           </div>

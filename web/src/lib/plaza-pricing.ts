@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import type { Language } from "../config/placeholders";
 import type { ModelPricing } from "../config/models";
 import type { PlazaDirectoryModel, PlazaPricing } from "./api/plaza";
@@ -59,44 +60,40 @@ export function describePlazaPrice(pricing: PlazaPricing, lang: Language) {
     : request && amounts.perRequest !== undefined;
   return {
     mode: token
-      ? text("按词元计价", "Token pricing", "تسعير الرموز")
+      ? text(...translatedMessage("token_pricing_cc103abe12"))
       : request
-        ? text("按次计价", "Per request", "لكل طلب")
-        : text("条件计价", "Conditional pricing", "تسعير مشروط"),
+        ? text(...translatedMessage("per_request_f6e4e2b1f7"))
+        : text(...translatedMessage("conditional_pricing_8a72d20e3e")),
     value: token
       ? `${amounts.input === undefined ? "—" : `$${amounts.input}`} / ${amounts.output === undefined ? "—" : `$${amounts.output}`}`
       : request
         ? amounts.perRequest === undefined
           ? "—"
           : `$${amounts.perRequest}`
-        : text("按用量计价", "Usage-based pricing", "حسب الاستخدام"),
+        : text(...translatedMessage("usage_based_pricing_efcd71458e")),
     unit: token
-      ? text(
-          "输入 / 输出 · 美元 / 百万词元",
-          "Input / output · USD / million tokens",
-          "إدخال / إخراج · دولار / مليون رمز",
-        )
+      ? text(...translatedMessage("input_output_usd_million_tokens_f00f399943"))
       : request
-        ? text("美元 / 次", "USD / request", "دولار / طلب")
+        ? text(...translatedMessage("usd_request_5265075e68"))
         : "",
     hasAmount,
     details:
       !token && !request
         ? text(
-            "按实际条件计算，基础倍率不是固定报价。",
-            "Calculated from request conditions; the base ratio is not a fixed quote.",
-            "تحسب وفق شروط الطلب؛ المعامل الأساسي ليس سعرًا ثابتًا.",
+            ...translatedMessage(
+              "calculated_from_request_conditions_the_base_r_2febbde24f",
+            ),
           )
         : pricing.explicit
           ? text(
-              "后端报价，已包含分组倍率。",
-              "Backend quote, including the group multiplier.",
-              "سعر الخادم شامل معامل المجموعة.",
+              ...translatedMessage(
+                "backend_quote_including_the_group_multiplier_77ee33c8d6",
+              ),
             )
           : text(
-              "尚未单独配置，使用后端默认报价；已包含分组倍率。",
-              "No explicit rate; using the backend default, including the group multiplier.",
-              "لا يوجد سعر مستقل؛ يستخدم السعر الافتراضي شامل معامل المجموعة.",
+              ...translatedMessage(
+                "no_explicit_rate_using_the_backend_default_in_caea4079e1",
+              ),
             ),
   };
 }

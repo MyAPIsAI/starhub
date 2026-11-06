@@ -51,53 +51,55 @@ func queueAPICharge(tx *gorm.DB, entry *Log) error {
 // FlushAPICharges atomically claims durable events into append-only minute batches.
 // Reads may flush the open minute so visible usage and the statement agree immediately.
 func FlushAPICharges(ctx context.Context, includeOpenMinute bool) error {
-	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&APIChargeEvent{}).Where("ledger_id = 0").UpdateColumn("ledger_id", gorm.Expr("ledger_id")).Error; err != nil {
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return flushAPICharges(tx, includeOpenMinute) })
+}
+
+func flushAPICharges(tx *gorm.DB, includeOpenMinute bool) error {
+	if err := tx.Model(&APIChargeEvent{}).Where("ledger_id = 0").UpdateColumn("ledger_id", gorm.Expr("ledger_id")).Error; err != nil {
+		return err
+	}
+	q := tx.Where("ledger_id = 0")
+	if !includeOpenMinute {
+		q = q.Where("created_at < ?", time.Now().Unix()/60*60)
+	}
+	var events []APIChargeEvent
+	if err := q.Order("log_id ASC").Find(&events).Error; err != nil {
+		return err
+	}
+	batches := map[string][]APIChargeEvent{}
+	var order []string
+	for _, e := range events {
+		key := fmt.Sprintf("%d:%d:%d", e.UserID, e.TokenID, e.CreatedAt/60)
+		if _, ok := batches[key]; !ok {
+			order = append(order, key)
+		}
+		batches[key] = append(batches[key], e)
+	}
+	for _, key := range order {
+		items := batches[key]
+		var amount int64
+		ids := make([]int64, 0, len(items))
+		for _, e := range items {
+			if e.Amount > math.MaxInt64-amount {
+				return errors.New("minute charge exceeds the ledger range")
+			}
+			amount += e.Amount
+			ids = append(ids, e.LogID)
+		}
+		last := items[len(items)-1]
+		batchKey := fmt.Sprintf("api:%s:%d:%d", key, items[0].LogID, last.LogID)
+		entry := LedgerEntry{UserID: last.UserID, TokenID: last.TokenID, Type: "call_summary", Amount: -amount, BalanceAfter: last.BalanceAfter, Description: "API usage", RequestCount: int64(len(items)), FundingSource: FundingSourceAPIQuota, CreatedAt: last.CreatedAt, BatchKey: &batchKey}
+		if err := tx.Create(&entry).Error; err != nil {
 			return err
 		}
-		q := tx.Where("ledger_id = 0")
-		if !includeOpenMinute {
-			q = q.Where("created_at < ?", time.Now().Unix()/60*60)
-		}
-		var events []APIChargeEvent
-		if err := q.Order("log_id ASC").Find(&events).Error; err != nil {
-			return err
-		}
-		batches := map[string][]APIChargeEvent{}
-		var order []string
-		for _, e := range events {
-			key := fmt.Sprintf("%d:%d:%d", e.UserID, e.TokenID, e.CreatedAt/60)
-			if _, ok := batches[key]; !ok {
-				order = append(order, key)
-			}
-			batches[key] = append(batches[key], e)
-		}
-		for _, key := range order {
-			items := batches[key]
-			var amount int64
-			ids := make([]int64, 0, len(items))
-			for _, e := range items {
-				if e.Amount > math.MaxInt64-amount {
-					return errors.New("minute charge exceeds the ledger range")
-				}
-				amount += e.Amount
-				ids = append(ids, e.LogID)
-			}
-			last := items[len(items)-1]
-			batchKey := fmt.Sprintf("api:%s:%d:%d", key, items[0].LogID, last.LogID)
-			entry := LedgerEntry{UserID: last.UserID, TokenID: last.TokenID, Type: "call_summary", Amount: -amount, BalanceAfter: last.BalanceAfter, Description: "API usage", RequestCount: int64(len(items)), FundingSource: FundingSourceAPIQuota, CreatedAt: last.CreatedAt, BatchKey: &batchKey}
-			if err := tx.Create(&entry).Error; err != nil {
+		for start := 0; start < len(ids); start += 500 {
+			end := min(start+500, len(ids))
+			if err := tx.Model(&APIChargeEvent{}).Where("log_id IN ? AND ledger_id = 0", ids[start:end]).UpdateColumn("ledger_id", entry.ID).Error; err != nil {
 				return err
 			}
-			for start := 0; start < len(ids); start += 500 {
-				end := min(start+500, len(ids))
-				if err := tx.Model(&APIChargeEvent{}).Where("log_id IN ? AND ledger_id = 0", ids[start:end]).UpdateColumn("ledger_id", entry.ID).Error; err != nil {
-					return err
-				}
-			}
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // StatementLedger groups API batches by regional calendar day and key for display.

@@ -60,10 +60,9 @@ func ChannelTypeName(channelType int) string {
 // for channel API validation and documentation surfaces.
 func SupportedChannelTypes() map[int]string {
 	return map[int]string{
-		channel.ChannelTypeTaskPlugin: ChannelTypeName(channel.ChannelTypeTaskPlugin),
-		channel.ChannelTypeOpenAI:     ChannelTypeName(channel.ChannelTypeOpenAI),
-		channel.ChannelTypeClaude:     ChannelTypeName(channel.ChannelTypeClaude),
-		channel.ChannelTypeGemini:     ChannelTypeName(channel.ChannelTypeGemini),
-		channel.ChannelTypeAWS:        ChannelTypeName(channel.ChannelTypeAWS),
+		channel.ChannelTypeOpenAI: ChannelTypeName(channel.ChannelTypeOpenAI),
+		channel.ChannelTypeClaude: ChannelTypeName(channel.ChannelTypeClaude),
+		channel.ChannelTypeGemini: ChannelTypeName(channel.ChannelTypeGemini),
+		channel.ChannelTypeAWS:    ChannelTypeName(channel.ChannelTypeAWS),
 	}
 }

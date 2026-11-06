@@ -1,0 +1,225 @@
+.announcement-admin {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.announcement-heading,
+.announcement-card header,
+.announcement-card footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.announcement-heading h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+.announcement-heading p,
+.announcement-impact,
+.announcement-card small,
+.announcement-card footer > span {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.announcement-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.announcement-list,
+.public-announcements {
+  display: grid;
+  gap: 16px;
+}
+.public-announcements {
+  margin-bottom: 32px;
+}
+.public-announcements > h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+.announcement-card {
+  padding: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.announcement-card h2,
+.announcement-card h3 {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+.announcement-card footer {
+  align-items: center;
+  margin-top: 20px;
+}
+.announcement-body {
+  white-space: pre-wrap;
+  line-height: 1.75;
+  font-size: var(--text-sm);
+}
+.announcement-badge {
+  background: var(--warning-soft);
+  color: var(--warning);
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.announcement-badge[data-status="resolved"] {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.announcement-locales {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.announcement-locales fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+.announcement-locales legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.announcement-form {
+  display: grid;
+  gap: 18px;
+}
+.announcement-form label {
+  font-size: var(--text-sm);
+  display: grid;
+  gap: 8px;
+}
+.announcement-form textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 140px;
+}
+.announcement-form p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.announcement-form [role="alert"] {
+  color: var(--danger);
+}
+.announcement-targets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.announcement-target-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.announcement-target-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.announcement-target-picker legend {
+  padding: 0 6px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.announcement-target-picker > .input {
+  width: 100%;
+  min-width: 0;
+}
+.announcement-target-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-block: 8px;
+  font-size: var(--text-xs);
+}
+.announcement-target-toolbar > p {
+  flex: 1 1 240px;
+}
+.announcement-target-toolbar > span {
+  margin-inline-end: auto;
+  color: var(--muted);
+}
+.announcement-target-options {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  max-height: 224px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.announcement-target-options > p {
+  padding: 12px 4px;
+}
+.announcement-form .announcement-target-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.announcement-target-option:hover,
+.announcement-target-option:focus-within {
+  background: var(--brand-soft);
+}
+.announcement-target-option input {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--brand);
+}
+.announcement-target-option > span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.announcement-target-option small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.announcement-target-option:has(input:disabled) {
+  opacity: 0.65;
+}
+.announcement-admin select,
+.announcement-form select {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 12px;
+  min-height: 36px;
+}
+@media (max-width: 700px) {
+  .announcement-locales,
+  .announcement-targets {
+    grid-template-columns: 1fr;
+  }
+  .announcement-heading,
+  .announcement-card footer {
+    flex-direction: column;
+  }
+  .announcement-card {
+    padding: 16px;
+  }
+  .announcement-card header {
+    gap: 10px;
+  }
+}

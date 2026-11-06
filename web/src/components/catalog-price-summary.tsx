@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import type { DirectoryModel } from "../config/model-directory";
 import type { PricingCatalogConfig } from "../config/models";
 import type { PublicCatalogPrice } from "../lib/catalog-public-pricing";
@@ -44,29 +45,17 @@ export function CatalogPriceSummary({
   const amounts = plazaQuote ? plazaAmounts(plazaQuote.model.pricing) : rate;
   const officialLabel =
     reference?.status === "legacy"
-      ? text("历史参考", "Historical", "مرجع تاريخي")
-      : text("官方参考", "Official", "مرجع رسمي");
+      ? text(...translatedMessage("historical_c557e619e9"))
+      : text(...translatedMessage("official_df6a837000"));
   const publicLabel = plazaQuote
-    ? text("平台报价", "Platform price", "سعر المنصة")
-    : text("平台最低", "Platform from", "سعر المنصة من");
-  const tokenUnit = text(
-    "美元 / 百万词元",
-    "USD / million tokens",
-    "دولار / مليون رمز",
-  );
+    ? text(...translatedMessage("platform_price_2386ba36c1"))
+    : text(...translatedMessage("platform_from_6b1eaf2b5e"));
+  const tokenUnit = text(...translatedMessage("usd_million_tokens_6f08728512"));
   const statusLabels = {
-    unknown: text("模型不存在", "Model not found", "النموذج غير موجود"),
-    offline: text("已下架", "Retired", "متوقف"),
-    "no-public-group": text(
-      "暂无公开报价",
-      "No public offer",
-      "لا يوجد عرض عام",
-    ),
-    "no-resource": text(
-      "暂无公开可用资源",
-      "No public resource",
-      "لا يوجد مورد عام متاح",
-    ),
+    unknown: text(...translatedMessage("model_not_found_d96fc188df")),
+    offline: text(...translatedMessage("retired_e4771f7b44")),
+    "no-public-group": text(...translatedMessage("no_public_offer_0104dbd32f")),
+    "no-resource": text(...translatedMessage("no_public_resource_c1206fa683")),
     "quote-error": text(
       plazaQuote ? "报价暂不可用" : "暂无法确定最低价",
       plazaQuote ? "Quote unavailable" : "Minimum unavailable",
@@ -78,9 +67,9 @@ export function CatalogPriceSummary({
     value === undefined ? "—" : `$${value}`;
   const unitLabel = (unit: "image" | "second" | "request") =>
     ({
-      image: text("美元 / 张", "USD / image", "دولار / صورة"),
-      second: text("美元 / 秒", "USD / second", "دولار / ثانية"),
-      request: text("美元 / 次", "USD / request", "دولار / طلب"),
+      image: text(...translatedMessage("usd_image_efd0385640")),
+      second: text(...translatedMessage("usd_second_b4496726da")),
+      request: text(...translatedMessage("usd_request_5265075e68")),
     })[unit];
   const tokenComparison =
     (plazaQuote
@@ -98,11 +87,11 @@ export function CatalogPriceSummary({
   const platformValue = plazaQuote
     ? info?.value
     : rate?.rule.mode === "expression"
-      ? text("按用量计价", "Usage-based pricing", "حسب الاستخدام")
+      ? text(...translatedMessage("usage_based_pricing_efcd71458e"))
       : specificationPrice
-        ? text("按规格计价", "Specification pricing", "حسب المواصفات")
+        ? text(...translatedMessage("specification_pricing_1af51af19c"))
         : (info?.value ??
-          text("查看计价详情", "See pricing details", "عرض تفاصيل التسعير"));
+          text(...translatedMessage("see_pricing_details_4b1fcb7b15")));
   const showPlatformAmount =
     (plazaQuote
       ? plazaQuote.model.pricing.mode !== "tiered"
@@ -124,13 +113,11 @@ export function CatalogPriceSummary({
       ) : model.kind === "smart" ? (
         <div className="catalog-price-summary-message" data-price-kind="public">
           <span className="catalog-price-summary-label">
-            {text("智能路由计费", "Routing pricing", "تسعير التوجيه")}
+            {text(...translatedMessage("routing_pricing_a4b1cdf202"))}
           </span>
           <span className="catalog-price-summary-value">
             {text(
-              "按实际模型计费",
-              "Billed by the actual model",
-              "بسعر النموذج الفعلي",
+              ...translatedMessage("billed_by_the_actual_model_a07b3e8d3d"),
             )}
           </span>
         </div>
@@ -140,16 +127,16 @@ export function CatalogPriceSummary({
           <table className="catalog-price-summary-table">
             <caption className="sr-only">
               {text(
-                `${model.name} 输入与输出价格`,
-                `${model.name} input and output prices`,
-                `أسعار الإدخال والإخراج لـ ${model.name}`,
+                ...translatedMessage("input_and_output_prices_5987a4aec3", {
+                  p0: model.name,
+                }),
               )}
             </caption>
             <thead>
               <tr>
                 <th scope="col">
                   <span className="sr-only">
-                    {text("用量", "Usage", "الاستخدام")}
+                    {text(...translatedMessage("usage_3404499089"))}
                   </span>
                 </th>
                 <th scope="col">{officialLabel}</th>
@@ -158,7 +145,9 @@ export function CatalogPriceSummary({
             </thead>
             <tbody>
               <tr>
-                <th scope="row">{text("输入", "Input", "إدخال")}</th>
+                <th scope="row">
+                  {text(...translatedMessage("input_b79be3e58a"))}
+                </th>
                 <td data-price-kind="official">
                   <bdi dir="ltr">
                     {amount(officialTokens?.input_per_million_usd)}
@@ -169,7 +158,9 @@ export function CatalogPriceSummary({
                 </td>
               </tr>
               <tr>
-                <th scope="row">{text("输出", "Output", "إخراج")}</th>
+                <th scope="row">
+                  {text(...translatedMessage("output_a7b8383921"))}
+                </th>
                 <td data-price-kind="official">
                   <bdi dir="ltr">
                     {amount(officialTokens?.output_per_million_usd)}
@@ -184,9 +175,7 @@ export function CatalogPriceSummary({
           {!reference && (
             <span className="catalog-price-summary-note">
               {text(
-                "官价尚未核实",
-                "Official rate unverified",
-                "السعر الرسمي غير موثق",
+                ...translatedMessage("official_rate_unverified_e8b72d5163"),
               )}
             </span>
           )}
@@ -209,20 +198,17 @@ export function CatalogPriceSummary({
             <span className="catalog-price-summary-note">
               {reference
                 ? reference.rate.mode === "tokens"
-                  ? text(
-                      "输入 / 输出 · ",
-                      "Input / output · ",
-                      "إدخال / إخراج · ",
-                    ) + tokenUnit
+                  ? text(...translatedMessage("input_output_da9f3d8092")) +
+                    tokenUnit
                   : unitLabel(reference.rate.unit)
-                : text("尚未核实", "Unverified", "غير موثق")}
+                : text(...translatedMessage("unverified_6354adc7da"))}
             </span>
           </div>
           <div data-price-kind="public">
             <span className="catalog-price-summary-label">
               {showPlatformAmount
                 ? publicLabel
-                : text("平台计费", "Platform pricing", "تسعير المنصة")}
+                : text(...translatedMessage("platform_pricing_524d3ef3f3"))}
             </span>
             <span className="catalog-price-summary-value">
               {showPlatformAmount ? (

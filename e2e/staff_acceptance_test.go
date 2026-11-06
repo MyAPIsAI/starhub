@@ -174,11 +174,15 @@ func TestADMAC01FourStaffRolesEnforceMoneySyncAndAuditBoundaries(t *testing.T) {
 				client.call("GET", "/api/finance/summary", nil, 403)
 			}
 			if role == 20 || role == 100 {
+				client.call("GET", "/api/admin/resource-instances", nil, 200)
+				client.call("GET", "/api/admin/resource-monitoring", nil, 200)
 				client.call("GET", "/api/admin/resource-sync", nil, 200)
 				client.call("POST", "/api/admin/resource-sync", nil, 503)
 				client.call("GET", "/api/admin/system", nil, 200)
 			} else {
 				client.call("GET", "/api/admin/resource-sync", nil, 403)
+				client.call("GET", "/api/admin/resource-instances", nil, 403)
+				client.call("GET", "/api/admin/resource-monitoring", nil, 403)
 				client.call("POST", "/api/admin/resource-sync", nil, 403)
 				client.call("GET", "/api/admin/system", nil, 403)
 			}
@@ -303,17 +307,17 @@ func TestStaffForceSyncReplacesOnlyValidatedFullSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = config.ConfigureSnapshotSource("", "") })
-	root.call("POST", "/api/admin/resource-sync", nil, 200)
+	root.call("POST", "/api/admin/resource-sync", map[string]bool{"confirm": true}, 200)
 	if !full {
 		t.Fatal("forced sync did not request a full authenticated snapshot")
 	}
 	before, _ := model.ReadResourceCatalog(t.Context())
-	root.call("POST", "/api/admin/resource-sync", nil, 409)
+	root.call("POST", "/api/admin/resource-sync", map[string]bool{"confirm": true}, 200)
 	snapshot.Sequence = 2
 	snapshot.Instances[0].ChannelID = "missing-source"
-	root.call("POST", "/api/admin/resource-sync", nil, 400)
+	root.call("POST", "/api/admin/resource-sync", map[string]bool{"confirm": true}, 400)
 	status = 500
-	root.call("POST", "/api/admin/resource-sync", nil, 502)
+	root.call("POST", "/api/admin/resource-sync", map[string]bool{"confirm": true}, 502)
 	after, _ := model.ReadResourceCatalog(t.Context())
 	if after.Revision != before.Revision || after.Snapshot.Sequence != 1 {
 		t.Fatal("failed sync modified the published snapshot")
@@ -327,7 +331,7 @@ func TestStaffLostAuthenticatorRecoveryAndOperationalControls(t *testing.T) {
 	ops := &staffHTTP{t: t, handler: handler, ip: "127.0.0.1:18512"}
 	ops.enroll("operator", "Operator-temporary-123")
 	for _, endpoint := range []string{"/api/redemption", "/api/task-plugin"} {
-		ops.call("POST", endpoint, map[string]any{}, 403)
+		ops.call("POST", endpoint, map[string]any{}, 410)
 	}
 	ops.call("PUT", "/api/option", map[string]any{"key": "aff_register_bonus", "value": "1000000"}, 403)
 	password, _ := common.HashPassword("Customer-password-123")

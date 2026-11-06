@@ -1,4 +1,5 @@
-﻿import { useRef, useState } from "react";
+import { message as translatedMessage } from "../i18n/messages";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
@@ -178,7 +179,7 @@ export function NativeKeyForm({
     )
       return;
     if (!name.trim()) {
-      setError(c("请填写密钥名称。", "Enter a key name.", "أدخل اسم المفتاح."));
+      setError(c(...translatedMessage("enter_a_key_name_d5f5c413f4")));
       return;
     }
     if (
@@ -229,20 +230,20 @@ export function NativeKeyForm({
         setError(
           reason === "below_used"
             ? c(
-                "累计额度不能低于已消费金额。",
-                "The lifetime limit cannot be below the amount already spent.",
-                "لا يمكن أن يكون الحد التراكمي أقل من المبلغ المنفق.",
+                ...translatedMessage(
+                  "the_lifetime_limit_cannot_be_below_the_amount_3944eda1d7",
+                ),
               )
             : reason === "too_large"
               ? c(
-                  "额度过大。",
-                  "Spending limit is too large.",
-                  "حد الإنفاق كبير جدًا.",
+                  ...translatedMessage(
+                    "spending_limit_is_too_large_0337b3a1f6",
+                  ),
                 )
               : c(
-                  "请输入非负美元金额，最多六位小数。",
-                  "Enter a nonnegative USD amount with at most six decimals.",
-                  "أدخل مبلغًا غير سالب بست منازل عشرية كحد أقصى.",
+                  ...translatedMessage(
+                    "enter_a_nonnegative_usd_amount_with_at_most_s_c0e1e0b5fa",
+                  ),
                 ),
         );
         return;
@@ -290,9 +291,9 @@ export function NativeKeyForm({
       setError(
         e instanceof Error && e.message.startsWith("key limit reached:")
           ? c(
-              "每个账号最多创建 200 把密钥，请先删除不再使用的密钥。",
-              "This account has reached the 200-key limit. Delete an unused key before creating another.",
-              "بلغ الحساب الحد الأقصى البالغ 200 مفتاح. احذف مفتاحًا غير مستخدم قبل إنشاء آخر.",
+              ...translatedMessage(
+                "this_account_has_reached_the_200_key_limit_de_00fc4973c6",
+              ),
             )
           : e instanceof Error
             ? e.message
@@ -317,17 +318,18 @@ export function NativeKeyForm({
       const result = await readOwnedKeyReceipt(operation, scope);
       setReceipt(
         c(
-          `操作已确认，密钥 ID：${result.token_id}。请重新读取列表；明文不能恢复。`,
-          `Operation confirmed for key ${result.token_id}. Reload keys; plaintext cannot be recovered.`,
-          `تأكدت العملية للمفتاح ${result.token_id}. أعد تحميل المفاتيح؛ لا يمكن استعادة النص السري.`,
+          ...translatedMessage(
+            "operation_confirmed_for_key_reload_keys_plain_fbd58c10fe",
+            { p0: result.token_id },
+          ),
         ),
       );
     } catch {
       setReceipt(
         c(
-          "未查到可确认的收据，不能据此判断写入失败。",
-          "No confirmed receipt was found; this does not prove the write failed.",
-          "لم يُعثر على إيصال مؤكد؛ لا يثبت ذلك فشل الكتابة.",
+          ...translatedMessage(
+            "no_confirmed_receipt_was_found_this_does_not__0e45db0dbc",
+          ),
         ),
       );
     } finally {
@@ -344,20 +346,20 @@ export function NativeKeyForm({
       }}
       title={
         created
-          ? c("密钥已创建", "Key created", "أُنشئ المفتاح")
+          ? c(...translatedMessage("key_created_23df770140"))
           : item
-            ? c("编辑密钥", "Edit key", "تعديل المفتاح")
-            : c("创建密钥", "Create key", "إنشاء مفتاح")
+            ? c(...translatedMessage("edit_key_cff9d0c9e8"))
+            : c(...translatedMessage("create_key_06433c30b0"))
       }
       description={c(
-        "设置服务分组、模型授权、额度和访问限制。查看完整密钥需要验证登录密码。",
-        "Set the service group, model permissions, spending limit and access restrictions. Viewing the full key requires your login password.",
-        "اضبط مجموعة الخدمة وأذونات النماذج وحد الإنفاق وقيود الوصول. عرض المفتاح الكامل يتطلب كلمة مرور تسجيل الدخول.",
+        ...translatedMessage(
+          "set_the_service_group_model_permissions_spend_7bedf4c9cf",
+        ),
       )}
       footer={
         <>
           <Button disabled={busy} onClick={onClose}>
-            {c("关闭", "Close", "إغلاق")}
+            {c(...translatedMessage("close_6bf477426b"))}
           </Button>
           {!created && !receipt && (
             <Button
@@ -373,8 +375,8 @@ export function NativeKeyForm({
               onClick={() => void submit()}
             >
               {item
-                ? c("保存", "Save", "حفظ")
-                : c("创建密钥", "Create key", "إنشاء مفتاح")}
+                ? c(...translatedMessage("save_6774e725d1"))
+                : c(...translatedMessage("create_key_06433c30b0"))}
             </Button>
           )}
         </>
@@ -388,19 +390,19 @@ export function NativeKeyForm({
               onClick={() =>
                 void copyText(
                   created.key,
-                  c("已复制", "Copied", "نُسخ"),
-                  c("复制失败", "Copy failed", "فشل النسخ"),
+                  c(...translatedMessage("copied_a2e05bbd2b")),
+                  c(...translatedMessage("copy_failed_45c59affcc")),
                 )
               }
             >
-              {c("复制", "Copy", "نسخ")}
+              {c(...translatedMessage("copy_4d8290cce9"))}
             </Button>
           </div>
           <p>
             {c(
-              "请妥善保存密钥。之后可在列表中验证登录密码后再次查看。",
-              "Store the key securely. You can view it again from the list after verifying your login password.",
-              "احفظ المفتاح بأمان. يمكنك عرضه مجددًا من القائمة بعد التحقق من كلمة مرور تسجيل الدخول.",
+              ...translatedMessage(
+                "store_the_key_securely_you_can_view_it_again__3eb1a9b1f5",
+              ),
             )}
           </p>
         </div>
@@ -408,7 +410,7 @@ export function NativeKeyForm({
         <div>
           {initialModel && (
             <p>
-              {c("接入示例模型：", "Example model: ", "نموذج المثال: ")}
+              {c(...translatedMessage("example_model_ec7557dd0f"))}
               <code>{initialModel}</code>
             </p>
           )}
@@ -423,11 +425,7 @@ export function NativeKeyForm({
                   );
                 }}
               >
-                {c(
-                  "复用已有密钥",
-                  "Reuse existing key",
-                  "إعادة استخدام المفتاح",
-                )}
+                {c(...translatedMessage("reuse_existing_key_c09b9dc867"))}
               </Button>
             </div>
           )}
@@ -449,7 +447,7 @@ export function NativeKeyForm({
               }}
             >
               <label>
-                {c("密钥名称", "Key name", "اسم المفتاح")}
+                {c(...translatedMessage("key_name_c60bdc543a"))}
                 <Input
                   id={item ? "edit-key-name" : "new-key-name"}
                   value={name}
@@ -459,7 +457,7 @@ export function NativeKeyForm({
                 />
               </label>
               <label>
-                {c("服务分组", "Service group", "مجموعة الخدمة")}
+                {c(...translatedMessage("service_group_1c6f8adf41"))}
                 <select
                   id="native-key-group"
                   className="select-trigger"
@@ -543,9 +541,9 @@ export function NativeKeyForm({
               />
               <label>
                 {c(
-                  "消费额度（美元，留空不限额）",
-                  "Spending limit (USD, empty for unlimited)",
-                  "حد الإنفاق بالدولار، فارغ بلا حد",
+                  ...translatedMessage(
+                    "spending_limit_usd_empty_for_unlimited_05b53bf257",
+                  ),
                 )}
                 <Input
                   id="new-key-quota"
@@ -555,7 +553,7 @@ export function NativeKeyForm({
                 />
               </label>
               <label>
-                {c("额度周期", "Quota period", "فترة الحصة")}
+                {c(...translatedMessage("quota_period_23b646d127"))}
                 <select
                   id="native-key-period"
                   className="select-trigger"
@@ -565,20 +563,20 @@ export function NativeKeyForm({
                   }
                 >
                   <option value="never">
-                    {c("不重置", "Never reset", "دون إعادة تعيين")}
+                    {c(...translatedMessage("never_reset_6ac0732a7d"))}
                   </option>
                   <option value="daily">
-                    {c("每天重置", "Daily", "يوميًا")}
+                    {c(...translatedMessage("daily_890f87b664"))}
                   </option>
                   <option value="monthly">
-                    {c("每月重置", "Monthly", "شهريًا")}
+                    {c(...translatedMessage("monthly_d84ce4da5f"))}
                   </option>
                 </select>
                 <small>
                   {c(
-                    "按地区时区在午夜重置：",
-                    "Resets at midnight in the region timezone: ",
-                    "يُعاد عند منتصف الليل بتوقيت المنطقة: ",
+                    ...translatedMessage(
+                      "resets_at_midnight_in_the_region_timezone_bc48ca5ea6",
+                    ),
                   )}
                   {item?.quotaTimezone ??
                     choices?.quota_timezone ??
@@ -596,13 +594,13 @@ export function NativeKeyForm({
                 >
                   <span className="native-key-access-heading">
                     <strong>
-                      {c("访问控制", "Access control", "التحكم في الوصول")}
+                      {c(...translatedMessage("access_control_f7086ff9b1"))}
                     </strong>
                     <span>
                       {c(
-                        "有效期 · 来源地址限制 · 可选",
-                        "Expiration · Source restrictions · Optional",
-                        "الصلاحية · قيود المصدر · اختياري",
+                        ...translatedMessage(
+                          "expiration_source_restrictions_optional_51f08e0895",
+                        ),
                       )}
                     </span>
                   </span>
@@ -616,7 +614,9 @@ export function NativeKeyForm({
                   hidden={!accessOpen}
                 >
                   <fieldset className="native-key-expiry">
-                    <legend>{c("有效期", "Expiration", "الصلاحية")}</legend>
+                    <legend>
+                      {c(...translatedMessage("expiration_cb80b02810"))}
+                    </legend>
                     <div className="native-key-expiry-options">
                       {(["never", "date"] as const).map((mode) => (
                         <label key={mode} className="native-key-expiry-option">
@@ -633,11 +633,11 @@ export function NativeKeyForm({
                           />
                           <span>
                             {mode === "never"
-                              ? c("永久有效", "No expiry", "دون انتهاء")
+                              ? c(...translatedMessage("no_expiry_89f56ad3fa"))
                               : c(
-                                  "指定到期时间",
-                                  "Set expiration",
-                                  "تحديد الانتهاء",
+                                  ...translatedMessage(
+                                    "set_expiration_8845c9b77a",
+                                  ),
                                 )}
                           </span>
                         </label>
@@ -647,9 +647,9 @@ export function NativeKeyForm({
                       <label className="native-key-expiry-date">
                         <span>
                           {c(
-                            "到期日期与时间",
-                            "Expiration date and time",
-                            "تاريخ ووقت الانتهاء",
+                            ...translatedMessage(
+                              "expiration_date_and_time_b7e2af4b90",
+                            ),
                           )}
                         </span>
                         <Input
@@ -677,9 +677,9 @@ export function NativeKeyForm({
                         role="alert"
                       >
                         {c(
-                          "请选择到期日期与时间。",
-                          "Choose an expiration date and time.",
-                          "اختر تاريخ ووقت انتهاء الصلاحية.",
+                          ...translatedMessage(
+                            "choose_an_expiration_date_and_time_423aa894d1",
+                          ),
                         )}
                       </p>
                     )}
@@ -688,9 +688,9 @@ export function NativeKeyForm({
                     <div className="native-key-ip-heading">
                       <label htmlFor="native-key-ips">
                         {c(
-                          "IP（来源地址）白名单",
-                          "IP (source address) allowlist",
-                          "قائمة عناوين IP المسموحة",
+                          ...translatedMessage(
+                            "ip_source_address_allowlist_01c886470a",
+                          ),
                         )}
                       </label>
                       <span
@@ -727,9 +727,9 @@ export function NativeKeyForm({
                       className="native-key-access-hint"
                     >
                       {c(
-                        "每行一条，支持 IPv4（四版地址）、IPv6（六版地址）与 CIDR（网段）；为空表示不限制。",
-                        "One entry per line. Supports IPv4, IPv6 and CIDR networks. Leave empty to allow any source.",
-                        "إدخال واحد لكل سطر. يدعم IPv4 وIPv6 وشبكات CIDR. اتركه فارغًا للسماح بأي مصدر.",
+                        ...translatedMessage(
+                          "one_entry_per_line_supports_ipv4_ipv6_and_cid_f46e3d939a",
+                        ),
                       )}
                     </p>
                     {accessError === "ips" && (
@@ -739,9 +739,9 @@ export function NativeKeyForm({
                         role="alert"
                       >
                         {c(
-                          "IP 白名单最多允许 50 条，请移除多余条目。",
-                          "The IP allowlist supports up to 50 entries. Remove the extra entries.",
-                          "تدعم قائمة IP حتى 50 إدخالًا. احذف الإدخالات الزائدة.",
+                          ...translatedMessage(
+                            "the_ip_allowlist_supports_up_to_50_entries_re_f372543be0",
+                          ),
                         )}
                       </p>
                     )}
@@ -753,18 +753,18 @@ export function NativeKeyForm({
           {!choices && query.isFetching && (
             <p role="status">
               {c(
-                "正在加载服务分组和模型…",
-                "Loading service groups and models…",
-                "جارٍ تحميل مجموعات الخدمة والنماذج…",
+                ...translatedMessage(
+                  "loading_service_groups_and_models_3b9df8eead",
+                ),
               )}
             </p>
           )}
           {choicesFailed && (
             <p role="alert">
               {c(
-                "无法加载服务分组和模型，请重试。",
-                "Unable to load service groups and models. Please retry.",
-                "تعذر تحميل مجموعات الخدمة والنماذج. أعد المحاولة.",
+                ...translatedMessage(
+                  "unable_to_load_service_groups_and_models_plea_81d71a1e15",
+                ),
               )}
             </p>
           )}
@@ -773,17 +773,13 @@ export function NativeKeyForm({
             <>
               <p>
                 {c(
-                  "结果未确认，请核对收据；不要重复提交。",
-                  "The result is unconfirmed. Check the receipt before another action.",
-                  "النتيجة غير مؤكدة. تحقق من الإيصال قبل إجراء آخر.",
+                  ...translatedMessage(
+                    "the_result_is_unconfirmed_check_the_receipt_b_cd54bc96d7",
+                  ),
                 )}
               </p>
               <Button disabled={busy} onClick={() => void checkReceipt()}>
-                {c(
-                  "查询操作收据",
-                  "Check operation receipt",
-                  "التحقق من إيصال العملية",
-                )}
+                {c(...translatedMessage("check_operation_receipt_7c28e8096d"))}
               </Button>
             </>
           )}
@@ -794,7 +790,7 @@ export function NativeKeyForm({
               disabled={busy || query.isFetching || !!operation}
               onClick={() => void query.refetch()}
             >
-              {c("重试", "Retry", "إعادة المحاولة")}
+              {c(...translatedMessage("retry_c16455021c"))}
             </Button>
           )}
         </div>

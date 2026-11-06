@@ -264,6 +264,11 @@ export interface ResourceChannel {
   enabled: boolean;
 }
 export interface ResourceInstance {
+  price_tier?: 4 | 6 | 8 | 10;
+  quality_level?: "S0" | "S1" | "S2" | "U";
+  state?: "hot" | "cold" | "bad" | "disabled";
+  trend?: "stable" | "degraded";
+  score?: number;
   id: string;
   channelId: string;
   upstreamModel: string;

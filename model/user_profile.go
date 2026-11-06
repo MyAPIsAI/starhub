@@ -26,6 +26,9 @@ func UpdateOwnedProfile(expected *User, field, value string) error {
 		if field == "email" && value == expected.Email {
 			return nil
 		}
-		return tx.Create(&UserSecurityEvent{UserID: expected.ID, Action: field + "_changed"}).Error
+		if err := tx.Create(&UserSecurityEvent{UserID: expected.ID, Action: field + "_changed"}).Error; err != nil {
+			return err
+		}
+		return queueProfileMail(tx, expected, field+"_changed")
 	})
 }

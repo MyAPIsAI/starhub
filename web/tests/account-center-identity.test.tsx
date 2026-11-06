@@ -86,6 +86,7 @@ vi.mock("../src/lib/api/user", () => ({
   useUpdateSelf: () => ({ isPending: false }),
 }));
 vi.mock("../src/lib/preferences", () => ({
+  bindAccountLanguage: () => {},
   usePreferences: (select: (state: { language: string }) => unknown) =>
     select({ language: "en" }),
 }));

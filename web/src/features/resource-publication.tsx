@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import {
@@ -102,14 +103,14 @@ function PublicationPanel({
         setError(
           cause instanceof ApiError && cause.status === 409
             ? text(
-                "资源、渠道或配置已变化，请刷新后重新生成预览。",
-                "Resources, channels or configuration changed. Refresh and generate a new preview.",
-                "تغيرت الموارد أو القنوات أو الإعدادات. حدّث وأنشئ معاينة جديدة.",
+                ...translatedMessage(
+                  "resources_channels_or_configuration_changed_r_a38dc0bfb0",
+                ),
               )
             : text(
-                "无法生成服务器预览。请刷新核对绑定，选择会保留且不会自动重试。",
-                "Server preview is unavailable. Refresh and check the retained selections; requests are not retried automatically.",
-                "معاينة الخادم غير متاحة. حدّث وتحقق من الاختيارات المحفوظة؛ لا تُعاد المحاولة تلقائيًا.",
+                ...translatedMessage(
+                  "server_preview_is_unavailable_refresh_and_che_1f276181e5",
+                ),
               ),
         );
     } finally {
@@ -123,93 +124,85 @@ function PublicationPanel({
     switch (code) {
       case "unknown_source_channel":
         return text(
-          "来源渠道已不存在",
-          "Source channel no longer exists",
-          "قناة المصدر لم تعد موجودة",
+          ...translatedMessage("source_channel_no_longer_exists_e37305772c"),
         );
       case "unknown_gateway_channel":
         return text(
-          "真实渠道已不存在",
-          "Gateway channel no longer exists",
-          "قناة البوابة لم تعد موجودة",
+          ...translatedMessage("gateway_channel_no_longer_exists_1bef1ecc74"),
         );
       case "unbound_source_channel":
         return text(
-          "请显式选择真实渠道",
-          "Select a gateway channel explicitly",
-          "اختر قناة البوابة صراحةً",
+          ...translatedMessage(
+            "select_a_gateway_channel_explicitly_fd2bc15132",
+          ),
         );
       case "unavailable_resource_or_channel":
         return text(
-          "来源、资源或真实渠道不可用",
-          "Source, resource or gateway channel is unavailable",
-          "المصدر أو المورد أو قناة البوابة غير متاحة",
+          ...translatedMessage(
+            "source_resource_or_gateway_channel_is_unavail_b645e8cecf",
+          ),
         );
       case "model_alias_not_supported":
         return text(
-          "暂不支持模型别名，三个模型标识须一致",
-          "Aliases are unsupported; all three model IDs must match",
-          "الأسماء البديلة غير مدعومة؛ يجب تطابق معرّفات النماذج الثلاثة",
+          ...translatedMessage(
+            "aliases_are_unsupported_all_three_model_ids_m_b244dd8077",
+          ),
         );
       case "gateway_model_id_not_supported":
         return text(
-          "模型标识超出网关支持范围",
-          "Model ID exceeds gateway limits",
-          "معرّف النموذج يتجاوز حدود البوابة",
+          ...translatedMessage("model_id_exceeds_gateway_limits_f023d4d26a"),
         );
       case "protocol_or_capability_not_supported":
         return text(
-          "首期仅支持 OpenAI 类型文本/代码资源",
-          "This preview supports OpenAI-type text/code resources only",
-          "تدعم هذه المعاينة موارد النص والبرمجة من نوع OpenAI فقط",
+          ...translatedMessage(
+            "this_preview_supports_openai_type_text_code_r_f4cf7b8f77",
+          ),
         );
       case "group_unavailable_or_unpriced":
         return text(
-          "分组不可用、已删除或未配置倍率",
-          "Group is unavailable, deleted or has no configured ratio",
-          "المجموعة غير متاحة أو محذوفة أو بلا معامل محدد",
+          ...translatedMessage(
+            "group_is_unavailable_deleted_or_has_no_config_1c21cc3b9d",
+          ),
         );
       case "no_supported_pairs":
         return text(
-          "没有可支持的模型与分组组合",
-          "No supported model and group pairs",
-          "لا توجد أزواج مدعومة من النماذج والمجموعات",
+          ...translatedMessage("no_supported_model_and_group_pairs_807cbf610c"),
         );
       case "incompatible_resource_constraints":
         return text(
-          "同一组合的来源能力互不兼容，请统一清单或拆分真实渠道。",
-          "Sources for this pair declare incompatible capabilities. Align inventory or use separate gateway channels.",
-          "قدرات مصادر هذا الزوج غير متوافقة. وحّد المخزون أو استخدم قنوات بوابة منفصلة.",
+          ...translatedMessage(
+            "sources_for_this_pair_declare_incompatible_ca_00660dcecb",
+          ),
         );
       case "gateway_bound_to_other_source":
         return text(
-          "真实渠道仍绑定其他来源，请先核对并解除旧绑定。",
-          "This gateway belongs to another source. Review and release its existing binding first.",
-          "ترتبط قناة البوابة بمصدر آخر. راجع الرابط الحالي وأزله أولًا.",
+          ...translatedMessage(
+            "this_gateway_belongs_to_another_source_review_f9f02d2439",
+          ),
         );
       case "source_bound_to_other_gateway":
         return text(
-          "来源仍绑定另一个真实渠道，请先核对并解除旧绑定。",
-          "This source is bound to another gateway. Review and release its existing binding first.",
-          "يرتبط هذا المصدر بقناة بوابة أخرى. راجع الرابط الحالي وأزله أولًا.",
+          ...translatedMessage(
+            "this_source_is_bound_to_another_gateway_revie_7a8c687aa1",
+          ),
         );
       case "binding_without_supported_pairs":
         return text(
-          "该绑定没有可发布组合，请启用有效投放或取消该选择。",
-          "This binding has no supported pairs. Enable valid placements or remove this selection.",
-          "لا يحتوي هذا الرابط على أزواج مدعومة. فعّل إعدادات نشر صالحة أو أزل هذا الاختيار.",
+          ...translatedMessage(
+            "this_binding_has_no_supported_pairs_enable_va_582d0d3055",
+          ),
         );
       case "publication_revision_exhausted":
         return text(
-          "发布版本已达到安全上限，请联系管理员处理。",
-          "Publication revisions reached the safe limit. Contact an administrator.",
-          "بلغت إصدارات النشر الحد الآمن. تواصل مع المسؤول.",
+          ...translatedMessage(
+            "publication_revisions_reached_the_safe_limit__f2ed19bb75",
+          ),
         );
       default:
         return text(
-          "服务器返回了阻塞原因，请核对来源配置",
-          "The server reported a blocking issue; check source configuration",
-          "أبلغ الخادم عن مشكلة مانعة؛ تحقق من إعدادات المصدر",
+          ...translatedMessage(
+            "the_server_reported_a_blocking_issue_check_so_9f2fe57633",
+          ),
         );
     }
   };
@@ -218,25 +211,21 @@ function PublicationPanel({
       id="gateway-publication"
       className="resource-publication"
       aria-label={text(
-        "网关发布预览",
-        "Gateway publication preview",
-        "معاينة نشر البوابة",
+        ...translatedMessage("gateway_publication_preview_86ab27029b"),
       )}
     >
       <header>
         <div>
           <h2>
             {text(
-              "网关发布预览",
-              "Gateway publication preview",
-              "معاينة نشر البوابة",
+              ...translatedMessage("gateway_publication_preview_86ab27029b"),
             )}
           </h2>
           <p>
             {text(
-              "将清单来源显式对应到真实渠道，再核对准确的模型与分组组合。",
-              "Map inventory sources to real channels, then review exact model and group pairs.",
-              "اربط مصادر المخزون بالقنوات الفعلية، ثم راجع أزواج النماذج والمجموعات بدقة.",
+              ...translatedMessage(
+                "map_inventory_sources_to_real_channels_then_r_1b3482100d",
+              ),
             )}
           </p>
         </div>
@@ -247,77 +236,67 @@ function PublicationPanel({
             void Promise.allSettled([query.refetch(), refreshCatalog()]);
           }}
         >
-          {text(
-            "刷新发布上下文",
-            "Refresh publication context",
-            "تحديث سياق النشر",
-          )}
+          {text(...translatedMessage("refresh_publication_context_a8afd9f762"))}
         </Button>
       </header>
       <aside>
         {text(
-          "先生成服务器预览；只有明确确认发布后，才会保存绑定并替换所选渠道的路由授权。公开模型与上游模型分别确认，按实际协议和能力逐条授权。上游凭证仍在真实渠道中单独管理。",
-          "Generate a server preview first. Only explicit publication confirmation saves bindings and replaces routing grants on selected channels. Review public and upstream model IDs separately; each route grants only its declared protocol and capabilities. Manage upstream credentials separately in real channels.",
-          "أنشئ معاينة الخادم أولًا. لا تُحفظ الروابط ولا تُستبدل صلاحيات التوجيه للقنوات المحددة إلا بعد تأكيد النشر صراحةً. راجع معرّفات النموذج العام والأصلي والبروتوكول والقدرات لكل مسار. تُدار بيانات الاعتماد في القنوات الفعلية بشكل منفصل.",
+          ...translatedMessage(
+            "generate_a_server_preview_first_only_explicit_ff0dc136f6",
+          ),
         )}
       </aside>
       <p className="rp-profile">
         {text(
-          "按资源声明选择协议与端点，文本对话包括：",
-          "Resource declarations control protocols and endpoints. Text chat includes:",
-          "تحدد الموارد البروتوكولات ونقاط النهاية. تشمل المحادثة النصية:",
+          ...translatedMessage(
+            "resource_declarations_control_protocols_and_e_29171829ff",
+          ),
         )}{" "}
         <code dir="ltr">/v1/chat/completions</code>
         {" · "}
         <code dir="ltr">/v1/messages</code>
         {". "}
         {text(
-          "工具、视觉、Responses、原生 Gemini 与图像/音视频等端点须逐项声明能力，并匹配渠道协议。上下文按请求估算核对，未登记保持未知；声明不代表真实供应商验收。",
-          "Tools, vision, Responses, native Gemini and image/audio/video endpoints require explicit capabilities and a matching provider protocol. Context checks use estimates; missing limits remain unknown. Declarations do not establish provider acceptance.",
-          "تتطلب الأدوات والوسائط وResponses وGemini قدرات معلنة وبروتوكولًا مطابقًا. السياق تقديري؛ ولا تثبت التصريحات قبول المزوّد.",
+          ...translatedMessage(
+            "tools_vision_responses_native_gemini_and_imag_270ce455cb",
+          ),
         )}
       </p>
       {query.isLoading && (
         <p role="status">
-          {text(
-            "正在读取真实渠道…",
-            "Loading real channels…",
-            "جارٍ تحميل القنوات الفعلية…",
-          )}
+          {text(...translatedMessage("loading_real_channels_454111d899"))}
         </p>
       )}
       {(!catalog || query.error || (!query.isLoading && !context)) && (
         <p role="alert">
           {text(
-            "服务器发布上下文不可用，已隐藏旧预览。请刷新。",
-            "Server publication context is unavailable. Previous previews are hidden. Refresh to retry.",
-            "سياق نشر الخادم غير متاح. أُخفيت المعاينات السابقة. حدّث للمحاولة.",
+            ...translatedMessage(
+              "server_publication_context_is_unavailable_pre_9735a5c575",
+            ),
           )}
         </p>
       )}
       {context && catalog && (
         <>
           <p className="rp-versions">
-            {text("资源", "Resources", "الموارد")} v{context.resource_revision}{" "}
-            · {text("渠道", "Channels", "القنوات")} v{context.channel_revision}{" "}
-            · {text("配置", "Configuration", "الإعدادات")} v
+            {text(...translatedMessage("resources_dd59219f36"))} v
+            {context.resource_revision} ·{" "}
+            {text(...translatedMessage("channels_40b918ebad"))} v
+            {context.channel_revision} ·{" "}
+            {text(...translatedMessage("configuration_2034cf5638"))} v
             {context.option_version}
           </p>
           {!coherent && (
             <p role="alert">
               {text(
-                "资源目录版本已变化，请一起刷新目录和发布上下文。",
-                "Inventory revisions differ. Refresh both inventory and publication context.",
-                "تختلف إصدارات المخزون. حدّث المخزون وسياق النشر معًا.",
+                ...translatedMessage(
+                  "inventory_revisions_differ_refresh_both_inven_d68c6775c9",
+                ),
               )}
             </p>
           )}
           <label className="rp-search">
-            {text(
-              "搜索来源渠道",
-              "Search source channels",
-              "البحث في قنوات المصدر",
-            )}
+            {text(...translatedMessage("search_source_channels_580724a9d4"))}
             <input
               value={search}
               onChange={(e) => {
@@ -331,20 +310,20 @@ function PublicationPanel({
             tabIndex={0}
             role="region"
             aria-label={text(
-              "来源与真实渠道绑定",
-              "Source to gateway bindings",
-              "روابط المصدر والبوابة",
+              ...translatedMessage("source_to_gateway_bindings_77591e6d89"),
             )}
           >
             <table>
               <thead>
                 <tr>
-                  <th>{text("来源渠道", "Source channel", "قناة المصدر")}</th>
+                  <th>
+                    {text(...translatedMessage("source_channel_e6d8b886ae"))}
+                  </th>
                   <th>
                     {text(
-                      "真实渠道（显式选择）",
-                      "Gateway channel (explicit selection)",
-                      "قناة البوابة (اختيار صريح)",
+                      ...translatedMessage(
+                        "gateway_channel_explicit_selection_a00053456d",
+                      ),
                     )}
                   </th>
                 </tr>
@@ -361,9 +340,9 @@ function PublicationPanel({
                       <td>
                         <select
                           aria-label={text(
-                            `真实渠道：${source.id}`,
-                            `Gateway channel: ${source.id}`,
-                            `قناة البوابة: ${source.id}`,
+                            ...translatedMessage("gateway_channel_47da408931", {
+                              p0: source.id,
+                            }),
                           )}
                           value={selected.get(source.id) ?? ""}
                           onChange={(e) => {
@@ -377,9 +356,9 @@ function PublicationPanel({
                         >
                           <option value="">
                             {text(
-                              "请选择，不自动绑定",
-                              "Select; never bound automatically",
-                              "اختر؛ لا يوجد ربط تلقائي",
+                              ...translatedMessage(
+                                "select_never_bound_automatically_6be2086699",
+                              ),
                             )}
                           </option>
                           {context.channels.map((ch) => (
@@ -392,13 +371,13 @@ function PublicationPanel({
                             >
                               {ch.name ||
                                 text(
-                                  "未命名渠道",
-                                  "Unnamed channel",
-                                  "قناة بلا اسم",
+                                  ...translatedMessage(
+                                    "unnamed_channel_a5aec61ea8",
+                                  ),
                                 )}{" "}
                               · {ch.id}
                               {ch.status !== 1
-                                ? ` · ${text("已停用", "Disabled", "معطلة")}`
+                                ? ` · ${text(...translatedMessage("disabled_2e15d27fba"))}`
                                 : ""}
                             </option>
                           ))}
@@ -412,9 +391,7 @@ function PublicationPanel({
           {sources.length === 0 && (
             <p>
               {text(
-                "没有匹配的来源渠道。",
-                "No matching source channels.",
-                "لا توجد قنوات مصدر مطابقة.",
+                ...translatedMessage("no_matching_source_channels_8b2245b2b0"),
               )}
             </p>
           )}
@@ -423,7 +400,7 @@ function PublicationPanel({
               disabled={current === 0}
               onClick={() => setPage(current - 1)}
             >
-              {text("上一页", "Previous", "السابق")}
+              {text(...translatedMessage("previous_2672646f39"))}
             </Button>
             <span>
               {current + 1} / {pages}
@@ -432,7 +409,7 @@ function PublicationPanel({
               disabled={current + 1 >= pages}
               onClick={() => setPage(current + 1)}
             >
-              {text("下一页", "Next", "التالي")}
+              {text(...translatedMessage("next_c0fd39244f"))}
             </Button>
             <Button
               disabled={
@@ -441,15 +418,9 @@ function PublicationPanel({
               onClick={() => void run()}
             >
               {busy
-                ? text(
-                    "生成预览中…",
-                    "Generating preview…",
-                    "جارٍ إنشاء المعاينة…",
-                  )
+                ? text(...translatedMessage("generating_preview_20450fab38"))
                 : text(
-                    "生成服务器预览",
-                    "Generate server preview",
-                    "إنشاء معاينة الخادم",
+                    ...translatedMessage("generate_server_preview_5f52b840fb"),
                   )}
             </Button>
           </div>
@@ -461,28 +432,26 @@ function PublicationPanel({
           <p role="status" className="rp-result-status">
             {preview.ready
               ? text(
-                  "预览校验通过，尚未发布。",
-                  "Preview checks passed. Nothing has been published.",
-                  "اجتازت المعاينة الفحوص. لم يُنشر أي شيء.",
+                  ...translatedMessage(
+                    "preview_checks_passed_nothing_has_been_publis_17071ec58d",
+                  ),
                 )
               : text(
-                  "存在阻塞项，尚未发布。",
-                  "Blocking issues remain. Nothing has been published.",
-                  "توجد مشكلات مانعة. لم يُنشر أي شيء.",
+                  ...translatedMessage(
+                    "blocking_issues_remain_nothing_has_been_publi_427ab9f3ac",
+                  ),
                 )}
           </p>
           <PairTable
             key={`proposed-${preview.review_digest}`}
-            title={text("拟发布组合", "Proposed pairs", "الأزواج المقترحة")}
+            title={text(...translatedMessage("proposed_pairs_91c410b11d"))}
             rows={preview.proposed_routes}
             showConstraints
           />
           <PairTable
             key={`existing-${preview.review_digest}`}
             title={text(
-              "当前能力组合",
-              "Current ability pairs",
-              "أزواج القدرات الحالية",
+              ...translatedMessage("current_ability_pairs_39c462f95d"),
             )}
             rows={preview.existing_pairs}
             existing
@@ -499,18 +468,18 @@ function PublicationPanel({
       {stale && (
         <p role="alert">
           {text(
-            "预览依赖已变化，旧结果已隐藏。请重新生成。",
-            "Preview dependencies changed. Previous results are hidden. Generate a new preview.",
-            "تغيرت متطلبات المعاينة. أُخفيت النتائج السابقة. أنشئ معاينة جديدة.",
+            ...translatedMessage(
+              "preview_dependencies_changed_previous_results_44e3806162",
+            ),
           )}
         </p>
       )}
       {context && context.publish_available !== true && (
         <p>
           {text(
-            "此服务器仅提供预览，未开放发布。",
-            "This server provides previews only; publication is unavailable.",
-            "يوفر هذا الخادم المعاينة فقط؛ النشر غير متاح.",
+            ...translatedMessage(
+              "this_server_provides_previews_only_publicatio_c5b0e5af39",
+            ),
           )}
         </p>
       )}
@@ -531,9 +500,7 @@ function PublicationPanel({
           <PairTable
             key={`confirmed-${review.review_digest}`}
             title={text(
-              "确认发布组合",
-              "Confirmed publication pairs",
-              "أزواج النشر المؤكدة",
+              ...translatedMessage("confirmed_publication_pairs_787fbdc710"),
             )}
             rows={review.proposed_routes}
             showConstraints
@@ -575,23 +542,25 @@ function PairTable({
         <table>
           <thead>
             <tr>
-              <th>{text("真实渠道标识", "Gateway ID", "معرّف البوابة")}</th>
-              <th>{text("模型", "Model", "النموذج")}</th>
-              <th>{text("分组", "Group", "المجموعة")}</th>
+              <th>{text(...translatedMessage("gateway_id_dbd0090ddd"))}</th>
+              <th>{text(...translatedMessage("model_9c2e5b5065"))}</th>
+              <th>{text(...translatedMessage("group_528d77dde5"))}</th>
               {showConstraints && (
                 <>
                   <th>
                     {text(
-                      "共同能力",
-                      "Shared capabilities",
-                      "القدرات المشتركة",
+                      ...translatedMessage("shared_capabilities_5093ca00de"),
                     )}
                   </th>
-                  <th>{text("上下文限制", "Context limit", "حد السياق")}</th>
+                  <th>
+                    {text(...translatedMessage("context_limit_7479560329"))}
+                  </th>
                 </>
               )}
               {existing && (
-                <th>{text("能力状态", "Ability state", "حالة القدرة")}</th>
+                <th>
+                  {text(...translatedMessage("ability_state_7fd03af902"))}
+                </th>
               )}
             </tr>
           </thead>
@@ -626,9 +595,9 @@ function PairTable({
                       {row.capabilities
                         ?.map((capability) =>
                           capability === "code"
-                            ? text("代码", "Code", "برمجة")
+                            ? text(...translatedMessage("code_5d3b561425"))
                             : capability === "text"
-                              ? text("文本", "Text", "نص")
+                              ? text(...translatedMessage("text_0c246fb7e5"))
                               : capability,
                         )
                         .join(" · ")}
@@ -637,7 +606,7 @@ function PairTable({
                       {row.context_length ? (
                         <code>{row.context_length.toLocaleString()}</code>
                       ) : (
-                        text("未知", "Unknown", "غير معروف")
+                        text(...translatedMessage("unknown_a3cf284f50"))
                       )}
                     </td>
                   </>
@@ -645,8 +614,8 @@ function PairTable({
                 {existing && (
                   <td>
                     {row.enabled
-                      ? text("已启用", "Enabled", "مفعلة")
-                      : text("已停用", "Disabled", "معطلة")}
+                      ? text(...translatedMessage("enabled_d03bf0e513"))
+                      : text(...translatedMessage("disabled_2e15d27fba"))}
                   </td>
                 )}
               </tr>
@@ -655,12 +624,12 @@ function PairTable({
         </table>
       </div>
       {rows.length === 0 && (
-        <p>{text("没有组合", "No pairs", "لا توجد أزواج")}</p>
+        <p>{text(...translatedMessage("no_pairs_073d411f62"))}</p>
       )}
       {pages > 1 && (
         <div className="rp-actions">
           <Button disabled={current === 0} onClick={() => setPage(current - 1)}>
-            {text("上一页", "Previous", "السابق")}
+            {text(...translatedMessage("previous_2672646f39"))}
           </Button>
           <span>
             {current + 1} / {pages}
@@ -669,7 +638,7 @@ function PairTable({
             disabled={current + 1 >= pages}
             onClick={() => setPage(current + 1)}
           >
-            {text("下一页", "Next", "التالي")}
+            {text(...translatedMessage("next_c0fd39244f"))}
           </Button>
         </div>
       )}
@@ -689,10 +658,10 @@ function IssueList({
   const pages = Math.ceil(issues.length / 20);
   return (
     <section
-      aria-label={text("发布阻塞原因", "Publication blockers", "عوائق النشر")}
+      aria-label={text(...translatedMessage("publication_blockers_a6af78d04c"))}
     >
       <h3>
-        {text("发布阻塞原因", "Publication blockers", "عوائق النشر")} ·{" "}
+        {text(...translatedMessage("publication_blockers_a6af78d04c"))} ·{" "}
         {issues.length}
       </h3>
       <ul className="rp-issues">
@@ -712,7 +681,7 @@ function IssueList({
       {pages > 1 && (
         <div className="rp-actions">
           <Button disabled={page === 0} onClick={() => setPage(page - 1)}>
-            {text("上一页", "Previous", "السابق")}
+            {text(...translatedMessage("previous_2672646f39"))}
           </Button>
           <span>
             {page + 1} / {pages}
@@ -721,7 +690,7 @@ function IssueList({
             disabled={page + 1 >= pages}
             onClick={() => setPage(page + 1)}
           >
-            {text("下一页", "Next", "التالي")}
+            {text(...translatedMessage("next_c0fd39244f"))}
           </Button>
         </div>
       )}

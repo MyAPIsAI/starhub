@@ -10,89 +10,41 @@ import (
 	"starhub/model"
 )
 
-// TestBILL006ConcurrentRedemption verifies that concurrent attempts to
-// redeem the same code only credit the user once. This is BILL-006 from
-// the P21 test strategy: "同兑换码并发执行 → 一次资金增量".
-func TestBILL006ConcurrentRedemption(t *testing.T) {
+// TestRetiredRedemptionCannotCredit verifies that even valid historical codes
+// cannot change balances through concurrent requests to the retired API.
+func TestRetiredRedemptionCannotCredit(t *testing.T) {
 	env := setupRelayApp(t)
-
-	// 1. Admin creates a redemption code with 500000 quota ($1).
-	res := doRequest(env.base, "POST", "/api/redemption/", env.session, map[string]any{
-		"quota": 500000, "count": 1,
-	})
-	if res.Status != 200 {
-		t.Fatalf("create redemption failed: %d %s", res.Status, res.Body)
+	code := &model.Redemption{Code: "RD-retired-concurrency", Quota: 500000, Status: 1}
+	if err := model.InsertRedemption(code); err != nil {
+		t.Fatal(err)
 	}
-	var rdResp struct {
-		Data struct {
-			Codes []string `json:"codes"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(res.Body), &rdResp); err != nil || len(rdResp.Data.Codes) != 1 {
-		t.Fatalf("expected 1 code, got: %s", res.Body)
-	}
-	code := rdResp.Data.Codes[0]
-
-	// 2. Record the user's quota before redemption.
 	before, err := model.GetUserByID(env.rootID)
 	if err != nil {
-		t.Fatalf("GetUserByID failed: %v", err)
+		t.Fatal(err)
 	}
-
-	// 3. Fire N concurrent redeem requests for the same code.
 	const concurrency = 10
 	var wg sync.WaitGroup
-	var successCount int64
-	var failCount int64
-	wg.Add(concurrency)
-	for i := 0; i < concurrency; i++ {
-		go func() {
-			defer wg.Done()
-			r := doRequest(env.base, "POST", "/api/user/redeem", env.session, map[string]any{
-				"code": code,
-			})
-			if r.Status == 200 {
-				atomic.AddInt64(&successCount, 1)
-			} else {
-				atomic.AddInt64(&failCount, 1)
+	var rejected atomic.Int64
+	for range concurrency {
+		wg.Go(func() {
+			res := doRequest(env.base, "POST", "/api/user/redeem", env.session, map[string]any{"code": code.Code})
+			if res.Status == 410 {
+				rejected.Add(1)
 			}
-		}()
+		})
 	}
 	wg.Wait()
-
-	// 4. Exactly one request must have succeeded; all others must fail.
-	if successCount != 1 {
-		t.Fatalf("expected exactly 1 successful redeem, got %d (failures: %d)", successCount, failCount)
-	}
-	if failCount != concurrency-1 {
-		t.Fatalf("expected %d failures, got %d", concurrency-1, failCount)
-	}
-
-	// 5. Quota increased by exactly 500000 — no double crediting.
 	after, err := model.GetUserByID(env.rootID)
 	if err != nil {
-		t.Fatalf("GetUserByID after failed: %v", err)
+		t.Fatal(err)
 	}
-	expected := before.Quota + 500000
-	if after.Quota != expected {
-		t.Fatalf("quota after concurrent redeem = %d, want %d (before=%d, delta should be exactly 500000)",
-			after.Quota, expected, before.Quota)
-	}
-
-	// 6. The redemption code must be in "used" status (2).
-	rd, err := model.GetRedemptionByCode(code)
+	stored, err := model.GetRedemptionByCode(code.Code)
 	if err != nil {
-		t.Fatalf("GetRedemptionByCode failed: %v", err)
+		t.Fatal(err)
 	}
-	if rd.Status != 2 {
-		t.Fatalf("redemption status = %d, want 2 (used)", rd.Status)
+	if rejected.Load() != concurrency || after.Quota != before.Quota || stored.Status != 1 || stored.UsedBy != 0 {
+		t.Fatal("retired redemption credited funds or changed the historical code")
 	}
-	if rd.UsedBy != env.rootID {
-		t.Fatalf("redemption used_by = %d, want %d", rd.UsedBy, env.rootID)
-	}
-
-	t.Logf("BILL-006 redemption: %d concurrent attempts, 1 success, %d failures, quota delta=500000",
-		concurrency, failCount)
 }
 
 // TestBILL006ConcurrentRechargeResolve verifies that concurrent resolve

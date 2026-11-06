@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
@@ -20,15 +22,13 @@ export function FinanceOverview() {
     return (
       <p role="alert">
         {text(
-          "该账户没有财务访问权限。",
-          "This account has no finance access.",
-          "هذا الحساب لا يملك صلاحية الوصول المالي.",
+          ...translatedMessage("this_account_has_no_finance_access_912e309887"),
         )}
       </p>
     );
   const data = query.error ? undefined : query.data;
   const date = (timestamp: number) =>
-    new Intl.DateTimeFormat(i18n.language, {
+    new Intl.DateTimeFormat(regionalLocale(i18n.language), {
       dateStyle: "medium",
       timeStyle: "short",
       timeZone: "UTC",
@@ -38,20 +38,20 @@ export function FinanceOverview() {
       <header className="finance-heading">
         <div>
           <p className="finance-eyebrow">
-            {text("只读财务", "Read-only finance", "المالية للقراءة فقط")}
+            {text(...translatedMessage("read_only_finance_16b84934dc"))}
           </p>
-          <h1>{text("财务概览", "Finance overview", "نظرة مالية")}</h1>
+          <h1>{text(...translatedMessage("finance_overview_f47c7aaf02"))}</h1>
           <p>
             {text(
-              "按平台已记录的付款、钱包及配额消费核对金额。",
-              "Review recorded payments, wallet balances, and API quota charges.",
-              "راجع المدفوعات المسجلة وأرصدة المحافظ ورسوم حصة الواجهة.",
+              ...translatedMessage(
+                "review_recorded_payments_wallet_balances_and__5e9f55e9cb",
+              ),
             )}
           </p>
         </div>
         <div className="finance-tools">
           <label>
-            {text("统计周期", "Reporting window", "فترة التقرير")}
+            {text(...translatedMessage("reporting_window_e03f76b62e"))}
             <select
               className="select-trigger"
               value={days}
@@ -63,7 +63,9 @@ export function FinanceOverview() {
             >
               {[7, 30, 90].map((n) => (
                 <option value={n} key={n}>
-                  {text(`最近 ${n} 天`, `Last ${n} days`, `آخر ${n} يومًا`)}
+                  {text(
+                    ...translatedMessage("last_days_66813b38c3", { p0: n }),
+                  )}
                 </option>
               ))}
             </select>
@@ -74,25 +76,21 @@ export function FinanceOverview() {
             onClick={() => void query.refetch()}
           >
             <RefreshCw size={15} />
-            {text("刷新", "Refresh", "تحديث")}
+            {text(...translatedMessage("refresh_9c83c3600a"))}
           </Button>
         </div>
       </header>
       {query.isLoading && (
         <p role="status">
-          {text(
-            "正在读取财务记录…",
-            "Loading financial records…",
-            "جارٍ تحميل السجلات المالية…",
-          )}
+          {text(...translatedMessage("loading_financial_records_6d3370bc8e"))}
         </p>
       )}
       {query.error && (
         <div className="finance-error" role="alert">
           {text(
-            "无法读取财务记录。请确认账户仍有财务权限后重试。",
-            "Financial records are unavailable. Confirm your account still has finance access and retry.",
-            "السجلات المالية غير متاحة. تأكد من استمرار صلاحية الوصول المالي ثم أعد المحاولة.",
+            ...translatedMessage(
+              "financial_records_are_unavailable_confirm_you_601d589421",
+            ),
           )}
         </div>
       )}
@@ -104,9 +102,9 @@ export function FinanceOverview() {
           {!data.wallet_and_api_quota_linked && (
             <p className="finance-note">
               {text(
-                "现金钱包与 API 配额目前分别记账，下列金额不能相加作为可用余额或收入。钱包为当前快照，其余指标按所选周期统计。",
-                "Cash wallets and API quota use separate accounting. These amounts cannot be combined into an available balance or revenue. Wallet balances are a current snapshot; other metrics use the reporting window.",
-                "تستخدم المحافظ النقدية وحصة الواجهة حسابات منفصلة. لا يمكن جمع هذه المبالغ كرصيد متاح أو إيراد. أرصدة المحافظ لقطة حالية؛ وتستخدم المقاييس الأخرى فترة التقرير.",
+                ...translatedMessage(
+                  "cash_wallets_and_api_quota_use_separate_accou_63e6de77de",
+                ),
               )}
             </p>
           )}
@@ -115,85 +113,79 @@ export function FinanceOverview() {
               {
                 key: "wallet",
                 title: text(
-                  "现金钱包余额快照",
-                  "Cash wallet balance snapshot",
-                  "لقطة رصيد المحافظ النقدية",
+                  ...translatedMessage(
+                    "cash_wallet_balance_snapshot_ca613247af",
+                  ),
                 ),
                 amount: data.wallet_balance_nano,
                 note: text(
-                  "所有钱包的已记录余额",
-                  "Recorded balances across all wallets",
-                  "الأرصدة المسجلة لجميع المحافظ",
+                  ...translatedMessage(
+                    "recorded_balances_across_all_wallets_fef8f2aaf2",
+                  ),
                 ),
               },
               {
                 key: "recharge",
                 title: text(
-                  "已记录的已付充值",
-                  "Recorded paid top-ups",
-                  "عمليات الشحن المدفوعة المسجلة",
+                  ...translatedMessage("recorded_paid_top_ups_65464b1736"),
                 ),
                 amount: data.paid_recharge_nano,
                 note: text(
-                  `${data.paid_recharge_count} 笔 · 按入账时间`,
-                  `${data.paid_recharge_count} orders · by paid time`,
-                  `${data.paid_recharge_count} طلبًا · حسب وقت الدفع`,
+                  ...translatedMessage("orders_by_paid_time_0e70498fd3", {
+                    p0: data.paid_recharge_count,
+                  }),
                 ),
               },
               {
                 key: "collected",
                 title: text(
-                  "API 配额消费折算",
-                  "API quota charged (USD equivalent)",
-                  "رسوم حصة الواجهة (بالدولار)",
+                  ...translatedMessage(
+                    "api_quota_charged_usd_equivalent_56a31a498b",
+                  ),
                 ),
                 amount: data.api_collected_nano,
                 note: text(
-                  "包含已收费的失败与取消请求",
-                  "Includes charged failed and cancelled requests",
-                  "تشمل الطلبات الفاشلة والملغاة التي حُوسبت",
+                  ...translatedMessage(
+                    "includes_charged_failed_and_cancelled_request_61b436a055",
+                  ),
                 ),
               },
               {
                 key: "unfunded",
                 title: text(
-                  "未收配额折算",
-                  "Unfunded quota (USD equivalent)",
-                  "حصة غير محصلة (بالدولار)",
+                  ...translatedMessage(
+                    "unfunded_quota_usd_equivalent_eab32d97ce",
+                  ),
                 ),
                 amount: data.api_unfunded_nano,
                 note: text(
-                  "已定价但未能收取的用量",
-                  "Priced usage that could not be collected",
-                  "استخدام مسعّر تعذر تحصيله",
+                  ...translatedMessage(
+                    "priced_usage_that_could_not_be_collected_3a1aab1540",
+                  ),
                 ),
               },
               {
                 key: "credits",
                 title: text(
-                  "钱包流水入账",
-                  "Wallet ledger credits",
-                  "قيود المحفظة الدائنة",
+                  ...translatedMessage("wallet_ledger_credits_ca0e754660"),
                 ),
                 amount: data.ledger_credits_nano,
                 note: text(
-                  "所选周期内的正向流水",
-                  "Positive ledger entries in this window",
-                  "القيود الموجبة في الفترة",
+                  ...translatedMessage(
+                    "positive_ledger_entries_in_this_window_ac86fc4f46",
+                  ),
                 ),
               },
               {
                 key: "debits",
                 title: text(
-                  "钱包流水出账",
-                  "Wallet ledger debits",
-                  "قيود المحفظة المدينة",
+                  ...translatedMessage("wallet_ledger_debits_65fb4758ac"),
                 ),
                 amount: data.ledger_debits_nano,
                 note: text(
-                  "所选周期内的负向流水绝对值",
-                  "Absolute value of negative ledger entries",
-                  "القيمة المطلقة للقيود السالبة",
+                  ...translatedMessage(
+                    "absolute_value_of_negative_ledger_entries_94e09ba135",
+                  ),
                 ),
               },
             ].map((metric) => (
@@ -210,9 +202,7 @@ export function FinanceOverview() {
                 <details>
                   <summary>
                     {text(
-                      "精确金额（纳美元）",
-                      "Exact amount (nano-USD)",
-                      "المبلغ الدقيق (نانو دولار)",
+                      ...translatedMessage("exact_amount_nano_usd_2b8f2146f6"),
                     )}
                   </summary>
                   <code dir="ltr" tabIndex={0}>
@@ -224,26 +214,28 @@ export function FinanceOverview() {
           </div>
           <div className="finance-outcomes">
             <h2>
-              {text(
-                "API 请求状态",
-                "API request outcomes",
-                "نتائج طلبات الواجهة",
-              )}
+              {text(...translatedMessage("api_request_outcomes_b848487fce"))}
             </h2>
             <dl>
               {[
                 [
-                  text("总请求", "Total requests", "إجمالي الطلبات"),
+                  text(...translatedMessage("total_requests_e14692abbf")),
                   data.api_request_count,
                 ],
-                [text("成功", "Successful", "ناجحة"), data.api_success_count],
-                [text("失败", "Failed", "فاشلة"), data.api_failed_count],
                 [
-                  text("已取消", "Cancelled", "ملغاة"),
+                  text(...translatedMessage("successful_63278519e1")),
+                  data.api_success_count,
+                ],
+                [
+                  text(...translatedMessage("failed_9a90056a7b")),
+                  data.api_failed_count,
+                ],
+                [
+                  text(...translatedMessage("cancelled_ac14ca071f")),
                   data.api_cancelled_count,
                 ],
                 [
-                  text("未知状态", "Unknown status", "حالة غير معروفة"),
+                  text(...translatedMessage("unknown_status_1eec72e763")),
                   Math.max(
                     0,
                     data.api_request_count -
@@ -263,9 +255,10 @@ export function FinanceOverview() {
           {data.paid_orders_without_timestamp > 0 && (
             <p className="finance-note">
               {text(
-                `全量记录中有 ${data.paid_orders_without_timestamp} 笔已付订单缺少入账时间，未分配到周期充值统计。`,
-                `${data.paid_orders_without_timestamp} recorded paid orders have no payment timestamp and are excluded from windowed top-up totals.`,
-                `${data.paid_orders_without_timestamp} طلبًا مدفوعًا بلا وقت دفع مستبعد من إجمالي الشحن للفترة.`,
+                ...translatedMessage(
+                  "recorded_paid_orders_have_no_payment_timestam_4bd6b0d8a0",
+                  { p0: data.paid_orders_without_timestamp },
+                ),
               )}
             </p>
           )}

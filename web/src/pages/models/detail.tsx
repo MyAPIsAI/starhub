@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../../i18n/messages";
 import { useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import {
@@ -70,9 +71,7 @@ export default function ModelDetail() {
       ? modelQuality.p95_duration_ms
       : null;
   const noLatencyData = text(
-    "暂无耗时数据",
-    "No latency data",
-    "لا توجد بيانات زمن الاستجابة",
+    ...translatedMessage("no_latency_data_3d1e009af8"),
   );
   const isLoading = plazaDetail.isPending;
   const hasLoadError =
@@ -112,7 +111,7 @@ export default function ModelDetail() {
         <Button asChild variant="secondary" size="small">
           <Link to={returnTo}>
             <ArrowLeft size={14} />
-            {text("返回模型目录", "Back to models", "العودة إلى النماذج")}
+            {text(...translatedMessage("back_to_models_42606e4b5d"))}
           </Link>
         </Button>
         {!model ? (
@@ -123,46 +122,42 @@ export default function ModelDetail() {
           >
             <h1>
               {isLoading
-                ? text("正在加载模型", "Loading model", "جار تحميل النموذج")
+                ? text(...translatedMessage("loading_model_11eece6964"))
                 : hasLoadError
                   ? text(
-                      "模型加载失败",
-                      "Failed to load model",
-                      "تعذر تحميل النموذج",
+                      ...translatedMessage("failed_to_load_model_db396ca311"),
                     )
-                  : text("模型不存在", "Model not found", "النموذج غير موجود")}
+                  : text(...translatedMessage("model_not_found_d96fc188df"))}
             </h1>
             <p>
               {isLoading
                 ? text(
-                    "正在获取模型详情，请稍候。",
-                    "Fetching model details. Please wait.",
-                    "جار جلب تفاصيل النموذج. يرجى الانتظار.",
+                    ...translatedMessage(
+                      "fetching_model_details_please_wait_1207650b23",
+                    ),
                   )
                 : hasLoadError
                   ? text(
-                      "暂时无法获取模型详情，请重试。",
-                      "Model details are unavailable. Please retry.",
-                      "تفاصيل النموذج غير متاحة حاليًا. يرجى إعادة المحاولة.",
+                      ...translatedMessage(
+                        "model_details_are_unavailable_please_retry_5932e8f7e0",
+                      ),
                     )
                   : text(
-                      "没有找到此模型标识，请返回目录选择可用模型。不会替换成其他模型。",
-                      "This model ID was not found. Return to the catalog to choose a model; no substitution was made.",
-                      "لم يتم العثور على معرف النموذج. اختر نموذجًا من الدليل؛ لم يتم استبداله.",
+                      ...translatedMessage(
+                        "this_model_id_was_not_found_return_to_the_cat_b423eeb1f4",
+                      ),
                     )}
             </p>
             <code>{id}</code>
             {hasLoadError ? (
               <Button onClick={() => void plazaDetail.refetch()}>
-                {text("重试", "Retry", "إعادة المحاولة")}
+                {text(...translatedMessage("retry_c16455021c"))}
               </Button>
             ) : !isLoading ? (
               <Button asChild>
                 <Link to={returnTo}>
                   {text(
-                    "查看模型目录",
-                    "View model directory",
-                    "عرض دليل النماذج",
+                    ...translatedMessage("view_model_directory_a2b8887bee"),
                   )}
                 </Link>
               </Button>
@@ -174,8 +169,8 @@ export default function ModelDetail() {
               <div>
                 <span className="access-kind">
                   {model.kind === "smart"
-                    ? text("智能路由", "Smart routing", "توجيه ذكي")
-                    : text("指定模型", "Specific model", "نموذج محدد")}
+                    ? text(...translatedMessage("smart_routing_34b9b06792"))
+                    : text(...translatedMessage("specific_model_020bc6e3c7"))}
                 </span>
                 <h1>
                   {model.name}
@@ -194,11 +189,13 @@ export default function ModelDetail() {
                         <ArrowRight size={15} />
                         {compatibleKey
                           ? text(
-                              "复用密钥并接入",
-                              "Reuse key & connect",
-                              "استخدام المفتاح والتوصيل",
+                              ...translatedMessage(
+                                "reuse_key_connect_0934bebb4a",
+                              ),
                             )
-                          : text("开始接入", "Connect a tool", "توصيل أداة")}
+                          : text(
+                              ...translatedMessage("connect_a_tool_20565c835b"),
+                            )}
                       </Link>
                     </Button>
                     <Button asChild variant="secondary">
@@ -207,9 +204,9 @@ export default function ModelDetail() {
                       >
                         <Terminal size={15} />
                         {text(
-                          "可选：模拟验证",
-                          "Optional: demo validation",
-                          "اختياري: تحقق تجريبي",
+                          ...translatedMessage(
+                            "optional_demo_validation_30a421fd28",
+                          ),
                         )}
                       </Link>
                     </Button>
@@ -218,14 +215,14 @@ export default function ModelDetail() {
                   <Button variant="secondary" disabled>
                     {!supportsClient
                       ? text(
-                          "客户端接入未提供",
-                          "Client connection unavailable",
-                          "اتصال العميل غير متوفر",
+                          ...translatedMessage(
+                            "client_connection_unavailable_be1d46f21e",
+                          ),
                         )
                       : text(
-                          "当前分组不可接入",
-                          "Unavailable in this group",
-                          "غير متاح في المجموعة",
+                          ...translatedMessage(
+                            "unavailable_in_this_group_7646f7ac65",
+                          ),
                         )}
                   </Button>
                 )}
@@ -234,18 +231,18 @@ export default function ModelDetail() {
             {!model.online && (
               <div className="access-notice access-error">
                 {text(
-                  "当前分组没有启用的渠道覆盖此模型，暂不可接入；历史调用和账单继续保留。",
-                  "No enabled channel serves this model in the current group. Historical requests and bills are retained.",
-                  "لا توجد قناة مفعلة لهذا النموذج في المجموعة الحالية. تبقى الطلبات والفواتير السابقة محفوظة.",
+                  ...translatedMessage(
+                    "no_enabled_channel_serves_this_model_in_the_c_4689e9bf70",
+                  ),
                 )}
               </div>
             )}
             {!supportsClient && (
               <div className="access-notice">
                 {text(
-                  "当前分组尚未提供可用的客户端协议，请检查渠道配置。",
-                  "No supported client protocol is available in this group. Check channel configuration.",
-                  "لا يوجد بروتوكول عميل مدعوم في المجموعة الحالية. تحقق من إعدادات القناة.",
+                  ...translatedMessage(
+                    "no_supported_client_protocol_is_available_in__3855cb203a",
+                  ),
                 )}
               </div>
             )}
@@ -255,56 +252,61 @@ export default function ModelDetail() {
                 <span>
                   {compatibleKey
                     ? text(
-                        `可复用「${compatibleKey.name}」。切换模型无需更换密钥；仍受原授权及额度约束。`,
-                        `Reuse “${compatibleKey.name}”. Changing models does not require a new key; existing permissions and limits apply.`,
-                        `يمكن إعادة استخدام «${compatibleKey.name}» مع الالتزام بالصلاحيات والحدود.`,
+                        ...translatedMessage(
+                          "reuse_changing_models_does_not_require_a_new__c93b5717b0",
+                          { p0: compatibleKey.name },
+                        ),
                       )
                     : text(
-                        "创建密钥时只选服务分组与额度。此模型仅作为接入示例，不会自动设置单模型白名单。",
-                        "New keys select a service group and budget. This model is only a configuration example, not an automatic single-model allowlist.",
-                        "اختر المجموعة والميزانية عند إنشاء المفتاح. هذا النموذج مثال للإعداد فقط ولا يقيد الصلاحيات تلقائيًا.",
+                        ...translatedMessage(
+                          "new_keys_select_a_service_group_and_budget_th_e2b2c99e8c",
+                        ),
                       )}
                 </span>
               </div>
             )}
             <section className="access-facts">
               <div>
-                <small>{text("支持协议", "Protocols", "البروتوكولات")}</small>
+                <small>
+                  {text(...translatedMessage("protocols_3a5fb4e26a"))}
+                </small>
                 <strong>
                   {supportsClient
                     ? model.protocols.join(" / ")
                     : text(
-                        "当前分组未提供",
-                        "Unavailable in this group",
-                        "غير متوفرة في المجموعة الحالية",
+                        ...translatedMessage(
+                          "unavailable_in_this_group_ed5c15898a",
+                        ),
                       )}
                 </strong>
               </div>
               <div>
-                <small>{text("上下文", "Context", "السياق")}</small>
+                <small>
+                  {text(...translatedMessage("context_9810531841"))}
+                </small>
                 <strong>{model.contextDisplay}</strong>
               </div>
               <div>
                 <small>
-                  {text("调用方式", "Request behavior", "سلوك الطلب")}
+                  {text(...translatedMessage("request_behavior_2ca6c11487"))}
                 </small>
                 <strong>
                   {model.kind === "smart"
                     ? text(
-                        "授权候选内选择",
-                        "Authorized candidate selection",
-                        "اختيار ضمن الصلاحيات",
+                        ...translatedMessage(
+                          "authorized_candidate_selection_e2cc163eb8",
+                        ),
                       )
                     : text(
-                        "严格使用请求模型",
-                        "Exact requested model",
-                        "النموذج المطلوب نفسه",
+                        ...translatedMessage(
+                          "exact_requested_model_445f685eed",
+                        ),
                       )}
                 </strong>
               </div>
               <div>
                 <small>
-                  {text("服务质量", "Service quality", "جودة الخدمة")}
+                  {text(...translatedMessage("service_quality_87d4d242c9"))}
                 </small>
                 <div
                   style={{
@@ -325,7 +327,7 @@ export default function ModelDetail() {
                         }}
                         dir="ltr"
                       >
-                        {text("成功率", "Success", "النجاح")}:{" "}
+                        {text(...translatedMessage("success_5bc7e895a7"))}:{" "}
                         <strong
                           style={{
                             color:
@@ -347,7 +349,7 @@ export default function ModelDetail() {
                         }}
                         dir="ltr"
                       >
-                        {text("P95 延迟", "P95 latency", "زمن P95")}:{" "}
+                        {text(...translatedMessage("p95_latency_dc1e193e2a"))}:{" "}
                         <strong
                           style={{
                             color:
@@ -371,7 +373,7 @@ export default function ModelDetail() {
                         }}
                         dir="ltr"
                       >
-                        {text("请求数", "Requests", "الطلبات")}:{" "}
+                        {text(...translatedMessage("requests_fe89af9421"))}:{" "}
                         <strong>{modelQuality.total_requests}</strong>
                       </span>
                     </>
@@ -383,9 +385,7 @@ export default function ModelDetail() {
                       }}
                     >
                       {text(
-                        "暂无请求数据",
-                        "No request data yet",
-                        "لا توجد بيانات طلبات بعد",
+                        ...translatedMessage("no_request_data_yet_61bf0d64a8"),
                       )}
                     </span>
                   )}
@@ -401,7 +401,7 @@ export default function ModelDetail() {
                     }}
                   >
                     <ShieldCheck size={13} />
-                    {text("查看趋势", "View trends", "عرض الاتجاهات")}
+                    {text(...translatedMessage("view_trends_4f4ace09ff"))}
                   </Link>
                 </div>
               </div>
@@ -411,24 +411,20 @@ export default function ModelDetail() {
               <section className="access-panel">
                 <h2>
                   <Sparkles size={20} />
-                  {text(
-                    "费用优先路由",
-                    "Cost-first routing",
-                    "التوجيه حسب التكلفة",
-                  )}
+                  {text(...translatedMessage("cost_first_routing_ba73d27fea"))}
                 </h2>
                 <p>
                   {text(
-                    "按本次请求的预计输入、输出用量，在满足能力和协议的已授权候选中选择估算费用最低的模型。工具调用链固定实际模型，后续不兼容时明确报错。",
-                    "Select the lowest estimated cost among authorized candidates that satisfy the request protocol and capabilities, using estimated request usage. Tool chains retain the actual model; incompatible continuation fails explicitly.",
-                    "يختار أقل تكلفة مقدرة ضمن النماذج المصرح بها والمتوافقة مع الطلب. تحتفظ سلسلة الأدوات بالنموذج الفعلي ويرفض الاستمرار غير المتوافق بوضوح.",
+                    ...translatedMessage(
+                      "select_the_lowest_estimated_cost_among_author_74f86a558e",
+                    ),
                   )}
                 </p>
                 <p>
                   {text(
-                    "这是一种调用策略，不是额外服务分组。只按实际模型计费一次，不另收路由费用。文本、编程、视觉与推理能力按候选过滤；本演示仅模拟文本输入。",
-                    "This is a routing strategy, not another service group. Charge once at the actual model rate, with no routing surcharge. Candidates are filtered for text, code, vision, and reasoning; this demo simulates text input only.",
-                    "هذه استراتيجية توجيه وليست مجموعة خدمة إضافية. تحسب التكلفة مرة واحدة بسعر النموذج الفعلي بلا رسم توجيه. العرض يحاكي إدخال النص فقط.",
+                    ...translatedMessage(
+                      "this_is_a_routing_strategy_not_another_servic_a670c495ae",
+                    ),
                   )}
                 </p>
               </section>
@@ -436,16 +432,16 @@ export default function ModelDetail() {
             <section className="access-panel access-public-comparison">
               <h2>
                 {text(
-                  "官方参考与平台报价",
-                  "Official reference and platform prices",
-                  "المرجع الرسمي وأسعار المنصة",
+                  ...translatedMessage(
+                    "official_reference_and_platform_prices_562ddae32f",
+                  ),
                 )}
               </h2>
               <p className="access-muted">
                 {text(
-                  "平台报价来自后端当前分组，已包含分组倍率，实际按密钥分组计费。官方参考由平台维护，不自动改变平台计费。",
-                  "Backend quotes include the current group multiplier; billing follows your key group. Official references are maintained by the platform and do not change billing.",
-                  "أسعار الخادم شاملة معامل المجموعة الحالية؛ الفوترة حسب مجموعة المفتاح. يدير المسؤول المرجع الرسمي دون تغيير الفوترة.",
+                  ...translatedMessage(
+                    "backend_quotes_include_the_current_group_mult_8bd30ae6de",
+                  ),
                 )}
               </p>
               <CatalogPriceComparison
@@ -458,13 +454,11 @@ export default function ModelDetail() {
               <div className="access-panel-heading">
                 <h2>
                   {text(
-                    "当前分组价格",
-                    "Your service group rates",
-                    "أسعار مجموعة الخدمة",
+                    ...translatedMessage("your_service_group_rates_5803a74853"),
                   )}
                 </h2>
                 <label className="access-inline-label">
-                  {text("服务分组", "Service group", "مجموعة الخدمة")}
+                  {text(...translatedMessage("service_group_1c6f8adf41"))}
                   <select
                     value={tier ?? ""}
                     disabled={!groups.length}
@@ -473,9 +467,7 @@ export default function ModelDetail() {
                     {!groups.length && (
                       <option value="">
                         {text(
-                          "暂无可用分组",
-                          "No available group",
-                          "لا توجد مجموعة متاحة",
+                          ...translatedMessage("no_available_group_1f7ede1b8c"),
                         )}
                       </option>
                     )}
@@ -489,17 +481,17 @@ export default function ModelDetail() {
               </div>
               <p className="access-muted">
                 {text(
-                  "后端报价 · 按模型计价方式及单位展示 · 已计入当前分组倍率",
-                  "Backend quotes · Configured billing units · Current group multiplier included",
-                  "أسعار الخادم حسب وحدات النموذج وشاملة معامل المجموعة الحالية",
+                  ...translatedMessage(
+                    "backend_quotes_configured_billing_units_curre_ed009cde16",
+                  ),
                 )}
               </p>
               {!price?.available ? (
                 <div className="access-notice access-error">
                   {text(
-                    "当前服务分组暂无可用模型。请选择其他分组查看，不会自动换模。",
-                    "No model is available in this group. Choose another group to inspect rates.",
-                    "لا يوجد نموذج متاح في هذه المجموعة. اختر مجموعة أخرى لعرض الأسعار.",
+                    ...translatedMessage(
+                      "no_model_is_available_in_this_group_choose_an_40df90acba",
+                    ),
                   )}
                 </div>
               ) : (
@@ -510,9 +502,9 @@ export default function ModelDetail() {
                         {price.canEstimate
                           ? `${formatMoney(price.minAmountNano!, "call")}–${formatMoney(price.maxAmountNano!, "call")}`
                           : text(
-                              "暂不可估算",
-                              "Estimate unavailable",
-                              "التقدير غير متاح",
+                              ...translatedMessage(
+                                "estimate_unavailable_56a941063d",
+                              ),
                             )}
                       </strong>
                       <span>
@@ -545,9 +537,9 @@ export default function ModelDetail() {
                       {model.pricing.mode === "per_token" && (
                         <p className="access-muted">
                           {text(
-                            "缓存读取 / 写入（美元 / 百万词元）：",
-                            "Cache read / write (USD / million tokens): ",
-                            "قراءة / كتابة التخزين (دولار / مليون رمز): ",
+                            ...translatedMessage(
+                              "cache_read_write_usd_million_tokens_28165c258e",
+                            ),
                           )}
                           {amounts?.cacheRead !== undefined
                             ? `$${amounts.cacheRead}`
@@ -566,27 +558,29 @@ export default function ModelDetail() {
                         tabIndex={0}
                         role="region"
                         aria-label={text(
-                          "模型价格表，可横向滚动",
-                          "Model price table, horizontally scrollable",
-                          "جدول الأسعار قابل للتمرير أفقيًا",
+                          ...translatedMessage(
+                            "model_price_table_horizontally_scrollable_d198948e1d",
+                          ),
                         )}
                       >
                         <table className="access-table">
                           <thead>
                             <tr>
-                              <th>{text("模型", "Model", "النموذج")}</th>
+                              <th>
+                                {text(...translatedMessage("model_9c2e5b5065"))}
+                              </th>
                               <th>
                                 {text(
-                                  "当前报价与估算假设",
-                                  "Current quote and assumptions",
-                                  "التسعير الحالي وافتراضات التقدير",
+                                  ...translatedMessage(
+                                    "current_quote_and_assumptions_efe6c14fca",
+                                  ),
                                 )}
                               </th>
                               <th>
                                 {text(
-                                  "缓存单价",
-                                  "Cache unit rates",
-                                  "أسعار التخزين",
+                                  ...translatedMessage(
+                                    "cache_unit_rates_30b06e2728",
+                                  ),
                                 )}
                               </th>
                             </tr>
@@ -608,9 +602,9 @@ export default function ModelDetail() {
                                   {rate.rule.mode === "tokens" && rate.quote ? (
                                     <>
                                       {text(
-                                        "读取 / 写入",
-                                        "Read / write",
-                                        "قراءة / كتابة",
+                                        ...translatedMessage(
+                                          "read_write_9e708504a0",
+                                        ),
                                       )}
                                       <br />
                                       {rate.cacheRead !== undefined
@@ -623,17 +617,17 @@ export default function ModelDetail() {
                                       <br />
                                       <small>
                                         {text(
-                                          "美元 / 百万词元",
-                                          "USD / million tokens",
-                                          "دولار / مليون رمز",
+                                          ...translatedMessage(
+                                            "usd_million_tokens_6f08728512",
+                                          ),
                                         )}
                                       </small>
                                     </>
                                   ) : (
                                     text(
-                                      "以左侧规则为准",
-                                      "See configured rule",
-                                      "حسب القاعدة المحددة",
+                                      ...translatedMessage(
+                                        "see_configured_rule_d57c6ab039",
+                                      ),
                                     )
                                   )}
                                 </td>
@@ -646,9 +640,10 @@ export default function ModelDetail() {
                   )}
                   <p className="access-muted">
                     {text(
-                      `分组倍率 ${model.pricing.group_ratio}× 已包含在上述售价中，不重复计算。未配置缓存价格显示 —，不代表免费。历史账单保留请求当时费率。`,
-                      `Group multiplier ${model.pricing.group_ratio}× is already included. An unconfigured cache rate is —, not free. Historical bills retain their original rates.`,
-                      `معامل المجموعة ${model.pricing.group_ratio}× محسوب بالفعل. — لا تعني المجانية. تحتفظ الفواتير السابقة بالأسعار الأصلية.`,
+                      ...translatedMessage(
+                        "group_multiplier_is_already_included_an_uncon_1dd3ebbd6b",
+                        { p0: model.pricing.group_ratio },
+                      ),
                     )}
                   </p>
                 </>
@@ -657,16 +652,14 @@ export default function ModelDetail() {
                 <details className="access-details">
                   <summary>
                     {text(
-                      "查看当前分组价格",
-                      "Current group rates",
-                      "أسعار المجموعة الحالية",
+                      ...translatedMessage("current_group_rates_a152f11009"),
                     )}
                   </summary>
                   <p className="access-muted">
                     {text(
-                      "SLA 为运营方发布的分组目标，与模型实测统计分开，不代表合同保证。空白指标未发布。",
-                      "SLA values are operator-published group targets, separate from model observations and without a contractual guarantee. Blank metrics are unpublished.",
-                      "قيم SLA أهداف للمجموعة ينشرها المشغّل، منفصلة عن إحصاءات النموذج وليست ضمانًا تعاقديًا. المقاييس الفارغة غير منشورة.",
+                      ...translatedMessage(
+                        "sla_values_are_operator_published_group_targe_76fe7fb035",
+                      ),
                     )}
                   </p>
                   <div
@@ -674,33 +667,41 @@ export default function ModelDetail() {
                     tabIndex={0}
                     role="region"
                     aria-label={text(
-                      "模型价格表，可横向滚动",
-                      "Model price table, horizontally scrollable",
-                      "جدول الأسعار قابل للتمرير أفقيًا",
+                      ...translatedMessage(
+                        "model_price_table_horizontally_scrollable_d198948e1d",
+                      ),
                     )}
                   >
                     <table className="access-table">
                       <thead>
                         <tr>
-                          <th>{text("分组", "Group", "المجموعة")}</th>
+                          <th>
+                            {text(...translatedMessage("group_528d77dde5"))}
+                          </th>
                           <th>
                             {text(
-                              "当前实际价格",
-                              "Current effective price",
-                              "السعر الفعلي الحالي",
+                              ...translatedMessage(
+                                "current_effective_price_945db1759f",
+                              ),
                             )}
                           </th>
                           <th>
                             {text(
-                              "模型7天成功率/P95",
-                              "Model success/P95 (7d)",
-                              "نجاح النموذج/P95 (7 أيام)",
+                              ...translatedMessage(
+                                "model_success_p95_7d_799e295f93",
+                              ),
                             )}
                           </th>
                           <th>
-                            {text("SLA 目标", "SLA targets", "أهداف SLA")}
+                            {text(
+                              ...translatedMessage("sla_targets_8d6bc914ec"),
+                            )}
                           </th>
-                          <th>{text("辅助倍率", "Multiplier", "المعامل")}</th>
+                          <th>
+                            {text(
+                              ...translatedMessage("multiplier_f33953c9ca"),
+                            )}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -738,15 +739,19 @@ export default function ModelDetail() {
                                         whiteSpace: "nowrap",
                                       }}
                                     >
-                                      {text("用此分组", "Use group", "استخدم")}
+                                      {text(
+                                        ...translatedMessage(
+                                          "use_group_6fd75f3ae5",
+                                        ),
+                                      )}
                                     </Link>
                                   </div>
                                 ) : (
                                   <span style={{ color: "var(--muted)" }}>
                                     {text(
-                                      "暂不可用",
-                                      "Unavailable",
-                                      "غير متاح",
+                                      ...translatedMessage(
+                                        "unavailable_2660727e4e",
+                                      ),
                                     )}
                                   </span>
                                 )}
@@ -776,7 +781,9 @@ export default function ModelDetail() {
                                       textDecoration: "none",
                                     }}
                                   >
-                                    {text("查看", "View", "عرض")}
+                                    {text(
+                                      ...translatedMessage("view_baad6e0094"),
+                                    )}
                                   </Link>
                                 )}
                               </td>
@@ -802,67 +809,81 @@ export default function ModelDetail() {
             </section>
             {model.pricing.mode === "per_token" && (
               <section className="access-panel">
-                <h2>{text("定价详情", "Pricing details", "تفاصيل التسعير")}</h2>
+                <h2>
+                  {text(...translatedMessage("pricing_details_da10e4f8c2"))}
+                </h2>
                 <p className="access-muted">
                   {text(
-                    "以下展示模型的定价结构与缓存折扣。实际费用取决于请求时的用量、缓存命中和分组倍率。",
-                    "The following shows the model's pricing structure and cache discounts. Actual cost depends on request usage, cache hits, and group multiplier.",
-                    "يعرض ما يلي هيكل تسعير النموذج وخصومات التخزين. التكلفة الفعلية تعتمد على الاستخدام وذاكرة التخزين المؤقتة ومعامل المجموعة.",
+                    ...translatedMessage(
+                      "the_following_shows_the_model_s_pricing_struc_347c248c32",
+                    ),
                   )}
                 </p>
                 <div className="access-table-wrap" tabIndex={0} role="region">
                   <table className="access-table">
                     <thead>
                       <tr>
-                        <th>{text("计费项", "Billing item", "بند الفوترة")}</th>
                         <th>
                           {text(
-                            "单价（美元/百万 Token）",
-                            "Rate (USD/M tokens)",
-                            "السعر (دولار/مليون رمز)",
+                            ...translatedMessage("billing_item_cfe9d9f378"),
                           )}
                         </th>
-                        <th>{text("说明", "Description", "الوصف")}</th>
+                        <th>
+                          {text(
+                            ...translatedMessage(
+                              "rate_usd_m_tokens_67f3b51774",
+                            ),
+                          )}
+                        </th>
+                        <th>
+                          {text(...translatedMessage("description_c6bae5d4e7"))}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
                         <td>
-                          {text("输入 Token", "Input tokens", "رموز الإدخال")}
+                          {text(
+                            ...translatedMessage("input_tokens_eaf331aa0f"),
+                          )}
                         </td>
                         <td className="mono">${amounts?.input ?? "—"}</td>
                         <td>
                           {text(
-                            "请求中的提示词和对话内容",
-                            "Prompt and conversation content in the request",
-                            "المحتوى التلقيني والمحادثة في الطلب",
+                            ...translatedMessage(
+                              "prompt_and_conversation_content_in_the_reques_4143987908",
+                            ),
                           )}
                         </td>
                       </tr>
                       <tr>
                         <td>
-                          {text("输出 Token", "Output tokens", "رموز الإخراج")}
+                          {text(
+                            ...translatedMessage("output_tokens_e7f8d19e9f"),
+                          )}
                         </td>
                         <td className="mono">${amounts?.output ?? "—"}</td>
                         <td>
                           {text(
-                            "模型生成的回复内容",
-                            "Model-generated response content",
-                            "محتوى الاستجابة المُنشأ بواسطة النموذج",
+                            ...translatedMessage(
+                              "model_generated_response_content_b5e6f31dc4",
+                            ),
                           )}
                         </td>
                       </tr>
                       {amounts?.cacheRead !== undefined && (
                         <tr>
                           <td>
-                            {text("缓存读取", "Cache read", "قراءة التخزين")}
+                            {text(
+                              ...translatedMessage("cache_read_98c9053b0f"),
+                            )}
                           </td>
                           <td className="mono">${amounts.cacheRead}</td>
                           <td>
                             {text(
-                              "命中缓存的输入按折扣价计费",
-                              "Cached input is billed at a discounted rate",
-                              "الإدخال المخزن يُحاسب بسعر مخفض",
+                              ...translatedMessage(
+                                "cached_input_is_billed_at_a_discounted_rate_332ab580d2",
+                              ),
                             )}
                           </td>
                         </tr>
@@ -870,14 +891,16 @@ export default function ModelDetail() {
                       {amounts?.cacheWrite !== undefined && (
                         <tr>
                           <td>
-                            {text("缓存写入", "Cache write", "كتابة التخزين")}
+                            {text(
+                              ...translatedMessage("cache_write_08397c9634"),
+                            )}
                           </td>
                           <td className="mono">${amounts.cacheWrite}</td>
                           <td>
                             {text(
-                              "首次写入缓存的输入内容",
-                              "Initial write of input to cache",
-                              "الكتابة الأولى للإدخال إلى التخزين",
+                              ...translatedMessage(
+                                "initial_write_of_input_to_cache_115c2005d6",
+                              ),
                             )}
                           </td>
                         </tr>
@@ -891,14 +914,14 @@ export default function ModelDetail() {
                 >
                   {[
                     {
-                      label: text("输入 Token", "Input tokens", "رموز الإدخال"),
+                      label: text(
+                        ...translatedMessage("input_tokens_eaf331aa0f"),
+                      ),
                       value: amounts?.input,
                     },
                     {
                       label: text(
-                        "输出 Token",
-                        "Output tokens",
-                        "رموز الإخراج",
+                        ...translatedMessage("output_tokens_e7f8d19e9f"),
                       ),
                       value: amounts?.output,
                     },
@@ -906,9 +929,7 @@ export default function ModelDetail() {
                       ? [
                           {
                             label: text(
-                              "缓存读取",
-                              "Cache read",
-                              "قراءة التخزين",
+                              ...translatedMessage("cache_read_98c9053b0f"),
                             ),
                             value: amounts.cacheRead,
                           },
@@ -918,9 +939,7 @@ export default function ModelDetail() {
                       ? [
                           {
                             label: text(
-                              "缓存写入",
-                              "Cache write",
-                              "كتابة التخزين",
+                              ...translatedMessage("cache_write_08397c9634"),
                             ),
                             value: amounts.cacheWrite,
                           },
@@ -937,9 +956,10 @@ export default function ModelDetail() {
                 </div>
                 <p className="access-muted">
                   {text(
-                    `当前分组倍率：${model.pricing.group_ratio}×（已包含在上方售价中）。历史账单保留请求当时费率。`,
-                    `Current group multiplier: ${model.pricing.group_ratio}× (included above). Historical bills retain their original rates.`,
-                    `معامل المجموعة الحالي: ${model.pricing.group_ratio}× (مضمّن أعلاه). تحتفظ الفواتير السابقة بأسعارها الأصلية.`,
+                    ...translatedMessage(
+                      "current_group_multiplier_included_above_histo_27a0cd3615",
+                      { p0: model.pricing.group_ratio },
+                    ),
                   )}
                 </p>
               </section>
@@ -949,13 +969,15 @@ export default function ModelDetail() {
               model.pricing.expression?.trim() && (
                 <section className="access-panel">
                   <h2>
-                    {text("表达式定价", "Expression pricing", "تسعير بالتعبير")}
+                    {text(
+                      ...translatedMessage("expression_pricing_d19d7f5185"),
+                    )}
                   </h2>
                   <p className="access-muted">
                     {text(
-                      "此模型使用表达式定价规则，实际费用取决于请求时的用量变量。下方为平台配置的表达式。",
-                      "This model uses expression-based pricing. Actual cost depends on request usage variables. Below is the platform-configured expression.",
-                      "يستخدم هذا النموذج تسعيرًا قائمًا على التعبيرات. التكلفة الفعلية تعتمد على متغيرات الاستخدام. أدناه التعبير المكون.",
+                      ...translatedMessage(
+                        "this_model_uses_expression_based_pricing_actu_e99413f585",
+                      ),
                     )}
                   </p>
                   <div
@@ -965,9 +987,7 @@ export default function ModelDetail() {
                     <div>
                       <span>
                         {text(
-                          "计价表达式",
-                          "Pricing expression",
-                          "تعبير التسعير",
+                          ...translatedMessage("pricing_expression_b4a2e43450"),
                         )}
                       </span>
                     </div>
@@ -983,13 +1003,15 @@ export default function ModelDetail() {
               model.pricing.per_request > 0 && (
                 <section className="access-panel">
                   <h2>
-                    {text("计量定价", "Per-request pricing", "تسعير لكل طلب")}
+                    {text(
+                      ...translatedMessage("per_request_pricing_c36d9156c1"),
+                    )}
                   </h2>
                   <p className="access-muted">
                     {text(
-                      "此模型按次计费，每次请求收取固定费用。实际费用取决于请求次数。",
-                      "This model is billed per request at a fixed rate. Actual cost depends on the number of requests.",
-                      "يُحاسب هذا النموذج لكل طلب بسعر ثابت. التكلفة الفعلية تعتمد على عدد الطلبات.",
+                      ...translatedMessage(
+                        "this_model_is_billed_per_request_at_a_fixed_r_2ea16ec328",
+                      ),
                     )}
                   </p>
                   <div className="access-table-wrap" tabIndex={0} role="region">
@@ -997,29 +1019,39 @@ export default function ModelDetail() {
                       <thead>
                         <tr>
                           <th>
-                            {text("计费项", "Billing item", "بند الفوترة")}
+                            {text(
+                              ...translatedMessage("billing_item_cfe9d9f378"),
+                            )}
                           </th>
                           <th>
                             {text(
-                              "单价（美元/次）",
-                              "Rate (USD/request)",
-                              "السعر (دولار/طلب)",
+                              ...translatedMessage(
+                                "rate_usd_request_dc80393580",
+                              ),
                             )}
                           </th>
-                          <th>{text("说明", "Description", "الوصف")}</th>
+                          <th>
+                            {text(
+                              ...translatedMessage("description_c6bae5d4e7"),
+                            )}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr>
-                          <td>{text("每次请求", "Per request", "لكل طلب")}</td>
+                          <td>
+                            {text(
+                              ...translatedMessage("per_request_3e12d7736d"),
+                            )}
+                          </td>
                           <td className="mono">
                             ${model.pricing.per_request.toFixed(6)}
                           </td>
                           <td>
                             {text(
-                              "无论用量多少，每次 API 请求收取固定费用",
-                              "A fixed charge per API request regardless of usage",
-                              "رسم ثابت لكل طلب API بغض النظر عن الاستخدام",
+                              ...translatedMessage(
+                                "a_fixed_charge_per_api_request_regardless_of__ec7b06912b",
+                              ),
                             )}
                           </td>
                         </tr>
@@ -1032,16 +1064,16 @@ export default function ModelDetail() {
               <section className="access-panel">
                 <h2>
                   {text(
-                    "在你的工具中选择模型",
-                    "Select the model in your tool",
-                    "اختر النموذج في أداتك",
+                    ...translatedMessage(
+                      "select_the_model_in_your_tool_9ff2c1dcb0",
+                    ),
                   )}
                 </h2>
                 <p>
                   {text(
-                    "接入中心会根据目标工具生成正确的协议、地址和模型默认值。复制配置后，可发起模拟请求验证，再到调用明细查看实际模型与费用。",
-                    "The connection center generates protocol, endpoint, and model defaults for your target tool. Validate with a simulated request and inspect the actual model and charge in request details.",
-                    "ينشئ مركز الاتصال البروتوكول والعنوان والنموذج لأداتك. تحقق بطلب تجريبي ثم راجع النموذج الفعلي والتكلفة.",
+                    ...translatedMessage(
+                      "the_connection_center_generates_protocol_endp_0d55b9a403",
+                    ),
                   )}
                 </p>
                 <Button asChild variant="primary" disabled={!canConnect}>
@@ -1054,9 +1086,7 @@ export default function ModelDetail() {
                     }}
                   >
                     {text(
-                      "前往接入中心",
-                      "Open connection center",
-                      "فتح مركز الاتصال",
+                      ...translatedMessage("open_connection_center_dc211175ab"),
                     )}
                     <ArrowRight size={16} />
                   </Link>

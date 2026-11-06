@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { lazy, Suspense, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
@@ -55,9 +56,9 @@ export function StandardModels({ role: _role }: { role: number }) {
     return (
       <p role="alert">
         {text(
-          "需要实际管理员会话。",
-          "An actual administrator session is required.",
-          "يلزم تسجيل دخول مسؤول فعلي.",
+          ...translatedMessage(
+            "an_actual_administrator_session_is_required_73d66b6397",
+          ),
         )}
       </p>
     );
@@ -67,9 +68,7 @@ export function StandardModels({ role: _role }: { role: number }) {
         <p className="pricing-policy">
           <Link to="/console/model-pricing">
             {text(
-              "返回服务器模型目录",
-              "Back to server model catalog",
-              "العودة إلى فهرس نماذج الخادم",
+              ...translatedMessage("back_to_server_model_catalog_28ccc1fc3e"),
             )}
           </Link>
         </p>
@@ -77,9 +76,7 @@ export function StandardModels({ role: _role }: { role: number }) {
           fallback={
             <p role="status">
               {text(
-                "正在加载浏览器演示编辑器…",
-                "Loading browser Demo editor…",
-                "جارٍ تحميل المحرر التجريبي للمتصفح…",
+                ...translatedMessage("loading_browser_demo_editor_3ce5730370"),
               )}
             </p>
           }
@@ -164,29 +161,29 @@ export function StandardModels({ role: _role }: { role: number }) {
       setDraft(null);
       setNotice(
         text(
-          "服务器模型元数据已保存。计费倍率和渠道权限请在各自页面核对。",
-          "Server model metadata saved. Check billing ratios and channel permissions on their respective pages.",
-          "حُفظت بيانات نموذج الخادم. تحقق من معاملات الفوترة وصلاحيات القنوات في صفحاتها.",
+          ...translatedMessage(
+            "server_model_metadata_saved_check_billing_rat_349215424b",
+          ),
         ),
       );
     } catch (caught) {
       setError(
         caught instanceof ApiError && caught.status === 409
           ? text(
-              "模型目录已变化，本次未覆盖。请刷新并重新打开编辑。",
-              "The model catalog changed and was not overwritten. Refresh and reopen the editor.",
-              "تغيّر فهرس النماذج ولم يُستبدل. حدّث وأعد فتح المحرر.",
+              ...translatedMessage(
+                "the_model_catalog_changed_and_was_not_overwri_12c005046b",
+              ),
             )
           : caught instanceof ApiError && caught.status === 400
             ? text(
-                "服务器拒绝此元数据，草稿已保留，请检查字段。",
-                "The server rejected this metadata; the draft is retained. Check the fields.",
-                "رفض الخادم هذه البيانات واحتُفظ بالمسودة. تحقق من الحقول.",
+                ...translatedMessage(
+                  "the_server_rejected_this_metadata_the_draft_i_e9737802a7",
+                ),
               )
             : text(
-                "无法确认保存结果，草稿已保留。请刷新核对服务器数据后再操作。",
-                "The save result is unconfirmed and the draft is retained. Refresh and check server data before trying again.",
-                "تعذر تأكيد الحفظ واحتُفظ بالمسودة. حدّث وتحقق من بيانات الخادم قبل المحاولة مجددًا.",
+                ...translatedMessage(
+                  "the_save_result_is_unconfirmed_and_the_draft__a1c1c4c1bc",
+                ),
               ),
       );
     }
@@ -198,26 +195,18 @@ export function StandardModels({ role: _role }: { role: number }) {
     >,
     string,
   ][] = [
-    ["vendor", text("厂商标识", "Vendor ID", "معرّف المورّد")],
+    ["vendor", text(...translatedMessage("vendor_id_c044bad499"))],
     [
       "vendor_display",
-      text("厂商显示名称", "Vendor display name", "اسم المورّد المعروض"),
+      text(...translatedMessage("vendor_display_name_73a4170683")),
     ],
     [
       "tags",
-      text(
-        "能力标签（逗号分隔）",
-        "Capability tags (comma separated)",
-        "وسوم القدرات (مفصولة بفواصل)",
-      ),
+      text(...translatedMessage("capability_tags_comma_separated_a2344bf02d")),
     ],
     [
       "compatible_groups",
-      text(
-        "兼容分组元数据",
-        "Compatible group metadata",
-        "بيانات المجموعات المتوافقة",
-      ),
+      text(...translatedMessage("compatible_group_metadata_c7f3364fcc")),
     ],
   ];
   const reference = (row: ModelMeta) => (
@@ -227,41 +216,39 @@ export function StandardModels({ role: _role }: { role: number }) {
           [
             "official_input_per_m",
             text(
-              "官方参考输入 USD/百万",
-              "Official reference input USD/M",
-              "إدخال مرجعي رسمي دولار/مليون",
+              ...translatedMessage("official_reference_input_usd_m_243caf060c"),
             ),
           ],
           [
             "official_output_per_m",
             text(
-              "官方参考输出 USD/百万",
-              "Official reference output USD/M",
-              "إخراج مرجعي رسمي دولار/مليون",
+              ...translatedMessage(
+                "official_reference_output_usd_m_deb7488cd5",
+              ),
             ),
           ],
           [
             "official_cache_read_per_m",
             text(
-              "官方缓存读取参考 USD/百万",
-              "Official cache-read reference USD/M",
-              "مرجع قراءة الذاكرة دولار/مليون",
+              ...translatedMessage(
+                "official_cache_read_reference_usd_m_5a0f269317",
+              ),
             ),
           ],
           [
             "official_cache_write_per_m",
             text(
-              "官方缓存写入参考 USD/百万",
-              "Official cache-write reference USD/M",
-              "مرجع كتابة الذاكرة دولار/مليون",
+              ...translatedMessage(
+                "official_cache_write_reference_usd_m_70dce01b7e",
+              ),
             ),
           ],
           [
             "official_per_request",
             text(
-              "官方按次参考 USD",
-              "Official per-request reference USD",
-              "مرجع رسمي لكل طلب بالدولار",
+              ...translatedMessage(
+                "official_per_request_reference_usd_0de7386b05",
+              ),
             ),
           ],
         ] as const
@@ -280,17 +267,13 @@ export function StandardModels({ role: _role }: { role: number }) {
       <header className="cm-heading">
         <div>
           <h1>
-            {text(
-              "标准模型元数据",
-              "Standard model metadata",
-              "بيانات النماذج القياسية",
-            )}
+            {text(...translatedMessage("standard_model_metadata_77cddae1a1"))}
           </h1>
           <p>
             {text(
-              "这里只展示服务器登记的模型身份、参考数据和能力/上下文约束；空库和错误不回退演示模型。计费价格、渠道与密钥权限独立管理。",
-              "Only server-registered model identities, reference data and capability/context constraints appear here. Empty storage and errors do not fall back to Demo models. Billing prices, channels and key permissions are managed separately.",
-              "تُعرض هنا هويات النماذج وبياناتها المرجعية وقيود القدرات والسياق المسجلة في الخادم فقط. لا تُستبدل البيانات الفارغة أو الأخطاء بنماذج تجريبية. تُدار أسعار الفوترة والقنوات وصلاحيات المفاتيح منفصلة.",
+              ...translatedMessage(
+                "only_server_registered_model_identities_refer_0c2dca68e5",
+              ),
             )}
           </p>
         </div>
@@ -302,66 +285,54 @@ export function StandardModels({ role: _role }: { role: number }) {
               void query.refetch();
             }}
           >
-            {text("刷新模型", "Refresh models", "تحديث النماذج")}
+            {text(...translatedMessage("refresh_models_df0567c446"))}
           </Button>
           <Button
             variant="primary"
             disabled={!writable}
             onClick={() => begin()}
           >
-            {text(
-              "登记模型元数据",
-              "Register model metadata",
-              "تسجيل بيانات نموذج",
-            )}
+            {text(...translatedMessage("register_model_metadata_d3820a9b66"))}
           </Button>
         </div>
       </header>
       <div className="cm-actions">
         <Link to="/admin?tab=resources">
           {text(
-            "服务器计费定价与配置同步",
-            "Server billing prices and configuration sync",
-            "أسعار فوترة الخادم ومزامنة الإعدادات",
+            ...translatedMessage(
+              "server_billing_prices_and_configuration_sync_9de4cd2bbf",
+            ),
           )}
         </Link>
         <Link to="/console/channels">
           {text(
-            "渠道与资源清单",
-            "Channels and resource inventory",
-            "القنوات وقائمة الموارد",
+            ...translatedMessage("channels_and_resource_inventory_cdd220a067"),
           )}
         </Link>
         <Link to="/console/model-pricing?demo=1">
           {text(
-            "浏览器演示定价（独立）",
-            "Browser Demo pricing (separate)",
-            "تسعير المتصفح التجريبي (مستقل)",
+            ...translatedMessage("browser_demo_pricing_separate_e43351a479"),
           )}
         </Link>
       </div>
       {query.isLoading && (
         <p role="status">
-          {text(
-            "正在读取服务器模型…",
-            "Loading server models…",
-            "جارٍ تحميل نماذج الخادم…",
-          )}
+          {text(...translatedMessage("loading_server_models_403dded6f4"))}
         </p>
       )}
       {query.isError && (
         <p role="alert">
           {text(
-            "无法确认服务器模型元数据或版本保护能力，已隐藏缓存并暂停编辑。",
-            "Cannot verify server model metadata or revision-guard support. Cached data is hidden and editing is paused.",
-            "تعذر التحقق من بيانات نماذج الخادم أو حماية الإصدار. أُخفيت البيانات السابقة وأُوقف التحرير.",
+            ...translatedMessage(
+              "cannot_verify_server_model_metadata_or_revisi_3fe7f57450",
+            ),
           )}
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
       {data && (
         <p>
-          {text("模型目录版本", "Model catalog version", "إصدار فهرس النماذج")}:{" "}
+          {text(...translatedMessage("model_catalog_version_3cd090b87b"))}:{" "}
           <bdi>v{data.revision}</bdi>
         </p>
       )}
@@ -371,21 +342,19 @@ export function StandardModels({ role: _role }: { role: number }) {
             <div className="cm-actions">
               <Button onClick={() => selectModel()}>
                 {text(
-                  "返回服务器模型列表",
-                  "Back to server model list",
-                  "العودة إلى قائمة نماذج الخادم",
+                  ...translatedMessage("back_to_server_model_list_915d43f6b8"),
                 )}
               </Button>
               {current && (
                 <>
                   <Button disabled={!writable} onClick={() => begin(current)}>
-                    {text("编辑元数据", "Edit metadata", "تحرير البيانات")}
+                    {text(...translatedMessage("edit_metadata_ac32bce57d"))}
                   </Button>
                   <Button
                     disabled={!writable}
                     onClick={() => begin(current, true)}
                   >
-                    {text("删除元数据", "Delete metadata", "حذف البيانات")}
+                    {text(...translatedMessage("delete_metadata_9730180311"))}
                   </Button>
                 </>
               )}
@@ -398,14 +367,14 @@ export function StandardModels({ role: _role }: { role: number }) {
                 <p>{current.vendor_display || current.vendor || "—"}</p>
                 <p>{current.description || "—"}</p>
                 <p>
-                  {text("能力标签", "Capability tags", "وسوم القدرات")}:{" "}
+                  {text(...translatedMessage("capability_tags_380f56f1e9"))}:{" "}
                   <bdi>{current.tags || "—"}</bdi>
                 </p>
                 <p>
                   {text(
-                    "上下文 / 最大输出（0 表示未知）",
-                    "Context / max output (0 means unknown)",
-                    "السياق / أقصى إخراج (الصفر يعني غير معروف)",
+                    ...translatedMessage(
+                      "context_max_output_0_means_unknown_cda3079b5a",
+                    ),
                   )}
                   :{" "}
                   <bdi>
@@ -417,9 +386,9 @@ export function StandardModels({ role: _role }: { role: number }) {
             ) : (
               <p>
                 {text(
-                  "服务器没有此模型的登记元数据。",
-                  "No metadata is registered for this model on the server.",
-                  "لم تُسجل بيانات هذا النموذج في الخادم.",
+                  ...translatedMessage(
+                    "no_metadata_is_registered_for_this_model_on_t_226269f2a6",
+                  ),
                 )}
               </p>
             )}
@@ -427,16 +396,10 @@ export function StandardModels({ role: _role }: { role: number }) {
         ) : (
           <>
             <label className="cm-search">
-              {text(
-                "搜索服务器模型",
-                "Search server models",
-                "البحث في نماذج الخادم",
-              )}
+              {text(...translatedMessage("search_server_models_344924f205"))}
               <input
                 aria-label={text(
-                  "搜索服务器模型",
-                  "Search server models",
-                  "البحث في نماذج الخادم",
+                  ...translatedMessage("search_server_models_344924f205"),
                 )}
                 value={search}
                 onChange={(e) => {
@@ -450,31 +413,27 @@ export function StandardModels({ role: _role }: { role: number }) {
               tabIndex={0}
               role="region"
               aria-label={text(
-                "服务器模型表，可横向滚动",
-                "Server model table, horizontally scrollable",
-                "جدول نماذج الخادم، قابل للتمرير أفقيًا",
+                ...translatedMessage(
+                  "server_model_table_horizontally_scrollable_82d2506bf8",
+                ),
               )}
             >
               <table>
                 <thead>
                   <tr>
-                    <th>{text("模型标识", "Model ID", "معرّف النموذج")}</th>
-                    <th>{text("厂商", "Vendor", "المورّد")}</th>
+                    <th>{text(...translatedMessage("model_id_2e00e41239"))}</th>
+                    <th>{text(...translatedMessage("vendor_a4625f4b1f"))}</th>
                     <th>
                       {text(
-                        "能力元数据",
-                        "Capability metadata",
-                        "بيانات القدرات",
+                        ...translatedMessage("capability_metadata_04a94730b6"),
                       )}
                     </th>
                     <th>
                       {text(
-                        "上下文 / 最大输出",
-                        "Context / max output",
-                        "السياق / أقصى إخراج",
+                        ...translatedMessage("context_max_output_8dbeb2fcd6"),
                       )}
                     </th>
-                    <th>{text("操作", "Action", "الإجراء")}</th>
+                    <th>{text(...translatedMessage("action_2a8e78b55a"))}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -508,9 +467,9 @@ export function StandardModels({ role: _role }: { role: number }) {
                               onClick={() => begin(row)}
                             >
                               {text(
-                                "编辑元数据",
-                                "Edit metadata",
-                                "تحرير البيانات",
+                                ...translatedMessage(
+                                  "edit_metadata_ac32bce57d",
+                                ),
                               )}
                             </Button>
                             <Button
@@ -519,9 +478,9 @@ export function StandardModels({ role: _role }: { role: number }) {
                               onClick={() => begin(row, true)}
                             >
                               {text(
-                                "删除元数据",
-                                "Delete metadata",
-                                "حذف البيانات",
+                                ...translatedMessage(
+                                  "delete_metadata_9730180311",
+                                ),
                               )}
                             </Button>
                           </div>
@@ -534,9 +493,9 @@ export function StandardModels({ role: _role }: { role: number }) {
             {!rows.length && (
               <p>
                 {text(
-                  "服务器尚未登记模型元数据；不会自动导入演示目录。",
-                  "No model metadata is registered on the server; the Demo catalog is not imported automatically.",
-                  "لم تُسجل بيانات نماذج في الخادم ولا يُستورد الفهرس التجريبي تلقائيًا.",
+                  ...translatedMessage(
+                    "no_model_metadata_is_registered_on_the_server_444d88fc5c",
+                  ),
                 )}
               </p>
             )}
@@ -545,7 +504,7 @@ export function StandardModels({ role: _role }: { role: number }) {
                 disabled={currentPage === 0}
                 onClick={() => setPage(currentPage - 1)}
               >
-                {text("上一页", "Previous", "السابق")}
+                {text(...translatedMessage("previous_2672646f39"))}
               </Button>
               <span>
                 {currentPage + 1} / {pages} · {filtered.length}
@@ -554,7 +513,7 @@ export function StandardModels({ role: _role }: { role: number }) {
                 disabled={currentPage + 1 >= pages}
                 onClick={() => setPage(currentPage + 1)}
               >
-                {text("下一页", "Next", "التالي")}
+                {text(...translatedMessage("next_c0fd39244f"))}
               </Button>
             </div>
           </>
@@ -569,25 +528,21 @@ export function StandardModels({ role: _role }: { role: number }) {
         title={
           draft?.remove
             ? text(
-                "删除服务器模型元数据",
-                "Delete server model metadata",
-                "حذف بيانات نموذج الخادم",
+                ...translatedMessage("delete_server_model_metadata_f073d8d3c2"),
               )
             : text(
-                "编辑服务器模型元数据",
-                "Edit server model metadata",
-                "تحرير بيانات نموذج الخادم",
+                ...translatedMessage("edit_server_model_metadata_80ffedb872"),
               )
         }
         description={text(
-          "能力标签和上下文约束会影响智能候选筛选。此处不修改计费选项，不授予调用权限。",
-          "Capability tags and context constraints affect smart-routing candidates. These edits do not change billing options or grant calling rights.",
-          "تؤثر وسوم القدرات وقيود السياق في مرشحي التوجيه الذكي. لا تغيّر هذه التعديلات خيارات الفوترة ولا تمنح حق الاستدعاء.",
+          ...translatedMessage(
+            "capability_tags_and_context_constraints_affec_c648a39a09",
+          ),
         )}
         footer={
           <>
             <Button disabled={pending} onClick={() => setDraft(null)}>
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             <Button
               variant="primary"
@@ -596,14 +551,10 @@ export function StandardModels({ role: _role }: { role: number }) {
             >
               {review
                 ? text(
-                    "确认服务器元数据",
-                    "Confirm server metadata",
-                    "تأكيد بيانات الخادم",
+                    ...translatedMessage("confirm_server_metadata_e43b9c5e1e"),
                   )
                 : text(
-                    "预览元数据变更",
-                    "Review metadata changes",
-                    "مراجعة تغييرات البيانات",
+                    ...translatedMessage("review_metadata_changes_6136d177e3"),
                   )}
             </Button>
           </>
@@ -611,12 +562,8 @@ export function StandardModels({ role: _role }: { role: number }) {
       >
         {draft && (
           <p>
-            {text(
-              "草稿目录版本",
-              "Draft catalog version",
-              "إصدار فهرس المسودة",
-            )}
-            : <bdi>v{draft.revision}</bdi>
+            {text(...translatedMessage("draft_catalog_version_62e8cf517e"))}:{" "}
+            <bdi>v{draft.revision}</bdi>
           </p>
         )}
         {draft &&
@@ -628,9 +575,9 @@ export function StandardModels({ role: _role }: { role: number }) {
               {draft.remove ? (
                 <p>
                   {text(
-                    "仅删除这条模型元数据；不删除渠道、密钥、历史记录或计费价格。缺少能力/上下文元数据可能使部分智能候选被拒绝。",
-                    "Deletes this model metadata only. Channels, keys, historical records and billing prices remain. Missing capability/context metadata can exclude some smart-routing candidates.",
-                    "يحذف بيانات هذا النموذج فقط دون القنوات أو المفاتيح أو السجلات أو أسعار الفوترة. قد يستبعد غياب بيانات القدرات أو السياق بعض مرشحي التوجيه الذكي.",
+                    ...translatedMessage(
+                      "deletes_this_model_metadata_only_channels_key_5e00410100",
+                    ),
                   )}
                 </p>
               ) : (
@@ -641,9 +588,7 @@ export function StandardModels({ role: _role }: { role: number }) {
                   </p>
                   <p>
                     {text(
-                      "上下文 / 最大输出",
-                      "Context / max output",
-                      "السياق / أقصى إخراج",
+                      ...translatedMessage("context_max_output_8dbeb2fcd6"),
                     )}
                     :{" "}
                     <bdi>
@@ -653,9 +598,9 @@ export function StandardModels({ role: _role }: { role: number }) {
                   <p>{draft.row.description || "—"}</p>
                   <p>
                     {text(
-                      "兼容分组 / 排序权重",
-                      "Compatible groups / sort weight",
-                      "المجموعات المتوافقة / وزن الترتيب",
+                      ...translatedMessage(
+                        "compatible_groups_sort_weight_965904ed96",
+                      ),
                     )}
                     :{" "}
                     <bdi>
@@ -665,9 +610,9 @@ export function StandardModels({ role: _role }: { role: number }) {
                   </p>
                   <p>
                     {text(
-                      "现有官方参考价格、评分及其他未编辑元数据原样保留；未登记值保持未知。",
-                      "Existing official references, score and other unedited metadata are retained. Unregistered values remain unknown.",
-                      "تُحفظ المراجع الرسمية والتقييم والبيانات غير المعدلة، وتبقى القيم غير المسجلة غير معروفة.",
+                      ...translatedMessage(
+                        "existing_official_references_score_and_other__b7d911d893",
+                      ),
                     )}
                   </p>
                   <Button
@@ -677,7 +622,7 @@ export function StandardModels({ role: _role }: { role: number }) {
                       setError("");
                     }}
                   >
-                    {text("返回编辑", "Back to edit", "العودة للتحرير")}
+                    {text(...translatedMessage("back_to_edit_8e464c075a"))}
                   </Button>
                 </>
               )}
@@ -685,11 +630,7 @@ export function StandardModels({ role: _role }: { role: number }) {
           ) : (
             <div className="cm-form">
               <label className="cm-wide">
-                {text(
-                  "服务器模型标识",
-                  "Server model ID",
-                  "معرّف نموذج الخادم",
-                )}
+                {text(...translatedMessage("server_model_id_a9c8feb9d9"))}
                 <input
                   dir="ltr"
                   readOnly={!!draft.original}
@@ -719,22 +660,22 @@ export function StandardModels({ role: _role }: { role: number }) {
                   [
                     "context_length",
                     text(
-                      "上下文上限（0 表示未知）",
-                      "Context limit (0 means unknown)",
-                      "حد السياق (الصفر يعني غير معروف)",
+                      ...translatedMessage(
+                        "context_limit_0_means_unknown_6ce0e82c21",
+                      ),
                     ),
                   ],
                   [
                     "max_output",
                     text(
-                      "最大输出（0 表示未知）",
-                      "Max output (0 means unknown)",
-                      "أقصى إخراج (الصفر يعني غير معروف)",
+                      ...translatedMessage(
+                        "max_output_0_means_unknown_795f5133c0",
+                      ),
                     ),
                   ],
                   [
                     "sort_weight",
-                    text("排序权重", "Sort weight", "وزن الترتيب"),
+                    text(...translatedMessage("sort_weight_8d8cdaea21")),
                   ],
                 ] as const
               ).map(([key, label]) => (
@@ -749,12 +690,10 @@ export function StandardModels({ role: _role }: { role: number }) {
                 </label>
               ))}
               <label className="cm-wide">
-                {text("模型说明", "Model description", "وصف النموذج")}
+                {text(...translatedMessage("model_description_c9b2428dd0"))}
                 <textarea
                   aria-label={text(
-                    "模型说明",
-                    "Model description",
-                    "وصف النموذج",
+                    ...translatedMessage("model_description_c9b2428dd0"),
                   )}
                   maxLength={8192}
                   value={draft.row.description}
@@ -767,18 +706,18 @@ export function StandardModels({ role: _role }: { role: number }) {
         {conflict && draft && (
           <p role="alert">
             {text(
-              "目录版本已变化或读取不可用，请刷新并重新打开编辑。",
-              "The catalog changed or cannot be read. Refresh and reopen the editor.",
-              "تغيّر الفهرس أو تعذرت قراءته. حدّث وأعد فتح المحرر.",
+              ...translatedMessage(
+                "the_catalog_changed_or_cannot_be_read_refresh_a669c6dfd0",
+              ),
             )}
           </p>
         )}
         {!readable && draft && (
           <p role="alert">
             {text(
-              "服务器读取不可用，已暂停保存。",
-              "Server data cannot be read; saving is paused.",
-              "تعذرت قراءة بيانات الخادم؛ أُوقف الحفظ.",
+              ...translatedMessage(
+                "server_data_cannot_be_read_saving_is_paused_5946f79db4",
+              ),
             )}
           </p>
         )}

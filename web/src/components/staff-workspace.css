@@ -391,3 +391,26 @@
     margin-inline: 4px;
   }
 }
+
+.admin-channel-type-field {
+  display: grid;
+  gap: 8px;
+  font-size: var(--text-xs);
+}
+.admin-channel-type-field label {
+  font-weight: 600;
+}
+.admin-channel-type-field select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.admin-channel-type-field span {
+  color: var(--secondary);
+  line-height: 1.5;
+}

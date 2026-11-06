@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Button } from "../components/ui/button";
@@ -99,17 +100,17 @@ export function ResourceRegions() {
       setDraft(null);
       setNotice(
         text(
-          `区域目录已保存，配置版本 v${result.revision}。`,
-          `Region directory saved at v${result.revision}.`,
-          `حُفظ دليل المناطق بالإصدار v${result.revision}.`,
+          ...translatedMessage("region_directory_saved_at_v_e0b35096e7", {
+            p0: result.revision,
+          }),
         ),
       );
     } catch {
       setError(
         text(
-          "无法确认保存结果。请刷新核对；版本变化后须重新打开编辑。被资源引用的区域不能删除。",
-          "Save outcome is unconfirmed. Refresh to check and reopen after a revision change. Referenced regions cannot be deleted.",
-          "تعذر تأكيد الحفظ. حدّث للتحقق وأعد فتح المحرر عند تغير الإصدار. لا يمكن حذف منطقة مستخدمة.",
+          ...translatedMessage(
+            "save_outcome_is_unconfirmed_refresh_to_check__a2d3451c98",
+          ),
         ),
       );
     }
@@ -125,17 +126,13 @@ export function ResourceRegions() {
       <header>
         <div>
           <h2 id="region-heading">
-            {text(
-              "资源区域目录",
-              "Resource region directory",
-              "دليل مناطق الموارد",
-            )}
+            {text(...translatedMessage("resource_region_directory_7715c4edf7"))}
           </h2>
           <p>
             {text(
-              "维护区域名称与说明，引用数量仅统计当前资源快照。此目录不代表网关部署位置，也不启停流量。",
-              "Manage region names and descriptions. Reference counts cover the current inventory snapshot. This directory neither represents gateway deployment locations nor switches traffic.",
-              "أدر أسماء المناطق وأوصافها. الأعداد تخص لقطة المخزون الحالية؛ لا يمثل الدليل مواقع نشر البوابة ولا يتحكم بحركة الطلبات.",
+              ...translatedMessage(
+                "manage_region_names_and_descriptions_referenc_a4673b08ee",
+              ),
             )}
           </p>
         </div>
@@ -147,24 +144,24 @@ export function ResourceRegions() {
               void query.refetch();
             }}
           >
-            {text("刷新区域", "Refresh regions", "تحديث المناطق")}
+            {text(...translatedMessage("refresh_regions_c355affe48"))}
           </Button>
           <Button disabled={!data} onClick={() => begin("")}>
-            {text("新增区域", "Add region", "إضافة منطقة")}
+            {text(...translatedMessage("add_region_e053b240d1"))}
           </Button>
         </div>
       </header>
       {query.isLoading && (
         <p role="status">
-          {text("正在读取区域…", "Loading regions…", "جارٍ تحميل المناطق…")}
+          {text(...translatedMessage("loading_regions_32aec83706"))}
         </p>
       )}
       {query.error && (
         <p role="alert">
           {text(
-            "无法读取区域目录，请刷新重试。",
-            "Region directory is unavailable. Refresh to retry.",
-            "دليل المناطق غير متاح. حدّث لإعادة المحاولة.",
+            ...translatedMessage(
+              "region_directory_is_unavailable_refresh_to_re_9f28463e76",
+            ),
           )}
         </p>
       )}
@@ -176,7 +173,7 @@ export function ResourceRegions() {
       {data && (
         <>
           <label className="rr-search">
-            {text("搜索区域", "Search regions", "بحث المناطق")}
+            {text(...translatedMessage("search_regions_1b669aeae0"))}
             <input
               value={search}
               onChange={(e) => {
@@ -188,13 +185,13 @@ export function ResourceRegions() {
           <p>
             v{data.revision} ·{" "}
             {text(
-              "区域定义与来源观测分别保留，未登记标签不会自动创建定义。",
-              "Definitions and source observations stay separate; observed labels never create definitions automatically.",
-              "تبقى التعريفات منفصلة عن رصد المصدر؛ لا تُنشأ تعريفات تلقائيًا للتسميات المرصودة.",
+              ...translatedMessage(
+                "definitions_and_source_observations_stay_sepa_0c4059070a",
+              ),
             )}
           </p>
           {!rows.length ? (
-            <p>{text("暂无区域。", "No regions yet.", "لا توجد مناطق بعد.")}</p>
+            <p>{text(...translatedMessage("no_regions_yet_b023745ccf"))}</p>
           ) : (
             <>
               <div
@@ -202,27 +199,21 @@ export function ResourceRegions() {
                 role="region"
                 tabIndex={0}
                 aria-label={text(
-                  "区域目录列表",
-                  "Region directory table",
-                  "جدول دليل المناطق",
+                  ...translatedMessage("region_directory_table_e548446267"),
                 )}
               >
                 <table>
                   <thead>
                     <tr>
                       {[
+                        text(...translatedMessage("region_id_name_6ba135fc8a")),
+                        text(...translatedMessage("description_c6bae5d4e7")),
                         text(
-                          "区域标识 / 名称",
-                          "Region ID / name",
-                          "معرّف المنطقة / الاسم",
+                          ...translatedMessage(
+                            "inventory_references_0d4785f103",
+                          ),
                         ),
-                        text("说明", "Description", "الوصف"),
-                        text(
-                          "资源引用",
-                          "Inventory references",
-                          "مراجع المخزون",
-                        ),
-                        text("操作", "Actions", "الإجراءات"),
+                        text(...translatedMessage("actions_d83f4ed14a")),
                       ].map((label) => (
                         <th key={label}>{label}</th>
                       ))}
@@ -241,14 +232,14 @@ export function ResourceRegions() {
                                 {region?.name ??
                                   (id
                                     ? text(
-                                        "未登记区域",
-                                        "Unregistered region",
-                                        "منطقة غير مسجلة",
+                                        ...translatedMessage(
+                                          "unregistered_region_2610c9c2bd",
+                                        ),
                                       )
                                     : text(
-                                        "区域未知",
-                                        "Unknown region",
-                                        "منطقة غير معروفة",
+                                        ...translatedMessage(
+                                          "unknown_region_4215977522",
+                                        ),
                                       ))}
                               </strong>
                               <code>{id || "—"}</code>
@@ -261,14 +252,14 @@ export function ResourceRegions() {
                                   <Button onClick={() => begin(id)}>
                                     {region
                                       ? text(
-                                          "编辑区域",
-                                          "Edit region",
-                                          "تحرير المنطقة",
+                                          ...translatedMessage(
+                                            "edit_region_ded14e3350",
+                                          ),
                                         )
                                       : text(
-                                          "登记区域",
-                                          "Register region",
-                                          "تسجيل المنطقة",
+                                          ...translatedMessage(
+                                            "register_region_69dfd204ef",
+                                          ),
                                         )}
                                   </Button>
                                   {region && (
@@ -277,18 +268,18 @@ export function ResourceRegions() {
                                       title={
                                         count > 0
                                           ? text(
-                                              "当前资源仍引用此区域",
-                                              "Current inventory references this region",
-                                              "يستخدم المخزون الحالي هذه المنطقة",
+                                              ...translatedMessage(
+                                                "current_inventory_references_this_region_af90414c3e",
+                                              ),
                                             )
                                           : undefined
                                       }
                                       onClick={() => begin(id, true)}
                                     >
                                       {text(
-                                        "删除区域",
-                                        "Delete region",
-                                        "حذف المنطقة",
+                                        ...translatedMessage(
+                                          "delete_region_2be7f9d133",
+                                        ),
                                       )}
                                     </Button>
                                   )}
@@ -304,16 +295,14 @@ export function ResourceRegions() {
               <nav
                 className="rr-pagination"
                 aria-label={text(
-                  "区域分页",
-                  "Region pagination",
-                  "صفحات المناطق",
+                  ...translatedMessage("region_pagination_0d3729039e"),
                 )}
               >
                 <Button
                   disabled={currentPage === 0}
                   onClick={() => setPage(currentPage - 1)}
                 >
-                  {text("上一页", "Previous", "السابق")}
+                  {text(...translatedMessage("previous_2672646f39"))}
                 </Button>
                 <span>
                   {currentPage + 1} / {pages} · {rows.length}
@@ -322,7 +311,7 @@ export function ResourceRegions() {
                   disabled={currentPage >= pages - 1}
                   onClick={() => setPage(currentPage + 1)}
                 >
-                  {text("下一页", "Next", "التالي")}
+                  {text(...translatedMessage("next_c0fd39244f"))}
                 </Button>
               </nav>
             </>
@@ -335,39 +324,27 @@ export function ResourceRegions() {
         preventOutsideClose
         title={
           draft?.remove
-            ? text(
-                "确认删除区域定义",
-                "Confirm region deletion",
-                "تأكيد حذف المنطقة",
-              )
+            ? text(...translatedMessage("confirm_region_deletion_6472d3fca7"))
             : review
-              ? text(
-                  "确认区域信息",
-                  "Confirm region details",
-                  "تأكيد تفاصيل المنطقة",
-                )
-              : text(
-                  "维护区域定义",
-                  "Edit region definition",
-                  "تحرير تعريف المنطقة",
-                )
+              ? text(...translatedMessage("confirm_region_details_c0d02f47c0"))
+              : text(...translatedMessage("edit_region_definition_0c5622f111"))
         }
         description={text(
-          "仅修改资源区域目录，实际网关路由与调用授权不变。",
-          "Only the inventory region directory changes. Gateway routing and API authorization remain unchanged.",
-          "يتغير دليل مناطق المخزون فقط، دون تغيير توجيه البوابة أو صلاحيات الواجهة.",
+          ...translatedMessage(
+            "only_the_inventory_region_directory_changes_g_cc3d0a8f24",
+          ),
         )}
         footer={
           <>
             <Button disabled={mutation.isPending} onClick={close}>
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             {review && !draft?.remove && (
               <Button
                 disabled={mutation.isPending}
                 onClick={() => setReview(false)}
               >
-                {text("返回编辑", "Back to editing", "العودة للتحرير")}
+                {text(...translatedMessage("back_to_editing_85b057f793"))}
               </Button>
             )}
             <Button
@@ -380,9 +357,9 @@ export function ResourceRegions() {
                 if (!draft?.id.trim() || !draft.name.trim()) {
                   setError(
                     text(
-                      "请填写区域标识和名称。",
-                      "Enter a region identifier and name.",
-                      "أدخل معرّف المنطقة واسمها.",
+                      ...translatedMessage(
+                        "enter_a_region_identifier_and_name_d5b528178e",
+                      ),
                     ),
                   );
                   return;
@@ -392,12 +369,12 @@ export function ResourceRegions() {
               }}
             >
               {mutation.isPending
-                ? text("正在保存…", "Saving…", "جارٍ الحفظ…")
+                ? text(...translatedMessage("saving_b89854a86e"))
                 : review
                   ? draft?.remove
-                    ? text("确认删除", "Confirm delete", "تأكيد الحذف")
-                    : text("确认保存", "Confirm save", "تأكيد الحفظ")
-                  : text("预览变更", "Review changes", "مراجعة التغييرات")}
+                    ? text(...translatedMessage("confirm_delete_f932f7d779"))
+                    : text(...translatedMessage("confirm_save_f90ef9ab0e"))
+                  : text(...translatedMessage("review_changes_0594a17c6d"))}
             </Button>
           </>
         }
@@ -406,9 +383,9 @@ export function ResourceRegions() {
           {conflict && (
             <p role="alert">
               {text(
-                "目录版本已变化，请取消并重新打开。",
-                "The directory revision changed. Cancel and reopen.",
-                "تغير إصدار الدليل. ألغِ التحرير وأعد فتحه.",
+                ...translatedMessage(
+                  "the_directory_revision_changed_cancel_and_reo_82223e72e0",
+                ),
               )}
             </p>
           )}
@@ -423,16 +400,17 @@ export function ResourceRegions() {
                 <p>{draft.description || "—"}</p>
                 <p>
                   {text(
-                    `当前快照引用 ${counts.get(draft.id) ?? 0} 个资源。`,
-                    `Referenced by ${counts.get(draft.id) ?? 0} resources in the current snapshot.`,
-                    `تستخدمها ${counts.get(draft.id) ?? 0} موارد في اللقطة الحالية.`,
+                    ...translatedMessage(
+                      "referenced_by_resources_in_the_current_snapsh_5915ac569a",
+                      { p0: counts.get(draft.id) ?? 0 },
+                    ),
                   )}
                 </p>
               </>
             ) : (
               <>
                 <label>
-                  {text("区域标识", "Region identifier", "معرّف المنطقة")}
+                  {text(...translatedMessage("region_identifier_c7634ae267"))}
                   <input
                     value={draft.id}
                     readOnly={draft.locked}
@@ -440,7 +418,7 @@ export function ResourceRegions() {
                   />
                 </label>
                 <label>
-                  {text("显示名称", "Display name", "الاسم المعروض")}
+                  {text(...translatedMessage("display_name_5900b00dfb"))}
                   <input
                     value={draft.name}
                     onChange={(e) =>
@@ -449,7 +427,7 @@ export function ResourceRegions() {
                   />
                 </label>
                 <label>
-                  {text("区域说明", "Region description", "وصف المنطقة")}
+                  {text(...translatedMessage("region_description_29bf5b17c6"))}
                   <textarea
                     rows={3}
                     value={draft.description}

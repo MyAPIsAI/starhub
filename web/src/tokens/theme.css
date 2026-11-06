@@ -247,6 +247,8 @@ code,
 pre,
 .mono {
   font-family: var(--font-mono);
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 .numeric,
 td,

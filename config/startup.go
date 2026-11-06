@@ -27,6 +27,12 @@ type Bootstrap struct {
 	StaffAllowedIPs       []string
 	ResourceSnapshotURL   string
 	ResourceSnapshotToken string
+	ResourceEventsURL     string
+	ResourceHealthURL     string
+	ResourceIncidentsURL  string
+	ResourceCAFile        string
+	ResourceCertFile      string
+	ResourceKeyFile       string
 	StaffSetupMode        string
 }
 
@@ -80,6 +86,12 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	result.Bootstrap.ResourceSnapshotURL = getenv("STARHUB_RESOURCE_SNAPSHOT_URL")
 	result.Bootstrap.StaffSetupMode = getenv("STARHUB_STAFF_SETUP_MODE")
 	result.Bootstrap.ResourceSnapshotToken = getenv("STARHUB_RESOURCE_SNAPSHOT_TOKEN")
+	result.Bootstrap.ResourceEventsURL = getenv("STARHUB_RESOURCE_EVENTS_URL")
+	result.Bootstrap.ResourceHealthURL = getenv("STARHUB_RESOURCE_HEALTH_SNAPSHOT_URL")
+	result.Bootstrap.ResourceIncidentsURL = getenv("STARHUB_RESOURCE_INCIDENTS_URL")
+	result.Bootstrap.ResourceCAFile = getenv("STARHUB_RESOURCE_CA_FILE")
+	result.Bootstrap.ResourceCertFile = getenv("STARHUB_RESOURCE_CLIENT_CERT_FILE")
+	result.Bootstrap.ResourceKeyFile = getenv("STARHUB_RESOURCE_CLIENT_KEY_FILE")
 	if path != "" {
 		absolute, err := filepath.Abs(path)
 		if err != nil {
@@ -236,6 +248,10 @@ func ApplyStartup(startup Startup) error {
 		return err
 	}
 	if err := ConfigureSnapshotSource(startup.Bootstrap.ResourceSnapshotURL, startup.Bootstrap.ResourceSnapshotToken); err != nil {
+		return err
+	}
+	b := startup.Bootstrap
+	if err := ConfigureResourceMonitoring(b.ResourceEventsURL, b.ResourceHealthURL, b.ResourceIncidentsURL, b.ResourceCAFile, b.ResourceCertFile, b.ResourceKeyFile); err != nil {
 		return err
 	}
 	networks := startup.Bootstrap.StaffAllowedIPs

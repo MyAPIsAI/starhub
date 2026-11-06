@@ -1,3 +1,5 @@
+import { message as translatedMessage } from "../i18n/messages";
+
 import { staffRoleName } from "./api/staff";
 import { formatFinanceAmount } from "./finance-format";
 
@@ -5,296 +7,185 @@ export type AuditText = (zh: string, en: string, ar: string) => string;
 type Labels = Record<string, readonly [string, string, string]>;
 
 const actions: Labels = {
-  staff_password_authenticated: [
-    "验证后台密码",
-    "Verify staff password",
-    "التحقق من كلمة مرور الموظف",
-  ],
-  staff_password_authenticated_rejected: [
-    "后台密码验证失败",
-    "Staff password verification failed",
-    "فشل التحقق من كلمة مرور الموظف",
-  ],
-  staff_2fa_verified: [
-    "登录后台",
-    "Sign in to back office",
-    "تسجيل الدخول إلى الإدارة",
-  ],
-  staff_2fa_verified_rejected: [
-    "后台双重验证失败",
-    "Staff 2FA failed",
-    "فشلت المصادقة الثنائية للموظف",
-  ],
-  staff_password_changed: [
-    "修改后台密码",
-    "Change staff password",
-    "تغيير كلمة مرور الموظف",
-  ],
-  staff_password_changed_rejected: [
-    "修改后台密码失败",
-    "Staff password change failed",
-    "فشل تغيير كلمة مرور الموظف",
-  ],
-  staff_created: ["创建后台账号", "Create staff account", "إنشاء حساب موظف"],
-  staff_updated: ["更新后台账号", "Update staff account", "تحديث حساب موظف"],
-  staff_root_initialized: [
-    "初始化超级管理员",
-    "Initialize super administrator",
-    "تهيئة المسؤول الأعلى",
-  ],
-  staff_2fa_reset: [
-    "重置后台双重验证",
-    "Reset staff 2FA",
-    "إعادة تعيين المصادقة الثنائية للموظف",
-  ],
-  customer_enabled: [
-    "启用账号",
-    "Enable customer account",
-    "تفعيل حساب العميل",
-  ],
-  customer_disabled: [
-    "禁用账号",
-    "Disable customer account",
-    "تعطيل حساب العميل",
-  ],
-  customer_key_disabled: [
-    "停用客户密钥",
-    "Disable customer key",
-    "تعطيل مفتاح العميل",
-  ],
-  customer_concurrency_updated: [
-    "调整并发上限",
-    "Change concurrency limit",
-    "تغيير حد التزامن",
-  ],
-  customer_sessions_revoked: [
-    "强制账号下线",
-    "Revoke customer sessions",
-    "إلغاء جلسات العميل",
-  ],
-  balance_gift: ["手动加款", "Add account credit", "إضافة رصيد للحساب"],
-  balance_compensation: ["手动补偿", "Add compensation", "إضافة تعويض"],
-  balance_offline_payment: [
-    "登记线下付款",
-    "Record offline payment",
-    "تسجيل دفعة خارجية",
-  ],
-  balance_deduction: ["手动扣款", "Deduct account credit", "خصم رصيد الحساب"],
-  pricing_changed: [
-    "修改计价配置",
-    "Change pricing configuration",
-    "تغيير إعدادات التسعير",
-  ],
-  model_pricing_changed: [
-    "价格变更",
-    "Change model price",
-    "تغيير سعر النموذج",
-  ],
-  model_reference_updated: [
-    "更新官方参考价",
-    "Update official reference prices",
-    "تحديث الأسعار المرجعية الرسمية",
-  ],
-  service_group_multiplier_changed: [
-    "修改服务分组倍率",
-    "Change service group multiplier",
-    "تغيير معامل مجموعة الخدمة",
-  ],
-  standard_model_saved: [
-    "保存标准模型",
-    "Save standard model",
-    "حفظ النموذج القياسي",
-  ],
-  standard_model_deleted: [
-    "删除标准模型",
-    "Delete standard model",
-    "حذف النموذج القياسي",
-  ],
-  deployment_profile_updated: [
-    "更新地区档案",
-    "Update region profile",
-    "تحديث ملف المنطقة",
-  ],
-  legal_version_scheduled: [
-    "设置法律文本生效版本",
-    "Schedule legal document version",
-    "جدولة إصدار الوثيقة القانونية",
-  ],
-  reconciliation_run: [
-    "执行账务对账",
-    "Run reconciliation",
-    "تنفيذ المطابقة المالية",
-  ],
+  announcement_published: translatedMessage(
+    "publish_incident_notice_c30bf65693",
+  ),
+  announcement_updated: translatedMessage("update_incident_notice_778e897e68"),
+  announcement_resolved: translatedMessage(
+    "resolve_incident_notice_8f1834adc0",
+  ),
+  resource_sync: translatedMessage(
+    "force_full_resource_synchronization_ff6a39e942",
+  ),
+  staff_password_authenticated: translatedMessage(
+    "verify_staff_password_fb1239f502",
+  ),
+  staff_password_authenticated_rejected: translatedMessage(
+    "staff_password_verification_failed_f38797d7ea",
+  ),
+  staff_2fa_verified: translatedMessage("sign_in_to_back_office_643e4f59a1"),
+  staff_2fa_verified_rejected: translatedMessage("staff_2fa_failed_93526b04d8"),
+  staff_password_changed: translatedMessage("change_staff_password_6295d05e43"),
+  staff_password_changed_rejected: translatedMessage(
+    "staff_password_change_failed_379e6958ca",
+  ),
+  staff_created: translatedMessage("create_staff_account_3c1de3e79a"),
+  staff_updated: translatedMessage("update_staff_account_0fbc5c21fd"),
+  staff_root_initialized: translatedMessage(
+    "initialize_super_administrator_cc3eefff58",
+  ),
+  staff_2fa_reset: translatedMessage("reset_staff_2fa_106922ce87"),
+  customer_enabled: translatedMessage("enable_customer_account_ea0482e190"),
+  customer_disabled: translatedMessage("disable_customer_account_47d75949cf"),
+  customer_key_disabled: translatedMessage("disable_customer_key_a8be825070"),
+  customer_concurrency_updated: translatedMessage(
+    "change_concurrency_limit_c94428357d",
+  ),
+  customer_sessions_revoked: translatedMessage(
+    "revoke_customer_sessions_3609a85d9e",
+  ),
+  balance_gift: translatedMessage("add_account_credit_c2f2ba6420"),
+  balance_compensation: translatedMessage("add_compensation_3add6ad1f0"),
+  balance_offline_payment: translatedMessage(
+    "record_offline_payment_9a68b437bf",
+  ),
+  balance_deduction: translatedMessage("deduct_account_credit_8a26dd5fac"),
+  pricing_changed: translatedMessage("change_pricing_configuration_defcdf1dbe"),
+  model_pricing_changed: translatedMessage("change_model_price_a8cb664f5d"),
+  model_reference_updated: translatedMessage(
+    "update_official_reference_prices_e26c8a338b",
+  ),
+  service_group_multiplier_changed: translatedMessage(
+    "change_service_group_multiplier_cd156addbb",
+  ),
+  standard_model_saved: translatedMessage("save_standard_model_505ec331d6"),
+  standard_model_deleted: translatedMessage("delete_standard_model_72b7348ef8"),
+  deployment_profile_updated: translatedMessage(
+    "update_region_profile_2b52d00f54",
+  ),
+  legal_version_scheduled: translatedMessage(
+    "schedule_legal_document_version_173ebd58cb",
+  ),
+  reconciliation_run: translatedMessage("run_reconciliation_0befbd0b23"),
+  payment_statement_imported: translatedMessage(
+    "import_payment_statement_fa3e80e60e",
+  ),
 };
 
 const objects: Labels = {
-  staff: ["后台账号", "Staff account", "حساب موظف"],
-  customers: ["客户账号", "Customer account", "حساب عميل"],
-  keys: ["访问密钥", "Access key", "مفتاح الوصول"],
-  models: ["标准模型", "Standard model", "النموذج القياسي"],
-  pricing: ["计价配置", "Pricing configuration", "إعدادات التسعير"],
-  "service-group": ["服务分组", "Service group", "مجموعة الخدمة"],
-  "region-profile": ["地区档案", "Region profile", "ملف المنطقة"],
-  legal: ["法律文本", "Legal document", "وثيقة قانونية"],
-  reconciliation: ["对账报告", "Reconciliation report", "تقرير المطابقة"],
+  announcements: translatedMessage("incident_notice_0600652e70"),
+  staff: translatedMessage("staff_account_206adf466b"),
+  customers: translatedMessage("customer_account_92d663dd47"),
+  keys: translatedMessage("access_key_9a2e8c436b"),
+  models: translatedMessage("standard_model_18b603bd24"),
+  pricing: translatedMessage("pricing_configuration_7a792e29a3"),
+  "service-group": translatedMessage("service_group_1c6f8adf41"),
+  "region-profile": translatedMessage("region_profile_15fb48e9d0"),
+  legal: translatedMessage("legal_document_e6c062428e"),
+  reconciliation: translatedMessage("reconciliation_report_617ed576b7"),
+  payment_statement: translatedMessage("payment_statement_9258011802"),
 };
 
 const fields: Labels = {
-  username: ["用户名", "Username", "اسم المستخدم"],
-  platform_admin: ["平台管理员", "Platform administrator", "مسؤول المنصة"],
-  role: ["角色", "Role", "الدور"],
-  status: ["状态", "Status", "الحالة"],
-  two_factor_bound: [
-    "双重验证（2FA）",
-    "Two-factor authentication",
-    "المصادقة الثنائية",
-  ],
-  must_change_password: [
-    "需修改密码",
-    "Password change required",
-    "يلزم تغيير كلمة المرور",
-  ],
-  concurrency_limit: ["并发上限", "Concurrency limit", "حد التزامن"],
-  revoked: ["会话已撤销", "Sessions revoked", "أُلغيت الجلسات"],
-  balance_nano: ["余额", "Balance", "الرصيد"],
-  amount_nano: ["变动金额", "Adjustment amount", "مبلغ التعديل"],
-  user_id: ["账号 ID", "Account ID", "معرّف الحساب"],
-  reports: ["报告数量", "Report count", "عدد التقارير"],
-  component: ["计价项", "Pricing component", "عنصر التسعير"],
-  value: ["数值", "Value", "القيمة"],
-  model: ["模型", "Model", "النموذج"],
-  name: ["名称", "Name", "الاسم"],
-  vendor: ["厂商", "Vendor", "المزوّد"],
-  vendor_display: [
-    "厂商显示名称",
-    "Vendor display name",
-    "اسم المزوّد المعروض",
-  ],
-  kind: ["类型", "Type", "النوع"],
-  protocols: ["协议", "Protocols", "البروتوكولات"],
-  capabilities: ["能力", "Capabilities", "الإمكانات"],
-  tags: ["标签", "Tags", "الوسوم"],
-  context_length: ["上下文长度", "Context length", "طول السياق"],
-  max_output: [
-    "最大输出词元",
-    "Maximum output tokens",
-    "الحد الأقصى لرموز الإخراج",
-  ],
-  description: ["说明", "Description", "الوصف"],
-  listed: ["上架状态", "Listing status", "حالة الإدراج"],
-  sort_weight: ["排序权重", "Sort weight", "وزن الترتيب"],
-  revision: ["版本号", "Revision", "المراجعة"],
-  version: ["版本", "Version", "الإصدار"],
-  created_at: ["创建时间戳", "Creation timestamp", "الطابع الزمني للإنشاء"],
-  updated_at: ["更新时间戳", "Update timestamp", "الطابع الزمني للتحديث"],
-  effective_at: ["生效时间戳", "Effective timestamp", "الطابع الزمني للسريان"],
-  reference: ["官方参考价", "Official reference", "المرجع الرسمي"],
-  official_source_url: [
-    "官方价格来源",
-    "Official price source",
-    "مصدر السعر الرسمي",
-  ],
-  official_verified_date: ["核验日期", "Verification date", "تاريخ التحقق"],
-  official_conditions: [
-    "参考价适用条件",
-    "Reference price conditions",
-    "شروط السعر المرجعي",
-  ],
-  official_historical: ["历史参考价", "Historical reference", "مرجع تاريخي"],
-  official_input_per_m: [
-    "官方输入价（美元/百万词元）",
-    "Official input USD / million tokens",
-    "سعر الإدخال الرسمي لكل مليون رمز بالدولار",
-  ],
-  official_output_per_m: [
-    "官方输出价（美元/百万词元）",
-    "Official output USD / million tokens",
-    "سعر الإخراج الرسمي لكل مليون رمز بالدولار",
-  ],
-  official_cache_read_per_m: [
-    "官方缓存读取价（美元/百万词元）",
-    "Official cache read USD / million tokens",
-    "سعر قراءة الذاكرة الرسمي لكل مليون رمز بالدولار",
-  ],
-  official_cache_write_per_m: [
-    "官方缓存写入价（美元/百万词元）",
-    "Official cache write USD / million tokens",
-    "سعر كتابة الذاكرة الرسمي لكل مليون رمز بالدولار",
-  ],
-  official_per_request: [
-    "官方单次价格（美元）",
-    "Official price per request (USD)",
-    "السعر الرسمي لكل طلب بالدولار",
-  ],
-  per_request_usd: [
-    "单次价格（美元）",
-    "Price per request (USD)",
-    "السعر لكل طلب بالدولار",
-  ],
-  score: ["能力评分", "Capability score", "تقييم الإمكانات"],
-  compatible_groups: ["兼容分组", "Compatible groups", "المجموعات المتوافقة"],
-  region_id: ["地区 ID", "Region ID", "معرّف المنطقة"],
-  brand: ["品牌", "Brand", "العلامة التجارية"],
-  domain: ["域名", "Domain", "النطاق"],
-  logo_url: ["标志地址", "Logo URL", "رابط الشعار"],
-  default_language: ["默认语言", "Default language", "اللغة الافتراضية"],
-  languages: ["支持语言", "Languages", "اللغات"],
-  timezone: ["时区", "Timezone", "المنطقة الزمنية"],
-  currency: ["币种", "Currency", "العملة"],
-  allowed_vendors: ["允许的厂商", "Allowed vendors", "المزوّدون المسموحون"],
-  login_methods: ["登录方式", "Login methods", "طرق تسجيل الدخول"],
-  payment_channels: ["支付渠道", "Payment channels", "قنوات الدفع"],
-  payment_config_refs: [
-    "支付配置引用",
-    "Payment configuration references",
-    "مراجع إعدادات الدفع",
-  ],
-  cookie_consent: [
-    "Cookie 同意提示",
-    "Cookie consent",
-    "الموافقة على ملفات الارتباط",
-  ],
-  features: ["功能开关", "Features", "الميزات"],
-  store_request_content: [
-    "保存请求内容",
-    "Store request content",
-    "حفظ محتوى الطلب",
-  ],
-  playground: ["调试台", "Playground", "ساحة التجربة"],
-  models: ["模型广场", "Model catalog", "كتالوج النماذج"],
-  smart_entry: ["智能入口", "Smart entry", "المدخل الذكي"],
-  video: ["视频", "Video", "الفيديو"],
-  arabic: ["阿拉伯语", "Arabic", "العربية"],
-  model_ratio: ["输入计费系数", "Input billing ratio", "معامل فوترة الإدخال"],
-  completion_ratio: [
-    "输出计费系数",
-    "Output billing ratio",
-    "معامل فوترة الإخراج",
-  ],
-  group_ratio: ["售价倍率", "Sale multiplier", "معامل سعر البيع"],
-  group_group_ratio: [
-    "账号分组售价倍率",
-    "Account group sale multiplier",
-    "معامل البيع لمجموعة الحساب",
-  ],
-  model_price: [
-    "按次计价（美元）",
-    "Per-request price (USD)",
-    "السعر لكل طلب بالدولار",
-  ],
-  model_price_expr: ["计价表达式", "Pricing expression", "صيغة التسعير"],
-  cache_ratio: ["缓存计费系数", "Cache billing ratio", "معامل فوترة الذاكرة"],
-  audio_ratio: ["音频计费系数", "Audio billing ratio", "معامل فوترة الصوت"],
-  model_time_pricing: [
-    "分时价格系数",
-    "Time pricing factors",
-    "معاملات التسعير الزمني",
-  ],
-  model_time_token_prices: [
-    "分时词元价格",
-    "Time token prices",
-    "أسعار الرموز الزمنية",
-  ],
+  provider: translatedMessage("payment_provider_28f57de213"),
+  day: translatedMessage("statement_date_86676bc86f"),
+  rows: translatedMessage("payment_count_2f6c9c68f6"),
+  total_nano: translatedMessage("statement_amount_7404a5386d"),
+  supersedes: translatedMessage("previous_version_70a428cebf"),
+  digest: translatedMessage("file_checksum_2e66ed3a25"),
+  username: translatedMessage("username_52bf46ce51"),
+  platform_admin: translatedMessage("platform_administrator_489c68ad11"),
+  role: translatedMessage("role_5b688c6fd8"),
+  status: translatedMessage("status_dda39dcd63"),
+  two_factor_bound: translatedMessage("two_factor_authentication_dbc5a3c12c"),
+  must_change_password: translatedMessage(
+    "password_change_required_b0c1f863ff",
+  ),
+  concurrency_limit: translatedMessage("concurrency_limit_a812217281"),
+  revoked: translatedMessage("sessions_revoked_01bba8e864"),
+  balance_nano: translatedMessage("balance_2afee946f4"),
+  amount_nano: translatedMessage("adjustment_amount_22f393d3d6"),
+  user_id: translatedMessage("account_id_267663f396"),
+  reports: translatedMessage("report_count_b85b36b981"),
+  component: translatedMessage("pricing_component_b6e0b92bb3"),
+  value: translatedMessage("value_d0e4887528"),
+  model: translatedMessage("model_9c2e5b5065"),
+  name: translatedMessage("name_e639662a6f"),
+  vendor: translatedMessage("vendor_5dc28b7ea6"),
+  vendor_display: translatedMessage("vendor_display_name_9eeb355fb8"),
+  kind: translatedMessage("type_b91a24e5ad"),
+  protocols: translatedMessage("protocols_0fc0348ab3"),
+  capabilities: translatedMessage("capabilities_cd2d018425"),
+  tags: translatedMessage("tags_f8eeb96e24"),
+  context_length: translatedMessage("context_length_7355a0b91b"),
+  max_output: translatedMessage("maximum_output_tokens_0bf4ad2271"),
+  description: translatedMessage("description_c6bae5d4e7"),
+  listed: translatedMessage("listing_status_e12bdab353"),
+  sort_weight: translatedMessage("sort_weight_8d8cdaea21"),
+  revision: translatedMessage("revision_1a3b92b341"),
+  version: translatedMessage("version_d07f8f123e"),
+  created_at: translatedMessage("creation_timestamp_012f122ddc"),
+  updated_at: translatedMessage("update_timestamp_82ee873bc0"),
+  effective_at: translatedMessage("effective_timestamp_bff9cf2924"),
+  reference: translatedMessage("official_reference_7896199b9d"),
+  official_source_url: translatedMessage("official_price_source_3a5c46e468"),
+  official_verified_date: translatedMessage("verification_date_e695c40f81"),
+  official_conditions: translatedMessage(
+    "reference_price_conditions_805f372bc5",
+  ),
+  official_historical: translatedMessage("historical_reference_879b0f1615"),
+  official_input_per_m: translatedMessage(
+    "official_input_usd_million_tokens_0f8af93274",
+  ),
+  official_output_per_m: translatedMessage(
+    "official_output_usd_million_tokens_aab7040e71",
+  ),
+  official_cache_read_per_m: translatedMessage(
+    "official_cache_read_usd_million_tokens_af8e8c4d3e",
+  ),
+  official_cache_write_per_m: translatedMessage(
+    "official_cache_write_usd_million_tokens_1966ef3cf4",
+  ),
+  official_per_request: translatedMessage(
+    "official_price_per_request_usd_6da84101c6",
+  ),
+  per_request_usd: translatedMessage("price_per_request_usd_9e00daa2cc"),
+  score: translatedMessage("capability_score_f7a553d452"),
+  compatible_groups: translatedMessage("compatible_groups_705a3e9423"),
+  region_id: translatedMessage("region_id_9d764a8947"),
+  brand: translatedMessage("brand_eff25bbb42"),
+  domain: translatedMessage("domain_59cd72edd7"),
+  logo_url: translatedMessage("logo_url_5c3cd83df9"),
+  default_language: translatedMessage("default_language_af6457f09c"),
+  languages: translatedMessage("languages_1fca20de33"),
+  timezone: translatedMessage("timezone_589797f8d4"),
+  currency: translatedMessage("currency_912b49ef57"),
+  allowed_vendors: translatedMessage("allowed_vendors_ae00df057f"),
+  login_methods: translatedMessage("login_methods_63cf073bb4"),
+  payment_channels: translatedMessage("payment_channels_d3f84608b2"),
+  payment_config_refs: translatedMessage(
+    "payment_configuration_references_5a72e13b16",
+  ),
+  cookie_consent: translatedMessage("cookie_consent_250eb89009"),
+  features: translatedMessage("features_b58eba93ee"),
+  store_request_content: translatedMessage("store_request_content_dab33e2102"),
+  playground: translatedMessage("playground_99cde0b0d9"),
+  models: translatedMessage("model_catalog_ed043af818"),
+  smart_entry: translatedMessage("smart_entry_95929b20ea"),
+  video: translatedMessage("video_f038b3ffa9"),
+  arabic: translatedMessage("arabic_f8904e8852"),
+  model_ratio: translatedMessage("input_billing_ratio_9d9b5c9f9c"),
+  completion_ratio: translatedMessage("output_billing_ratio_3606e5f1e4"),
+  group_ratio: translatedMessage("sale_multiplier_0faa16e317"),
+  group_group_ratio: translatedMessage(
+    "account_group_sale_multiplier_c6753b1125",
+  ),
+  model_price: translatedMessage("per_request_price_usd_893a3c943c"),
+  model_price_expr: translatedMessage("pricing_expression_97debc0743"),
+  cache_ratio: translatedMessage("cache_billing_ratio_1cda243b8e"),
+  audio_ratio: translatedMessage("audio_billing_ratio_fde0f3a5f0"),
+  model_time_pricing: translatedMessage("time_pricing_factors_9000e40d77"),
+  model_time_token_prices: translatedMessage("time_token_prices_706ad26ab5"),
 };
 
 function label(labels: Labels, key: string, text: AuditText): string {
@@ -306,7 +197,7 @@ export function auditActionLabel(action: string, text: AuditText): string {
   const translated = label(actions, action, text);
   return translated !== action
     ? translated
-    : `${text("未识别操作", "Unrecognized action", "إجراء غير معروف")} (${action})`;
+    : `${text(...translatedMessage("unrecognized_action_c21bec19e5"))} (${action})`;
 }
 
 export function auditSearchActions(query: string, text: AuditText): string[] {
@@ -324,8 +215,8 @@ export function auditObjectLabel(kind: string, text: AuditText): string {
 
 export function auditRoleLabel(role: number, text: AuditText): string {
   if (role === 0)
-    return text("未记录角色", "Role not recorded", "الدور غير مسجل");
-  if (role === 1) return text("客户", "Customer", "عميل");
+    return text(...translatedMessage("role_not_recorded_b3c7d2f94f"));
+  if (role === 1) return text(...translatedMessage("customer_37e417bb9d"));
   return [5, 10, 20, 100].includes(role)
     ? staffRoleName(role, text)
     : `${staffRoleName(role, text)} (${role})`;
@@ -349,19 +240,21 @@ function describe(value: unknown, text: AuditText, key = ""): string {
   if (key === "role" && typeof value === "number")
     return auditRoleLabel(value, text);
   if (key === "status" && value === 1)
-    return text("已启用", "Enabled", "مفعّل");
+    return text(...translatedMessage("enabled_d4fda6d86a"));
   if (key === "status" && value === 2)
-    return text("已禁用", "Disabled", "معطّل");
+    return text(...translatedMessage("disabled_11bee48d5f"));
   if (typeof value === "boolean") {
     if (key === "two_factor_bound")
       return value
-        ? text("已绑定", "Bound", "مرتبط")
-        : text("未绑定", "Not bound", "غير مرتبط");
+        ? text(...translatedMessage("bound_261ddf4c15"))
+        : text(...translatedMessage("not_bound_6a172e1958"));
     if (key === "listed")
       return value
-        ? text("已上架", "Listed", "مدرج")
-        : text("未上架", "Not listed", "غير مدرج");
-    return value ? text("是", "Yes", "نعم") : text("否", "No", "لا");
+        ? text(...translatedMessage("listed_435899385f"))
+        : text(...translatedMessage("not_listed_bd0a1a8b51"));
+    return value
+      ? text(...translatedMessage("yes_3445b9ddec"))
+      : text(...translatedMessage("no_b02901acfa"));
   }
   if (
     (key === "balance_nano" || key === "amount_nano") &&
@@ -373,7 +266,9 @@ function describe(value: unknown, text: AuditText, key = ""): string {
 }
 
 function isolateValue(value: string, text: AuditText): string {
-  return text("ltr", "ltr", "rtl") === "rtl" ? `\u2066${value}\u2069` : value;
+  return text(...translatedMessage("ltr_f1338d980b")) === "rtl"
+    ? `\u2066${value}\u2069`
+    : value;
 }
 
 function parse(value: string): unknown {
@@ -443,23 +338,17 @@ export function auditChanges(
 export function auditAuthResult(action: string, text: AuditText): string {
   switch (action) {
     case "staff_2fa_verified":
-      return text(
-        "双重验证（2FA）通过",
-        "2FA verification passed",
-        "نجحت المصادقة الثنائية",
-      );
+      return text(...translatedMessage("2fa_verification_passed_446853dd95"));
     case "staff_password_authenticated":
       return text(
-        "密码验证通过，等待双重验证",
-        "Password verified; awaiting 2FA",
-        "تم التحقق من كلمة المرور؛ بانتظار المصادقة الثنائية",
+        ...translatedMessage("password_verified_awaiting_2fa_1e2b8633df"),
       );
     case "staff_password_changed":
-      return text("密码已修改", "Password changed", "تم تغيير كلمة المرور");
+      return text(...translatedMessage("password_changed_809c9e5ff3"));
     case "staff_password_authenticated_rejected":
     case "staff_password_changed_rejected":
     case "staff_2fa_verified_rejected":
-      return text("验证未通过", "Verification failed", "فشل التحقق");
+      return text(...translatedMessage("verification_failed_770b92f762"));
     default:
       return "";
   }
@@ -467,11 +356,11 @@ export function auditAuthResult(action: string, text: AuditText): string {
 
 export function auditHTTPAction(method: string, text: AuditText): string {
   const methods: Labels = {
-    POST: ["提交操作", "Submit operation", "إرسال عملية"],
-    PUT: ["修改配置", "Update configuration", "تحديث الإعدادات"],
-    PATCH: ["修改配置", "Update configuration", "تحديث الإعدادات"],
-    DELETE: ["删除操作", "Delete operation", "عملية حذف"],
-    CHANGE: ["配置变更", "Configuration change", "تغيير الإعدادات"],
+    POST: translatedMessage("submit_operation_572574d337"),
+    PUT: translatedMessage("update_configuration_5a4a9836cb"),
+    PATCH: translatedMessage("update_configuration_5a4a9836cb"),
+    DELETE: translatedMessage("delete_operation_ebf3789e9b"),
+    CHANGE: translatedMessage("configuration_change_2266df19ec"),
   };
   return label(methods, method, text);
 }

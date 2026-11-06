@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useId, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -43,33 +44,31 @@ export function KeyModelAccess({
     <>
       <fieldset className="key-policy-section">
         <legend className="key-policy-legend">
-          {c("模型白名单", "Model allowlist", "قائمة السماح للنماذج")}
+          {c(...translatedMessage("model_allowlist_a482123a7e"))}
         </legend>
         <div className="key-restriction-heading">
           <label htmlFor={switchId}>
             <strong>
-              {c("模型白名单", "Model allowlist", "قائمة السماح للنماذج")}
+              {c(...translatedMessage("model_allowlist_a482123a7e"))}
             </strong>
             <small>
               {c(
-                "只允许选中的模型，智能路由遵守同一限制。",
-                "Allow only selected models, including smart-routing candidates.",
-                "السماح بالنماذج المحددة فقط، بما فيها مرشحو التوجيه.",
+                ...translatedMessage(
+                  "allow_only_selected_models_including_smart_ro_c8a783c65b",
+                ),
               )}
             </small>
           </label>
           <span className="key-restriction-control">
             <span>
               {access === "custom"
-                ? c("已启用", "Enabled", "مفعلة")
-                : c("已停用", "Disabled", "متوقفة")}
+                ? c(...translatedMessage("enabled_d03bf0e513"))
+                : c(...translatedMessage("disabled_a2a7e48b0e"))}
             </span>
             <Switch
               id={switchId}
               label={c(
-                "启用模型白名单",
-                "Enable model allowlist",
-                "تفعيل قائمة النماذج",
+                ...translatedMessage("enable_model_allowlist_b59f55a683"),
               )}
               checked={access === "custom"}
               onChange={(enabled) => onAccessChange(enabled ? "custom" : "all")}
@@ -79,9 +78,9 @@ export function KeyModelAccess({
         {access === "all" ? (
           <p className="key-policy-hint">
             {c(
-              "当前允许分组内全部具体模型，智能路由入口权限保持不变。关闭仅暂停此限制，已选模型保留在表单草稿中。",
-              "All group models are allowed; route-entry permissions stay unchanged. Turning this off preserves your selections in this form draft.",
-              "كل نماذج المجموعة مسموحة وتبقى صلاحيات التوجيه دون تغيير. تحفظ الاختيارات في مسودة النموذج.",
+              ...translatedMessage(
+                "all_group_models_are_allowed_route_entry_perm_d3f4b77fe4",
+              ),
             )}
           </p>
         ) : (
@@ -134,22 +133,24 @@ export function KeyModelAccess({
             >
               {chosen.length
                 ? c(
-                    `已授权 ${chosen.length} 个模型；仅选一个即为单模型限制。`,
-                    `${chosen.length} models allowed. Selecting one restricts the key to that model.`,
-                    `${chosen.length} نماذج مسموحة. اختيار نموذج واحد يقيد المفتاح به.`,
+                    ...translatedMessage(
+                      "models_allowed_selecting_one_restricts_the_ke_291fab2c7f",
+                      { p0: chosen.length },
+                    ),
                   )
                 : c(
-                    "请至少选择一个当前分组可用的模型。",
-                    "Select at least one available model.",
-                    "اختر نموذجًا متاحًا واحدًا على الأقل.",
+                    ...translatedMessage(
+                      "select_at_least_one_available_model_9ee5f5fb93",
+                    ),
                   )}
             </p>
             {unavailable.length > 0 && (
               <p className="key-policy-hint is-warning" role="status">
                 {c(
-                  `有 ${unavailable.length} 个原选模型不在当前分组开放范围内，不会加入此密钥权限。`,
-                  `${unavailable.length} previous selections are unavailable in this group and will not be authorized.`,
-                  `${unavailable.length} نماذج محددة سابقًا غير متاحة ولن تُمنح صلاحية لها.`,
+                  ...translatedMessage(
+                    "previous_selections_are_unavailable_in_this_g_76ec21a3c5",
+                    { p0: unavailable.length },
+                  ),
                 )}
               </p>
             )}
@@ -159,17 +160,15 @@ export function KeyModelAccess({
           <Check size={14} />
           <span>
             {c(
-              "智能路由同样受白名单约束。指定模型不会被静默替换，费用只按实际模型计算一次。",
-              "Smart routing follows this allowlist. Explicit models are never substituted; the actual model is billed once.",
-              "يلتزم التوجيه بقائمة السماح ولا تُستبدل النماذج المحددة. تحسب الرسوم مرة واحدة.",
+              ...translatedMessage(
+                "smart_routing_follows_this_allowlist_explicit_b2983c9c8d",
+              ),
             )}
           </span>
         </div>
         <Link to="/models" className="key-model-price-link">
           {c(
-            "查看模型能力与分组价格",
-            "Explore models and group prices",
-            "استعرض النماذج وأسعار المجموعات",
+            ...translatedMessage("explore_models_and_group_prices_a654c223ea"),
           )}
           <ArrowUpRight size={13} />
         </Link>
@@ -200,18 +199,16 @@ export function KeyAdvancedSettings({
       >
         <span>
           <strong>
-            {c("高级设置", "Advanced settings", "إعدادات متقدمة")}
+            {c(...translatedMessage("advanced_settings_f5b42651a8"))}
           </strong>
           <small>
-            {c(
-              "模型白名单与网络地址限制",
-              "Model and IP allowlists",
-              "قوائم النماذج وعناوين الشبكة",
-            )}
+            {c(...translatedMessage("model_and_ip_allowlists_e24f12d28a"))}
           </small>
         </span>
         <span className="key-advanced-action">
-          {open ? c("收起", "Collapse", "طي") : c("展开", "Expand", "توسيع")}
+          {open
+            ? c(...translatedMessage("collapse_e8d986c7b2"))
+            : c(...translatedMessage("expand_c77fe8dab8"))}
           <ChevronDown size={16} aria-hidden="true" />
         </span>
       </summary>
@@ -240,30 +237,24 @@ export function KeyIpAllowlist({
     <section className="key-ip-allowlist">
       <div className="key-restriction-heading">
         <label htmlFor={`${id}-enabled`}>
-          <strong>
-            {c("IP（网络地址）白名单", "IP allowlist", "قائمة عناوين الشبكة")}
-          </strong>
+          <strong>{c(...translatedMessage("ip_allowlist_b4c0043c13"))}</strong>
           <small>
             {c(
-              "只允许列表中的网络地址发起请求。",
-              "Accept requests only from listed network addresses.",
-              "قبول الطلبات من عناوين الشبكة المدرجة فقط.",
+              ...translatedMessage(
+                "accept_requests_only_from_listed_network_addr_f1cf25c88b",
+              ),
             )}
           </small>
         </label>
         <span className="key-restriction-control">
           <span>
             {enabled
-              ? c("已启用", "Enabled", "مفعلة")
-              : c("已停用", "Disabled", "متوقفة")}
+              ? c(...translatedMessage("enabled_d03bf0e513"))
+              : c(...translatedMessage("disabled_a2a7e48b0e"))}
           </span>
           <Switch
             id={`${id}-enabled`}
-            label={c(
-              "启用 IP（网络地址）白名单",
-              "Enable IP allowlist",
-              "تفعيل قائمة عناوين الشبكة",
-            )}
+            label={c(...translatedMessage("enable_ip_allowlist_ac8ad60f7b"))}
             checked={enabled}
             onChange={onEnabledChange}
           />
@@ -272,11 +263,11 @@ export function KeyIpAllowlist({
       {enabled ? (
         <Field
           id={id}
-          label={c("允许的网络地址", "Allowed addresses", "العناوين المسموحة")}
+          label={c(...translatedMessage("allowed_addresses_e713e28ca8"))}
           hint={c(
-            "每行一项，至少填写一项；支持单个地址或 CIDR（网段）。模拟请求来自 127.0.0.1（本机地址）。",
-            "One per line, at least one required. Supports an IP address or CIDR range. Demo requests use 127.0.0.1.",
-            "عنوان واحد على الأقل، كل عنوان في سطر. تدعم العناوين ونطاقات CIDR. مصدر المحاكاة 127.0.0.1.",
+            ...translatedMessage(
+              "one_per_line_at_least_one_required_supports_a_a44e4f6331",
+            ),
           )}
         >
           <textarea
@@ -290,9 +281,9 @@ export function KeyIpAllowlist({
       ) : (
         <p className="key-policy-hint">
           {c(
-            "当前不限制来源地址。关闭仅暂停此限制，已填地址保留在表单草稿中。",
-            "Source addresses are unrestricted. Turning this off preserves addresses in this form draft.",
-            "عناوين المصدر غير مقيدة. تحفظ العناوين في مسودة النموذج.",
+            ...translatedMessage(
+              "source_addresses_are_unrestricted_turning_thi_e1033e066b",
+            ),
           )}
         </p>
       )}
@@ -307,32 +298,28 @@ export function ClientModelGuide() {
   return (
     <details className="key-client-guide">
       <summary>
-        {c(
-          "通过 CC Switch（客户端配置工具）接入",
-          "Connect through CC Switch",
-          "الاتصال عبر CC Switch",
-        )}
+        {c(...translatedMessage("connect_through_cc_switch_6ace2817e3"))}
       </summary>
       <div>
         <p>
           {c(
-            "将所需模型纳入授权范围。客户端发送的 model（模型标识）须与模型列表一致。",
-            "Allow the models you need. Send the exact model ID listed in the catalog.",
-            "اختر وضع العميل واسمح بالنماذج المطلوبة. أرسل معرّف النموذج المطابق للفهرس.",
+            ...translatedMessage(
+              "allow_the_models_you_need_send_the_exact_mode_f5268c207f",
+            ),
           )}
         </p>
         <p>
           {c(
-            "Claude Code（编程客户端）的 /model（切换模型命令）可切换模型；若使用 Sonnet / Opus / Haiku（模型档位别名），还需在客户端配置相应的实际模型映射。",
-            "Claude Code can switch using /model. Sonnet, Opus and Haiku aliases also require mappings to actual model IDs in the client configuration.",
-            "يتيح Claude Code التبديل عبر /model. تتطلب الأسماء Sonnet وOpus وHaiku تعيينًا لمعرّفات نماذج فعلية في إعدادات العميل.",
+            ...translatedMessage(
+              "claude_code_can_switch_using_model_sonnet_opu_9101a3524d",
+            ),
           )}
         </p>
         <p>
           {c(
-            "授权多模型不代表协议通用：还需匹配客户端所用接口协议。本项目展示权限与计费逻辑，未接入真实网关。",
-            "Multi-model permission does not provide protocol compatibility. Match the client's API protocol. This demo has no live gateway.",
-            "السماح بعدة نماذج لا يعني توافق البروتوكولات. طابق بروتوكول العميل. لا يتصل هذا العرض ببوابة فعلية.",
+            ...translatedMessage(
+              "multi_model_permission_does_not_provide_proto_3606be3750",
+            ),
           )}
         </p>
       </div>

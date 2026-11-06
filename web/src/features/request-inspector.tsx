@@ -1,3 +1,6 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
+
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -22,91 +25,57 @@ import { callTypeLabel } from "../lib/request-metadata";
 import { useSystemAccess, isAdmin } from "../lib/system-access";
 
 const errors: Record<string, [string, string, string]> = {
-  insufficient_balance: [
-    "账户余额不足。本次请求未执行，请先完成模拟充值后重试。",
-    "The balance is insufficient. This request was not run. Complete a simulated top-up, then retry.",
-    "الرصيد غير كافٍ. لم ينفذ الطلب. أضف رصيداً محاكياً ثم أعد المحاولة.",
-  ],
-  key_quota_exceeded: [
-    "本密钥剩余额度不足以承担本次请求的最大预估费用。降低最大输出词元、调整额度或选择另一把兼容密钥后重试。",
-    "This request’s maximum estimated cost exceeds the key’s remaining budget. Reduce max output tokens, adjust the limit or use another compatible key.",
-    "تتجاوز التكلفة القصوى المتوقعة الميزانية المتبقية للمفتاح. قلل حد الإخراج أو عدّل الميزانية أو اختر مفتاحاً آخر.",
-  ],
-  model_unauthorized: [
-    "本密钥未授权此模型。选择已授权模型，或在密钥管理中明确修改白名单。",
-    "This model is not authorized for the key. Select an authorized model or explicitly update its allowlist.",
-    "النموذج غير مصرح لهذا المفتاح. اختر نموذجاً مصرحاً أو عدّل القائمة صراحةً.",
-  ],
-  protocol_incompatible: [
-    "请求协议与模型不兼容。返回接入中心，选择适配目标工具的模型与地址。",
-    "The protocol is incompatible with this model. Select a matching model and endpoint in the connection center.",
-    "البروتوكول غير متوافق مع النموذج. اختر نموذجاً وعنواناً متوافقين في مركز الاتصال.",
-  ],
-  capability_incompatible: [
-    "该模型或智能路由候选不支持本次请求能力。保留输入，调整模型或请求参数后重试。",
-    "No authorized model supports the requested capability. Keep your input and adjust the model or parameters.",
-    "لا يدعم نموذج مصرح قدرات الطلب. احتفظ بالمدخلات وعدّل النموذج أو المعلمات.",
-  ],
-  tool_chain_incompatible: [
-    "工具调用链已固定到兼容模型，当前请求与该上下文不匹配。请恢复原模型或开始新的调用链。",
-    "This tool chain is pinned to a compatible model. Restore that model or start a new chain.",
-    "سلسلة الأدوات مرتبطة بنموذج متوافق. استعده أو ابدأ سلسلة جديدة.",
-  ],
-  unknown_model: [
-    "请求的模型标识不存在。平台未替换模型，请检查标识后重试。",
-    "The requested model ID does not exist. No substitute was used; check the ID.",
-    "معرّف النموذج غير موجود. لم يُستخدم بديل؛ تحقق من المعرّف.",
-  ],
-  model_unavailable: [
-    "此模型已下架或未向当前服务分组开放。请选择当前可用模型。",
-    "This model is offline or unavailable in this service group. Choose an available model.",
-    "النموذج غير متاح أو غير مفتوح لهذه المجموعة. اختر نموذجاً متاحاً.",
-  ],
-  ip_unauthorized: [
-    "当前模拟来源地址不在密钥允许范围内。请在密钥管理中检查来源地址白名单。",
-    "The simulated source address is outside the key's allowed range. Check its IP allowlist in key management.",
-    "عنوان المصدر المحاكى خارج النطاق المسموح للمفتاح. راجع قائمة العناوين في إدارة المفاتيح.",
-  ],
-  key_disabled: [
-    "密钥已停用。启用密钥或选择其他兼容密钥后重试。",
-    "This key is disabled. Enable it or use another compatible key.",
-    "المفتاح معطل. فعّله أو استخدم مفتاحاً متوافقاً آخر.",
-  ],
-  key_expired: [
-    "密钥已过期。更新有效期或选择其他兼容密钥后重试。",
-    "This key has expired. Update its validity or use another compatible key.",
-    "انتهت صلاحية المفتاح. حدّث الصلاحية أو اختر مفتاحاً آخر.",
-  ],
-  key_not_found: [
-    "密钥不存在，请选择一把有效密钥。",
-    "The key was not found. Select a valid key.",
-    "المفتاح غير موجود. اختر مفتاحاً صالحاً.",
-  ],
-  upstream_unavailable: [
-    "模拟上游故障，请求未完成。关闭演示故障后可用原输入重试，平台不会静默改用其他模型。",
-    "The simulated upstream failed. Restore the demo upstream and retry with your original input; no model was silently substituted.",
-    "فشل المزوّد المحاكى. استعد حالته وأعد المحاولة بالمدخلات الأصلية؛ لم يُستبدل النموذج تلقائياً.",
-  ],
-  account_unavailable: [
-    "当前账户状态不允许调用。恢复演示账户后重试。",
-    "The account cannot make requests in its current state. Restore the demo account before retrying.",
-    "حالة الحساب تمنع الطلبات. استعد الحساب التجريبي قبل إعادة المحاولة.",
-  ],
-  invalid_request: [
-    "请求参数无效。保留输入并修正标记的参数后重试。",
-    "Request parameters are invalid. Preserve your input and correct the parameters.",
-    "معلمات الطلب غير صالحة. احتفظ بالمدخلات وصحح المعلمات.",
-  ],
-  pricing_invalid: [
-    "计价规则或所需用量无效，本次未计费。保留输入，检查计费单位、表达式变量与费率后重试。",
-    "The pricing rule or required usage is invalid. No charge was made. Retain the input and correct the billing unit, variables or rates.",
-    "قاعدة التسعير أو الاستخدام المطلوب غير صالح. لم تحتسب رسوم. احتفظ بالمدخلات وصحح الوحدة أو المتغيرات أو الأسعار.",
-  ],
-  stream_interrupted: [
-    "模拟输出中断，请检查已记录的用量与计费金额后重试。",
-    "The simulated stream was interrupted. Check recorded usage and charges before retrying.",
-    "انقطع الإخراج المحاكى. تحقق من الاستخدام والتكلفة المسجلين قبل إعادة المحاولة.",
-  ],
+  insufficient_balance: translatedMessage(
+    "the_balance_is_insufficient_this_request_was__e79ecf1371",
+  ),
+  key_quota_exceeded: translatedMessage(
+    "this_request_s_maximum_estimated_cost_exceeds_2cedfd71a4",
+  ),
+  model_unauthorized: translatedMessage(
+    "this_model_is_not_authorized_for_the_key_sele_18910965cb",
+  ),
+  protocol_incompatible: translatedMessage(
+    "the_protocol_is_incompatible_with_this_model__8be2affeea",
+  ),
+  capability_incompatible: translatedMessage(
+    "no_authorized_model_supports_the_requested_ca_27ef6f00e2",
+  ),
+  tool_chain_incompatible: translatedMessage(
+    "this_tool_chain_is_pinned_to_a_compatible_mod_b73c756cb3",
+  ),
+  unknown_model: translatedMessage(
+    "the_requested_model_id_does_not_exist_no_subs_bbbdb0fc06",
+  ),
+  model_unavailable: translatedMessage(
+    "this_model_is_offline_or_unavailable_in_this__bc997ca21d",
+  ),
+  ip_unauthorized: translatedMessage(
+    "the_simulated_source_address_is_outside_the_k_ded81bb424",
+  ),
+  key_disabled: translatedMessage(
+    "this_key_is_disabled_enable_it_or_use_another_a86607b5be",
+  ),
+  key_expired: translatedMessage(
+    "this_key_has_expired_update_its_validity_or_u_478bcfff1a",
+  ),
+  key_not_found: translatedMessage(
+    "the_key_was_not_found_select_a_valid_key_b9a37fe20a",
+  ),
+  upstream_unavailable: translatedMessage(
+    "the_simulated_upstream_failed_restore_the_dem_752832a535",
+  ),
+  account_unavailable: translatedMessage(
+    "the_account_cannot_make_requests_in_its_curre_2a40e45795",
+  ),
+  invalid_request: translatedMessage(
+    "request_parameters_are_invalid_preserve_your__8261e983de",
+  ),
+  pricing_invalid: translatedMessage(
+    "the_pricing_rule_or_required_usage_is_invalid_30d867f534",
+  ),
+  stream_interrupted: translatedMessage(
+    "the_simulated_stream_was_interrupted_check_re_155b5ccd92",
+  ),
 };
 
 export default function RequestInspector({
@@ -160,32 +129,28 @@ export default function RequestInspector({
         : "/console/keys";
   const actionLabel =
     record?.error_code === "insufficient_balance"
-      ? text("前往模拟充值", "Simulated top-up", "إضافة رصيد محاكى")
+      ? text(...translatedMessage("simulated_top_up_891a80067c"))
       : record?.error_code === "protocol_incompatible"
-        ? text("检查工具配置", "Check configuration", "تحقق من الإعداد")
-        : text(
-            "管理密钥权限与额度",
-            "Manage key access & limits",
-            "إدارة صلاحيات المفتاح وحدوده",
-          );
+        ? text(...translatedMessage("check_configuration_e06cde4c52"))
+        : text(...translatedMessage("manage_key_access_limits_7986c270a9"));
   return (
     <Drawer
       open={!!record}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={text("调用明细", "Request details", "تفاصيل الطلب")}
+      title={text(...translatedMessage("request_details_1c3ba2496f"))}
       description={
         record?.source === "api"
           ? text(
-              "网关记录 · 已记录费用与用量来源",
-              "Gateway record · recorded charge and usage source",
-              "سجل البوابة · الرسوم ومصدر الاستخدام المسجل",
+              ...translatedMessage(
+                "gateway_record_recorded_charge_and_usage_sour_3d915fd5d6",
+              ),
             )
           : text(
-              "模拟调用 · 一笔业务记录对应一次计费",
-              "Simulated call · one business record, one charge",
-              "طلب محاكى · سجل واحد ورسوم واحدة",
+              ...translatedMessage(
+                "simulated_call_one_business_record_one_charge_aada7035f8",
+              ),
             )
       }
       footer={
@@ -223,7 +188,7 @@ export default function RequestInspector({
             }
           >
             <Copy size={14} />
-            {text("复制诊断信息", "Copy diagnostics", "نسخ التشخيص")}
+            {text(...translatedMessage("copy_diagnostics_807fda1c4f"))}
           </Button>
           <Button
             variant="primary"
@@ -247,45 +212,41 @@ export default function RequestInspector({
             <h3>
               {record.source === "api"
                 ? record.outcome === "cancelled"
-                  ? text("请求已取消", "Request cancelled", "أُلغي الطلب")
+                  ? text(...translatedMessage("request_cancelled_76abde8a23"))
                   : failed
                     ? text(
-                        "接口调用失败",
-                        "API request failed",
-                        "فشل طلب الواجهة",
+                        ...translatedMessage("api_request_failed_45751177ef"),
                       )
                     : text(
-                        "接口调用成功",
-                        "API request succeeded",
-                        "نجح طلب الواجهة",
+                        ...translatedMessage(
+                          "api_request_succeeded_59c37cd2d7",
+                        ),
                       )
                 : record.outcome === "cancelled"
-                  ? text("请求已取消", "Request cancelled", "أُلغي الطلب")
+                  ? text(...translatedMessage("request_cancelled_76abde8a23"))
                   : failed
                     ? text(
-                        "请求未完成",
-                        "Request incomplete",
-                        "الطلب غير مكتمل",
+                        ...translatedMessage("request_incomplete_d09066c8de"),
                       )
                     : text(
-                        "模拟请求已完成",
-                        "Simulated request completed",
-                        "اكتمل الطلب المحاكى",
+                        ...translatedMessage(
+                          "simulated_request_completed_78801548e1",
+                        ),
                       )}
             </h3>
             <p>
               {record.source === "api"
                 ? text(
-                    "此记录来自网关调用日志，费用与实际模型以记录为准。",
-                    "This record comes from gateway logs and shows the recorded charge and actual model.",
-                    "هذا السجل من البوابة ويعرض الرسوم والنموذج الفعلي المسجلين.",
+                    ...translatedMessage(
+                      "this_record_comes_from_gateway_logs_and_shows_c1fe7c83f7",
+                    ),
                   )
                 : failed
                   ? reason
                   : text(
-                      "结果由本地演示生成，可用于核对接入、权限与计费流程。",
-                      "This local demo result verifies configuration, access and billing flows.",
-                      "النتيجة محاكاة محلية للتحقق من الاتصال والصلاحيات والفوترة.",
+                      ...translatedMessage(
+                        "this_local_demo_result_verifies_configuration_3437c28bce",
+                      ),
                     )}
             </p>
             {failed && record.source !== "api" && (
@@ -298,17 +259,15 @@ export default function RequestInspector({
                     }}
                   >
                     {text(
-                      "恢复模拟上游并重试",
-                      "Restore upstream & retry",
-                      "استعادة المزوّد وإعادة المحاولة",
+                      ...translatedMessage("restore_upstream_retry_8fc5a87c56"),
                     )}
                   </Button>
                 ) : requestFix ? (
                   <Button onClick={onRetry}>
                     {text(
-                      "保留输入并修改请求",
-                      "Edit request with input",
-                      "تعديل الطلب مع المدخلات",
+                      ...translatedMessage(
+                        "edit_request_with_input_ba92f3ac20",
+                      ),
                     )}
                   </Button>
                 ) : (
@@ -324,17 +283,13 @@ export default function RequestInspector({
           <div className="request-charge">
             <span>
               {BigInt(record.cost_nano) > 0n
-                ? text("已计费", "Charged", "تمت المحاسبة")
+                ? text(...translatedMessage("charged_c6cfa19bff"))
                 : record.status === "success"
-                  ? text(
-                      "已结算 · 零费用",
-                      "Settled · zero cost",
-                      "تمت التسوية · دون تكلفة",
-                    )
+                  ? text(...translatedMessage("settled_zero_cost_08cab6a891"))
                   : text(
-                      "未计费 · 余额与额度未扣减",
-                      "Not charged · balance and quota unchanged",
-                      "دون رسوم · الرصيد والحد لم يتغيرا",
+                      ...translatedMessage(
+                        "not_charged_balance_and_quota_unchanged_bc26199b73",
+                      ),
                     )}
             </span>
             <strong className="money">
@@ -343,74 +298,72 @@ export default function RequestInspector({
           </div>
           <dl className="product-detail-list">
             <div>
-              <dt>{text("业务记录", "Business record", "سجل العملية")}</dt>
+              <dt>
+                {text(...translatedMessage("business_record_3ef74e7812"))}
+              </dt>
               <dd className="mono" dir="ltr">
                 {record.trace_id}
               </dd>
             </div>
             <div>
-              <dt>{text("请求模型", "Requested model", "النموذج المطلوب")}</dt>
+              <dt>
+                {text(...translatedMessage("requested_model_59bacdc290"))}
+              </dt>
               <dd className="mono" dir="ltr">
                 {record.requested_model ?? record.model}
               </dd>
             </div>
             <div>
-              <dt>{text("实际模型", "Actual model", "النموذج الفعلي")}</dt>
+              <dt>{text(...translatedMessage("actual_model_87fe7e61b2"))}</dt>
               <dd className="mono" dir="ltr">
                 {record.actual_model ??
                   (record.status === "success" ? record.model : "—")}
               </dd>
             </div>
             <div>
-              <dt>{text("使用密钥", "Key", "المفتاح")}</dt>
+              <dt>{text(...translatedMessage("key_1108ef42bc"))}</dt>
               <dd>
                 {record.key_deleted
-                  ? text("已删除的 Key", "Deleted key", "مفتاح محذوف")
+                  ? text(...translatedMessage("deleted_key_571647d876"))
                   : (record.key_name ??
                     key?.name ??
                     record.key_id ??
-                    text("历史样例", "Historical sample", "عينة سابقة"))}
+                    text(...translatedMessage("historical_sample_95c37e035f")))}
               </dd>
             </div>
             <div>
-              <dt>{text("服务分组", "Service group", "مجموعة الخدمة")}</dt>
+              <dt>{text(...translatedMessage("service_group_1c6f8adf41"))}</dt>
               <dd>
                 {record.service_group ||
                   (record.tier ? <TierBadge id={record.tier} /> : "—")}
               </dd>
             </div>
             <div>
-              <dt>{text("厂商", "Vendor", "المزوّد")}</dt>
+              <dt>{text(...translatedMessage("vendor_5dc28b7ea6"))}</dt>
               <dd>{record.vendor || "—"}</dd>
             </div>
             <div>
-              <dt>{text("调用类型", "Call type", "نوع الطلب")}</dt>
+              <dt>{text(...translatedMessage("call_type_481db78ba3"))}</dt>
               <dd>{callTypeLabel(record.call_type, i18n.language)}</dd>
             </div>
             <div>
               <dt>
-                {text("自动切换", "Automatic switch", "التحويل التلقائي")}
+                {text(...translatedMessage("automatic_switch_e1171667b9"))}
               </dt>
               <dd>
                 {record.fallback
                   ? text(
-                      "已自动切换",
-                      "Automatically switched",
-                      "تم التحويل تلقائيًا",
+                      ...translatedMessage("automatically_switched_cd94edcbb0"),
                     )
                   : text(
-                      "未自动切换",
-                      "No automatic switch",
-                      "دون تحويل تلقائي",
+                      ...translatedMessage("no_automatic_switch_72bec5356c"),
                     )}
               </dd>
             </div>
             <div>
               <dt>
                 {text(
-                  "缓存读取 / 写入 Token",
-                  "Cache read / write tokens",
-                  "رموز قراءة / كتابة التخزين",
+                  ...translatedMessage("cache_read_write_tokens_824bb2f440"),
                 )}
               </dt>
               <dd>
@@ -426,12 +379,12 @@ export default function RequestInspector({
             )}
             {record.usage_source === "admission_estimate" && (
               <div>
-                <dt>{text("用量来源", "Usage source", "مصدر الاستخدام")}</dt>
+                <dt>{text(...translatedMessage("usage_source_94c3143825"))}</dt>
                 <dd>
                   {text(
-                    "估算计费用量，上游未返回完整 Token 计数。",
-                    "Estimated billing usage; complete provider token counts were unavailable.",
-                    "استخدام تقديري للفوترة؛ لم تتوفر أعداد الرموز الكاملة من المزوّد.",
+                    ...translatedMessage(
+                      "estimated_billing_usage_complete_provider_tok_2d18cc5438",
+                    ),
                   )}
                 </dd>
               </div>
@@ -439,11 +392,7 @@ export default function RequestInspector({
             {record.billing_detail ? (
               <div>
                 <dt>
-                  {text(
-                    "输入 / 输出 Token",
-                    "Input / output tokens",
-                    "رموز الإدخال / الإخراج",
-                  )}
+                  {text(...translatedMessage("input_output_tokens_52437a9a3b"))}
                 </dt>
                 <dd>
                   {record.input_tokens} / {record.output_tokens}
@@ -455,9 +404,9 @@ export default function RequestInspector({
               <div>
                 <dt>
                   {text(
-                    "模拟用量（未结算）",
-                    "Simulated usage (unsettled)",
-                    "الاستخدام المحاكى غير المسوى",
+                    ...translatedMessage(
+                      "simulated_usage_unsettled_7636142d95",
+                    ),
                   )}
                 </dt>
                 <dd>
@@ -474,17 +423,15 @@ export default function RequestInspector({
                 <div>
                   <dt>
                     {text(
-                      "输入 / 输出词元",
-                      "Input / output tokens",
-                      "رموز الإدخال / الإخراج",
+                      ...translatedMessage("input_output_tokens_57071059f4"),
                     )}
                   </dt>
                   <dd>
                     {record.usage_source === "admission_estimate"
                       ? text(
-                          "上游未报告用量；费用按提交估算结算。",
-                          "The provider did not report usage; billing uses the admission estimate.",
-                          "لم يبلّغ المزوّد عن الاستخدام؛ تعتمد الفاتورة على تقدير القبول.",
+                          ...translatedMessage(
+                            "the_provider_did_not_report_usage_billing_use_1da92aa07e",
+                          ),
                         )
                       : `${record.input_tokens.toLocaleString()} / ${record.output_tokens.toLocaleString()}`}
                   </dd>
@@ -492,9 +439,9 @@ export default function RequestInspector({
                 <div>
                   <dt>
                     {text(
-                      "调用时输入 / 输出单价",
-                      "Input / output rate at request",
-                      "سعر الإدخال / الإخراج وقت الطلب",
+                      ...translatedMessage(
+                        "input_output_rate_at_request_d42a64db8d",
+                      ),
                     )}
                   </dt>
                   <dd>
@@ -504,12 +451,12 @@ export default function RequestInspector({
                       : record.input_price_nano !== undefined &&
                           record.output_price_nano !== undefined
                         ? `${formatMoney(record.input_price_nano, "detail")} / ${formatMoney(record.output_price_nano, "detail")}`
-                        : text("未记录", "Not recorded", "غير مسجل")}
+                        : text(...translatedMessage("not_recorded_4bbcb12676"))}
                     <small className="request-rate-note">
                       {text(
-                        "美元 / 百万词元，已包含分组倍率",
-                        "USD / 1M tokens, group multiplier included",
-                        "دولار / مليون رمز، شاملاً معامل المجموعة",
+                        ...translatedMessage(
+                          "usd_1m_tokens_group_multiplier_included_21a5b91b49",
+                        ),
                       )}
                     </small>
                   </dd>
@@ -517,19 +464,19 @@ export default function RequestInspector({
               </>
             )}
             <div>
-              <dt>{text("费率快照", "Rate snapshot", "لقطة السعر")}</dt>
+              <dt>{text(...translatedMessage("rate_snapshot_b2e43d5884"))}</dt>
               <dd className="mono" dir="ltr">
                 {record.billing_detail?.priced_at ??
                   record.pricing_revision ??
                   text(
-                    "未记录历史费率",
-                    "Historical tariff not recorded",
-                    "السعر التاريخي غير مسجل",
+                    ...translatedMessage(
+                      "historical_tariff_not_recorded_3a33290c1b",
+                    ),
                   )}
               </dd>
             </div>
             <div>
-              <dt>{text("关联账本流水", "Ledger entry", "قيد السجل")}</dt>
+              <dt>{text(...translatedMessage("ledger_entry_c7dfa3438d"))}</dt>
               <dd>
                 {entry ? (
                   <Link
@@ -539,83 +486,81 @@ export default function RequestInspector({
                     {entry.id}
                   </Link>
                 ) : (
-                  text("无扣款流水", "No debit entry", "لا يوجد قيد خصم")
+                  text(...translatedMessage("no_debit_entry_aab01374b3"))
                 )}
               </dd>
             </div>
             {record.request_source === "playground" && (
               <div>
-                <dt>{text("来源", "Source", "المصدر")}</dt>
-                <dd>{text("调试台", "Playground", "مساحة التجربة")}</dd>
+                <dt>{text(...translatedMessage("source_7986b56c96"))}</dt>
+                <dd>{text(...translatedMessage("playground_8e85ca0e84"))}</dd>
               </div>
             )}
             <div>
-              <dt>{text("时间", "Time", "الوقت")}</dt>
+              <dt>{text(...translatedMessage("time_d70a9315f6"))}</dt>
               <dd>
-                {new Date(record.time).toLocaleString(
-                  lang === "zh" ? "zh-CN" : lang === "ar" ? "ar" : "en-GB",
-                  { timeZone: timezone, timeZoneName: "short" },
-                )}
+                {new Date(record.time).toLocaleString(regionalLocale(lang), {
+                  timeZone: timezone,
+                  timeZoneName: "short",
+                })}
               </dd>
             </div>
           </dl>
           <p className="request-inspector-note">
             {text(
-              "金额以调用时保存的扣费记录为准。未记录的历史费率不会使用当前价格补算。",
-              "Charges use the saved settlement. Missing historical tariffs are never reconstructed from current prices.",
-              "تعتمد الرسوم على التسوية المحفوظة. لا يعاد إنشاء الأسعار التاريخية المفقودة من الأسعار الحالية.",
+              ...translatedMessage(
+                "charges_use_the_saved_settlement_missing_hist_6910db4dcf",
+              ),
             )}
           </p>
           <details className="technical-details">
             <summary>
-              {text("高级诊断", "Advanced diagnostics", "التشخيص المتقدم")}
+              {text(...translatedMessage("advanced_diagnostics_d7a77fc80e"))}
               <Plus size={15} />
             </summary>
             <dl className="product-detail-list">
               <div>
-                <dt>{text("错误代码", "Error code", "رمز الخطأ")}</dt>
+                <dt>{text(...translatedMessage("error_code_2ca4ba8a4b"))}</dt>
                 <dd className="mono">{record.error_code ?? "—"}</dd>
               </div>
               <div>
                 <dt>
                   {text(
-                    "耗时 / 首字延迟",
-                    "Duration / first token",
-                    "المدة / أول رمز",
+                    ...translatedMessage("duration_first_token_81bea9d0fe"),
                   )}
                 </dt>
                 <dd>
                   {record.duration_ms} / {record.ttft_ms}{" "}
-                  {text("毫秒", "ms", "مللي ثانية")}
+                  {text(...translatedMessage("ms_7184894997"))}
                 </dd>
               </div>
               <div>
-                <dt>{text("精确费用", "Exact cost", "التكلفة الدقيقة")}</dt>
+                <dt>{text(...translatedMessage("exact_cost_b82f4aeaa1"))}</dt>
                 <dd>{formatMoney(record.cost_nano, "detail")}</dd>
               </div>
               <div>
-                <dt>{text("来源", "Source", "المصدر")}</dt>
+                <dt>{text(...translatedMessage("source_7986b56c96"))}</dt>
                 <dd>
                   {record.metered_demo
                     ? text(
-                        "管理员计费模拟（未生成媒体）",
-                        "Admin billing simulation (no media generated)",
-                        "محاكاة فوترة المسؤول دون إنشاء وسائط",
+                        ...translatedMessage(
+                          "admin_billing_simulation_no_media_generated_7471087256",
+                        ),
                       )
                     : record.request_source === "playground"
-                      ? text("调试台", "Playground", "مساحة التجربة")
+                      ? text(...translatedMessage("playground_8e85ca0e84"))
                       : record.source === "api"
-                        ? text("API 调用", "API request", "طلب API")
+                        ? text(...translatedMessage("api_request_7e17b3af15"))
                         : record.source === "playground"
                           ? text(
-                              "调试台模拟",
-                              "Playground simulation",
-                              "محاكاة مساحة التجربة",
+                              ...translatedMessage(
+                                "playground_simulation_322edd136e",
+                              ),
                             )
                           : text(
-                              "模拟客户端请求",
-                              "Simulated client request",
-                              "طلب عميل محاكى",
+                              ...translatedMessage(
+                                "simulated_client_request_f6bb40ad28",
+                              ),
                             )}
                 </dd>
               </div>

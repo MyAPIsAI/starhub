@@ -1,3 +1,5 @@
+import { message as translatedMessage } from "../../i18n/messages";
+import { AdminAnnouncements } from "../../features/admin-announcements";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -12,7 +14,7 @@ import { ServiceGroups } from "../../features/service-groups";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/primitives";
 import { Modal } from "../../components/ui/overlay";
-import { useSystemAccess, isAdmin, ROLE_ROOT } from "../../lib/system-access";
+import { useSystemAccess, ROLE_ROOT } from "../../lib/system-access";
 import { FinanceOverview } from "../../features/finance-overview";
 import { OperatingDashboard } from "../../features/operating-dashboard";
 import { AdminCustomers } from "../../features/admin-customers";
@@ -45,17 +47,6 @@ import {
   useDeleteChannel,
   type ChannelInput,
 } from "../../lib/api/channel";
-import {
-  useRedemptions,
-  useCreateRedemption,
-  useDeleteRedemption,
-  type Redemption,
-} from "../../lib/api/redemption";
-import { TaskPlugins } from "../../features/task-plugins";
-import {
-  useTaskPlugins,
-  TASK_PLUGIN_CHANNEL_TYPE,
-} from "../../lib/api/task-plugin";
 import { ApiError } from "../../lib/api/http";
 
 export default function AdminPortal() {
@@ -88,17 +79,10 @@ export default function AdminPortal() {
   // Backend API hooks.
   const channelsQuery = useAdminChannels(tab === "resources");
   const metricsQuery = useAdminMetrics(tab === "resources");
-  const pluginsQuery = useTaskPlugins(
-    isRoot && (tab === "plugins" || tab === "resources"),
-  );
   const testChannelMut = useTestChannel();
   const createChannelMut = useCreateChannel();
   const updateChannelMut = useUpdateChannel();
   const deleteChannelMut = useDeleteChannel();
-  const redemptionsQuery = useRedemptions(isRoot && tab === "redemption");
-  const createRedemptionMut = useCreateRedemption();
-  const deleteRedemptionMut = useDeleteRedemption();
-
   // Channel test result per channel id (cleared on next test).
   const [testResults, setTestResults] = useState<
     Record<number, ChannelTestResult | string>
@@ -127,53 +111,9 @@ export default function AdminPortal() {
     weight: 1,
   });
 
-  // Redemption create modal state.
-  const [redeemModalOpen, setRedeemModalOpen] = useState(false);
-  const [redeemQuota, setRedeemQuota] = useState("10");
-  const [redeemCount, setRedeemCount] = useState("1");
-  const [redeemNotice, setRedeemNotice] = useState("");
-
-  // Incidents have no backend endpoint — keep as local state.
-  const [incidents, setIncidents] = useState<
-    {
-      id: string;
-      title: { en: string; zh: string; ar: string };
-      impactedVendor: string;
-      status: string;
-      updatedAt: string;
-      content: { en: string; zh: string; ar: string };
-    }[]
-  >([]);
-
-  // Incident modal state
-  const [incidentOpen, setIncidentOpen] = useState(false);
-  const [incTitle, setIncTitle] = useState("");
-  const [incVendor, setIncVendor] = useState("OpenAI");
-  const [incContent, setIncContent] = useState("");
-
-  const handlePublishIncidentSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!incTitle || !incContent) return;
-    setIncidents((prev) => [
-      {
-        id: `inc_${Date.now()}`,
-        title: { en: incTitle, zh: incTitle, ar: incTitle },
-        impactedVendor: incVendor,
-        status: "investigating",
-        updatedAt: text("刚刚", "Just now", "الآن"),
-        content: { en: incContent, zh: incContent, ar: incContent },
-      },
-      ...prev,
-    ]);
-    setIncidentOpen(false);
-    setIncTitle("");
-    setIncContent("");
-  };
-
   return (
     <StaffWorkspace active={tab}>
       <div className="admin-content">
-        {tab === "plugins" && <TaskPlugins />}
         {tab === "customers" && <AdminCustomers />}
         {tab === "staff" && isRoot && <StaffAccounts />}
         {tab === "sync" && (
@@ -220,9 +160,9 @@ export default function AdminPortal() {
                   }}
                 >
                   {text(
-                    "查看上游渠道及共享配置数据库的加载和心跳状态。",
-                    "View upstream channels and shared-configuration load and heartbeat status.",
-                    "عرض القنوات وحالة تحميل الإعدادات المشتركة والنبضات.",
+                    ...translatedMessage(
+                      "view_upstream_channels_and_shared_configurati_ebc80df852",
+                    ),
                   )}
                 </p>
               </div>
@@ -260,7 +200,7 @@ export default function AdminPortal() {
                     }}
                   >
                     <span>
-                      {text("渠道列表", "Channels", "القنوات")} (
+                      {text(...translatedMessage("channels_dc6282e0ba"))} (
                       {channelsQuery.data?.length ?? 0})
                     </span>
                     <Button
@@ -284,7 +224,7 @@ export default function AdminPortal() {
                       }}
                     >
                       <Plus size={14} style={{ marginInlineEnd: 4 }} />
-                      {text("新建渠道", "New channel", "قناة جديدة")}
+                      {text(...translatedMessage("new_channel_70800bf37c"))}
                     </Button>
                   </div>
                 </h3>
@@ -304,29 +244,25 @@ export default function AdminPortal() {
                     }}
                   >
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("名称", "Name", "الاسم")}
+                      {text(...translatedMessage("name_e639662a6f"))}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("模型", "Models", "النماذج")}
+                      {text(...translatedMessage("models_098275fbd2"))}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
                       {t("status")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("成功率", "Success rate", "معدل النجاح")}
+                      {text(...translatedMessage("success_rate_b8e8689749"))}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text(
-                        "平均 TTFT (ms)",
-                        "Avg TTFT (ms)",
-                        "متوسط TTFT (ملث)",
-                      )}
+                      {text(...translatedMessage("avg_ttft_ms_d960312604"))}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                      {text("测试", "Test", "اختبار")}
+                      {text(...translatedMessage("test_2f53109312"))}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                      {text("管理", "Manage", "إدارة")}
+                      {text(...translatedMessage("manage_e3761d66d9"))}
                     </th>
                   </tr>
                 </thead>
@@ -341,7 +277,7 @@ export default function AdminPortal() {
                           color: "var(--muted)",
                         }}
                       >
-                        {text("加载中…", "Loading…", "جارٍ التحميل…")}
+                        {text(...translatedMessage("loading_4c20385375"))}
                       </td>
                     </tr>
                   )}
@@ -393,8 +329,10 @@ export default function AdminPortal() {
                             }}
                           >
                             {ch.status === 1
-                              ? text("启用", "Enabled", "مُفعّل")
-                              : text("禁用", "Disabled", "مُعطّل")}
+                              ? text(...translatedMessage("enabled_bc0e24c0da"))
+                              : text(
+                                  ...translatedMessage("disabled_d13f2c5fc4"),
+                                )}
                           </span>
                         </td>
                         <td className="mono" style={{ padding: "10px 14px" }}>
@@ -442,9 +380,9 @@ export default function AdminPortal() {
                                           err instanceof ApiError
                                             ? err.message
                                             : text(
-                                                "测试失败",
-                                                "Test failed",
-                                                "فشل الاختبار",
+                                                ...translatedMessage(
+                                                  "test_failed_f4a1bca81d",
+                                                ),
                                               ),
                                       })),
                                   },
@@ -453,8 +391,10 @@ export default function AdminPortal() {
                             >
                               {testChannelMut.isPending &&
                               testChannelMut.variables?.id === ch.id
-                                ? text("测试中…", "Testing…", "اختبار…")
-                                : text("测试连通", "Test", "اختبار")}
+                                ? text(
+                                    ...translatedMessage("testing_b1cdbb3652"),
+                                  )
+                                : text(...translatedMessage("test_43ee6472a6"))}
                             </Button>
                             {testResults[ch.id] &&
                               (typeof testResults[ch.id] === "string" ? (
@@ -478,8 +418,12 @@ export default function AdminPortal() {
                                   }}
                                 >
                                   {(testResults[ch.id] as ChannelTestResult).ok
-                                    ? `${text("成功", "OK", "نجح")} · ${(testResults[ch.id] as ChannelTestResult).elapsed_ms}ms`
-                                    : text("失败", "Failed", "فشل")}
+                                    ? `${text(...translatedMessage("ok_be3a283cbb"))} · ${(testResults[ch.id] as ChannelTestResult).elapsed_ms}ms`
+                                    : text(
+                                        ...translatedMessage(
+                                          "failed_5da76a883a",
+                                        ),
+                                      )}
                                 </span>
                               ))}
                           </div>
@@ -513,9 +457,9 @@ export default function AdminPortal() {
                                       err instanceof ApiError
                                         ? err.message
                                         : text(
-                                            "查询失败",
-                                            "Query failed",
-                                            "فشل الاستعلام",
+                                            ...translatedMessage(
+                                              "query_failed_952b68b314",
+                                            ),
                                           ),
                                     );
                                     setUpstreamLoading(false);
@@ -525,8 +469,14 @@ export default function AdminPortal() {
                             >
                               {upstreamLoading &&
                               upstreamMut.variables === ch.id
-                                ? text("查询中…", "Querying…", "استعلام…")
-                                : text("上游对账", "Reconcile", "مطابقة")}
+                                ? text(
+                                    ...translatedMessage("querying_92c9a85457"),
+                                  )
+                                : text(
+                                    ...translatedMessage(
+                                      "reconcile_04a7e2f385",
+                                    ),
+                                  )}
                             </Button>
                             <Button
                               size="small"
@@ -541,7 +491,6 @@ export default function AdminPortal() {
                                   base_url: ch.base_url,
                                   key_mode: ch.key_mode,
                                   type: ch.type,
-                                  task_plugin_id: ch.task_plugin_id ?? 0,
                                   status: ch.status,
                                   priority: ch.priority,
                                   weight: ch.weight,
@@ -549,7 +498,7 @@ export default function AdminPortal() {
                                 setChannelModalOpen(true);
                               }}
                             >
-                              {text("编辑", "Edit", "تعديل")}
+                              {text(...translatedMessage("edit_6224671192"))}
                             </Button>
                             <Button
                               size="small"
@@ -562,9 +511,9 @@ export default function AdminPortal() {
                                 if (
                                   !confirm(
                                     text(
-                                      "确认删除此渠道？",
-                                      "Delete this channel?",
-                                      "حذف هذه القناة؟",
+                                      ...translatedMessage(
+                                        "delete_this_channel_6d60a34ae2",
+                                      ),
                                     ),
                                   )
                                 )
@@ -572,7 +521,7 @@ export default function AdminPortal() {
                                 deleteChannelMut.mutate(ch.id);
                               }}
                             >
-                              {text("删除", "Delete", "حذف")}
+                              {text(...translatedMessage("delete_0a459cc2a8"))}
                             </Button>
                           </div>
                         </td>
@@ -616,7 +565,7 @@ export default function AdminPortal() {
                     variant="secondary"
                     onClick={() => setUpstreamError(null)}
                   >
-                    {text("关闭", "Close", "إغلاق")}
+                    {text(...translatedMessage("close_6bf477426b"))}
                   </Button>
                 </div>
               </div>
@@ -657,9 +606,9 @@ export default function AdminPortal() {
                   >
                     <h3 style={{ margin: 0, fontSize: "var(--text-lg)" }}>
                       {text(
-                        "上游对账",
-                        "Upstream Reconciliation",
-                        "مطابقة المنبع",
+                        ...translatedMessage(
+                          "upstream_reconciliation_f0316575cd",
+                        ),
                       )}
                     </h3>
                     <Button
@@ -667,7 +616,7 @@ export default function AdminPortal() {
                       variant="secondary"
                       onClick={() => setUpstreamModal(null)}
                     >
-                      {text("关闭", "Close", "إغلاق")}
+                      {text(...translatedMessage("close_6bf477426b"))}
                     </Button>
                   </div>
                   <p
@@ -683,9 +632,9 @@ export default function AdminPortal() {
                   {!upstreamModal.supported ? (
                     <p style={{ color: "var(--muted)" }}>
                       {text(
-                        "上游不支持用量查询（可能不是 new-api 实例）",
-                        "Upstream does not support usage queries (may not be a new-api instance)",
-                        "المنبع لا يدعم استعلامات الاستخدام",
+                        ...translatedMessage(
+                          "upstream_does_not_support_usage_queries_may_n_e52818571b",
+                        ),
                       )}
                     </p>
                   ) : (
@@ -700,7 +649,9 @@ export default function AdminPortal() {
                       >
                         <div>
                           <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                            {text("本地累计", "Local Used", "المحلي")}
+                            {text(
+                              ...translatedMessage("local_used_dcad0c7a11"),
+                            )}
                           </div>
                           <div
                             className="mono"
@@ -711,7 +662,9 @@ export default function AdminPortal() {
                         </div>
                         <div>
                           <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                            {text("上游累计", "Upstream Used", "المنبع")}
+                            {text(
+                              ...translatedMessage("upstream_used_78c322d155"),
+                            )}
                           </div>
                           <div
                             className="mono"
@@ -722,7 +675,7 @@ export default function AdminPortal() {
                         </div>
                         <div>
                           <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                            {text("差异", "Diff", "الفرق")}
+                            {text(...translatedMessage("diff_2bd3633c01"))}
                           </div>
                           <div
                             className="mono"
@@ -761,17 +714,19 @@ export default function AdminPortal() {
                             <th
                               style={{ textAlign: "end", padding: "8px 12px" }}
                             >
-                              {text("已用", "Used", "مستخدم")}
+                              {text(...translatedMessage("used_9178f3966b"))}
                             </th>
                             <th
                               style={{ textAlign: "end", padding: "8px 12px" }}
                             >
-                              {text("剩余", "Available", "متاح")}
+                              {text(
+                                ...translatedMessage("available_00e89c4586"),
+                              )}
                             </th>
                             <th
                               style={{ textAlign: "end", padding: "8px 12px" }}
                             >
-                              {text("过期", "Expires", "تنتهي")}
+                              {text(...translatedMessage("expires_af2035b496"))}
                             </th>
                           </tr>
                         </thead>
@@ -800,7 +755,9 @@ export default function AdminPortal() {
                                     }}
                                   >
                                     {k.error ||
-                                      text("不可用", "N/A", "غير متاح")}
+                                      text(
+                                        ...translatedMessage("n_a_6fcb32bb1f"),
+                                      )}
                                   </span>
                                 )}
                               </td>
@@ -828,7 +785,11 @@ export default function AdminPortal() {
                               >
                                 {k.available
                                   ? k.unlimited
-                                    ? text("无限", "Unlimited", "غير محدود")
+                                    ? text(
+                                        ...translatedMessage(
+                                          "unlimited_868a96a574",
+                                        ),
+                                      )
                                     : quotaToUsd(k.total_available)
                                   : "—"}
                               </td>
@@ -857,9 +818,9 @@ export default function AdminPortal() {
                         }}
                       >
                         {text(
-                          "差异可能来自倍率不同、精度差异或退款同步延迟，不一定代表计费错误。",
-                          "The diff may stem from different multipliers, rounding, or refund sync delays, and does not necessarily indicate a billing error.",
-                          "قد ينبع الفرق من معدلات مختلفة أو تأخر المزامنة ولا يعني بالضرورة خطأ في الفوترة.",
+                          ...translatedMessage(
+                            "the_diff_may_stem_from_different_multipliers__2a4461be4f",
+                          ),
                         )}
                       </p>
                     </>
@@ -870,116 +831,7 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {/* Tab 5: Incidents */}
-        {tab === "incidents" && (
-          <div>
-            <div
-              className="admin-section-heading"
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "var(--space-6)",
-              }}
-            >
-              <div>
-                <h1
-                  style={{
-                    fontSize: "var(--text-xl)",
-                    fontWeight: "var(--weight-bold)",
-                    margin: 0,
-                  }}
-                >
-                  {t("adminIncidents")}
-                </h1>
-                <p
-                  style={{
-                    color: "var(--muted)",
-                    fontSize: "var(--text-sm)",
-                    margin: "4px 0 0 0",
-                  }}
-                >
-                  {text(
-                    "当前为页面内演示；发布不会更新公开服务状态页。",
-                    "Local page demonstration; publishing does not update the public status page.",
-                    "عرض محلي داخل الصفحة؛ لا يحدّث النشر صفحة حالة الخدمة العامة.",
-                  )}
-                </p>
-              </div>
-
-              {isAdmin(authRole) && (
-                <Button variant="primary" onClick={() => setIncidentOpen(true)}>
-                  <Plus size={15} style={{ marginInlineEnd: 4 }} />
-                  {t("publishIncident")}
-                </Button>
-              )}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-3)",
-              }}
-            >
-              {incidents.map((inc) => (
-                <div
-                  key={inc.id}
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: "var(--space-4)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: 6,
-                    }}
-                  >
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: "var(--text-base)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {inc.title[lang] || inc.title.en}
-                    </h3>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        padding: "2px 8px",
-                        background: "var(--subtle)",
-                        borderRadius: 4,
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {inc.status}
-                    </span>
-                  </div>
-                  <p
-                    style={{
-                      margin: "0 0 8px 0",
-                      color: "var(--muted)",
-                      fontSize: "var(--text-sm)",
-                    }}
-                  >
-                    {inc.content[lang] || inc.content.en}
-                  </p>
-                  <div
-                    className="mono"
-                    style={{ fontSize: 11, color: "var(--muted)" }}
-                  >
-                    Vendor: {inc.impactedVendor} · {inc.updatedAt}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {tab === "incidents" && <AdminAnnouncements />}
 
         {tab === "audit" && <AdminAudit />}
 
@@ -989,366 +841,16 @@ export default function AdminPortal() {
             <details className="adm-card">
               <summary>
                 {text(
-                  "账务汇总与订单",
-                  "Financial summary and orders",
-                  "الملخص المالي والطلبات",
+                  ...translatedMessage(
+                    "financial_summary_and_orders_02c9410d90",
+                  ),
                 )}
               </summary>
               <FinanceOverview />
             </details>
           </>
         )}
-
-        {/* Tab: Redemption codes */}
-        {tab === "redemption" && (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "var(--space-6)",
-              }}
-            >
-              <div>
-                <h1
-                  style={{
-                    fontSize: "var(--text-xl)",
-                    fontWeight: "var(--weight-bold)",
-                    margin: 0,
-                  }}
-                >
-                  {text("兑换码管理", "Redemption codes", "أكواد الاسترداد")}
-                </h1>
-                <p
-                  style={{
-                    color: "var(--muted)",
-                    fontSize: "var(--text-sm)",
-                    margin: "4px 0 0 0",
-                  }}
-                >
-                  {text(
-                    "创建、查看和删除预付费兑换码。",
-                    "Create, view and delete prepaid redemption codes.",
-                    "إنشاء وعرض وحذف أكواد الاسترداد المدفوعة مسبقاً.",
-                  )}
-                </p>
-              </div>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setRedeemQuota("10");
-                  setRedeemCount("1");
-                  setRedeemNotice("");
-                  setRedeemModalOpen(true);
-                }}
-              >
-                <Plus size={15} style={{ marginInlineEnd: 4 }} />
-                {text("创建兑换码", "Create codes", "إنشاء أكواد")}
-              </Button>
-            </div>
-            {redeemNotice && (
-              <div
-                style={{
-                  padding: "var(--space-3) var(--space-4)",
-                  background: "var(--success-soft)",
-                  color: "var(--success)",
-                  borderRadius: "var(--radius-md)",
-                  marginBottom: "var(--space-4)",
-                  fontSize: "var(--text-sm)",
-                }}
-              >
-                {redeemNotice}
-              </div>
-            )}
-            <section
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                overflowX: "auto",
-              }}
-            >
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: "var(--text-sm)",
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      borderBottom: "1px solid var(--border)",
-                      background: "var(--subtle)",
-                    }}
-                  >
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("码", "Code", "الرمز")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("面值", "Value", "القيمة")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {t("status")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("使用人", "Used by", "استُخدم من")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
-                      {text("创建时间", "Created", "أُنشئ")}
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "end" }}>
-                      {text("操作", "Actions", "الإجراءات")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {redemptionsQuery.isLoading && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        style={{
-                          padding: 24,
-                          textAlign: "center",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {text("加载中…", "Loading…", "جارٍ التحميل…")}
-                      </td>
-                    </tr>
-                  )}
-                  {redemptionsQuery.data?.map((rd: Redemption) => (
-                    <tr
-                      key={rd.id}
-                      style={{ borderBottom: "1px solid var(--border)" }}
-                    >
-                      <td
-                        className="mono"
-                        style={{ padding: "10px 14px", fontWeight: 600 }}
-                      >
-                        {rd.code}
-                      </td>
-                      <td
-                        className="mono"
-                        style={{ padding: "10px 14px", color: "var(--brand)" }}
-                      >
-                        ${(rd.quota / 1e9).toFixed(2)}
-                      </td>
-                      <td style={{ padding: "10px 14px" }}>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                            fontWeight: 600,
-                            background:
-                              rd.status === 1
-                                ? "var(--success-soft)"
-                                : "var(--subtle)",
-                            color:
-                              rd.status === 1
-                                ? "var(--success)"
-                                : "var(--muted)",
-                          }}
-                        >
-                          {rd.status === 1
-                            ? text("未使用", "Unused", "غير مستخدم")
-                            : text("已使用", "Used", "مستخدم")}
-                        </span>
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: 12,
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {rd.used_by ? `#${rd.used_by}` : "—"}
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: 12,
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {new Date(rd.created_at * 1000).toLocaleString()}
-                      </td>
-                      <td style={{ padding: "10px 14px", textAlign: "end" }}>
-                        {rd.status === 1 && (
-                          <Button
-                            size="small"
-                            variant="danger"
-                            disabled={
-                              deleteRedemptionMut.isPending &&
-                              deleteRedemptionMut.variables === rd.id
-                            }
-                            onClick={() => {
-                              if (
-                                !confirm(
-                                  text(
-                                    "确认删除此兑换码？",
-                                    "Delete this code?",
-                                    "حذف هذا الرمز؟",
-                                  ),
-                                )
-                              )
-                                return;
-                              deleteRedemptionMut.mutate(rd.id);
-                            }}
-                          >
-                            {text("删除", "Delete", "حذف")}
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {redemptionsQuery.data &&
-                    redemptionsQuery.data.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          style={{
-                            padding: 24,
-                            textAlign: "center",
-                            color: "var(--muted)",
-                          }}
-                        >
-                          {text("暂无兑换码", "No codes", "لا أكواد")}
-                        </td>
-                      </tr>
-                    )}
-                </tbody>
-              </table>
-            </section>
-          </div>
-        )}
       </div>
-
-      {/* Incident Modal */}
-      <Modal
-        size="default"
-        preventOutsideClose
-        open={incidentOpen}
-        onOpenChange={setIncidentOpen}
-        title={t("publishIncident")}
-        description={text(
-          "向公开服务状态页发布服务异常公告。",
-          "Publish service incident notices to the status page.",
-          "انشر إشعارات حوادث الخدمة في صفحة الحالة.",
-        )}
-        footer={
-          <>
-            <Button onClick={() => setIncidentOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button variant="primary" type="submit" form="admin-incident-form">
-              {text(
-                "发布事件公告",
-                "Publish incident announcement",
-                "نشر إشعار الحادث",
-              )}
-            </Button>
-          </>
-        }
-      >
-        <form
-          id="admin-incident-form"
-          onSubmit={handlePublishIncidentSubmit}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--space-4)",
-          }}
-        >
-          <div>
-            <label
-              htmlFor="admin-incident-title"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {text("公告标题", "Notice title", "عنوان الإشعار")}
-            </label>
-            <Input
-              id="admin-incident-title"
-              type="text"
-              value={incTitle}
-              onChange={(e) => setIncTitle(e.target.value)}
-              placeholder={text(
-                "例如：部分模型响应延迟增加",
-                "e.g. Increased response latency for some models",
-                "مثل: زيادة زمن استجابة بعض النماذج",
-              )}
-              required
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="admin-incident-vendor"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {text("受影响供应商", "Impacted vendor", "المزوّد المتأثر")}
-            </label>
-            <select
-              id="admin-incident-vendor"
-              value={incVendor}
-              onChange={(e) => setIncVendor(e.target.value)}
-              className="select-trigger"
-              style={{ width: "100%" }}
-            >
-              <option value="OpenAI">OpenAI</option>
-              <option value="Anthropic">Anthropic</option>
-              <option value="Google">Google</option>
-              <option value="DeepSeek">DeepSeek</option>
-              <option value="Qwen">Qwen</option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="admin-incident-content"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {text(
-                "事件说明与处理建议",
-                "Description & workaround",
-                "الوصف والحل البديل",
-              )}
-            </label>
-            <textarea
-              id="admin-incident-content"
-              value={incContent}
-              onChange={(e) => setIncContent(e.target.value)}
-              placeholder={text(
-                "说明影响范围、当前状态与处理建议",
-                "Describe the impact, current status, and workaround",
-                "صف التأثير والحالة الحالية والحل البديل",
-              )}
-              className="input"
-              rows={4}
-              required
-            />
-          </div>
-        </form>
-      </Modal>
 
       {/* Channel create/edit modal */}
       <Modal
@@ -1358,13 +860,13 @@ export default function AdminPortal() {
         onOpenChange={setChannelModalOpen}
         title={
           editingChannel
-            ? text("编辑渠道", "Edit channel", "تعديل القناة")
-            : text("新建渠道", "New channel", "قناة جديدة")
+            ? text(...translatedMessage("edit_channel_33053e2138"))
+            : text(...translatedMessage("new_channel_70800bf37c"))
         }
         description={text(
-          "配置渠道名称、密钥、模型和分组。",
-          "Configure channel name, key, models and group.",
-          "تكوين اسم القناة والمفتاح والنماذج والمجموعة.",
+          ...translatedMessage(
+            "configure_channel_name_key_models_and_group_8a86fc902c",
+          ),
         )}
         footer={
           <>
@@ -1380,8 +882,8 @@ export default function AdminPortal() {
               }
             >
               {editingChannel
-                ? text("保存", "Save", "حفظ")
-                : text("创建", "Create", "إنشاء")}
+                ? text(...translatedMessage("save_6774e725d1"))
+                : text(...translatedMessage("create_6d0538dedd"))}
             </Button>
           </>
         }
@@ -1410,9 +912,9 @@ export default function AdminPortal() {
           <ChannelRoutingNotice
             onOpenBindings={() => setChannelModalOpen(false)}
           />
-          <div className="task-plugin-channel-field">
+          <div className="admin-channel-type-field">
             <label htmlFor="ch-type">
-              {text("渠道类型", "Channel type", "نوع القناة")}
+              {text(...translatedMessage("channel_type_11743331db"))}
             </label>
             <select
               id="ch-type"
@@ -1421,7 +923,6 @@ export default function AdminPortal() {
                 setChannelForm((f) => ({
                   ...f,
                   type: Number(e.target.value),
-                  task_plugin_id: 0,
                 }))
               }
             >
@@ -1429,56 +930,8 @@ export default function AdminPortal() {
               <option value={14}>Claude</option>
               <option value={15}>AWS Bedrock</option>
               <option value={25}>Gemini</option>
-              <option value={TASK_PLUGIN_CHANNEL_TYPE}>
-                {text(
-                  "视频任务插件",
-                  "Video task plugin",
-                  "إضافة مهام الفيديو",
-                )}
-              </option>
             </select>
           </div>
-          {channelForm.type === TASK_PLUGIN_CHANNEL_TYPE && (
-            <div className="task-plugin-channel-field">
-              <label htmlFor="ch-plugin">
-                {text("插件版本", "Plugin version", "إصدار الإضافة")}
-              </label>
-              <select
-                id="ch-plugin"
-                required
-                value={channelForm.task_plugin_id || ""}
-                onChange={(e) =>
-                  setChannelForm((f) => ({
-                    ...f,
-                    task_plugin_id: Number(e.target.value),
-                  }))
-                }
-              >
-                <option value="">
-                  {text("选择版本", "Select a version", "اختر إصداراً")}
-                </option>
-                {pluginsQuery.data?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.key} {p.version}
-                    {p.enabled
-                      ? ""
-                      : text("（已禁用）", " (disabled)", " (معطل)")}
-                  </option>
-                ))}
-              </select>
-              {pluginsQuery.isError && (
-                <span role="alert">{pluginsQuery.error.message}</span>
-              )}
-              <span>
-                {text(
-                  "使用单个上游密钥；有未完成任务时不可更换密钥或地址。",
-                  "Use one upstream key. Credentials and base URL are locked while tasks are pending.",
-                  "استخدم مفتاحاً واحداً. لا يمكن تغيير المفتاح أو العنوان أثناء وجود مهام معلقة.",
-                )}
-              </span>
-            </div>
-          )}
-
           <div>
             <label
               htmlFor="ch-name"
@@ -1489,7 +942,7 @@ export default function AdminPortal() {
                 marginBottom: 4,
               }}
             >
-              {text("名称", "Name", "الاسم")}
+              {text(...translatedMessage("name_e639662a6f"))}
             </label>
             <Input
               id="ch-name"
@@ -1510,7 +963,7 @@ export default function AdminPortal() {
                 marginBottom: 4,
               }}
             >
-              {text("密钥", "API Key", "المفتاح")}
+              {text(...translatedMessage("api_key_74afeeaf64"))}
             </label>
             <Input
               id="ch-key"
@@ -1521,11 +974,7 @@ export default function AdminPortal() {
               }
               placeholder={
                 editingChannel
-                  ? text(
-                      "留空则不修改",
-                      "Leave empty to keep",
-                      "اترك فارغًا للإبقاء",
-                    )
+                  ? text(...translatedMessage("leave_empty_to_keep_521458eb6b"))
                   : ""
               }
               required={!editingChannel}
@@ -1541,11 +990,7 @@ export default function AdminPortal() {
                 marginBottom: 4,
               }}
             >
-              {text(
-                "模型（逗号分隔）",
-                "Models (comma-separated)",
-                "النماذج (مفصولة بفواصل)",
-              )}
+              {text(...translatedMessage("models_comma_separated_368c1f6199"))}
             </label>
             <Input
               id="ch-models"
@@ -1567,7 +1012,7 @@ export default function AdminPortal() {
                 marginBottom: 4,
               }}
             >
-              {text("分组", "Group", "المجموعة")}
+              {text(...translatedMessage("group_528d77dde5"))}
             </label>
             <Input
               id="ch-group"
@@ -1587,11 +1032,7 @@ export default function AdminPortal() {
                 marginBottom: 4,
               }}
             >
-              {text(
-                "Base URL（可选）",
-                "Base URL (optional)",
-                "عنوان أساسي (اختياري)",
-              )}
+              {text(...translatedMessage("base_url_optional_976f4a52dc"))}
             </label>
             <Input
               id="ch-base-url"
@@ -1600,121 +1041,6 @@ export default function AdminPortal() {
                 setChannelForm((f) => ({ ...f, base_url: e.target.value }))
               }
               placeholder="https://api.openai.com/v1"
-            />
-          </div>
-        </form>
-      </Modal>
-
-      {/* Redemption create modal */}
-      <Modal
-        size="default"
-        preventOutsideClose
-        open={redeemModalOpen}
-        onOpenChange={setRedeemModalOpen}
-        title={text(
-          "创建兑换码",
-          "Create redemption codes",
-          "إنشاء أكواد استرداد",
-        )}
-        description={text(
-          "指定面值和数量，系统将生成随机兑换码。",
-          "Specify value and count; the system will generate random codes.",
-          "حدد القيمة والعدد؛ سيقوم النظام بإنشاء أكواد عشوائية.",
-        )}
-        footer={
-          <>
-            <Button onClick={() => setRedeemModalOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              form="admin-redeem-form"
-              disabled={createRedemptionMut.isPending}
-            >
-              {text("创建", "Create", "إنشاء")}
-            </Button>
-          </>
-        }
-      >
-        <form
-          id="admin-redeem-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const usd = parseFloat(redeemQuota);
-            if (isNaN(usd) || usd <= 0) return;
-            const count = parseInt(redeemCount) || 1;
-            createRedemptionMut.mutate(
-              { quota: Math.round(usd * 1e9), count },
-              {
-                onSuccess: (result) => {
-                  setRedeemNotice(
-                    text(
-                      `已创建 ${result.count} 个兑换码：${result.codes.join(", ")}`,
-                      `Created ${result.count} code(s): ${result.codes.join(", ")}`,
-                      `تم إنشاء ${result.count} رمز: ${result.codes.join(", ")}`,
-                    ),
-                  );
-                  setRedeemModalOpen(false);
-                },
-                onError: (err) => {
-                  setRedeemNotice(
-                    err instanceof ApiError
-                      ? err.message
-                      : text("创建失败", "Failed", "فشل"),
-                  );
-                },
-              },
-            );
-          }}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--space-4)",
-          }}
-        >
-          <div>
-            <label
-              htmlFor="redeem-quota"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {text("面值 (USD)", "Value (USD)", "القيمة (دولار)")}
-            </label>
-            <Input
-              id="redeem-quota"
-              type="number"
-              value={redeemQuota}
-              onChange={(e) => setRedeemQuota(e.target.value)}
-              placeholder="10"
-              required
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="redeem-count"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {text("数量", "Count", "العدد")}
-            </label>
-            <Input
-              id="redeem-count"
-              type="number"
-              value={redeemCount}
-              onChange={(e) => setRedeemCount(e.target.value)}
-              placeholder="1"
-              min="1"
-              max="100"
-              required
             />
           </div>
         </form>

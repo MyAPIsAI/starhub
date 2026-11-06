@@ -5,8 +5,11 @@ import { usePreferences } from "../../lib/preferences";
 import { apiGet, ApiError } from "../../lib/api/http";
 import { Button } from "../../components/ui/button";
 import DemoLegalPage from "./index";
+import { useTranslation } from "react-i18next";
+import { regionalLocale } from "../../lib/locale-format";
 
 export default function PublishedLegalPage() {
+  const { t } = useTranslation();
   const { doc = "privacy" } = useParams(),
     lang = usePreferences((s) => s.language);
   const query = useQuery({
@@ -26,11 +29,11 @@ export default function PublishedLegalPage() {
   });
   if (query.error instanceof ApiError && query.error.status === 404)
     return <DemoLegalPage />;
-  const titles: Record<string, [string, string]> = {
-    terms: ["服务条款", "Terms of service"],
-    privacy: ["隐私政策", "Privacy policy"],
-    cookies: ["Cookie 政策", "Cookie policy"],
-    refund: ["退款政策", "Refund policy"],
+  const titles: Record<string, string> = {
+    terms: t("legalTermsTitle"),
+    privacy: t("legalPrivacyTitle"),
+    cookies: t("legalCookiesTitle"),
+    refund: t("legalRefundTitle"),
   };
   return (
     <div className="brand-home public-refined" style={{ minHeight: "100vh" }}>
@@ -39,35 +42,27 @@ export default function PublishedLegalPage() {
         className="public-page-container"
         style={{ maxWidth: 780, padding: "var(--space-8) var(--space-6)" }}
       >
-        <Link to="/">{lang === "zh" ? "返回首页" : "Back to home"}</Link>
+        <Link to="/">{t("legalBackHome")}</Link>
         <nav className="adm-actions" style={{ marginBlock: 24 }}>
           {Object.entries(titles).map(([key, title]) => (
             <Link key={key} to={`/legal/${key}`}>
-              {title[lang === "zh" ? 0 : 1]}
+              {title}
             </Link>
           ))}
         </nav>
-        <h1>{titles[doc]?.[lang === "zh" ? 0 : 1] ?? doc}</h1>
-        {query.isPending && (
-          <p role="status">{lang === "zh" ? "正在加载…" : "Loading…"}</p>
-        )}
+        <h1>{titles[doc] ?? doc}</h1>
+        {query.isPending && <p role="status">{t("loading")}</p>}
         {query.error && (
           <div role="alert">
-            <p>
-              {lang === "zh"
-                ? "暂时无法读取已发布的法律文本。"
-                : "Unable to load the published legal document."}
-            </p>
-            <Button onClick={() => void query.refetch()}>
-              {lang === "zh" ? "重试" : "Retry"}
-            </Button>
+            <p>{t("legalLoadFailed")}</p>
+            <Button onClick={() => void query.refetch()}>{t("retry")}</Button>
           </div>
         )}
         {query.data && (
           <article>
             <p>
               {query.data.version} ·{" "}
-              {new Intl.DateTimeFormat(lang, {
+              {new Intl.DateTimeFormat(regionalLocale(lang), {
                 dateStyle: "medium",
                 timeStyle: "short",
                 timeZone: query.data.timezone,

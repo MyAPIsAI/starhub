@@ -87,6 +87,9 @@ func TestFailedRelayModelAttribution(t *testing.T) {
 				t.Fatalf("failed log missing: total=%d entries=%d err=%v", total, len(entries), err)
 			}
 			entry := entries[0]
+			if entry.AcceptedAt <= 0 || entry.CreatedAt != entry.AcceptedAt || entry.SettledAt < entry.AcceptedAt {
+				t.Fatal("failed request lost its admission or settlement timestamp")
+			}
 			expectedProtocol := "OpenAI"
 			if tc.inbound == dto.InboundClaude {
 				expectedProtocol = "Anthropic"
@@ -104,6 +107,9 @@ func TestFailedRelayModelAttribution(t *testing.T) {
 			afterToken, err := model.GetTokenByID(token.ID)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if afterUser.ReservedQuota != 0 {
+				t.Fatal("failed request leaked a reservation")
 			}
 			if afterUser.Quota != user.Quota || afterUser.UsedQuota != user.UsedQuota || afterToken.RemainQuota != token.RemainQuota || afterToken.UsedQuota != token.UsedQuota {
 				t.Fatal("failed relay changed user or token quota after refund")

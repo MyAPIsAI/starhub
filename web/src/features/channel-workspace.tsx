@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
@@ -121,17 +122,17 @@ export function ChannelWorkspace({
   const groupName = (id: string, name: string) =>
     id === "__all__"
       ? view === "channel"
-        ? text("全部渠道", "All channels", "كل القنوات")
-        : text("全部标准模型", "All standard models", "كل النماذج القياسية")
+        ? text(...translatedMessage("all_channels_4c3a0b8907"))
+        : text(...translatedMessage("all_standard_models_c3130891d3"))
       : id === "__unmapped__"
-        ? text("未映射资源", "Unmapped resources", "موارد غير مرتبطة")
+        ? text(...translatedMessage("unmapped_resources_0e0d3146fb"))
         : name;
   const statusNames = {
-    all: text("全部状态", "All statuses", "كل الحالات"),
-    ready: text("可供调用", "Ready to serve", "متاح للطلبات"),
-    unmapped: text("待映射", "Needs mapping", "يحتاج ربطاً"),
-    paused: text("投放暂停", "Placement paused", "النشر متوقف"),
-    unavailable: text("来源异常", "Source unavailable", "المصدر غير متاح"),
+    all: text(...translatedMessage("all_statuses_df82d81776")),
+    ready: text(...translatedMessage("ready_to_serve_f881e287bd")),
+    unmapped: text(...translatedMessage("needs_mapping_b4fd33786a")),
+    paused: text(...translatedMessage("placement_paused_63daaa7870")),
+    unavailable: text(...translatedMessage("source_unavailable_148180cd18")),
   };
   useEffect(() => {
     rowsRef.current?.scrollTo({ top: 0 });
@@ -166,7 +167,7 @@ export function ChannelWorkspace({
   };
   const contextName = selected
     ? groupName(selected.id, selected.name)
-    : text("资源实例", "Resource instances", "الموارد");
+    : text(...translatedMessage("resource_instances_1159731b8a"));
   const renderGroups = (r: ResourceInstance) => {
     const ids = config.placements?.[r.id]?.groupIds ?? [];
     const expanded = expandedGroups.includes(r.id);
@@ -184,14 +185,14 @@ export function ChannelWorkspace({
             aria-label={
               expanded
                 ? text(
-                    `收起 ${r.id} 的分组`,
-                    `Collapse groups for ${r.id}`,
-                    `طي مجموعات ${r.id}`,
+                    ...translatedMessage("collapse_groups_for_5aaed573dc", {
+                      p0: r.id,
+                    }),
                   )
                 : text(
-                    `展开 ${r.id} 的全部投放分组`,
-                    `Show all groups for ${r.id}`,
-                    `عرض مجموعات ${r.id}`,
+                    ...translatedMessage("show_all_groups_for_7b36c08252", {
+                      p0: r.id,
+                    }),
                   )
             }
             onClick={() =>
@@ -202,13 +203,15 @@ export function ChannelWorkspace({
               )
             }
           >
-            {expanded ? text("收起", "Less", "أقل") : `+${ids.length - 2}`}
+            {expanded
+              ? text(...translatedMessage("less_26c35982e7"))
+              : `+${ids.length - 2}`}
           </button>
         )}
       </div>
     ) : (
       <span className="channel-muted">
-        {text("尚未投放", "Not placed", "لم يُنشر")}
+        {text(...translatedMessage("not_placed_b1121df1b9"))}
       </span>
     );
   };
@@ -224,19 +227,19 @@ export function ChannelWorkspace({
           {state.id !== "paused"
             ? statusNames[state.id]
             : state.label === "模型已停用"
-              ? text("模型已停用", "Model disabled", "النموذج معطل")
+              ? text(...translatedMessage("model_disabled_5dcaa603d0"))
               : state.label === "分组未启用"
-                ? text("分组未启用", "Groups disabled", "المجموعات معطلة")
-                : text("尚未投放", "Not placed", "لم يُنشر")}
+                ? text(...translatedMessage("groups_disabled_6bdef29fdc"))
+                : text(...translatedMessage("not_placed_b1121df1b9"))}
         </span>
         <small>
           {sourceOk
-            ? text("来源可用", "Source healthy", "المصدر متاح")
+            ? text(...translatedMessage("source_healthy_dc8280687c"))
             : r.status === "retired"
-              ? text("来源已下架", "Source retired", "أزيل من المصدر")
-              : text("来源不可用", "Source unavailable", "المصدر غير متاح")}
+              ? text(...translatedMessage("source_retired_ef09cf1529"))
+              : text(...translatedMessage("source_unavailable_b0c1804be3"))}
           {!sourceOk && config.placements?.[r.id]?.enabled
-            ? text(" · 投放配置保留", " · Placement retained", " · النشر محفوظ")
+            ? text(...translatedMessage("placement_retained_4ec29c3040"))
             : ""}
         </small>
       </div>
@@ -245,7 +248,7 @@ export function ChannelWorkspace({
   const relatedName = (r: ResourceInstance) =>
     view === "channel"
       ? (models.find((m) => m.id === config.placements?.[r.id]?.modelId)
-          ?.name ?? text("未映射", "Unmapped", "غير مرتبط"))
+          ?.name ?? text(...translatedMessage("unmapped_6d198b7550")))
       : (snapshot.channels.find((c) => c.id === r.channelId)?.name ??
         r.channelId);
   const relatedId = (r: ResourceInstance) =>
@@ -253,42 +256,35 @@ export function ChannelWorkspace({
   return (
     <section
       className="channel-workspace"
-      aria-label={text(
-        "资源管理工作区",
-        "Resource workspace",
-        "مساحة إدارة الموارد",
-      )}
+      aria-label={text(...translatedMessage("resource_workspace_57b1695233"))}
     >
       <div className="channel-view-bar">
         <div
           className="channel-view-switch"
           role="group"
-          aria-label={text(
-            "资源查看方式",
-            "Resource view",
-            "طريقة عرض الموارد",
-          )}
+          aria-label={text(...translatedMessage("resource_view_36383c9316"))}
         >
           <button
             aria-pressed={view === "channel"}
             onClick={() => switchView("channel")}
           >
             <Network size={16} />
-            {text("按渠道", "By channel", "حسب القناة")}
+            {text(...translatedMessage("by_channel_3bca83d786"))}
           </button>
           <button
             aria-pressed={view === "model"}
             onClick={() => switchView("model")}
           >
             <Boxes size={16} />
-            {text("按标准模型", "By standard model", "حسب النموذج")}
+            {text(...translatedMessage("by_standard_model_38adc73787"))}
           </button>
         </div>
         <span className="channel-inventory-count">
           {text(
-            `${snapshot.channels.length} 个渠道 · ${snapshot.instances.length} 个资源实例`,
-            `${snapshot.channels.length} channels · ${snapshot.instances.length} instances`,
-            `${snapshot.channels.length} قنوات · ${snapshot.instances.length} موارد`,
+            ...translatedMessage("channels_instances_9430add3e6", {
+              p0: snapshot.channels.length,
+              p1: snapshot.instances.length,
+            }),
           )}
         </span>
       </div>
@@ -297,8 +293,8 @@ export function ChannelWorkspace({
           <div className="channel-index-heading">
             <span>
               {view === "channel"
-                ? text("渠道目录", "Channels", "القنوات")
-                : text("标准模型目录", "Standard models", "النماذج القياسية")}
+                ? text(...translatedMessage("channels_80408f5ebf"))
+                : text(...translatedMessage("standard_models_c89f0ff4d7"))}
             </span>
             <span>
               {result.groups.filter((g) => !g.id.startsWith("__")).length}
@@ -309,21 +305,13 @@ export function ChannelWorkspace({
             <input
               aria-label={
                 view === "channel"
-                  ? text("搜索渠道", "Search channels", "بحث القنوات")
-                  : text(
-                      "搜索标准模型目录",
-                      "Search model index",
-                      "بحث النماذج",
-                    )
+                  ? text(...translatedMessage("search_channels_d050781403"))
+                  : text(...translatedMessage("search_model_index_30eb49ca56"))
               }
               placeholder={
                 view === "channel"
-                  ? text("搜索渠道", "Search channels", "بحث القنوات")
-                  : text(
-                      "搜索名称或标识",
-                      "Search name or ID",
-                      "بحث الاسم أو المعرّف",
-                    )
+                  ? text(...translatedMessage("search_channels_d050781403"))
+                  : text(...translatedMessage("search_name_or_id_010d37442e"))
               }
               value={indexSearch}
               onChange={(e) => setIndexSearch(e.target.value)}
@@ -331,9 +319,7 @@ export function ChannelWorkspace({
             {indexSearch && (
               <button
                 aria-label={text(
-                  "清空目录搜索",
-                  "Clear index search",
-                  "مسح البحث",
+                  ...translatedMessage("clear_index_search_a0d6e2afaf"),
                 )}
                 onClick={() => setIndexSearch("")}
               >
@@ -349,8 +335,8 @@ export function ChannelWorkspace({
             <nav
               aria-label={
                 view === "channel"
-                  ? text("渠道目录", "Channel index", "دليل القنوات")
-                  : text("标准模型目录", "Model index", "دليل النماذج")
+                  ? text(...translatedMessage("channel_index_427e1548f7"))
+                  : text(...translatedMessage("model_index_a1dee1f330"))
               }
             >
               {visibleGroups.map((g) => {
@@ -389,22 +375,23 @@ export function ChannelWorkspace({
                       <small title={g.subtitle}>
                         {g.id === "__all__"
                           ? text(
-                              "查看所有来源实例",
-                              "All resource instances",
-                              "كل موارد المصدر",
+                              ...translatedMessage(
+                                "all_resource_instances_df713a91f6",
+                              ),
                             )
                           : g.id === "__unmapped__"
                             ? text(
-                                "等待绑定标准模型",
-                                "Awaiting model mapping",
-                                "بانتظار ربط النموذج",
+                                ...translatedMessage(
+                                  "awaiting_model_mapping_7176d56b0b",
+                                ),
                               )
                             : view === "model"
                               ? g.id
                               : text(
-                                  `${g.ready} 个可供调用`,
-                                  `${g.ready} ready to serve`,
-                                  `${g.ready} جاهز للطلبات`,
+                                  ...translatedMessage(
+                                    "ready_to_serve_8c518d778a",
+                                    { p0: g.ready },
+                                  ),
                                 )}
                       </small>
                     </span>
@@ -414,11 +401,7 @@ export function ChannelWorkspace({
               })}
               {!visibleGroups.length && (
                 <p className="channel-index-empty">
-                  {text(
-                    "没有匹配的目录项",
-                    "No matching entries",
-                    "لا توجد نتائج",
-                  )}
+                  {text(...translatedMessage("no_matching_entries_b654d04efa"))}
                 </p>
               )}
             </nav>
@@ -426,7 +409,7 @@ export function ChannelWorkspace({
           <div className="channel-index-footer">
             <button type="button" onClick={onRemoved}>
               <Inbox size={15} />
-              {text("来源已移除", "Removed from source", "أزيل من المصدر")}
+              {text(...translatedMessage("removed_from_source_a60c5be193"))}
               <span>{removedCount}</span>
             </button>
           </div>
@@ -435,16 +418,18 @@ export function ChannelWorkspace({
           <div className="channel-mobile-index">
             <label>
               {view === "channel"
-                ? text("选择渠道", "Choose channel", "اختر القناة")
-                : text("选择标准模型", "Choose standard model", "اختر النموذج")}
+                ? text(...translatedMessage("choose_channel_fd331bd512"))
+                : text(
+                    ...translatedMessage("choose_standard_model_6e7fd191a2"),
+                  )}
               <select
                 aria-label={
                   view === "channel"
-                    ? text("选择渠道", "Choose channel", "اختر القناة")
+                    ? text(...translatedMessage("choose_channel_fd331bd512"))
                     : text(
-                        "选择标准模型",
-                        "Choose standard model",
-                        "اختر النموذج",
+                        ...translatedMessage(
+                          "choose_standard_model_6e7fd191a2",
+                        ),
                       )
                 }
                 value={selected?.id ?? "__all__"}
@@ -458,7 +443,7 @@ export function ChannelWorkspace({
               </select>
             </label>
             <button type="button" onClick={onRemoved}>
-              {text("来源已移除", "Removed sources", "المصادر المحذوفة")} (
+              {text(...translatedMessage("removed_sources_02c820feb7"))} (
               {removedCount})
             </button>
           </div>
@@ -476,15 +461,15 @@ export function ChannelWorkspace({
                 <p>
                   {selectedAll
                     ? text(
-                        "集中查看资源映射、销售投放与来源状态",
-                        "Review model mapping, placement and source status",
-                        "راجع ربط النماذج والنشر وحالة المصدر",
+                        ...translatedMessage(
+                          "review_model_mapping_placement_and_source_sta_4fc47ed52a",
+                        ),
                       )
                     : selected?.id === "__unmapped__"
                       ? text(
-                          "映射标准模型后，才能配置对客投放",
-                          "Map a standard model before enabling placement",
-                          "اربط نموذجاً قياسياً قبل النشر",
+                          ...translatedMessage(
+                            "map_a_standard_model_before_enabling_placemen_50eada2ba8",
+                          ),
                         )
                       : selectedChannel
                         ? selectedChannel.provider
@@ -497,7 +482,7 @@ export function ChannelWorkspace({
                 <Link
                   to={`/console/model-pricing?model=${encodeURIComponent(selectedModel.id)}`}
                 >
-                  {text("模型设置", "Model settings", "إعدادات النموذج")}
+                  {text(...translatedMessage("model_settings_66f4d98a52"))}
                   <ArrowUpRight size={14} />
                 </Link>
               </Button>
@@ -508,17 +493,17 @@ export function ChannelWorkspace({
               >
                 <i />
                 {selectedChannel.enabled
-                  ? text("渠道启用", "Channel enabled", "القناة مفعلة")
-                  : text("渠道停用", "Channel disabled", "القناة معطلة")}
+                  ? text(...translatedMessage("channel_enabled_d06eb06e13"))
+                  : text(...translatedMessage("channel_disabled_a45b6201ca"))}
               </span>
             )}
           </header>
           {selectedId !== selected?.id && (
             <p className="channel-invalid-selection" role="status">
               {text(
-                "原选择已不在当前目录，已显示全部资源。",
-                "The previous selection is unavailable. Showing all resources.",
-                "الاختيار السابق غير متاح؛ تظهر كل الموارد.",
+                ...translatedMessage(
+                  "the_previous_selection_is_unavailable_showing_d2fb47fb4f",
+                ),
               )}
             </p>
           )}
@@ -527,14 +512,12 @@ export function ChannelWorkspace({
               <Search size={16} />
               <input
                 aria-label={text(
-                  "搜索资源实例",
-                  "Search resource instances",
-                  "بحث الموارد",
+                  ...translatedMessage("search_resource_instances_56bd6e03b5"),
                 )}
                 placeholder={text(
-                  "搜索实例或模型标识",
-                  "Search instance or model ID",
-                  "بحث المورد أو معرّف النموذج",
+                  ...translatedMessage(
+                    "search_instance_or_model_id_03b76eac60",
+                  ),
                 )}
                 value={query}
                 onChange={(e) =>
@@ -545,9 +528,7 @@ export function ChannelWorkspace({
                 <button
                   onClick={() => change({ query: null, page: null }, true)}
                   aria-label={text(
-                    "清空资源搜索",
-                    "Clear resource search",
-                    "مسح بحث الموارد",
+                    ...translatedMessage("clear_resource_search_0fefe21ae6"),
                   )}
                 >
                   <X size={14} />
@@ -558,19 +539,17 @@ export function ChannelWorkspace({
               <SlidersHorizontal size={15} />
               <select
                 aria-label={text(
-                  "按投放分组筛选",
-                  "Filter by service group",
-                  "تصفية حسب مجموعة الخدمة",
+                  ...translatedMessage("filter_by_service_group_4fc7ad9f07"),
                 )}
                 value={groupId}
                 onChange={(e) => change({ group: e.target.value, page: null })}
               >
                 <option value="">
-                  {text("全部分组", "All groups", "كل المجموعات")}
+                  {text(...translatedMessage("all_groups_051837cdeb"))}
                 </option>
                 {groupId && !config.groups[groupId] && (
                   <option value={groupId}>
-                    {text("分组已移除", "Group removed", "المجموعة محذوفة")}
+                    {text(...translatedMessage("group_removed_686b935703"))}
                   </option>
                 )}
                 {Object.entries(config.groups).map(([id, g]) => (
@@ -581,9 +560,7 @@ export function ChannelWorkspace({
               </select>
               <select
                 aria-label={text(
-                  "按资源状态筛选",
-                  "Filter by resource status",
-                  "تصفية حسب الحالة",
+                  ...translatedMessage("filter_by_resource_status_bab343f1db"),
                 )}
                 value={status}
                 onChange={(e) =>
@@ -605,13 +582,14 @@ export function ChannelWorkspace({
             <div className="channel-active-filters">
               <span>
                 {text(
-                  `当前范围匹配 ${result.filteredTotal} / ${result.total} 个实例`,
-                  `${result.filteredTotal} / ${result.total} matching instances`,
-                  `${result.filteredTotal} / ${result.total} موارد مطابقة`,
+                  ...translatedMessage("matching_instances_4f4a5dbb3a", {
+                    p0: result.filteredTotal,
+                    p1: result.total,
+                  }),
                 )}
               </span>
               <button onClick={clearFilters}>
-                {text("清空筛选", "Clear filters", "مسح الفلاتر")}
+                {text(...translatedMessage("clear_filters_43c142eafa"))}
                 <X size={12} />
               </button>
             </div>
@@ -620,24 +598,30 @@ export function ChannelWorkspace({
             <table className="channel-resource-table">
               <thead>
                 <tr>
-                  <th>{text("资源实例", "Resource instance", "المورد")}</th>
+                  <th>
+                    {text(...translatedMessage("resource_instance_cc1b21a3ff"))}
+                  </th>
                   {selectedAll && (
                     <th>
                       {view === "channel"
-                        ? text("来源渠道", "Source channel", "قناة المصدر")
-                        : text("标准模型", "Standard model", "النموذج القياسي")}
+                        ? text(
+                            ...translatedMessage("source_channel_e6d8b886ae"),
+                          )
+                        : text(
+                            ...translatedMessage("standard_model_18b603bd24"),
+                          )}
                     </th>
                   )}
                   <th>
                     {view === "channel"
-                      ? text("标准模型", "Standard model", "النموذج القياسي")
-                      : text("来源渠道", "Source channel", "قناة المصدر")}
+                      ? text(...translatedMessage("standard_model_18b603bd24"))
+                      : text(...translatedMessage("source_channel_e6d8b886ae"))}
                   </th>
                   <th>
-                    {text("投放分组", "Placement groups", "مجموعات النشر")}
+                    {text(...translatedMessage("placement_groups_f2ad9a9265"))}
                   </th>
-                  <th>{text("状态", "Status", "الحالة")}</th>
-                  <th>{text("操作", "Action", "الإجراء")}</th>
+                  <th>{text(...translatedMessage("status_dda39dcd63"))}</th>
+                  <th>{text(...translatedMessage("action_2a8e78b55a"))}</th>
                 </tr>
               </thead>
               <tbody>
@@ -679,7 +663,9 @@ export function ChannelWorkspace({
                                 (m) =>
                                   m.id === config.placements?.[r.id]?.modelId,
                               )?.name ??
-                              text("未映射", "Unmapped", "غير مرتبط"))}
+                              text(
+                                ...translatedMessage("unmapped_6d198b7550"),
+                              ))}
                         </button>
                       </td>
                     )}
@@ -700,7 +686,7 @@ export function ChannelWorkspace({
                     <td>{renderState(r)}</td>
                     <td>
                       <Button size="small" onClick={() => onEdit(r.id)}>
-                        {text("映射与投放", "Configure", "إعداد النشر")}
+                        {text(...translatedMessage("configure_b3a5bdb50a"))}
                       </Button>
                     </td>
                   </tr>
@@ -726,11 +712,11 @@ export function ChannelWorkspace({
                       <dt>
                         {view === "channel"
                           ? text(
-                              "标准模型",
-                              "Standard model",
-                              "النموذج القياسي",
+                              ...translatedMessage("standard_model_18b603bd24"),
                             )
-                          : text("来源渠道", "Source channel", "قناة المصدر")}
+                          : text(
+                              ...translatedMessage("source_channel_e6d8b886ae"),
+                            )}
                       </dt>
                       <dd>
                         <button
@@ -745,7 +731,9 @@ export function ChannelWorkspace({
                     {view === "channel" && (
                       <div>
                         <dt>
-                          {text("来源渠道", "Source channel", "قناة المصدر")}
+                          {text(
+                            ...translatedMessage("source_channel_e6d8b886ae"),
+                          )}
                         </dt>
                         <dd>
                           {
@@ -759,9 +747,7 @@ export function ChannelWorkspace({
                       <div>
                         <dt>
                           {text(
-                            "标准模型",
-                            "Standard model",
-                            "النموذج القياسي",
+                            ...translatedMessage("standard_model_18b603bd24"),
                           )}
                         </dt>
                         <dd>
@@ -777,18 +763,19 @@ export function ChannelWorkspace({
                             {models.find(
                               (m) =>
                                 m.id === config.placements?.[r.id]?.modelId,
-                            )?.name ?? text("未映射", "Unmapped", "غير مرتبط")}
+                            )?.name ??
+                              text(...translatedMessage("unmapped_6d198b7550"))}
                           </button>
                         </dd>
                       </div>
                     )}
                     <div>
-                      <dt>{text("投放分组", "Groups", "المجموعات")}</dt>
+                      <dt>{text(...translatedMessage("groups_03d4031d8b"))}</dt>
                       <dd>{renderGroups(r)}</dd>
                     </div>
                   </dl>
                   <Button size="small" onClick={() => onEdit(r.id)}>
-                    {text("映射与投放", "Configure", "إعداد النشر")}
+                    {text(...translatedMessage("configure_b3a5bdb50a"))}
                   </Button>
                 </article>
               ))}
@@ -799,38 +786,34 @@ export function ChannelWorkspace({
                 <h3>
                   {filtered
                     ? text(
-                        "没有匹配的资源实例",
-                        "No matching resources",
-                        "لا موارد مطابقة",
+                        ...translatedMessage(
+                          "no_matching_resources_45db4656e8",
+                        ),
                       )
-                    : text(
-                        "暂时没有资源实例",
-                        "No resources yet",
-                        "لا توجد موارد بعد",
-                      )}
+                    : text(...translatedMessage("no_resources_yet_be7813b165"))}
                 </h3>
                 <p>
                   {filtered
                     ? text(
-                        "调整当前范围的搜索或筛选，不会改变已有映射。",
-                        "Adjust the search or filters. Saved mappings remain unchanged.",
-                        "عدّل البحث أو الفلاتر دون تغيير الربط المحفوظ.",
+                        ...translatedMessage(
+                          "adjust_the_search_or_filters_saved_mappings_r_f11c5f461d",
+                        ),
                       )
                     : selectedModel
                       ? text(
-                          "该标准模型尚未关联资源实例，可从渠道视角配置映射。",
-                          "This model has no linked resources. Map an instance from the channel view.",
-                          "لا موارد مرتبطة بهذا النموذج. اربط مورداً من عرض القنوات.",
+                          ...translatedMessage(
+                            "this_model_has_no_linked_resources_map_an_ins_ddb63ff52b",
+                          ),
                         )
                       : text(
-                          "同步上游资源后，可在这里完成模型映射与投放。",
-                          "Sync source resources to configure model mapping and placement here.",
-                          "زامن موارد المصدر لإعداد الربط والنشر هنا.",
+                          ...translatedMessage(
+                            "sync_source_resources_to_configure_model_mapp_0e27c51d01",
+                          ),
                         )}
                 </p>
                 {filtered && (
                   <Button onClick={clearFilters}>
-                    {text("清空筛选", "Clear filters", "مسح الفلاتر")}
+                    {text(...translatedMessage("clear_filters_43c142eafa"))}
                   </Button>
                 )}
               </div>
@@ -840,20 +823,20 @@ export function ChannelWorkspace({
             <span>
               {result.filteredTotal
                 ? text(
-                    `显示 ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, result.filteredTotal)} / ${result.filteredTotal} 个实例`,
-                    `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, result.filteredTotal)} of ${result.filteredTotal} instances`,
-                    `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, result.filteredTotal)} من ${result.filteredTotal}`,
+                    ...translatedMessage("of_instances_efc2bae166", {
+                      p0: (page - 1) * pageSize + 1,
+                      p1: Math.min(page * pageSize, result.filteredTotal),
+                      p2: result.filteredTotal,
+                    }),
                   )
-                : text("0 个实例", "0 instances", "0 موارد")}
+                : text(...translatedMessage("0_instances_03f79aff73"))}
             </span>
             <div>
               <Button
                 variant="ghost"
                 size="icon"
                 aria-label={text(
-                  "上一页资源",
-                  "Previous resources",
-                  "الموارد السابقة",
+                  ...translatedMessage("previous_resources_101e4f6cf4"),
                 )}
                 disabled={page <= 1}
                 onClick={() =>
@@ -869,9 +852,7 @@ export function ChannelWorkspace({
                 variant="ghost"
                 size="icon"
                 aria-label={text(
-                  "下一页资源",
-                  "Next resources",
-                  "الموارد التالية",
+                  ...translatedMessage("next_resources_89fb990bd8"),
                 )}
                 disabled={page >= pageCount}
                 onClick={() => change({ page: String(page + 1) })}

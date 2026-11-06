@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import {
   Activity,
   BarChart3,
@@ -63,9 +64,9 @@ export function WorkspaceLinks({
   const { t } = useTranslation();
   const text = useStaffText();
   const labels = {
-    console: text("工作台", "CONSOLE", "لوحة العمل"),
+    console: text(...translatedMessage("console_12470788db")),
     quality: t("navObservability"),
-    account: text("账号", "ACCOUNT", "الحساب"),
+    account: text(...translatedMessage("account_7176d568ed")),
   };
   const inConsole = section !== undefined;
   return groups.map(({ id, items }) => (

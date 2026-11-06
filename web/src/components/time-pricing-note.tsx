@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { usePreferences } from "../lib/preferences";
 import { writtenLanguage } from "../lib/localize";
 import { formatTimeQuoteInstant, readTimeQuote } from "../lib/time-quote";
@@ -19,9 +20,9 @@ export function TimePricingNote({
     return (
       <p role="alert" className="time-pricing-note">
         {text(
-          "分时信息暂不可用，请刷新报价。",
-          "Time-pricing information is unavailable. Refresh the quote.",
-          "معلومات التسعير الزمني غير متاحة. حدّث عرض السعر.",
+          ...translatedMessage(
+            "time_pricing_information_is_unavailable_refre_171f1c4c7b",
+          ),
         )}
       </p>
     );
@@ -34,7 +35,7 @@ export function TimePricingNote({
       data-token-price-window={quote.token_window?.window_id}
     >
       <p>
-        {text("已含分时倍率", "Time multiplier included", "معامل الوقت مشمول")}:{" "}
+        {text(...translatedMessage("time_multiplier_included_d0d4bc3779"))}:{" "}
         <bdi>{quote.multiplier}×</bdi> · <bdi>{quote.timezone}</bdi>
         {quote.window_id && (
           <>
@@ -47,14 +48,14 @@ export function TimePricingNote({
         <p>
           {quote.token_window.window_id
             ? text(
-                "已含独立时段词元单价",
-                "Independent window token prices included",
-                "أسعار رموز الفترة المستقلة مشمولة",
+                ...translatedMessage(
+                  "independent_window_token_prices_included_2dfe517da9",
+                ),
               )
             : text(
-                "独立单价时段外，使用基础词元单价",
-                "Outside independent price windows; base token prices apply",
-                "خارج فترات الأسعار المستقلة؛ تُطبق أسعار الرموز الأساسية",
+                ...translatedMessage(
+                  "outside_independent_price_windows_base_token__cd56a7d218",
+                ),
               )}
           {" · "}
           <bdi>{quote.token_window.timezone}</bdi>
@@ -73,22 +74,18 @@ export function TimePricingNote({
       ) : (
         <>
           <p>
-            {text("报价时间", "Quoted at", "وقت عرض السعر")}:{" "}
+            {text(...translatedMessage("quoted_at_408d9c705d"))}:{" "}
             <time dateTime={quote.quoted_at}>{at}</time>
           </p>
           <p>
-            {text(
-              "本次报价有效至",
-              "This quote is valid until",
-              "هذا العرض صالح حتى",
-            )}
+            {text(...translatedMessage("this_quote_is_valid_until_c18095f798"))}
             : <time dateTime={quote.valid_until}>{until}</time>
           </p>
           <p>
             {text(
-              "页面按服务器报价时效自动刷新；未命中时段使用基础倍率。实际费用使用请求准入时捕获的定价，长请求不会按结束时段重算。",
-              "The page refreshes using the server quote lifetime. Unmatched windows use the base multiplier. Charges use pricing captured at request admission; long requests are not repriced at completion.",
-              "تُحدّث الصفحة وفق مدة عرض الخادم. خارج الفترات يُستخدم المعامل الأساسي. تُحسب الرسوم بالسعر الملتقط عند قبول الطلب دون إعادة تسعير الطلبات الطويلة عند انتهائها.",
+              ...translatedMessage(
+                "the_page_refreshes_using_the_server_quote_lif_49d51d0eb2",
+              ),
             )}
           </p>
         </>

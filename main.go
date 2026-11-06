@@ -67,7 +67,13 @@ func main() {
 	}
 	go model.WatchOptions(context.Background(), time.Second)
 	go model.WatchAdministration(context.Background())
+	go model.WatchResourceSync(context.Background())
+	go model.WatchResourceMonitoring(context.Background())
+	go service.WatchResourceRuntime(context.Background())
 	go controller.RunExportJobs(context.Background())
+	if err := service.WatchTransactionalMail(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()

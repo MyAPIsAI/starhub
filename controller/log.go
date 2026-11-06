@@ -30,11 +30,16 @@ func ListLogs(w http.ResponseWriter, r *http.Request) {
 		pageSize = 100
 	}
 	modelFilter := q.Get("model")
+	resourceFilter := q.Get("resource_id")
 	userID := int64(0)
 	if !common.CanReadCustomerCalls(requestRole(r)) {
+		if resourceFilter != "" {
+			common.ApiError(w, http.StatusForbidden, "resource filters require staff access")
+			return
+		}
 		userID = requestUserID(r)
 	}
-	logs, total, err := model.ListLogs(userID, page, pageSize, modelFilter)
+	logs, total, err := model.ListResourceLogs(userID, page, pageSize, modelFilter, resourceFilter)
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return

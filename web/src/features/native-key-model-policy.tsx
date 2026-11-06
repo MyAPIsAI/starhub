@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Search, Sparkles } from "lucide-react";
@@ -81,7 +82,7 @@ export function NativeKeyModelPolicy({
       const vendor =
         info?.vendor && info.vendor !== "unknown"
           ? info.vendor_display || info.vendor
-          : c("其他", "Other", "أخرى");
+          : c(...translatedMessage("other_f6ed33d295"));
       return {
         id,
         info,
@@ -102,28 +103,30 @@ export function NativeKeyModelPolicy({
     tags: string[] | undefined,
     smart: boolean | undefined,
   ) => {
-    if (tags?.includes("video")) return c("视频生成", "Video", "فيديو");
-    if (tags?.includes("image")) return c("图像生成", "Images", "صور");
+    if (tags?.includes("video"))
+      return c(...translatedMessage("video_85e7b59814"));
+    if (tags?.includes("image"))
+      return c(...translatedMessage("images_d073ede5bb"));
     if (tags?.some((tag) => ["audio", "tts", "stt"].includes(tag)))
-      return c("音频", "Audio", "صوت");
+      return c(...translatedMessage("audio_c62be0ebb2"));
     if (tags?.some((tag) => ["embedding", "embeddings"].includes(tag)))
-      return c("向量嵌入", "Embeddings", "تضمين");
+      return c(...translatedMessage("embeddings_33397a5e10"));
     if (tags?.includes("rerank"))
-      return c("重排序", "Reranking", "إعادة ترتيب");
-    return smart ? c("文本对话", "Text chat", "محادثة نصية") : "—";
+      return c(...translatedMessage("reranking_685334e184"));
+    return smart ? c(...translatedMessage("text_chat_8bfb0015d8")) : "—";
   };
   return (
     <section className="native-key-model-policy">
       <div className="native-key-policy-heading">
         <div>
           <h3 id="native-key-policy-title">
-            {c("模型权限", "Model permissions", "أذونات النماذج")}
+            {c(...translatedMessage("model_permissions_68da5e952e"))}
           </h3>
           <p>
             {c(
-              "控制密钥可调用的模型，明确指定模型时不会被自动替换。",
-              "Control which models this key can call. Explicitly requested models are never substituted.",
-              "تحكم في النماذج التي يمكن للمفتاح استخدامها. لا يُستبدل النموذج المحدد صراحةً.",
+              ...translatedMessage(
+                "control_which_models_this_key_can_call_explic_c48b92d14c",
+              ),
             )}
           </p>
         </div>
@@ -134,7 +137,9 @@ export function NativeKeyModelPolicy({
           aria-controls="native-key-policy-body"
           onClick={() => setOpen((value) => !value)}
         >
-          {open ? c("收起", "Collapse", "طي") : c("展开", "Expand", "توسيع")}
+          {open
+            ? c(...translatedMessage("collapse_e8d986c7b2"))
+            : c(...translatedMessage("expand_c77fe8dab8"))}
           <ChevronDown size={14} aria-hidden="true" />
         </button>
       </div>
@@ -147,9 +152,7 @@ export function NativeKeyModelPolicy({
           className="native-key-model-scope segmented"
           role="group"
           aria-label={c(
-            "授权模型范围",
-            "Model authorization scope",
-            "نطاق أذونات النماذج",
+            ...translatedMessage("model_authorization_scope_9c96cfc823"),
           )}
         >
           <button
@@ -159,11 +162,7 @@ export function NativeKeyModelPolicy({
             disabled={locked}
             onClick={() => onScopeChange("snapshot")}
           >
-            {c(
-              "保存时的全部模型",
-              "All models at save",
-              "كل النماذج عند الحفظ",
-            )}
+            {c(...translatedMessage("all_models_at_save_d762055489"))}
           </button>
           <button
             id="native-key-scope-custom"
@@ -172,15 +171,15 @@ export function NativeKeyModelPolicy({
             disabled={locked}
             onClick={() => onScopeChange("custom")}
           >
-            {c("指定模型", "Select models", "تحديد النماذج")}
+            {c(...translatedMessage("select_models_6c1f578d62"))}
           </button>
         </div>
         {locked && (
           <p className="native-key-policy-hint" role="status">
             {c(
-              "保留现有自动分组及模型授权。可直接修改名称、额度和 IP 限制；选择具体分组才会更改路由授权。",
-              "Existing automatic groups and model permissions are preserved. Edit the name, limit or IP restrictions directly; selecting a specific group changes routing permissions.",
-              "تُحفظ المجموعات التلقائية وأذونات النماذج الحالية. يمكنك تعديل الاسم أو الحد أو قيود IP؛ اختيار مجموعة محددة يغيّر أذونات التوجيه.",
+              ...translatedMessage(
+                "existing_automatic_groups_and_model_permissio_4a1721d222",
+              ),
             )}
           </p>
         )}
@@ -192,16 +191,16 @@ export function NativeKeyModelPolicy({
           >
             <p>
               {c(
-                "保存时授权当前分组的全部可用模型，并保留本次授权快照。此后新增模型仍需明确更新授权。",
-                "Authorize the current group's available models as an explicit snapshot. Future models require an explicit permission update.",
-                "امنح صلاحية النماذج المتاحة في المجموعة الحالية كلقطة محددة. النماذج الجديدة تتطلب تحديثًا صريحًا للأذونات.",
+                ...translatedMessage(
+                  "authorize_the_current_group_s_available_model_7da6554441",
+                ),
               )}
             </p>
             <span>
               {c(
-                `本次授权 ${selected.length} 个模型`,
-                `${selected.length} models in this snapshot`,
-                `${selected.length} نماذج في هذه اللقطة`,
+                ...translatedMessage("models_in_this_snapshot_7168c114b4", {
+                  p0: selected.length,
+                }),
               )}
             </span>
             {existing && (
@@ -211,7 +210,7 @@ export function NativeKeyModelPolicy({
                 disabled={locked}
                 onClick={() => onScopeChange("snapshot")}
               >
-                {c("更新授权快照", "Update snapshot", "تحديث اللقطة")}
+                {c(...translatedMessage("update_snapshot_8e218ee594"))}
               </button>
             )}
           </div>
@@ -228,8 +227,12 @@ export function NativeKeyModelPolicy({
                   id="native-key-model-search"
                   type="search"
                   value={search}
-                  aria-label={c("搜索模型", "Search models", "البحث عن نموذج")}
-                  placeholder={c("搜索模型", "Search models", "البحث عن نموذج")}
+                  aria-label={c(
+                    ...translatedMessage("search_models_13e4a8df03"),
+                  )}
+                  placeholder={c(
+                    ...translatedMessage("search_models_13e4a8df03"),
+                  )}
                   onChange={(event) => setSearch(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") event.preventDefault();
@@ -238,16 +241,18 @@ export function NativeKeyModelPolicy({
               </label>
               <span className="native-key-model-count">
                 {c(
-                  `已选 ${selected.length}`,
-                  `${selected.length} selected`,
-                  `${selected.length} محدد`,
+                  ...translatedMessage("selected_20fd78cb1c", {
+                    p0: selected.length,
+                  }),
                 )}
               </span>
             </div>
             <div
               className="native-key-model-list"
               role="group"
-              aria-label={c("可选模型", "Available models", "النماذج المتاحة")}
+              aria-label={c(
+                ...translatedMessage("available_models_7875383e3b"),
+              )}
             >
               {vendors.map((vendor) => (
                 <div key={vendor} role="group" aria-label={vendor}>
@@ -276,9 +281,9 @@ export function NativeKeyModelPolicy({
                         <span>
                           {locked
                             ? c(
-                                "保留现有授权",
-                                "Retained permission",
-                                "صلاحية محفوظة",
+                                ...translatedMessage(
+                                  "retained_permission_20a3fd935d",
+                                ),
                               )
                             : row.available
                               ? capability(
@@ -287,11 +292,16 @@ export function NativeKeyModelPolicy({
                                 )
                               : row.info
                                 ? c(
-                                    `${group} 暂不可用`,
-                                    `Unavailable in ${group}`,
-                                    `غير متاح في ${group}`,
+                                    ...translatedMessage(
+                                      "unavailable_in_40102a9859",
+                                      { p0: group },
+                                    ),
                                   )
-                                : c("已下架", "Unavailable", "غير متاح")}
+                                : c(
+                                    ...translatedMessage(
+                                      "unavailable_410033df61",
+                                    ),
+                                  )}
                         </span>
                       </label>
                     ))}
@@ -299,11 +309,7 @@ export function NativeKeyModelPolicy({
               ))}
               {!rows.length && (
                 <p className="native-key-model-empty">
-                  {c(
-                    "没有匹配的模型。",
-                    "No matching models.",
-                    "لا توجد نماذج مطابقة.",
-                  )}
+                  {c(...translatedMessage("no_matching_models_dcc6cc1d60"))}
                 </p>
               )}
             </div>
@@ -312,18 +318,18 @@ export function NativeKeyModelPolicy({
         {legacyUnrestricted && (
           <p className="native-key-policy-hint">
             {c(
-              "仅编辑其他字段会保留既有授权。主动选择范围或模型后，才按新列表保存权限。",
-              "Editing other fields preserves the existing policy. Permissions change only after explicitly choosing a scope or models.",
-              "تعديل الحقول الأخرى يحفظ الأذونات الحالية. تتغير فقط بعد اختيار نطاق أو نماذج صراحةً.",
+              ...translatedMessage(
+                "editing_other_fields_preserves_the_existing_p_acde7c8d7d",
+              ),
             )}
           </p>
         )}
         {error === "models" && (
           <p className="native-key-policy-error" role="alert">
             {c(
-              "请选择至少一个当前分组可用的授权模型。",
-              "Select at least one available model in this group.",
-              "اختر نموذجًا متاحًا واحدًا على الأقل في هذه المجموعة.",
+              ...translatedMessage(
+                "select_at_least_one_available_model_in_this_g_ca33c115b9",
+              ),
             )}
           </p>
         )}
@@ -335,7 +341,7 @@ export function NativeKeyModelPolicy({
               <Sparkles size={18} />
             </span>
             <div className="native-key-smart-title">
-              <span>{c("智能入口", "Smart entry", "المدخل الذكي")}</span>
+              <span>{c(...translatedMessage("smart_entry_95929b20ea"))}</span>
               <code dir="ltr">{SMART_MODEL_ID}</code>
             </div>
             <button
@@ -344,9 +350,7 @@ export function NativeKeyModelPolicy({
               role="switch"
               aria-checked={smartEnabled}
               aria-label={c(
-                "允许智能路由入口",
-                "Allow smart routing",
-                "السماح بالتوجيه الذكي",
+                ...translatedMessage("allow_smart_routing_d717c151a5"),
               )}
               disabled={locked}
               className="native-key-smart-switch"
@@ -358,24 +362,20 @@ export function NativeKeyModelPolicy({
           <div className="native-key-smart-content">
             {smartEnabled ? (
               <p>
-                {c(
-                  "请求中 model（模型字段）填 ",
-                  "Set the request model to ",
-                  "اضبط حقل model في الطلب على ",
-                )}
+                {c(...translatedMessage("set_the_request_model_to_d469cad192"))}
                 <code dir="ltr">{SMART_MODEL_ID}</code>
                 {c(
-                  " 时，在授权范围内按输入与输出单价之和选模，再按实际用量计费。同一把密钥仍可直接指定具体模型。",
-                  " to choose within the authorized scope by combined input and output rates, then bill actual usage. This key can also call specific models directly.",
-                  " للاختيار ضمن النطاق المصرح حسب مجموع أسعار الإدخال والإخراج، ثم احتساب الاستخدام الفعلي. يمكن للمفتاح أيضًا طلب نموذج محدد مباشرةً.",
+                  ...translatedMessage(
+                    "to_choose_within_the_authorized_scope_by_comb_1b2ed76ad5",
+                  ),
                 )}
               </p>
             ) : (
               <p>
                 {c(
-                  "智能入口已关闭。仍可在授权范围内直接指定模型调用。",
-                  "Smart entry is off. This key can still call explicitly authorized models directly.",
-                  "المدخل الذكي معطل. لا يزال بإمكان المفتاح طلب النماذج المصرح بها مباشرةً.",
+                  ...translatedMessage(
+                    "smart_entry_is_off_this_key_can_still_call_ex_174a261310",
+                  ),
                 )}
               </p>
             )}
@@ -383,21 +383,25 @@ export function NativeKeyModelPolicy({
               <>
                 <div className="native-key-smart-details">
                   <p>
-                    {c("策略：", "Strategy: ", "الاستراتيجية: ")}
-                    <strong>{c("最省", "Lowest cost", "الأقل تكلفة")}</strong>
+                    {c(...translatedMessage("strategy_999a2df0fc"))}
+                    <strong>
+                      {c(...translatedMessage("lowest_cost_6008c03066"))}
+                    </strong>
                   </p>
                   <div className="native-key-candidate-summary">
                     <span>
                       {smartSelected.length === smartAvailable.length
                         ? c(
-                            `候选模型：授权范围内全部文本模型（${smartSelected.length} 个）`,
-                            `Candidates: all authorized text models (${smartSelected.length})`,
-                            `المرشحون: كل النماذج النصية المصرح بها (${smartSelected.length})`,
+                            ...translatedMessage(
+                              "candidates_all_authorized_text_models_7f323a6817",
+                              { p0: smartSelected.length },
+                            ),
                           )
                         : c(
-                            `候选模型：已选择 ${smartSelected.length} 个文本模型`,
-                            `Candidates: ${smartSelected.length} selected text models`,
-                            `المرشحون: ${smartSelected.length} نماذج نصية محددة`,
+                            ...translatedMessage(
+                              "candidates_selected_text_models_def5a77907",
+                              { p0: smartSelected.length },
+                            ),
                           )}
                     </span>
                     <button
@@ -409,8 +413,12 @@ export function NativeKeyModelPolicy({
                       onClick={() => setCandidatesOpen((value) => !value)}
                     >
                       {candidatesOpen
-                        ? c("收起候选", "Hide candidates", "إخفاء المرشحين")
-                        : c("收窄候选", "Narrow candidates", "تضييق المرشحين")}
+                        ? c(...translatedMessage("hide_candidates_f29b0780f6"))
+                        : c(
+                            ...translatedMessage(
+                              "narrow_candidates_952a6aef9a",
+                            ),
+                          )}
                     </button>
                   </div>
                 </div>
@@ -422,9 +430,9 @@ export function NativeKeyModelPolicy({
                   >
                     <legend>
                       {c(
-                        "智能候选模型",
-                        "Smart candidate models",
-                        "النماذج المرشحة للتوجيه الذكي",
+                        ...translatedMessage(
+                          "smart_candidate_models_7b2e6299b6",
+                        ),
                       )}
                     </legend>
                     <button
@@ -434,9 +442,9 @@ export function NativeKeyModelPolicy({
                       onClick={() => onCandidatesChange(null)}
                     >
                       {c(
-                        "使用全部授权文本模型",
-                        "Use all authorized text models",
-                        "استخدام كل النماذج النصية المصرح بها",
+                        ...translatedMessage(
+                          "use_all_authorized_text_models_7f84e59c3f",
+                        ),
                       )}
                     </button>
                     {smartAvailable.map((id) => (
@@ -460,9 +468,9 @@ export function NativeKeyModelPolicy({
                     {!smartAvailable.length && (
                       <p role="status">
                         {c(
-                          "当前没有已授权的文本候选模型。",
-                          "No authorized text candidates are available.",
-                          "لا تتوفر نماذج نصية مرشحة مصرح بها.",
+                          ...translatedMessage(
+                            "no_authorized_text_candidates_are_available_d91d7d1eb5",
+                          ),
                         )}
                       </p>
                     )}
@@ -471,9 +479,9 @@ export function NativeKeyModelPolicy({
                 {error === "candidates" && (
                   <p className="native-key-policy-error" role="alert">
                     {c(
-                      "开启智能入口时须选择至少一个已授权的文本模型。",
-                      "Select at least one authorized text model for smart routing.",
-                      "اختر نموذجًا نصيًا مصرحًا به على الأقل للتوجيه الذكي.",
+                      ...translatedMessage(
+                        "select_at_least_one_authorized_text_model_for_d429825043",
+                      ),
                     )}
                   </p>
                 )}

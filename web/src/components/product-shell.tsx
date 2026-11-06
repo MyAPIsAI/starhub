@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useModelPricing } from "../lib/model-pricing";
 import { modelCatalog } from "../lib/platform-catalog";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -57,7 +58,7 @@ export function PublicHeader() {
   const home = pathname === "/" || pathname === "/preview/home";
   const text = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
-  const accountCenter = text("账号中心", "Account center", "مركز الحساب");
+  const accountCenter = text(...translatedMessage("account_center_60e51179ff"));
   const authenticated = session.accountId !== null;
   const accountName = authenticated
     ? (sessionUsername(session) ?? accountCenter)
@@ -78,9 +79,7 @@ export function PublicHeader() {
           className={className}
           role="status"
           aria-label={text(
-            "正在确认登录状态",
-            "Checking your session",
-            "جارٍ التحقق من تسجيل الدخول",
+            ...translatedMessage("checking_your_session_893684fa5e"),
           )}
         >
           …
@@ -90,9 +89,7 @@ export function PublicHeader() {
     const unavailable = status === "unavailable";
     const label = unavailable
       ? text(
-          "暂时无法确认登录状态，点击重试",
-          "Unable to check your session. Retry",
-          "تعذر التحقق من تسجيل الدخول. حاول مجددًا",
+          ...translatedMessage("unable_to_check_your_session_retry_f8aba0ff9b"),
         )
       : accountLabel;
     return (
@@ -114,7 +111,9 @@ export function PublicHeader() {
           } else if (mobile) setMenuOpen(false);
         }}
       >
-        {unavailable ? text("重试", "Retry", "إعادة المحاولة") : accountName}
+        {unavailable
+          ? text(...translatedMessage("retry_c16455021c"))
+          : accountName}
       </Link>
     );
   };
@@ -178,7 +177,7 @@ export function PublicHeader() {
               to="/console"
               onClick={() => setMenuOpen(false)}
             >
-              {text("进入工作台", "Open console", "لوحة التحكم")}
+              {text(...translatedMessage("open_console_9b01a2b8d8"))}
               <ArrowUpRight size={15} className="directional" />
             </Link>
           </div>
@@ -190,7 +189,7 @@ export function PublicHeader() {
             className="veyra-public-console veyra-public-desktop-console"
             to="/console"
           >
-            {text("进入工作台", "Open console", "لوحة التحكم")}
+            {text(...translatedMessage("open_console_9b01a2b8d8"))}
             <ArrowUpRight size={15} className="directional" />
           </Link>
           <button
@@ -201,8 +200,8 @@ export function PublicHeader() {
             aria-expanded={menuOpen}
             aria-label={
               menuOpen
-                ? text("收起导航", "Close navigation", "إغلاق التنقل")
-                : text("展开导航", "Open navigation", "فتح التنقل")
+                ? text(...translatedMessage("close_navigation_f2254b385d"))
+                : text(...translatedMessage("open_navigation_2da59c6a14"))
             }
             onClick={() => setMenuOpen((open) => !open)}
           >
@@ -215,20 +214,31 @@ export function PublicHeader() {
 }
 export function Preferences() {
   const { t } = useTranslation();
-  const { language, setLanguage, theme, setTheme } = usePreferences();
+  const {
+    language,
+    languages,
+    languageSaving,
+    languageError,
+    setLanguage,
+    theme,
+    setTheme,
+  } = usePreferences();
   return (
     <div className="product-preferences">
       <Select
         label={t("language")}
         value={language}
+        disabled={languageSaving}
         onChange={(v) => setLanguage(v as Language)}
         options={[
           { value: "en", label: "English" },
           { value: "zh", label: "中文" },
           { value: "ar", label: "العربية" },
-          { value: "ko", label: "한국어" },
-        ]}
+        ].filter((option) =>
+          languages.includes(option.value as "en" | "zh" | "ar"),
+        )}
       />
+      {languageError && <span role="alert">{t("languageSaveFailed")}</span>}
       <Button
         variant="ghost"
         size="icon"
@@ -383,28 +393,30 @@ export function ProductSearch() {
                 {isAdmin(role) && (
                   <Command.Group
                     heading={text(
-                      "系统设置",
-                      "System settings",
-                      "إعدادات النظام",
+                      ...translatedMessage("system_settings_966a9e1755"),
                     )}
                   >
                     <Command.Item onSelect={() => go("/console/model-pricing")}>
-                      {text("标准模型", "Standard models", "النماذج القياسية")}
+                      {text(...translatedMessage("standard_models_d7f00fd7f0"))}
                     </Command.Item>
                     <Command.Item onSelect={() => go("/console/channels")}>
-                      {text("渠道管理", "Channels", "القنوات")}
+                      {text(...translatedMessage("channels_eee07fd951"))}
                     </Command.Item>
                     <Command.Item
                       onSelect={() => go("/console/service-groups")}
                     >
-                      {text("服务分组", "Service groups", "مجموعات الخدمة")}
+                      {text(...translatedMessage("service_groups_0b4d78d515"))}
                     </Command.Item>
                   </Command.Group>
                 )}
                 {canReadFinance(role) && (
-                  <Command.Group heading={text("财务", "Finance", "المالية")}>
+                  <Command.Group
+                    heading={text(...translatedMessage("finance_dfaa8d1e15"))}
+                  >
                     <Command.Item onSelect={() => go("/finance")}>
-                      {text("财务概览", "Finance overview", "نظرة مالية")}
+                      {text(
+                        ...translatedMessage("finance_overview_f47c7aaf02"),
+                      )}
                     </Command.Item>
                   </Command.Group>
                 )}

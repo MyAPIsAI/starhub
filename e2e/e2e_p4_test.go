@@ -159,58 +159,9 @@ func TestP4GroupGroupRatio(t *testing.T) {
 	}
 }
 
-// TestP4RedemptionAndAffCode exercises the commercialization features:
-// redemption codes, affiliate codes, and the rebate flow.
-func TestP4RedemptionAndAffCode(t *testing.T) {
+// TestP4AffCode exercises affiliate codes and the rebate flow.
+func TestP4AffCode(t *testing.T) {
 	env := setupRelayApp(t)
-
-	// 1. Admin creates a redemption code.
-	res := doRequest(env.base, "POST", "/api/redemption/", env.session, map[string]any{
-		"quota": 500000, "count": 1,
-	})
-	if res.Status != 200 {
-		t.Fatalf("create redemption failed: %d %s", res.Status, res.Body)
-	}
-	var rdResp struct {
-		Data struct {
-			Codes []string `json:"codes"`
-		} `json:"data"`
-	}
-	_ = json.Unmarshal([]byte(res.Body), &rdResp)
-	if len(rdResp.Data.Codes) != 1 {
-		t.Fatalf("expected 1 code, got %d", len(rdResp.Data.Codes))
-	}
-	code := rdResp.Data.Codes[0]
-	if !strings.HasPrefix(code, "RD-") {
-		t.Fatalf("redemption code should start with RD-: %q", code)
-	}
-
-	// 2. Admin lists redemption codes.
-	res = doRequest(env.base, "GET", "/api/redemption/", env.session, nil)
-	if res.Status != 200 || !strings.Contains(res.Body, code) {
-		t.Fatalf("redemption list should contain the code: %d %s", res.Status, res.Body)
-	}
-
-	// 3. Root user redeems the code.
-	beforeQuota, _ := model.GetUserByID(env.rootID)
-	res = doRequest(env.base, "POST", "/api/user/redeem", env.session, map[string]any{
-		"code": code,
-	})
-	if res.Status != 200 {
-		t.Fatalf("redeem failed: %d %s", res.Status, res.Body)
-	}
-	afterQuota, _ := model.GetUserByID(env.rootID)
-	if afterQuota.Quota != beforeQuota.Quota+500000 {
-		t.Fatalf("quota after redeem = %d, want %d", afterQuota.Quota, beforeQuota.Quota+500000)
-	}
-
-	// 4. Reusing a code fails.
-	res = doRequest(env.base, "POST", "/api/user/redeem", env.session, map[string]any{
-		"code": code,
-	})
-	if res.Status != 404 {
-		t.Fatalf("reusing a code should fail: %d %s", res.Status, res.Body)
-	}
 
 	// 5. Root has an aff_code (auto-generated at seed time).
 	root, _ := model.GetUserByID(env.rootID)
@@ -219,7 +170,7 @@ func TestP4RedemptionAndAffCode(t *testing.T) {
 	}
 
 	// 6. Register with the aff code → the invitee's inviter_id is set.
-	res = doRequest(env.base, "POST", "/api/user/register", "", map[string]string{
+	res := doRequest(env.base, "POST", "/api/user/register", "", map[string]string{
 		"username": "invitee", "password": "invitee-pass",
 		"email": "invitee@example.com", "aff_code": root.AffCode,
 	})

@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Layers3, Plus, Search } from "lucide-react";
@@ -58,9 +59,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
     return (
       <p role="alert">
         {text(
-          "需要实际管理员会话。",
-          "An actual administrator session is required.",
-          "يلزم تسجيل دخول مسؤول فعلي.",
+          ...translatedMessage(
+            "an_actual_administrator_session_is_required_73d66b6397",
+          ),
         )}
       </p>
     );
@@ -177,34 +178,34 @@ export function ServiceGroups({ role: _role }: { role: number }) {
       setNotice(
         draft.remove
           ? text(
-              "分组定义与对应倍率已删除。",
-              "Group definition and its ratio were deleted.",
-              "حُذف تعريف المجموعة ومعاملها.",
+              ...translatedMessage(
+                "group_definition_and_its_ratio_were_deleted_0c58126cf8",
+              ),
             )
           : text(
-              "分组配置已保存，响应进程已完成设置重载。其他进程状态请查看配置同步。",
-              "Group configuration saved; the response process reloaded its settings. Check configuration sync for other processes.",
-              "حُفظت المجموعة وأعادت العملية المستجيبة تحميل الإعدادات. راجع المزامنة لبقية العمليات.",
+              ...translatedMessage(
+                "group_configuration_saved_the_response_proces_c6300fa48f",
+              ),
             ),
       );
     } catch (caught) {
       setError(
         caught instanceof ApiError && caught.status === 409
           ? text(
-              "分组或配置版本已变化，本次操作未覆盖。请刷新并重新打开编辑。",
-              "The group or configuration version changed. This operation did not overwrite it. Refresh and reopen the editor.",
-              "تغيّرت المجموعة أو إصدار الإعدادات. لم تستبدل هذه العملية التغيير. حدّث وأعد فتح المحرر.",
+              ...translatedMessage(
+                "the_group_or_configuration_version_changed_th_15b0d0a1bf",
+              ),
             )
           : caught instanceof ApiError && caught.status === 400
             ? text(
-                "服务器拒绝了此配置，草稿已保留。请检查账号 ID 是否真实存在、名单格式与数量是否正确。",
-                "The server rejected this configuration; the draft is retained. Check that account IDs exist and that the list format and size are valid.",
-                "رفض الخادم هذا الإعداد واحتُفظ بالمسودة. تحقق من وجود معرّفات الحسابات وصحة تنسيق القائمة وحجمها.",
+                ...translatedMessage(
+                  "the_server_rejected_this_configuration_the_dr_17f822f73d",
+                ),
               )
             : text(
-                "无法确认保存或重载结果。请刷新核对配置与同步状态；版本变化后须重新打开编辑。",
-                "The save or reload outcome is unconfirmed. Refresh and check configuration sync; reopen after a version change.",
-                "تعذر تأكيد الحفظ أو إعادة التحميل. حدّث وتحقق من المزامنة وأعد فتح المحرر عند تغير الإصدار.",
+                ...translatedMessage(
+                  "the_save_or_reload_outcome_is_unconfirmed_ref_39ca5a925a",
+                ),
               ),
       );
     }
@@ -213,21 +214,21 @@ export function ServiceGroups({ role: _role }: { role: number }) {
     draft && Object.prototype.hasOwnProperty.call(draft.ratios, draft.id.trim())
       ? draft.ratios[draft.id.trim()]
       : undefined;
-  const unknown = text("未配置", "Unconfigured", "غير مهيّأ");
+  const unknown = text(...translatedMessage("unconfigured_02a7666991"));
   return (
     <div className="catalog-management service-group-management">
       <header className="cm-heading">
         <div>
           <span className="pricing-eyebrow">
             <Layers3 size={16} />
-            {text("系统设置", "System settings", "إعدادات النظام")}
+            {text(...translatedMessage("system_settings_966a9e1755"))}
           </span>
-          <h1>{text("服务分组", "Service groups", "مجموعات الخدمة")}</h1>
+          <h1>{text(...translatedMessage("service_groups_0b4d78d515"))}</h1>
           <p>
             {text(
-              "管理服务分组与售价倍率。新请求立即使用保存后的倍率，已受理请求保留原倍率。",
-              "Manage database group definitions and ratios. Saving changes server configuration; option ratios and stored definitions are shown separately.",
-              "أدر تعريفات مجموعات قاعدة البيانات ومعاملاتها. يغيّر الحفظ إعدادات الخادم؛ تُعرض معاملات الخيارات والتعريفات بشكل منفصل.",
+              ...translatedMessage(
+                "manage_database_group_definitions_and_ratios__5ca0806347",
+              ),
             )}
           </p>
         </div>
@@ -239,7 +240,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
               void query.refetch();
             }}
           >
-            {text("刷新分组", "Refresh groups", "تحديث المجموعات")}
+            {text(...translatedMessage("refresh_groups_fd60cbc9f7"))}
           </Button>
           <Button
             variant="primary"
@@ -247,55 +248,47 @@ export function ServiceGroups({ role: _role }: { role: number }) {
             onClick={() => begin()}
           >
             <Plus size={16} />
-            {text("新增分组定义", "Add group definition", "إضافة تعريف مجموعة")}
+            {text(...translatedMessage("add_group_definition_2094e39272"))}
           </Button>
         </div>
       </header>
       <div className="cm-callout">
         <p>
           {text(
-            "这里展示数据库配置。最终费用还受模型规则、用户/分组矩阵和运行中设置影响。网关会检查停用状态与自定义账号名单；名单只匹配真实服务器用户 ID，演示标识不授予调用权限。",
-            "This view shows database configuration. Final charges also depend on model rules, user/group matrices and running settings. The gateway checks disabled groups and custom account lists. Only exact server user IDs grant access; Demo identifiers do not.",
-            "تعرض هذه الصفحة إعدادات قاعدة البيانات. تعتمد الرسوم أيضًا على قواعد النماذج ومصفوفات المستخدم والمجموعة والإعدادات الفعلية. تتحقق البوابة من تعطيل المجموعة وقوائم الحسابات المخصصة. تمنح معرّفات مستخدمي الخادم المطابقة فقط حق الوصول؛ ولا تمنحه معرّفات العرض التجريبي.",
+            ...translatedMessage(
+              "this_view_shows_database_configuration_final__3cdc35163a",
+            ),
           )}
         </p>
         <Link to="/admin?tab=resources">
-          {text(
-            "查看配置同步",
-            "View configuration sync",
-            "عرض مزامنة الإعدادات",
-          )}
+          {text(...translatedMessage("view_configuration_sync_e89e18fe01"))}
         </Link>
       </div>
       {query.isLoading && (
         <p role="status">
-          {text(
-            "正在读取分组配置…",
-            "Loading group configuration…",
-            "جارٍ تحميل إعدادات المجموعات…",
-          )}
+          {text(...translatedMessage("loading_group_configuration_4fa6d32826"))}
         </p>
       )}
       {query.isError && (
         <p role="alert">
           {text(
-            "无法确认服务器配置、版本保护或账号权限校验能力，已隐藏旧数据并暂停编辑。请刷新重试。",
-            "Cannot verify server configuration, version guards or account access checks. Cached data is hidden and editing is paused. Refresh to retry.",
-            "تعذر التحقق من الإعدادات أو حماية الإصدار أو فحص صلاحيات الحساب. أُخفيت البيانات السابقة وأُوقف التحرير. حدّث للمحاولة.",
+            ...translatedMessage(
+              "cannot_verify_server_configuration_version_gu_02a9aa7812",
+            ),
           )}
         </p>
       )}
       {data && (
         <p className="sgm-versions">
           <span>
-            {text("配置版本", "Configuration version", "إصدار الإعدادات")}:{" "}
+            {text(...translatedMessage("configuration_version_1191a660ca"))}:{" "}
             <bdi>v{data.option_version}</bdi>
           </span>
           <span>
             {text(
-              "响应进程加载版本",
-              "Response process loaded version",
-              "الإصدار المحمّل في العملية المستجيبة",
+              ...translatedMessage(
+                "response_process_loaded_version_220a8c977b",
+              ),
             )}
             : <bdi>v{data.loaded_option_version}</bdi>
           </span>
@@ -311,9 +304,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
           <Search size={17} />
           <input
             aria-label={text(
-              "搜索分组定义",
-              "Search group definitions",
-              "البحث في تعريفات المجموعات",
+              ...translatedMessage("search_group_definitions_db1498b73c"),
             )}
             value={search}
             onChange={(e) => {
@@ -321,22 +312,20 @@ export function ServiceGroups({ role: _role }: { role: number }) {
               setPage(0);
             }}
             placeholder={text(
-              "搜索名称或标识",
-              "Search names or identifiers",
-              "ابحث بالاسم أو المعرّف",
+              ...translatedMessage("search_names_or_identifiers_9dc5dcb475"),
             )}
           />
         </label>
         <span>
-          {ids.length} {text("条配置", "entries", "إعدادات")}
+          {ids.length} {text(...translatedMessage("entries_b7200e3364"))}
         </span>
       </div>
       {data && data.groups.length === 0 && (
         <p>
           {text(
-            "暂无数据库分组定义。已有倍率键会保留，可在下方登记；不会自动创建定义。",
-            "No database group definitions. Existing ratio entries remain and can be registered below; definitions are not created automatically.",
-            "لا توجد تعريفات مجموعات. تبقى مفاتيح المعاملات ويمكن تسجيلها أدناه؛ لا تُنشأ التعريفات تلقائيًا.",
+            ...translatedMessage(
+              "no_database_group_definitions_existing_ratio__a1f08c83de",
+            ),
           )}
         </p>
       )}
@@ -345,19 +334,23 @@ export function ServiceGroups({ role: _role }: { role: number }) {
         role="region"
         tabIndex={0}
         aria-label={text(
-          "分组配置表，可横向滚动",
-          "Group configuration table, horizontally scrollable",
-          "جدول إعدادات المجموعات قابل للتمرير أفقيًا",
+          ...translatedMessage(
+            "group_configuration_table_horizontally_scroll_39aff114c3",
+          ),
         )}
       >
         <table>
           <thead>
             <tr>
-              <th>{text("分组", "Group", "المجموعة")}</th>
-              <th>{text("定义状态", "Definition state", "حالة التعريف")}</th>
-              <th>{text("售价倍率", "Sale multiplier", "معامل البيع")}</th>
+              <th>{text(...translatedMessage("group_528d77dde5"))}</th>
+              <th>
+                {text(...translatedMessage("definition_state_38341af71f"))}
+              </th>
+              <th>
+                {text(...translatedMessage("sale_multiplier_fc00917682"))}
+              </th>
 
-              <th>{text("操作", "Actions", "الإجراءات")}</th>
+              <th>{text(...translatedMessage("actions_d83f4ed14a"))}</th>
             </tr>
           </thead>
           <tbody>
@@ -378,19 +371,19 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   <td>
                     {group
                       ? group.enabled
-                        ? text("启用", "Enabled", "مفعّلة")
-                        : text("停用", "Disabled", "معطّلة")
+                        ? text(...translatedMessage("enabled_f028916a96"))
+                        : text(...translatedMessage("disabled_0049e8e608"))
                       : text(
-                          "仅有倍率，未登记定义",
-                          "Ratio only; no definition",
-                          "معامل فقط دون تعريف",
+                          ...translatedMessage(
+                            "ratio_only_no_definition_1869d3ba62",
+                          ),
                         )}
                     {group?.visibility === "custom" && (
                       <small>
                         {text(
-                          "自定义账号范围",
-                          "Custom account scope",
-                          "نطاق حسابات مخصص",
+                          ...translatedMessage(
+                            "custom_account_scope_1d24b5701c",
+                          ),
                         )}
                       </small>
                     )}
@@ -402,15 +395,13 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                       Number(group.multiplier) !== ratio && (
                         <small>
                           {text(
-                            "定义记录",
-                            "Stored definition",
-                            "التعريف المحفوظ",
+                            ...translatedMessage(
+                              "stored_definition_4a0212ae33",
+                            ),
                           )}
                           : {group.multiplier} ·{" "}
                           {text(
-                            "保存后对齐",
-                            "Aligned on save",
-                            "تتم المزامنة عند الحفظ",
+                            ...translatedMessage("aligned_on_save_d007ce55fc"),
                           )}
                         </small>
                       )}
@@ -418,15 +409,19 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   <td>
                     <div className="cm-actions">
                       <Button onClick={() => setHistory(id)}>
-                        {text("倍率历史", "Multiplier history", "سجل المعامل")}
+                        {text(
+                          ...translatedMessage("multiplier_history_d1836371bc"),
+                        )}
                       </Button>
                       <Button disabled={!editable} onClick={() => begin(id)}>
                         {group
-                          ? text("编辑定义", "Edit definition", "تحرير التعريف")
+                          ? text(
+                              ...translatedMessage(
+                                "edit_definition_1bcd613a31",
+                              ),
+                            )
                           : text(
-                              "登记分组",
-                              "Register group",
-                              "تسجيل المجموعة",
+                              ...translatedMessage("register_group_3a91186601"),
                             )}
                       </Button>
                       {group && (
@@ -434,7 +429,11 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                           disabled={!editable}
                           onClick={() => begin(id, true)}
                         >
-                          {text("删除定义", "Delete definition", "حذف التعريف")}
+                          {text(
+                            ...translatedMessage(
+                              "delete_definition_d0cc3d2cb1",
+                            ),
+                          )}
                         </Button>
                       )}
                     </div>
@@ -451,7 +450,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
             disabled={currentPage === 0}
             onClick={() => setPage(currentPage - 1)}
           >
-            {text("上一页", "Previous", "السابق")}
+            {text(...translatedMessage("previous_2672646f39"))}
           </Button>
           <span>
             {currentPage + 1} / {pages}
@@ -460,7 +459,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
             disabled={currentPage >= pages - 1}
             onClick={() => setPage(currentPage + 1)}
           >
-            {text("下一页", "Next", "التالي")}
+            {text(...translatedMessage("next_c0fd39244f"))}
           </Button>
         </div>
       )}
@@ -470,7 +469,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
         onOpenChange={(v) => {
           if (!v) setHistory(null);
         }}
-        title={text("倍率历史", "Multiplier history", "سجل المعامل")}
+        title={text(...translatedMessage("multiplier_history_d1836371bc"))}
         description={history ?? ""}
       >
         {history && <PricingHistory kind="service-group" id={history} />}
@@ -481,26 +480,18 @@ export function ServiceGroups({ role: _role }: { role: number }) {
         onOpenChange={(open) => !open && close()}
         title={
           draft?.remove
-            ? text(
-                "删除分组定义",
-                "Delete group definition",
-                "حذف تعريف المجموعة",
-              )
-            : text(
-                "编辑分组定义",
-                "Edit group definition",
-                "تحرير تعريف المجموعة",
-              )
+            ? text(...translatedMessage("delete_group_definition_c22c2b0316"))
+            : text(...translatedMessage("edit_group_definition_474a05934f"))
         }
         description={text(
-          "保存需要匹配分组身份、元数据版本和配置版本。取消会放弃当前草稿。",
-          "Saving requires matching group identity, metadata revision and configuration version. Cancel discards this draft.",
-          "يتطلب الحفظ تطابق هوية المجموعة وإصدار البيانات والإعدادات. يُلغي الإغلاق المسودة الحالية.",
+          ...translatedMessage(
+            "saving_requires_matching_group_identity_metad_d937d9133b",
+          ),
         )}
         footer={
           <>
             <Button disabled={pending} onClick={close}>
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             {review ? (
               <Button
@@ -508,11 +499,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                 disabled={pending || conflict || !valid || !versionWritable}
                 onClick={() => void save()}
               >
-                {text(
-                  "确认分组变更",
-                  "Confirm group changes",
-                  "تأكيد تغييرات المجموعة",
-                )}
+                {text(...translatedMessage("confirm_group_changes_b237850451"))}
               </Button>
             ) : (
               <Button
@@ -520,11 +507,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                 disabled={!valid || conflict || !versionWritable}
                 onClick={() => setReview(true)}
               >
-                {text(
-                  "预览分组变更",
-                  "Review group changes",
-                  "مراجعة تغييرات المجموعة",
-                )}
+                {text(...translatedMessage("review_group_changes_0c1a80773f"))}
               </Button>
             )}
           </>
@@ -534,9 +517,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
           <>
             <p>
               <bdi>{draft.id || "—"}</bdi> ·{" "}
-              {text("元数据", "Metadata", "البيانات")}: v
+              {text(...translatedMessage("metadata_cfa777c3b7"))}: v
               {draft.original?.revision ?? 0} ·{" "}
-              {text("配置", "Configuration", "الإعدادات")}: v
+              {text(...translatedMessage("configuration_2034cf5638"))}: v
               {draft.optionVersion}
             </p>
             {review ? (
@@ -544,18 +527,14 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                 <h3>
                   {draft.remove
                     ? text(
-                        "删除定义及对应倍率",
-                        "Delete definition and its ratio",
-                        "حذف التعريف ومعامله",
+                        ...translatedMessage(
+                          "delete_definition_and_its_ratio_5283f418cf",
+                        ),
                       )
                     : draft.name.trim()}
                 </h3>
                 <p>
-                  {text(
-                    "选项倍率变更",
-                    "Option ratio change",
-                    "تغيير معامل الخيار",
-                  )}
+                  {text(...translatedMessage("option_ratio_change_dc4a4548b2"))}
                   :{" "}
                   <bdi>
                     {oldRatio ?? unknown} →{" "}
@@ -567,29 +546,27 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                 <p>
                   {draft.remove || !draft.enabled
                     ? text(
-                        "移除倍率后，该分组不再通过网关分组准入。此操作不修改账本。",
-                        "After removing the ratio, this group no longer passes gateway group admission. Ledgers are unchanged.",
-                        "بعد إزالة المعامل لا تجتاز المجموعة تحقق الدخول في البوابة. لا تتغير السجلات المالية.",
+                        ...translatedMessage(
+                          "after_removing_the_ratio_this_group_no_longer_b1f55d6e04",
+                        ),
                       )
                     : draft.visibility === "custom"
                       ? text(
-                          "保存会发布该倍率与下方账号范围。名单中匹配的服务器用户 ID 仍需通过模型、渠道与额度检查。",
-                          "Saving publishes this ratio and the account scope below. Matching server user IDs still require model, channel and quota checks.",
-                          "ينشر الحفظ المعامل ونطاق الحسابات أدناه. تظل معرّفات المستخدمين المطابقة خاضعة لفحوص النموذج والقناة والحصة.",
+                          ...translatedMessage(
+                            "saving_publishes_this_ratio_and_the_account_s_576b3f5c4d",
+                          ),
                         )
                       : text(
-                          "公共账号范围：保存会发布该倍率，所有账号仍需通过密钥、模型、渠道与额度检查。",
-                          "Common account scope: saving publishes this ratio. All accounts still require key, model, channel and quota checks.",
-                          "نطاق حسابات عام: ينشر الحفظ هذا المعامل. تظل كل الحسابات خاضعة لفحوص المفتاح والنموذج والقناة والحصة.",
+                          ...translatedMessage(
+                            "common_account_scope_saving_publishes_this_ra_1e5a32fe96",
+                          ),
                         )}
                 </p>
                 {!draft.remove && draft.visibility === "custom" && (
                   <div className="sgm-legacy">
                     <strong>
                       {text(
-                        "确认账号名单",
-                        "Confirm account list",
-                        "تأكيد قائمة الحسابات",
+                        ...translatedMessage("confirm_account_list_7c2a6c5484"),
                       )}
                     </strong>
                     <p
@@ -597,9 +574,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                       role="region"
                       tabIndex={0}
                       aria-label={text(
-                        "待保存账号标识",
-                        "Account identifiers to save",
-                        "معرّفات الحسابات للحفظ",
+                        ...translatedMessage(
+                          "account_identifiers_to_save_257dd6d12b",
+                        ),
                       )}
                     >
                       {draftAccounts?.join(", ")}
@@ -614,7 +591,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                       setError("");
                     }}
                   >
-                    {text("返回编辑", "Back to edit", "العودة للتحرير")}
+                    {text(...translatedMessage("back_to_edit_8e464c075a"))}
                   </Button>
                 )}
               </div>
@@ -623,14 +600,14 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                 {draft.visibility !== "custom" && (
                   <p className="cm-wide">
                     {text(
-                      "公共范围向所有账号开放，仍需通过密钥、模型、渠道及额度检查。可改为自定义范围并填写真实服务器用户 ID。",
-                      "Common scope is open to all accounts, subject to key, model, channel and quota checks. Choose custom scope to specify server user IDs.",
-                      "النطاق العام متاح لكل الحسابات مع فحوص المفتاح والنموذج والقناة والحصة. اختر نطاقًا مخصصًا لتحديد معرّفات مستخدمي الخادم.",
+                      ...translatedMessage(
+                        "common_scope_is_open_to_all_accounts_subject__0e694a5d43",
+                      ),
                     )}
                   </p>
                 )}
                 <label>
-                  {text("分组标识", "Group identifier", "معرّف المجموعة")}
+                  {text(...translatedMessage("group_identifier_24068b0a25"))}
                   <input
                     dir="ltr"
                     readOnly={draft.locked}
@@ -640,7 +617,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   />
                 </label>
                 <label>
-                  {text("分组名称", "Group name", "اسم المجموعة")}
+                  {text(...translatedMessage("group_name_f6efd7fd39"))}
                   <input
                     maxLength={128}
                     value={draft.name}
@@ -650,14 +627,12 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   />
                 </label>
                 <label>
-                  {text("分组倍率", "Group ratio", "معامل المجموعة")}
+                  {text(...translatedMessage("group_ratio_c88644f2fa"))}
                   <input
                     dir="ltr"
                     inputMode="decimal"
                     aria-label={text(
-                      "分组倍率",
-                      "Group ratio",
-                      "معامل المجموعة",
+                      ...translatedMessage("group_ratio_c88644f2fa"),
                     )}
                     aria-describedby="group-ratio-help"
                     maxLength={32}
@@ -668,9 +643,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   />
                   <small id="group-ratio-help">
                     {text(
-                      "0–100，最多四位小数；0 表示免费分组。",
-                      "0–100 with at most four decimal places; 0 makes the group free.",
-                      "من 0 إلى 100 بأربع منازل عشرية كحد أقصى؛ 0 يجعل المجموعة مجانية.",
+                      ...translatedMessage(
+                        "0_100_with_at_most_four_decimal_places_0_make_4357e2b5fe",
+                      ),
                     )}
                   </small>
                 </label>
@@ -682,14 +657,10 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                       setDraft({ ...draft, enabled: e.target.checked })
                     }
                   />
-                  {text(
-                    "启用分组倍率",
-                    "Enable group ratio",
-                    "تفعيل معامل المجموعة",
-                  )}
+                  {text(...translatedMessage("enable_group_ratio_d4c9629636"))}
                 </label>
                 <label className="cm-wide">
-                  {text("分组说明", "Group description", "وصف المجموعة")}
+                  {text(...translatedMessage("group_description_17ae505524"))}
                   <textarea
                     maxLength={512}
                     value={draft.description}
@@ -699,12 +670,10 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   />
                 </label>
                 <label className="cm-wide">
-                  {text("账号范围", "Account scope", "نطاق الحسابات")}
+                  {text(...translatedMessage("account_scope_fdf75b281e"))}
                   <select
                     aria-label={text(
-                      "账号范围",
-                      "Account scope",
-                      "نطاق الحسابات",
+                      ...translatedMessage("account_scope_fdf75b281e"),
                     )}
                     value={draft.visibility}
                     onChange={(e) =>
@@ -716,16 +685,14 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   >
                     <option value="common">
                       {text(
-                        "公共：所有账号",
-                        "Common: all accounts",
-                        "عام: كل الحسابات",
+                        ...translatedMessage("common_all_accounts_347848fbee"),
                       )}
                     </option>
                     <option value="custom">
                       {text(
-                        "自定义：指定服务器用户 ID",
-                        "Custom: specified server user IDs",
-                        "مخصص: معرّفات مستخدمي خادم محددة",
+                        ...translatedMessage(
+                          "custom_specified_server_user_ids_68339730fa",
+                        ),
                       )}
                     </option>
                   </select>
@@ -744,9 +711,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                         }
                       />
                       {text(
-                        "替换账号名单",
-                        "Replace account list",
-                        "استبدال قائمة الحسابات",
+                        ...translatedMessage("replace_account_list_40f63eb6d4"),
                       )}
                     </label>
                   )}
@@ -754,17 +719,11 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                   (draft.original?.visibility !== "custom" ||
                     draft.replaceAccounts) && (
                     <label className="cm-wide">
-                      {text(
-                        "服务器用户 ID",
-                        "Server user IDs",
-                        "معرّفات مستخدمي الخادم",
-                      )}
+                      {text(...translatedMessage("server_user_ids_b6ca9632e1"))}
                       <textarea
                         dir="ltr"
                         aria-label={text(
-                          "服务器用户 ID",
-                          "Server user IDs",
-                          "معرّفات مستخدمي الخادم",
+                          ...translatedMessage("server_user_ids_b6ca9632e1"),
                         )}
                         maxLength={4096}
                         value={draft.accountText}
@@ -775,17 +734,17 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                       />
                       <small id="group-account-help">
                         {text(
-                          "填写 1–100 个不同的正整数 ID，以空格、逗号或换行分隔。保存时验证账号存在；名单总长度不超过 1024 字符。",
-                          "Enter 1–100 distinct positive integer IDs, separated by spaces, commas or newlines. The server verifies that accounts exist. The joined list must fit 1024 characters.",
-                          "أدخل من 1 إلى 100 معرّف صحيح موجب ومختلف، وافصل بمسافات أو فواصل أو أسطر. يتحقق الخادم من وجود الحسابات. الحد الأقصى للقائمة الموصولة 1024 حرفًا.",
+                          ...translatedMessage(
+                            "enter_1_100_distinct_positive_integer_ids_sep_2ac166ceae",
+                          ),
                         )}
                       </small>
                       {draft.accountText.trim() && !draftAccounts && (
                         <small role="alert">
                           {text(
-                            "名单格式或数量无效，请使用真实服务器用户 ID。",
-                            "Invalid list format or size. Use server user IDs.",
-                            "تنسيق القائمة أو حجمها غير صالح. استخدم معرّفات مستخدمي الخادم.",
+                            ...translatedMessage(
+                              "invalid_list_format_or_size_use_server_user_i_7b54ff2c4c",
+                            ),
                           )}
                         </small>
                       )}
@@ -797,9 +756,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                     <div className="cm-wide sgm-legacy">
                       <strong>
                         {text(
-                          "保留的定制元数据",
-                          "Retained custom metadata",
-                          "البيانات المخصصة المحفوظة",
+                          ...translatedMessage(
+                            "retained_custom_metadata_874ecd0d9f",
+                          ),
                         )}
                       </strong>
                       <p
@@ -807,18 +766,18 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                         tabIndex={0}
                         role="region"
                         aria-label={text(
-                          "保留的账号标识",
-                          "Retained account identifiers",
-                          "معرّفات الحسابات المحفوظة",
+                          ...translatedMessage(
+                            "retained_account_identifiers_9ba8719a8f",
+                          ),
                         )}
                       >
                         {draft.original.account_ids.join(", ")}
                       </p>
                       <small>
                         {text(
-                          "本次保留原账号名单。网关只接受名单中匹配的服务器用户 ID，仍需满足模型、渠道及额度限制。",
-                          "This edit retains the stored account list. The gateway requires a matching server user ID, with model, channel and quota checks still applying.",
-                          "يُحفظ كشف الحسابات السابق. تشترط البوابة معرّف مستخدم خادم مطابقًا، وتظل قيود النموذج والقناة والحصة سارية.",
+                          ...translatedMessage(
+                            "this_edit_retains_the_stored_account_list_the_e6b278f6ca",
+                          ),
                         )}
                       </small>
                     </div>
@@ -828,9 +787,9 @@ export function ServiceGroups({ role: _role }: { role: number }) {
             {conflict && (
               <p role="alert">
                 {text(
-                  "分组或配置版本已变化，或读取暂不可用。请刷新后重新打开编辑。",
-                  "The group or configuration version changed, or the read is unavailable. Refresh and reopen the editor.",
-                  "تغيّرت المجموعة أو إصدار الإعدادات أو تعذرت القراءة. حدّث وأعد فتح المحرر.",
+                  ...translatedMessage(
+                    "the_group_or_configuration_version_changed_or_e233ae243b",
+                  ),
                 )}
               </p>
             )}

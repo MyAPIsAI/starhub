@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
@@ -87,9 +88,9 @@ export function ServerTokenPricing() {
         : validServerRatio(draft.input) && validServerRatio(draft.completion));
   const mode = (state: ServerPricing, id: string) =>
     ({
-      per_token: text("按词元", "Per token", "لكل رمز"),
-      per_request: text("按次", "Per request", "لكل طلب"),
-      expression: text("表达式", "Expression", "تعبير"),
+      per_token: text(...translatedMessage("per_token_7f44ff66c4")),
+      per_request: text(...translatedMessage("per_request_63e05e97c4")),
+      expression: text(...translatedMessage("expression_396d42fc66")),
     })[serverPricingMode(state, id)];
   const begin = (id = "") => {
     if (!data) return;
@@ -136,29 +137,30 @@ export function ServerTokenPricing() {
       setDraft(null);
       setNotice(
         text(
-          `已保存服务器定价 v${result.version}；响应进程加载版本 v${result.loaded_version}。其他实例请查看配置同步。`,
-          `Server pricing saved at v${result.version}; response process loaded v${result.loaded_version}. Check configuration sync for other instances.`,
-          `حُفظ تسعير الخادم بالإصدار ${result.version}؛ حمّلت العملية المستجيبة الإصدار ${result.loaded_version}. راجع المزامنة للعمليات الأخرى.`,
+          ...translatedMessage(
+            "server_pricing_saved_at_v_response_process_lo_fd72fcb20f",
+            { p0: result.version, p1: result.loaded_version },
+          ),
         ),
       );
     } catch (caught) {
       setError(
         caught instanceof ApiError && caught.status === 409
           ? text(
-              "服务器配置已变化，未覆盖新版本。请刷新并重新打开编辑。",
-              "Server configuration changed; the new version was not overwritten. Refresh and reopen the editor.",
-              "تغيّرت إعدادات الخادم ولم يُستبدل الإصدار الجديد. حدّث وأعد فتح المحرر.",
+              ...translatedMessage(
+                "server_configuration_changed_the_new_version__8751096670",
+              ),
             )
           : caught instanceof ApiError && caught.status === 400
             ? text(
-                "服务器拒绝了此配置，草稿已保留。请检查输入及配置限制。",
-                "The server rejected this configuration; the draft is retained. Check values and configuration limits.",
-                "رفض الخادم هذا الإعداد واحتُفظ بالمسودة. تحقق من القيم وحدود الإعداد.",
+                ...translatedMessage(
+                  "the_server_rejected_this_configuration_the_dr_9f416eb0a7",
+                ),
               )
             : text(
-                "无法确认保存或重载结果。请刷新核对数据库与进程版本，勿直接重复提交旧草稿。",
-                "The save or reload result is unconfirmed. Refresh to check database and process versions before submitting again.",
-                "تعذر تأكيد الحفظ أو إعادة التحميل. حدّث للتحقق من إصداري قاعدة البيانات والعملية قبل الإرسال مجددًا.",
+                ...translatedMessage(
+                  "the_save_or_reload_result_is_unconfirmed_refr_0684cbce2d",
+                ),
               ),
       );
     }
@@ -168,17 +170,13 @@ export function ServerTokenPricing() {
       <header>
         <div>
           <h2>
-            {text(
-              "服务器模型定价",
-              "Server model pricing",
-              "تسعير نماذج الخادم",
-            )}
+            {text(...translatedMessage("server_model_pricing_308a70163d"))}
           </h2>
           <p>
             {text(
-              "这里读取并修改真实服务器计费配置，与浏览器演示价格独立。输入基准单位为美元/百万词元；输出倍率相对普通输入。分组、缓存、音频及其他计费规则仍会影响费用。",
-              "Read and edit actual server billing configuration, independently of browser Demo prices. Input base is USD per million tokens; output ratio is relative to ordinary input. Group, cache, audio and other billing rules still affect charges.",
-              "اقرأ إعدادات فوترة الخادم الفعلية وعدّلها مستقلة عن أسعار العرض التجريبي. أساس الإدخال بالدولار لكل مليون رمز ومعامل الإخراج نسبة إلى الإدخال العادي. تظل قواعد المجموعة والذاكرة والصوت وغيرها مؤثرة في الرسوم.",
+              ...translatedMessage(
+                "read_and_edit_actual_server_billing_configura_52ad6eed9e",
+              ),
             )}
           </p>
         </div>
@@ -190,39 +188,31 @@ export function ServerTokenPricing() {
               void query.refetch();
             }}
           >
-            {text("刷新定价", "Refresh pricing", "تحديث التسعير")}
+            {text(...translatedMessage("refresh_pricing_db20dc83dd"))}
           </Button>
           <Button disabled={!writable} onClick={() => begin()}>
-            {text(
-              "登记模型定价",
-              "Configure model pricing",
-              "تعيين تسعير نموذج",
-            )}
+            {text(...translatedMessage("configure_model_pricing_4045f367bb"))}
           </Button>
         </div>
       </header>
       <p>
         {text(
-          "可登记、编辑或明确切换按词元、按次及表达式计价，周重复分时倍率在下方单独管理。所选模型的模式与价格同事务保存；变更不会创建渠道、投放资源或授予密钥权限。",
-          "Configure, edit or explicitly switch token, per-request and expression pricing. Manage weekly time multipliers separately below. The selected model's mode and prices are saved atomically; changes do not create channels, publish resources or grant key permissions.",
-          "اضبط أو عدّل أو بدّل التسعير لكل رمز أو طلب أو بالتعبير. أدر معاملات الوقت الأسبوعية منفصلة أدناه. يُحفظ نمط النموذج وأسعاره ذريًا دون إنشاء قنوات أو نشر موارد أو منح صلاحيات للمفاتيح.",
+          ...translatedMessage(
+            "configure_edit_or_explicitly_switch_token_per_6e38dfdc5b",
+          ),
         )}
       </p>
       {query.isLoading && (
         <p role="status">
-          {text(
-            "正在读取服务器定价…",
-            "Loading server pricing…",
-            "جارٍ تحميل تسعير الخادم…",
-          )}
+          {text(...translatedMessage("loading_server_pricing_8443ffc4cd"))}
         </p>
       )}
       {query.isError && (
         <p role="alert">
           {text(
-            "无法确认服务器快照或原子版本保护，已隐藏缓存并暂停编辑。",
-            "Cannot verify the server snapshot or atomic version guard. Cached data is hidden and editing is paused.",
-            "تعذر التحقق من لقطة الخادم أو حماية الإصدار الذرية. أُخفيت البيانات السابقة وأُوقف التحرير.",
+            ...translatedMessage(
+              "cannot_verify_the_server_snapshot_or_atomic_v_1145daed6d",
+            ),
           )}
         </p>
       )}
@@ -231,24 +221,20 @@ export function ServerTokenPricing() {
       {data && (
         <>
           <p className="stp-versions">
-            {text("数据库版本", "Database version", "إصدار قاعدة البيانات")}:{" "}
+            {text(...translatedMessage("database_version_7331c145d8"))}:{" "}
             <bdi>v{data.version}</bdi> ·{" "}
             {text(
-              "响应进程加载版本",
-              "Response process loaded version",
-              "الإصدار المحمّل في العملية المستجيبة",
+              ...translatedMessage(
+                "response_process_loaded_version_220a8c977b",
+              ),
             )}
             : <bdi>v{data.loaded_version}</bdi> ·{" "}
             <Link to="/admin?tab=resources">
-              {text("配置同步", "Configuration sync", "مزامنة الإعدادات")}
+              {text(...translatedMessage("configuration_sync_82e05cc2ab"))}
             </Link>
           </p>
           <label className="stp-search">
-            {text(
-              "搜索已配置模型",
-              "Search configured models",
-              "البحث في النماذج المضبوطة",
-            )}
+            {text(...translatedMessage("search_configured_models_3507a557d4"))}
             <input
               value={search}
               onChange={(e) => {
@@ -262,38 +248,34 @@ export function ServerTokenPricing() {
             tabIndex={0}
             role="region"
             aria-label={text(
-              "服务器定价表，可横向滚动",
-              "Server pricing table, horizontally scrollable",
-              "جدول تسعير الخادم، قابل للتمرير أفقيًا",
+              ...translatedMessage(
+                "server_pricing_table_horizontally_scrollable_10f81abc56",
+              ),
             )}
           >
             <table>
               <thead>
                 <tr>
-                  <th>{text("模型标识", "Model ID", "معرّف النموذج")}</th>
-                  <th>{text("计价方式", "Pricing mode", "نمط التسعير")}</th>
+                  <th>{text(...translatedMessage("model_id_2e00e41239"))}</th>
+                  <th>
+                    {text(...translatedMessage("pricing_mode_aa6a8d8f59"))}
+                  </th>
+                  <th>
+                    {text(...translatedMessage("input_base_usd_m_44e6c38185"))}
+                  </th>
                   <th>
                     {text(
-                      "输入基准 USD/百万",
-                      "Input base USD/M",
-                      "أساس الإدخال دولار/مليون",
+                      ...translatedMessage("output_input_ratio_b3c82f0166"),
                     )}
                   </th>
                   <th>
                     {text(
-                      "输出/输入倍率",
-                      "Output/input ratio",
-                      "معامل الإخراج/الإدخال",
+                      ...translatedMessage(
+                        "per_request_usd_request_f7d390b205",
+                      ),
                     )}
                   </th>
-                  <th>
-                    {text(
-                      "按次 USD/请求",
-                      "Per request USD/request",
-                      "لكل طلب دولار/طلب",
-                    )}
-                  </th>
-                  <th>{text("操作", "Action", "الإجراء")}</th>
+                  <th>{text(...translatedMessage("action_2a8e78b55a"))}</th>
                 </tr>
               </thead>
               <tbody>
@@ -334,20 +316,20 @@ export function ServerTokenPricing() {
                         >
                           {serverPricingMode(data, id) === "expression"
                             ? text(
-                                "编辑计费表达式",
-                                "Edit billing expression",
-                                "تحرير تعبير الفوترة",
+                                ...translatedMessage(
+                                  "edit_billing_expression_9a565eebac",
+                                ),
                               )
                             : serverPricingMode(data, id) === "per_request"
                               ? text(
-                                  "编辑按次价格",
-                                  "Edit request price",
-                                  "تحرير سعر الطلب",
+                                  ...translatedMessage(
+                                    "edit_request_price_14540a818a",
+                                  ),
                                 )
                               : text(
-                                  "编辑服务器倍率",
-                                  "Edit server ratios",
-                                  "تحرير معاملات الخادم",
+                                  ...translatedMessage(
+                                    "edit_server_ratios_33d8381f40",
+                                  ),
                                 )}
                         </Button>
                       </td>
@@ -361,7 +343,7 @@ export function ServerTokenPricing() {
               disabled={currentPage === 0}
               onClick={() => setPage(currentPage - 1)}
             >
-              {text("上一页", "Previous", "السابق")}
+              {text(...translatedMessage("previous_2672646f39"))}
             </Button>
             <span>
               {currentPage + 1} / {pages} · {ids.length}
@@ -370,7 +352,7 @@ export function ServerTokenPricing() {
               disabled={currentPage + 1 >= pages}
               onClick={() => setPage(currentPage + 1)}
             >
-              {text("下一页", "Next", "التالي")}
+              {text(...translatedMessage("next_c0fd39244f"))}
             </Button>
           </div>
         </>
@@ -387,39 +369,39 @@ export function ServerTokenPricing() {
         title={
           draft?.kind === "expression"
             ? text(
-                "修改真实计费表达式",
-                "Change actual billing expression",
-                "تغيير تعبير الفوترة الفعلي",
+                ...translatedMessage(
+                  "change_actual_billing_expression_a73da43aff",
+                ),
               )
             : draft?.kind === "per_request"
               ? text(
-                  "修改真实按次价格",
-                  "Change actual request price",
-                  "تغيير سعر الطلب الفعلي",
+                  ...translatedMessage(
+                    "change_actual_request_price_9c68d608dd",
+                  ),
                 )
               : text(
-                  "修改真实服务器倍率",
-                  "Change actual server ratios",
-                  "تغيير معاملات الخادم الفعلية",
+                  ...translatedMessage(
+                    "change_actual_server_ratios_1459c829d8",
+                  ),
                 )
         }
         description={
           draft?.kind === "expression"
             ? text(
-                "表达式求值结果为基础美元金额，分组等倍率仍适用。后端校验语法后保存，取消仅放弃草稿。",
-                "The expression result is a base USD amount; group and other multipliers still apply. The server validates syntax before saving. Cancel discards this draft.",
-                "نتيجة التعبير مبلغ أساسي بالدولار وتظل معاملات المجموعة وغيرها مطبقة. يتحقق الخادم من الصياغة قبل الحفظ. يلغي الإلغاء هذه المسودة.",
+                ...translatedMessage(
+                  "the_expression_result_is_a_base_usd_amount_gr_642781fd18",
+                ),
               )
             : draft?.kind === "per_request"
               ? text(
-                  "按次价格使用美元/请求，模式与价格变更整体保存。取消仅放弃此草稿。",
-                  "Per-request prices use USD/request. Mode and price changes are saved together. Cancel discards this draft.",
-                  "الأسعار بالدولار لكل طلب. يُحفظ تغيير النمط والسعر معًا. يلغي الإلغاء هذه المسودة.",
+                  ...translatedMessage(
+                    "per_request_prices_use_usd_request_mode_and_p_dec25e00dc",
+                  ),
                 )
               : text(
-                  "输入和输出倍率按同一配置版本整体保存。取消仅放弃此草稿。",
-                  "Input and output ratios are saved together against one configuration version. Cancel discards this draft.",
-                  "يُحفظ معاملا الإدخال والإخراج معًا وفق إصدار إعدادات واحد. يلغي الإلغاء هذه المسودة.",
+                  ...translatedMessage(
+                    "input_and_output_ratios_are_saved_together_ag_431503f790",
+                  ),
                 )
         }
         footer={
@@ -428,7 +410,7 @@ export function ServerTokenPricing() {
               disabled={mutation.isPending}
               onClick={() => setDraft(null)}
             >
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             <Button
               variant="primary"
@@ -437,14 +419,10 @@ export function ServerTokenPricing() {
             >
               {review
                 ? text(
-                    "确认服务器定价",
-                    "Confirm server pricing",
-                    "تأكيد تسعير الخادم",
+                    ...translatedMessage("confirm_server_pricing_5765113e19"),
                   )
                 : text(
-                    "预览服务器变更",
-                    "Review server changes",
-                    "مراجعة تغييرات الخادم",
+                    ...translatedMessage("review_server_changes_d9a0f4c6cc"),
                   )}
             </Button>
           </>
@@ -458,16 +436,24 @@ export function ServerTokenPricing() {
             {review ? (
               <div className="stp-review">
                 <p>
-                  {text("计价方式", "Pricing mode", "نمط التسعير")}:{" "}
+                  {text(...translatedMessage("pricing_mode_aa6a8d8f59"))}:{" "}
                   {draft.locked
                     ? mode(draft.base, draft.id)
-                    : text("未配置", "Unconfigured", "غير مضبوط")}{" "}
+                    : text(
+                        ...translatedMessage("unconfigured_23a581fe9b"),
+                      )}{" "}
                   →{" "}
                   {
                     {
-                      per_token: text("按词元", "Per token", "لكل رمز"),
-                      per_request: text("按次", "Per request", "لكل طلب"),
-                      expression: text("表达式", "Expression", "تعبير"),
+                      per_token: text(
+                        ...translatedMessage("per_token_7f44ff66c4"),
+                      ),
+                      per_request: text(
+                        ...translatedMessage("per_request_63e05e97c4"),
+                      ),
+                      expression: text(
+                        ...translatedMessage("expression_396d42fc66"),
+                      ),
                     }[draft.kind]
                   }
                 </p>
@@ -475,9 +461,7 @@ export function ServerTokenPricing() {
                   <>
                     <p>
                       {text(
-                        "原表达式",
-                        "Previous expression",
-                        "التعبير السابق",
+                        ...translatedMessage("previous_expression_23f92e7324"),
                       )}
                     </p>
                     <code className="stp-expression">
@@ -485,9 +469,9 @@ export function ServerTokenPricing() {
                     </code>
                     <p>
                       {text(
-                        "新表达式（基础美元金额）",
-                        "New expression (base USD)",
-                        "التعبير الجديد (دولار أساسي)",
+                        ...translatedMessage(
+                          "new_expression_base_usd_e223547213",
+                        ),
                       )}
                     </p>
                     <code className="stp-expression">{draft.expression}</code>
@@ -495,9 +479,9 @@ export function ServerTokenPricing() {
                 ) : draft.kind === "per_request" ? (
                   <p>
                     {text(
-                      "按次 USD/请求",
-                      "Per request USD/request",
-                      "لكل طلب دولار/طلب",
+                      ...translatedMessage(
+                        "per_request_usd_request_f7d390b205",
+                      ),
                     )}
                     :{" "}
                     <bdi>
@@ -508,7 +492,7 @@ export function ServerTokenPricing() {
                 ) : (
                   <>
                     <p>
-                      {text("输入基准", "Input base", "أساس الإدخال")}:{" "}
+                      {text(...translatedMessage("input_base_7c6f0894d7"))}:{" "}
                       <bdi>
                         {ownPrice(draft.base.input, draft.id) ?? "—"} →{" "}
                         {draft.input}
@@ -516,9 +500,7 @@ export function ServerTokenPricing() {
                     </p>
                     <p>
                       {text(
-                        "输出/输入倍率",
-                        "Output/input ratio",
-                        "معامل الإخراج/الإدخال",
+                        ...translatedMessage("output_input_ratio_b3c82f0166"),
                       )}
                       :{" "}
                       <bdi>
@@ -530,16 +512,16 @@ export function ServerTokenPricing() {
                 )}
                 <p>
                   {text(
-                    "此操作修改所选模型后续请求的真实服务器价格，不重写历史账单；其他模型和无关计费选项保持原值。分组等规则仍会影响最终费用。数据库提交后响应进程单独重载，其他实例状态需另行确认。",
-                    "This changes the selected model's real server price for future requests and leaves historical bills unchanged. Other models and unrelated pricing options retain their values. Group and other rules still affect final charges. The response process reloads after the database commit; check other instances separately.",
-                    "يغيّر هذا سعر النموذج المحدد للطلبات القادمة دون إعادة كتابة الفواتير السابقة. تحتفظ النماذج والخيارات الأخرى بقيمها وتظل قواعد المجموعة وغيرها مؤثرة في الرسوم النهائية. تعيد العملية المستجيبة التحميل بعد الالتزام بقاعدة البيانات؛ تحقق من بقية العمليات منفصلة.",
+                    ...translatedMessage(
+                      "this_changes_the_selected_model_s_real_server_ff36c86a30",
+                    ),
                   )}
                 </p>
                 <p>
                   {text(
-                    "切换到按词元将移除所选模型的表达式及按次价格；切换到按次将移除所选模型的表达式。按次或表达式模式保留较低优先级价格作为现有回退。所有相关键按同一版本整体保存。",
-                    "Switching to per-token removes this model's expression and per-request override; switching to per-request removes its expression. Lower-priority prices are retained for existing fallback in per-request or expression mode. All affected keys are saved together against one version.",
-                    "الانتقال إلى التسعير لكل رمز يزيل تعبير النموذج وسعره لكل طلب؛ والانتقال إلى التسعير لكل طلب يزيل تعبيره. تُحفظ الأسعار الأقل أولوية للرجوع إليها في النمطين الآخرين. تُحفظ المفاتيح المتأثرة معًا وفق إصدار واحد.",
+                    ...translatedMessage(
+                      "switching_to_per_token_removes_this_model_s_e_c1027f7f4e",
+                    ),
                   )}
                 </p>
                 <Button
@@ -549,17 +531,13 @@ export function ServerTokenPricing() {
                     setError("");
                   }}
                 >
-                  {text("返回编辑", "Back to edit", "العودة للتحرير")}
+                  {text(...translatedMessage("back_to_edit_8e464c075a"))}
                 </Button>
               </div>
             ) : (
               <div className="stp-fields">
                 <label>
-                  {text(
-                    "服务器模型标识",
-                    "Server model ID",
-                    "معرّف نموذج الخادم",
-                  )}
+                  {text(...translatedMessage("server_model_id_a9c8feb9d9"))}
                   <input
                     dir="ltr"
                     readOnly={draft.locked}
@@ -569,9 +547,11 @@ export function ServerTokenPricing() {
                   />
                 </label>
                 <label>
-                  {text("计价方式", "Pricing mode", "نمط التسعير")}
+                  {text(...translatedMessage("pricing_mode_aa6a8d8f59"))}
                   <select
-                    aria-label={text("计价方式", "Pricing mode", "نمط التسعير")}
+                    aria-label={text(
+                      ...translatedMessage("pricing_mode_aa6a8d8f59"),
+                    )}
                     value={draft.kind}
                     onChange={(e) =>
                       setDraft({
@@ -581,13 +561,13 @@ export function ServerTokenPricing() {
                     }
                   >
                     <option value="per_token">
-                      {text("按词元", "Per token", "لكل رمز")}
+                      {text(...translatedMessage("per_token_7f44ff66c4"))}
                     </option>
                     <option value="per_request">
-                      {text("按次", "Per request", "لكل طلب")}
+                      {text(...translatedMessage("per_request_63e05e97c4"))}
                     </option>
                     <option value="expression">
-                      {text("表达式", "Expression", "تعبير")}
+                      {text(...translatedMessage("expression_396d42fc66"))}
                     </option>
                   </select>
                 </label>
@@ -595,18 +575,18 @@ export function ServerTokenPricing() {
                   <>
                     <label>
                       {text(
-                        "计费表达式（基础美元金额）",
-                        "Billing expression (base USD)",
-                        "تعبير الفوترة (دولار أساسي)",
+                        ...translatedMessage(
+                          "billing_expression_base_usd_a387449ba0",
+                        ),
                       )}
                       <textarea
                         dir="ltr"
                         rows={5}
                         maxLength={512}
                         aria-label={text(
-                          "计费表达式（基础美元金额）",
-                          "Billing expression (base USD)",
-                          "تعبير الفوترة (دولار أساسي)",
+                          ...translatedMessage(
+                            "billing_expression_base_usd_a387449ba0",
+                          ),
                         )}
                         value={draft.expression}
                         onChange={(e) =>
@@ -616,9 +596,9 @@ export function ServerTokenPricing() {
                     </label>
                     <small>
                       {text(
-                        "非空且不超过 512 个 UTF-8 字节。支持十进制数、算术/比较、三元条件及 min/max/floor/ceil/round/abs。通用变量为 prompt_tokens、completion_tokens、total_tokens；图片/视频变量仅在相应计费路径提供。语法通过不保证所有用量下求值成功；未知变量或除零会回退到原有按次/词元计费。",
-                        "Use a nonempty expression of at most 512 UTF-8 bytes. Supports decimal numbers, arithmetic/comparisons, ternary conditions and min/max/floor/ceil/round/abs. Common variables: prompt_tokens, completion_tokens, total_tokens; image/video variables exist only on their billing paths. Valid syntax does not guarantee evaluation for every usage; unknown variables or division by zero fall back to existing per-request/token pricing.",
-                        "استخدم تعبيرًا غير فارغ لا يتجاوز 512 بايت UTF-8. يدعم الأعداد العشرية والحساب والمقارنة والشرط الثلاثي والدوال min/max/floor/ceil/round/abs. المتغيرات العامة prompt_tokens وcompletion_tokens وtotal_tokens؛ ومتغيرات الصور والفيديو خاصة بمساراتها. صحة الصياغة لا تضمن نجاح كل تقييم؛ المتغير المجهول أو القسمة على صفر يعيدان التسعير السابق لكل طلب أو رمز.",
+                        ...translatedMessage(
+                          "use_a_nonempty_expression_of_at_most_512_utf__d7e16c7dea",
+                        ),
                       )}
                     </small>
                   </>
@@ -626,9 +606,9 @@ export function ServerTokenPricing() {
                   <>
                     <label>
                       {text(
-                        "按次 USD/请求",
-                        "Per request USD/request",
-                        "لكل طلب دولار/طلب",
+                        ...translatedMessage(
+                          "per_request_usd_request_f7d390b205",
+                        ),
                       )}
                       <input
                         dir="ltr"
@@ -642,9 +622,9 @@ export function ServerTokenPricing() {
                     </label>
                     <small>
                       {text(
-                        "价格必须大于 0 且不超过 10000 美元/请求。零值会退出按次计价；如需其他模式，请明确选择计价方式。",
-                        "Price must be greater than 0 and at most 10000 USD/request. Zero would leave per-request pricing; select another mode explicitly when needed.",
-                        "يجب أن يكون السعر أكبر من صفر وألا يتجاوز 10000 دولار لكل طلب. الصفر يلغي التسعير لكل طلب؛ اختر نمطًا آخر صراحةً عند الحاجة.",
+                        ...translatedMessage(
+                          "price_must_be_greater_than_0_and_at_most_1000_525b787ceb",
+                        ),
                       )}
                     </small>
                   </>
@@ -652,9 +632,9 @@ export function ServerTokenPricing() {
                   <>
                     <label>
                       {text(
-                        "输入基准 USD/百万词元",
-                        "Input base USD/million tokens",
-                        "أساس الإدخال دولار/مليون رمز",
+                        ...translatedMessage(
+                          "input_base_usd_million_tokens_928d66f340",
+                        ),
                       )}
                       <input
                         dir="ltr"
@@ -668,9 +648,7 @@ export function ServerTokenPricing() {
                     </label>
                     <label>
                       {text(
-                        "输出/输入倍率",
-                        "Output/input ratio",
-                        "معامل الإخراج/الإدخال",
+                        ...translatedMessage("output_input_ratio_b3c82f0166"),
                       )}
                       <input
                         dir="ltr"
@@ -684,9 +662,9 @@ export function ServerTokenPricing() {
                     </label>
                     <small>
                       {text(
-                        "两项均为 0–10 亿的有限非负数。未配置值保持空白；不从演示价格或其他模型推断。",
-                        "Both values must be finite numbers from 0 to one billion. Unconfigured values stay blank; no Demo or other-model fallback is used.",
-                        "يجب أن تكون القيمتان محدودتين وغير سالبتين من صفر إلى مليار. تبقى القيم غير المضبوطة فارغة دون الرجوع إلى أسعار تجريبية أو نماذج أخرى.",
+                        ...translatedMessage(
+                          "both_values_must_be_finite_numbers_from_0_to__277e1c4460",
+                        ),
                       )}
                     </small>
                   </>
@@ -696,9 +674,9 @@ export function ServerTokenPricing() {
             {conflict && (
               <p role="alert">
                 {text(
-                  "配置版本变化或读取不可用，请刷新并重新打开编辑。",
-                  "Configuration changed or cannot be read. Refresh and reopen the editor.",
-                  "تغيّر الإعداد أو تعذرت قراءته. حدّث وأعد فتح المحرر.",
+                  ...translatedMessage(
+                    "configuration_changed_or_cannot_be_read_refre_d4edd25f0d",
+                  ),
                 )}
               </p>
             )}

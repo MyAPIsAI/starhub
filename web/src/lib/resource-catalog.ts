@@ -67,6 +67,27 @@ export function parseResourceSnapshot(value: unknown): ResourceSnapshot {
   const ids = new Set<string>();
   for (const resource of value.instances) {
     if (
+      object(resource) &&
+      ((resource.price_tier !== undefined &&
+        ![4, 6, 8, 10].includes(resource.price_tier as number)) ||
+        (resource.quality_level !== undefined &&
+          !["S0", "S1", "S2", "U"].includes(
+            resource.quality_level as string,
+          )) ||
+        (resource.state !== undefined &&
+          !["hot", "cold", "bad", "disabled"].includes(
+            resource.state as string,
+          )) ||
+        (resource.trend !== undefined &&
+          !["stable", "degraded"].includes(resource.trend as string)) ||
+        (resource.score !== undefined &&
+          (typeof resource.score !== "number" ||
+            !Number.isFinite(resource.score) ||
+            resource.score < 0 ||
+            resource.score > 100)))
+    )
+      return invalid();
+    if (
       !object(resource) ||
       !text(resource.id, 128) ||
       ids.has(resource.id) ||

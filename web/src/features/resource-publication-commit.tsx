@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
@@ -61,20 +62,20 @@ export function PublicationCommit({
       setError(
         cause instanceof ApiError && cause.status === 409
           ? text(
-              "预览已过期。关闭后刷新并重新生成；原选择已保留。",
-              "This review is stale. Close, refresh and generate again; selections are retained.",
-              "انتهت صلاحية المعاينة. أغلق وحدّث وأنشئها مجددًا؛ تُحفظ الاختيارات.",
+              ...translatedMessage(
+                "this_review_is_stale_close_refresh_and_genera_2807f5ec40",
+              ),
             )
           : cause instanceof ApiError && cause.status === 400
             ? text(
-                "服务器拒绝了这份预览。关闭后核对配置并重新生成。",
-                "The server rejected this review. Close, check configuration and generate again.",
-                "رفض الخادم هذه المعاينة. أغلق وراجع الإعدادات وأنشئها مجددًا.",
+                ...translatedMessage(
+                  "the_server_rejected_this_review_close_check_c_5fe5a7a804",
+                ),
               )
             : text(
-                "尚未确认提交结果。请核对提交记录，不要重复发送。",
-                "The submission outcome is unconfirmed. Check its record before any new publication.",
-                "لم تُؤكد نتيجة الإرسال. تحقق من السجل قبل أي نشر جديد.",
+                ...translatedMessage(
+                  "the_submission_outcome_is_unconfirmed_check_i_f6fa918f0f",
+                ),
               ),
       );
     } finally {
@@ -100,14 +101,14 @@ export function PublicationCommit({
         setError(
           cause instanceof ApiError && cause.status === 404
             ? text(
-                "暂未找到这份预览的提交记录。关闭后刷新并重新核对状态；这不证明之前的请求一定失败。",
-                "No submission record was found yet. Close, refresh and review current state; this does not prove the earlier request failed.",
-                "لم يُعثر على سجل إرسال بعد. أغلق وحدّث وراجع الحالة؛ هذا لا يثبت فشل الطلب السابق.",
+                ...translatedMessage(
+                  "no_submission_record_was_found_yet_close_refr_b63c224422",
+                ),
               )
             : text(
-                "无法核对提交记录。请稍后再次查询或刷新当前状态。",
-                "The submission record could not be verified. Check again later or refresh current state.",
-                "تعذر التحقق من سجل الإرسال. أعد التحقق لاحقًا أو حدّث الحالة الحالية.",
+                ...translatedMessage(
+                  "the_submission_record_could_not_be_verified_c_7e20ce5de9",
+                ),
               ),
         );
     } finally {
@@ -122,32 +123,35 @@ export function PublicationCommit({
           <strong>
             {historical
               ? text(
-                  "已核对历史提交",
-                  "Historical submission verified",
-                  "تم التحقق من الإرسال التاريخي",
+                  ...translatedMessage(
+                    "historical_submission_verified_b2624aada8",
+                  ),
                 )
               : text(
-                  "服务器已提交发布",
-                  "Publication committed by the server",
-                  "اعتمد الخادم النشر",
+                  ...translatedMessage(
+                    "publication_committed_by_the_server_1944f41a27",
+                  ),
                 )}
           </strong>
           <p>
-            {text("提交记录", "Submission record", "سجل الإرسال")}{" "}
+            {text(...translatedMessage("submission_record_0c4c5312f8"))}{" "}
             <code dir="ltr">{ack.publication_id}</code> · {ack.binding_count}{" "}
-            {text("绑定", "bindings", "روابط")} · {ack.route_count}{" "}
-            {text("组合", "pairs", "أزواج")}
+            {text(...translatedMessage("bindings_4aa0f48b55"))} ·{" "}
+            {ack.route_count} {text(...translatedMessage("pairs_16421ff278"))}
           </p>
           <p>
-            {text("资源", "Resources", "الموارد")} v{ack.resource_revision} ·{" "}
-            {text("渠道", "Channels", "القنوات")} v{ack.channel_revision} ·{" "}
-            {text("配置", "Configuration", "الإعدادات")} v{ack.option_version}
+            {text(...translatedMessage("resources_dd59219f36"))} v
+            {ack.resource_revision} ·{" "}
+            {text(...translatedMessage("channels_40b918ebad"))} v
+            {ack.channel_revision} ·{" "}
+            {text(...translatedMessage("configuration_2034cf5638"))} v
+            {ack.option_version}
           </p>
           <p>
             {text(
-              "收据仅证明这次历史提交。请刷新核对当前绑定和可用性；不代表上游或真实客户端验收。",
-              "This receipt proves a historical commit. Refresh to check current bindings and availability; it does not verify an upstream or real client.",
-              "يثبت الإيصال اعتمادًا تاريخيًا. حدّث للتحقق من الروابط والتوافر الحاليين؛ لا يثبت اختبار مزود أو عميل فعلي.",
+              ...translatedMessage(
+                "this_receipt_proves_a_historical_commit_refre_135c02b7a3",
+              ),
             )}
           </p>
         </div>
@@ -164,7 +168,7 @@ export function PublicationCommit({
             setHistorical(false);
           }}
         >
-          {text("发布这份预览", "Publish this review", "نشر هذه المعاينة")}
+          {text(...translatedMessage("publish_this_review_bb78390619"))}
         </Button>
       )}
       <Modal
@@ -176,19 +180,19 @@ export function PublicationCommit({
         className="rp-publish-dialog"
         preventOutsideClose
         title={text(
-          "确认替换所选渠道的路由",
-          "Confirm route replacement for selected channels",
-          "تأكيد استبدال مسارات القنوات المحددة",
+          ...translatedMessage(
+            "confirm_route_replacement_for_selected_channe_d218882823",
+          ),
         )}
         description={text(
-          "仅在明确确认后提交这份服务器预览。",
-          "Only explicit confirmation submits this server review.",
-          "لا تُرسل معاينة الخادم إلا بعد التأكيد الصريح.",
+          ...translatedMessage(
+            "only_explicit_confirmation_submits_this_serve_291abbd781",
+          ),
         )}
         footer={
           <>
             <Button disabled={pending} onClick={() => setCaptured(undefined)}>
-              {text("关闭", "Close", "إغلاق")}
+              {text(...translatedMessage("close_6bf477426b"))}
             </Button>
             {attempted && (
               <Button
@@ -197,9 +201,7 @@ export function PublicationCommit({
                 onClick={() => void check()}
               >
                 {text(
-                  "核对提交记录",
-                  "Check submission record",
-                  "تحقق من سجل الإرسال",
+                  ...translatedMessage("check_submission_record_a6065b3dfb"),
                 )}
               </Button>
             )}
@@ -209,7 +211,7 @@ export function PublicationCommit({
               disabled={disabled || attempted || checking}
               onClick={() => void confirm()}
             >
-              {text("确认发布", "Confirm publication", "تأكيد النشر")}
+              {text(...translatedMessage("confirm_publication_5d7b49f8ab"))}
             </Button>
           </>
         }
@@ -223,19 +225,15 @@ export function PublicationCommit({
             )}
             <p>
               {text(
-                "将替换所选真实渠道的全部模型/分组授权，不保留未列出的旧组合。",
-                "This replaces all model/group grants on selected gateway channels. Unlisted existing pairs will be removed.",
-                "يستبدل هذا جميع صلاحيات النماذج والمجموعات للقنوات المحددة. ستُزال الأزواج الحالية غير المدرجة.",
+                ...translatedMessage(
+                  "this_replaces_all_model_group_grants_on_selec_a5bd2ec261",
+                ),
               )}
             </p>
             <p>
-              {text(
-                "当前能力组合",
-                "Current ability pairs",
-                "أزواج القدرات الحالية",
-              )}
-              : {captured.existing_pairs.length} →{" "}
-              {text("拟发布组合", "Proposed pairs", "الأزواج المقترحة")}:{" "}
+              {text(...translatedMessage("current_ability_pairs_39c462f95d"))}:{" "}
+              {captured.existing_pairs.length} →{" "}
+              {text(...translatedMessage("proposed_pairs_91c410b11d"))}:{" "}
               {captured.proposed_routes.length}
             </p>
             <ul>
@@ -249,23 +247,24 @@ export function PublicationCommit({
             </ul>
             <p>
               {text(
-                "仅授予本次列出的模型、分组、上游模型、协议与能力，未声明的端点和多模态输入不能调用。上下文采用估算；发布不代表真实供应商验收。",
-                "Only the listed model/group pairs, provider models, protocols and capabilities are granted. Undeclared endpoints and media are denied. Context is estimated; publication does not establish provider acceptance.",
-                "تُمنح فقط النماذج والمجموعات والبروتوكولات والقدرات المدرجة. تُرفض الوسائط ونقاط النهاية غير المعلنة. السياق تقديري؛ والنشر لا يثبت قبول المزوّد.",
+                ...translatedMessage(
+                  "only_the_listed_model_group_pairs_provider_mo_8078deb1c8",
+                ),
               )}
             </p>
             <p>
               {text(
-                "只影响后续请求；已准入调用及历史记录保持原口径。密钥授权范围、凭证、价格和资金不由此修改。",
-                "This affects future requests. Already admitted calls and historical records retain their existing terms. Token scopes, credentials, prices and funds are unchanged.",
-                "يؤثر هذا في الطلبات اللاحقة. تحتفظ الطلبات المقبولة والسجلات التاريخية بشروطها. لا تتغير نطاقات المفاتيح أو بيانات الاعتماد أو الأسعار أو الأموال.",
+                ...translatedMessage(
+                  "this_affects_future_requests_already_admitted_aa66960a5a",
+                ),
               )}
             </p>
             <p className="rp-versions">
-              {text("资源", "Resources", "الموارد")} v
+              {text(...translatedMessage("resources_dd59219f36"))} v
               {captured.resource_revision} ·{" "}
-              {text("渠道", "Channels", "القنوات")} v{captured.channel_revision}{" "}
-              · {text("配置", "Configuration", "الإعدادات")} v
+              {text(...translatedMessage("channels_40b918ebad"))} v
+              {captured.channel_revision} ·{" "}
+              {text(...translatedMessage("configuration_2034cf5638"))} v
               {captured.option_version}
             </p>
             {renderRoutes(captured)}

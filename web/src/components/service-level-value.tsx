@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { readServiceLevel, successPercent } from "../lib/service-level";
 import "./service-level-value.css";
 
@@ -11,19 +12,19 @@ export function ServiceLevelValue({
   const sla = readServiceLevel(value);
   if (value === null || sla?.targets === null)
     return (
-      <span>{text("目标未发布", "Not published", "لم تُنشر الأهداف")}</span>
+      <span>{text(...translatedMessage("not_published_cc5c3ba13c"))}</span>
     );
   if (!sla?.targets)
     return (
       <span>
-        {text("目标未知", "Targets unavailable", "الأهداف غير متاحة")}
+        {text(...translatedMessage("targets_unavailable_a62eb2f6f2"))}
       </span>
     );
   const target = sla.targets;
   return (
     <div className="service-level-value">
       <span>
-        {text("成功率目标", "Success target", "نسبة النجاح المستهدفة")}:{" "}
+        {text(...translatedMessage("success_target_0d6cdcf9cf"))}:{" "}
         <bdi>
           {target.success_rate_ppm === null
             ? "—"
@@ -31,7 +32,7 @@ export function ServiceLevelValue({
         </bdi>
       </span>
       <span>
-        {text("P95 目标", "P95 target", "هدف P95")}:{" "}
+        {text(...translatedMessage("p95_target_a1283236a8"))}:{" "}
         <bdi>
           {target.p95_latency_ms === null ? "—" : `${target.p95_latency_ms} ms`}
         </bdi>

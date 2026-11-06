@@ -10,19 +10,43 @@ const digits: Record<MoneyMode, number> = {
 export function formatMoney(
   value: string,
   mode: MoneyMode = "balance",
+  language = typeof document === "undefined"
+    ? "en"
+    : document.documentElement.lang,
 ): string {
   const n = BigInt(value);
   const absolute = n < 0n ? -n : n;
-  if (mode === "call" && absolute > 0n && absolute < 1000n)
+  if (mode === "call" && absolute > 0n && absolute < 1000n) {
+    if (language === "ar")
+      return `\u2066${n < 0n ? "−" : ""}<${formatMoney("1000", "call", "ar").replace(/[\u2066\u2069]/g, "")}\u2069`;
     return n < 0n ? "−<$0.000001" : "<$0.000001";
+  }
   const places = digits[mode];
   const divisor = 10n ** BigInt(9 - places);
   const rounded = (absolute + divisor / 2n) / divisor;
   const base = 10n ** BigInt(places);
+  if (language === "ar") {
+    // Format integer parts without converting exact ledger amounts to floating point.
+    const parts = new Intl.NumberFormat("ar-AE-u-nu-latn", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: places,
+      maximumFractionDigits: places,
+    }).formatToParts(rounded / base);
+    const localized = parts
+      .map((part) =>
+        part.type === "fraction"
+          ? (rounded % base).toString().padStart(places, "0")
+          : part.value.replace(/[\u200e\u200f\u061c]/g, ""),
+      )
+      .join("");
+    return `\u2066${n < 0n ? "−" : ""}${localized}\u2069`;
+  }
   const whole = (rounded / base)
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${n < 0n ? "−" : ""}$${whole}.${(rounded % base).toString().padStart(places, "0")}`;
+  const amount = `${n < 0n ? "−" : ""}$${whole}.${(rounded % base).toString().padStart(places, "0")}`;
+  return amount;
 }
 
 export function sumNano(values: string[]): NanoString {

@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../../i18n/messages";
 import {
   useEffect,
   useRef,
@@ -212,28 +213,24 @@ export default function ModelSquare() {
     `/models/${encodeURIComponent(model.id)}?from=${encodeURIComponent(returnTo)}`;
   const vendorLabel = (value: string) =>
     value === "Veyra"
-      ? text("Veyra（平台）", "Veyra platform", "منصة Veyra")
+      ? text(...translatedMessage("veyra_platform_02fbaf741d"))
       : value;
   const capabilities: Record<string, string> = {
-    text: text("文本", "Text", "نص"),
-    code: text("编程", "Code", "برمجة"),
-    vision: text("视觉", "Vision", "رؤية"),
-    reasoning: text("推理", "Reasoning", "استدلال"),
-    image: text("图片", "Image", "صور"),
-    video: text("视频", "Video", "فيديو"),
+    text: text(...translatedMessage("text_0c246fb7e5")),
+    code: text(...translatedMessage("code_6980ed049f")),
+    vision: text(...translatedMessage("vision_2bb5870e7d")),
+    reasoning: text(...translatedMessage("reasoning_bc2a4ebae1")),
+    image: text(...translatedMessage("image_66fb7dd3a1")),
+    video: text(...translatedMessage("video_e2fb3c780b")),
   };
   const renderKind = (model: DirectoryModel) =>
     model.kind === "smart" ? (
       <span className="access-kind catalog-smart-label">
-        {text("智能路由", "Smart routing", "توجيه ذكي")}
+        {text(...translatedMessage("smart_routing_34b9b06792"))}
       </span>
     ) : !model.protocols.length ? (
       <span className="access-kind catalog-specific-label">
-        {text(
-          "客户端接入未提供",
-          "Client connection unavailable",
-          "اتصال العميل غير متوفر",
-        )}
+        {text(...translatedMessage("client_connection_unavailable_be1d46f21e"))}
       </span>
     ) : null;
   const renderCapabilities = (model: DirectoryModel) => (
@@ -263,8 +260,8 @@ export default function ModelSquare() {
         }
       >
         {canConnect
-          ? text("接入此模型", "Connect model", "توصيل النموذج")
-          : text("查看状态", "View status", "عرض الحالة")}
+          ? text(...translatedMessage("connect_model_84185df670"))
+          : text(...translatedMessage("view_status_42390b743c"))}
         <ArrowUpRight size={13} />
       </Link>
     );
@@ -276,17 +273,13 @@ export default function ModelSquare() {
         <section className="catalog-heading">
           <div>
             <h1>
-              {text(
-                "找到适合你的模型",
-                "Find your next model",
-                "ابحث عن نموذجك التالي",
-              )}
+              {text(...translatedMessage("find_your_next_model_9cc7c25265"))}
             </h1>
             <p>
               {text(
-                "一把密钥，在熟悉的工具中切换多个模型。",
-                "One key. Switch models in the tools you already use.",
-                "مفتاح واحد للتبديل بين النماذج في أدواتك المعتادة.",
+                ...translatedMessage(
+                  "one_key_switch_models_in_the_tools_you_alread_6fa498495f",
+                ),
               )}
             </p>
           </div>
@@ -296,13 +289,13 @@ export default function ModelSquare() {
             </span>
             <span>
               <strong>
-                {text("开始接入", "Connect a tool", "توصيل أداة")}
+                {text(...translatedMessage("connect_a_tool_20565c835b"))}
               </strong>
               <small>
                 {text(
-                  "复用密钥，获取工具配置",
-                  "Reuse a key and get tool configuration",
-                  "استخدم مفتاحًا قائمًا واحصل على الإعداد",
+                  ...translatedMessage(
+                    "reuse_a_key_and_get_tool_configuration_b5fbe8dd14",
+                  ),
                 )}
               </small>
             </span>
@@ -312,11 +305,7 @@ export default function ModelSquare() {
         <div
           className="catalog-tabs catalog-vendor-tabs"
           role="group"
-          aria-label={text(
-            "按厂商筛选",
-            "Filter by vendor",
-            "التصفية حسب المورد",
-          )}
+          aria-label={text(...translatedMessage("filter_by_vendor_08dffcaea2"))}
         >
           {[{ value: "", label: "", count: catalogTotal }, ...vendors].map(
             (item) => (
@@ -331,7 +320,7 @@ export default function ModelSquare() {
                 onClick={() => updateFilters({ vendor: item.value })}
               >
                 {!item.value
-                  ? text("全部厂商", "All vendors", "كل الموردين")
+                  ? text(...translatedMessage("all_vendors_2beb299061"))
                   : vendorLabel(item.label || item.value)}
                 <span>{item.count}</span>
               </button>
@@ -343,11 +332,13 @@ export default function ModelSquare() {
             <Search size={17} aria-hidden="true" />
             <input
               type="search"
-              aria-label={text("搜索模型", "Search models", "البحث عن نماذج")}
+              aria-label={text(
+                ...translatedMessage("search_models_767e4edbf7"),
+              )}
               placeholder={text(
-                "搜索名称、模型标识或厂商",
-                "Search name, model ID, or vendor",
-                "ابحث بالاسم أو المعرف أو المورد",
+                ...translatedMessage(
+                  "search_name_model_id_or_vendor_7ca5ed9aa5",
+                ),
               )}
               value={search}
               onChange={(e) => updateFilters({ q: e.target.value }, true)}
@@ -355,7 +346,9 @@ export default function ModelSquare() {
             {search && (
               <button
                 type="button"
-                aria-label={text("清空搜索", "Clear search", "مسح البحث")}
+                aria-label={text(
+                  ...translatedMessage("clear_search_99d00f5436"),
+                )}
                 onClick={() => updateFilters({ q: "" }, true)}
               >
                 <X size={15} />
@@ -365,15 +358,15 @@ export default function ModelSquare() {
           <div className="catalog-toolbar-end">
             <span className="catalog-result-count" role="status">
               {plazaQuery.isPending
-                ? text("加载中…", "Loading…", "جار التحميل…")
+                ? text(...translatedMessage("loading_a4e12025bb"))
                 : plazaQuery.isError
-                  ? text("加载失败", "Load failed", "تعذر التحميل")
-                  : `${models.length} ${text("个模型", "models", "نماذج")}`}
+                  ? text(...translatedMessage("load_failed_36068d34aa"))
+                  : `${models.length} ${text(...translatedMessage("models_52c071580a"))}`}
             </span>
             <div
               className="catalog-view-switch"
               role="group"
-              aria-label={text("展示方式", "Display mode", "طريقة العرض")}
+              aria-label={text(...translatedMessage("display_mode_f20af7121b"))}
             >
               <button
                 type="button"
@@ -382,7 +375,7 @@ export default function ModelSquare() {
                 onClick={() => setView("cards")}
               >
                 <LayoutGrid size={16} />
-                <span>{text("卡片", "Cards", "بطاقات")}</span>
+                <span>{text(...translatedMessage("cards_ea74f92a8a"))}</span>
               </button>
               <button
                 type="button"
@@ -391,7 +384,7 @@ export default function ModelSquare() {
                 onClick={() => setView("list")}
               >
                 <List size={17} />
-                <span>{text("列表", "List", "قائمة")}</span>
+                <span>{text(...translatedMessage("list_fac72a3200"))}</span>
               </button>
             </div>
           </div>
@@ -400,9 +393,10 @@ export default function ModelSquare() {
           <Info size={14} aria-hidden="true" />
           <p>
             {text(
-              `平台报价来自后端当前分组 ${quoteGroup || "—"}，已包含分组倍率；实际按密钥分组计费。官方参考价的适用条件见详情。`,
-              `Platform quotes are for backend group ${quoteGroup || "—"}, with its multiplier included; billing follows your key group. See details for official reference conditions.`,
-              `أسعار الخادم للمجموعة ${quoteGroup || "—"} شاملة المعامل؛ الفوترة حسب مجموعة المفتاح. راجع شروط المرجع الرسمي في التفاصيل.`,
+              ...translatedMessage(
+                "platform_quotes_are_for_backend_group_with_it_7a4ac5f3b9",
+                { p0: quoteGroup || "—" },
+              ),
             )}
           </p>
         </div>
@@ -415,36 +409,30 @@ export default function ModelSquare() {
             <Cpu size={36} />
             <h2>
               {plazaQuery.isPending
-                ? text("正在加载模型", "Loading models", "جار تحميل النماذج")
+                ? text(...translatedMessage("loading_models_ac854a2d56"))
                 : plazaQuery.isError
                   ? text(
-                      "模型加载失败",
-                      "Failed to load models",
-                      "تعذر تحميل النماذج",
+                      ...translatedMessage("failed_to_load_models_1d0672f449"),
                     )
-                  : text(
-                      "没有符合条件的模型",
-                      "No matching models",
-                      "لا توجد نماذج مطابقة",
-                    )}
+                  : text(...translatedMessage("no_matching_models_ab6a7f3e93"))}
             </h2>
             <p>
               {plazaQuery.isPending
                 ? text(
-                    "正在获取模型目录，请稍候。",
-                    "Fetching the model catalog. Please wait.",
-                    "جار جلب دليل النماذج. يرجى الانتظار.",
+                    ...translatedMessage(
+                      "fetching_the_model_catalog_please_wait_de673b3c9b",
+                    ),
                   )
                 : plazaQuery.isError
                   ? text(
-                      "暂时无法获取模型目录，请重试。",
-                      "The model catalog is unavailable. Please retry.",
-                      "دليل النماذج غير متاح حاليًا. يرجى إعادة المحاولة.",
+                      ...translatedMessage(
+                        "the_model_catalog_is_unavailable_please_retry_a82d31d6dd",
+                      ),
                     )
                   : text(
-                      "试试其他厂商或关键词。",
-                      "Try another vendor or search term.",
-                      "جرّب موردًا أو كلمة بحث أخرى.",
+                      ...translatedMessage(
+                        "try_another_vendor_or_search_term_37f1f0037a",
+                      ),
                     )}
             </p>
             {!plazaQuery.isPending && (
@@ -458,8 +446,8 @@ export default function ModelSquare() {
                 }}
               >
                 {plazaQuery.isError
-                  ? text("重试", "Retry", "إعادة المحاولة")
-                  : text("清除筛选", "Clear filters", "مسح عوامل التصفية")}
+                  ? text(...translatedMessage("retry_c16455021c"))
+                  : text(...translatedMessage("clear_filters_fb9b992311"))}
               </Button>
             )}
           </div>
@@ -498,9 +486,7 @@ export default function ModelSquare() {
                       <span
                         className="catalog-context-info"
                         title={text(
-                          "演示上下文",
-                          "Demo context",
-                          "السياق التجريبي",
+                          ...translatedMessage("demo_context_d2808a6c99"),
                         )}
                       >
                         <bdi>{model.contextDisplay}</bdi>
@@ -519,24 +505,20 @@ export default function ModelSquare() {
           <div
             className="catalog-list"
             role="table"
-            aria-label={text("模型列表", "Model list", "قائمة النماذج")}
+            aria-label={text(...translatedMessage("model_list_aba1fb7a46"))}
           >
             <div className="catalog-list-head" role="row">
               <div role="columnheader">
-                {text("模型 / 标识", "Model / ID", "النموذج / المعرف")}
+                {text(...translatedMessage("model_id_aa489331aa"))}
               </div>
               <div role="columnheader">
-                {text(
-                  "能力 / 上下文",
-                  "Capabilities / context",
-                  "القدرات / السياق",
-                )}
+                {text(...translatedMessage("capabilities_context_4521df5a70"))}
               </div>
               <div role="columnheader">
-                {text("价格对照", "Price comparison", "مقارنة الأسعار")}
+                {text(...translatedMessage("price_comparison_cea6ad3d85"))}
               </div>
               <div role="columnheader">
-                {text("操作", "Actions", "الإجراءات")}
+                {text(...translatedMessage("actions_d83f4ed14a"))}
               </div>
             </div>
             {entries.map((entry) => {
@@ -564,7 +546,7 @@ export default function ModelSquare() {
                     {renderCapabilities(model)}
                     {model.protocols.length > 0 && model.kind !== "smart" && (
                       <div className="catalog-context-info">
-                        {text("上下文", "Context", "السياق")}{" "}
+                        {text(...translatedMessage("context_9810531841"))}{" "}
                         <bdi>{model.contextDisplay}</bdi>
                       </div>
                     )}
@@ -602,14 +584,23 @@ export default function ModelSquare() {
                 fontWeight: "var(--weight-bold)",
               }}
             >
-              {text("模型排行榜", "Model ranking", "ترتيب النماذج")}
+              {text(...translatedMessage("model_ranking_e8b97d360b"))}
             </h2>
             <div style={{ display: "flex", gap: 4 }}>
               {(
                 [
-                  { id: "value", label: text("性价比", "Value", "القيمة") },
-                  { id: "hot", label: text("热门", "Popular", "الشائع") },
-                  { id: "new", label: text("最新", "Newest", "الأحدث") },
+                  {
+                    id: "value",
+                    label: text(...translatedMessage("value_e035bd0136")),
+                  },
+                  {
+                    id: "hot",
+                    label: text(...translatedMessage("popular_ba11f0a9f0")),
+                  },
+                  {
+                    id: "new",
+                    label: text(...translatedMessage("newest_61c766d0ce")),
+                  },
                 ] as { id: PlazaRankType; label: string }[]
               ).map((tab) => (
                 <button
@@ -634,7 +625,7 @@ export default function ModelSquare() {
           </div>
           {rankQuery.isLoading ? (
             <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)" }}>
-              {text("加载中…", "Loading…", "جارٍ التحميل…")}
+              {text(...translatedMessage("loading_4c20385375"))}
             </p>
           ) : rankQuery.data?.items?.length ? (
             <div
@@ -711,7 +702,7 @@ export default function ModelSquare() {
             </div>
           ) : (
             <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)" }}>
-              {text("暂无排行榜数据", "No ranking data", "لا بيانات ترتيب")}
+              {text(...translatedMessage("no_ranking_data_06785284ff"))}
             </p>
           )}
         </section>

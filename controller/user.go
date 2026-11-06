@@ -351,20 +351,21 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 func publicUser(u *model.User) map[string]any {
 	return map[string]any{
-		"api_balance_nano": model.APIBalanceNano(u).String(),
-		"platform_admin":   u.HasPlatformWorkspace(),
-		"account_kind":     u.AccountKind,
-		"id":               u.ID,
-		"username":         u.Username,
-		"email":            u.Email,
-		"role":             u.Role,
-		"status":           u.Status,
-		"quota":            u.Quota,
-		"used_quota":       u.UsedQuota,
-		"group":            u.Group,
-		"aff_code":         u.AffCode,
-		"inviter_id":       u.InviterID,
-		"created_at":       u.CreatedAt,
+		"api_balance_nano":   model.APIBalanceNano(u).String(),
+		"platform_admin":     u.HasPlatformWorkspace(),
+		"account_kind":       u.AccountKind,
+		"id":                 u.ID,
+		"username":           u.Username,
+		"email":              u.Email,
+		"preferred_language": u.PreferredLanguage,
+		"role":               u.Role,
+		"status":             u.Status,
+		"quota":              u.Quota,
+		"used_quota":         u.UsedQuota,
+		"group":              u.Group,
+		"aff_code":           u.AffCode,
+		"inviter_id":         u.InviterID,
+		"created_at":         u.CreatedAt,
 	}
 }
 

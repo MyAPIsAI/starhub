@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -34,10 +36,10 @@ export type KeySecretAction = "view" | "copy";
 type KeyAction = (key: PreviewKey) => void;
 const periodName = (period: PreviewKey["quotaPeriod"], text: Text) =>
   period === "daily"
-    ? text("每日重置", "Resets daily", "إعادة يومية")
+    ? text(...translatedMessage("resets_daily_be717db526"))
     : period === "monthly"
-      ? text("每月重置", "Resets monthly", "إعادة شهرية")
-      : text("不重置", "No reset", "دون إعادة");
+      ? text(...translatedMessage("resets_monthly_9850fef677"))
+      : text(...translatedMessage("no_reset_74958fd486"));
 const money = (nano: string) =>
   formatMoney(
     nano,
@@ -84,28 +86,24 @@ function KeyStatus({
       >
         {item.active ? <Check size={12} /> : <Pause size={12} />}
         {item.active
-          ? text("已启用", "Enabled", "مفعّل")
-          : text("已停用", "Disabled", "معطّل")}
+          ? text(...translatedMessage("enabled_d4fda6d86a"))
+          : text(...translatedMessage("disabled_ab66c5caec"))}
       </span>
       {expired && (
         <small className="key-quota-exhausted">
-          {text("已过期", "Expired", "منتهي الصلاحية")}
+          {text(...translatedMessage("expired_11167eed99"))}
         </small>
       )}
       {exhausted && (
         <small className="key-quota-exhausted">
           {exceeded
-            ? text(
-                "已超当前额度",
-                "Current limit exceeded",
-                "تجاوز الحد الحالي",
-              )
-            : text("额度已用尽", "Limit reached", "استُنفد الحد")}
+            ? text(...translatedMessage("current_limit_exceeded_cc3d80ebbd"))
+            : text(...translatedMessage("limit_reached_04905e78e0"))}
         </small>
       )}
       {!exhausted && nearLimit && (
         <small className="key-quota-warning">
-          {text("额度将尽", "Near limit", "قرب بلوغ الحد")}
+          {text(...translatedMessage("near_limit_6d339b9313"))}
         </small>
       )}
     </div>
@@ -195,9 +193,9 @@ function KeyActionsMenu({
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         aria-label={text(
-          `${item.name} 的更多操作`,
-          `More actions for ${item.name}`,
-          `المزيد من إجراءات ${item.name}`,
+          ...translatedMessage("more_actions_for_4965ae6bf1", {
+            p0: item.name,
+          }),
         )}
         onClick={() => setOpen(!open)}
         onKeyDown={(event) => {
@@ -208,7 +206,7 @@ function KeyActionsMenu({
         }}
       >
         <MoreHorizontal size={17} />
-        <span>{text("更多", "More", "المزيد")}</span>
+        <span>{text(...translatedMessage("more_cf83566eec"))}</span>
       </button>
       {open && (
         <div
@@ -216,7 +214,7 @@ function KeyActionsMenu({
           id={menuId}
           role="menu"
           ref={menu}
-          aria-label={text("密钥操作", "Key actions", "إجراءات المفتاح")}
+          aria-label={text(...translatedMessage("key_actions_00ab564c69"))}
         >
           <button
             type="button"
@@ -225,7 +223,7 @@ function KeyActionsMenu({
             onClick={() => choose(onDetails)}
           >
             <List size={15} />
-            {text("密钥详情", "Key details", "تفاصيل المفتاح")}
+            {text(...translatedMessage("key_details_85c8df0bff"))}
           </button>
           <button
             type="button"
@@ -235,8 +233,8 @@ function KeyActionsMenu({
           >
             {item.active ? <Pause size={15} /> : <Play size={15} />}
             {item.active
-              ? text("停用密钥", "Disable key", "تعطيل المفتاح")
-              : text("启用密钥", "Enable key", "تفعيل المفتاح")}
+              ? text(...translatedMessage("disable_key_4dffc6b207"))
+              : text(...translatedMessage("enable_key_bb19cb41d8"))}
           </button>
           <button
             type="button"
@@ -245,7 +243,7 @@ function KeyActionsMenu({
             onClick={() => choose(onRegenerate)}
           >
             <RotateCcw size={15} />
-            {text("重置密钥", "Regenerate key", "تجديد المفتاح")}
+            {text(...translatedMessage("regenerate_key_230088f779"))}
           </button>
           <button
             type="button"
@@ -255,7 +253,7 @@ function KeyActionsMenu({
             onClick={() => choose(onDelete)}
           >
             <Trash2 size={15} />
-            {text("删除密钥", "Delete key", "حذف المفتاح")}
+            {text(...translatedMessage("delete_key_90a1ff06c7"))}
           </button>
         </div>
       )}
@@ -299,52 +297,48 @@ export default function KeyList({
     <section className="key-manager">
       <header className="key-manager-header">
         <div>
-          <h1>{text("访问密钥", "API keys", "مفاتيح الوصول")}</h1>
+          <h1>{text(...translatedMessage("api_keys_7e3d5e4b7d"))}</h1>
           <p>
             {text(
-              "管理应用凭证、启用状态与消费额度。",
-              "Manage application credentials, status and spending limits.",
-              "أدر بيانات اعتماد التطبيقات وحالتها وحدود الإنفاق.",
+              ...translatedMessage(
+                "manage_application_credentials_status_and_spe_c1f9a26900",
+              ),
             )}
           </p>
         </div>
         <Button variant="primary" onClick={onCreate}>
           <Plus size={15} />
-          {text("创建密钥", "Create key", "إنشاء مفتاح")}
+          {text(...translatedMessage("create_key_06433c30b0"))}
         </Button>
       </header>
       {!keys.length ? (
         <div className="key-list-empty">
           <KeyRound size={28} />
-          <h2>{text("还没有访问密钥", "No keys yet", "لا توجد مفاتيح بعد")}</h2>
+          <h2>{text(...translatedMessage("no_keys_yet_0872a1eecd"))}</h2>
           <p>
             {text(
-              "创建一把密钥，再在客户端选择模型使用。",
-              "Create a key, then select your model in your client.",
-              "أنشئ مفتاحًا ثم اختر النموذج في تطبيقك.",
+              ...translatedMessage(
+                "create_a_key_then_select_your_model_in_your_c_d586e1860e",
+              ),
             )}
           </p>
           <Button onClick={onCreate}>
-            {text("创建密钥", "Create key", "إنشاء مفتاح")}
+            {text(...translatedMessage("create_key_06433c30b0"))}
           </Button>
         </div>
       ) : (
         <div
           className="key-list-table"
           role="table"
-          aria-label={text(
-            "访问密钥列表",
-            "API key list",
-            "قائمة مفاتيح الوصول",
-          )}
+          aria-label={text(...translatedMessage("api_key_list_d9208d98a8"))}
         >
           <div className="key-list-head" role="row">
             {[
-              text("密钥", "Key", "المفتاح"),
-              text("服务分组", "Service group", "مجموعة الخدمة"),
-              text("状态", "Status", "الحالة"),
-              text("消费额度", "Spending limit", "حد الإنفاق"),
-              text("操作", "Actions", "الإجراءات"),
+              text(...translatedMessage("key_64846eb2df")),
+              text(...translatedMessage("service_group_1c6f8adf41")),
+              text(...translatedMessage("status_dda39dcd63")),
+              text(...translatedMessage("spending_limit_0562b63d71")),
+              text(...translatedMessage("actions_d83f4ed14a")),
             ].map((label) => (
               <div key={label} role="columnheader">
                 {label}
@@ -384,20 +378,26 @@ export default function KeyList({
                         aria-label={
                           visible
                             ? text(
-                                `隐藏 ${item.name} 的密钥`,
-                                `Hide key for ${item.name}`,
-                                `إخفاء مفتاح ${item.name}`,
+                                ...translatedMessage(
+                                  "hide_key_for_65de012616",
+                                  { p0: item.name },
+                                ),
                               )
                             : text(
-                                `查看 ${item.name} 的密钥`,
-                                `Reveal key for ${item.name}`,
-                                `عرض مفتاح ${item.name}`,
+                                ...translatedMessage(
+                                  "reveal_key_for_3b07c078fc",
+                                  { p0: item.name },
+                                ),
                               )
                         }
                         title={
                           visible
-                            ? text("隐藏密钥", "Hide key", "إخفاء المفتاح")
-                            : text("验证查看", "Verify to reveal", "تحقق للعرض")
+                            ? text(...translatedMessage("hide_key_c69295abde"))
+                            : text(
+                                ...translatedMessage(
+                                  "verify_to_reveal_6c27be333c",
+                                ),
+                              )
                         }
                         onClick={() =>
                           visible ? onHide(item.id) : onSecret(item, "view")
@@ -409,11 +409,13 @@ export default function KeyList({
                         type="button"
                         data-key-action="copy"
                         aria-label={text(
-                          `复制 ${item.name} 的密钥`,
-                          `Copy key for ${item.name}`,
-                          `نسخ مفتاح ${item.name}`,
+                          ...translatedMessage("copy_key_for_8ef91d257e", {
+                            p0: item.name,
+                          }),
                         )}
-                        title={text("复制密钥", "Copy key", "نسخ المفتاح")}
+                        title={text(
+                          ...translatedMessage("copy_key_eb45bf5c2d"),
+                        )}
                         onClick={() => onSecret(item, "copy")}
                       >
                         <Copy size={14} />
@@ -423,7 +425,7 @@ export default function KeyList({
                 </div>
                 <div className="key-list-group" role="cell">
                   <span className="key-mobile-label">
-                    {text("服务分组", "Service group", "مجموعة الخدمة")}
+                    {text(...translatedMessage("service_group_1c6f8adf41"))}
                   </span>
                   <TierBadge id={item.tier} />
                 </div>
@@ -446,7 +448,7 @@ export default function KeyList({
                     <strong dir="ltr">{money(quota.usedNano)}</strong>
                     <span>
                       {quota.limitNano === null ? (
-                        text(" / 不限额", " / Unlimited", " / بلا حد")
+                        text(...translatedMessage("unlimited_bb98361525"))
                       ) : (
                         <bdi dir="ltr"> / {money(quota.limitNano)}</bdi>
                       )}
@@ -457,9 +459,10 @@ export default function KeyList({
                       className={`key-quota-track${quota.exhausted ? " is-exhausted" : quota.nearLimit ? " is-near" : ""}`}
                       role="progressbar"
                       aria-label={text(
-                        `${item.name} 的消费额度使用率`,
-                        `Spending limit used for ${item.name}`,
-                        `استخدام حد الإنفاق لـ ${item.name}`,
+                        ...translatedMessage(
+                          "spending_limit_used_for_f394c828f7",
+                          { p0: item.name },
+                        ),
                       )}
                       aria-valuemin={0}
                       aria-valuemax={100}
@@ -484,7 +487,7 @@ export default function KeyList({
                     disabled={!item.active}
                     onClick={() => onConnect(item)}
                   >
-                    {text("接入", "Connect", "ربط")}
+                    {text(...translatedMessage("connect_81f76afa98"))}
                   </Button>
                   <button
                     className="key-edit-action"
@@ -492,7 +495,7 @@ export default function KeyList({
                     data-key-action="edit"
                     onClick={() => onEdit(item)}
                   >
-                    {text("编辑", "Edit", "تعديل")}
+                    {text(...translatedMessage("edit_6224671192"))}
                   </button>
                   <KeyActionsMenu
                     item={item}
@@ -510,9 +513,10 @@ export default function KeyList({
       )}
       <p className="key-list-footnote">
         {text(
-          `${keys.length} 把密钥 · 消费金额为模拟数据`,
-          `${keys.length} keys · Spending amounts are simulated`,
-          `${keys.length} مفاتيح · مبالغ الإنفاق تجريبية`,
+          ...translatedMessage(
+            "keys_spending_amounts_are_simulated_f9b8828c47",
+            { p0: keys.length },
+          ),
         )}
       </p>
     </section>
@@ -541,35 +545,35 @@ export function KeyDetails({
       : (item.allowedModels ?? [item.model]);
   const date = (value?: string | null) =>
     value
-      ? new Intl.DateTimeFormat(i18n.language, {
+      ? new Intl.DateTimeFormat(regionalLocale(i18n.language), {
           dateStyle: "medium",
           timeStyle: "short",
           timeZone: "Asia/Dubai",
         }).format(new Date(value))
-      : text("尚无记录", "Not recorded", "غير مسجّل");
+      : text(...translatedMessage("not_recorded_0407708992"));
   return (
     <div className="key-detail" data-key-detail={item.id}>
       <section>
-        <h3>{text("基本信息", "Basic information", "المعلومات الأساسية")}</h3>
+        <h3>{text(...translatedMessage("basic_information_c28cfb4d8c"))}</h3>
         <dl>
           <div>
-            <dt>{text("密钥名称", "Key name", "اسم المفتاح")}</dt>
+            <dt>{text(...translatedMessage("key_name_c60bdc543a"))}</dt>
             <dd>{item.name}</dd>
           </div>
           <div>
-            <dt>{text("密钥标识", "Key ID", "معرّف المفتاح")}</dt>
+            <dt>{text(...translatedMessage("key_id_db5f419032"))}</dt>
             <dd>
               <code dir="ltr">{item.id}</code>
             </dd>
           </div>
           <div>
-            <dt>{text("服务分组", "Service group", "مجموعة الخدمة")}</dt>
+            <dt>{text(...translatedMessage("service_group_1c6f8adf41"))}</dt>
             <dd>
               <TierBadge id={item.tier} />
             </dd>
           </div>
           <div>
-            <dt>{text("状态", "Status", "الحالة")}</dt>
+            <dt>{text(...translatedMessage("status_dda39dcd63"))}</dt>
             <dd>
               <KeyStatus
                 item={item}
@@ -582,40 +586,36 @@ export function KeyDetails({
             </dd>
           </div>
           <div>
-            <dt>{text("最后使用", "Last used", "آخر استخدام")}</dt>
+            <dt>{text(...translatedMessage("last_used_42a34272e0"))}</dt>
             <dd>{date(item.lastUsedAt)}</dd>
           </div>
           <div>
-            <dt>{text("有效期", "Expires", "انتهاء الصلاحية")}</dt>
+            <dt>{text(...translatedMessage("expires_4c2b1bc79c"))}</dt>
             <dd>
               {item.validUntil
                 ? date(item.validUntil)
-                : text("长期有效", "No expiry", "دون انتهاء")}
+                : text(...translatedMessage("no_expiry_5f6d3fb5e8"))}
             </dd>
           </div>
         </dl>
         <p className="key-detail-hint">
           {text(
-            "时间按迪拜时区显示。",
-            "Times are shown in Dubai time.",
-            "تُعرض الأوقات بتوقيت دبي.",
+            ...translatedMessage("times_are_shown_in_dubai_time_716dc35780"),
           )}
         </p>
       </section>
       <section>
-        <h3>{text("消费额度", "Spending limit", "حد الإنفاق")}</h3>
+        <h3>{text(...translatedMessage("spending_limit_0562b63d71"))}</h3>
         <dl>
           <div>
-            <dt>
-              {text("当前周期已用", "Used this period", "المستخدم خلال الفترة")}
-            </dt>
+            <dt>{text(...translatedMessage("used_this_period_d49ac65202"))}</dt>
             <dd dir="ltr">{money(quota.usedNano)}</dd>
           </div>
           <div>
-            <dt>{text("额度上限", "Limit", "الحد")}</dt>
+            <dt>{text(...translatedMessage("limit_8ca8e48322"))}</dt>
             <dd>
               {quota.limitNano === null ? (
-                text("不限额", "Unlimited", "بلا حد")
+                text(...translatedMessage("unlimited_3db9664741"))
               ) : (
                 <bdi dir="ltr">{money(quota.limitNano)}</bdi>
               )}
@@ -623,16 +623,18 @@ export function KeyDetails({
           </div>
           {quota.remainingNano !== null && (
             <div>
-              <dt>{text("剩余额度", "Remaining", "المتبقي")}</dt>
+              <dt>{text(...translatedMessage("remaining_735d237b85"))}</dt>
               <dd dir="ltr">{money(quota.remainingNano)}</dd>
             </div>
           )}
           <div>
-            <dt>{text("额度周期", "Quota period", "فترة الحصة")}</dt>
+            <dt>{text(...translatedMessage("quota_period_23b646d127"))}</dt>
             <dd>{periodName(quota.period, text)}</dd>
           </div>
           <div>
-            <dt>{text("累计消费", "Lifetime spending", "إجمالي الإنفاق")}</dt>
+            <dt>
+              {text(...translatedMessage("lifetime_spending_d3b58ade21"))}
+            </dt>
             <dd dir="ltr">
               {money(item.totalUsed_nano ?? item.currentPeriodUsed_nano ?? "0")}
             </dd>
@@ -640,71 +642,59 @@ export function KeyDetails({
         </dl>
         <p className="key-detail-hint">
           {text(
-            "按模拟请求实际累计；周期以迪拜时间为准。",
-            "Totals reflect simulated requests; periods use Dubai time.",
-            "تعكس الإجماليات الطلبات التجريبية؛ الفترات بتوقيت دبي.",
+            ...translatedMessage(
+              "totals_reflect_simulated_requests_periods_use_4b4d8c03c0",
+            ),
           )}
         </p>
       </section>
       <section>
-        <h3>{text("模型授权", "Model access", "صلاحيات النماذج")}</h3>
+        <h3>{text(...translatedMessage("model_access_dedddbaa09"))}</h3>
         <dl>
           <div>
-            <dt>{text("授权范围", "Access scope", "نطاق الصلاحيات")}</dt>
+            <dt>{text(...translatedMessage("access_scope_1f11112dac"))}</dt>
             <dd>
               {item.modelAccess === "all"
-                ? text(
-                    "分组全部模型",
-                    "All group models",
-                    "جميع نماذج المجموعة",
-                  )
-                : text(
-                    "模型白名单",
-                    "Model allowlist",
-                    "قائمة النماذج المسموحة",
-                  )}
+                ? text(...translatedMessage("all_group_models_d6e225abd3"))
+                : text(...translatedMessage("model_allowlist_3a57ae93e3"))}
             </dd>
           </div>
           <div>
             <dt>
-              {text(
-                "指定模型调用",
-                "Direct model requests",
-                "طلبات النماذج المباشرة",
-              )}
+              {text(...translatedMessage("direct_model_requests_dbb0db748c"))}
             </dt>
             <dd>
               {allowsSpecifiedModels(item)
-                ? text("允许", "Allowed", "مسموح")
-                : text("不允许", "Not allowed", "غير مسموح")}
+                ? text(...translatedMessage("allowed_48c0aa47dc"))
+                : text(...translatedMessage("not_allowed_a92c42fbae"))}
             </dd>
           </div>
           <div>
-            <dt>{text("智能路由入口", "Smart routing", "التوجيه الذكي")}</dt>
+            <dt>{text(...translatedMessage("smart_routing_c4f3fd8e0e"))}</dt>
             <dd>
               {allowsSmartModel(item)
                 ? text(
-                    "允许 · 受上述授权约束",
-                    "Allowed · within this scope",
-                    "مسموح ضمن هذا النطاق",
+                    ...translatedMessage(
+                      "allowed_within_this_scope_51483c14ba",
+                    ),
                   )
-                : text("不允许", "Not allowed", "غير مسموح")}
+                : text(...translatedMessage("not_allowed_a92c42fbae"))}
             </dd>
           </div>
         </dl>
         {item.smartAccess === undefined && (
           <p className="key-detail-legacy">
             {text(
-              "此密钥保留旧版授权，改版没有自动扩大模型或智能路由权限。",
-              "Legacy access is preserved. Model and routing permissions were not automatically expanded.",
-              "تُحفظ الصلاحيات القديمة دون توسيع تلقائي للنماذج أو التوجيه.",
+              ...translatedMessage(
+                "legacy_access_is_preserved_model_and_routing__1d8e9aa23b",
+              ),
             )}
           </p>
         )}
         <h4 className="key-detail-model-heading">
           {allowsSpecifiedModels(item)
-            ? text("授权模型", "Authorized models", "النماذج المصرّح بها")
-            : text("路由候选", "Routing candidates", "مرشحو التوجيه")}
+            ? text(...translatedMessage("authorized_models_c194b309e9"))
+            : text(...translatedMessage("routing_candidates_5eef0ab025"))}
         </h4>
         <ul className="key-detail-models">
           {modelIds.map((id) => (
@@ -718,9 +708,7 @@ export function KeyDetails({
               {!available.some((model) => model.id === id) && (
                 <small>
                   {text(
-                    "当前分组不可用",
-                    "Unavailable in group",
-                    "غير متاح في المجموعة",
+                    ...translatedMessage("unavailable_in_group_396ca621b8"),
                   )}
                 </small>
               )}
@@ -730,15 +718,15 @@ export function KeyDetails({
         {!modelIds.length && (
           <p className="key-detail-hint">
             {text(
-              "当前没有可用的授权模型。",
-              "No authorized models are currently available.",
-              "لا تتوفر نماذج مصرّح بها حاليًا.",
+              ...translatedMessage(
+                "no_authorized_models_are_currently_available_0f3b30d87b",
+              ),
             )}
           </p>
         )}
       </section>
       <section>
-        <h3>{text("来源地址限制", "IP restrictions", "قيود عناوين المصدر")}</h3>
+        <h3>{text(...translatedMessage("ip_restrictions_4288eddb2a"))}</h3>
         {item.ipWhitelist?.length ? (
           <ul className="key-detail-ip">
             {item.ipWhitelist.map((ip) => (
@@ -749,16 +737,12 @@ export function KeyDetails({
           </ul>
         ) : (
           <p className="key-detail-hint">
-            {text(
-              "未设置地址限制。",
-              "No IP restrictions set.",
-              "لم تُحدّد قيود للعناوين.",
-            )}
+            {text(...translatedMessage("no_ip_restrictions_set_68f208188a"))}
           </p>
         )}
       </section>
       <Button onClick={() => onEdit(item)}>
-        {text("编辑密钥设置", "Edit key settings", "تعديل إعدادات المفتاح")}
+        {text(...translatedMessage("edit_key_settings_7f830d4f88"))}
       </Button>
     </div>
   );

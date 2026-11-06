@@ -64,7 +64,13 @@
   margin-top: 12px;
   font-size: 24px;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+@media (max-width: 600px) {
+  .usage-summary-value {
+    font-size: 18px;
+  }
 }
 .usage-muted {
   color: var(--muted);

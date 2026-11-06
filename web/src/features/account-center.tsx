@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -55,35 +57,31 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
   const [logoutError, setLogoutError] = useState("");
   const [copied, setCopied] = useState(false);
   const profileName =
-    sessionUsername(session) ?? c("账号中心", "Account center", "مركز الحساب");
+    sessionUsername(session) ??
+    c(...translatedMessage("account_center_60e51179ff"));
   const accountId =
     session.accountId === null ? null : String(session.accountId);
   const otherSessions = backendSessions.some((item) => !item.is_current);
   const formatDate = (value: string) =>
-    new Intl.DateTimeFormat(
-      language === "zh" ? "zh-CN" : language === "ar" ? "ar" : "en",
-      {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      },
-    ).format(new Date(value));
+    new Intl.DateTimeFormat(regionalLocale(language), {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
   async function copyId() {
     if (accountId === null) return;
     try {
       await navigator.clipboard.writeText(accountId);
       setCopied(true);
-      setNotice(
-        c("用户 ID（标识）已复制。", "User ID copied.", "نُسخ معرّف المستخدم."),
-      );
+      setNotice(c(...translatedMessage("user_id_copied_a7ab87cd8f")));
     } catch {
       setNotice(
         c(
-          "未能自动复制，请在用户 ID（标识）输入框中选中并复制。",
-          "Copy failed. Select and copy the user ID from its field.",
-          "تعذر النسخ. حدد معرّف المستخدم وانسخه من الحقل.",
+          ...translatedMessage(
+            "copy_failed_select_and_copy_the_user_id_from__877044d541",
+          ),
         ),
       );
     }
@@ -107,9 +105,9 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
       if (isCurrent())
         setLogoutError(
           c(
-            "未能确认退出结果，请重新读取登录设备或确认当前账号后核对。",
-            "Sign-out could not be confirmed. Reload devices or confirm the current account to check.",
-            "تعذر تأكيد تسجيل الخروج. أعد تحميل الأجهزة أو أكّد الحساب الحالي للتحقق.",
+            ...translatedMessage(
+              "sign_out_could_not_be_confirmed_reload_device_dd76a96c33",
+            ),
           ),
         );
     } finally {
@@ -120,17 +118,17 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
     <div className="account-center">
       <header className="ac-heading">
         <div>
-          <h1>{c("账号中心", "Account center", "مركز الحساب")}</h1>
+          <h1>{c(...translatedMessage("account_center_60e51179ff"))}</h1>
           <p>
             {c(
-              "管理账号身份、登录方式与安全信息。",
-              "Manage your identity, sign-in methods and account security.",
-              "إدارة هويتك وطرق الدخول وأمان الحساب.",
+              ...translatedMessage(
+                "manage_your_identity_sign_in_methods_and_acco_21278dee79",
+              ),
             )}
           </p>
         </div>
         <span className="ac-demo-tag">
-          {c("服务器账号", "Server account", "حساب الخادم")}
+          {c(...translatedMessage("server_account_46645f86b3"))}
         </span>
       </header>
       {notice && (
@@ -149,37 +147,37 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
           </div>
           <div>
             <h2 id="ac-profile-title">{profileName}</h2>
-            <p>{c("账号资料", "Account profile", "بيانات الحساب")}</p>
+            <p>{c(...translatedMessage("account_profile_cdbd818f5d"))}</p>
           </div>
           <span
             className={`ac-badge ${profile?.status === 1 ? "ac-badge--success" : "ac-badge--warning"}`}
           >
             {profile?.status === 1
-              ? c("正常", "Active", "نشط")
+              ? c(...translatedMessage("active_1dcd1c3d8f"))
               : profile?.status === 2
-                ? c("已停用", "Disabled", "معطل")
-                : c("未确认", "Unconfirmed", "غير مؤكد")}
+                ? c(...translatedMessage("disabled_2556c8592f"))
+                : c(...translatedMessage("unconfirmed_6d40d4c4c5"))}
           </span>
         </div>
         <div className="ac-identity-grid">
           <div className="ac-field">
             <label htmlFor="account-username">
               {sessionUsername(session)
-                ? c("用户名", "Username", "اسم المستخدم")
-                : c("登录账号", "Login account", "حساب الدخول")}
+                ? c(...translatedMessage("username_52bf46ce51"))
+                : c(...translatedMessage("login_account_a78d09d30b"))}
             </label>
             <Input id="account-username" value={profileName} readOnly />
             <small>
               {c(
-                "用于登录，当前版本不可修改。",
-                "Your sign-in name; editing is unavailable in this version.",
-                "اسم الدخول؛ لا يمكن تعديله في هذا الإصدار.",
+                ...translatedMessage(
+                  "your_sign_in_name_editing_is_unavailable_in_t_5f4a59f856",
+                ),
               )}
             </small>
           </div>
           <div className="ac-field">
             <label htmlFor="account-id">
-              {c("用户 ID（标识）", "User ID", "معرّف المستخدم")}
+              {c(...translatedMessage("user_id_e23e6a991e"))}
             </label>
             <div className="ac-id">
               <Input
@@ -190,11 +188,7 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
               />
               <Button
                 size="icon"
-                aria-label={c(
-                  "复制用户 ID（标识）",
-                  "Copy user ID",
-                  "نسخ معرّف المستخدم",
-                )}
+                aria-label={c(...translatedMessage("copy_user_id_e6772ffc1b"))}
                 onClick={copyId}
                 disabled={accountId === null}
               >
@@ -203,78 +197,74 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
             </div>
             <small>
               {c(
-                "账号的固定标识，用于定位问题与核对记录。",
-                "A permanent identifier for support and record matching.",
-                "معرّف ثابت لتحديد الحساب ومطابقة السجلات.",
+                ...translatedMessage(
+                  "a_permanent_identifier_for_support_and_record_e904b47c07",
+                ),
               )}
             </small>
           </div>
           <div className="ac-meta">
-            <span>{c("账号身份", "Account role", "دور الحساب")}</span>
+            <span>{c(...translatedMessage("account_role_bb4f156761"))}</span>
             <strong>
               {session.platformAdmin
-                ? c("平台管理员", "Platform administrator", "مسؤول المنصة")
+                ? c(...translatedMessage("platform_administrator_489c68ad11"))
                 : profile?.role === 100
-                  ? c("超级管理员", "Root", "المسؤول الأعلى")
+                  ? c(...translatedMessage("root_93c072d1ee"))
                   : profile?.role === 10
-                    ? c("平台管理员", "Administrator", "مدير المنصة")
+                    ? c(...translatedMessage("administrator_7d64c1eea3"))
                     : profile?.role === 5
-                      ? c("财务", "Finance", "المالية")
+                      ? c(...translatedMessage("finance_dfaa8d1e15"))
                       : profile?.role === 1
-                        ? c("普通用户", "User", "مستخدم")
-                        : c("未确认", "Unconfirmed", "غير مؤكد")}
+                        ? c(...translatedMessage("user_f0f3c6b09f"))
+                        : c(...translatedMessage("unconfirmed_6d40d4c4c5"))}
             </strong>
             <small>
               {c(
-                "平台权限与服务分组授权分别管理。",
-                "Platform permissions and service-group access are separate.",
-                "تُدار أذونات المنصة والوصول إلى مجموعات الخدمة بشكل منفصل.",
+                ...translatedMessage(
+                  "platform_permissions_and_service_group_access_1fc081723e",
+                ),
               )}
             </small>
           </div>
           <div className="ac-meta">
-            <span>{c("注册时间", "Created", "تاريخ الإنشاء")}</span>
+            <span>{c(...translatedMessage("created_e7096b514b"))}</span>
             <strong>
               {profile?.created_at
                 ? formatDate(new Date(profile.created_at * 1000).toISOString())
                 : profile
                   ? c(
-                      "历史账号，时间未记录",
-                      "Existing account; date not recorded",
-                      "حساب سابق؛ التاريخ غير مسجل",
+                      ...translatedMessage(
+                        "existing_account_date_not_recorded_fc9fa43f0d",
+                      ),
                     )
-                  : c("未确认", "Unconfirmed", "غير مؤكد")}
+                  : c(...translatedMessage("unconfirmed_6d40d4c4c5"))}
             </strong>
             <small>
               {c(
-                "时间按当前设备时区显示。",
-                "Times use your device's time zone.",
-                "الأوقات حسب المنطقة الزمنية لجهازك.",
+                ...translatedMessage(
+                  "times_use_your_device_s_time_zone_a9dba7c06c",
+                ),
               )}
             </small>
           </div>
         </div>
         {profileQuery.isLoading && (
           <p role="status" className="ac-empty-hint">
-            {c(
-              "正在读取账号资料…",
-              "Loading account profile…",
-              "جارٍ تحميل بيانات الحساب…",
-            )}
+            {c(...translatedMessage("loading_account_profile_29056796f7"))}
           </p>
         )}
         {profileQuery.isError && (
           <p role="alert" className="ac-empty-hint">
             {profileOwnerChanged
               ? c(
-                  "登录账号可能已变化，请重新确认当前账号。",
-                  "The signed-in account may have changed. Confirm the current account.",
-                  "ربما تغير الحساب المسجل. أكّد الحساب الحالي.",
+                  ...translatedMessage(
+                    "the_signed_in_account_may_have_changed_confir_2764a99c4c",
+                  ),
                 )
               : c(
-                  "暂时无法读取账号资料，旧资料已隐藏。",
-                  "The account profile is unavailable. Previous details are hidden.",
-                  "بيانات الحساب غير متاحة. أُخفيت التفاصيل السابقة.",
+                  ...translatedMessage(
+                    "the_account_profile_is_unavailable_previous_d_660a9c847b",
+                  ),
                 )}
           </p>
         )}
@@ -290,12 +280,8 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
             }
           >
             {profileOwnerChanged
-              ? c(
-                  "确认当前账号",
-                  "Confirm current account",
-                  "تأكيد الحساب الحالي",
-                )
-              : c("重新读取资料", "Reload profile", "إعادة تحميل البيانات")}
+              ? c(...translatedMessage("confirm_current_account_9bdf8613b1"))
+              : c(...translatedMessage("reload_profile_a2022bbf8f"))}
           </Button>
         </div>
       </section>
@@ -306,13 +292,13 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
             <div>
               <h2 id="ac-devices-title">
                 <Monitor size={18} />
-                {c("登录设备", "Signed-in devices", "أجهزة الدخول")}
+                {c(...translatedMessage("signed_in_devices_568e5614ae"))}
               </h2>
               <p>
                 {c(
-                  "活跃会话列表。",
-                  "Active sessions for your account.",
-                  "الجلسات النشطة لحسابك.",
+                  ...translatedMessage(
+                    "active_sessions_for_your_account_9abddb32c7",
+                  ),
                 )}
               </p>
             </div>
@@ -324,17 +310,17 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
                 <div>
                   <strong>
                     {session.is_current
-                      ? c("当前会话", "Current session", "الجلسة الحالية")
-                      : c("其他会话", "Other session", "جلسة أخرى")}
+                      ? c(...translatedMessage("current_session_25470fb346"))
+                      : c(...translatedMessage("other_session_7b212c4b24"))}
                   </strong>
                   <p dir="ltr">
-                    {c("创建于", "Created", "أُنشئت")}{" "}
+                    {c(...translatedMessage("created_1402d40fad"))}{" "}
                     {new Date(session.created_at * 1000).toLocaleString(
                       language === "zh" ? "zh-CN" : "en-GB",
                     )}
                   </p>
                   <small>
-                    {c("过期于", "Expires", "تنتهي")}{" "}
+                    {c(...translatedMessage("expires_1faaae491b"))}{" "}
                     {new Date(session.expires_at * 1000).toLocaleString(
                       language === "zh" ? "zh-CN" : "en-GB",
                     )}
@@ -342,18 +328,14 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
                 </div>
                 {session.is_current && (
                   <span className="ac-badge ac-badge--success">
-                    {c("当前", "Current", "الحالي")}
+                    {c(...translatedMessage("current_1214f62533"))}
                   </span>
                 )}
               </div>
             ))}
             {sessionsQuery.isLoading && (
               <p role="status" className="ac-empty-hint">
-                {c(
-                  "正在读取登录设备…",
-                  "Loading account devices…",
-                  "جارٍ تحميل أجهزة الحساب…",
-                )}
+                {c(...translatedMessage("loading_account_devices_142e1b67a8"))}
               </p>
             )}
             {sessionsQuery.isError && (
@@ -361,14 +343,14 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
                 <p className="ac-empty-hint">
                   {deviceOwnerChanged
                     ? c(
-                        "登录账号可能已变化，请重新确认当前账号。",
-                        "The signed-in account may have changed. Confirm the current account.",
-                        "ربما تغير الحساب المسجل. أكّد الحساب الحالي.",
+                        ...translatedMessage(
+                          "the_signed_in_account_may_have_changed_confir_2764a99c4c",
+                        ),
                       )
                     : c(
-                        "暂时无法读取设备列表，旧记录已隐藏。",
-                        "The device list is unavailable. Previous records are hidden.",
-                        "قائمة الأجهزة غير متاحة. أُخفيت السجلات السابقة.",
+                        ...translatedMessage(
+                          "the_device_list_is_unavailable_previous_recor_a934660fa1",
+                        ),
                       )}
                 </p>
               </div>
@@ -378,11 +360,7 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
               !sessionsQuery.isError &&
               session.accountId !== null && (
                 <p className="ac-empty-hint">
-                  {c(
-                    "暂无活跃会话。",
-                    "No active sessions.",
-                    "لا توجد جلسات نشطة.",
-                  )}
+                  {c(...translatedMessage("no_active_sessions_b451a8bb07"))}
                 </p>
               )}
           </div>
@@ -409,12 +387,8 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
               }
             >
               {deviceOwnerChanged
-                ? c(
-                    "确认当前账号",
-                    "Confirm current account",
-                    "تأكيد الحساب الحالي",
-                  )
-                : c("重新读取设备", "Reload devices", "إعادة تحميل الأجهزة")}
+                ? c(...translatedMessage("confirm_current_account_9bdf8613b1"))
+                : c(...translatedMessage("reload_devices_cf18e295e8"))}
             </Button>
             <Button
               size="small"
@@ -424,28 +398,24 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
                   onSuccess: () => {
                     setNotice(
                       c(
-                        "其他设备已下线。",
-                        "Other devices were signed out.",
-                        "سُجل خروج الأجهزة الأخرى.",
+                        ...translatedMessage(
+                          "other_devices_were_signed_out_378f2c3fa1",
+                        ),
                       ),
                     );
                   },
                   onError: () =>
                     setNotice(
                       c(
-                        "未能确认设备操作结果，请重新读取列表后核对。",
-                        "The device operation could not be confirmed. Reload the list to check.",
-                        "تعذر تأكيد عملية الأجهزة. أعد تحميل القائمة للتحقق.",
+                        ...translatedMessage(
+                          "the_device_operation_could_not_be_confirmed_r_94d580c98f",
+                        ),
                       ),
                     ),
                 });
               }}
             >
-              {c(
-                "下线其他设备",
-                "Sign out other devices",
-                "خروج الأجهزة الأخرى",
-              )}
+              {c(...translatedMessage("sign_out_other_devices_f0a6f5cd66"))}
             </Button>
             <Button
               size="small"
@@ -455,7 +425,7 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
               onClick={() => signOut()}
             >
               <LogOut size={14} />
-              {c("退出当前账号", "Sign out", "تسجيل الخروج")}
+              {c(...translatedMessage("sign_out_4fb3312a6b"))}
             </Button>
           </div>
         </section>
@@ -464,17 +434,17 @@ function AccountWorkspace({ onDeactivate }: { onDeactivate: () => void }) {
       {session.accountKind !== "staff" && (
         <section className="ac-close">
           <div>
-            <h2>{c("注销账号", "Close account", "إغلاق الحساب")}</h2>
+            <h2>{c(...translatedMessage("close_account_e9a0b4116f"))}</h2>
             <p>
               {c(
-                "注销前需处理余额和未完成订单，确认后将无法继续调用。",
-                "Resolve your balance and pending orders before closing. Model access stops after confirmation.",
-                "سوِّ الرصيد والطلبات المعلقة قبل الإغلاق. سيتوقف استخدام النماذج بعد التأكيد.",
+                ...translatedMessage(
+                  "resolve_your_balance_and_pending_orders_befor_f23e84d733",
+                ),
               )}
             </p>
           </div>
           <Button size="small" variant="ghost" onClick={onDeactivate}>
-            {c("申请注销", "Close account", "طلب الإغلاق")}
+            {c(...translatedMessage("close_account_04aaf76b86"))}
           </Button>
         </section>
       )}

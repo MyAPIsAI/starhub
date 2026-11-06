@@ -11,7 +11,7 @@ Internal credentials, roles, status and authenticator state live in `staff_accou
 | Finance | Customer inspection, immediate manual balance adjustments, financial statements and reconciliation reports, operations metrics, own audit records |
 | Technical | Resource/channel and routing inspection, forced full snapshot synchronization, system information, read-only customer/call inspection, own audit records |
 
-Root sees all audit records. Non-Root staff cannot manage staff identities. Operations cannot mint redemption codes, upload task plugins, change non-pricing options, manually adjust balances or force upstream synchronization. Disabling a staff account or changing its role increments its security version and revokes existing sessions. Disabled identities remain available for historical audit references.
+Root sees all audit records. Non-Root staff cannot manage staff identities. Redemption codes and JavaScript task plugins are excluded by the PRD and unavailable to every role, including Root. Operations cannot change non-pricing options, manually adjust balances or force upstream synchronization. Disabling a staff account or changing its role increments its security version and revokes existing sessions. Disabled identities remain available for historical audit references.
 
 ## Deployment initialization
 
@@ -43,7 +43,7 @@ The deployment command checks sole-Root status atomically and records the recove
 
 ## Full resource synchronization
 
-Set `STARHUB_RESOURCE_SNAPSHOT_URL` to the authoritative full-snapshot endpoint and, if required, `STARHUB_RESOURCE_SNAPSHOT_TOKEN` to its bearer credential. HTTPS is required outside loopback. Forced synchronization requests `GET ?full=true`, does not follow redirects, and validates the existing snapshot contract, including increasing sequence numbers. Fetch, validation or revision-conflict failures preserve the published snapshot. Without a configured source the API returns 503 and the UI disables synchronization; local option reloads are not reported as upstream synchronization.
+Set `STARHUB_RESOURCE_SNAPSHOT_URL` to the authoritative full-snapshot endpoint and, if required, `STARHUB_RESOURCE_SNAPSHOT_TOKEN` to its bearer credential. HTTPS is required outside loopback. Scheduled alignment runs every five minutes; forced synchronization requires a confirmation dialog and `{"confirm":true}`. Both request `GET ?full=true` with the last applied version/checksum, refuse redirects and validate versions/content before publication. Identical repeated snapshots succeed without changing inventory. Failures retain published data and append safe failure history. Without a configured source the API returns 503 and the UI disables synchronization; local option reloads are not reported as upstream synchronization. The versioned response envelope, legacy compatibility mode, gateway status and external-integration boundaries are documented in [M7 resource monitoring](m7-administration.md#resource-synchronization-and-instance-status-adm-61--adm-63).
 
 ## Upgrade behavior
 

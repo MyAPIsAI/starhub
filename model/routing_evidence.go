@@ -9,13 +9,14 @@ import (
 )
 
 type RoutingEvidence struct {
+	Instances map[string]ResourceInstance
 	Sequence  int64
 	Revision  int64
 	Resources map[string][]string
 }
 
 func CaptureRoutingEvidence(ctx context.Context) (*RoutingEvidence, error) {
-	result := &RoutingEvidence{Resources: map[string][]string{}}
+	result := &RoutingEvidence{Resources: map[string][]string{}, Instances: map[string]ResourceInstance{}}
 	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var record ResourceCatalogRecord
 		if err := tx.First(&record, 1).Error; err != nil {
@@ -29,7 +30,13 @@ func CaptureRoutingEvidence(ctx context.Context) (*RoutingEvidence, error) {
 		if err := json.Unmarshal([]byte(record.Snapshot), &snapshot); err != nil {
 			return err
 		}
+		if err := overlayResourceDirectoryPrices(tx, &ResourceCatalog{Snapshot: &snapshot}); err != nil {
+			return err
+		}
 		result.Sequence = snapshot.Sequence
+		for _, instance := range snapshot.Instances {
+			result.Instances[instance.ID] = instance
+		}
 		var owners []ResourceGatewayManagedChannel
 		if err := tx.Where("active = ?", true).Find(&owners).Error; err != nil {
 			return err

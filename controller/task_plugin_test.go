@@ -52,7 +52,7 @@ func submitExamplePlugin(t *testing.T, token *model.Token) *httptest.ResponseRec
 	r.Header.Set("Authorization", "Bearer "+token.Key)
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayTaskSubmitVideo))).ServeHTTP(w, r)
+	middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(legacyPluginAdmission))).ServeHTTP(w, r)
 	return w
 }
 

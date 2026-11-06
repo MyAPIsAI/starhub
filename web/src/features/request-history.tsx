@@ -1,5 +1,7 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useSearchParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { regionalLocale } from "../lib/locale-format";
 import {
   CalendarDays,
   Download,
@@ -9,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
+  ArrowDown,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { TierBadge } from "../components/tier-badge";
@@ -116,29 +119,21 @@ export default function RequestHistory({
     !!params.get("key_id") ||
     !!params.get("model");
   const rangeLabel = {
-    today: c("今日", "Today", "اليوم"),
-    "7d": c("近 7 天", "Last 7 days", "آخر 7 أيام"),
-    "30d": c("近 30 天", "Last 30 days", "آخر 30 يومًا"),
-    custom: c("自定义日期", "Custom dates", "تواريخ مخصصة"),
-    all: c("近一年", "Last year", "آخر سنة"),
+    today: c(...translatedMessage("today_f692c6d48f")),
+    "7d": c(...translatedMessage("last_7_days_1365f5fbb3")),
+    "30d": c(...translatedMessage("last_30_days_24648573ce")),
+    custom: c(...translatedMessage("custom_dates_15b2c69cd1")),
+    all: c(...translatedMessage("last_year_dfdae1e760")),
   };
   const errorText =
     result.error === "missing_dates"
-      ? c(
-          "请选择完整的开始和结束日期。",
-          "Choose both a start and end date.",
-          "اختر تاريخ البداية والنهاية.",
-        )
+      ? c(...translatedMessage("choose_both_a_start_and_end_date_4a91577c48"))
       : result.error === "invalid_date"
-        ? c(
-            "日期无效，请重新选择。",
-            "Invalid date. Choose a valid date.",
-            "التاريخ غير صالح. اختر تاريخًا صالحًا.",
-          )
+        ? c(...translatedMessage("invalid_date_choose_a_valid_date_bf8c46e512"))
         : c(
-            "结束日期不能早于开始日期。",
-            "The end date cannot precede the start date.",
-            "لا يمكن أن يسبق تاريخ النهاية تاريخ البداية.",
+            ...translatedMessage(
+              "the_end_date_cannot_precede_the_start_date_b6d2f65af1",
+            ),
           );
   return (
     <section className="request-history">
@@ -171,13 +166,13 @@ export default function RequestHistory({
             }}
           >
             <Download size={14} />
-            {c("创建导出任务", "Create export task", "إنشاء مهمة تصدير")}
+            {c(...translatedMessage("create_export_task_e769ec073c"))}
           </Button>
           <small>
             {c(
-              "保留本页筛选条件，单次最多 31 天",
-              "Uses the current filters, up to 31 days",
-              "تُطبق مرشحات الصفحة، حتى 31 يومًا",
+              ...translatedMessage(
+                "uses_the_current_filters_up_to_31_days_04c3534b67",
+              ),
             )}
           </small>
         </div>
@@ -186,19 +181,15 @@ export default function RequestHistory({
         <div className="request-history-toolbar">
           <label className="request-history-search">
             <span className="sr-only">
-              {c("搜索调用", "Search requests", "بحث الطلبات")}
+              {c(...translatedMessage("search_requests_3f6f554dd7"))}
             </span>
             <Search size={15} aria-hidden="true" />
             <input
               type="search"
-              aria-label={c("搜索调用", "Search requests", "بحث الطلبات")}
+              aria-label={c(...translatedMessage("search_requests_3f6f554dd7"))}
               value={query}
               onChange={(e) => change({ query: e.target.value }, true)}
-              placeholder={c(
-                "精确搜索 Trace ID（追踪编号）",
-                "Exact Trace ID",
-                "معرّف التتبع المطابق",
-              )}
+              placeholder={c(...translatedMessage("exact_trace_id_feff830003"))}
             />
           </label>
           {serverPage &&
@@ -206,15 +197,15 @@ export default function RequestHistory({
               <label className="request-history-field" key={dim}>
                 <span className="sr-only">
                   {dim === "key"
-                    ? c("筛选密钥", "Filter key", "تصفية المفتاح")
-                    : c("筛选模型", "Filter model", "تصفية النموذج")}
+                    ? c(...translatedMessage("filter_key_6470a1a76d"))
+                    : c(...translatedMessage("filter_model_279a4304b3"))}
                 </span>
                 <select
                   className="select-trigger"
                   aria-label={
                     dim === "key"
-                      ? c("筛选密钥", "Filter key", "تصفية المفتاح")
-                      : c("筛选模型", "Filter model", "تصفية النموذج")
+                      ? c(...translatedMessage("filter_key_6470a1a76d"))
+                      : c(...translatedMessage("filter_model_279a4304b3"))
                   }
                   value={params.get(dim === "key" ? "key_id" : "model") ?? ""}
                   onChange={(e) =>
@@ -225,8 +216,8 @@ export default function RequestHistory({
                 >
                   <option value="">
                     {dim === "key"
-                      ? c("全部密钥", "All keys", "كل المفاتيح")
-                      : c("全部模型", "All models", "كل النماذج")}
+                      ? c(...translatedMessage("all_keys_092be94fb9"))
+                      : c(...translatedMessage("all_models_aa0962e85e"))}
                   </option>
                   {(options?.[dim] ?? []).map((v) => (
                     <option key={v.id} value={v.id}>
@@ -239,14 +230,12 @@ export default function RequestHistory({
           <label className="request-history-field">
             <CalendarDays size={15} aria-hidden="true" />
             <span className="sr-only">
-              {c("调用时间", "Request date range", "الفترة الزمنية للطلبات")}
+              {c(...translatedMessage("request_date_range_171c1a1185"))}
             </span>
             <select
               className="select-trigger"
               aria-label={c(
-                "调用时间",
-                "Request date range",
-                "الفترة الزمنية للطلبات",
+                ...translatedMessage("request_date_range_171c1a1185"),
               )}
               value={range}
               onChange={(e) =>
@@ -270,38 +259,42 @@ export default function RequestHistory({
           </label>
           <label className="request-history-status">
             <span className="sr-only">
-              {c("调用状态", "Request status", "حالة الطلب")}
+              {c(...translatedMessage("request_status_3ec173bb98"))}
             </span>
             <select
               className="select-trigger"
-              aria-label={c("调用状态", "Request status", "حالة الطلب")}
+              aria-label={c(...translatedMessage("request_status_3ec173bb98"))}
               value={status}
               onChange={(e) => change({ status: e.target.value })}
             >
               <option value="all">
-                {c("全部状态", "All statuses", "كل الحالات")}
+                {c(...translatedMessage("all_statuses_df82d81776"))}
               </option>
-              <option value="success">{c("成功", "Success", "نجاح")}</option>
-              <option value="failed">{c("失败", "Failed", "فشل")}</option>
+              <option value="success">
+                {c(...translatedMessage("success_7f82e1ddcc"))}
+              </option>
+              <option value="failed">
+                {c(...translatedMessage("failed_5da76a883a"))}
+              </option>
               <option value="cancelled">
-                {c("已取消", "Cancelled", "ملغى")}
+                {c(...translatedMessage("cancelled_544275e39b"))}
               </option>
             </select>
           </label>
           {hasFilters && (
             <button className="request-clear-button" onClick={clear}>
               <RotateCcw size={13} />
-              {c("清空筛选", "Clear filters", "مسح المرشحات")}
+              {c(...translatedMessage("clear_filters_bd434ebfc4"))}
             </button>
           )}
         </div>
         {range === "custom" && (
           <div className="request-custom-dates">
             <label>
-              {c("开始日期", "Start date", "تاريخ البداية")}
+              {c(...translatedMessage("start_date_761834f95f"))}
               <input
                 type="date"
-                aria-label={c("开始日期", "Start date", "تاريخ البداية")}
+                aria-label={c(...translatedMessage("start_date_761834f95f"))}
                 aria-invalid={!!result.error}
                 aria-describedby={
                   result.error ? "request-date-error" : undefined
@@ -314,10 +307,10 @@ export default function RequestHistory({
               —
             </span>
             <label>
-              {c("结束日期", "End date", "تاريخ النهاية")}
+              {c(...translatedMessage("end_date_ddebce9446"))}
               <input
                 type="date"
-                aria-label={c("结束日期", "End date", "تاريخ النهاية")}
+                aria-label={c(...translatedMessage("end_date_ddebce9446"))}
                 aria-invalid={!!result.error}
                 aria-describedby={
                   result.error ? "request-date-error" : undefined
@@ -328,9 +321,9 @@ export default function RequestHistory({
             </label>
             <span>
               {c(
-                "包含起止日期的完整一天",
-                "Includes both full calendar days",
-                "يشمل يومَي البداية والنهاية كاملين",
+                ...translatedMessage(
+                  "includes_both_full_calendar_days_b1aa9ef31f",
+                ),
               )}
             </span>
           </div>
@@ -347,22 +340,22 @@ export default function RequestHistory({
         )}
         <div className="request-history-summary">
           <span aria-live="polite">
-            {c(`共 ${count} 条调用`, `${count} requests`, `${count} طلبًا`)}
+            {c(...translatedMessage("requests_5805c076af", { p0: count }))}
             {!serverPage && requests.length !== count && (
               <small>
                 {c(
-                  ` / 全部 ${requests.length} 条`,
-                  ` / ${requests.length} total`,
-                  ` / ${requests.length} إجمالًا`,
+                  ...translatedMessage("total_9de357c4ce", {
+                    p0: requests.length,
+                  }),
                 )}
               </small>
             )}
           </span>
           <span>
             {c(
-              `日期与时间均按 ${timezone}`,
-              `Dates and times use ${timezone}`,
-              `التواريخ والأوقات بتوقيت ${timezone}`,
+              ...translatedMessage("dates_and_times_use_161b9d770f", {
+                p0: timezone,
+              }),
             )}
           </span>
         </div>
@@ -371,47 +364,40 @@ export default function RequestHistory({
             <table className="request-history-table">
               <thead>
                 <tr>
+                  <th aria-sort="descending">
+                    {c(
+                      ...translatedMessage("time_9416f54517", { p0: timezone }),
+                    )}
+                    <ArrowDown
+                      size={12}
+                      aria-hidden="true"
+                      style={{ display: "inline", marginInlineStart: 4 }}
+                    />
+                  </th>
+                  <th>{c(...translatedMessage("trace_id_326806835b"))}</th>
+                  <th>{c(...translatedMessage("key_type_8fb6f58a20"))}</th>
                   <th>
                     {c(
-                      `时间（${timezone}）`,
-                      `Time (${timezone})`,
-                      `الوقت (${timezone})`,
+                      ...translatedMessage("requested_actual_model_05304874f7"),
                     )}
                   </th>
-                  <th>{c("业务编号", "Trace ID", "معرّف الطلب")}</th>
-                  <th>
-                    {c("密钥 / 调用类型", "Key / type", "المفتاح / النوع")}
-                  </th>
+                  <th>{c(...translatedMessage("vendor_5dc28b7ea6"))}</th>
+                  <th>{c(...translatedMessage("group_528d77dde5"))}</th>
+                  <th>{c(...translatedMessage("status_dda39dcd63"))}</th>
+                  <th>{c(...translatedMessage("switch_error_5c4477d117"))}</th>
                   <th>
                     {c(
-                      "请求模型 → 实际模型",
-                      "Requested → actual model",
-                      "المطلوب → الفعلي",
+                      ...translatedMessage(
+                        "input_output_cache_tokens_38a3a3cdab",
+                      ),
                     )}
                   </th>
-                  <th>{c("厂商", "Vendor", "المزوّد")}</th>
-                  <th>{c("分组", "Group", "المجموعة")}</th>
-                  <th>{c("状态", "Status", "الحالة")}</th>
-                  <th>
-                    {c(
-                      "自动切换 / 错误码",
-                      "Switch / error",
-                      "التحويل / الخطأ",
-                    )}
-                  </th>
-                  <th>
-                    {c(
-                      "输入 / 输出 / 缓存读写 Token",
-                      "Input / output / cache tokens",
-                      "رموز الإدخال / الإخراج / التخزين",
-                    )}
-                  </th>
-                  <th>{c("首 Token 延迟", "First token", "أول رمز")}</th>
+                  <th>{c(...translatedMessage("first_token_4d9199c032"))}</th>
                   <th className="request-number">
-                    {c("耗时", "Duration", "المدة")}
+                    {c(...translatedMessage("duration_aab6e26676"))}
                   </th>
                   <th className="request-number">
-                    {c("费用（美元）", "Cost (USD)", "التكلفة (دولار)")}
+                    {c(...translatedMessage("cost_usd_9cd3ac1402"))}
                   </th>
                 </tr>
               </thead>
@@ -419,10 +405,13 @@ export default function RequestHistory({
                 {visibleRows.map((row) => (
                   <tr key={row.trace_id} onClick={() => onSelect(row)}>
                     <td className="mono">
-                      {new Date(row.time).toLocaleString("en-GB", {
-                        timeZone: timezone,
-                        hour12: false,
-                      })}
+                      {new Date(row.time).toLocaleString(
+                        regionalLocale(i18n.language),
+                        {
+                          timeZone: timezone,
+                          hour12: false,
+                        },
+                      )}
                     </td>
                     <td className="mono">
                       <button
@@ -437,15 +426,17 @@ export default function RequestHistory({
                     </td>
                     <td>
                       {row.key_deleted
-                        ? c("已删除的 Key", "Deleted key", "مفتاح محذوف")
+                        ? c(...translatedMessage("deleted_key_571647d876"))
                         : row.key_name || row.key_id || "—"}
                       <small>
                         {callTypeLabel(row.call_type, i18n.language)}
                       </small>
                     </td>
                     <td>
-                      <strong>{row.requested_model || row.model}</strong>
-                      <small>
+                      <strong dir="ltr">
+                        {row.requested_model || row.model}
+                      </strong>
+                      <small dir="ltr">
                         →{" "}
                         {row.actual_model ||
                           (row.status === "success" ? row.model : "—")}
@@ -466,7 +457,7 @@ export default function RequestHistory({
                           <Check size={13} />
                         )}
                         {row.outcome === "cancelled"
-                          ? c("已取消", "Cancelled", "ملغى")
+                          ? c(...translatedMessage("cancelled_544275e39b"))
                           : t(
                               row.status === "failed"
                                 ? "pFailed"
@@ -477,9 +468,9 @@ export default function RequestHistory({
                     <td>
                       {row.fallback
                         ? c(
-                            "已自动切换",
-                            "Automatically switched",
-                            "تم التحويل تلقائيًا",
+                            ...translatedMessage(
+                              "automatically_switched_cd94edcbb0",
+                            ),
                           )
                         : "—"}
                       <small>{row.error_code || "—"}</small>
@@ -503,7 +494,8 @@ export default function RequestHistory({
                       {row.ttft_ms ? `${row.ttft_ms} ms` : "—"}
                     </td>
                     <td className="mono request-number">
-                      {row.duration_ms} {c("毫秒", "ms", "مللي ثانية")}
+                      {row.duration_ms}{" "}
+                      {c(...translatedMessage("ms_7184894997"))}
                     </td>
                     <td className="mono request-number request-cost">
                       {formatMoney(row.cost_nano, "call")}
@@ -517,11 +509,7 @@ export default function RequestHistory({
         {(serverPage?.loading || serverPage?.error) && (
           <p role={serverPage.error ? "alert" : "status"}>
             {serverPage.error ||
-              c(
-                "正在加载调用明细…",
-                "Loading requests…",
-                "جارٍ تحميل الطلبات…",
-              )}
+              c(...translatedMessage("loading_requests_bbb4221e07"))}
           </p>
         )}
         {!visibleRows.length && !serverPage?.loading && !serverPage?.error && (
@@ -529,51 +517,43 @@ export default function RequestHistory({
             {result.error ? (
               <>
                 <strong>
-                  {c(
-                    "请检查日期范围",
-                    "Check the date range",
-                    "تحقق من الفترة الزمنية",
-                  )}
+                  {c(...translatedMessage("check_the_date_range_52d6975253"))}
                 </strong>
                 <p>{errorText}</p>
               </>
             ) : !requests.length ? (
               <>
                 <strong>
-                  {c("还没有调用记录", "No requests yet", "لا توجد طلبات بعد")}
+                  {c(...translatedMessage("no_requests_yet_7e097cd000"))}
                 </strong>
                 <p>
                   {c(
-                    "接入工具后，可在这里核对费用与异常。",
-                    "Connect a tool to review costs and errors here.",
-                    "اربط أداة لمراجعة التكاليف والأخطاء هنا.",
+                    ...translatedMessage(
+                      "connect_a_tool_to_review_costs_and_errors_her_1eebf97789",
+                    ),
                   )}
                 </p>
                 <Link to="/console/connect">
-                  {c("前往接入", "Connect a tool", "ربط أداة")}
+                  {c(...translatedMessage("connect_a_tool_ef1a3d8013"))}
                 </Link>
               </>
             ) : (
               <>
                 <strong>
-                  {c(
-                    "没有符合筛选条件的调用",
-                    "No matching requests",
-                    "لا توجد طلبات مطابقة",
-                  )}
+                  {c(...translatedMessage("no_matching_requests_71efebcf83"))}
                 </strong>
                 <p>
                   {c(
-                    "调整时间、状态或搜索词，已有记录不会被删除。",
-                    "Adjust the date, status or search. Your records are unchanged.",
-                    "عدّل التاريخ أو الحالة أو البحث. لم تتغير سجلاتك.",
+                    ...translatedMessage(
+                      "adjust_the_date_status_or_search_your_records_6da21b58e8",
+                    ),
                   )}
                 </p>
                 <Button size="small" variant="secondary" onClick={clear}>
                   {c(
-                    "清空筛选，查看全部",
-                    "Clear filters and show all",
-                    "مسح المرشحات وعرض الكل",
+                    ...translatedMessage(
+                      "clear_filters_and_show_all_4d14a05fa8",
+                    ),
                   )}
                 </Button>
               </>
@@ -584,18 +564,20 @@ export default function RequestHistory({
           <span>
             {count
               ? c(
-                  `第 ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, count)} 条，共 ${count} 条`,
-                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, count)} of ${count}`,
-                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, count)} من ${count}`,
+                  ...translatedMessage("of_d11efb7ec9", {
+                    p0: (page - 1) * PAGE_SIZE + 1,
+                    p1: Math.min(page * PAGE_SIZE, count),
+                    p2: count,
+                  }),
                 )
-              : c("0 条记录", "0 records", "0 سجلات")}
+              : c(...translatedMessage("0_records_ddc08efba4"))}
           </span>
           <div>
             <Button
               size="small"
               variant="secondary"
               disabled={page <= 1}
-              aria-label={c("上一页", "Previous page", "الصفحة السابقة")}
+              aria-label={c(...translatedMessage("previous_page_69cac17b46"))}
               onClick={() => change({ page: String(page - 1) })}
             >
               <ChevronLeft size={14} />
@@ -607,7 +589,7 @@ export default function RequestHistory({
               size="small"
               variant="secondary"
               disabled={page >= pages}
-              aria-label={c("下一页", "Next page", "الصفحة التالية")}
+              aria-label={c(...translatedMessage("next_page_8a29f0d0d2"))}
               onClick={() => change({ page: String(page + 1) })}
             >
               <ChevronRight size={14} />

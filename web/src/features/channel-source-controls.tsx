@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -36,26 +38,26 @@ export function ChannelSourceControls({
         <div>
           <span className="pricing-eyebrow">
             <Network size={15} />
-            {text("系统设置", "System settings", "إعدادات النظام")}
+            {text(...translatedMessage("system_settings_966a9e1755"))}
           </span>
-          <h1>{text("渠道管理", "Channels", "القنوات")}</h1>
+          <h1>{text(...translatedMessage("channels_eee07fd951"))}</h1>
           <p>
             {text(
-              "按渠道或标准模型组织资源，统一管理映射与销售投放。",
-              "Browse by channel or standard model. Manage resource mapping and placement.",
-              "تصفح حسب القناة أو النموذج وأدر الربط والنشر.",
+              ...translatedMessage(
+                "browse_by_channel_or_standard_model_manage_re_ff887719e4",
+              ),
             )}
           </p>
         </div>
         <div className="channel-page-actions">
           <Button asChild>
             <Link to="/console/model-pricing">
-              {text("标准模型", "Standard models", "النماذج القياسية")}
+              {text(...translatedMessage("standard_models_d7f00fd7f0"))}
             </Link>
           </Button>
           <Button variant="primary" onClick={() => setOpen(true)}>
             <RefreshCw size={15} />
-            {text("同步资源", "Sync resources", "مزامنة الموارد")}
+            {text(...translatedMessage("sync_resources_99eef5158b"))}
           </Button>
         </div>
       </header>
@@ -63,32 +65,30 @@ export function ChannelSourceControls({
         <div>
           <Database size={14} />
           <strong>
-            {text("资源管理平台", "Resource platform", "منصة الموارد")}
+            {text(...translatedMessage("resource_platform_0c225d5c88"))}
           </strong>
           <span className="channel-demo-label">
-            {text("本地模拟", "Local demo", "عرض محلي")}
+            {text(...translatedMessage("local_demo_2768dd8aea"))}
           </span>
           <code>{snapshot.id}</code>
           <span className="channel-source-time">
-            {text("更新于", "Updated", "تحديث")}{" "}
-            {new Date(snapshot.receivedAt).toLocaleString(
-              lang === "zh" ? "zh-CN" : lang === "ar" ? "ar" : "en-US",
-            )}
+            {text(...translatedMessage("updated_bf7485a3fd"))}{" "}
+            {new Date(snapshot.receivedAt).toLocaleString(regionalLocale(lang))}
           </span>
         </div>
         <button onClick={() => setOpen(true)}>
-          {text("快照详情", "Snapshot details", "تفاصيل اللقطة")}
+          {text(...translatedMessage("snapshot_details_fcb75398b6"))}
           <ChevronRight size={13} />
         </button>
       </div>
       <Modal
         open={open}
         onOpenChange={setOpen}
-        title={text("同步资源", "Sync resources", "مزامنة الموارد")}
+        title={text(...translatedMessage("sync_resources_99eef5158b"))}
         description={text(
-          "使用本地快照模拟资源管理平台。同步前先检查差异，不自动开放新资源。",
-          "Local snapshots simulate the resource platform. Review changes before syncing; new resources are never opened automatically.",
-          "تحاكي اللقطات المحلية المنصة. راجع التغييرات؛ لا تنشر الموارد الجديدة تلقائياً.",
+          ...translatedMessage(
+            "local_snapshots_simulate_the_resource_platfor_5dccbf3786",
+          ),
         )}
         footer={
           <>
@@ -99,7 +99,7 @@ export function ChannelSourceControls({
               }}
             >
               <Upload size={14} />
-              {text("导入快照数据", "Import snapshot", "استيراد لقطة")}
+              {text(...translatedMessage("import_snapshot_694cc2cc87"))}
             </Button>
             <Button
               variant="primary"
@@ -108,16 +108,16 @@ export function ChannelSourceControls({
                 if (mode === "fail")
                   onFailure(
                     text(
-                      "模拟同步失败：资源平台暂时不可用。继续使用现有快照，本次未改变资源状态或本地投放。",
-                      "Demo sync failed: the resource platform is unavailable. The existing snapshot and placements are unchanged.",
-                      "فشلت المزامنة المحاكاة. بقيت اللقطة وإعدادات النشر كما هي.",
+                      ...translatedMessage(
+                        "demo_sync_failed_the_resource_platform_is_una_f681ff89ce",
+                      ),
                     ),
                   );
                 else onPreview(nextDemoSnapshot(config, mode));
               }}
             >
               <RefreshCw size={14} />
-              {text("预览模拟同步", "Preview demo sync", "معاينة المزامنة")}
+              {text(...translatedMessage("preview_demo_sync_60978ef001"))}
             </Button>
           </>
         }
@@ -127,57 +127,48 @@ export function ChannelSourceControls({
           <div>
             <strong>
               {text(
-                "资源管理平台 · 本地快照",
-                "Resource platform · local snapshot",
-                "منصة الموارد · لقطة محلية",
+                ...translatedMessage(
+                  "resource_platform_local_snapshot_a5576d22fd",
+                ),
               )}
             </strong>
             <p>
               <code>{snapshot.id}</code> · {snapshot.channels.length}{" "}
-              {text("个渠道", "channels", "قنوات")} ·{" "}
-              {snapshot.instances.length} {text("个实例", "instances", "موارد")}
+              {text(...translatedMessage("channels_1d2c9778ad"))} ·{" "}
+              {snapshot.instances.length}{" "}
+              {text(...translatedMessage("instances_b8a43d724b"))}
             </p>
           </div>
         </div>
         <div className="cm-form">
           <label className="cm-wide">
-            {text("同步演示场景", "Demo sync scenario", "سيناريو المزامنة")}
+            {text(...translatedMessage("demo_sync_scenario_780293076b"))}
             <select
               aria-label={text(
-                "同步演示场景",
-                "Demo sync scenario",
-                "سيناريو المزامنة",
+                ...translatedMessage("demo_sync_scenario_780293076b"),
               )}
               value={mode}
               onChange={(e) => setMode(e.target.value as typeof mode)}
             >
               <option value="add">
                 {text(
-                  "发现一个新资源",
-                  "Discover a new resource",
-                  "اكتشاف مورد جديد",
+                  ...translatedMessage("discover_a_new_resource_4486b88490"),
                 )}
               </option>
               <option value="outage">
                 {text(
-                  "模拟上游资源不可用",
-                  "Simulate source outage",
-                  "محاكاة تعطل المصدر",
+                  ...translatedMessage("simulate_source_outage_8b5e639871"),
                 )}
               </option>
               <option value="restore">
                 {text(
-                  "恢复资源可用",
-                  "Restore resource availability",
-                  "استعادة الموارد",
+                  ...translatedMessage(
+                    "restore_resource_availability_b763bc8e9f",
+                  ),
                 )}
               </option>
               <option value="fail">
-                {text(
-                  "模拟同步失败",
-                  "Simulate sync failure",
-                  "محاكاة فشل المزامنة",
-                )}
+                {text(...translatedMessage("simulate_sync_failure_002325c1c7"))}
               </option>
             </select>
           </label>
@@ -185,38 +176,40 @@ export function ChannelSourceControls({
         <details className="channel-sync-meta">
           <summary>
             {text(
-              "来源与快照信息",
-              "Source and snapshot information",
-              "معلومات المصدر واللقطة",
+              ...translatedMessage(
+                "source_and_snapshot_information_99fa9ba237",
+              ),
             )}
           </summary>
           <dl className="cm-details">
             <div>
-              <dt>{text("源发布时间", "Published at", "وقت النشر")}</dt>
+              <dt>{text(...translatedMessage("published_at_ac72dfa0c7"))}</dt>
               <dd>
                 {new Date(snapshot.publishedAt).toLocaleString(
-                  lang === "zh" ? "zh-CN" : lang === "ar" ? "ar" : "en-US",
+                  regionalLocale(lang),
                 )}
               </dd>
             </div>
             <div>
-              <dt>{text("本地接收时间", "Received at", "وقت الاستلام")}</dt>
+              <dt>{text(...translatedMessage("received_at_496400eb28"))}</dt>
               <dd>
                 {new Date(snapshot.receivedAt).toLocaleString(
-                  lang === "zh" ? "zh-CN" : lang === "ar" ? "ar" : "en-US",
+                  regionalLocale(lang),
                 )}
               </dd>
             </div>
             <div>
-              <dt>{text("快照序号", "Snapshot sequence", "تسلسل اللقطة")}</dt>
+              <dt>
+                {text(...translatedMessage("snapshot_sequence_804a2514e7"))}
+              </dt>
               <dd>{snapshot.sequence}</dd>
             </div>
           </dl>
           <p>
             {text(
-              "渠道、上游模型、能力与状态是只读来源字段。本地模型映射及销售投放独立保存；智能路由共用此快照。",
-              "Source fields are read-only. Local mappings and placement are saved separately; routing shares this snapshot.",
-              "حقول المصدر للقراءة فقط. يحفظ الربط والنشر محلياً وتستخدم اللقطة نفسها للتوجيه.",
+              ...translatedMessage(
+                "source_fields_are_read_only_local_mappings_an_f1259e3110",
+              ),
             )}
           </p>
         </details>
@@ -244,18 +237,16 @@ export function RemovedChannelResources({
       open={open}
       onOpenChange={onOpenChange}
       title={text(
-        "来源已移除的实例",
-        "Resources removed from source",
-        "الموارد المحذوفة من المصدر",
+        ...translatedMessage("resources_removed_from_source_1561312c67"),
       )}
       description={text(
-        "已停止进入调用候选。本地映射和历史仍保留，可检查后清除投放。",
-        "These resources no longer serve requests. Local mapping and history are retained; review before clearing placement.",
-        "لا تدخل هذه الموارد في الطلبات. يبقى الربط والسجل ويمكن مراجعتها قبل مسح النشر.",
+        ...translatedMessage(
+          "these_resources_no_longer_serve_requests_loca_75a86de81b",
+        ),
       )}
       footer={
         <Button onClick={() => onOpenChange(false)}>
-          {text("关闭", "Close", "إغلاق")}
+          {text(...translatedMessage("close_6bf477426b"))}
         </Button>
       }
     >
@@ -266,7 +257,7 @@ export function RemovedChannelResources({
               <code>{id}</code>
               <small>
                 {config.placements?.[id]?.modelId ??
-                  text("未映射", "Unmapped", "غير مرتبط")}
+                  text(...translatedMessage("unmapped_6d198b7550"))}
               </small>
             </div>
             <Button
@@ -277,9 +268,7 @@ export function RemovedChannelResources({
               }}
             >
               {text(
-                "检查并清除投放",
-                "Review and clear placement",
-                "مراجعة ومسح النشر",
+                ...translatedMessage("review_and_clear_placement_1e1fedd015"),
               )}
             </Button>
           </div>
@@ -287,9 +276,7 @@ export function RemovedChannelResources({
         {!missing.length && (
           <p className="cm-empty">
             {text(
-              "没有已移除来源的本地配置。",
-              "No orphaned local placements.",
-              "لا توجد إعدادات محلية بلا مصدر.",
+              ...translatedMessage("no_orphaned_local_placements_7f660e7504"),
             )}
           </p>
         )}

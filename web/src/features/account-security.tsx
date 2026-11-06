@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useRef, useState, type FormEvent } from "react";
 import {
   Eye,
@@ -68,9 +69,9 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
     ) {
       setError(
         c(
-          "请输入当前密码，并确认两次新密码一致；新密码至少8个字符且不超过64字节。",
-          "Enter your current password and matching new passwords: at least 8 characters, at most 64 bytes.",
-          "أدخل كلمة المرور الحالية وجديدة متطابقة: 8 أحرف على الأقل و64 بايتًا كحد أقصى.",
+          ...translatedMessage(
+            "enter_your_current_password_and_matching_new__6a5f5640f4",
+          ),
         ),
       );
       return;
@@ -91,14 +92,14 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
       setNotice(
         mode === "password"
           ? c(
-              "密码已更新，下次登录请使用新密码。登录设备可在下方单独管理。",
-              "Password updated. Use the new password at your next sign-in. Manage signed-in devices separately below.",
-              "حُدثت كلمة المرور. استخدم الجديدة للدخول التالي، وأدر الأجهزة المسجلة بشكل منفصل أدناه.",
+              ...translatedMessage(
+                "password_updated_use_the_new_password_at_your_d78036fe51",
+              ),
             )
           : c(
-              "账号资料邮箱已保存。邮箱验证和邮箱登录尚未开放。",
-              "Profile email saved. Email verification and email sign-in are unavailable.",
-              "حُفظ بريد الحساب. التحقق بالبريد والدخول به غير متاحين.",
+              ...translatedMessage(
+                "profile_email_saved_email_verification_and_em_c2dc646cfc",
+              ),
             ),
       );
       active.current = false;
@@ -110,43 +111,39 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
         caught.message.includes("current password")
       )
         setError(
-          c(
-            "当前密码不正确。",
-            "Current password is incorrect.",
-            "كلمة المرور الحالية غير صحيحة.",
-          ),
+          c(...translatedMessage("current_password_is_incorrect_81e1cb0eb2")),
         );
       else if (caught instanceof ApiError && caught.status === 409)
         setError(
           c(
-            "账号或资料已变化。请关闭窗口并重新读取账号资料后再试。",
-            "The account or profile changed. Close this dialog and reload the profile before trying again.",
-            "تغير الحساب أو بياناته. أغلق النافذة وأعد تحميل البيانات قبل المحاولة.",
+            ...translatedMessage(
+              "the_account_or_profile_changed_close_this_dia_f1ff763da6",
+            ),
           ),
         );
       else if (caught instanceof ApiError && caught.status === 429)
         setError(
           c(
-            "尝试过于频繁，请稍后再试。",
-            "Too many attempts. Try again later.",
-            "محاولات كثيرة. حاول لاحقًا.",
+            ...translatedMessage(
+              "too_many_attempts_try_again_later_a64840b74a",
+            ),
           ),
         );
       else if (caught instanceof ApiError && caught.status === 400)
         setError(
           c(
-            "输入不符合要求，请检查密码长度或邮箱格式。",
-            "Check the password length or email format.",
-            "تحقق من طول كلمة المرور أو صيغة البريد.",
+            ...translatedMessage(
+              "check_the_password_length_or_email_format_39ba6c929d",
+            ),
           ),
         );
       else {
         setUncertain(true);
         setError(
           c(
-            "未能确认保存结果。请关闭窗口，核对已保存的邮箱或通过登录核对密码后再操作。",
-            "The save could not be confirmed. Close this dialog and check the saved email or verify the password by signing in before trying again.",
-            "تعذر تأكيد الحفظ. أغلق النافذة وتحقق من البريد المحفوظ أو من كلمة المرور بتسجيل الدخول قبل المحاولة مجددًا.",
+            ...translatedMessage(
+              "the_save_could_not_be_confirmed_close_this_di_675d714e22",
+            ),
           ),
         );
       }
@@ -163,13 +160,13 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
           <div>
             <h2 id="ac-security-title">
               <ShieldCheck size={18} />
-              {c("登录与安全", "Sign-in & security", "الدخول والأمان")}
+              {c(...translatedMessage("sign_in_security_1b06bafdc6"))}
             </h2>
             <p>
               {c(
-                "使用服务器用户名和密码登录。",
-                "Sign in with your server username and password.",
-                "ادخل باسم المستخدم وكلمة المرور على الخادم.",
+                ...translatedMessage(
+                  "sign_in_with_your_server_username_and_passwor_9efbb1f0ce",
+                ),
               )}
             </p>
           </div>
@@ -183,9 +180,9 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
         {!allowed && (
           <p className="ac-empty-hint">
             {c(
-              "请先重新读取账号资料；仅在服务器明确支持时开放修改。",
-              "Reload your account profile. Changes require explicit server support.",
-              "أعد تحميل بيانات الحساب. تتطلب التغييرات دعمًا صريحًا من الخادم.",
+              ...translatedMessage(
+                "reload_your_account_profile_changes_require_e_6fbbfd9d8f",
+              ),
             )}
           </p>
         )}
@@ -194,12 +191,12 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
             <KeyRound size={19} />
           </span>
           <div className="ac-row-content">
-            <h3>{c("登录密码", "Password", "كلمة المرور")}</h3>
+            <h3>{c(...translatedMessage("password_7f7a868751"))}</h3>
             <p>
               {c(
-                "修改时验证当前密码；尚无手机号找回密码。",
-                "Changes require your current password. Phone password recovery is unavailable.",
-                "يتطلب التغيير كلمة المرور الحالية. الاستعادة عبر الهاتف غير متاحة.",
+                ...translatedMessage(
+                  "changes_require_your_current_password_phone_p_b7387c8fbe",
+                ),
               )}
             </p>
           </div>
@@ -209,7 +206,7 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
             disabled={!allowed || pending}
             onClick={() => open("password")}
           >
-            {c("修改密码", "Change password", "تغيير كلمة المرور")}
+            {c(...translatedMessage("change_password_54c4e196bc"))}
           </Button>
         </div>
         <div className="ac-security-row">
@@ -217,24 +214,24 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
             <Smartphone size={19} />
           </span>
           <div className="ac-row-content">
-            <h3>{c("手机号", "Phone", "الهاتف")}</h3>
+            <h3>{c(...translatedMessage("phone_abba197f77"))}</h3>
             <Input
               className="ac-contact-value"
               id="account-phone"
-              aria-label={c("绑定手机号", "Linked phone", "الهاتف المرتبط")}
-              value={c("尚未接入", "Unavailable", "غير متاح")}
+              aria-label={c(...translatedMessage("linked_phone_d4892b59b0"))}
+              value={c(...translatedMessage("unavailable_cddbd3a531"))}
               readOnly
             />
             <p>
               {c(
-                "手机绑定、验证码登录和找回密码尚未接入。",
-                "Phone linking, SMS sign-in and password recovery are unavailable.",
-                "ربط الهاتف والدخول بالرسائل واستعادة كلمة المرور غير متاحة.",
+                ...translatedMessage(
+                  "phone_linking_sms_sign_in_and_password_recove_e6529ef560",
+                ),
               )}
             </p>
           </div>
           <Button data-account-action="phone" size="small" disabled>
-            {c("绑定", "Link", "ربط")}
+            {c(...translatedMessage("link_c9a152d363"))}
           </Button>
         </div>
         <div className="ac-security-row">
@@ -242,24 +239,24 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
             <Mail size={19} />
           </span>
           <div className="ac-row-content">
-            <h3>{c("邮箱", "Email", "البريد الإلكتروني")}</h3>
+            <h3>{c(...translatedMessage("email_218a18e187"))}</h3>
             <Input
               className="ac-contact-value"
               id="account-email"
-              aria-label={c("资料邮箱", "Profile email", "بريد الحساب")}
+              aria-label={c(...translatedMessage("profile_email_61b39133e9"))}
               value={
                 profile
-                  ? masked || c("未填写", "Not provided", "غير محدد")
-                  : c("未确认", "Unconfirmed", "غير مؤكد")
+                  ? masked || c(...translatedMessage("not_provided_c3f269cf5b"))
+                  : c(...translatedMessage("unconfirmed_6d40d4c4c5"))
               }
               readOnly
               dir={masked ? "ltr" : undefined}
             />
             <p>
               {c(
-                "邮箱仅作为账号资料保存；当前使用用户名和密码登录，尚无邮箱验证。",
-                "Email is a profile field. Sign in with your username and password; email verification is unavailable.",
-                "البريد ضمن بيانات الحساب. ادخل باسم المستخدم وكلمة المرور؛ التحقق بالبريد غير متاح.",
+                ...translatedMessage(
+                  "email_is_a_profile_field_sign_in_with_your_us_f29c126ea5",
+                ),
               )}
             </p>
           </div>
@@ -269,7 +266,7 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
             disabled={!allowed || pending}
             onClick={() => open("email")}
           >
-            {c("编辑", "Edit", "تعديل")}
+            {c(...translatedMessage("edit_6224671192"))}
           </Button>
         </div>
       </section>
@@ -280,20 +277,20 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
         }}
         title={
           mode === "password"
-            ? c("修改登录密码", "Change password", "تغيير كلمة المرور")
-            : c("修改资料邮箱", "Edit profile email", "تعديل بريد الحساب")
+            ? c(...translatedMessage("change_password_0470176a4a"))
+            : c(...translatedMessage("edit_profile_email_a53bd401b0"))
         }
         description={
           mode === "password"
             ? c(
-                "验证当前密码后保存新密码。登录设备保持不变，可单独管理。",
-                "Verify your current password to save a new one. Signed-in devices stay active and can be managed separately.",
-                "تحقق بكلمة المرور الحالية لحفظ جديدة. تبقى الأجهزة المسجلة نشطة ويمكن إدارتها منفصلة.",
+                ...translatedMessage(
+                  "verify_your_current_password_to_save_a_new_on_ab51d9453a",
+                ),
               )
             : c(
-                "邮箱仅作为资料保存，不发送验证码，也不用于登录。",
-                "Email is profile data. No verification code is sent and it is not a sign-in method.",
-                "البريد من بيانات الحساب. لا يُرسل رمز تحقق ولا يُستخدم للدخول.",
+                ...translatedMessage(
+                  "email_is_profile_data_no_verification_code_is_27a37c369c",
+                ),
               )
         }
         initialFocus={first}
@@ -302,7 +299,7 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
         footer={
           <>
             <Button onClick={close} disabled={pending}>
-              {c("取消", "Cancel", "إلغاء")}
+              {c(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             <Button
               variant="primary"
@@ -311,7 +308,7 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
               loading={pending}
               disabled={!allowed || uncertain}
             >
-              {c("保存", "Save", "حفظ")}
+              {c(...translatedMessage("save_6774e725d1"))}
             </Button>
           </>
         }
@@ -334,7 +331,7 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
             <>
               <div className="ac-field">
                 <label htmlFor="security-current-password">
-                  {c("当前密码", "Current password", "كلمة المرور الحالية")}
+                  {c(...translatedMessage("current_password_8b8cddc381"))}
                 </label>
                 <Input
                   ref={first}
@@ -352,7 +349,7 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
               </div>
               <div className="ac-field">
                 <label htmlFor="security-new-password">
-                  {c("新密码", "New password", "كلمة المرور الجديدة")}
+                  {c(...translatedMessage("new_password_29bd27acfe"))}
                 </label>
                 <Input
                   id="security-new-password"
@@ -367,19 +364,15 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
                 />
                 <small id="security-password-help">
                   {c(
-                    "至少8个字符，最多64字节；非英文字符可能更早达到上限。",
-                    "At least 8 characters, at most 64 bytes. Non-ASCII characters may reach the limit sooner.",
-                    "8 أحرف على الأقل و64 بايتًا كحد أقصى. قد تبلغ الأحرف غير اللاتينية الحد أسرع.",
+                    ...translatedMessage(
+                      "at_least_8_characters_at_most_64_bytes_non_as_65deb3d0d6",
+                    ),
                   )}
                 </small>
               </div>
               <div className="ac-field">
                 <label htmlFor="security-confirm-password">
-                  {c(
-                    "确认新密码",
-                    "Confirm new password",
-                    "تأكيد كلمة المرور الجديدة",
-                  )}
+                  {c(...translatedMessage("confirm_new_password_f33eca8ac7"))}
                 </label>
                 <Input
                   id="security-confirm-password"
@@ -399,18 +392,14 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
               >
                 {visible ? <EyeOff size={16} /> : <Eye size={16} />}{" "}
                 {visible
-                  ? c("隐藏密码", "Hide password", "إخفاء كلمة المرور")
-                  : c("显示密码", "Show password", "إظهار كلمة المرور")}
+                  ? c(...translatedMessage("hide_password_fde939f99a"))
+                  : c(...translatedMessage("show_password_4090d99064"))}
               </Button>
             </>
           ) : (
             <div className="ac-field">
               <label htmlFor="security-email">
-                {c(
-                  "资料邮箱（可留空）",
-                  "Profile email (optional)",
-                  "بريد الحساب (اختياري)",
-                )}
+                {c(...translatedMessage("profile_email_optional_d45d1983d1"))}
               </label>
               <Input
                 ref={first}

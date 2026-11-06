@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -9,12 +10,14 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Legend,
 } from "recharts";
 import { Download } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useUsageReport, type UsageStats } from "../lib/api/usage-report";
 import { useCreateExport } from "../lib/api/exports";
 import { formatMoney } from "../lib/money";
+import { regionalLocale } from "../lib/locale-format";
 import { billingDate, validateBillingRange } from "../lib/billing-export";
 import { writtenLanguage } from "../lib/localize";
 import { callTypeLabel } from "../lib/request-metadata";
@@ -43,19 +46,19 @@ export default function UsageReports() {
   const reportError =
     invalidReport || query.error instanceof UsageReportContractError
       ? c(
-          "报表接口与当前后端版本不兼容，请更新并重启后端后重试。",
-          "The report API is incompatible with this backend. Update and restart the backend, then retry.",
-          "واجهة التقارير غير متوافقة مع هذا الخادم. حدّث الخادم وأعد تشغيله ثم حاول مجددًا.",
+          ...translatedMessage(
+            "the_report_api_is_incompatible_with_this_back_5d6e2ec544",
+          ),
         )
       : query.error?.message;
   const range = params.get("range") ?? "7d",
     dimension = params.get("group_by") ?? "key";
   const labels: Record<string, string> = {
-    key: c("密钥", "Key", "المفتاح"),
-    model: c("模型", "Model", "النموذج"),
-    vendor: c("厂商", "Vendor", "المزوّد"),
-    call_type: c("调用类型", "Call type", "نوع الطلب"),
-    group: c("服务分组", "Service group", "مجموعة الخدمة"),
+    key: c(...translatedMessage("key_64846eb2df")),
+    model: c(...translatedMessage("model_9c2e5b5065")),
+    vendor: c(...translatedMessage("vendor_5dc28b7ea6")),
+    call_type: c(...translatedMessage("call_type_481db78ba3")),
+    group: c(...translatedMessage("service_group_1c6f8adf41")),
   };
   const change = (name: string, value: string) => {
     setError("");
@@ -76,9 +79,9 @@ export default function UsageReports() {
     if (!validateBillingRange(report.start_date, report.end_date)) {
       setError(
         c(
-          "单份导出最多 31 天，请缩小时间范围。",
-          "Exports allow up to 31 days; choose a shorter range.",
-          "حد التصدير 31 يومًا؛ اختر فترة أقصر.",
+          ...translatedMessage(
+            "exports_allow_up_to_31_days_choose_a_shorter__45b7d39aed",
+          ),
         ),
       );
       return;
@@ -110,14 +113,16 @@ export default function UsageReports() {
         : metric === "tokens"
           ? s.input_tokens + s.output_tokens
           : s.requests,
-    label: new Date(s.id).toLocaleString(i18n.language, {
-      timeZone: report?.timezone,
-      month: "2-digit",
-      day: "2-digit",
-      ...(report?.granularity === "hour"
-        ? { hour: "2-digit" as const, minute: "2-digit" as const }
-        : {}),
-    }),
+    label: new Date(s.id)
+      .toLocaleString(regionalLocale(i18n.language), {
+        timeZone: report?.timezone,
+        month: "2-digit",
+        day: "2-digit",
+        ...(report?.granularity === "hour"
+          ? { hour: "2-digit" as const, minute: "2-digit" as const }
+          : {}),
+      })
+      .replace(/[\u200e\u200f\u061c]/g, ""),
   }));
   const shares = (rows: UsageStats[], title: string) => (
     <section className="usage-card">
@@ -126,7 +131,9 @@ export default function UsageReports() {
         rows.map((row) => (
           <div className="usage-share" key={row.id}>
             <div>
-              <span>{row.name || c("未记录", "Not recorded", "غير مسجل")}</span>
+              <span>
+                {row.name || c(...translatedMessage("not_recorded_4bbcb12676"))}
+              </span>
               <strong>
                 {formatMoney(row.amount_nano, "total")} ·{" "}
                 {share(row.amount_nano, report!.totals.amount_nano)}%
@@ -141,11 +148,7 @@ export default function UsageReports() {
         ))
       ) : (
         <p className="usage-muted">
-          {c(
-            "此范围暂无用量",
-            "No usage in this range",
-            "لا يوجد استخدام لهذه الفترة",
-          )}
+          {c(...translatedMessage("no_usage_in_this_range_7a96e1f7d0"))}
         </p>
       )}
     </section>
@@ -155,17 +158,13 @@ export default function UsageReports() {
       <header className="usage-heading">
         <div>
           <h1>
-            {c(
-              "用量报表与多维分析",
-              "Usage reports and analysis",
-              "تقارير الاستخدام والتحليل",
-            )}
+            {c(...translatedMessage("usage_reports_and_analysis_e760366356"))}
           </h1>
           <p>
             {c(
-              "按真实调用记录统计费用、用量与成功率。",
-              "Spend, usage and success rates from gateway records.",
-              "التكاليف والاستخدام ومعدلات النجاح من سجلات البوابة.",
+              ...translatedMessage(
+                "spend_usage_and_success_rates_from_gateway_re_4fe59813c3",
+              ),
             )}
           </p>
         </div>
@@ -175,12 +174,12 @@ export default function UsageReports() {
           onClick={exportReport}
         >
           <Download size={15} />
-          {c("导出报表", "Export report", "تصدير التقرير")}
+          {c(...translatedMessage("export_report_d0e5a6756f"))}
         </Button>
       </header>
       <section className="usage-card usage-filters">
         <label>
-          {c("时间范围", "Date range", "الفترة")}
+          {c(...translatedMessage("date_range_d9fad808c9"))}
           <select
             className="select-trigger"
             value={range}
@@ -202,17 +201,13 @@ export default function UsageReports() {
             }}
           >
             {[
-              ["today", c("今天", "Today", "اليوم")],
-              ["7d", c("近 7 天", "Last 7 days", "آخر 7 أيام")],
-              ["30d", c("近 30 天", "Last 30 days", "آخر 30 يومًا")],
-              ["month", c("本月", "This month", "هذا الشهر")],
+              ["today", c(...translatedMessage("today_3a255d525f"))],
+              ["7d", c(...translatedMessage("last_7_days_1365f5fbb3"))],
+              ["30d", c(...translatedMessage("last_30_days_24648573ce"))],
+              ["month", c(...translatedMessage("this_month_ad96df918e"))],
               [
                 "custom",
-                c(
-                  "自定义（最多一年）",
-                  "Custom (up to one year)",
-                  "مخصص (حتى سنة)",
-                ),
+                c(...translatedMessage("custom_up_to_one_year_7c8fab629b")),
               ],
             ].map(([v, l]) => (
               <option key={v} value={v}>
@@ -224,7 +219,7 @@ export default function UsageReports() {
         {range === "custom" && (
           <>
             <label>
-              {c("开始日期", "Start date", "تاريخ البداية")}
+              {c(...translatedMessage("start_date_761834f95f"))}
               <input
                 type="date"
                 value={params.get("start_date") ?? ""}
@@ -232,7 +227,7 @@ export default function UsageReports() {
               />
             </label>
             <label>
-              {c("结束日期", "End date", "تاريخ النهاية")}
+              {c(...translatedMessage("end_date_ddebce9446"))}
               <input
                 type="date"
                 value={params.get("end_date") ?? ""}
@@ -251,19 +246,22 @@ export default function UsageReports() {
                 change(key === "key" ? "key_id" : key, e.target.value)
               }
             >
-              <option value="">{c("全部", "All", "الكل")}</option>
+              <option value="">
+                {c(...translatedMessage("all_ac49939df0"))}
+              </option>
               {(report?.options[key] ?? []).map((v) => (
                 <option key={v.id} value={v.id}>
                   {key === "call_type"
                     ? callTypeLabel(v.name, i18n.language)
-                    : v.name || c("未记录", "Not recorded", "غير مسجل")}
+                    : v.name ||
+                      c(...translatedMessage("not_recorded_4bbcb12676"))}
                 </option>
               ))}
             </select>
           </label>
         ))}
         <label>
-          {c("分组维度", "Group by", "التجميع حسب")}
+          {c(...translatedMessage("group_by_2fd097bc41"))}
           <select
             className="select-trigger"
             value={dimension}
@@ -277,18 +275,22 @@ export default function UsageReports() {
           </select>
         </label>
         <label>
-          {c("统计粒度", "Interval", "الفاصل")}
+          {c(...translatedMessage("interval_bb384227aa"))}
           <select
             className="select-trigger"
             value={params.get("granularity") ?? "day"}
             onChange={(e) => change("granularity", e.target.value)}
           >
-            <option value="day">{c("按天", "Daily", "يومي")}</option>
-            <option value="hour">{c("按小时", "Hourly", "كل ساعة")}</option>
+            <option value="day">
+              {c(...translatedMessage("daily_c65ed2c3a3"))}
+            </option>
+            <option value="hour">
+              {c(...translatedMessage("hourly_2855399597"))}
+            </option>
           </select>
         </label>
         <Button variant="ghost" onClick={() => setParams({})}>
-          {c("重置筛选", "Reset filters", "إعادة ضبط")}
+          {c(...translatedMessage("reset_filters_71a291a252"))}
         </Button>
       </section>
       {report && (
@@ -298,14 +300,14 @@ export default function UsageReports() {
       )}
       {query.isFetching && (
         <p role="status">
-          {c("正在加载真实用量…", "Loading usage…", "جار تحميل الاستخدام…")}
+          {c(...translatedMessage("loading_usage_2bcb86bb23"))}
         </p>
       )}
       {(reportError || error) && (
         <p role="alert" className="usage-error">
           {error || reportError}{" "}
           <Button variant="ghost" onClick={() => void query.refetch()}>
-            {c("重试", "Retry", "إعادة المحاولة")}
+            {c(...translatedMessage("retry_c16455021c"))}
           </Button>
         </p>
       )}
@@ -314,19 +316,19 @@ export default function UsageReports() {
           <div className="usage-summary">
             {[
               [
-                c("调用次数", "Requests", "الطلبات"),
+                c(...translatedMessage("requests_6480ea807d")),
                 report.totals.requests.toLocaleString(),
               ],
               [
-                c("总费用（美元）", "Spend (USD)", "التكلفة (دولار)"),
+                c(...translatedMessage("spend_usd_d24e6785bf")),
                 formatMoney(report.totals.amount_nano, "total"),
               ],
               [
-                c("成功率", "Success rate", "معدل النجاح"),
+                c(...translatedMessage("success_rate_b8e8689749")),
                 percent(report.totals),
               ],
               [
-                c("Token 用量", "Tokens", "الرموز"),
+                c(...translatedMessage("tokens_9f06dbbe17")),
                 (
                   report.totals.input_tokens + report.totals.output_tokens
                 ).toLocaleString(),
@@ -340,21 +342,21 @@ export default function UsageReports() {
           </div>
           <section className="usage-card">
             <div className="usage-heading">
-              <h2>{c("用量趋势", "Usage over time", "الاستخدام عبر الوقت")}</h2>
+              <h2>{c(...translatedMessage("usage_over_time_414c3494a8"))}</h2>
               <select
-                aria-label={c("图表指标", "Chart metric", "مقياس الرسم")}
+                aria-label={c(...translatedMessage("chart_metric_b95503c8fd"))}
                 className="select-trigger"
                 value={metric}
                 onChange={(e) => setMetric(e.target.value)}
               >
                 <option value="cost">
-                  {c("费用（美元）", "Spend (USD)", "التكلفة")}
+                  {c(...translatedMessage("spend_usd_e98e9e9e19"))}
                 </option>
                 <option value="requests">
-                  {c("调用次数", "Requests", "الطلبات")}
+                  {c(...translatedMessage("requests_6480ea807d"))}
                 </option>
                 <option value="tokens">
-                  {c("Token 用量", "Tokens", "الرموز")}
+                  {c(...translatedMessage("tokens_9f06dbbe17"))}
                 </option>
               </select>
             </div>
@@ -367,10 +369,14 @@ export default function UsageReports() {
                       stroke="var(--border)"
                     />
                     <XAxis
+                      reversed={i18n.language.startsWith("ar")}
                       dataKey="label"
                       tick={{ fill: "var(--muted)", fontSize: 11 }}
                     />
                     <YAxis
+                      orientation={
+                        i18n.language.startsWith("ar") ? "right" : "left"
+                      }
                       tick={{ fill: "var(--muted)", fontSize: 11 }}
                       width={65}
                     />
@@ -381,9 +387,22 @@ export default function UsageReports() {
                         color: "var(--text)",
                       }}
                     />
+                    <Legend
+                      align={i18n.language === "ar" ? "right" : "left"}
+                      wrapperStyle={{
+                        direction: i18n.language === "ar" ? "rtl" : "ltr",
+                      }}
+                    />
                     <Area
                       type="monotone"
                       dataKey="value"
+                      name={
+                        metric === "cost"
+                          ? c(...translatedMessage("cost_usd_9cd3ac1402"))
+                          : metric === "tokens"
+                            ? c(...translatedMessage("tokens_9f06dbbe17"))
+                            : c(...translatedMessage("requests_fe89af9421"))
+                      }
                       stroke="var(--brand)"
                       fill="var(--brand)"
                       fillOpacity={0.12}
@@ -394,9 +413,9 @@ export default function UsageReports() {
             ) : (
               <p>
                 {c(
-                  "当前筛选条件下没有调用。",
-                  "No requests match these filters.",
-                  "لا توجد طلبات تطابق المرشحات.",
+                  ...translatedMessage(
+                    "no_requests_match_these_filters_4f52193b06",
+                  ),
                 )}
               </p>
             )}
@@ -404,42 +423,36 @@ export default function UsageReports() {
           <div className="usage-shares">
             {shares(
               report.by_key,
-              c("按 Key 的费用占比", "Spend by Key", "التكلفة حسب المفتاح"),
+              c(...translatedMessage("spend_by_key_08e3b37ac7")),
             )}
             {shares(
               report.by_model,
-              c("按模型的费用占比", "Spend by model", "التكلفة حسب النموذج"),
+              c(...translatedMessage("spend_by_model_21e3406923")),
             )}
           </div>
           <section className="usage-card">
             <h2>
               {labels[dimension]} ·{" "}
-              {c("用量明细", "Usage breakdown", "تفاصيل الاستخدام")}
+              {c(...translatedMessage("usage_breakdown_eccf106201"))}
             </h2>
             <div className="usage-table-scroll">
               <table>
                 <thead>
                   <tr>
                     <th>{labels[dimension]}</th>
-                    <th>{c("调用次数", "Requests", "الطلبات")}</th>
-                    <th>{c("成功率", "Success rate", "النجاح")}</th>
+                    <th>{c(...translatedMessage("requests_6480ea807d"))}</th>
                     <th>
-                      {c(
-                        "输入 / 输出 Token",
-                        "Input / output tokens",
-                        "رموز الإدخال / الإخراج",
-                      )}
+                      {c(...translatedMessage("success_rate_cf0d8496e2"))}
                     </th>
                     <th>
                       {c(
-                        "缓存读 / 写 Token",
-                        "Cache read / write",
-                        "قراءة / كتابة التخزين",
+                        ...translatedMessage("input_output_tokens_52437a9a3b"),
                       )}
                     </th>
                     <th>
-                      {c("费用（美元）", "Spend (USD)", "التكلفة (دولار)")}
+                      {c(...translatedMessage("cache_read_write_8940d40a29"))}
                     </th>
+                    <th>{c(...translatedMessage("spend_usd_67b82d4b99"))}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -448,7 +461,8 @@ export default function UsageReports() {
                       <td>
                         {dimension === "call_type"
                           ? callTypeLabel(row.name, i18n.language)
-                          : row.name || c("未记录", "Not recorded", "غير مسجل")}
+                          : row.name ||
+                            c(...translatedMessage("not_recorded_4bbcb12676"))}
                       </td>
                       <td>{row.requests.toLocaleString()}</td>
                       <td>{percent(row)}</td>

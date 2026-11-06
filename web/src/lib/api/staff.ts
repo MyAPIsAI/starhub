@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../../i18n/messages";
 import { apiGet, apiPost } from "./http";
 import { usePreferences } from "../preferences";
 
@@ -63,12 +64,12 @@ export function staffRoleName(
   text: (zh: string, en: string, ar: string) => string,
 ): string {
   return role === 100
-    ? text("超级管理员", "Super administrator", "المسؤول الأعلى")
+    ? text(...translatedMessage("super_administrator_c8b532a265"))
     : role === 10
-      ? text("运营", "Operations", "العمليات")
+      ? text(...translatedMessage("operations_2c62b6e82e"))
       : role === 5
-        ? text("财务", "Finance", "المالية")
+        ? text(...translatedMessage("finance_dfaa8d1e15"))
         : role === 20
-          ? text("技术", "Technical", "التقنية")
-          : text("未知角色", "Unknown role", "دور غير معروف");
+          ? text(...translatedMessage("technical_13cb7de7bb"))
+          : text(...translatedMessage("unknown_role_5f2402e586"));
 }

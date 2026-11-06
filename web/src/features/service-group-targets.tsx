@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
@@ -103,17 +104,18 @@ export function ServiceGroupTargets() {
       setDraft(null);
       setNotice(
         text(
-          `目标配置已保存：${result.group_id}，v${saved.revision}。`,
-          `Targets saved: ${result.group_id}, v${saved.revision}.`,
-          `حُفظت الأهداف: ${result.group_id}، v${saved.revision}.`,
+          ...translatedMessage("targets_saved_v_08bef9a9bb", {
+            p0: result.group_id,
+            p1: saved.revision,
+          }),
         ),
       );
     } catch {
       setError(
         text(
-          "无法确认保存结果。请刷新核对；版本变化后须重新打开编辑。",
-          "Save outcome is unconfirmed. Refresh to check and reopen after a revision change.",
-          "تعذر تأكيد الحفظ. حدّث للتحقق وأعد فتح المحرر عند تغير الإصدار.",
+          ...translatedMessage(
+            "save_outcome_is_unconfirmed_refresh_to_check__87e91df437",
+          ),
         ),
       );
     }
@@ -126,13 +128,13 @@ export function ServiceGroupTargets() {
       <header>
         <div>
           <h2 id="group-target-heading">
-            {text("分组 SLA 目标", "Group SLA targets", "أهداف SLA للمجموعة")}
+            {text(...translatedMessage("group_sla_targets_0a5619344f"))}
           </h2>
           <p>
             {text(
-              "仅显示数据库中的分组。目标由运营方发布，与实测统计分开；不代表合同保证，也不改变计费或路由。停用分组不在模型页展示目标。",
-              "Only database groups are listed. Operator-published targets are separate from observed statistics, carry no contractual guarantee, and do not change billing or routing. Disabled groups do not expose targets on model pages.",
-              "تُعرض مجموعات قاعدة البيانات فقط. الأهداف المنشورة منفصلة عن الإحصاءات وليست ضمانًا تعاقديًا ولا تغيّر الفوترة أو التوجيه. لا تعرض صفحات النماذج أهداف المجموعات المعطّلة.",
+              ...translatedMessage(
+                "only_database_groups_are_listed_operator_publ_7c1a94ca78",
+              ),
             )}
           </p>
         </div>
@@ -143,20 +145,20 @@ export function ServiceGroupTargets() {
             void query.refetch();
           }}
         >
-          {text("刷新目标", "Refresh targets", "تحديث الأهداف")}
+          {text(...translatedMessage("refresh_targets_f3294d8db7"))}
         </Button>
       </header>
       {query.isLoading && (
         <p role="status">
-          {text("正在读取目标…", "Loading targets…", "جارٍ تحميل الأهداف…")}
+          {text(...translatedMessage("loading_targets_8f807ce4e6"))}
         </p>
       )}
       {query.isError && (
         <p role="alert">
           {text(
-            "无法读取分组目标，已隐藏旧数据。",
-            "Cannot load group targets. Cached data is hidden.",
-            "تعذر تحميل أهداف المجموعات. أُخفيت البيانات السابقة.",
+            ...translatedMessage(
+              "cannot_load_group_targets_cached_data_is_hidd_049472cfe0",
+            ),
           )}
         </p>
       )}
@@ -166,11 +168,7 @@ export function ServiceGroupTargets() {
         </p>
       )}
       <label>
-        {text(
-          "搜索目标分组",
-          "Search target groups",
-          "البحث في مجموعات الأهداف",
-        )}
+        {text(...translatedMessage("search_target_groups_b9b5508b01"))}
         <input
           value={search}
           onChange={(e) => {
@@ -182,9 +180,9 @@ export function ServiceGroupTargets() {
       {data?.length === 0 && (
         <p>
           {text(
-            "暂无数据库分组，请先创建并核对真实分组配置。",
-            "No database groups. Create and verify a real group configuration first.",
-            "لا توجد مجموعات في قاعدة البيانات. أنشئ إعداد مجموعة فعلية وتحقق منه أولًا.",
+            ...translatedMessage(
+              "no_database_groups_create_and_verify_a_real_g_7c3ae7d5f1",
+            ),
           )}
         </p>
       )}
@@ -192,21 +190,17 @@ export function ServiceGroupTargets() {
         className="sgt-table"
         tabIndex={0}
         role="region"
-        aria-label={text(
-          "分组目标列表",
-          "Group target list",
-          "قائمة أهداف المجموعات",
-        )}
+        aria-label={text(...translatedMessage("group_target_list_401779db95"))}
       >
         <table>
           <thead>
             <tr>
-              <th>{text("分组", "Group", "المجموعة")}</th>
+              <th>{text(...translatedMessage("group_528d77dde5"))}</th>
               <th>
-                {text("发布目标", "Published targets", "الأهداف المنشورة")}
+                {text(...translatedMessage("published_targets_f0e57608c9"))}
               </th>
-              <th>{text("版本", "Revision", "الإصدار")}</th>
-              <th>{text("操作", "Actions", "الإجراءات")}</th>
+              <th>{text(...translatedMessage("revision_2d6025d8da"))}</th>
+              <th>{text(...translatedMessage("actions_d83f4ed14a"))}</th>
             </tr>
           </thead>
           <tbody>
@@ -220,8 +214,8 @@ export function ServiceGroupTargets() {
                     <div>
                       <bdi>{g.group_id}</bdi> ·{" "}
                       {g.enabled
-                        ? text("启用", "Enabled", "مفعّلة")
-                        : text("停用", "Disabled", "معطّلة")}
+                        ? text(...translatedMessage("enabled_f028916a96"))
+                        : text(...translatedMessage("disabled_0049e8e608"))}
                     </div>
                   </td>
                   <td>
@@ -233,13 +227,13 @@ export function ServiceGroupTargets() {
                   <td>
                     <div className="sgt-actions">
                       <Button disabled={!editable} onClick={() => begin(g)}>
-                        {text("编辑目标", "Edit targets", "تحرير الأهداف")}
+                        {text(...translatedMessage("edit_targets_8f3f498a50"))}
                       </Button>
                       <Button
                         disabled={!editable || !sla?.targets}
                         onClick={() => begin(g, true)}
                       >
-                        {text("取消发布", "Unpublish", "إلغاء النشر")}
+                        {text(...translatedMessage("unpublish_adacb36b31"))}
                       </Button>
                     </div>
                   </td>
@@ -255,7 +249,7 @@ export function ServiceGroupTargets() {
             disabled={currentPage === 0}
             onClick={() => setPage(currentPage - 1)}
           >
-            {text("上一页", "Previous", "السابق")}
+            {text(...translatedMessage("previous_2672646f39"))}
           </Button>
           <span>
             {currentPage + 1} / {pages}
@@ -264,7 +258,7 @@ export function ServiceGroupTargets() {
             disabled={currentPage >= pages - 1}
             onClick={() => setPage(currentPage + 1)}
           >
-            {text("下一页", "Next", "التالي")}
+            {text(...translatedMessage("next_c0fd39244f"))}
           </Button>
         </div>
       )}
@@ -273,18 +267,18 @@ export function ServiceGroupTargets() {
         onOpenChange={(open) => !open && close()}
         title={
           draft?.remove
-            ? text("取消发布目标", "Unpublish targets", "إلغاء نشر الأهداف")
-            : text("编辑分组目标", "Edit group targets", "تحرير أهداف المجموعة")
+            ? text(...translatedMessage("unpublish_targets_914bb56980"))
+            : text(...translatedMessage("edit_group_targets_d965e16a06"))
         }
         description={text(
-          "保存需要匹配分组身份与目标版本。空白表示该项未发布，0% 是有效的已发布成功率目标。",
-          "Saving requires the same group identity and target revision. Blank means that metric is unpublished; 0% is a valid published success target.",
-          "يتطلب الحفظ تطابق هوية المجموعة وإصدار الأهداف. الحقل الفارغ يعني عدم نشر المقياس، و0% هدف نجاح صالح.",
+          ...translatedMessage(
+            "saving_requires_the_same_group_identity_and_t_9853f52d9f",
+          ),
         )}
         footer={
           <>
             <Button disabled={mutation.isPending} onClick={close}>
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             {review ? (
               <Button
@@ -297,7 +291,7 @@ export function ServiceGroupTargets() {
                 }
                 onClick={() => void save()}
               >
-                {text("确认保存目标", "Confirm targets", "تأكيد الأهداف")}
+                {text(...translatedMessage("confirm_targets_1d25b8f610"))}
               </Button>
             ) : (
               <Button
@@ -305,7 +299,7 @@ export function ServiceGroupTargets() {
                 disabled={!targets || conflict || !data}
                 onClick={() => setReview(true)}
               >
-                {text("预览目标", "Review targets", "مراجعة الأهداف")}
+                {text(...translatedMessage("review_targets_03a65a5ae3"))}
               </Button>
             )}
           </>
@@ -322,14 +316,12 @@ export function ServiceGroupTargets() {
                 <p>
                   {draft.remove
                     ? text(
-                        "确认后将清除该分组的已发布目标。",
-                        "Confirming clears this group's published targets.",
-                        "يؤدي التأكيد إلى مسح أهداف المجموعة المنشورة.",
+                        ...translatedMessage(
+                          "confirming_clears_this_group_s_published_targ_4ede2e4a81",
+                        ),
                       )
                     : text(
-                        "即将发布以下目标：",
-                        "Targets to publish:",
-                        "الأهداف المراد نشرها:",
+                        ...translatedMessage("targets_to_publish_f754e6971c"),
                       )}
                 </p>
                 {!draft.remove && (
@@ -343,18 +335,14 @@ export function ServiceGroupTargets() {
                     onClick={() => setReview(false)}
                     disabled={mutation.isPending}
                   >
-                    {text("返回编辑", "Back to edit", "العودة للتحرير")}
+                    {text(...translatedMessage("back_to_edit_8e464c075a"))}
                   </Button>
                 )}
               </div>
             ) : (
               <div className="sgt-fields">
                 <label>
-                  {text(
-                    "成功率目标（%）",
-                    "Success target (%)",
-                    "نسبة النجاح المستهدفة (%)",
-                  )}
+                  {text(...translatedMessage("success_target_2b8f8e1a39"))}
                   <input
                     dir="ltr"
                     inputMode="decimal"
@@ -365,11 +353,7 @@ export function ServiceGroupTargets() {
                   />
                 </label>
                 <label>
-                  {text(
-                    "P95 目标（毫秒）",
-                    "P95 target (ms)",
-                    "هدف P95 (مللي ثانية)",
-                  )}
+                  {text(...translatedMessage("p95_target_ms_858cec53dc"))}
                   <input
                     dir="ltr"
                     inputMode="numeric"
@@ -381,9 +365,9 @@ export function ServiceGroupTargets() {
                 </label>
                 <p>
                   {text(
-                    "成功率：0–100%，最多四位小数；P95：1–86400000 整数毫秒。至少填写一项。",
-                    "Success: 0–100%, up to four decimal places. P95: 1–86400000 whole milliseconds. Set at least one metric.",
-                    "النجاح: 0–100% حتى أربع منازل عشرية. P95: عدد صحيح من 1 إلى 86400000 مللي ثانية. أدخل مقياسًا واحدًا على الأقل.",
+                    ...translatedMessage(
+                      "success_0_100_up_to_four_decimal_places_p95_1_9cb8040148",
+                    ),
                   )}
                 </p>
               </div>
@@ -391,9 +375,9 @@ export function ServiceGroupTargets() {
             {conflict && (
               <p role="alert">
                 {text(
-                  "分组或版本已变化，或当前读取不可用。请刷新核对并重新打开编辑。",
-                  "The group or revision changed, or the current read is unavailable. Refresh and reopen the editor.",
-                  "تغيّرت المجموعة أو الإصدار، أو تعذر القراءة. حدّث وأعد فتح المحرر.",
+                  ...translatedMessage(
+                    "the_group_or_revision_changed_or_the_current__2ec8cb9f41",
+                  ),
                 )}
               </p>
             )}

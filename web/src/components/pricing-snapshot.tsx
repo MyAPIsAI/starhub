@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import type { PricingQuoteSnapshot } from "../lib/model-pricing";
 import { usePreferences } from "../lib/preferences";
 
@@ -11,35 +12,33 @@ export function PricingSnapshot({
     language === "zh" ? zh : language === "ar" ? ar : en;
   const { rule, usage, pricing } = snapshot;
   const labels = {
-    input_tokens: text("普通输入词元", "Uncached input tokens", "رموز الإدخال"),
-    output_tokens: text("输出词元", "Output tokens", "رموز الإخراج"),
+    input_tokens: text(
+      ...translatedMessage("uncached_input_tokens_c001c308cc"),
+    ),
+    output_tokens: text(...translatedMessage("output_tokens_e8729227cd")),
     cache_read_tokens: text(
-      "缓存读取词元",
-      "Cache read tokens",
-      "رموز قراءة التخزين",
+      ...translatedMessage("cache_read_tokens_ea19d27041"),
     ),
     cache_write_tokens: text(
-      "缓存写入词元",
-      "Cache write tokens",
-      "رموز كتابة التخزين",
+      ...translatedMessage("cache_write_tokens_2e87c1619e"),
     ),
-    images: text("图片张数", "Images", "الصور"),
-    seconds: text("时长（秒）", "Duration (seconds)", "المدة بالثواني"),
-    requests: text("请求次数", "Requests", "الطلبات"),
+    images: text(...translatedMessage("images_0cc4309f02")),
+    seconds: text(...translatedMessage("duration_seconds_7aa2eff257")),
+    requests: text(...translatedMessage("requests_de8ae6d124")),
   };
   const unit =
     rule.mode === "unit"
       ? {
-          request: text("次", "request", "طلب"),
-          image: text("张", "image", "صورة"),
-          second: text("秒", "second", "ثانية"),
+          request: text(...translatedMessage("request_1084482b61")),
+          image: text(...translatedMessage("image_3ac6426300")),
+          second: text(...translatedMessage("second_458c9c7655")),
         }[rule.unit]
       : "";
   return (
     <>
       <div>
         <dt>
-          {text("计费用量快照", "Metered usage snapshot", "لقطة الاستخدام")}
+          {text(...translatedMessage("metered_usage_snapshot_959973b235"))}
         </dt>
         <dd>
           {Object.entries(usage).map(([field, amount]) => (
@@ -51,32 +50,21 @@ export function PricingSnapshot({
       </div>
       <div>
         <dt>
-          {text(
-            "调用时计价规则",
-            "Pricing rule at request",
-            "قاعدة التسعير وقت الطلب",
-          )}
+          {text(...translatedMessage("pricing_rule_at_request_c6e98f204c"))}
         </dt>
         <dd>
           {rule.mode === "tokens" ? (
             <>
               {text(
-                "按词元 · 美元 / 百万词元基准价",
-                "Per token · base USD / 1M tokens",
-                "لكل رمز · السعر الأساسي لكل مليون رمز",
+                ...translatedMessage("per_token_base_usd_1m_tokens_8fe5eace89"),
               )}
               <small className="request-rate-note">
-                {text("普通输入 / 输出", "Input / output", "إدخال / إخراج")}：$
+                {text(...translatedMessage("input_output_8eeba908fe"))}：$
                 {pricing.input_per_million_usd} / $
                 {pricing.output_per_million_usd}
               </small>
               <small className="request-rate-note">
-                {text(
-                  "缓存读取 / 写入",
-                  "Cache read / write",
-                  "قراءة / كتابة التخزين",
-                )}
-                ：
+                {text(...translatedMessage("cache_read_write_84134346f7"))}：
                 {pricing.cache_read_per_million_usd === undefined
                   ? "—"
                   : `$${pricing.cache_read_per_million_usd}`}{" "}
@@ -91,21 +79,17 @@ export function PricingSnapshot({
               ${snapshot.matchedCondition?.priceUsd ?? rule.priceUsd} / {unit}
               {snapshot.matchedCondition && (
                 <small className="request-rate-note">
-                  {text("条件价", "Conditional price", "السعر المشروط")}：
+                  {text(...translatedMessage("conditional_price_cac8576a56"))}：
                   {snapshot.matchedCondition.label} ·{" "}
                   {JSON.stringify(snapshot.attributes)}
                 </small>
               )}
               <small className="request-rate-note">
-                {text(
-                  "最低计费量 / 取整步长",
-                  "Minimum / rounding step",
-                  "الحد الأدنى / خطوة التقريب",
-                )}
+                {text(...translatedMessage("minimum_rounding_step_88a65094d4"))}
                 ：{rule.minimum} / {rule.ceilTo}
               </small>
               <small className="request-rate-note">
-                {text("结算数量", "Billed quantity", "الكمية المفوترة")}：
+                {text(...translatedMessage("billed_quantity_458df63459"))}：
                 {snapshot.billedQuantity} {unit}
               </small>
             </>
@@ -113,9 +97,7 @@ export function PricingSnapshot({
             <>
               <span>
                 {text(
-                  "表达式基准金额（美元）",
-                  "Expression base amount (USD)",
-                  "المبلغ الأساسي بالتعبير",
+                  ...translatedMessage("expression_base_amount_usd_90797b4572"),
                 )}
               </span>
               <code
@@ -130,27 +112,25 @@ export function PricingSnapshot({
       </div>
       <div>
         <dt>
-          {text("本次结算系数", "Settlement coefficients", "معاملات التسوية")}
+          {text(...translatedMessage("settlement_coefficients_838c25bbae"))}
         </dt>
         <dd>
-          {text("分组", "Group", "المجموعة")} {snapshot.groupMultiplier}× ·{" "}
-          {text("时段", "Time window", "الفترة")} {snapshot.timeMultiplier}×
+          {text(...translatedMessage("group_528d77dde5"))}{" "}
+          {snapshot.groupMultiplier}× ·{" "}
+          {text(...translatedMessage("time_window_ea1ddd4afa"))}{" "}
+          {snapshot.timeMultiplier}×
           <small className="request-rate-note">
             {text(
-              "基准金额 × 分组倍率 × 时段系数，各计算一次。",
-              "Base amount × group × time coefficient, each applied once.",
-              "المبلغ الأساسي × معامل المجموعة × الفترة، مرة واحدة لكل منها.",
+              ...translatedMessage(
+                "base_amount_group_time_coefficient_each_appli_dbe348c610",
+              ),
             )}
           </small>
         </dd>
       </div>
       <div>
         <dt>
-          {text(
-            "计价时刻与时区",
-            "Pricing time and timezone",
-            "وقت التسعير والمنطقة",
-          )}
+          {text(...translatedMessage("pricing_time_and_timezone_e5c5a08732"))}
         </dt>
         <dd>
           {new Date(snapshot.quotedAt).toLocaleString()}
@@ -158,26 +138,26 @@ export function PricingSnapshot({
             {snapshot.matchedWindow
               ? `${snapshot.matchedWindow.label} · ${snapshot.matchedWindow.timezone} · ${snapshot.matchedWindow.start}–${snapshot.matchedWindow.end}`
               : text(
-                  "未命中分时时段，使用常规价",
-                  "No window matched; standard rate",
-                  "لم تطابق فترة؛ السعر العادي",
+                  ...translatedMessage(
+                    "no_window_matched_standard_rate_42c04ea42d",
+                  ),
                 )}
           </small>
         </dd>
       </div>
       <div>
-        <dt>{text("价格来源", "Price source", "مصدر السعر")}</dt>
+        <dt>{text(...translatedMessage("price_source_1fbffadc9a"))}</dt>
         <dd>
           {snapshot.source === "sample"
             ? text(
-                "演示样例，非核实官价",
-                "Demo sample, not verified official pricing",
-                "عينة عرض وليست سعرًا رسميًا موثقًا",
+                ...translatedMessage(
+                  "demo_sample_not_verified_official_pricing_c59f3923b7",
+                ),
               )
             : text(
-                "管理员录入的官方参考价，未自动核实",
-                "Official reference entered by admin; not independently verified",
-                "مرجع رسمي أدخله المسؤول دون تحقق آلي",
+                ...translatedMessage(
+                  "official_reference_entered_by_admin_not_indep_44f186bba7",
+                ),
               )}
           <small className="request-rate-note">{snapshot.version}</small>
         </dd>

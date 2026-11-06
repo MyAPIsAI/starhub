@@ -404,7 +404,7 @@ var (
 // settleImageAttempt balances the image bill (unit-based: the amount was
 // computed by ImageBill with the count/usage guards).
 func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64, bill *relay.ImageBill) {
-	entry := &model.Log{TraceID: flow.traceID, RequestSource: flow.req.requestSource, TTFTMs: flow.ttftMs, UserID: flow.req.userID, TokenID: flow.req.tokenID, TokenName: flow.req.tokenName, TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, ChannelID: ch.ID, Model: flow.req.modelName, RequestedModel: flow.req.requestedModel, Protocol: flow.req.protocol, Quota: actual, UsedChannels: flow.trailString(), DurationMs: time.Since(flow.startTime).Milliseconds(), Status: 1, BillingDetail: bill.BillingDetail, UsageSource: bill.UsageSource}
+	entry := &model.Log{AcceptedAt: flow.startTime.Unix(), TraceID: flow.traceID, RequestSource: flow.req.requestSource, TTFTMs: flow.ttftMs, UserID: flow.req.userID, TokenID: flow.req.tokenID, TokenName: flow.req.tokenName, TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, ChannelID: ch.ID, Model: flow.req.modelName, RequestedModel: flow.req.requestedModel, Protocol: flow.req.protocol, Quota: actual, UsedChannels: flow.trailString(), DurationMs: time.Since(flow.startTime).Milliseconds(), Status: 1, BillingDetail: bill.BillingDetail, UsageSource: bill.UsageSource}
 	model.FreezeLogLabels(entry, flow.settleGroup(), "images")
 	model.FreezeRoutingEvidence(flow.ctx, entry, flow.affinityPreferred != 0)
 	if bill.SettledUsage != nil {

@@ -3,6 +3,8 @@ package model
 import "gorm.io/gorm"
 
 type Log struct {
+	AcceptedAt           int64  `gorm:"not null;default:0" json:"accepted_at"`
+	SettledAt            int64  `gorm:"not null;default:0;index" json:"settled_at"`
 	ResourceID           string `gorm:"size:128;not null;default:''" json:"resource_id,omitempty"`
 	ResourceIDs          string `gorm:"type:text;not null;default:''" json:"resource_ids,omitempty"`
 	SnapshotSequence     int64  `gorm:"not null;default:0" json:"snapshot_sequence"`
@@ -107,6 +109,11 @@ func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) 
 }
 
 func ListLogs(userID int64, page, pageSize int64, model string) ([]Log, int64, error) {
+	return ListResourceLogs(userID, page, pageSize, model, "")
+}
+
+// ListResourceLogs matches complete IDs in recorded routing attribution.
+func ListResourceLogs(userID int64, page, pageSize int64, model, resourceID string) ([]Log, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -122,6 +129,12 @@ func ListLogs(userID int64, page, pageSize int64, model string) ([]Log, int64, e
 	}
 	if model != "" {
 		q = q.Where("model = ?", model)
+	}
+	if resourceID != "" {
+		q = q.Where(`resource_id = ? OR EXISTS (
+			SELECT 1 FROM json_each(CASE WHEN json_valid(logs.resource_ids) THEN logs.resource_ids ELSE '[]' END)
+			WHERE type = 'text' AND value = ?
+		)`, resourceID, resourceID)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {

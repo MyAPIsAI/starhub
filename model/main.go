@@ -40,15 +40,25 @@ func InitDB(path string) error {
 		}
 	}()
 	db = db.Set(tokenCipherSetting, aead).Session(&gorm.Session{})
+	legacyReservations := !db.Migrator().HasColumn(&User{}, "reserved_quota")
 	legacyQuotaLimits := !db.Migrator().HasColumn(&Token{}, "quota_limit")
 	legacyStaffAccounts := !db.Migrator().HasColumn(&User{}, "account_kind")
 	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
-	if err := db.AutoMigrate(&ChannelConfigurationState{}); err != nil {
+	if err := db.AutoMigrate(&ChannelConfigurationState{}, &TransactionalMail{}); err != nil {
 		return fmt.Errorf("migrate channel configuration revision: %w", err)
 	}
-	if err := db.AutoMigrate(&DeploymentProfileState{}, &DeploymentProfileVersion{}, &LegalDocumentVersion{}, &StandardModel{}, &StandardModelHistory{}, &CustomerRequestLease{}, &ReconciliationReport{}); err != nil {
+	if err := db.AutoMigrate(&ResourceSyncState{}, &ResourceSyncFailure{}, &GatewayResourceReport{}); err != nil {
+		return fmt.Errorf("migrate resource monitoring: %w", err)
+	}
+	if err := db.AutoMigrate(&ResourceMonitorFeed{}, &ResourceDirectoryPrice{}, &ResourceObservedEvent{}, &ResourcePriceMismatch{}, &ResourceIncident{}); err != nil {
+		return fmt.Errorf("migrate resource monitoring history: %w", err)
+	}
+	if err := db.AutoMigrate(&ServiceAnnouncement{}); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(&DeploymentProfileState{}, &DeploymentProfileVersion{}, &LegalDocumentVersion{}, &StandardModel{}, &StandardModelHistory{}, &CustomerRequestLease{}, &ReconciliationReport{}, &ReconciliationDirtyDay{}, &ReconciliationSchedule{}, &ReconciliationAlert{}, &PaymentStatement{}, &PaymentStatementRow{}); err != nil {
 		return err
 	}
 	if err := db.FirstOrCreate(&DeploymentProfileState{}, DeploymentProfileState{ID: 1}).Error; err != nil {
@@ -67,6 +77,11 @@ func InitDB(path string) error {
 	}
 	if err := db.AutoMigrate(&APIChargeEvent{}); err != nil {
 		return fmt.Errorf("migrate API billing outbox: %w", err)
+	}
+	if legacyReservations {
+		if err := db.Exec("UPDATE users SET reserved_quota = COALESCE((SELECT SUM(quota) FROM tasks WHERE tasks.user_id = users.id AND status NOT IN ('succeeded','failed','cancelled')),0) + COALESCE((SELECT SUM(actual-delta) FROM quota_settlements WHERE quota_settlements.user_id = users.id AND completed_at = 0),0)").Error; err != nil {
+			return err
+		}
 	}
 	if err := initializeExportMetadata(db); err != nil {
 		return fmt.Errorf("migrate export download metadata: %w", err)
@@ -126,6 +141,7 @@ func InitDB(path string) error {
 		return fmt.Errorf("migrate key encryption: %w", err)
 	}
 	DB = db
+	LocalResources = NewResourceRuntime(common.GenerateSessionKey())
 	initialized = true
 	return nil
 }

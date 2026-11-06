@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 export interface StoredBillingDetail {
   version: number;
   mode: string;
@@ -17,13 +18,13 @@ export function callTypeLabel(
   language: string,
 ): string {
   const names: Record<string, [string, string, string]> = {
-    chat: ["文本对话", "Chat", "محادثة"],
-    responses: ["响应接口", "Responses", "الاستجابات"],
-    embeddings: ["向量嵌入", "Embeddings", "التضمينات"],
-    rerank: ["重排序", "Reranking", "إعادة الترتيب"],
-    images: ["图像", "Images", "الصور"],
-    audio: ["音频", "Audio", "الصوت"],
-    video: ["视频", "Video", "الفيديو"],
+    chat: translatedMessage("chat_94cc5639f0"),
+    responses: translatedMessage("responses_41fa1e671c"),
+    embeddings: translatedMessage("embeddings_387a044c6b"),
+    rerank: translatedMessage("reranking_16b3ce50be"),
+    images: translatedMessage("images_2490b318b5"),
+    audio: translatedMessage("audio_42f61562b3"),
+    video: translatedMessage("video_f038b3ffa9"),
   };
   const labels = names[value ?? ""];
   return labels

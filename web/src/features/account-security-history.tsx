@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { History } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useUserSecurityHistory } from "../lib/api/user";
@@ -15,27 +17,23 @@ export function AccountSecurityHistory() {
   const mismatch =
     query.error instanceof ApiError && query.error.status === 409;
   const date = (value: number) =>
-    new Intl.DateTimeFormat(
-      language === "zh" ? "zh-CN" : language === "ar" ? "ar" : "en",
-      { dateStyle: "medium", timeStyle: "short" },
-    ).format(new Date(value * 1000));
+    new Intl.DateTimeFormat(regionalLocale(language), {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value * 1000));
   return (
     <section className="ac-card" aria-labelledby="ac-history-title">
       <div className="ac-section-heading">
         <div>
           <h2 id="ac-history-title">
             <History size={18} />
-            {c(
-              "最近安全操作",
-              "Recent security activity",
-              "نشاط الأمان الأخير",
-            )}
+            {c(...translatedMessage("recent_security_activity_4124050334"))}
           </h2>
           <p>
             {c(
-              "最近5条；仅覆盖本功能启用后通过此页面成功的密码、邮箱修改。更早历史、其他入口和设备操作不在此范围。",
-              "Latest 5 changes. Covers successful password and email changes made here after history was enabled. Earlier actions, other entry points and device operations are outside this history.",
-              "آخر 5 تغييرات ناجحة لكلمة المرور والبريد من هذه الصفحة بعد تفعيل السجل. لا يشمل الإجراءات الأقدم أو المداخل الأخرى أو عمليات الأجهزة.",
+              ...translatedMessage(
+                "latest_5_changes_covers_successful_password_a_4a946c31d1",
+              ),
             )}
           </p>
         </div>
@@ -48,11 +46,11 @@ export function AccountSecurityHistory() {
               <div>
                 <strong>
                   {event.action === "password_changed"
-                    ? c("修改登录密码", "Password changed", "تغيير كلمة المرور")
+                    ? c(...translatedMessage("password_changed_014a46f6c9"))
                     : c(
-                        "更新资料邮箱",
-                        "Profile email changed",
-                        "تغيير بريد الحساب",
+                        ...translatedMessage(
+                          "profile_email_changed_84c6c2069a",
+                        ),
                       )}
                 </strong>
                 <time
@@ -67,25 +65,21 @@ export function AccountSecurityHistory() {
       )}
       {query.isLoading && (
         <p role="status" className="ac-history-status">
-          {c(
-            "正在读取安全历史…",
-            "Loading security history…",
-            "جارٍ تحميل سجل الأمان…",
-          )}
+          {c(...translatedMessage("loading_security_history_1dbcc73cce"))}
         </p>
       )}
       {query.isError && (
         <p role="alert" className="ac-history-status">
           {mismatch
             ? c(
-                "登录账号可能已变化，请重新确认当前账号。",
-                "The signed-in account may have changed. Confirm the current account.",
-                "ربما تغير الحساب المسجل. أكّد الحساب الحالي.",
+                ...translatedMessage(
+                  "the_signed_in_account_may_have_changed_confir_2764a99c4c",
+                ),
               )
             : c(
-                "暂时无法读取安全历史，旧记录已隐藏。",
-                "Security history is unavailable. Previous records are hidden.",
-                "سجل الأمان غير متاح. أُخفيت السجلات السابقة.",
+                ...translatedMessage(
+                  "security_history_is_unavailable_previous_reco_3dd1bc577a",
+                ),
               )}
         </p>
       )}
@@ -95,9 +89,9 @@ export function AccountSecurityHistory() {
         events.length === 0 && (
           <p className="ac-history-status">
             {c(
-              "此记录范围内暂无操作。",
-              "No changes recorded in this scope.",
-              "لا تغييرات مسجلة ضمن هذا النطاق.",
+              ...translatedMessage(
+                "no_changes_recorded_in_this_scope_5f776b1c64",
+              ),
             )}
           </p>
         )}
@@ -111,16 +105,8 @@ export function AccountSecurityHistory() {
           }
         >
           {mismatch
-            ? c(
-                "确认当前账号",
-                "Confirm current account",
-                "تأكيد الحساب الحالي",
-              )
-            : c(
-                "重新读取安全历史",
-                "Reload security history",
-                "إعادة تحميل سجل الأمان",
-              )}
+            ? c(...translatedMessage("confirm_current_account_9bdf8613b1"))
+            : c(...translatedMessage("reload_security_history_c476457ed3"))}
         </Button>
       </div>
     </section>

@@ -19,83 +19,27 @@ import (
 	"starhub/service"
 )
 
-func ListTaskPlugins(w http.ResponseWriter, r *http.Request) {
-	plugins, err := model.ListTaskPlugins()
-	if err != nil {
-		common.ApiError(w, http.StatusInternalServerError, "load plugins failed")
-		return
+// legacyPluginAdmission recreates accepted tasks for recovery tests only.
+// Production admission cannot execute a JavaScript task plugin.
+func legacyPluginAdmission(w http.ResponseWriter, r *http.Request) {
+	req := relayRequestFromContext(r)
+	flow := newRelayFlow(r.Context(), w, req, "", "task")
+	defer flow.finish()
+	for {
+		ch, err := flow.pick()
+		if err != nil {
+			flow.exhausted()
+			return
+		}
+		flow.begin(ch)
+		flow.unsupported++
+		if submitPluginTask(flow, ch) {
+			return
+		}
 	}
-	common.ApiSuccess(w, plugins)
 }
 
-func UploadTaskPlugin(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Source string `json:"source"`
-	}
-	if !decodeJSONBody(w, r, &input) {
-		return
-	}
-	plugin, err := taskplugin.Compile(r.Context(), input.Source)
-	if err != nil {
-		common.ApiError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	stored, err := model.SaveTaskPlugin(input.Source, plugin.Meta)
-	if err != nil {
-		common.ApiError(w, http.StatusConflict, err.Error())
-		return
-	}
-	common.ApiSuccess(w, stored)
-}
-
-func SetTaskPluginEnabled(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	var input struct {
-		Enabled *bool `json:"enabled"`
-	}
-	if !decodeJSONBody(w, r, &input) {
-		return
-	}
-	if input.Enabled == nil {
-		common.ApiError(w, http.StatusBadRequest, "enabled is required")
-		return
-	}
-	if err := model.SetTaskPluginEnabled(id, *input.Enabled); err != nil {
-		common.ApiError(w, http.StatusNotFound, "plugin version not found")
-		return
-	}
-	common.ApiSuccess(w, nil)
-}
-
-// TestTaskPlugin executes data transforms only; it cannot send HTTP requests.
-func TestTaskPlugin(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	var input struct {
-		Hook string `json:"hook"`
-		Args []any  `json:"args"`
-	}
-	if !decodeJSONBody(w, r, &input) {
-		return
-	}
-	plugin, err := relay.LoadTaskPlugin(r.Context(), id, false)
-	if err != nil {
-		common.ApiError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	var result json.RawMessage
-	if err := plugin.Call(r.Context(), input.Hook, input.Args, &result); err != nil {
-		common.ApiError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	common.ApiSuccess(w, result)
-}
-
+// Legacy admission is a test fixture for recovery of pre-retirement tasks.
 // submitPluginTask returns false only when the candidate cannot accept new tasks.
 // A durable task protects channel credentials before HTTP is sent.
 func submitPluginTask(flow *relayFlow, picked *model.Channel) bool {
@@ -143,7 +87,7 @@ func submitPluginTask(flow *relayFlow, picked *model.Channel) bool {
 		return true
 	}
 	request, _ := json.Marshal(taskReq)
-	task := &model.Task{TraceID: flow.traceID, CallType: flow.req.callType, TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, TaskPluginID: ch.TaskPluginID, Platform: plugin.Meta.Key, Action: dto.TaskActionVideo, Status: model.TaskStatusSubmitting,
+	task := &model.Task{SubmitTime: flow.startTime.Unix(), TraceID: flow.traceID, CallType: flow.req.callType, TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, TaskPluginID: ch.TaskPluginID, Platform: plugin.Meta.Key, Action: dto.TaskActionVideo, Status: model.TaskStatusSubmitting,
 		Model: flow.req.modelName, RequestedModel: flow.req.requestedModel, Protocol: flow.req.protocol, UserID: flow.req.userID, TokenID: flow.req.tokenID, TokenName: flow.req.tokenName,
 		TokenUnlimited: flow.req.tokenUnlimited, ChannelID: ch.ID, Group: flow.settleGroup(), UserGroup: flow.req.userGroup, Quota: max(1, quota), RequestMeta: string(request), PricingMeta: string(pricing)}
 	model.FreezeTaskRouting(flow.ctx, task, flow.affinityPreferred == task.ChannelID)

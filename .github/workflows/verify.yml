@@ -48,6 +48,7 @@ jobs:
           npm run lint
           npm run format:check
           npm run typecheck
+          npm run check:i18n
           npm run test:unit
           npm run build
       - name: Verify embedded console
@@ -61,6 +62,9 @@ jobs:
       - name: Browser tests against isolated Go server
         working-directory: web
         run: npm run test:e2e
+      - name: M9 language and RTL acceptance
+        working-directory: web
+        run: node tests/m9-browser.mjs
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -68,6 +72,8 @@ jobs:
           path: |
             web/playwright-report/
             web/test-results/
+            output/m9-browser/*.png
+            output/m9-browser/report.json
 
   # Nightly job: shuffle tests to detect order-dependent failures.
   # Only runs on schedule (not on every push/PR).

@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../components/ui/button";
@@ -50,12 +51,8 @@ function FinanceRoleControlView({
     return null;
   const enabled = user.role !== ROLE_FINANCE;
   const label = enabled
-    ? text(
-        "授予财务只读权限",
-        "Grant read-only finance access",
-        "منح صلاحية مالية للقراءة فقط",
-      )
-    : text("收回财务权限", "Revoke finance access", "سحب الصلاحية المالية");
+    ? text(...translatedMessage("grant_read_only_finance_access_29ab002618"))
+    : text(...translatedMessage("revoke_finance_access_65e929edac"));
   return (
     <div>
       <Button
@@ -81,7 +78,7 @@ function FinanceRoleControlView({
               disabled={mutation.isPending}
               onClick={() => setOpen(false)}
             >
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             <Button
               disabled={mutation.isPending}
@@ -98,8 +95,8 @@ function FinanceRoleControlView({
               }
             >
               {mutation.isPending
-                ? text("正在更新…", "Updating…", "جارٍ التحديث…")
-                : text("确认变更", "Confirm change", "تأكيد التغيير")}
+                ? text(...translatedMessage("updating_06852373b6"))
+                : text(...translatedMessage("confirm_change_d9a625c488"))}
             </Button>
           </>
         }
@@ -107,14 +104,14 @@ function FinanceRoleControlView({
         <p>
           {enabled
             ? text(
-                "该账户将可读取全平台财务汇总，包括钱包、充值、流水与 API 配额消费。",
-                "This account will be able to read platform-wide wallet, top-up, ledger and API quota summaries.",
-                "سيتمكن هذا الحساب من قراءة ملخصات المحافظ والشحن والسجل وحصة الواجهة على مستوى المنصة.",
+                ...translatedMessage(
+                  "this_account_will_be_able_to_read_platform_wi_df2d08bf92",
+                ),
               )
             : text(
-                "该账户将恢复为普通用户，下次财务请求即不再获准。",
-                "This account will return to a regular user and its next finance request will be denied.",
-                "سيعود الحساب مستخدمًا عاديًا وسيُرفض طلبه المالي التالي.",
+                ...translatedMessage(
+                  "this_account_will_return_to_a_regular_user_an_9c2507fab1",
+                ),
               )}
         </p>
         {mutation.error && (
@@ -122,9 +119,9 @@ function FinanceRoleControlView({
             {mutation.error instanceof ApiError
               ? mutation.error.message
               : text(
-                  "无法确认变更结果，请刷新账户角色后再操作。",
-                  "The result could not be confirmed. Reload the account role before trying again.",
-                  "تعذر تأكيد النتيجة. أعد تحميل دور الحساب قبل المحاولة مجددًا.",
+                  ...translatedMessage(
+                    "the_result_could_not_be_confirmed_reload_the__7273b16c8b",
+                  ),
                 )}
           </p>
         )}

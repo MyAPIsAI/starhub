@@ -1,6 +1,6 @@
 # M7 administration
 
-The administration implementation covers ADM-2, ADM-3, ADM-4, ADM-8 and ADM-9 and their fourteen originally requested acceptance cases. The subsequent operating dashboard implements ADM-5 with ADM-AC-07 verification. It uses the supplied MyAPIs Demo for page structure and the existing application theme. Customer and employee sign-in use separate forms and credentials, with server-confirmed role permissions.
+The administration implementation covers ADM-2, ADM-3, ADM-4, ADM-8 and ADM-9 and their fourteen originally requested acceptance cases. The operating dashboard implements ADM-5 with ADM-AC-07 verification, resource monitoring covers ADM-6, and service announcements implement ADM-7 with ADM-AC-11 verification. It uses the supplied MyAPIs Demo for page structure and the existing application theme. Customer and employee sign-in use separate forms and credentials, with server-confirmed role permissions.
 
 ## Personal workspace and back office
 
@@ -10,11 +10,15 @@ The personal workspace sends `X-StarHub-Portal: workspace`. With a verified staf
 
 ## Management pages
 
+The product scope follows the supplied overall PRD section 9.2 and the feature inventory: redemption codes and JavaScript task plugins/plugin marketplaces are excluded. The back office has no corresponding pages, menu entries or tools group. Existing `tab=plugins` and `tab=redemption` links fall back to the role's default management page. Customer billing also has no redemption form. Business, models/resources, operations and system navigation groups remain unchanged.
+
+The legacy `/api/redemption`, `/api/user/redeem` and `/api/task-plugin` endpoints (including their former children and trailing-slash forms) return HTTP 410. No role, including Root, has plugin or redemption management permission. Channel creation/update rejects type 61 and nonzero `task_plugin_id`; channel testing cannot execute a legacy plugin. Public video submission only selects built-in task adapters. The OpenAI-compatible video submit/poll endpoints remain available under the optional M1 video scope. Historical database rows are retained, and workers can finish/refund tasks accepted before retirement. Legacy plugin submission exists only in a test fixture, preserving recovery coverage without a production entry point. Current local retirement required no channel conversion or historical data deletion.
+
 - Customer accounts: server-side search and paging, masked contact details, monthly spend, account details, concurrency controls, key disable, internal call metadata, ledger, orders and session revocation. Concurrent edits use an independent control revision; changing a concurrency limit does not revoke customer sessions.
 - Models and pricing: stable model identity, explicit listing, resource eligibility, atomic base-price changes, reference guards on deletion, official reference provenance and separate pricing history. Existing advanced pricing engines remain available. Legacy configured models are shown as needing registration; migration does not silently unlist existing integrations.
 - Region profile: Root-only versioned deployment settings, vendor and regional listing constraints, legal document versions and regional time. Current Key quota periods keep their original boundary when the regional timezone changes.
 - System information: measured process heartbeats, build/configuration versions and database health. Technical and Root roles can access it.
-- Reconciliation: daily regional comparisons of settled usage, API ledger and paid orders versus recharge credits, with exact nano-USD differences and separate funding sources. Finance and Root can read/run reports. Current-day reports are provisional. External payment statements and vendor invoices are not integrated by this change.
+- Reconciliation: exact balance, usage, key and recharge checks with regional 02:00 scheduling, late-settlement backfills and durable difference notifications. Finance and Root can read/run reports and import complete daily payment statements. Imported statements do not post money; automated payment-provider connectivity is not configured. See the financial reconciliation section below.
 - Audit: actor, role, business action, object, available before/after summaries, reason, IP and time; role-scoped filters and a one-year retention window. Typed projections exclude passwords, authenticator seeds, complete API keys and upstream credentials.
 
 ## API contracts
@@ -32,6 +36,7 @@ All administration endpoints require an enrolled staff session and an allowed ne
 | `/api/admin/region-profile`, `/api/admin/legal` | Root |
 | `/api/admin/system` | Technical, Root |
 | `/api/admin/reconciliation` | Finance, Root |
+| `/api/admin/reconciliation/statements` | Finance, Root |
 | `/api/audit` | Own records; Root can select any actor |
 | `/api/legal/{kind}?language=en` | Public, currently effective document only |
 
@@ -59,10 +64,134 @@ ADM-AC-07 is covered by `model/operating_dashboard_test.go`: three actual receip
 
 Evidence: `output/operating-dashboard-go-tests.txt`, `output/operating-dashboard-unit-tests.txt`, and `output/operating-dashboard-browser/report.json`. Run the browser check with `node tests/operating-dashboard-browser.mjs` from `web/`; it verifies all twelve language/theme/viewport combinations plus range controls, refresh, drill-down, empty and failure states.
 
+## Resource synchronization and instance status
+
+Scope: ADM-6.1–6.4 and ADM-AC-08–10, 14–16.
+
+The Technical/Root page at `/admin?tab=sync` displays applied and last-observed upstream versions, their difference, the public directory checksum, last successful alignment, last attempt, recent failures, and the independent snapshot sequence. The worker starts with the application and aligns every five minutes. Two failed cycles, an alignment heartbeat overdue by ten minutes, or local directory drift produces a red alert. Recovery clears the active alert while retaining recent failures. Unconfigured sources and unknown versions are distinct from aligned state. Multiple processes use a shared SQLite lease with a unique fencing token; stale workers cannot publish over a later owner.
+
+`POST /api/admin/resource-sync` requires `{"confirm":true}` and verified Technical/Root access. The UI requires a confirmation dialog and returns keyboard focus on cancel. Scheduled and manual runs share validation and mutual exclusion. Identical versions/content are an idempotent success; rollback, conflicting same-version content, invalid payloads and checksum mismatches retain published data. Successful manual application and a typed business audit record commit in one transaction. Source URLs, authentication tokens and raw upstream errors are excluded from the status, failure and audit projections. The existing generic audit also retains unsuccessful write attempts.
+
+### Source adapter contract
+
+The configured `STARHUB_RESOURCE_SNAPSHOT_URL` and token remain the full-directory source. The monitoring adapters below add independent health snapshots, a price-event projection and incident delivery. They do not acknowledge credential application or replace M8's complete incremental credential distribution and signing protocol, or the complete M2 routing algorithm. The user confirmed that the real provider contract is undecided; this change supplies configurable interfaces and isolated HTTP tests. No live provider was selected or connected. Confirm or adapt the following wire contract when the actual provider is available.
+
+The request is an authenticated `GET` with `full=true`, `version=<last-applied-directory-version>` and `checksum=<last-applied-directory-checksum>`. The token is sent only as a Bearer header. Redirects are refused; fetches time out after ten seconds and payloads are limited to 1 MiB. The versioned response is:
+
+```json
+{"version":1042,"checksum":"<sha256>","snapshot":{"id":"example","sequence":105,"publishedAt":"2026-11-06T00:00:00Z","channels":[],"instances":[]}}
+```
+
+Snapshot channels and instances retain the existing inventory schema. Instances additionally accept optional `price_tier` (4/6/8/10), `quality_level` (S0/S1/S2/U), `state` (hot/cold/bad/disabled), `trend` (stable/degraded), and `score` (finite 0–100). Absent historic/source metadata remains absent and is shown as an em dash, never fabricated. The directory checksum is `model.ResourceSnapshotChecksum`: sort channels/instances by ID and protocol/capability arrays; omit receipt/source/publication metadata and snapshot identity/sequence, and exclude snapshot-only quality/state/trend/score/latency. Hash the resulting Go JSON encoding with SHA-256. A newer health snapshot can therefore carry an unchanged directory version/checksum. The same snapshot sequence with conflicting content is rejected.
+
+Legacy responses containing only the original snapshot object remain accepted in explicitly labeled `snapshot_compatibility` mode. Their sequence supplies the adapter version; the UI explains that an independent directory version is unavailable. This compatibility path must not be represented as verification of a remote directory-version protocol.
+
+### Snapshot freshness and price consistency (ADM-6.2)
+
+The snapshot panel displays sequence, actual publication time and age. Age comes from `publishedAt`, never the last fetch time. More than 180 seconds is red; exactly 180 seconds is still fresh. A newer, fresh publication clears the warning. Missing or invalid publication data remains unknown, and a future publication reports clock skew. The browser advances age between refreshes without relying on its clock matching the server.
+
+Configure these adapters through startup environment variables:
+
+| Variable | Contract |
+| --- | --- |
+| `STARHUB_RESOURCE_EVENTS_URL` | GET every five seconds with `after_version=<durable cursor>`; returns the price projection batch below. |
+| `STARHUB_RESOURCE_HEALTH_SNAPSHOT_URL` | GET every minute; returns `{"directory_version":1042,"snapshot":{...}}`, using the complete existing snapshot schema. |
+| `STARHUB_RESOURCE_INCIDENTS_URL` | POST incident events; only a 2xx response marks delivery successful. |
+| `STARHUB_RESOURCE_SNAPSHOT_TOKEN` | Optional shared Bearer token for all resource adapters, including the existing full-directory source. |
+| `STARHUB_RESOURCE_CA_FILE` | Optional PEM CA bundle, added to trusted system roots. |
+| `STARHUB_RESOURCE_CLIENT_CERT_FILE` / `STARHUB_RESOURCE_CLIENT_KEY_FILE` | PEM client certificate/key pair for mutual TLS. Required for non-loopback monitoring endpoints. |
+
+Non-loopback monitoring endpoints require HTTPS and client credentials. Server certificates are verified, redirects are refused, credentials in URLs are rejected, monitoring requests time out after five seconds, and fetched payloads are limited to 1 MiB. Local HTTP is allowed only on loopback for development/tests. Errors exposed to the page are typed codes, without endpoint URLs, tokens, certificates or raw upstream error bodies. The full-directory HTTP client also uses the configured TLS transport.
+
+An initial price response can bootstrap a complete independent directory baseline, followed by contiguous events:
+
+```json
+{"base_version":1042,"baseline":[{"resource_id":"ri_example","price_tier":6}],"events":[{"event_id":"event-1043","version":1043,"type":"resource.upsert","occurred_at":"2026-11-06T00:01:00Z","resource":{"resource_id":"ri_example","price_tier":8}}]}
+```
+
+Subsequent responses omit `baseline` and return `base_version` equal to the requested cursor, with the following events (or an empty list). Without a baseline, observation must start from version zero with contiguous events. Batches accept at most 1,000 events or 10,000 baseline entries, subject to the payload-size limit. Exact duplicates are idempotent; version gaps, rollback attempts and conflicting identities/content do not partially apply. Bootstrap baselines cannot silently replace an initialized cursor. Supported event types are `resource.upsert`, `resource.disable`, `resource.delete` and `credential.rotate`; only IDs, versions and prices are projected, and raw credentials are not stored or acknowledged by this adapter.
+
+Comparison waits until the observed event cursor catches up with the applied full-directory version. The independently observed event P wins for catalog reads and routing admission; the original snapshot P remains available for comparison. A mismatch records resource, snapshot sequence/P, event P/version and detection time, and requests an early full alignment. Repeated snapshots of the same active conflict do not create duplicate alerts. Changed conflicts create history, and recovery records a resolution time rather than deleting the evidence. A new health snapshot must match the applied directory version and increase its independent sequence; identical sequence/content is idempotent, while conflicting content and sequence rollback are rejected.
+
+Each accepted baseline and contiguous event is compared within the same batch transaction. Two price changes in one response retain both conflicts; a conflict followed by recovery in that response retains the resolved history. Retries do not replay already observed transitions. An invalid later event rolls back the entire batch, including prices, cursor, history/resolution changes and the early alignment request. Intermediate event versions behind the applied directory are not compared against a newer snapshot. History with the same detection timestamp is ordered by descending event version. Regression coverage includes these cases in `model/resource_monitor_batch_test.go`, and the ADM-AC-15 HTTP acceptance fixture now returns both changes in one response.
+
+`GET /api/admin/resource-monitoring?mismatch_page=1&incident_page=1` is read-only and Technical/Root-only. It returns twenty rows per history page, totals, source configuration flags and sanitized feed status. The page explicitly shows unconfigured, failed and empty states. No source or missing P value is inferred from the demo.
+
+### Incident history and delivery (ADM-6.4)
+
+Five consecutive failed half-open probes produce `half_open_failed`; two consecutive EWMA breaches after the existing runtime's minimum sample guard produce `ewma_breach_twice`. Each event retains occurrence time, resource and gateway identity. A recovery resets the corresponding sequence so a later incident can be recorded. Publishing a gateway report persists its queued events in the same transaction. Events not yet published can be lost by a process crash within the five-second report interval; once persisted, pending delivery survives restarts.
+
+The delivery worker sends the following immutable payload with `Idempotency-Key` equal to `event_id`:
+
+```json
+{"event_id":"stable-event-id","type":"half_open_failed","resource_id":"ri_example","gateway_id":"gw-2","occurred_at":"2026-11-06T00:02:00Z"}
+```
+
+Shared leases and fenced updates coordinate workers. Failed delivery retries with exponential backoff capped at five minutes; retries preserve the payload and event ID, so the receiver must deduplicate. Delivery is at least once. A separate worker prevents slow report delivery from blocking snapshot polling. Pending events are bound to their destination once configured; changing that destination does not silently send older bound events to another service. Without a configured destination, events remain visible as unconfigured, never falsely delivered. History shows delivery state, attempts and successful report time separately from occurrence time.
+
+### Gateway reports and five-minute statistics
+
+`GET /api/admin/resource-instances` provides read-only inventory, model/vendor/lifecycle/tier filters, twenty-row pagination and each gateway's local state. Tier eligibility uses P ≤ G and, for text/code, the source quality requirement (G=10 requires S0; G=8 allows S0/S1; G=4/6 allow S0/S1/S2). This describes resource tier eligibility, not customer authorization or a grant to a service group. Missing P/Q data is not guessed. Placement, Key and group permissions remain authoritative.
+
+The resource table follows the supplied MyAPIs demo's compact layout: separate lifecycle, trend, score, attempt-count and success-rate columns, with vendor/capabilities beneath the model and gateway badges arranged horizontally. It retains the model/vendor/state/tier filters. `q` searches resource IDs and canonical models case-insensitively before pagination; `resource_id` selects one exact instance for its live read-only drawer. State filters also accept `open`, `degraded`, `unknown` and `abnormal` (any non-normal gateway, including absent reports). Up to three gateway badges are shown, prioritizing open/deprioritized/unknown states; the additional-count control opens all gateway IDs, heartbeats and failure counts. Missing source metadata remains an em dash, and no demo lifecycle/trend values are substituted.
+
+The related-calls action opens `/admin?tab=calls&resource_id=...`. Staff log queries apply the same exact resource predicate to count and pagination, matching `resource_id` or a complete element of the stored `resource_ids` JSON array. Legacy invalid JSON is safely ignored. This is recorded routing attribution, not a reconstruction of every historical retry; records without attribution cannot be inferred from matching model names. Existing role and owner boundaries remain enforced, and customers cannot use the staff resource filter.
+
+Each process has a unique boot identity and reports every five seconds. Circuit and deprioritization state stays in memory; persisted reports are observational and are never restored into routing. Reports older than fifteen seconds show unknown, not normal. The page refreshes every five seconds. Reports are retained for up to one day for diagnosing stopped gateways. A restarted process receives a new identity; its predecessor is visibly stale.
+
+The shared relay loop records actual upstream attempts for uniquely identified managed resources using admission-frozen routing evidence. Retries are separate resource attempts; unsupported/pre-send failures and platform probes do not count. Async submissions count as submission attempts, not eventual job completion. Ambiguous multi-resource bindings and unmanaged channels are not attributed to an invented resource. Per-second buckets provide the trailing `(now-300s, now]` window across reports from all gateways, including recent data from a gateway that has stopped. Empty windows have no success-rate value. Reports may lag by one heartbeat and an abrupt crash can lose the last unreported samples; these operational counters are not the durable billing report.
+
+The local circuit guard opens after five upstream failures (two for a source classified U), excluding client errors, cancellations and uncertain outcomes. A platform probe becomes due after thirty seconds, with failure backoff capped at five minutes. Text probes send one output token; non-text probes use a model-list connectivity request. Probes never debit a customer or add customer usage records. Q-based EWMA latency can deprioritize a resource behind healthy alternatives, with timed or successful-request recovery. These guards supply real local observations for ADM-AC-10 and the incident triggers above; the complete M2 scoring/traffic-pool algorithm remains separate work.
+
+Validation: `model/resource_monitoring_test.go` advances an injected clock through a ten-minute TCP interruption and automatic recovery, checks shared-worker exclusion, independent directory/snapshot versions, audit rollback, exact five-minute expiry, gateway isolation and probe exclusions. `model/resource_monitor_history_test.go` verifies publication-age boundaries, baseline/cursor catch-up, atomic duplicate/gap/conflict handling, persistent mismatch resolution, and incident retry with the same payload/key after reopening SQLite. `e2e/resource_monitoring_test.go` covers ADM-AC-08–10 and 14–16 using real authenticated HTTP adapters, runtime triggers and the protected management routes. Existing four-role acceptance checks read access and denied roles. `web/tests/resource-status-browser.mjs` covers twelve language/theme/viewport combinations, snapshot expiry/recovery, both history tables, filters/pagination, red/normal/unknown states, confirmation cancellation, focus return, automatic refresh, empty and failed-load states. Current regression evidence is `output/resource-monitor-complete-{go-tests,web-tests,web-build,browser-run}.txt` and `output/resource-status-browser/report.json`. These tests use isolated synthetic sources and databases; local backend activation has separate backup and preservation evidence.
+
+## Service announcements (ADM-7 / ADM-AC-11)
+
+The Operations/Root page at `/admin?tab=incidents` publishes, edits and resolves persistent notices. Chinese, English and Arabic titles and descriptions are independently required; copying one input into all translations is no longer performed. A notice identifies one or more affected vendor names or model identifiers. The editor reads the existing authenticated `/api/admin/models` catalog and offers separate searchable vendor/model checklists, selection counts, select-search-results, clear-selection and catalog refresh. Vendors are deduplicated from catalog models; model names, IDs and vendors are searchable, and unlisted entries are labeled. Selection does not implicitly add all models belonging to a vendor. The existing forty-target total applies to both lists together. Previously saved labels remain selected and are marked when no longer in the catalog; refreshing or saving other edits does not discard them. A catalog error is explicit and prevents selecting stale options. Content is plain text, with preserved line breaks and escaped rendering; it does not execute HTML or Markdown.
+
+The form supports `investigating`, `identified` and `monitoring`. Resolving an active notice requires a separate confirmation, sets `resolved_at` and removes it from the public active feed. Staff can still filter and edit resolved history; edits cannot reactivate a resolved notice. Each update uses an expected version to reject stale overwrites with 409. Creation uses an actor-scoped operation ID: an identical retry returns the original notice without another publication or business audit entry; conflicting content with that ID is rejected. Database writes and the business audit commit atomically. Audit records include actor, role, IP, object and public before/after content, excluding operation keys and authentication material.
+
+| Route | Access and behavior |
+| --- | --- |
+| `GET /api/admin/announcements?status=all&page=1` | Verified Operations/Root only; twenty notices per page. Status supports `all`, `active` and `resolved`. |
+| `POST /api/admin/announcements` | Publish; requires `operation_id`, `expected_version: 0`, `title` and `content` objects with `zh/en/ar`, `vendors` and `models` arrays, and an active `status`. |
+| `PUT /api/admin/announcements/{id}` | Update or resolve; requires the current `expected_version` and the complete editable content. |
+| `GET /api/status/announcements` | Anonymous, read-only active feed. Returns public content and timestamps, without staff identity or internal operation metadata. |
+
+Titles allow up to 200 Unicode code points per language, descriptions up to 5,000. At least one affected vendor/model is required, with at most forty entries of 128 code points each. Unknown request fields, unsupported states, missing translations, stale versions and invalid pagination are rejected. Existing staff network, session, 2FA and same-origin write protections apply. Finance, Technical and customer identities cannot manage notices. No deletion endpoint is provided; resolved history remains available. The catalog-selector browser regression additionally covers independent scopes, search, bulk selection limits, keyboard selection, catalog error/retry, persisted selections and saving labels that disappeared from the current catalog. Its evidence is `output/announcement-selection-browser-report.json` and `output/announcement-selection-browser-run.txt`.
+
+The public `/status` page reads this API in a separate anonymous session and displays active notices before the health summary and model list, using the visitor's selected language. It refreshes on entry/focus and every thirty seconds while visible. Empty results show no announcement; failures show an explicit retry state instead of seeded or stale notices. Backend publication is immediately available to new reads; open pages receive it on refresh or the next poll. The legacy preview incident seed is no longer a source for this page. This integration concerns announcements; it does not certify the separate M6 metric windows, historical availability chart or automatic status-classification implementation.
+
+Validation: `e2e/service_announcement_test.go` checks actual Operations publication, all three translations in the anonymous feed, updates, stale-version rejection, resolution/history, duplicate submission, validation, role/2FA boundaries and audit metadata. `model/service_announcement_test.go` checks persistence after reopening SQLite and rollback when audit insertion fails. `web/tests/announcements-browser.mjs` uses an isolated real backend, temporary SQLite, verified Operations credentials and a separate anonymous browser. It covers twelve language/theme/viewport combinations, publication, reload persistence, updates, resolution, RTL, narrow-screen overflow and explicit public-load failure/retry. The fixture raises only its own request budget because all matrix sessions share one loopback IP. Evidence: `output/announcements-go-tests.txt`, `output/announcements-web-{tests,build}.txt`, `output/announcements-browser-run.txt` and `output/announcements-browser/report.json`. No test notice is published to the user's live database.
+
+## Financial reconciliation (BIL-4.1 / ADM-AC-19)
+
+The `/admin?tab=finance` page separates internal consistency from payment-provider verification. Current-day discrepancies remain visible ahead of the provisional state. Difference labels support Chinese, English and Arabic; details show nine decimal places and the exact nano-USD integer. Reports generated before the expanded checks require recalculation. Legacy calls without a trusted admission timestamp are explicitly marked unverified; historical timestamps and ledger rows are not rewritten.
+
+Each run flushes the durable API billing outbox, reads the money sources and writes reports and alert records within one SQLite writer transaction. A concurrent settlement cannot be present on only one side. The checks compare daily call charges against minute ledger batches, each key's daily metering events against its calls, key lifetime counters against retained call records, local paid orders against recharge credits, and account balances against cumulative ledger entries. Account balance checks are snapshots at the verification time, including outstanding reservations; they are not historical closing balances. API funds and the legacy simulated wallet remain separate and are checked against their corresponding sources. An unexplained legacy opening balance is reported as a discrepancy; reconciliation never silently manufactures an opening credit or changes customer balances. Existing quota-based call charges are converted exactly to nano-USD; this change does not replace the pricing engine's settlement quantum.
+
+New gateway calls freeze their admission time across synchronous, streaming, image, realtime and asynchronous task settlement. The ledger minute and reporting day follow that time. The scheduled job uses the deployment timezone, runs at or after 02:00 (the first valid instant after a DST gap), catches up missed scheduled days and rechecks durable dirty days when late settlements arrive. Manual runs remain available for up to 31 days; the page selects a fourteen-day window.
+
+Changed discrepancies append a durable serious-severity alert. Repeating an unchanged report does not enqueue another copy; a resolved discrepancy that recurs alerts again. The background worker logs the first delivery attempt and retries pending webhook notifications after failures or restarts. Delivery uses the existing configured alert webhook and an `Idempotency-Key` header. Without a webhook, the alert remains pending and the UI states that external delivery is not configured. No recipient or external endpoint is invented by this feature.
+
+### Payment statement import
+
+`POST /api/admin/reconciliation/statements` accepts `provider`, `day`, `source`, `csv`, and `expected_previous_id`. `GET` lists the latest 100 imports, optionally filtered by `day`. Imports require verified Finance or Root access and are recorded in the administration audit. The provider identifier uses ASCII letters, digits, dot, underscore or hyphen; `day` is a regional calendar date. Use a complete successful-payment statement for one provider and day, in USD, with the following CSV header:
+
+```csv
+provider_order_id,platform_order_id,user_id,amount_cents,currency,paid_at
+```
+
+Amounts are positive integer cents and are converted once at the import boundary using 1 cent = 10,000,000 nano-USD. `paid_at` is an RFC3339 timestamp with an offset and must fall within the selected regional day. `user_id` must identify a customer. An unknown platform order reference may be empty and produces an unmatched-payment difference. The importer rejects duplicate provider orders, duplicate platform references within a file, unsupported currencies, malformed numbers, per-row overflow, future payments and conflicting dates. Files are limited to 2 MiB and 10,000 payment rows; combined totals use arbitrary-precision integers.
+
+Imports are immutable, hashed and idempotent. A changed complete-day statement requires the current version ID, records which earlier version it supersedes and leaves the earlier evidence intact. The latest version per provider/day is used. Statement evidence is matched by platform order reference against independently recorded payment-provider recharge credits; simulated recharge rows cannot certify real payments. Missing payments, missing credits, wrong amounts and duplicate mappings appear as differences. The import neither credits funds nor changes an order's payment state. A provider API has not been selected: verification is explicitly limited to the imported statements, not a claim that all external payment channels have been automatically checked. Statements from a previous deployment timezone require reimport.
+
+Tests: `model/reconciliation_test.go` covers nano-level balance drift, live reservations and releases, simulated-wallet separation, key drift, midnight admission, durable settlement replay, 02:00/DST scheduling, historical catch-up, alert retries/deduplication, import validation, revisions and totals beyond int64. `e2e/reconciliation_permissions_test.go` checks actual staff routes for Finance, Root, Operations and Technical roles. `web/tests/reconciliation-browser.mjs` verifies twelve language/theme/viewport combinations with synthetic HTTP fixtures; backend correctness is covered by the independent Go tests. Evidence is under `output/reconciliation-review-20261105/` and `output/reconciliation-browser/`.
+
 ## Validation and deployment
 
 Run `go build ./...`, `go vet ./...`, `go test ./...`, and the frontend unit/build checks. In environments where Git cannot read the checkout metadata, use `go build -buildvcs=false ./...`. Browser acceptance is `node web/tests/m7-admin-browser.mjs`; it starts isolated services and synthetic accounts. Run it from the repository root or adapt the working directory as required by the existing test tooling. The browser script uses its own temporary database and never enrolls a real account.
 
 The migration adds tables and columns. Back up SQLite consistently together with its `.key` file. Preserve the deployment's database path, company network allowlist, snapshot source and other startup configuration. Restarting a process clears its in-memory login sessions, while stored passwords and authenticator bindings remain intact. Keep backups and test databases out of commits.
 
-The original fourteen-case evidence is under `output/adm-m7-review-20261104`. `completion.html` maps those cases to executable evidence and records their local activation result; the later ADM-5 evidence is listed above. These checks do not certify incident publication, external provider deployment or the complete M9 regional feature rollout.
+The original fourteen-case evidence is under `output/adm-m7-review-20261104`. `completion.html` maps those cases to executable evidence and records their local activation result; the later ADM-5, ADM-6 and ADM-7 evidence is listed above. These checks do not certify external provider deployment or the complete M9 regional feature rollout.

@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { usePreferences } from "../lib/preferences";
@@ -45,24 +46,24 @@ export function ModelIdCopy({ id }: { id: string }) {
           data-copy-model-id={id}
           onClick={copy}
           aria-label={text(
-            `复制模型标识 ${id}`,
-            `Copy model ID ${id}`,
-            `نسخ معرف النموذج ${id}`,
+            ...translatedMessage("copy_model_id_01095e7880", { p0: id }),
           )}
-          title={text("复制模型标识", "Copy model ID", "نسخ معرف النموذج")}
+          title={text(...translatedMessage("copy_model_id_03ddd2ee81"))}
         >
           {status === "copied" ? <Check size={13} /> : <Copy size={13} />}
         </button>
         <span className="model-id-copy-feedback" role="status">
-          {status === "copied" ? text("已复制", "Copied", "تم النسخ") : ""}
+          {status === "copied"
+            ? text(...translatedMessage("copied_e6bf924fa2"))
+            : ""}
         </span>
       </div>
       {status === "error" && (
         <small role="alert">
           {text(
-            "复制失败，请选中标识手动复制，或重试。",
-            "Copy failed. Select the ID to copy manually, or retry.",
-            "تعذر النسخ. حدد المعرف لنسخه يدويًا أو أعد المحاولة.",
+            ...translatedMessage(
+              "copy_failed_select_the_id_to_copy_manually_or_bbb8d2b49b",
+            ),
           )}
         </small>
       )}

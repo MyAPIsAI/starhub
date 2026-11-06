@@ -1,30 +1,45 @@
 package controller
 
 import (
-	"context"
-	"encoding/json"
-	"io"
+	"errors"
 	"net/http"
-	"net/url"
 	"runtime"
-	"time"
-
+	"slices"
 	"starhub/common"
 	"starhub/config"
 	"starhub/model"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func StaffResourceSyncStatus(w http.ResponseWriter, r *http.Request) {
-	catalog, err := model.ReadResourceCatalog(r.Context())
+	status, err := model.ReadResourceSyncStatus(r.Context(), time.Now())
 	if err != nil {
 		common.ApiError(w, 500, "resource state unavailable")
 		return
 	}
-	sequence := int64(0)
-	if catalog.Snapshot != nil {
-		sequence = catalog.Snapshot.Sequence
+	common.ApiSuccess(w, status)
+}
+
+func StaffResourceMonitoring(w http.ResponseWriter, r *http.Request) {
+	pages := []int{1, 1}
+	for i, key := range []string{"mismatch_page", "incident_page"} {
+		if value := r.URL.Query().Get(key); value != "" {
+			page, err := strconv.Atoi(value)
+			if err != nil || page < 1 || page > 100000 {
+				common.ApiError(w, 400, "invalid page")
+				return
+			}
+			pages[i] = page
+		}
 	}
-	common.ApiSuccess(w, map[string]any{"configured": config.ResourceSnapshotSource().URL != "", "revision": catalog.Revision, "sequence": sequence, "updated_at": catalog.UpdatedAt})
+	result, err := model.ReadResourceMonitorHistory(r.Context(), pages[0], pages[1])
+	if err != nil {
+		common.ApiError(w, 500, "resource monitoring history unavailable")
+		return
+	}
+	common.ApiSuccess(w, result)
 }
 
 func StaffSystemInfo(w http.ResponseWriter, r *http.Request) {
@@ -49,63 +64,103 @@ func StaffSystemInfo(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, map[string]any{"version": common.Version, "go_version": runtime.Version(), "timezone": config.RegionTimezone(), "resource_source_configured": config.ResourceSnapshotSource().URL != "", "instances": rows})
 }
 
-// A forced synchronization fetches a full authoritative snapshot, never resets
-// sequence validation, and never changes the published catalog on a failure.
+// Forced synchronization shares the scheduled worker's lease and validation.
 func StaffForceResourceSync(w http.ResponseWriter, r *http.Request) {
-	source := config.ResourceSnapshotSource()
-	if source.URL == "" {
+	if config.ResourceSnapshotSource().URL == "" {
 		common.ApiError(w, 503, "resource snapshot source is not configured")
 		return
 	}
-	catalog, err := model.ReadResourceCatalog(r.Context())
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if !decodeResourceBody(w, r, &body) {
+		return
+	}
+	if !body.Confirm {
+		common.ApiError(w, 400, "full synchronization confirmation is required")
+		return
+	}
+	actor, _ := r.Context().Value(common.CtxUserID).(int64)
+	status, err := model.SyncResourcesOnce(r.Context(), time.Now(), actor)
 	if err != nil {
-		common.ApiError(w, 500, "resource state unavailable")
+		code := 502
+		if errors.Is(err, model.ErrResourceSyncBusy) || strings.Contains(err.Error(), "version_conflict") {
+			code = 409
+		}
+		if strings.Contains(err.Error(), "invalid_snapshot") || strings.Contains(err.Error(), "invalid_payload") {
+			code = 400
+		}
+		common.ApiError(w, code, err.Error())
 		return
 	}
-	address, err := url.Parse(source.URL)
+	common.ApiSuccess(w, status)
+}
+
+func StaffResourceInstances(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	page, size := 1, 20
+	if value := query.Get("page"); value != "" {
+		var err error
+		page, err = strconv.Atoi(value)
+		if err != nil || page < 1 || page > 100000 {
+			common.ApiError(w, 400, "invalid page")
+			return
+		}
+	}
+	tier := 0
+	if value := query.Get("tier"); value != "" {
+		tier, _ = strconv.Atoi(value)
+		if tier != 4 && tier != 6 && tier != 8 && tier != 10 {
+			common.ApiError(w, 400, "invalid tier")
+			return
+		}
+	}
+	now := time.Now()
+	rows, err := model.ReadAdminResourceStatus(r.Context(), now)
 	if err != nil {
-		common.ApiError(w, 503, "resource snapshot source is unavailable")
+		common.ApiError(w, 500, "resource status unavailable")
 		return
 	}
-	query := address.Query()
-	query.Set("full", "true")
-	address.RawQuery = query.Encode()
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
-	if err != nil {
-		common.ApiError(w, 503, "resource synchronization unavailable")
-		return
+	filtered := []model.AdminResourceStatus{}
+	vendors, models := []string{}, []string{}
+	search := strings.ToLower(strings.TrimSpace(query.Get("q")))
+	for _, row := range rows {
+		if row.Vendor != "" && !slices.Contains(vendors, row.Vendor) {
+			vendors = append(vendors, row.Vendor)
+		}
+		if !slices.Contains(models, row.CanonicalModel) {
+			models = append(models, row.CanonicalModel)
+		}
+		if search != "" && !strings.Contains(strings.ToLower(row.ID), search) && !strings.Contains(strings.ToLower(row.CanonicalModel), search) {
+			continue
+		}
+		if query.Get("resource_id") != "" && row.ID != query.Get("resource_id") {
+			continue
+		}
+		if query.Get("model") != "" && row.CanonicalModel != query.Get("model") {
+			continue
+		}
+		if query.Get("vendor") != "" && row.Vendor != query.Get("vendor") {
+			continue
+		}
+		if state := query.Get("status"); state != "" {
+			matches := row.Status == state || row.State == state
+			matches = matches || ((state == "unknown" || state == "abnormal") && len(row.Gateways) == 0)
+			for _, gateway := range row.Gateways {
+				matches = matches || gateway.State == state || (state == "abnormal" && gateway.State != "normal")
+			}
+			if !matches {
+				continue
+			}
+		}
+		if tier != 0 && !slices.Contains(row.Tiers, tier) {
+			continue
+		}
+		filtered = append(filtered, row)
 	}
-	request.Header.Set("Accept", "application/json")
-	if source.Token != "" {
-		request.Header.Set("Authorization", "Bearer "+source.Token)
-	}
-	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(request)
-	if err != nil {
-		common.ApiError(w, 502, "resource snapshot fetch failed")
-		return
-	}
-	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		common.ApiError(w, 502, "resource snapshot source rejected the request")
-		return
-	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
-	if err != nil || len(raw) > 1<<20 {
-		common.ApiError(w, 400, "resource snapshot exceeds the import limit")
-		return
-	}
-	var snapshot model.ResourceSnapshot
-	if json.Unmarshal(raw, &snapshot) != nil {
-		common.ApiError(w, 400, "invalid resource snapshot JSON")
-		return
-	}
-	updated, err := model.SaveResourceSnapshot(ctx, catalog.Revision, snapshot)
-	if err != nil {
-		writeResourceResult(w, nil, err)
-		return
-	}
-	common.ApiSuccess(w, map[string]any{"full": true, "revision": updated.Revision, "sequence": snapshot.Sequence, "instances": len(snapshot.Instances)})
+	slices.Sort(vendors)
+	slices.Sort(models)
+	start := min((page-1)*size, len(filtered))
+	end := min(start+size, len(filtered))
+	common.ApiSuccess(w, map[string]any{"items": filtered[start:end], "total": len(filtered), "page": page, "page_size": size, "vendors": vendors, "models": models, "observed_at": now.Unix(), "window_seconds": 300})
 }

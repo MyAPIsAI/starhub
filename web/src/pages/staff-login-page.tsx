@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { BrandMark } from "../components/brand";
@@ -81,28 +82,22 @@ export default function StaffLoginPage() {
           <h1 id="staff-login-title">
             {installation
               ? text(
-                  "初始化管理员",
-                  "Initialize administrator",
-                  "تهيئة المسؤول",
+                  ...translatedMessage("initialize_administrator_f80c2e119d"),
                 )
-              : text("员工登录", "Staff sign in", "تسجيل دخول الموظفين")}
+              : text(...translatedMessage("staff_sign_in_96dcc13567"))}
           </h1>
           <p>
             {text(
-              "仅限内部账号。客户请使用客户登录入口。",
-              "Internal accounts only. Customers use the customer sign-in page.",
-              "للحسابات الداخلية فقط. يستخدم العملاء صفحة دخول العملاء.",
+              ...translatedMessage(
+                "internal_accounts_only_customers_use_the_cust_00f5b12605",
+              ),
             )}
           </p>
         </header>
         <div className="auth-dialog-body">
           {checking ? (
             <p role="status">
-              {text(
-                "正在检查会话…",
-                "Checking session…",
-                "جارٍ التحقق من الجلسة…",
-              )}
+              {text(...translatedMessage("checking_session_f7e3c816ae"))}
             </p>
           ) : state ? (
             <StaffVerification
@@ -136,7 +131,7 @@ export default function StaffLoginPage() {
               )}
               <div className="auth-field">
                 <label htmlFor="staff-account">
-                  {text("员工账号", "Staff username", "اسم مستخدم الموظف")}
+                  {text(...translatedMessage("staff_username_e1eeb34be2"))}
                 </label>
                 <Input
                   ref={accountInput}
@@ -149,7 +144,7 @@ export default function StaffLoginPage() {
                 />
               </div>
               <PasswordField
-                label={text("密码", "Password", "كلمة المرور")}
+                label={text(...translatedMessage("password_02b393215e"))}
                 value={password}
                 onChange={setPassword}
                 autoComplete="current-password"
@@ -161,20 +156,16 @@ export default function StaffLoginPage() {
                 disabled={busy}
               >
                 {busy
-                  ? text("正在登录…", "Signing in…", "جارٍ تسجيل الدخول…")
-                  : text(
-                      "登录并验证",
-                      "Sign in and verify",
-                      "تسجيل الدخول والتحقق",
-                    )}
+                  ? text(...translatedMessage("signing_in_76477573bc"))
+                  : text(...translatedMessage("sign_in_and_verify_1105ca78f6"))}
               </Button>
               {canInstall && (
                 <div className="auth-switch">
                   <button type="button" onClick={() => setInstallation(true)}>
                     {text(
-                      "首次安装：创建 Root",
-                      "First installation: create Root",
-                      "التثبيت الأول: إنشاء Root",
+                      ...translatedMessage(
+                        "first_installation_create_root_0c218d5b72",
+                      ),
                     )}
                   </button>
                 </div>
@@ -185,9 +176,9 @@ export default function StaffLoginPage() {
         <footer className="auth-dialog-footer">
           <span>
             {text(
-              "每次重新登录需要双重验证（2FA）。验证后的会话有效期为 8 小时，期间刷新或切换工作空间无需再次输入验证码。",
-              "Each new sign-in requires 2FA. A verified session lasts 8 hours; refreshing or switching workspaces does not require another code.",
-              "يتطلب كل دخول جديد المصادقة الثنائية. تستمر الجلسة المتحققة 8 ساعات؛ لا يتطلب تحديث الصفحة أو تبديل مساحات العمل رمزًا آخر.",
+              ...translatedMessage(
+                "each_new_sign_in_requires_2fa_a_verified_sess_cf1924de26",
+              ),
             )}
           </span>
         </footer>

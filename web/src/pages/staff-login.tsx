@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
@@ -47,8 +48,8 @@ export function PasswordField({
           aria-pressed={visible}
           aria-label={
             visible
-              ? text("隐藏密码", "Hide password", "إخفاء كلمة المرور")
-              : text("显示密码", "Show password", "إظهار كلمة المرور")
+              ? text(...translatedMessage("hide_password_fde939f99a"))
+              : text(...translatedMessage("show_password_4090d99064"))
           }
           onClick={() => setVisible((current) => !current)}
         >
@@ -65,14 +66,12 @@ export function verificationError(
 ) {
   return error instanceof ApiError && error.status === 429
     ? text(
-        "尝试次数过多，请稍后再试。",
-        "Too many attempts. Please try later.",
-        "محاولات كثيرة. حاول لاحقًا.",
+        ...translatedMessage("too_many_attempts_please_try_later_81d78c1669"),
       )
     : text(
-        "验证未通过。请检查凭据、验证码及公司网络或 VPN。",
-        "Verification failed. Check your credentials, code and company network or VPN.",
-        "فشل التحقق. تحقّق من بياناتك والرمز وشبكة الشركة أو VPN.",
+        ...translatedMessage(
+          "verification_failed_check_your_credentials_co_2228619432",
+        ),
       );
 }
 
@@ -131,9 +130,9 @@ export default function StaffVerification({
         if (live)
           setError(
             text(
-              "无法确认登录状态，请重试。",
-              "Unable to confirm your session. Please retry.",
-              "تعذر تأكيد الجلسة. حاول مجددًا.",
+              ...translatedMessage(
+                "unable_to_confirm_your_session_please_retry_668def7179",
+              ),
             ),
           );
       });
@@ -169,20 +168,20 @@ export default function StaffVerification({
         {state.username} ·{" "}
         {state.stage === "change_password"
           ? text(
-              "首次登录：修改临时密码",
-              "First sign in: change temporary password",
-              "أول دخول: تغيير كلمة المرور المؤقتة",
+              ...translatedMessage(
+                "first_sign_in_change_temporary_password_e2345d8e88",
+              ),
             )
           : state.stage === "enroll"
             ? text(
-                "首次登录：绑定双重验证（2FA）",
-                "First sign in: set up two-factor authentication (2FA)",
-                "أول دخول: إعداد المصادقة الثنائية (2FA)",
+                ...translatedMessage(
+                  "first_sign_in_set_up_two_factor_authenticatio_698127f7cb",
+                ),
               )
             : text(
-                "双重验证（2FA）",
-                "Two-factor authentication (2FA)",
-                "المصادقة الثنائية (2FA)",
+                ...translatedMessage(
+                  "two_factor_authentication_2fa_07a1d27b59",
+                ),
               )}
       </p>
       {error && (
@@ -193,11 +192,7 @@ export default function StaffVerification({
       {state.stage === "ready" ? (
         <>
           <p role="status">
-            {text(
-              "正在确认登录状态…",
-              "Checking session…",
-              "جارٍ التحقق من الجلسة…",
-            )}
+            {text(...translatedMessage("checking_session_c44b3558d1"))}
           </p>
           {error && (
             <Button
@@ -208,7 +203,7 @@ export default function StaffVerification({
                 setAttempt((value) => value + 1);
               }}
             >
-              {text("重试", "Retry", "إعادة المحاولة")}
+              {text(...translatedMessage("retry_c16455021c"))}
             </Button>
           )}
         </>
@@ -218,9 +213,7 @@ export default function StaffVerification({
             <>
               <PasswordField
                 label={text(
-                  "当前临时密码",
-                  "Current temporary password",
-                  "كلمة المرور المؤقتة",
+                  ...translatedMessage("current_temporary_password_e9accdab2f"),
                 )}
                 value={password}
                 onChange={onPasswordChange}
@@ -228,9 +221,7 @@ export default function StaffVerification({
               />
               <PasswordField
                 label={text(
-                  "新密码（12–72 字节）",
-                  "New password (12–72 bytes)",
-                  "كلمة مرور جديدة (12–72 بايت)",
+                  ...translatedMessage("new_password_12_72_bytes_310adf3e59"),
                 )}
                 value={newPassword}
                 onChange={setNewPassword}
@@ -243,9 +234,9 @@ export default function StaffVerification({
             <>
               <p className="auth-field-hint">
                 {text(
-                  "在验证器应用中新增账号，选择基于时间的验证码并输入设置密钥。完成验证前无法进入后台。",
-                  "Add an account in your authenticator, select time-based codes and enter the setup key. Back-office access stays locked until verification succeeds.",
-                  "أضف حسابًا في تطبيق المصادقة واختر رموزًا زمنية وأدخل مفتاح الإعداد. لن يتاح الدخول قبل نجاح التحقق.",
+                  ...translatedMessage(
+                    "add_an_account_in_your_authenticator_select_t_e7a749ed32",
+                  ),
                 )}
               </p>
               {!secret ? (
@@ -265,11 +256,7 @@ export default function StaffVerification({
                     }
                   }}
                 >
-                  {text(
-                    "获取设置密钥",
-                    "Get setup key",
-                    "الحصول على مفتاح الإعداد",
-                  )}
+                  {text(...translatedMessage("get_setup_key_fe0aa4e334"))}
                 </Button>
               ) : (
                 <>
@@ -279,16 +266,8 @@ export default function StaffVerification({
                     onClick={() => setShowSecret((value) => !value)}
                   >
                     {showSecret
-                      ? text(
-                          "隐藏设置密钥",
-                          "Hide setup key",
-                          "إخفاء مفتاح الإعداد",
-                        )
-                      : text(
-                          "显示设置密钥",
-                          "Show setup key",
-                          "إظهار مفتاح الإعداد",
-                        )}
+                      ? text(...translatedMessage("hide_setup_key_57e979d5fe"))
+                      : text(...translatedMessage("show_setup_key_88ebbc5c1f"))}
                   </Button>
                   {showSecret && (
                     <code dir="ltr" className="staff-secret">
@@ -303,9 +282,7 @@ export default function StaffVerification({
             <div className="auth-field">
               <label htmlFor={id}>
                 {text(
-                  "6 位验证码",
-                  "6-digit verification code",
-                  "رمز التحقق من 6 أرقام",
+                  ...translatedMessage("6_digit_verification_code_9a7d40dbfc"),
                 )}
               </label>
               <Input
@@ -327,14 +304,14 @@ export default function StaffVerification({
             disabled={busy || (state.stage === "enroll" && !secret)}
           >
             {busy
-              ? text("处理中…", "Working…", "جارٍ التنفيذ…")
+              ? text(...translatedMessage("working_acf0cfceef"))
               : state.stage === "change_password"
                 ? text(
-                    "修改密码并继续",
-                    "Change password and continue",
-                    "تغيير كلمة المرور والمتابعة",
+                    ...translatedMessage(
+                      "change_password_and_continue_7d89a4f635",
+                    ),
                   )
-                : text("验证并进入后台", "Verify and enter", "التحقق والدخول")}
+                : text(...translatedMessage("verify_and_enter_fddab11b16"))}
           </Button>
         </form>
       )}
@@ -356,14 +333,14 @@ export default function StaffVerification({
             }
           }}
         >
-          {text("返回登录", "Back to sign in", "العودة للدخول")}
+          {text(...translatedMessage("back_to_sign_in_b4bfef6bb7"))}
         </button>
       </div>
       <p className="auth-field-hint">
         {text(
-          "验证器遗失时，请联系另一位 Root；唯一 Root 通过部署终端恢复。",
-          "Lost authenticator? Contact another Root. A sole Root recovers through the deployment terminal.",
-          "فقدت تطبيق المصادقة؟ اتصل بمستخدم Root آخر. يستعيد Root الوحيد الوصول عبر طرفية النشر.",
+          ...translatedMessage(
+            "lost_authenticator_contact_another_root_a_sol_31cce945bf",
+          ),
         )}
       </p>
     </div>
@@ -414,7 +391,7 @@ export function StaffInstallation({
       )}
       <div className="auth-field">
         <label htmlFor={id + "-username"}>
-          {text("账号", "Username", "اسم المستخدم")}
+          {text(...translatedMessage("username_cd595a0c3d"))}
         </label>
         <Input
           id={id + "-username"}
@@ -427,11 +404,7 @@ export function StaffInstallation({
         />
       </div>
       <PasswordField
-        label={text(
-          "密码（12–72 字节）",
-          "Password (12–72 bytes)",
-          "كلمة المرور (12–72 بايت)",
-        )}
+        label={text(...translatedMessage("password_12_72_bytes_295fee76fd"))}
         value={password}
         onChange={setPassword}
         autoComplete="new-password"
@@ -440,9 +413,9 @@ export function StaffInstallation({
       <div className="auth-field">
         <label htmlFor={id + "-token"}>
           {text(
-            "部署终端的一次性安装令牌",
-            "One-time token from deployment terminal",
-            "رمز التثبيت لمرة واحدة من طرفية النشر",
+            ...translatedMessage(
+              "one_time_token_from_deployment_terminal_f641d364e5",
+            ),
           )}
         </label>
         <Input
@@ -460,11 +433,11 @@ export function StaffInstallation({
         className="auth-submit"
         disabled={busy}
       >
-        {text("初始化 Root", "Initialize Root", "تهيئة Root")}
+        {text(...translatedMessage("initialize_root_b71c9b1d4c"))}
       </Button>
       <div className="auth-helper-row">
         <button type="button" disabled={busy} onClick={onCancel}>
-          {text("返回登录", "Back to sign in", "العودة للدخول")}
+          {text(...translatedMessage("back_to_sign_in_b4bfef6bb7"))}
         </button>
       </div>
     </form>

@@ -45,6 +45,11 @@ type ResourceChannel struct {
 }
 
 type ResourceInstance struct {
+	PriceTier      *int     `json:"price_tier,omitempty"`
+	QualityLevel   string   `json:"quality_level,omitempty"`
+	State          string   `json:"state,omitempty"`
+	Trend          string   `json:"trend,omitempty"`
+	Score          *float64 `json:"score,omitempty"`
 	ID             string   `json:"id"`
 	ChannelID      string   `json:"channelId"`
 	UpstreamModel  string   `json:"upstreamModel"`
@@ -131,6 +136,21 @@ func validateResourceSnapshot(snapshot ResourceSnapshot) error {
 	}
 	ids := map[string]bool{}
 	for _, instance := range snapshot.Instances {
+		if instance.PriceTier != nil && *instance.PriceTier != 4 && *instance.PriceTier != 6 && *instance.PriceTier != 8 && *instance.PriceTier != 10 {
+			return invalid("price tier")
+		}
+		if instance.QualityLevel != "" && instance.QualityLevel != "S0" && instance.QualityLevel != "S1" && instance.QualityLevel != "S2" && instance.QualityLevel != "U" {
+			return invalid("quality level")
+		}
+		if instance.State != "" && instance.State != "hot" && instance.State != "cold" && instance.State != "bad" && instance.State != "disabled" {
+			return invalid("lifecycle state")
+		}
+		if instance.Trend != "" && instance.Trend != "stable" && instance.Trend != "degraded" {
+			return invalid("trend")
+		}
+		if instance.Score != nil && (math.IsNaN(*instance.Score) || math.IsInf(*instance.Score, 0) || *instance.Score < 0 || *instance.Score > 100) {
+			return invalid("score")
+		}
 		if !resourceText(instance.ID, 128, true) || ids[instance.ID] || !channels[instance.ChannelID] || !concreteResourceModel(instance.UpstreamModel) || !concreteResourceModel(instance.CanonicalModel) {
 			return invalid("instance identity or reference")
 		}
@@ -187,7 +207,14 @@ func readResourceCatalog(tx *gorm.DB) (*ResourceCatalog, error) {
 
 func ReadResourceCatalog(ctx context.Context) (*ResourceCatalog, error) {
 	var result *ResourceCatalog
-	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error { var err error; result, err = readResourceCatalog(tx); return err })
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		result, err = readResourceCatalog(tx)
+		if err != nil {
+			return err
+		}
+		return overlayResourceDirectoryPrices(tx, result)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -197,11 +224,15 @@ func ReadResourceCatalog(ctx context.Context) (*ResourceCatalog, error) {
 // mutateResourceCatalog claims the revision before reading, avoiding SQLite read-to-write upgrades.
 // Failed validation or writes roll back the claim together with the inventory and placements.
 func mutateResourceCatalog(ctx context.Context, expected int64, mutate func(*gorm.DB, *ResourceCatalog) error) (*ResourceCatalog, error) {
+	return mutateResourceCatalogDB(DB.WithContext(ctx), expected, mutate)
+}
+
+func mutateResourceCatalogDB(db *gorm.DB, expected int64, mutate func(*gorm.DB, *ResourceCatalog) error) (*ResourceCatalog, error) {
 	if expected < 0 || expected >= maxResourceRevision {
 		return nil, ErrInvalidResource
 	}
 	var result *ResourceCatalog
-	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		claim := tx.Model(&ResourceCatalogRecord{}).Where("id = 1 AND revision = ?", expected).Updates(map[string]any{"revision": expected + 1, "updated_at": time.Now().Unix()})
 		if claim.Error != nil {
 			return claim.Error
@@ -226,6 +257,19 @@ func mutateResourceCatalog(ctx context.Context, expected int64, mutate func(*gor
 }
 
 func SaveResourceSnapshot(ctx context.Context, expected int64, snapshot ResourceSnapshot) (*ResourceCatalog, error) {
+	var result *ResourceCatalog
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		result, err = saveResourceSnapshot(tx, expected, snapshot)
+		if err != nil {
+			return err
+		}
+		return reconcileResourcePrices(tx, time.Now())
+	})
+	return result, err
+}
+
+func saveResourceSnapshot(db *gorm.DB, expected int64, snapshot ResourceSnapshot) (*ResourceCatalog, error) {
 	if err := validateResourceSnapshot(snapshot); err != nil {
 		return nil, err
 	}
@@ -237,7 +281,7 @@ func SaveResourceSnapshot(ctx context.Context, expected int64, snapshot Resource
 	if len(encoded) > 1<<20 {
 		return nil, ErrInvalidResource
 	}
-	return mutateResourceCatalog(ctx, expected, func(tx *gorm.DB, previous *ResourceCatalog) error {
+	return mutateResourceCatalogDB(db, expected, func(tx *gorm.DB, previous *ResourceCatalog) error {
 		if previous.Snapshot != nil && snapshot.Sequence <= previous.Snapshot.Sequence {
 			return ErrResourceConflict
 		}

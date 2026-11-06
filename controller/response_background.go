@@ -29,7 +29,7 @@ func beginBackgroundResponse(flow *relayFlow, ch *model.Channel, capture *respon
 	if err != nil {
 		return nil, err
 	}
-	task := &model.Task{TraceID: flow.traceID, CallType: "responses", TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, Platform: "responses", Action: "responses", Status: "submitting", Model: r.Model, RequestedModel: flow.req.requestedModel, Protocol: "OpenAI", UserID: r.UserID, TokenID: r.TokenID, TokenName: flow.req.tokenName, TokenUnlimited: flow.req.tokenUnlimited, ChannelID: ch.ID, Group: r.Group, UserGroup: flow.req.userGroup, Quota: flow.preQuota, RequestMeta: string(raw)}
+	task := &model.Task{SubmitTime: flow.startTime.Unix(), TraceID: flow.traceID, CallType: "responses", TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, Platform: "responses", Action: "responses", Status: "submitting", Model: r.Model, RequestedModel: flow.req.requestedModel, Protocol: "OpenAI", UserID: r.UserID, TokenID: r.TokenID, TokenName: flow.req.tokenName, TokenUnlimited: flow.req.tokenUnlimited, ChannelID: ch.ID, Group: r.Group, UserGroup: flow.req.userGroup, Quota: flow.preQuota, RequestMeta: string(raw)}
 	model.FreezeTaskRouting(flow.ctx, task, flow.affinityPreferred == task.ChannelID)
 	if err := model.InsertTask(task); err != nil {
 		return nil, err

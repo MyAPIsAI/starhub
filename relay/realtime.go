@@ -26,6 +26,7 @@ const realtimeIdleTimeout = 10 * time.Minute
 
 // RelayRealtime serves GET /v1/realtime?model=... (websocket upgrade).
 func RelayRealtime(w http.ResponseWriter, r *http.Request) {
+	acceptedAt := time.Now().Unix()
 	ctx := r.Context()
 	userID, _ := ctx.Value(common.CtxUserID).(int64)
 	tokenID, _ := ctx.Value(common.CtxTokenID).(int64)
@@ -165,6 +166,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			CompletionTokens: EstimateTokens(outputText),
 		}
 	}
+	actualUsage.AcceptedAt = acceptedAt
 	actualUsage.RequestProtocol = "OpenAI"
 	actualUsage.TokenPeriodStartedAt, _ = ctx.Value(common.CtxTokenPeriodStartedAt).(int64)
 	if err := PostConsumeQuotaWithPrice(pd, userID, tokenID, tokenName, tokenUnlimited,

@@ -1,3 +1,4 @@
+import { localizedMessage } from "../i18n/messages";
 import { ArrowRight, KeyRound, CircleDollarSign, PlugZap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { usePreferences } from "../lib/preferences";
@@ -55,11 +56,10 @@ export function DemoScenarios({ onSelect }: { onSelect?: () => void }) {
   return (
     <div className="demo-scenario-list">
       <p className="demo-scenario-note">
-        {language === "zh"
-          ? "选择场景会重置本地演示数据与价格，不更改已登录账号或角色。真实工作台需要服务器登录，管理入口需要实际管理员权限。"
-          : language === "ar"
-            ? "اختيار السيناريو يعيد بيانات العرض والأسعار المحلية دون تغيير الحساب أو الدور. تتطلب اللوحة جلسة خادم وتتطلب الإدارة صلاحية مسؤول فعلية."
-            : "Selecting a scenario resets local Demo data and prices without changing the signed-in account or role. The console requires a server login; management requires an actual administrator."}
+        {localizedMessage(
+          "selecting_a_scenario_resets_local_demo_data_a_b8c9516e4a",
+          language,
+        )}
       </p>
       {demoScenarios.map(({ id, path, Icon, title, body }) => (
         <button

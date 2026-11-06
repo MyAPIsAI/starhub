@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
@@ -30,15 +31,9 @@ export function ServerDetailPricing({
   const conflict = !!draft && (!data || data.version !== draft.base.version);
   const writable = !!data && data.version <= Number.MAX_SAFE_INTEGER - 2;
   const cacheLabel = text(
-    "缓存输入倍率",
-    "Cached input ratio",
-    "معامل الإدخال المخزّن",
+    ...translatedMessage("cached_input_ratio_712cb0daf3"),
   );
-  const audioLabel = text(
-    "音频词元倍率",
-    "Audio token ratio",
-    "معامل الرموز الصوتية",
-  );
+  const audioLabel = text(...translatedMessage("audio_token_ratio_eae3784800"));
   const save = async () => {
     if (!draft || !review || !valid || conflict || !writable) return;
     try {
@@ -54,29 +49,30 @@ export function ServerDetailPricing({
       setDraft(null);
       setNotice(
         text(
-          `全局倍率已保存 v${result.version}；响应进程加载 v${result.loaded_version}，其他实例请查看配置同步。`,
-          `Global ratios saved at v${result.version}; response process loaded v${result.loaded_version}. Check configuration sync for other instances.`,
-          `حُفظت المعاملات العامة بالإصدار ${result.version}؛ حمّلت العملية المستجيبة ${result.loaded_version}. راجع المزامنة للعمليات الأخرى.`,
+          ...translatedMessage(
+            "global_ratios_saved_at_v_response_process_loa_ba878523f4",
+            { p0: result.version, p1: result.loaded_version },
+          ),
         ),
       );
     } catch (caught) {
       setError(
         caught instanceof ApiError && caught.status === 409
           ? text(
-              "配置已变化，未覆盖新版本。请刷新并重新打开编辑。",
-              "Configuration changed; the newer version was not overwritten. Refresh and reopen the editor.",
-              "تغيّرت الإعدادات ولم يُستبدل الإصدار الأحدث. حدّث وأعد فتح المحرر.",
+              ...translatedMessage(
+                "configuration_changed_the_newer_version_was_n_cdbaf9fd55",
+              ),
             )
           : caught instanceof ApiError && caught.status === 400
             ? text(
-                "服务器拒绝了倍率，草稿已保留。请检查输入。",
-                "The server rejected these ratios; the draft is retained. Check the values.",
-                "رفض الخادم المعاملات واحتُفظ بالمسودة. تحقق من القيم.",
+                ...translatedMessage(
+                  "the_server_rejected_these_ratios_the_draft_is_2514c0fd00",
+                ),
               )
             : text(
-                "无法确认保存或重载结果，请刷新核对数据库与进程版本。",
-                "The save or reload result is unconfirmed. Refresh to check database and process versions.",
-                "تعذر تأكيد الحفظ أو إعادة التحميل. حدّث للتحقق من إصداري قاعدة البيانات والعملية.",
+                ...translatedMessage(
+                  "the_save_or_reload_result_is_unconfirmed_refr_52e6c431c9",
+                ),
               ),
       );
     }
@@ -105,17 +101,15 @@ export function ServerDetailPricing({
               }}
             >
               {text(
-                "编辑全局明细倍率",
-                "Edit global detail ratios",
-                "تحرير معاملات التفاصيل العامة",
+                ...translatedMessage("edit_global_detail_ratios_d0048695d9"),
               )}
             </Button>
           </div>
           <p>
             {text(
-              "缓存命中输入与音频输入/输出词元相对普通输入的全局倍率，仅用于按词元计费。按次与表达式保留各自规则，其他倍率仍适用。",
-              "Global multipliers for cached input and audio input/output tokens relative to ordinary input, used in token billing only. Per-request and expression pricing retain their own rules; other multipliers still apply.",
-              "معاملات عامة للإدخال المخزّن والرموز الصوتية الداخلة والخارجة نسبةً إلى الإدخال العادي، لفوترة الرموز فقط. يحتفظ التسعير لكل طلب وبالتعبير بقواعده وتظل المعاملات الأخرى مطبقة.",
+              ...translatedMessage(
+                "global_multipliers_for_cached_input_and_audio_e12e8eee1f",
+              ),
             )}
           </p>
         </>
@@ -129,14 +123,12 @@ export function ServerDetailPricing({
         }}
         preventOutsideClose
         title={text(
-          "修改全局明细倍率",
-          "Change global detail ratios",
-          "تغيير معاملات التفاصيل العامة",
+          ...translatedMessage("change_global_detail_ratios_c3fb05e76f"),
         )}
         description={text(
-          "影响所有采用词元计费的模型后续请求，不重写历史账单。取消仅放弃草稿。",
-          "Affects future requests for all models using token billing. Historical bills stay unchanged. Cancel discards this draft.",
-          "يؤثر في الطلبات القادمة لجميع نماذج فوترة الرموز دون تغيير الفواتير السابقة. يلغي الإلغاء هذه المسودة.",
+          ...translatedMessage(
+            "affects_future_requests_for_all_models_using__a3c0a36f4a",
+          ),
         )}
         footer={
           <>
@@ -144,7 +136,7 @@ export function ServerDetailPricing({
               disabled={mutation.isPending}
               onClick={() => setDraft(null)}
             >
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             <Button
               variant="primary"
@@ -152,15 +144,9 @@ export function ServerDetailPricing({
               onClick={() => (review ? void save() : setReview(true))}
             >
               {review
-                ? text(
-                    "确认全局倍率",
-                    "Confirm global ratios",
-                    "تأكيد المعاملات العامة",
-                  )
+                ? text(...translatedMessage("confirm_global_ratios_59f5c8c089"))
                 : text(
-                    "预览全局变更",
-                    "Review global changes",
-                    "مراجعة التغييرات العامة",
+                    ...translatedMessage("review_global_changes_4508de6e7b"),
                   )}
             </Button>
           </>
@@ -185,9 +171,9 @@ export function ServerDetailPricing({
                 </p>
                 <p>
                   {text(
-                    "两项倍率同一版本整体保存，其他模型价格、模式、分组及历史账单不改写。词元计费存在最小 1 配额，即使某项倍率为零也不代表整次请求免费。响应进程在提交后重载；其他实例状态需另行确认。",
-                    "Both ratios are saved atomically against one version. Model prices, modes, groups and historical bills are not rewritten. Token billing retains a one-quota minimum; a zero multiplier does not make a whole request free. The response process reloads after commit; check other instances separately.",
-                    "يُحفظ المعاملان ذريًا وفق إصدار واحد دون إعادة كتابة أسعار النماذج أو أنماطها أو مجموعاتها أو الفواتير السابقة. تحتفظ فوترة الرموز بحد أدنى وحدة حصة واحدة؛ الصفر لا يجعل الطلب كله مجانيًا. تعيد العملية المستجيبة التحميل بعد الحفظ؛ تحقق من العمليات الأخرى منفصلة.",
+                    ...translatedMessage(
+                      "both_ratios_are_saved_atomically_against_one__a72b2a044b",
+                    ),
                   )}
                 </p>
                 <Button
@@ -197,7 +183,7 @@ export function ServerDetailPricing({
                     setError("");
                   }}
                 >
-                  {text("返回编辑", "Back to edit", "العودة للتحرير")}
+                  {text(...translatedMessage("back_to_edit_8e464c075a"))}
                 </Button>
               </div>
             ) : (
@@ -228,9 +214,9 @@ export function ServerDetailPricing({
                 </label>
                 <small>
                   {text(
-                    "两项均为 0–1000 的有限非负数，零值会按原值保存。",
-                    "Both values must be finite nonnegative numbers from 0 to 1000. Explicit zero is preserved.",
-                    "يجب أن تكون القيمتان محدودتين وغير سالبتين من صفر إلى 1000. يُحفظ الصفر كما هو.",
+                    ...translatedMessage(
+                      "both_values_must_be_finite_nonnegative_number_807c899fb5",
+                    ),
                   )}
                 </small>
               </div>
@@ -238,9 +224,9 @@ export function ServerDetailPricing({
             {conflict && (
               <p role="alert">
                 {text(
-                  "配置变化或读取失败，请刷新并重新打开。",
-                  "Configuration changed or could not be read. Refresh and reopen.",
-                  "تغيّر الإعداد أو تعذرت قراءته. حدّث وأعد الفتح.",
+                  ...translatedMessage(
+                    "configuration_changed_or_could_not_be_read_re_5f7e9ceca7",
+                  ),
                 )}
               </p>
             )}

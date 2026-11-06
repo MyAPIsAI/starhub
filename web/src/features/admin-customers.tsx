@@ -1,3 +1,4 @@
+import { messagePair } from "../i18n/messages";
 import { SettledBilling } from "../components/settled-billing";
 import { readBillingDetail } from "../lib/request-metadata";
 import { useState } from "react";
@@ -69,11 +70,12 @@ function CustomerList() {
     <section className="adm-page">
       <header className="adm-heading">
         <div>
-          <h1>{t("账号管理", "Customer accounts")}</h1>
+          <h1>{t(...messagePair("customer_accounts_9413e58186"))}</h1>
           <p>
             {t(
-              "查看个人账号及其密钥、调用、账本、订单与登录会话。",
-              "Inspect customer accounts, keys, calls, ledger, orders and login sessions.",
+              ...messagePair(
+                "inspect_customer_accounts_keys_calls_ledger_o_2bf995506b",
+              ),
             )}
           </p>
         </div>
@@ -86,11 +88,8 @@ function CustomerList() {
       <div>
         <div className="adm-filters">
           <Input
-            aria-label={t("搜索账号", "Search accounts")}
-            placeholder={t(
-              "用户名 / 手机号 / 用户标识",
-              "Username / phone / user ID",
-            )}
+            aria-label={t(...messagePair("search_accounts_03a853d444"))}
+            placeholder={t(...messagePair("username_phone_user_id_57617944ed"))}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -98,34 +97,38 @@ function CustomerList() {
             }}
           />
           <select
-            aria-label={t("账号状态", "Account status")}
+            aria-label={t(...messagePair("account_status_f0999dcc05"))}
             value={status}
             onChange={(e) => {
               setStatus(e.target.value);
               setPage(1);
             }}
           >
-            <option value="">{t("全部状态", "All statuses")}</option>
-            <option value="1">{t("正常", "Enabled")}</option>
-            <option value="2">{t("已禁用", "Disabled")}</option>
+            <option value="">
+              {t(...messagePair("all_statuses_9fda56fbf6"))}
+            </option>
+            <option value="1">{t(...messagePair("enabled_c2ea99f45b"))}</option>
+            <option value="2">
+              {t(...messagePair("disabled_79b1b987fa"))}
+            </option>
           </select>
         </div>
         {query.data && (
           <>
-            <AdminTable label={t("账号列表", "Account list")}>
+            <AdminTable label={t(...messagePair("account_list_0dc352a191"))}>
               <thead>
                 <tr>
                   {[
-                    t("用户名", "Username"),
-                    t("用户标识", "User ID"),
-                    t("手机号", "Phone"),
-                    t("邮箱", "Email"),
-                    t("余额", "Balance"),
-                    t("本月消耗", "Monthly spend"),
-                    t("密钥数", "Keys"),
-                    t("状态", "Status"),
-                    t("最近调用", "Last call"),
-                    t("注册时间", "Registered"),
+                    t(...messagePair("username_6b74910d23")),
+                    t(...messagePair("user_id_9f6e3c663a")),
+                    t(...messagePair("phone_a90f318a7f")),
+                    t(...messagePair("email_fd11b7ed4b")),
+                    t(...messagePair("balance_e1258fb4af")),
+                    t(...messagePair("monthly_spend_039f31d3cd")),
+                    t(...messagePair("keys_98f373eeaf")),
+                    t(...messagePair("status_05fdd567d6")),
+                    t(...messagePair("last_call_ea054b6e23")),
+                    t(...messagePair("registered_9fc53d0c88")),
                   ].map((x) => (
                     <th key={x}>{x}</th>
                   ))}
@@ -161,8 +164,8 @@ function CustomerList() {
                         className={`adm-status ${user.status === 1 ? "is-active" : "is-disabled"}`}
                       >
                         {user.status === 1
-                          ? t("正常", "Enabled")
-                          : t("已禁用", "Disabled")}
+                          ? t(...messagePair("enabled_c2ea99f45b"))
+                          : t(...messagePair("disabled_79b1b987fa"))}
                       </span>
                     </td>
                     <td>{adminDate(user.last_call_at, user.timezone)}</td>
@@ -172,7 +175,7 @@ function CustomerList() {
               </tbody>
             </AdminTable>
             {query.data.items.length === 0 && (
-              <p>{t("暂无匹配账号。", "No matching accounts.")}</p>
+              <p>{t(...messagePair("no_matching_accounts_de02419bf3"))}</p>
             )}
             <AdminPagination
               page={page}
@@ -268,29 +271,29 @@ function CustomerDetail({ id }: { id: string }) {
     write = isAdmin(role),
     finance = canReadFinance(role);
   const labels = {
-    keys: t("访问密钥", "Access keys"),
-    calls: t("调用明细", "Call details"),
-    ledger: t("账本流水", "Ledger"),
-    orders: t("支付订单", "Payment orders"),
-    sessions: t("登录会话", "Login sessions"),
+    keys: t(...messagePair("access_keys_2a98cb0b87")),
+    calls: t(...messagePair("call_details_09feda52cb")),
+    ledger: t(...messagePair("ledger_f3b8cadd56")),
+    orders: t(...messagePair("payment_orders_e9b93dd9df")),
+    sessions: t(...messagePair("login_sessions_8d57b0e8ec")),
   };
   const actionLabel =
     action === "balance"
-      ? t("手动加款 / 扣款", "Manual balance adjustment")
+      ? t(...messagePair("manual_balance_adjustment_fccfd63d1b"))
       : action === "enable"
-        ? t("启用账号", "Enable account")
+        ? t(...messagePair("enable_account_fc76ab91b6"))
         : action === "disable"
-          ? t("禁用账号", "Disable account")
+          ? t(...messagePair("disable_account_d2f78c3c65"))
           : action === "revoke"
-            ? t("强制下线", "Revoke sessions")
+            ? t(...messagePair("revoke_sessions_223666dee4"))
             : action === "key"
-              ? t("停用密钥", "Disable key")
-              : t("修改并发上限", "Change concurrent limit");
+              ? t(...messagePair("disable_key_19208f1779"))
+              : t(...messagePair("change_concurrent_limit_e32ebd813e"));
   return (
     <section className="adm-page">
       <Link className="adm-link" to="/admin?tab=customers">
         <ArrowLeft size={14} className="directional" />{" "}
-        {t("账号管理", "Customer accounts")}
+        {t(...messagePair("customer_accounts_9413e58186"))}
       </Link>
       <AdminFeedback
         pending={query.isPending}
@@ -307,12 +310,13 @@ function CustomerDetail({ id }: { id: string }) {
                   className={`adm-status ${user.status === 1 ? "is-active" : "is-disabled"}`}
                 >
                   {user.status === 1
-                    ? t("正常", "Enabled")
-                    : t("已禁用", "Disabled")}
+                    ? t(...messagePair("enabled_c2ea99f45b"))
+                    : t(...messagePair("disabled_79b1b987fa"))}
                 </span>
               </h1>
               <p>
-                <bdi>{user.user_identifier}</bdi> · {t("注册于", "Registered")}{" "}
+                <bdi>{user.user_identifier}</bdi> ·{" "}
+                {t(...messagePair("registered_6e4cea9360"))}{" "}
                 {adminDate(user.created_at, user.timezone)}
               </p>
             </div>
@@ -325,32 +329,38 @@ function CustomerDetail({ id }: { id: string }) {
                   }
                 >
                   {user.status === 1
-                    ? t("禁用账号", "Disable account")
-                    : t("启用账号", "Enable account")}
+                    ? t(...messagePair("disable_account_d2f78c3c65"))
+                    : t(...messagePair("enable_account_fc76ab91b6"))}
                 </Button>
               )}
               {finance && (
                 <Button variant="primary" onClick={() => begin("balance")}>
-                  {t("手动加款", "Adjust balance")}
+                  {t(...messagePair("adjust_balance_c5b55b6e5d"))}
                 </Button>
               )}
             </div>
           </header>
           <div className="adm-detail-grid">
             <article className="adm-card">
-              <h2>{t("基本信息", "Account information")}</h2>
+              <h2>{t(...messagePair("account_information_bdc1bcbab1"))}</h2>
               <dl className="adm-info">
                 {[
-                  [t("手机号", "Phone"), user.phone_masked || "—"],
-                  [t("邮箱", "Email"), user.email || "—"],
-                  [t("余额", "Balance"), adminAmount(user.api_balance_nano)],
                   [
-                    t("本月消耗", "Monthly spend"),
+                    t(...messagePair("phone_a90f318a7f")),
+                    user.phone_masked || "—",
+                  ],
+                  [t(...messagePair("email_fd11b7ed4b")), user.email || "—"],
+                  [
+                    t(...messagePair("balance_e1258fb4af")),
+                    adminAmount(user.api_balance_nano),
+                  ],
+                  [
+                    t(...messagePair("monthly_spend_039f31d3cd")),
                     adminAmount(user.monthly_usage_nano),
                   ],
-                  [t("密钥数", "Keys"), user.key_count],
+                  [t(...messagePair("keys_98f373eeaf")), user.key_count],
                   [
-                    t("最近调用", "Last call"),
+                    t(...messagePair("last_call_ea054b6e23")),
                     adminDate(user.last_call_at, user.timezone),
                   ],
                 ].map(([name, value]) => (
@@ -362,14 +372,17 @@ function CustomerDetail({ id }: { id: string }) {
               </dl>
               {user.status_reason && (
                 <p className="adm-meta">
-                  {t("状态原因", "Status reason")}: {user.status_reason}
+                  {t(...messagePair("status_reason_fcf5a5c53e"))}:{" "}
+                  {user.status_reason}
                 </p>
               )}
             </article>
             <article className="adm-card">
-              <h2>{t("并发上限", "Concurrent request limit")}</h2>
+              <h2>
+                {t(...messagePair("concurrent_request_limit_176a964e79"))}
+              </h2>
               <p className="adm-meta">
-                {t("默认 50 个并发请求", "Default: 50 concurrent requests")}
+                {t(...messagePair("default_50_concurrent_requests_d79d89b0ae"))}
               </p>
               <div className="adm-count">
                 <bdi>{user.concurrency_limit}</bdi>
@@ -379,7 +392,7 @@ function CustomerDetail({ id }: { id: string }) {
                   variant="secondary"
                   onClick={() => begin("concurrency")}
                 >
-                  {t("修改上限", "Change limit")}
+                  {t(...messagePair("change_limit_c80f38fc9c"))}
                 </Button>
               )}
             </article>
@@ -410,11 +423,11 @@ function CustomerDetail({ id }: { id: string }) {
                   <thead>
                     <tr>
                       {[
-                        t("名称", "Name"),
-                        t("标识", "ID"),
-                        t("服务分组", "Group"),
-                        t("状态", "Status"),
-                        t("操作", "Actions"),
+                        t(...messagePair("name_76540d04d3")),
+                        t(...messagePair("id_6c3f3567fd")),
+                        t(...messagePair("group_16578f28f0")),
+                        t(...messagePair("status_05fdd567d6")),
+                        t(...messagePair("actions_2806edaa15")),
                       ].map((x) => (
                         <th key={x}>{x}</th>
                       ))}
@@ -428,8 +441,8 @@ function CustomerDetail({ id }: { id: string }) {
                         <td>{k.group}</td>
                         <td>
                           {k.status === 1
-                            ? t("启用", "Enabled")
-                            : t("已停用", "Disabled")}
+                            ? t(...messagePair("enabled_34fecc2957"))
+                            : t(...messagePair("disabled_a0b61d0d86"))}
                         </td>
                         <td>
                           {write && k.status === 1 && (
@@ -438,7 +451,7 @@ function CustomerDetail({ id }: { id: string }) {
                               variant="secondary"
                               onClick={() => begin("key", k)}
                             >
-                              {t("停用", "Disable")}
+                              {t(...messagePair("disable_6468329ed8"))}
                             </Button>
                           )}
                         </td>
@@ -449,8 +462,9 @@ function CustomerDetail({ id }: { id: string }) {
               )}
               <p className="adm-meta">
                 {t(
-                  "后台只显示密钥标识及属性，不能查看完整密钥。",
-                  "Staff can inspect key identifiers and attributes, not complete credentials.",
+                  ...messagePair(
+                    "staff_can_inspect_key_identifiers_and_attribu_7ef49755f1",
+                  ),
                 )}
               </p>
             </Tabs.Content>
@@ -464,7 +478,7 @@ function CustomerDetail({ id }: { id: string }) {
                 {section === "sessions" && write && (
                   <div className="adm-actions">
                     <Button variant="secondary" onClick={() => begin("revoke")}>
-                      {t("强制下线全部会话", "Revoke all sessions")}
+                      {t(...messagePair("revoke_all_sessions_de30c90c3e"))}
                     </Button>
                   </div>
                 )}
@@ -475,27 +489,29 @@ function CustomerDetail({ id }: { id: string }) {
                         <tr>
                           {(section === "calls"
                             ? [
-                                t("时间", "Time"),
-                                t("模型", "Model"),
+                                t(...messagePair("time_1da26dad48")),
+                                t(...messagePair("model_b80025508f")),
                                 "Trace ID",
-                                t("状态", "Status"),
-                                t("操作", "Actions"),
+                                t(...messagePair("status_05fdd567d6")),
+                                t(...messagePair("actions_2806edaa15")),
                               ]
                             : section === "sessions"
                               ? [
-                                  t("创建时间", "Created"),
-                                  t("到期时间", "Expires"),
+                                  t(...messagePair("created_93a8df1dcf")),
+                                  t(...messagePair("expires_adf5d52fbd")),
                                 ]
                               : [
-                                  t("时间", "Time"),
+                                  t(...messagePair("time_1da26dad48")),
                                   section === "orders"
-                                    ? t("订单号", "Order")
-                                    : t("类型", "Type"),
-                                  t("金额", "Amount"),
+                                    ? t(...messagePair("order_0ffede7771"))
+                                    : t(...messagePair("type_be00a90d64")),
+                                  t(...messagePair("amount_3b0bcc85c2")),
                                   section === "orders"
-                                    ? t("状态", "Status")
-                                    : t("余额", "Balance"),
-                                  t("资金来源", "Funding source"),
+                                    ? t(...messagePair("status_05fdd567d6"))
+                                    : t(...messagePair("balance_e1258fb4af")),
+                                  t(
+                                    ...messagePair("funding_source_fc9f235e9c"),
+                                  ),
                                 ]
                           ).map((x) => (
                             <th key={x}>{x}</th>
@@ -519,15 +535,19 @@ function CustomerDetail({ id }: { id: string }) {
                                 </td>
                                 <td>
                                   {r.status === 1
-                                    ? t("成功", "Succeeded")
-                                    : t("未成功", "Unsuccessful")}
+                                    ? t(...messagePair("succeeded_ec2a95382a"))
+                                    : t(
+                                        ...messagePair(
+                                          "unsuccessful_0e799a464a",
+                                        ),
+                                      )}
                                 </td>
                                 <td>
                                   <button
                                     className="adm-link"
                                     onClick={() => setCall(r)}
                                   >
-                                    {t("详情", "Details")}
+                                    {t(...messagePair("details_91cd6ded0d"))}
                                   </button>
                                 </td>
                               </tr>
@@ -566,7 +586,7 @@ function CustomerDetail({ id }: { id: string }) {
                       </tbody>
                     </AdminTable>
                     {activity.data.items.length === 0 && (
-                      <p>{t("暂无记录。", "No records.")}</p>
+                      <p>{t(...messagePair("no_records_0d134b9bff"))}</p>
                     )}
                     <AdminPagination
                       page={page}
@@ -594,7 +614,7 @@ function CustomerDetail({ id }: { id: string }) {
               disabled={mutation.isPending}
               onClick={() => setAction(null)}
             >
-              {t("取消", "Cancel")}
+              {t(...messagePair("cancel_82ac496be8"))}
             </Button>
             <Button
               variant="primary"
@@ -602,7 +622,7 @@ function CustomerDetail({ id }: { id: string }) {
               type="submit"
               disabled={mutation.isPending}
             >
-              {t("确认", "Confirm")}
+              {t(...messagePair("confirm_f262a471a4"))}
             </Button>
           </>
         }
@@ -617,7 +637,7 @@ function CustomerDetail({ id }: { id: string }) {
         >
           {action === "concurrency" && (
             <label className="adm-wide">
-              {t("新的并发上限", "New concurrent request limit")}
+              {t(...messagePair("new_concurrent_request_limit_0e3b91bf5b"))}
               <Input
                 type="number"
                 min={1}
@@ -632,7 +652,7 @@ function CustomerDetail({ id }: { id: string }) {
           {action === "balance" && (
             <>
               <label>
-                {t("金额（USD）", "Amount (USD)")}
+                {t(...messagePair("amount_usd_568c286447"))}
                 <Input
                   required
                   inputMode="decimal"
@@ -641,24 +661,26 @@ function CustomerDetail({ id }: { id: string }) {
                 />
               </label>
               <label>
-                {t("调整类型", "Adjustment type")}
+                {t(...messagePair("adjustment_type_89365bbd64"))}
                 <select value={kind} onChange={(e) => setKind(e.target.value)}>
                   <option value="offline_payment">
-                    {t("线下付款", "Offline payment")}
+                    {t(...messagePair("offline_payment_e9aa9cce96"))}
                   </option>
-                  <option value="gift">{t("赠送", "Gift")}</option>
+                  <option value="gift">
+                    {t(...messagePair("gift_ddad176e3f"))}
+                  </option>
                   <option value="compensation">
-                    {t("补偿", "Compensation")}
+                    {t(...messagePair("compensation_74719de2d0"))}
                   </option>
                   <option value="deduction">
-                    {t("扣款（负数）", "Deduction (negative amount)")}
+                    {t(...messagePair("deduction_negative_amount_5e9f0fca55"))}
                   </option>
                 </select>
               </label>
             </>
           )}
           <label className="adm-wide">
-            {t("原因", "Reason")}
+            {t(...messagePair("reason_6879e84de6"))}
             <textarea
               required
               rows={3}
@@ -696,62 +718,80 @@ export function AdminCallDrawer({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={t("调用详情", "Call details")}
+      title={t(...messagePair("call_details_ab6874b516"))}
       description={call?.trace_id ?? ""}
     >
       {call && (
         <div className="adm-page">
           <dl className="adm-info">
             {[
-              [t("费用", "Charge"), adminAmount(call.amount_nano)],
-              [t("密钥", "Key"), call.token_name],
-              [t("厂商", "Vendor"), call.vendor || "—"],
               [
-                t("调用类型 / 协议", "Call type / protocol"),
+                t(...messagePair("charge_349f2ff7f6")),
+                adminAmount(call.amount_nano),
+              ],
+              [t(...messagePair("key_d6b66f7d17")), call.token_name],
+              [t(...messagePair("vendor_02b6ea9581")), call.vendor || "—"],
+              [
+                t(...messagePair("call_type_protocol_c1c8ec4cf1")),
                 `${call.call_type || "—"} / ${call.protocol || "—"}`,
               ],
               [
-                t("缓存读取 / 写入词元", "Cache read / write tokens"),
+                t(...messagePair("cache_read_write_tokens_6564c5a032")),
                 `${call.cache_read_tokens ?? 0} / ${call.cache_write_tokens ?? 0}`,
               ],
               [
-                t("首字延迟", "Time to first token"),
+                t(...messagePair("time_to_first_token_5a815ab455")),
                 call.ttft_ms ? `${call.ttft_ms} ms` : "—",
               ],
-              [t("受理时间", "Accepted"), adminDate(call.created_at, timezone)],
-              [t("请求模型", "Requested model"), call.requested_model],
-              [t("实际模型", "Executed model"), call.model],
-              [t("服务分组", "Service group"), call.service_group],
               [
-                t("资源实例 ID", "Resource instance ID"),
+                t(...messagePair("accepted_33204fd7ab")),
+                adminDate(call.created_at, timezone),
+              ],
+              [
+                t(...messagePair("requested_model_e942dbbab4")),
+                call.requested_model,
+              ],
+              [t(...messagePair("executed_model_2907879ddc")), call.model],
+              [
+                t(...messagePair("service_group_90b4e6ccd2")),
+                call.service_group,
+              ],
+              [
+                t(...messagePair("resource_instance_id_fe96718d32")),
                 call.resource_id ||
                   call.resource_ids ||
-                  t("未记录 / 非托管资源", "Unrecorded / unmanaged resource"),
+                  t(...messagePair("unrecorded_unmanaged_resource_061fba0c99")),
               ],
               [
-                t("受理时快照序号", "Admission snapshot sequence"),
+                t(...messagePair("admission_snapshot_sequence_f289553111")),
                 call.routing_recorded && call.snapshot_sequence > 0
                   ? call.snapshot_sequence
-                  : t("历史未记录", "Historically unrecorded"),
+                  : t(...messagePair("historically_unrecorded_2d458508a1")),
               ],
               [
-                t("资源配置版本", "Resource revision"),
+                t(...messagePair("resource_revision_f0a722b115")),
                 call.routing_recorded ? call.resource_revision : "—",
               ],
               [
-                t("亲和命中", "Affinity hit"),
+                t(...messagePair("affinity_hit_4bbc4c343d")),
                 call.routing_recorded
                   ? call.affinity_used
-                    ? t("是", "Yes")
-                    : t("否", "No")
+                    ? t(...messagePair("yes_e6025d7cb9"))
+                    : t(...messagePair("no_5d7c678bfd"))
                   : "—",
               ],
               [
-                t("输入 / 输出词元", "Input / output tokens"),
+                t(...messagePair("input_output_tokens_f807770abd")),
                 `${call.prompt_tokens} / ${call.completion_tokens}`,
               ],
-              [t("耗时", "Duration"), `${call.duration_ms} ms`],
-              [t("错误码", "Error code"), call.error_code || "—"],
+              [
+                t(...messagePair("duration_8f65bdb42b")),
+                `${call.duration_ms} ms`,
+              ],
+              [
+                t(...messagePair("error_code_6c3b677c4d")),
+                call.error_code || "—",
+              ],
             ].map(([name, value]) => (
               <div key={name}>
                 <dt>{name}</dt>
@@ -771,8 +811,9 @@ export function AdminCallDrawer({
           )}
           <p className="adm-meta">
             {t(
-              "仅显示调用与路由元数据，不保存或展示请求、响应内容。",
-              "Only request and routing metadata are shown; request and response content is not stored or displayed.",
+              ...messagePair(
+                "only_request_and_routing_metadata_are_shown_r_c96b0cda25",
+              ),
             )}
           </p>
         </div>

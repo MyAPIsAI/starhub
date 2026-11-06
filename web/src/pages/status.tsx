@@ -1,3 +1,4 @@
+import { localizedMessage } from "../i18n/messages";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, AlertTriangle, Radio } from "lucide-react";
@@ -5,13 +6,17 @@ import { PublicHeader } from "../components/product-shell";
 import { catalogModels } from "../config/models";
 import { useProductPreview } from "../lib/product-preview";
 import { usePreferences } from "../lib/preferences";
-import { writtenLanguage } from "../lib/localize";
+import { usePublishedAnnouncements } from "../lib/api/announcements";
+import { PublicAnnouncements } from "../features/public-announcements";
 import { useServiceQuality } from "../lib/api/service-quality";
 
 export default function StatusPage() {
   const { t } = useTranslation();
   const lang = usePreferences((s) => s.language);
-  const incidents = useProductPreview((s) => s.incidents);
+  const announcementQuery = usePublishedAnnouncements();
+  const incidents = announcementQuery.isError
+    ? []
+    : (announcementQuery.data?.items ?? []);
   const upstreamOutage = useProductPreview((s) => s.demoMode.upstreamOutage);
   // Fetch real service-quality metrics (last 7 days). Degrades to
   // demo defaults when the endpoint is unavailable or has no data.
@@ -86,6 +91,7 @@ export default function StatusPage() {
           boxSizing: "border-box",
         }}
       >
+        <PublicAnnouncements query={announcementQuery} />
         {/* Top Health Banner */}
         <div
           style={{
@@ -149,122 +155,10 @@ export default function StatusPage() {
           >
             <Radio size={12} style={{ color: "var(--brand)" }} />
             {hasRealData
-              ? lang === "zh"
-                ? "实时数据 · 迪拜时区（UTC+4）"
-                : lang === "ar"
-                  ? "بيانات حية · دبي (UTC+4)"
-                  : "Live data · Dubai (UTC+4)"
-              : lang === "zh"
-                ? "暂无请求数据"
-                : lang === "ar"
-                  ? "لا بيانات طلبات"
-                  : "No request data yet"}
+              ? localizedMessage("live_data_dubai_utc_4_567be1ee66", lang)
+              : localizedMessage("no_request_data_yet_e3608cbfc3", lang)}
           </div>
         </div>
-
-        {/* Active Incidents Announcement Section */}
-        {incidents.length > 0 && (
-          <section style={{ marginBottom: "var(--space-8)" }}>
-            <h2
-              style={{
-                fontSize: "var(--text-lg)",
-                fontWeight: "var(--weight-bold)",
-                marginBottom: "var(--space-3)",
-              }}
-            >
-              {t("activeIncidents")}
-            </h2>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-3)",
-              }}
-            >
-              {incidents.map((incident) => (
-                <div
-                  key={incident.id}
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: "var(--space-4)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      marginBottom: "var(--space-2)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: "var(--weight-semibold)",
-                        fontSize: "var(--text-base)",
-                      }}
-                    >
-                      {incident.title[writtenLanguage(lang)]}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        padding: "2px 8px",
-                        borderRadius: "var(--radius-sm)",
-                        background:
-                          incident.status === "resolved"
-                            ? "var(--success-soft)"
-                            : "var(--warning-soft)",
-                        color:
-                          incident.status === "resolved"
-                            ? "var(--success)"
-                            : "var(--warning)",
-                        fontWeight: "var(--weight-medium)",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {lang === "zh"
-                        ? (
-                            {
-                              resolved: "已解决",
-                              investigating: "调查中",
-                              identified: "已定位",
-                              monitoring: "监测中",
-                            } as Record<string, string>
-                          )[incident.status] || incident.status
-                        : incident.status}
-                    </span>
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "var(--text-sm)",
-                      color: "var(--muted)",
-                      margin: "0 0 var(--space-2) 0",
-                      lineHeight: "var(--leading-base)",
-                    }}
-                  >
-                    {incident.content[writtenLanguage(lang)]}
-                  </p>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    {lang === "zh"
-                      ? "更新于"
-                      : lang === "ar"
-                        ? "تحديث"
-                        : "Updated"}{" "}
-                    {incident.updatedAt}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         {/* Grouped Vendor Models List */}
         <section>
@@ -288,12 +182,7 @@ export default function StatusPage() {
                     fontWeight: "normal",
                   }}
                 >
-                  ({models.length}{" "}
-                  {lang === "zh"
-                    ? "个模型"
-                    : lang === "ar"
-                      ? "نموذج"
-                      : "models"}
+                  ({models.length} {localizedMessage("models_77eff90879", lang)}
                   )
                 </span>
               </h2>
@@ -486,11 +375,7 @@ export default function StatusPage() {
                           }}
                         >
                           <span>
-                            {lang === "zh"
-                              ? "90 天前"
-                              : lang === "ar"
-                                ? "قبل 90 يومًا"
-                                : "90 days ago"}
+                            {localizedMessage("90_days_ago_a926d1b97a", lang)}
                           </span>
                           <span>
                             {t("uptime90Days")}:{" "}
@@ -499,11 +384,7 @@ export default function StatusPage() {
                               : "—"}
                           </span>
                           <span>
-                            {lang === "zh"
-                              ? "今天"
-                              : lang === "ar"
-                                ? "اليوم"
-                                : "Today"}
+                            {localizedMessage("today_3a255d525f", lang)}
                           </span>
                         </div>
                       </div>

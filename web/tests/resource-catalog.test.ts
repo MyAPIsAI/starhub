@@ -172,3 +172,27 @@ describe("server resource inventory boundaries", () => {
     expect(() => parseResourceCatalog({ ...catalog(), regions })).toThrow();
   });
 });
+
+it("preserves observed resource fields and rejects invalid source metadata", () => {
+  const value = snapshot();
+  Object.assign(value.instances[0], {
+    price_tier: 4,
+    quality_level: "S0",
+    state: "hot",
+    trend: "degraded",
+    score: 0,
+  });
+  expect(parseResourceSnapshot(value).instances[0].score).toBe(0);
+  for (const [key, invalid] of [
+    ["price_tier", 3],
+    ["quality_level", "S9"],
+    ["state", "normal"],
+    ["trend", "broken"],
+    ["score", 101],
+    ["score", null],
+  ]) {
+    const copy = structuredClone(value);
+    Object.assign(copy.instances[0], { [String(key)]: invalid });
+    expect(() => parseResourceSnapshot(copy)).toThrow();
+  }
+});

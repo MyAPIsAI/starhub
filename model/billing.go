@@ -63,6 +63,7 @@ const (
 	FundingSourceLegacyUnverified = "legacy_unverified"
 	FundingSourceSimulation       = "simulation"
 	FundingSourceAPIQuota         = "api_quota"
+	FundingSourcePaymentProvider  = "payment_provider"
 	FundingSourceStaffAdjustment  = "staff_adjustment"
 )
 

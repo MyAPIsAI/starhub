@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
@@ -77,13 +78,13 @@ function ResourceInventoryView() {
     draft?.kind === "import" && draft.snapshot
       ? resourceImportDiff(snapshot ?? null, draft.snapshot)
       : null;
-  const unknown = text("未知区域", "Unknown region", "منطقة غير معروفة");
+  const unknown = text(...translatedMessage("unknown_region_e682d37883"));
   const statusLabel = (value: string) =>
     value === "available"
-      ? text("来源可用", "Available", "متاح")
+      ? text(...translatedMessage("available_d26b22e8da"))
       : value === "unavailable"
-        ? text("来源不可用", "Unavailable", "غير متاح")
-        : text("来源已下架", "Retired", "مسحوب");
+        ? text(...translatedMessage("unavailable_0b91d6e139"))
+        : text(...translatedMessage("retired_75ce51762f"));
   const begin = (next: Draft) => {
     mutation.reset();
     setDraft(next);
@@ -119,9 +120,9 @@ function ResourceInventoryView() {
     } catch {
       setError(
         text(
-          "请检查字段；快照版本须递增，启用投放须填写模型和分组。",
-          "Check fields. Snapshot sequence must increase; enabled placements need a model and groups.",
-          "تحقق من الحقول. يجب زيادة تسلسل اللقطة وتحديد النموذج والمجموعات للنشر.",
+          ...translatedMessage(
+            "check_fields_snapshot_sequence_must_increase__9bf6428d9d",
+          ),
         ),
       );
     }
@@ -147,9 +148,9 @@ function ResourceInventoryView() {
       );
       setNotice(
         text(
-          `已保存资源配置 v${result.revision}。`,
-          `Inventory saved as v${result.revision}.`,
-          `حُفظ المخزون بالإصدار v${result.revision}.`,
+          ...translatedMessage("inventory_saved_as_v_ac7fd69268", {
+            p0: result.revision,
+          }),
         ),
       );
       setDraft(null);
@@ -157,9 +158,9 @@ function ResourceInventoryView() {
     } catch {
       setError(
         text(
-          "无法确认保存结果。请刷新核对；若版本已变化，请重新打开编辑后再保存。",
-          "Save outcome is unconfirmed. Refresh to check. If the revision changed, reopen the editor before saving.",
-          "تعذر تأكيد الحفظ. حدّث للتحقق، ثم أعد فتح المحرر إذا تغير الإصدار.",
+          ...translatedMessage(
+            "save_outcome_is_unconfirmed_refresh_to_check__02941a883e",
+          ),
         ),
       );
     }
@@ -170,16 +171,16 @@ function ResourceInventoryView() {
         <div>
           <h1>
             {text(
-              "渠道资源与投放",
-              "Channel inventory and placements",
-              "مخزون القنوات والنشر",
+              ...translatedMessage(
+                "channel_inventory_and_placements_24502175ca",
+              ),
             )}
           </h1>
           <p>
             {text(
-              "集中保存供应商资源、区域和投放清单。",
-              "Store supplier inventory, regions and placements centrally.",
-              "احفظ مخزون الموردين والمناطق وإعدادات النشر مركزيًا.",
+              ...translatedMessage(
+                "store_supplier_inventory_regions_and_placemen_f67910aa4e",
+              ),
             )}
           </p>
         </div>
@@ -191,7 +192,7 @@ function ResourceInventoryView() {
               void query.refetch();
             }}
           >
-            {text("刷新", "Refresh", "تحديث")}
+            {text(...translatedMessage("refresh_9c83c3600a"))}
           </Button>
           <Button
             disabled={!data}
@@ -221,20 +222,18 @@ function ResourceInventoryView() {
               })
             }
           >
-            {text("导入快照", "Import snapshot", "استيراد لقطة")}
+            {text(...translatedMessage("import_snapshot_9fbcc55332"))}
           </Button>
           <Button asChild>
             <a href="#gateway-publication">
               {text(
-                "网关发布预览",
-                "Gateway publication preview",
-                "معاينة نشر البوابة",
+                ...translatedMessage("gateway_publication_preview_86ab27029b"),
               )}
             </a>
           </Button>
           <Button asChild>
             <Link to="/admin?tab=resources#regions">
-              {text("区域目录", "Region directory", "دليل المناطق")}
+              {text(...translatedMessage("region_directory_8a612c18f4"))}
             </Link>
           </Button>
         </div>
@@ -242,30 +241,30 @@ function ResourceInventoryView() {
       <aside className="ri-boundary">
         {data?.affects_gateway_routing
           ? text(
-              "此清单已关联托管网关渠道。修改投放，或改变资源身份、能力、上下文及可用状态，将撤销相关渠道的全部托管组合，须重新预览发布。凭证另行管理；区域和延迟仍为来源元数据。",
-              "This inventory has managed gateway channels. Placement changes or resource identity, capability, context or availability changes revoke all managed pairs on affected channels until reviewed and published again. Credentials are managed separately; regions and latency remain source metadata.",
-              "يرتبط هذا المخزون بقنوات بوابة مُدارة. تؤدي تغييرات النشر أو هوية المورد أو قدراته أو سياقه أو توفره إلى إلغاء جميع أزواج القنوات المتأثرة حتى مراجعتها ونشرها مجددًا. تُدار بيانات الاعتماد منفصلة؛ المناطق وزمن الاستجابة بيانات مصدر.",
+              ...translatedMessage(
+                "this_inventory_has_managed_gateway_channels_p_4c57025dd3",
+              ),
             )
           : text(
-              "此清单暂不改变网关实际路由或调用授权。上游密钥与真实渠道在后台单独管理；区域及延迟来自导入数据，并非实测或服务承诺。",
-              "This inventory does not yet change gateway routing or API authorization. Manage credentials and live channels separately in Admin. Imported regions and latency are metadata, not measurements or service commitments.",
-              "لا يغيّر هذا المخزون توجيه البوابة أو صلاحيات الواجهة بعد. تُدار بيانات الاعتماد والقنوات الفعلية في الإدارة. المناطق وزمن الاستجابة بيانات مستوردة وليست قياسات أو ضمانات.",
+              ...translatedMessage(
+                "this_inventory_does_not_yet_change_gateway_ro_75817ecefa",
+              ),
             )}{" "}
         <Link to="/admin?tab=resources">
-          {text("打开后台渠道", "Open live channels", "فتح القنوات الفعلية")}
+          {text(...translatedMessage("open_live_channels_337c9e60b0"))}
         </Link>
       </aside>
       {query.isLoading && (
         <p role="status">
-          {text("正在读取资源…", "Loading inventory…", "جارٍ تحميل المخزون…")}
+          {text(...translatedMessage("loading_inventory_44cc0550f1"))}
         </p>
       )}
       {query.error && (
         <p role="alert">
           {text(
-            "无法读取服务器资源，刷新后重试。",
-            "Server inventory is unavailable. Refresh to retry.",
-            "مخزون الخادم غير متاح. حدّث لإعادة المحاولة.",
+            ...translatedMessage(
+              "server_inventory_is_unavailable_refresh_to_re_59a49a4611",
+            ),
           )}
         </p>
       )}
@@ -280,26 +279,25 @@ function ResourceInventoryView() {
             <strong>v{data.revision}</strong> ·{" "}
             {snapshot?.id ??
               text(
-                "尚未导入快照",
-                "No snapshot imported",
-                "لم تُستورد لقطة",
+                ...translatedMessage("no_snapshot_imported_b5dfbbb8db"),
               )}{" "}
             · {snapshot?.instances.length ?? 0}{" "}
-            {text("个资源", "resources", "موارد")}
+            {text(...translatedMessage("resources_a6c40e4594"))}
           </p>
           {!snapshot ? (
             <p className="ri-empty">
               {text(
-                "服务器暂无资源快照。导入真实清单后可编辑投放；不会自动发布浏览器内的演示资源。",
-                "The server has no inventory snapshot. Import your inventory to edit placements. Browser demo resources are never published automatically.",
-                "لا توجد لقطة مخزون في الخادم. استورد المخزون لتحرير النشر؛ لا تُنشر موارد العرض المحلية تلقائيًا.",
+                ...translatedMessage(
+                  "the_server_has_no_inventory_snapshot_import_y_a9b6d1d99c",
+                ),
               )}
             </p>
           ) : (
             <>
               <p className="ri-source">
-                {text("来源", "Source", "المصدر")}: {snapshot.source || "—"} ·{" "}
-                {text("来源发布时间", "Source publication", "نشر المصدر")}:{" "}
+                {text(...translatedMessage("source_7986b56c96"))}:{" "}
+                {snapshot.source || "—"} ·{" "}
+                {text(...translatedMessage("source_publication_5f70b4c1ad"))}:{" "}
                 <time dateTime={snapshot.publishedAt}>
                   {snapshot.publishedAt}
                 </time>
@@ -307,9 +305,7 @@ function ResourceInventoryView() {
               <div className="ri-filters">
                 <label>
                   {text(
-                    "搜索模型或资源",
-                    "Search model or resource",
-                    "بحث النموذج أو المورد",
+                    ...translatedMessage("search_model_or_resource_fd5ae6d66c"),
                   )}
                   <input
                     value={search}
@@ -320,9 +316,11 @@ function ResourceInventoryView() {
                   />
                 </label>
                 <label>
-                  {text("渠道", "Channel", "القناة")}
+                  {text(...translatedMessage("channel_1d199d8e98"))}
                   <select
-                    aria-label={text("渠道", "Channel", "القناة")}
+                    aria-label={text(
+                      ...translatedMessage("channel_1d199d8e98"),
+                    )}
                     value={channel}
                     onChange={(e) => {
                       setChannel(e.target.value);
@@ -330,7 +328,7 @@ function ResourceInventoryView() {
                     }}
                   >
                     <option value="">
-                      {text("全部渠道", "All channels", "كل القنوات")}
+                      {text(...translatedMessage("all_channels_4c3a0b8907"))}
                     </option>
                     {snapshot.channels.map((row) => (
                       <option key={row.id} value={row.id}>
@@ -340,9 +338,9 @@ function ResourceInventoryView() {
                   </select>
                 </label>
                 <label>
-                  {text("区域", "Region", "المنطقة")}
+                  {text(...translatedMessage("region_288ebd1a0e"))}
                   <select
-                    aria-label={text("区域", "Region", "المنطقة")}
+                    aria-label={text(...translatedMessage("region_288ebd1a0e"))}
                     value={region}
                     onChange={(e) => {
                       setRegion(e.target.value);
@@ -350,7 +348,7 @@ function ResourceInventoryView() {
                     }}
                   >
                     <option value="">
-                      {text("全部区域", "All regions", "كل المناطق")}
+                      {text(...translatedMessage("all_regions_b23e02a5a7"))}
                     </option>
                     {[...new Set(snapshot.instances.map((row) => row.region))]
                       .sort()
@@ -362,9 +360,11 @@ function ResourceInventoryView() {
                   </select>
                 </label>
                 <label>
-                  {text("来源状态", "Source state", "حالة المصدر")}
+                  {text(...translatedMessage("source_state_2c32c66bce"))}
                   <select
-                    aria-label={text("来源状态", "Source state", "حالة المصدر")}
+                    aria-label={text(
+                      ...translatedMessage("source_state_2c32c66bce"),
+                    )}
                     value={status}
                     onChange={(e) => {
                       setStatus(e.target.value);
@@ -372,7 +372,7 @@ function ResourceInventoryView() {
                     }}
                   >
                     <option value="">
-                      {text("全部状态", "All states", "كل الحالات")}
+                      {text(...translatedMessage("all_states_4e405d0900"))}
                     </option>
                     {["available", "unavailable", "retired"].map((value) => (
                       <option key={value} value={value}>
@@ -386,9 +386,7 @@ function ResourceInventoryView() {
                 className="ri-table"
                 role="region"
                 aria-label={text(
-                  "服务器资源列表",
-                  "Server inventory",
-                  "مخزون الخادم",
+                  ...translatedMessage("server_inventory_1c50c7fcd1"),
                 )}
                 tabIndex={0}
               >
@@ -397,17 +395,19 @@ function ResourceInventoryView() {
                     <tr>
                       {[
                         text(
-                          "资源 / 上游模型",
-                          "Resource / upstream model",
-                          "المورد / النموذج",
+                          ...translatedMessage(
+                            "resource_upstream_model_32a17c0242",
+                          ),
                         ),
                         text(
-                          "区域 / 来源状态",
-                          "Region / source state",
-                          "المنطقة / الحالة",
+                          ...translatedMessage(
+                            "region_source_state_beed1dabd3",
+                          ),
                         ),
-                        text("保存的投放", "Stored placement", "النشر المحفوظ"),
-                        text("操作", "Actions", "الإجراءات"),
+                        text(
+                          ...translatedMessage("stored_placement_1f413af87e"),
+                        ),
+                        text(...translatedMessage("actions_d83f4ed14a")),
                       ].map((label) => (
                         <th key={label}>{label}</th>
                       ))}
@@ -436,13 +436,19 @@ function ResourceInventoryView() {
                               <span>{statusLabel(row.status)}</span>
                               <small>
                                 {row.latencyMs} ms ·{" "}
-                                {text("来源值", "Source value", "قيمة المصدر")}
+                                {text(
+                                  ...translatedMessage(
+                                    "source_value_28f99d7a83",
+                                  ),
+                                )}
                               </small>
                             </td>
                             <td>
                               <span>
                                 {placement?.modelId ??
-                                  text("未映射", "Unmapped", "غير مرتبط")}
+                                  text(
+                                    ...translatedMessage("unmapped_6d198b7550"),
+                                  )}
                               </span>
                               <small>
                                 {placement?.groupIds.join(", ") || "—"}
@@ -450,14 +456,14 @@ function ResourceInventoryView() {
                               <small>
                                 {placement?.enabled
                                   ? text(
-                                      "清单投放启用",
-                                      "Inventory placement enabled",
-                                      "النشر مفعّل في المخزون",
+                                      ...translatedMessage(
+                                        "inventory_placement_enabled_2f6535a3fe",
+                                      ),
                                     )
                                   : text(
-                                      "清单投放停用",
-                                      "Inventory placement disabled",
-                                      "النشر معطّل في المخزون",
+                                      ...translatedMessage(
+                                        "inventory_placement_disabled_b469fd0882",
+                                      ),
                                     )}
                               </small>
                             </td>
@@ -476,9 +482,9 @@ function ResourceInventoryView() {
                                 }
                               >
                                 {text(
-                                  "编辑投放",
-                                  "Edit placement",
-                                  "تحرير النشر",
+                                  ...translatedMessage(
+                                    "edit_placement_ffca10c028",
+                                  ),
                                 )}
                               </Button>
                             </td>
@@ -491,25 +497,21 @@ function ResourceInventoryView() {
               {!rows.length && (
                 <p className="ri-empty">
                   {text(
-                    "没有匹配资源。",
-                    "No matching resources.",
-                    "لا توجد موارد مطابقة.",
+                    ...translatedMessage("no_matching_resources_941a8e0fb3"),
                   )}
                 </p>
               )}
               <nav
                 className="ri-pagination"
                 aria-label={text(
-                  "资源分页",
-                  "Inventory pagination",
-                  "صفحات المخزون",
+                  ...translatedMessage("inventory_pagination_6c84359706"),
                 )}
               >
                 <Button
                   disabled={currentPage === 0}
                   onClick={() => setPage(currentPage - 1)}
                 >
-                  {text("上一页", "Previous", "السابق")}
+                  {text(...translatedMessage("previous_2672646f39"))}
                 </Button>
                 <span>
                   {currentPage + 1} / {pages} · {rows.length}
@@ -518,7 +520,7 @@ function ResourceInventoryView() {
                   disabled={currentPage >= pages - 1}
                   onClick={() => setPage(currentPage + 1)}
                 >
-                  {text("下一页", "Next", "التالي")}
+                  {text(...translatedMessage("next_c0fd39244f"))}
                 </Button>
               </nav>
             </>
@@ -536,47 +538,39 @@ function ResourceInventoryView() {
         size="wide"
         title={
           review
-            ? text(
-                "确认保存资源配置",
-                "Confirm inventory save",
-                "تأكيد حفظ المخزون",
-              )
+            ? text(...translatedMessage("confirm_inventory_save_1f7d7b761f"))
             : draft?.kind === "placement"
               ? text(
-                  "编辑清单投放",
-                  "Edit inventory placement",
-                  "تحرير نشر المخزون",
+                  ...translatedMessage("edit_inventory_placement_09ffb0ccee"),
                 )
               : text(
-                  "导入资源快照",
-                  "Import inventory snapshot",
-                  "استيراد لقطة المخزون",
+                  ...translatedMessage("import_inventory_snapshot_01201cb36a"),
                 )
         }
         description={
           data?.affects_gateway_routing
             ? text(
-                "保存资源/投放变更可能撤销相关托管渠道的全部组合；不会自动重新发布或扩权。",
-                "Saving resource or placement changes may revoke all pairs on affected managed channels. It never republishes or grants access automatically.",
-                "قد يؤدي حفظ تغييرات الموارد أو النشر إلى إلغاء جميع أزواج القنوات المُدارة المتأثرة. لا يحدث نشر جديد أو منح صلاحيات تلقائيًا.",
+                ...translatedMessage(
+                  "saving_resource_or_placement_changes_may_revo_347e3d6cca",
+                ),
               )
             : text(
-                "保存到服务器清单。此操作暂不改变实际网关路由。",
-                "Save to server inventory. Live gateway routing is unchanged by this operation.",
-                "الحفظ في مخزون الخادم؛ لا يغيّر هذا الإجراء توجيه البوابة الفعلي.",
+                ...translatedMessage(
+                  "save_to_server_inventory_live_gateway_routing_e9d9d1ab16",
+                ),
               )
         }
         footer={
           <>
             <Button disabled={mutation.isPending} onClick={close}>
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             {review && (
               <Button
                 disabled={mutation.isPending}
                 onClick={() => setReview(false)}
               >
-                {text("返回编辑", "Back to editing", "العودة للتحرير")}
+                {text(...translatedMessage("back_to_editing_85b057f793"))}
               </Button>
             )}
             <Button
@@ -584,10 +578,10 @@ function ResourceInventoryView() {
               onClick={() => (review ? void save() : preview())}
             >
               {mutation.isPending
-                ? text("正在保存…", "Saving…", "جارٍ الحفظ…")
+                ? text(...translatedMessage("saving_b89854a86e"))
                 : review
-                  ? text("确认保存", "Confirm save", "تأكيد الحفظ")
-                  : text("预览变更", "Review changes", "مراجعة التغييرات")}
+                  ? text(...translatedMessage("confirm_save_f90ef9ab0e"))
+                  : text(...translatedMessage("review_changes_0594a17c6d"))}
             </Button>
           </>
         }
@@ -595,16 +589,16 @@ function ResourceInventoryView() {
         <div className="ri-editor">
           {draft && (
             <p>
-              {text("基于版本", "Base revision", "الإصدار الأساسي")} v
+              {text(...translatedMessage("base_revision_40fdfc70dc"))} v
               {draft.revision}
             </p>
           )}
           {conflict && (
             <p role="alert">
               {text(
-                "服务器版本已变化，请取消并重新打开编辑。",
-                "The server revision changed. Cancel and reopen the editor.",
-                "تغير إصدار الخادم. ألغِ التحرير وأعد فتحه.",
+                ...translatedMessage(
+                  "the_server_revision_changed_cancel_and_reopen_0e6c67d1e2",
+                ),
               )}
             </p>
           )}
@@ -630,21 +624,23 @@ function ResourceInventoryView() {
               <>
                 <p>
                   {draft.snapshot?.id} ·{" "}
-                  {text("来源序号", "Source sequence", "تسلسل المصدر")}{" "}
+                  {text(...translatedMessage("source_sequence_fb090bde31"))}{" "}
                   {draft.snapshot?.sequence}
                 </p>
                 <p>
                   {text(
-                    `新增 ${diff?.added}，变化 ${diff?.changed}，移除 ${diff?.removed}。`,
-                    `Added ${diff?.added}, changed ${diff?.changed}, removed ${diff?.removed}.`,
-                    `إضافة ${diff?.added}، تغيير ${diff?.changed}، إزالة ${diff?.removed}.`,
+                    ...translatedMessage("added_changed_removed_a7ad9e8c66", {
+                      p0: diff?.added,
+                      p1: diff?.changed,
+                      p2: diff?.removed,
+                    }),
                   )}
                 </p>
                 <p>
                   {text(
-                    "新资源默认未投放；改绑渠道或模型、下架将暂停原投放；移除会清除投放。",
-                    "New resources are unplaced. Channel/model identity changes or retirement disable placement; removal clears it.",
-                    "تبدأ الموارد الجديدة بلا نشر. يؤدي تغيير القناة أو النموذج أو سحب المورد إلى تعطيل النشر؛ وتزيله إزالة المورد.",
+                    ...translatedMessage(
+                      "new_resources_are_unplaced_channel_model_iden_3f86144634",
+                    ),
                   )}
                 </p>
               </>
@@ -657,27 +653,29 @@ function ResourceInventoryView() {
               {review ? (
                 <dl>
                   <dt>
-                    {text("标准模型", "Standard model", "النموذج القياسي")}
+                    {text(...translatedMessage("standard_model_18b603bd24"))}
                   </dt>
                   <dd>{draft.model.trim() || "—"}</dd>
                   <dt>
-                    {text("分组标识", "Group identifiers", "معرّفات المجموعات")}
+                    {text(...translatedMessage("group_identifiers_9e0a470944"))}
                   </dt>
                   <dd>{draft.groups || "—"}</dd>
-                  <dt>{text("清单状态", "Inventory state", "حالة المخزون")}</dt>
+                  <dt>
+                    {text(...translatedMessage("inventory_state_9fa79f44c1"))}
+                  </dt>
                   <dd>
                     {draft.enabled
-                      ? text("已启用", "Enabled", "مفعّل")
-                      : text("已停用", "Disabled", "معطّل")}
+                      ? text(...translatedMessage("enabled_d4fda6d86a"))
+                      : text(...translatedMessage("disabled_ab66c5caec"))}
                   </dd>
                 </dl>
               ) : (
                 <>
                   <label>
                     {text(
-                      "标准模型标识",
-                      "Standard model identifier",
-                      "معرّف النموذج القياسي",
+                      ...translatedMessage(
+                        "standard_model_identifier_453d74296f",
+                      ),
                     )}
                     <input
                       value={draft.model}
@@ -688,9 +686,9 @@ function ResourceInventoryView() {
                   </label>
                   <label>
                     {text(
-                      "分组标识（英文逗号分隔）",
-                      "Group identifiers (comma-separated)",
-                      "معرّفات المجموعات (بفواصل إنجليزية)",
+                      ...translatedMessage(
+                        "group_identifiers_comma_separated_ef11199aba",
+                      ),
                     )}
                     <input
                       dir="ltr"
@@ -709,9 +707,9 @@ function ResourceInventoryView() {
                       }
                     />
                     {text(
-                      "启用清单投放",
-                      "Enable inventory placement",
-                      "تفعيل النشر في المخزون",
+                      ...translatedMessage(
+                        "enable_inventory_placement_26a3d2514e",
+                      ),
                     )}
                   </label>
                 </>

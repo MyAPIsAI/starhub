@@ -25,4 +25,15 @@ describe("M4 §2.3 display precision", () => {
     ).toBe("$0.1333");
     expect(formatMoney("-300000000", "balance")).toBe("−$0.30");
   });
+  it("keeps Arabic regional currency and Western digits isolated without losing precision", () => {
+    expect(formatMoney("12340000000", "balance", "ar")).toBe(
+      "\u206612.34\u00a0US$\u2069",
+    );
+    expect(formatMoney("10000000000000000296", "detail", "ar")).toBe(
+      "\u206610,000,000,000.000000296\u00a0US$\u2069",
+    );
+    expect(formatMoney("-296", "call", "ar")).toBe(
+      "\u2066−<0.000001\u00a0US$\u2069",
+    );
+  });
 });

@@ -57,6 +57,7 @@ const (
 	ResourceSystem          Resource = "system"
 	ResourceCustomerControl Resource = "customer_control"
 	ResourceReconciliation  Resource = "reconciliation"
+	ResourceAnnouncements   Resource = "announcements"
 )
 
 // policy maps role -> resource -> allowed actions. An empty action set means
@@ -64,16 +65,15 @@ const (
 // denied.
 var policy = map[int]map[Resource]map[Action]bool{
 	common.RoleRoot: {
+		ResourceAnnouncements:  {ActionRead: true, ActionWrite: true},
 		ResourceReconciliation: {},
 		ResourceStaff:          {}, ResourceSync: {}, ResourceAdjustment: {}, ResourceBilling: {}, ResourceExport: {}, ResourceMetrics: {}, ResourceSystem: {}, ResourceCustomerControl: {},
 		ResourceUser:         {}, // all actions
 		ResourceChannel:      {}, // all actions
-		ResourceTaskPlugin:   {ActionRead: true, ActionWrite: true},
 		ResourceToken:        {}, // all actions
 		ResourceOption:       {}, // all actions
 		ResourceLog:          {}, // all actions
 		ResourceAudit:        {}, // all actions
-		ResourceRedemption:   {}, // all actions
 		ResourceFinance:      {ActionRead: true},
 		ResourceInventory:    {ActionRead: true, ActionWrite: true},
 		ResourceRegion:       {ActionRead: true, ActionWrite: true, ActionDelete: true},
@@ -81,14 +81,15 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceModelMeta:    {ActionRead: true, ActionWrite: true, ActionDelete: true},
 	},
 	common.RoleAdmin: {
-		ResourceUser:      {ActionRead: true},
-		ResourceChannel:   {ActionRead: true},
-		ResourceToken:     {ActionRead: true},
-		ResourceOption:    {ActionRead: true, ActionWrite: true},
-		ResourceLog:       {ActionRead: true},
-		ResourceAudit:     {ActionRead: true},
-		ResourceInventory: {ActionRead: true},
-		ResourceExport:    {ActionRead: true, ActionWrite: true}, ResourceMetrics: {ActionRead: true}, ResourceCustomerControl: {ActionRead: true, ActionWrite: true},
+		ResourceAnnouncements: {ActionRead: true, ActionWrite: true},
+		ResourceUser:          {ActionRead: true},
+		ResourceChannel:       {ActionRead: true},
+		ResourceToken:         {ActionRead: true},
+		ResourceOption:        {ActionRead: true, ActionWrite: true},
+		ResourceLog:           {ActionRead: true},
+		ResourceAudit:         {ActionRead: true},
+		ResourceInventory:     {ActionRead: true},
+		ResourceExport:        {ActionRead: true, ActionWrite: true}, ResourceMetrics: {ActionRead: true}, ResourceCustomerControl: {ActionRead: true, ActionWrite: true},
 		ResourceServiceGroup: {ActionRead: true, ActionWrite: true, ActionDelete: true},
 		ResourceModelMeta:    {ActionRead: true, ActionWrite: true, ActionDelete: true},
 	},
@@ -144,19 +145,21 @@ func methodAction(method string) Action {
 func pathResource(path string) (Resource, bool) {
 	path = strings.TrimSuffix(path, "/")
 	switch {
+	case path == "/api/admin/announcements" || strings.HasPrefix(path, "/api/admin/announcements/"):
+		return ResourceAnnouncements, true
 	case path == "/api/admin/models" || strings.HasPrefix(path, "/api/admin/models/"):
 		return ResourceModelMeta, true
 	case path == "/api/admin/region-profile" || path == "/api/admin/legal" || strings.HasPrefix(path, "/api/admin/region-profile/"):
 		return ResourceStaff, true
 	case path == "/api/admin/pricing-history":
 		return ResourceModelMeta, true
-	case path == "/api/admin/reconciliation":
+	case path == "/api/admin/reconciliation" || path == "/api/admin/reconciliation/statements":
 		return ResourceReconciliation, true
 	case path == "/api/admin/customers":
 		return ResourceUser, true
 	case path == "/api/admin/staff" || strings.HasPrefix(path, "/api/admin/staff/"):
 		return ResourceStaff, true
-	case path == "/api/admin/resource-sync":
+	case path == "/api/admin/resource-sync" || path == "/api/admin/resource-instances" || path == "/api/admin/resource-monitoring":
 		return ResourceSync, true
 	case path == "/api/admin/system":
 		return ResourceSystem, true

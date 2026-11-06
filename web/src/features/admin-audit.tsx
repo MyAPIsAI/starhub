@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -43,18 +44,19 @@ function AuditChange({ row }: { row: AuditRow }) {
   if (!changes.length && result) changes.push(result);
   if (!row.action)
     changes.push(
-      `${t("操作结果", "Result", "النتيجة")}: ${row.status >= 200 && row.status < 300 ? t("成功", "Succeeded", "نجحت") : t("未成功", "Unsuccessful", "لم تنجح")} (HTTP ${row.status})`,
+      `${t(...translatedMessage("result_df85486175"))}: ${row.status >= 200 && row.status < 300 ? t(...translatedMessage("succeeded_adfe5eb8a1")) : t(...translatedMessage("unsuccessful_6a914d7adc"))} (HTTP ${row.status})`,
     );
   let reason = row.reason;
   if (row.user_id === 0 && reason === "Deployment initialization")
-    reason = t("部署初始化", "Deployment initialization", "تهيئة النشر");
+    reason = t(...translatedMessage("deployment_initialization_9f45276728"));
   if (row.user_id === 0 && reason === "Deployment-side sole Root 2FA recovery")
     reason = t(
-      "通过部署终端恢复唯一超级管理员的双重验证",
-      "Recover sole super administrator 2FA through deployment terminal",
-      "استعادة المصادقة الثنائية للمسؤول الأعلى الوحيد عبر طرفية النشر",
+      ...translatedMessage(
+        "recover_sole_super_administrator_2fa_through__7f23d1c265",
+      ),
     );
-  if (reason) changes.push(`${t("原因", "Reason", "السبب")}: ${reason}`);
+  if (reason)
+    changes.push(`${t(...translatedMessage("reason_7dbf24f62e"))}: ${reason}`);
   const description = changes.join(" · ") || "—";
   return description.length > 160 || changes.length > 3 ? (
     <details className="adm-change-summary">
@@ -141,12 +143,12 @@ export function AdminAudit() {
     <section className="adm-page adm-audit-page">
       <header className="adm-heading">
         <div>
-          <h1>{t("审计日志", "Audit log", "سجل التدقيق")}</h1>
+          <h1>{t(...translatedMessage("audit_log_f73fcc381d"))}</h1>
           <p>
             {t(
-              "记录后台敏感操作，不记录密码、完整密钥或凭证。保留最近一年记录，时间按 UTC 显示。",
-              "Sensitive back-office operations, without passwords, full keys or credentials. Records are retained for one year; times are shown in UTC.",
-              "عمليات الإدارة الحساسة دون كلمات المرور أو المفاتيح الكاملة أو بيانات الاعتماد. تُحفظ السجلات لعام واحد وتُعرض الأوقات بالتوقيت العالمي UTC.",
+              ...translatedMessage(
+                "sensitive_back_office_operations_without_pass_d82a9eed65",
+              ),
             )}
           </p>
         </div>
@@ -160,24 +162,22 @@ export function AdminAudit() {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             aria-label={t(
-              "搜索审计记录",
-              "Search audit records",
-              "البحث في سجلات التدقيق",
+              ...translatedMessage("search_audit_records_17d877e97b"),
             )}
             placeholder={t(
-              "搜索对象、操作或内容",
-              "Search objects, actions or content",
-              "البحث عن كائن أو إجراء أو محتوى",
+              ...translatedMessage(
+                "search_objects_actions_or_content_fcd4450888",
+              ),
             )}
           />
         </label>
         <select
-          aria-label={t("操作类型", "Action", "الإجراء")}
+          aria-label={t(...translatedMessage("action_e1ba7109ce"))}
           value={action}
           onChange={(e) => change(() => setAction(e.target.value))}
         >
           <option value="">
-            {t("全部操作", "All actions", "كل الإجراءات")}
+            {t(...translatedMessage("all_actions_c574eadae5"))}
           </option>
           {query.data?.actions.filter(Boolean).map((code) => (
             <option key={code} value={code}>
@@ -187,28 +187,28 @@ export function AdminAudit() {
         </select>
         {root ? (
           <select
-            aria-label={t("操作人", "Actor", "المنفّذ")}
+            aria-label={t(...translatedMessage("actor_d343f22c5e"))}
             value={actor}
             onChange={(e) => change(() => setActor(e.target.value))}
           >
             <option value="">
-              {t("全部操作人", "All actors", "كل المنفّذين")}
+              {t(...translatedMessage("all_actors_88d93d26d9"))}
             </option>
             {query.data?.actors.map((item) => (
               <option key={`${item.id}/${item.username}`} value={item.id}>
                 {item.id === 0
-                  ? t("部署终端", "Deployment terminal", "طرفية النشر")
+                  ? t(...translatedMessage("deployment_terminal_1e6435a529"))
                   : item.username}
               </option>
             ))}
           </select>
         ) : (
           <span className="adm-meta">
-            {t("仅显示本人的操作", "Your actions only", "إجراءاتك فقط")}
+            {t(...translatedMessage("your_actions_only_339c9c26cd"))}
           </span>
         )}
         <select
-          aria-label={t("时间范围", "Time range", "الفترة الزمنية")}
+          aria-label={t(...translatedMessage("time_range_31eaa8de19"))}
           value={range}
           onChange={(e) =>
             change(() => {
@@ -217,24 +217,26 @@ export function AdminAudit() {
             })
           }
         >
-          <option value="all">{t("全部时间", "All time", "كل الأوقات")}</option>
+          <option value="all">
+            {t(...translatedMessage("all_time_4f27bb07c8"))}
+          </option>
           <option value="1">
-            {t("最近 24 小时", "Last 24 hours", "آخر 24 ساعة")}
+            {t(...translatedMessage("last_24_hours_de312c887e"))}
           </option>
           <option value="7">
-            {t("最近 7 天", "Last 7 days", "آخر 7 أيام")}
+            {t(...translatedMessage("last_7_days_27d531a444"))}
           </option>
           <option value="30">
-            {t("最近 30 天", "Last 30 days", "آخر 30 يومًا")}
+            {t(...translatedMessage("last_30_days_df52873ad5"))}
           </option>
           <option value="custom">
-            {t("自定义时间", "Custom range", "فترة مخصصة")}
+            {t(...translatedMessage("custom_range_11a7838f93"))}
           </option>
         </select>
         {range === "custom" && (
           <>
             <label>
-              {t("开始日期", "From", "من")}
+              {t(...translatedMessage("from_7a16d6bf6a"))}
               <Input
                 type="date"
                 value={from}
@@ -243,7 +245,7 @@ export function AdminAudit() {
               />
             </label>
             <label>
-              {t("结束日期", "Until", "إلى")}
+              {t(...translatedMessage("until_d233f3ca3c"))}
               <Input
                 type="date"
                 value={until}
@@ -261,16 +263,16 @@ export function AdminAudit() {
       />
       {query.data && (
         <div className="adm-audit-results">
-          <AdminTable label={t("审计日志", "Audit log", "سجل التدقيق")}>
+          <AdminTable label={t(...translatedMessage("audit_log_f73fcc381d"))}>
             <thead>
               <tr>
                 {[
-                  t("时间", "Time", "الوقت"),
-                  t("操作人", "Actor", "المنفّذ"),
-                  t("动作", "Action", "الإجراء"),
-                  t("对象", "Object", "الكائن"),
-                  t("变更摘要", "Change summary", "ملخص التغيير"),
-                  t("IP（地址）", "IP address", "عنوان IP"),
+                  t(...translatedMessage("time_d70a9315f6")),
+                  t(...translatedMessage("actor_d343f22c5e")),
+                  t(...translatedMessage("action_631108cb6b")),
+                  t(...translatedMessage("object_091cb607a9")),
+                  t(...translatedMessage("change_summary_dcdcbe7961")),
+                  t(...translatedMessage("ip_address_729ec1ec0c")),
                 ].map((heading) => (
                   <th key={heading}>{heading}</th>
                 ))}
@@ -294,7 +296,11 @@ export function AdminAudit() {
                     <div className="adm-audit-actor">
                       <bdi>
                         {row.user_id === 0
-                          ? t("部署终端", "Deployment terminal", "طرفية النشر")
+                          ? t(
+                              ...translatedMessage(
+                                "deployment_terminal_1e6435a529",
+                              ),
+                            )
                           : row.username || "—"}
                       </bdi>
                       <span className="adm-audit-role">
@@ -337,18 +343,14 @@ export function AdminAudit() {
           </AdminTable>
           {!total && (
             <p className="adm-audit-empty">
-              {t(
-                "没有匹配的审计记录。",
-                "No matching audit records.",
-                "لا توجد سجلات تدقيق مطابقة.",
-              )}
+              {t(...translatedMessage("no_matching_audit_records_dff7ef9103"))}
             </p>
           )}
           <footer className="adm-audit-pagination">
             <span>
               {total
-                ? `${t("第", "Showing", "عرض")} ${(page - 1) * 20 + 1}–${Math.min(page * 20, total)} ${t("条，共", "of", "من")} ${total} ${t("条", "records", "سجلًا")}`
-                : t("共 0 条", "0 records", "0 سجلات")}
+                ? `${t(...translatedMessage("showing_a3e16ce64b"))} ${(page - 1) * 20 + 1}–${Math.min(page * 20, total)} ${t(...translatedMessage("of_f3dfd279ea"))} ${total} ${t(...translatedMessage("records_199d09a9b4"))}`
+                : t(...translatedMessage("0_records_3619f4daa0"))}
             </span>
             <div>
               <Button
@@ -356,7 +358,7 @@ export function AdminAudit() {
                 disabled={page <= 1 || query.isFetching}
                 onClick={() => setPage((value) => value - 1)}
               >
-                {t("上一页", "Previous", "السابق")}
+                {t(...translatedMessage("previous_2672646f39"))}
               </Button>
               <span>
                 {page} / {pages}
@@ -366,7 +368,7 @@ export function AdminAudit() {
                 disabled={page >= pages || query.isFetching}
                 onClick={() => setPage((value) => value + 1)}
               >
-                {t("下一页", "Next", "التالي")}
+                {t(...translatedMessage("next_c0fd39244f"))}
               </Button>
             </div>
           </footer>

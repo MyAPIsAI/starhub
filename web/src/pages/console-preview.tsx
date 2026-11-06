@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -169,13 +170,13 @@ function ConsoleWorkspace() {
   const session = useSystemAccess((s) => s.session);
   const platformAdmin = canManagePlatform({ role, session });
   const workspaceRoleLabel = platformAdmin
-    ? c("平台管理员", "Platform administrator", "مسؤول المنصة")
-    : c("普通用户", "Customer", "مستخدم");
+    ? c(...translatedMessage("platform_administrator_489c68ad11"))
+    : c(...translatedMessage("customer_daa1d3a318"));
   const sessionScope = sessionQueryIdentity({ session, role });
   const isCurrentSession = () =>
     JSON.stringify(sessionScope) ===
     JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()));
-  const settingsLabel = c("账号中心", "Account center", "مركز الحساب");
+  const settingsLabel = c(...translatedMessage("account_center_60e51179ff"));
   const profileName = sessionUsername(session) ?? settingsLabel;
   const profileInitials = Array.from(profileName.trim())
     .slice(0, 2)
@@ -204,14 +205,14 @@ function ConsoleWorkspace() {
     setKeyActionError(
       error instanceof ApiError && error.status === 409
         ? c(
-            "密钥或配置已变化，请重新读取后确认。",
-            "Key or configuration changed. Reload before confirming.",
-            "تغيّر المفتاح أو الإعداد. أعد التحميل قبل التأكيد.",
+            ...translatedMessage(
+              "key_or_configuration_changed_reload_before_co_d94e79d745",
+            ),
           )
         : c(
-            "操作结果未确认，请读取列表或查询收据后核对。",
-            "The operation is unconfirmed. Reload keys or check its receipt.",
-            "العملية غير مؤكدة. أعد تحميل المفاتيح أو تحقق من الإيصال.",
+            ...translatedMessage(
+              "the_operation_is_unconfirmed_reload_keys_or_c_63f3b6a989",
+            ),
           ),
     );
     setKeyOperation((error as { operationId?: string })?.operationId ?? "");
@@ -558,14 +559,14 @@ function ConsoleWorkspace() {
           ? t("invalidPassword")
           : error instanceof ApiError && error.status === 429
             ? c(
-                "验证次数过多，请稍后重试。",
-                "Too many verification attempts. Try again later.",
-                "محاولات تحقق كثيرة. حاول لاحقًا.",
+                ...translatedMessage(
+                  "too_many_verification_attempts_try_again_late_270bbf7ad9",
+                ),
               )
             : c(
-                "未能确认验证结果，请重试；登录状态或密钥变化后请重新打开。",
-                "Verification could not be confirmed. Retry, or reopen after a session or key change.",
-                "تعذر تأكيد التحقق. أعد المحاولة أو افتح النافذة مجددًا بعد تغيير الجلسة أو المفتاح.",
+                ...translatedMessage(
+                  "verification_could_not_be_confirmed_retry_or__5a9e29d2b2",
+                ),
               ),
       );
     } finally {
@@ -607,17 +608,17 @@ function ConsoleWorkspace() {
   const systemNavigation = [
     {
       path: "model-pricing",
-      label: c("标准模型", "Standard models", "النماذج القياسية"),
+      label: c(...translatedMessage("standard_models_d7f00fd7f0")),
       Icon: CircleDollarSign,
     },
     {
       path: "channels",
-      label: c("渠道管理", "Channels", "القنوات"),
+      label: c(...translatedMessage("channels_eee07fd951")),
       Icon: Network,
     },
     {
       path: "service-groups",
-      label: c("服务分组", "Service groups", "مجموعات الخدمة"),
+      label: c(...translatedMessage("service_groups_0b4d78d515")),
       Icon: Boxes,
     },
   ];
@@ -686,7 +687,7 @@ function ConsoleWorkspace() {
         <div className="xy-workspace">
           <span className="xy-workspace-avatar">V</span>
           <div>
-            <strong>{c("工作台", "Console", "لوحة العمل")}</strong>
+            <strong>{c(...translatedMessage("console_1d5ce558be"))}</strong>
             <small>{workspaceRoleLabel}</small>
           </div>
         </div>
@@ -707,13 +708,15 @@ function ConsoleWorkspace() {
               onClick={() => setMobileNavOpen(false)}
             >
               <CircleDollarSign size={18} />
-              <span>{c("财务概览", "Finance overview", "نظرة مالية")}</span>
+              <span>
+                {c(...translatedMessage("finance_overview_f47c7aaf02"))}
+              </span>
             </Link>
           )}
           {platformAdmin && (
             <>
               <span className="xy-nav-label xy-nav-divider">
-                {c("平台管理", "Platform management", "إدارة المنصة")}
+                {c(...translatedMessage("platform_management_4b7a0c4faa"))}
               </span>
               <Link
                 to="/admin"
@@ -723,10 +726,10 @@ function ConsoleWorkspace() {
               >
                 <Settings size={18} />
                 <span>
-                  {c("平台管理", "Platform management", "إدارة المنصة")}
+                  {c(...translatedMessage("platform_management_4b7a0c4faa"))}
                 </span>
                 <span className="xy-nav-badge">
-                  {c("管理员", "Administrator", "مسؤول")}
+                  {c(...translatedMessage("administrator_5ccdea960a"))}
                 </span>
               </Link>
             </>
@@ -734,7 +737,7 @@ function ConsoleWorkspace() {
           {isSystemAdmin && (
             <>
               <span className="xy-nav-label xy-nav-divider">
-                {c("系统设置", "SYSTEM SETTINGS", "إعدادات النظام")}
+                {c(...translatedMessage("system_settings_4c9b4bdb1e"))}
               </span>
               {systemNavigation.map(({ path, label, Icon }) => (
                 <Link
@@ -762,21 +765,17 @@ function ConsoleWorkspace() {
               <Sparkles size={19} />
             </div>
             <strong>
-              {c(
-                "从一个好想法开始",
-                "Build your next big idea",
-                "ابدأ فكرتك القادمة",
-              )}
+              {c(...translatedMessage("build_your_next_big_idea_1a3ad28025"))}
             </strong>
             <p>
               {c(
-                "接入前沿模型，让创意更快实现。",
-                "Everything you need to ship with AI.",
-                "كل ما تحتاجه لبناء تطبيقك الذكي.",
+                ...translatedMessage(
+                  "everything_you_need_to_ship_with_ai_7dd8cafdfa",
+                ),
               )}
             </p>
             <Link to="/models">
-              {c("探索模型", "Explore models", "استكشف النماذج")}
+              {c(...translatedMessage("explore_models_6d7b3cc60c"))}
               <ArrowRight size={15} />
             </Link>
           </div>
@@ -797,17 +796,17 @@ function ConsoleWorkspace() {
           <div className="xy-breadcrumb">
             <button
               className="xy-menu-toggle"
-              aria-label={c("打开导航", "Open navigation", "افتح التنقل")}
+              aria-label={c(...translatedMessage("open_navigation_77b8073ea6"))}
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
             >
               <Menu size={20} />
             </button>
-            <span>{c("工作台", "Console", "لوحة العمل")}</span>
+            <span>{c(...translatedMessage("console_1d5ce558be"))}</span>
             <ChevronRight size={14} className="directional" />
             <strong>
               {isRechargePage
-                ? c("账户充值", "Add credits", "إضافة رصيد")
+                ? c(...translatedMessage("add_credits_7952fdf706"))
                 : section === "settings"
                   ? settingsLabel
                   : systemSection?.label || t(activeSection.key)}
@@ -829,7 +828,7 @@ function ConsoleWorkspace() {
                   return total > 0 && errs / total > 0.01 ? "is-warning" : "";
                 })()}`}
               />
-              {c("系统状态", "System status", "حالة النظام")}
+              {c(...translatedMessage("system_status_cca6c51b95"))}
             </Link>
             <Preferences />
             <Link
@@ -863,21 +862,21 @@ function ConsoleWorkspace() {
               <ShieldCheck size={28} />
               <h1>
                 {c(
-                  "需要系统管理员权限",
-                  "System administrator access required",
-                  "يلزم إذن مسؤول النظام",
+                  ...translatedMessage(
+                    "system_administrator_access_required_f8aef00eba",
+                  ),
                 )}
               </h1>
               <p>
                 {c(
-                  "当前为普通用户演示账户，无法查看或修改系统定价与分组。可在右下角演示控制中切换身份进行验证。",
-                  "The customer demo account cannot view or edit system pricing or groups. Use the demo control to test another role.",
-                  "لا يمكن للمستخدم عرض أو تعديل الأسعار والمجموعات. يمكن تغيير الهوية من أداة العرض.",
+                  ...translatedMessage(
+                    "the_customer_demo_account_cannot_view_or_edit_83494f30cc",
+                  ),
                 )}
               </p>
               <Button asChild variant="secondary">
                 <Link to="/console">
-                  {c("返回概览", "Back to overview", "العودة للنظرة العامة")}
+                  {c(...translatedMessage("back_to_overview_730e411a05"))}
                 </Link>
               </Button>
             </section>
@@ -905,17 +904,17 @@ function ConsoleWorkspace() {
                 <div>
                   <div className="xy-eyebrow">
                     {c(
-                      "一切尽在掌握",
-                      "YOUR WORKSPACE, AT A GLANCE",
-                      "مساحة عملك بنظرة واحدة",
+                      ...translatedMessage(
+                        "your_workspace_at_a_glance_435ab92061",
+                      ),
                     )}
                   </div>
-                  <h1>{c("工作台概览", "Overview", "نظرة عامة")}</h1>
+                  <h1>{c(...translatedMessage("overview_3f81a09f70"))}</h1>
                   <p>
                     {c(
-                      "欢迎回来，来看看你的模型今天表现如何。",
-                      "Welcome back. Here’s how your models are performing.",
-                      "مرحبًا بعودتك. إليك أداء نماذجك.",
+                      ...translatedMessage(
+                        "welcome_back_here_s_how_your_models_are_perfo_4b106d25c3",
+                      ),
                     )}
                   </p>
                 </div>
@@ -925,7 +924,7 @@ function ConsoleWorkspace() {
                     onClick={() => navigate("/console/connect")}
                   >
                     <BookOpen size={16} />
-                    {c("接入指南", "Quickstart", "دليل البدء")}
+                    {c(...translatedMessage("quickstart_2785ea5326"))}
                   </button>
                   <button
                     className="xy-primary"
@@ -946,9 +945,9 @@ function ConsoleWorkspace() {
                       <h2>{t("onboardingTitle")}</h2>
                       <p>
                         {c(
-                          "完成以下步骤，开启第一次模型调用。",
-                          "A few simple steps to your first model request.",
-                          "خطوات بسيطة لطلبك الأول.",
+                          ...translatedMessage(
+                            "a_few_simple_steps_to_your_first_model_reques_704ddda2d8",
+                          ),
                         )}
                       </p>
                     </div>
@@ -960,36 +959,36 @@ function ConsoleWorkspace() {
                     {[
                       {
                         title: c(
-                          "创建或复用密钥",
-                          "Create or reuse a key",
-                          "إنشاء مفتاح أو إعادة استخدامه",
+                          ...translatedMessage(
+                            "create_or_reuse_a_key_69f5ae8ce2",
+                          ),
                         ),
                         Icon: KeyRound,
                         action: () => setCreateOpen(true),
                       },
                       {
                         title: c(
-                          "选择工具并获取配置",
-                          "Configure your tool",
-                          "إعداد الأداة",
+                          ...translatedMessage(
+                            "configure_your_tool_f83dd14509",
+                          ),
                         ),
                         Icon: BookOpen,
                         action: () => navigate("/console/connect"),
                       },
                       {
                         title: c(
-                          "补充预付费余额",
-                          "Add prepaid balance",
-                          "إضافة رصيد مسبق",
+                          ...translatedMessage(
+                            "add_prepaid_balance_3d9c5b11a8",
+                          ),
                         ),
                         Icon: CreditCard,
                         action: () => openRecharge(),
                       },
                       {
                         title: c(
-                          "查看调用与费用",
-                          "View calls and costs",
-                          "عرض الطلبات والتكلفة",
+                          ...translatedMessage(
+                            "view_calls_and_costs_09586d4f9d",
+                          ),
                         ),
                         Icon: Zap,
                         action: () => navigate("/console/requests"),
@@ -1008,7 +1007,7 @@ function ConsoleWorkspace() {
               <div className="overview-actionable">
                 {backendLogs.length === 0 && !logsQuery.isLoading && (
                   <span>
-                    {c("暂无调用记录", "No requests yet", "لا توجد طلبات بعد")}
+                    {c(...translatedMessage("no_requests_yet_091d5c50e7"))}
                   </span>
                 )}
                 {/* Failed-request alerts: the backend Log has no
@@ -1019,11 +1018,11 @@ function ConsoleWorkspace() {
                   <Link key={k.id} to="/console/keys">
                     {k.name} ·{" "}
                     {keyQuotaSummary(k, quotaAt).exhausted
-                      ? c("额度已用尽", "Quota exhausted", "الحصة مستنفدة")
+                      ? c(...translatedMessage("quota_exhausted_41294054cf"))
                       : c(
-                          "额度即将耗尽",
-                          "Quota nearly exhausted",
-                          "الحصة قاربت النفاد",
+                          ...translatedMessage(
+                            "quota_nearly_exhausted_59ed17805f",
+                          ),
                         )}{" "}
                     →
                   </Link>
@@ -1032,36 +1031,37 @@ function ConsoleWorkspace() {
               <div className="xy-metrics">
                 {[
                   {
-                    label: c("请求总量", "Total requests", "إجمالي الطلبات"),
+                    label: c(...translatedMessage("total_requests_0013914751")),
                     value: summary.count.toLocaleString(),
                     note: c(
-                      `近 ${days} 天累计调用`,
-                      `Requests in the last ${days} days`,
-                      `الطلبات خلال ${days} يومًا`,
+                      ...translatedMessage(
+                        "requests_in_the_last_days_eddf7e7ad8",
+                        { p0: days },
+                      ),
                     ),
                     Icon: Activity,
                     series: chartActivity.map((item) => item.requests),
                     color: "blue",
                   },
                   {
-                    label: c("累计消费", "Total spend", "إجمالي الإنفاق"),
+                    label: c(...translatedMessage("total_spend_fa745f7b25")),
                     value: formatMoney(summary.cost, "total"),
                     note: c(
-                      "按实际用量计费",
-                      "Pay only for what you use",
-                      "ادفع مقابل استخدامك فقط",
+                      ...translatedMessage(
+                        "pay_only_for_what_you_use_1efdd9571b",
+                      ),
                     ),
                     Icon: Wallet,
                     series: chartActivity.map((item) => item.cost),
                     color: "purple",
                   },
                   {
-                    label: c("请求成功率", "Success rate", "معدل النجاح"),
+                    label: c(...translatedMessage("success_rate_f2722e5f55")),
                     value: summary.count ? `${summary.success}%` : "—",
                     note: c(
-                      "所选周期内成功请求占比",
-                      "Successful requests this period",
-                      "الطلبات الناجحة في هذه الفترة",
+                      ...translatedMessage(
+                        "successful_requests_this_period_e01e66f03a",
+                      ),
                     ),
                     Icon: CircleCheck,
                     series: chartActivity.map((item) =>
@@ -1070,12 +1070,12 @@ function ConsoleWorkspace() {
                     color: "green",
                   },
                   {
-                    label: c("有效密钥", "Active keys", "المفاتيح النشطة"),
+                    label: c(...translatedMessage("active_keys_cb353d19d0")),
                     value: String(activeKeyCount).padStart(2, "0"),
                     note: c(
-                      `共 ${keys.length} 个密钥`,
-                      `${keys.length} keys in your account`,
-                      `${keys.length} مفاتيح في مساحة عملك`,
+                      ...translatedMessage("keys_in_your_account_f48ee66268", {
+                        p0: keys.length,
+                      }),
                     ),
                     Icon: KeyRound,
                     series: chartActivity.map(() => activeKeyCount),
@@ -1122,26 +1122,20 @@ function ConsoleWorkspace() {
                     <div className="xy-card-heading">
                       <div>
                         <h2>
-                          {c(
-                            "用量趋势",
-                            "Usage overview",
-                            "نظرة على الاستخدام",
-                          )}
+                          {c(...translatedMessage("usage_overview_0d9957d956"))}
                         </h2>
                         <p>
                           {c(
-                            "让每一次调用，都清晰可见",
-                            "A clearer picture of every request",
-                            "صورة أوضح لكل طلب",
+                            ...translatedMessage(
+                              "a_clearer_picture_of_every_request_65dcf75b17",
+                            ),
                           )}
                         </p>
                       </div>
                       <div
                         className="xy-period-tabs"
                         aria-label={c(
-                          "统计周期",
-                          "Time period",
-                          "الفترة الزمنية",
+                          ...translatedMessage("time_period_f38f25c2ff"),
                         )}
                       >
                         {(["7", "30"] as const).map((day) => (
@@ -1150,7 +1144,11 @@ function ConsoleWorkspace() {
                             className={days === day ? "is-active" : ""}
                             onClick={() => setDays(day)}
                           >
-                            {c(`近 ${day} 天`, `${day} days`, `${day} يومًا`)}
+                            {c(
+                              ...translatedMessage("days_aaef666749", {
+                                p0: day,
+                              }),
+                            )}
                           </button>
                         ))}
                       </div>
@@ -1160,13 +1158,13 @@ function ConsoleWorkspace() {
                       <div className="xy-chart-legend">
                         <span />
                         {chartMetric === "requests"
-                          ? c("调用请求", "Requests", "الطلبات")
+                          ? c(...translatedMessage("requests_01bf71f145"))
                           : chartMetric === "cost"
-                            ? c("消费金额", "Spend", "الإنفاق")
+                            ? c(...translatedMessage("spend_ce2b22ebd6"))
                             : c(
-                                "平均延迟",
-                                "Average latency",
-                                "متوسط الاستجابة",
+                                ...translatedMessage(
+                                  "average_latency_c010c3241b",
+                                ),
                               )}
                       </div>
                     </div>
@@ -1175,12 +1173,19 @@ function ConsoleWorkspace() {
                         [
                           {
                             id: "requests",
-                            label: c("请求数", "Requests", "الطلبات"),
+                            label: c(
+                              ...translatedMessage("requests_fe89af9421"),
+                            ),
                           },
-                          { id: "cost", label: c("消费", "Spend", "الإنفاق") },
+                          {
+                            id: "cost",
+                            label: c(...translatedMessage("spend_d3c8580068")),
+                          },
                           {
                             id: "latency",
-                            label: c("延迟", "Latency", "الاستجابة"),
+                            label: c(
+                              ...translatedMessage("latency_0b764a38e9"),
+                            ),
                           },
                         ] as const
                       ).map((metric) => (
@@ -1255,13 +1260,13 @@ function ConsoleWorkspace() {
                                 ? `$${value.toFixed(4)}`
                                 : value.toLocaleString(),
                               chartMetric === "requests"
-                                ? c("请求数", "Requests", "الطلبات")
+                                ? c(...translatedMessage("requests_fe89af9421"))
                                 : chartMetric === "cost"
-                                  ? c("消费", "Spend", "الإنفاق")
+                                  ? c(...translatedMessage("spend_d3c8580068"))
                                   : c(
-                                      "延迟（毫秒）",
-                                      "Latency (ms)",
-                                      "الاستجابة",
+                                      ...translatedMessage(
+                                        "latency_ms_7766a3ece9",
+                                      ),
                                     ),
                             ]}
                           />
@@ -1324,18 +1329,20 @@ function ConsoleWorkspace() {
                     <div className="xy-card-heading">
                       <div>
                         <h2>
-                          {c("最近调用", "Recent requests", "الطلبات الأخيرة")}
+                          {c(
+                            ...translatedMessage("recent_requests_328e086b9f"),
+                          )}
                         </h2>
                         <p>
                           {c(
-                            "追踪请求状态与每一笔消费",
-                            "Track status and cost, down to the request",
-                            "تتبع الحالة والتكلفة لكل طلب",
+                            ...translatedMessage(
+                              "track_status_and_cost_down_to_the_request_95d5a60d2f",
+                            ),
                           )}
                         </p>
                       </div>
                       <Link to="/console/requests" className="xy-text-link">
-                        {c("查看全部", "View all", "عرض الكل")}
+                        {c(...translatedMessage("view_all_990b081362"))}
                         <ArrowUpRight size={15} />
                       </Link>
                     </div>
@@ -1343,15 +1350,25 @@ function ConsoleWorkspace() {
                       <table>
                         <thead>
                           <tr>
-                            <th>{c("模型", "Model", "النموذج")}</th>
                             <th>
-                              {c("时间（迪拜）", "Time · Dubai", "الوقت · دبي")}
+                              {c(...translatedMessage("model_9c2e5b5065"))}
                             </th>
-                            <th>{c("状态", "Status", "الحالة")}</th>
-                            <th>{c("费用", "Cost", "التكلفة")}</th>
+                            <th>
+                              {c(...translatedMessage("time_dubai_e0a70fcde3"))}
+                            </th>
+                            <th>
+                              {c(...translatedMessage("status_dda39dcd63"))}
+                            </th>
+                            <th>
+                              {c(...translatedMessage("cost_d118b228e2"))}
+                            </th>
                             <th>
                               <span className="sr-only">
-                                {c("查看详情", "View details", "عرض التفاصيل")}
+                                {c(
+                                  ...translatedMessage(
+                                    "view_details_8c9210e282",
+                                  ),
+                                )}
                               </span>
                             </th>
                           </tr>
@@ -1395,9 +1412,9 @@ function ConsoleWorkspace() {
                                   className="xy-row-detail"
                                   to="/console/requests"
                                   aria-label={c(
-                                    "查看调用详情",
-                                    "View request details",
-                                    "عرض تفاصيل الطلب",
+                                    ...translatedMessage(
+                                      "view_request_details_c18f0afee3",
+                                    ),
                                   )}
                                 >
                                   <ArrowUpRight size={16} />
@@ -1410,9 +1427,9 @@ function ConsoleWorkspace() {
                       {!backendLogs.length && !logsQuery.isLoading && (
                         <p className="xy-empty">
                           {c(
-                            "暂无调用，前往调试台开始第一次请求。",
-                            "No requests yet. Configure your preferred tool to get started.",
-                            "لا توجد طلبات بعد. جرّب طلبك الأول.",
+                            ...translatedMessage(
+                              "no_requests_yet_configure_your_preferred_tool_68e7e2a095",
+                            ),
                           )}
                         </p>
                       )}
@@ -1427,7 +1444,7 @@ function ConsoleWorkspace() {
                         {t("availableBalance")}
                       </span>
                       <span className="xy-wallet-tag">
-                        {c("预付费", "PREPAID", "مدفوع مسبقًا")}
+                        {c(...translatedMessage("prepaid_f3ae72a6f3"))}
                       </span>
                     </div>
                     <strong
@@ -1442,9 +1459,9 @@ function ConsoleWorkspace() {
                     </strong>
                     <p>
                       {c(
-                        "按量付费 · 随时充值",
-                        "Pay as you go. Top up anytime.",
-                        "ادفع حسب الاستخدام. اشحن في أي وقت.",
+                        ...translatedMessage(
+                          "pay_as_you_go_top_up_anytime_72b470da3a",
+                        ),
                       )}
                     </p>
                     <div className="xy-wallet-art" aria-hidden="true">
@@ -1454,19 +1471,21 @@ function ConsoleWorkspace() {
                     </div>
                     <button onClick={() => openRecharge()}>
                       <Plus size={17} />
-                      {c("为账户充值", "Add funds", "إضافة رصيد")}
+                      {c(...translatedMessage("add_funds_f196c2cc2b"))}
                       <ArrowUpRight size={16} />
                     </button>
                   </section>
                   <section className="xy-card xy-health-card">
                     <div className="xy-card-heading">
-                      <h2>{c("服务状态", "Service health", "حالة الخدمة")}</h2>
+                      <h2>
+                        {c(...translatedMessage("service_health_6d7da75c52"))}
+                      </h2>
                       <Link
                         to="/status"
                         aria-label={c(
-                          "查看服务状态",
-                          "View service status",
-                          "عرض حالة الخدمة",
+                          ...translatedMessage(
+                            "view_service_status_12eb01ae5b",
+                          ),
                         )}
                       >
                         <ArrowUpRight size={17} />
@@ -1494,33 +1513,34 @@ function ConsoleWorkspace() {
                               <strong>
                                 {!total
                                   ? c(
-                                      "暂无请求",
-                                      "No requests yet",
-                                      "لا طلبات بعد",
+                                      ...translatedMessage(
+                                        "no_requests_yet_806c7066f6",
+                                      ),
                                     )
                                   : hasIssue
                                     ? c(
-                                        "部分上游异常",
-                                        "Upstream degraded",
-                                        "تدهور خدمة المزود",
+                                        ...translatedMessage(
+                                          "upstream_degraded_d3bd34cd79",
+                                        ),
                                       )
                                     : c(
-                                        "运行正常",
-                                        "Operational",
-                                        "جميع الأنظمة تعمل",
+                                        ...translatedMessage(
+                                          "operational_910edf7393",
+                                        ),
                                       )}
                               </strong>
                               <small>
                                 {total > 0
                                   ? c(
-                                      `${total} 次请求 · ${errors} 错误`,
-                                      `${total} requests · ${errors} errors`,
-                                      `${total} طلبات · ${errors} أخطاء`,
+                                      ...translatedMessage(
+                                        "requests_errors_0fde61764c",
+                                        { p0: total, p1: errors },
+                                      ),
                                     )
                                   : c(
-                                      "等待第一次调用",
-                                      "Awaiting first request",
-                                      "بانتظار أول طلب",
+                                      ...translatedMessage(
+                                        "awaiting_first_request_ed061b0e23",
+                                      ),
                                     )}
                               </small>
                             </div>
@@ -1537,41 +1557,51 @@ function ConsoleWorkspace() {
                           </div>
                           <div className="xy-health-caption">
                             <span>
-                              {c("平台状态", "Platform status", "حالة المنصة")}
+                              {c(
+                                ...translatedMessage(
+                                  "platform_status_c618d713b5",
+                                ),
+                              )}
                             </span>
                             <strong>
                               {!total
                                 ? c(
-                                    "尚无请求，待验证",
-                                    "No requests · unverified",
-                                    "لا طلبات · غير متحقق",
+                                    ...translatedMessage(
+                                      "no_requests_unverified_334f31ff47",
+                                    ),
                                   )
                                 : hasIssue
                                   ? c(
-                                      "检测到上游异常",
-                                      "Upstream issues detected",
-                                      "تم رصد مشكلات",
+                                      ...translatedMessage(
+                                        "upstream_issues_detected_1d3f4b7e0a",
+                                      ),
                                     )
                                   : c(
-                                      "查看调用结果",
-                                      "See request results",
-                                      "راجع نتائج الطلبات",
+                                      ...translatedMessage(
+                                        "see_request_results_521b301187",
+                                      ),
                                     )}
                             </strong>
                           </div>
                           <div className="xy-health-divider" />
                           <div className="xy-health-line">
                             <span>
-                              {c("网关区域", "Gateway region", "منطقة البوابة")}
+                              {c(
+                                ...translatedMessage(
+                                  "gateway_region_79a6056067",
+                                ),
+                              )}
                             </span>
                             <strong>
-                              {c("迪拜", "Dubai", "دبي")}
+                              {c(...translatedMessage("dubai_a52ed72a44"))}
                               <span className="xy-status-dot" />
                             </strong>
                           </div>
                           <div className="xy-health-line">
                             <span>
-                              {c("活跃密钥", "Active keys", "المفاتيح النشطة")}
+                              {c(
+                                ...translatedMessage("active_keys_867ef24d2f"),
+                              )}
                             </span>
                             <strong>{keys.length}</strong>
                           </div>
@@ -1581,7 +1611,7 @@ function ConsoleWorkspace() {
                   </section>
                   <section className="xy-card xy-shortcuts">
                     <h2>
-                      {c("下一步，创造更多", "Keep building", "واصل البناء")}
+                      {c(...translatedMessage("keep_building_9b93f3454a"))}
                     </h2>
                     <button onClick={() => navigate("/console/playground")}>
                       <span className="xy-shortcut-icon">
@@ -1590,16 +1620,14 @@ function ConsoleWorkspace() {
                       <span>
                         <strong>
                           {c(
-                            "在线调试台",
-                            "Open playground",
-                            "افتح ساحة التجربة",
+                            ...translatedMessage("open_playground_53efa9ebc7"),
                           )}
                         </strong>
                         <small>
                           {c(
-                            "即刻尝试你的模型",
-                            "Try a model in seconds",
-                            "جرّب نموذجًا في ثوانٍ",
+                            ...translatedMessage(
+                              "try_a_model_in_seconds_5edf41b92b",
+                            ),
                           )}
                         </small>
                       </span>
@@ -1611,13 +1639,17 @@ function ConsoleWorkspace() {
                       </span>
                       <span>
                         <strong>
-                          {c("快速接入", "Integration guide", "دليل التكامل")}
+                          {c(
+                            ...translatedMessage(
+                              "integration_guide_7a843f9768",
+                            ),
+                          )}
                         </strong>
                         <small>
                           {c(
-                            "只需几行代码即可开始",
-                            "Get started in a few lines",
-                            "ابدأ ببضعة أسطر",
+                            ...translatedMessage(
+                              "get_started_in_a_few_lines_ac3b28ce1d",
+                            ),
                           )}
                         </small>
                       </span>
@@ -1631,13 +1663,13 @@ function ConsoleWorkspace() {
                   <AlertTriangle size={16} />
                   <span>
                     {c(
-                      "部分密钥已接近或达到消费额度。",
-                      "Some keys are near or at their spending limit.",
-                      "بعض المفاتيح قريبة من حد الإنفاق أو بلغت الحد.",
+                      ...translatedMessage(
+                        "some_keys_are_near_or_at_their_spending_limit_053952af4c",
+                      ),
                     )}
                   </span>
                   <Link to="/console/keys">
-                    {c("查看密钥", "Review keys", "مراجعة المفاتيح")}
+                    {c(...translatedMessage("review_keys_7fd0b44d67"))}
                     <ArrowRight size={14} />
                   </Link>
                 </div>
@@ -1646,18 +1678,18 @@ function ConsoleWorkspace() {
                 <span>
                   © 2026{" "}
                   {c(
-                    "MyAPIs · 让智能触手可及",
-                    "MyAPIs · Intelligence, within reach",
-                    "MyAPIs · الذكاء بين يديك",
+                    ...translatedMessage(
+                      "myapis_intelligence_within_reach_d27831d1ff",
+                    ),
                   )}
                 </span>
                 <span>
-                  {c("演示数据", "Demo data", "بيانات تجريبية")}
+                  {c(...translatedMessage("demo_data_c6e167f020"))}
                   {isSystemAdmin && (
                     <>
                       <i />{" "}
                       <Link to="/console/model-pricing">
-                        {c("系统设置", "System settings", "إعدادات النظام")}
+                        {c(...translatedMessage("system_settings_966a9e1755"))}
                       </Link>
                     </>
                   )}
@@ -1670,7 +1702,7 @@ function ConsoleWorkspace() {
             <div role="alert" className="key-list-empty">
               <p>{keyActionError}</p>
               <Button onClick={() => window.location.reload()}>
-                {c("重新读取密钥", "Reload keys", "إعادة تحميل المفاتيح")}
+                {c(...translatedMessage("reload_keys_87b3e090af"))}
               </Button>
               {keyOperation && (
                 <Button
@@ -1683,27 +1715,26 @@ function ConsoleWorkspace() {
                       if (isCurrentSession())
                         setKeyActionError(
                           c(
-                            `操作已确认，密钥 ID：${receipt.token_id}。明文不会再次返回。`,
-                            `Operation confirmed for key ${receipt.token_id}; plaintext is not returned again.`,
-                            `تأكدت العملية للمفتاح ${receipt.token_id}؛ لا يُعاد النص السري.`,
+                            ...translatedMessage(
+                              "operation_confirmed_for_key_plaintext_is_not__251d552505",
+                              { p0: receipt.token_id },
+                            ),
                           ),
                         );
                     } catch {
                       if (isCurrentSession())
                         setKeyActionError(
                           c(
-                            "未查到可确认的收据，不能据此判断操作失败。",
-                            "No confirmed receipt found; this does not prove failure.",
-                            "لم يُعثر على إيصال مؤكد؛ لا يثبت ذلك الفشل.",
+                            ...translatedMessage(
+                              "no_confirmed_receipt_found_this_does_not_prov_d2a47b4b4c",
+                            ),
                           ),
                         );
                     }
                   }}
                 >
                   {c(
-                    "查询操作收据",
-                    "Check operation receipt",
-                    "التحقق من إيصال العملية",
+                    ...translatedMessage("check_operation_receipt_7c28e8096d"),
                   )}
                 </Button>
               )}
@@ -1714,23 +1745,19 @@ function ConsoleWorkspace() {
             (tokensLoading ? (
               <div className="key-list-empty">
                 <KeyRound size={28} />
-                <h2>{c("加载中…", "Loading…", "جارٍ التحميل…")}</h2>
+                <h2>{c(...translatedMessage("loading_4c20385375"))}</h2>
               </div>
             ) : tokensError ? (
               <div className="key-list-empty">
                 <KeyRound size={28} />
                 <h2>
-                  {c(
-                    "无法加载密钥",
-                    "Failed to load keys",
-                    "تعذّر تحميل المفاتيح",
-                  )}
+                  {c(...translatedMessage("failed_to_load_keys_6034ad4a82"))}
                 </h2>
                 <p>
                   {c(
-                    "请检查网络连接或重新登录后刷新。",
-                    "Check your connection or sign in again.",
-                    "تحقق من الاتصال أو سجّل الدخول مجددًا.",
+                    ...translatedMessage(
+                      "check_your_connection_or_sign_in_again_15220283f2",
+                    ),
                   )}
                 </p>
               </div>
@@ -1955,9 +1982,9 @@ function ConsoleWorkspace() {
               autoComplete="current-password"
               type="password"
               placeholder={c(
-                "输入当前账号密码",
-                "Enter your current account password",
-                "أدخل كلمة مرور حسابك الحالية",
+                ...translatedMessage(
+                  "enter_your_current_account_password_330a4bccdf",
+                ),
               )}
               value={authPassword}
               disabled={authPending}
@@ -1986,13 +2013,13 @@ function ConsoleWorkspace() {
         }}
         title={
           usageKey?.name
-            ? `${usageKey.name} · ${c("密钥详情", "Key details", "تفاصيل المفتاح")}`
-            : c("密钥详情", "Key details", "تفاصيل المفتاح")
+            ? `${usageKey.name} · ${c(...translatedMessage("key_details_85c8df0bff"))}`
+            : c(...translatedMessage("key_details_85c8df0bff"))
         }
         description={c(
-          "查看凭证状态、消费额度与授权范围。",
-          "Review credential status, spending limits and access scope.",
-          "راجع حالة بيانات الاعتماد وحدود الإنفاق ونطاق الصلاحيات.",
+          ...translatedMessage(
+            "review_credential_status_spending_limits_and__2bffc8530a",
+          ),
         )}
       >
         {usageKey && (
@@ -2014,9 +2041,10 @@ function ConsoleWorkspace() {
         onOpenChange={setExportModalOpen}
         title={t("createExport")}
         description={c(
-          `按地区时区（${walletQuery.data?.timezone ?? "Asia/Dubai"}）选择最多 31 天。保留当前筛选条件，文件与字段说明保留 7 天。`,
-          `Choose up to 31 calendar days in ${walletQuery.data?.timezone ?? "Asia/Dubai"}. Current filters apply. Files and field descriptions remain available for 7 days.`,
-          `اختر حتى 31 يومًا بتوقيت ${walletQuery.data?.timezone ?? "Asia/Dubai"}. تُطبق المرشحات الحالية وتُحفظ الملفات وأوصافها 7 أيام.`,
+          ...translatedMessage(
+            "choose_up_to_31_calendar_days_in_current_filt_c618dea4b8",
+            { p0: walletQuery.data?.timezone ?? "Asia/Dubai" },
+          ),
         )}
       >
         <form
@@ -2074,7 +2102,7 @@ function ConsoleWorkspace() {
           <div className="verify-field-row">
             <div>
               <label htmlFor="export-task-start">
-                {c("开始日期", "Start date", "تاريخ البداية")}
+                {c(...translatedMessage("start_date_761834f95f"))}
               </label>
               <Input
                 id="export-task-start"
@@ -2086,7 +2114,7 @@ function ConsoleWorkspace() {
             </div>
             <div>
               <label htmlFor="export-task-end">
-                {c("结束日期", "End date", "تاريخ النهاية")}
+                {c(...translatedMessage("end_date_ddebce9446"))}
               </label>
               <Input
                 id="export-task-end"
@@ -2103,7 +2131,7 @@ function ConsoleWorkspace() {
             variant="primary"
             disabled={createExportMut.isPending}
           >
-            {c("生成 CSV（表格文件）", "Generate CSV export", "إنشاء ملف CSV")}
+            {c(...translatedMessage("generate_csv_export_115628914c"))}
           </Button>
         </form>
       </Modal>
@@ -2119,26 +2147,28 @@ function ConsoleWorkspace() {
         }}
         title={
           keyConfirmation?.action === "delete"
-            ? c("删除这把密钥？", "Delete this key?", "حذف هذا المفتاح؟")
-            : c("重置这把密钥？", "Regenerate this key?", "تجديد هذا المفتاح؟")
+            ? c(...translatedMessage("delete_this_key_0b6049e022"))
+            : c(...translatedMessage("regenerate_this_key_d136f6cefe"))
         }
         description={
           keyConfirmation?.action === "delete"
             ? c(
-                `删除“${keyConfirmation.key.name}”后，使用它的应用将无法继续调用。此操作无法撤销。`,
-                `Deleting “${keyConfirmation.key.name}” stops calls from apps using it. This cannot be undone.`,
-                `حذف «${keyConfirmation.key.name}» يوقف طلبات التطبيقات التي تستخدمه. لا يمكن التراجع عن ذلك.`,
+                ...translatedMessage(
+                  "deleting_stops_calls_from_apps_using_it_this__34a9e07812",
+                  { p0: keyConfirmation.key.name },
+                ),
               )
             : c(
-                `重置“${keyConfirmation?.key.name ?? ""}”将立即使旧密钥失效。你需要将新密钥更新到使用它的应用。`,
-                `Regenerating “${keyConfirmation?.key.name ?? ""}” immediately invalidates the old key. Update your apps with the replacement.`,
-                `تجديد «${keyConfirmation?.key.name ?? ""}» يُبطل المفتاح القديم فورًا. حدّث التطبيقات بالمفتاح الجديد.`,
+                ...translatedMessage(
+                  "regenerating_immediately_invalidates_the_old__c7c4fe0054",
+                  { p0: keyConfirmation?.key.name ?? "" },
+                ),
               )
         }
         confirmLabel={
           keyConfirmation?.action === "delete"
-            ? c("删除密钥", "Delete key", "حذف المفتاح")
-            : c("重置密钥", "Regenerate key", "تجديد المفتاح")
+            ? c(...translatedMessage("delete_key_90a1ff06c7"))
+            : c(...translatedMessage("regenerate_key_230088f779"))
         }
         onConfirm={() => {
           if (!keyConfirmation || keyActionPending.current) return;
@@ -2199,15 +2229,15 @@ function ConsoleWorkspace() {
           if (!open) setRegeneratedKey(null);
         }}
         size="wide"
-        title={c("密钥已重置", "Key regenerated", "تم تجديد المفتاح")}
+        title={c(...translatedMessage("key_regenerated_e1e7e715c2"))}
         description={c(
-          "旧密钥已立即失效，请将新密钥更新到使用它的应用。此为新密钥的唯一一次明文展示。",
-          "The old key is invalid. Update your apps with the new key below — this is the only time it will be shown.",
-          "المفتاح القديم غير صالح. حدّث تطبيقاتك بالمفتاح الجديد؛ هذا العرض الوحيد له.",
+          ...translatedMessage(
+            "the_old_key_is_invalid_update_your_apps_with__a160572072",
+          ),
         )}
         footer={
           <Button variant="primary" onClick={() => setRegeneratedKey(null)}>
-            {c("我已保存", "I've saved it", "حفظته")}
+            {c(...translatedMessage("i_ve_saved_it_c12a651b84"))}
           </Button>
         }
       >

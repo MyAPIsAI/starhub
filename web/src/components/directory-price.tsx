@@ -1,3 +1,8 @@
+import {
+  localizedMessage,
+  message as translatedMessage,
+} from "../i18n/messages";
+
 import type { DirectoryRate } from "../config/model-directory";
 import type { Language } from "../config/placeholders";
 import { multiplyDecimalPrice } from "../config/models";
@@ -11,53 +16,55 @@ export function describeDirectoryRate(rate: DirectoryRate, lang: Language) {
   const rule = rate.rule;
   const mode =
     rule.mode === "tokens"
-      ? t("按词元计价", "Token pricing", "التسعير بالرموز")
+      ? t(...translatedMessage("token_pricing_3a08771a10"))
       : rule.mode === "expression"
-        ? t("表达式计价", "Expression pricing", "التسعير بالتعبير")
+        ? t(...translatedMessage("expression_pricing_8bfbbcc34f"))
         : {
-            request: t("按次计价", "Per request", "لكل طلب"),
-            image: t("按张计价", "Per image", "لكل صورة"),
-            second: t("按秒计价", "Per second", "لكل ثانية"),
+            request: t(...translatedMessage("per_request_f6e4e2b1f7")),
+            image: t(...translatedMessage("per_image_c4bd6d3c05")),
+            second: t(...translatedMessage("per_second_cb7de61b04")),
           }[rule.unit];
   const usage = rate.usage;
   const basicAssumption =
     rule.mode === "expression"
       ? t(
-          `示例用量：输入 ${usage.input_tokens}、输出 ${usage.output_tokens}、缓存读写均为 0 词元，${usage.images} 张图片、${usage.seconds} 秒、1 次请求。`,
-          `Example usage: ${usage.input_tokens} input, ${usage.output_tokens} output, 0 cache tokens, ${usage.images} images, ${usage.seconds} seconds, 1 request.`,
-          `مثال الاستخدام: ${usage.input_tokens} إدخال، ${usage.output_tokens} إخراج، صفر تخزين، ${usage.images} صور، ${usage.seconds} ثانية، طلب واحد.`,
+          ...translatedMessage(
+            "example_usage_input_output_0_cache_tokens_ima_1da50a5415",
+            {
+              p0: usage.input_tokens,
+              p1: usage.output_tokens,
+              p2: usage.images,
+              p3: usage.seconds,
+            },
+          ),
         )
       : rule.mode === "tokens"
         ? t(
-            "示例：1,000 输入 + 300 输出词元，无缓存。",
-            "Example: 1,000 input + 300 output tokens, no cache.",
-            "مثال: 1000 إدخال + 300 إخراج بلا تخزين.",
+            ...translatedMessage(
+              "example_1_000_input_300_output_tokens_no_cach_c112c85e31",
+            ),
           )
         : rule.unit === "request"
-          ? t("示例：1 次请求。", "Example: 1 request.", "مثال: طلب واحد.")
+          ? t(...translatedMessage("example_1_request_7389bd8c3c"))
           : rule.unit === "image"
-            ? t("示例：1 张图片。", "Example: 1 image.", "مثال: صورة واحدة.")
-            : t(
-                "示例：1 秒视频。",
-                "Example: 1 second of video.",
-                "مثال: ثانية واحدة من الفيديو.",
-              );
+            ? t(...translatedMessage("example_1_image_6ec2c85f40"))
+            : t(...translatedMessage("example_1_second_of_video_ee29dfafe6"));
   const assumption =
     basicAssumption +
     (rate.attributes
       ? t(
-          ` 示例规格：${JSON.stringify(rate.attributes)}；其他规格可能不同。`,
-          ` Example specification: ${JSON.stringify(rate.attributes)}; other specifications may differ.`,
-          ` مواصفات المثال: ${JSON.stringify(rate.attributes)}؛ قد تختلف المواصفات الأخرى.`,
+          ...translatedMessage(
+            "example_specification_other_specifications_ma_77718740ac",
+            { p0: JSON.stringify(rate.attributes) },
+          ),
         )
       : "");
   if (!rate.quote)
     return {
       mode,
-      value: t("暂不可估算", "Estimate unavailable", "التقدير غير متاح"),
+      value: t(...translatedMessage("estimate_unavailable_56a941063d")),
       unit:
-        rate.error ||
-        t("计价配置不可用", "Pricing unavailable", "التسعير غير متاح"),
+        rate.error || t(...translatedMessage("pricing_unavailable_af643eccc2")),
       assumption,
       estimate: "—",
       schedule: "",
@@ -66,15 +73,17 @@ export function describeDirectoryRate(rate: DirectoryRate, lang: Language) {
   const quote = rate.quote;
   const schedule = quote.snapshot.matchedWindow
     ? t(
-        `当前命中「${quote.snapshot.matchedWindow.label}」时段（${quote.snapshot.matchedWindow.timezone}），时段系数 ${quote.snapshot.timeMultiplier}× 已计入。`,
-        `Current window: ${quote.snapshot.matchedWindow.label} (${quote.snapshot.matchedWindow.timezone}); ${quote.snapshot.timeMultiplier}× included.`,
-        `الفترة الحالية: ${quote.snapshot.matchedWindow.label} (${quote.snapshot.matchedWindow.timezone})؛ المعامل ${quote.snapshot.timeMultiplier} محسوب.`,
+        ...translatedMessage("current_window_included_70985afe5d", {
+          p0: quote.snapshot.matchedWindow.label,
+          p1: quote.snapshot.matchedWindow.timezone,
+          p2: quote.snapshot.timeMultiplier,
+        }),
       )
     : rule.timeWindows?.length
       ? t(
-          "当前未命中特殊时段，按标准时段计价。",
-          "Current time uses the standard rate.",
-          "السعر القياسي للوقت الحالي.",
+          ...translatedMessage(
+            "current_time_uses_the_standard_rate_1a60eccedb",
+          ),
         )
       : "";
   const unitPrice =
@@ -97,21 +106,17 @@ export function describeDirectoryRate(rate: DirectoryRate, lang: Language) {
           : formatMoney(quote.amountNano, "call"),
     unit:
       rule.mode === "tokens"
-        ? t(
-            "输入 / 输出 · 美元 / 百万词元",
-            "Input / output · USD / million tokens",
-            "إدخال / إخراج · دولار / مليون رمز",
-          )
+        ? t(...translatedMessage("input_output_usd_million_tokens_f00f399943"))
         : rule.mode === "expression"
           ? t(
-              "上述示例费用，非固定单价",
-              "Example cost, not a fixed unit price",
-              "تكلفة المثال وليست سعر وحدة ثابتًا",
+              ...translatedMessage(
+                "example_cost_not_a_fixed_unit_price_f337d62414",
+              ),
             )
           : {
-              request: t("美元 / 次", "USD / request", "دولار / طلب"),
-              image: t("美元 / 张", "USD / image", "دولار / صورة"),
-              second: t("美元 / 秒", "USD / second", "دولار / ثانية"),
+              request: t(...translatedMessage("usd_request_5265075e68")),
+              image: t(...translatedMessage("usd_image_efd0385640")),
+              second: t(...translatedMessage("usd_second_b4496726da")),
             }[rule.unit],
     assumption,
     estimate: formatMoney(quote.amountNano, "call"),
@@ -119,9 +124,14 @@ export function describeDirectoryRate(rate: DirectoryRate, lang: Language) {
     details:
       rule.mode === "unit"
         ? t(
-            `最低计费量 ${rule.minimum}；${Number(rule.ceilTo) > 0 ? `按 ${rule.ceilTo} 向上取整` : "不取整"}。本例计费量 ${quote.snapshot.billedQuantity}。`,
-            `Minimum quantity ${rule.minimum}; rounding step ${rule.ceilTo}. Example billed quantity ${quote.snapshot.billedQuantity}.`,
-            `الحد الأدنى ${rule.minimum}؛ خطوة التقريب ${rule.ceilTo}. كمية المثال ${quote.snapshot.billedQuantity}.`,
+            ...translatedMessage(
+              "minimum_quantity_rounding_step_example_billed_ac6c79030a",
+              {
+                p0: rule.minimum,
+                p1: rule.ceilTo,
+                p2: quote.snapshot.billedQuantity,
+              },
+            ),
           )
         : rule.mode === "expression"
           ? rule.expression
@@ -164,11 +174,7 @@ export function DirectoryPrice({
             <>
               <small>
                 {info.assumption}{" "}
-                {lang === "zh"
-                  ? "示例费用："
-                  : lang === "ar"
-                    ? "تكلفة المثال: "
-                    : "Example cost: "}
+                {localizedMessage("example_cost_b219a924d8", lang)}
                 {info.estimate}
               </small>
               {info.details && (

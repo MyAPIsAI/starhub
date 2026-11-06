@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"encoding/json"
 	"net/http"
 	"starhub/common"
 	"starhub/model"
+	"starhub/setting"
 	"strconv"
 	"time"
 )
@@ -46,5 +48,40 @@ func AdminReconciliation(w http.ResponseWriter, r *http.Request) {
 		adminFailure(w, err)
 		return
 	}
-	common.ApiSuccess(w, map[string]any{"items": reports, "timezone": loc.String(), "end": end, "days": days, "external_provider_verified": false})
+	var pending int64
+	if err := model.DB.WithContext(r.Context()).Model(&model.ReconciliationAlert{}).Where("delivered_at = 0").Count(&pending).Error; err != nil {
+		adminFailure(w, err)
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"items": reports, "timezone": loc.String(), "end": end, "days": days, "external_provider_verified": false, "alert_webhook_configured": setting.AlertWebhookURLValue() != "", "pending_alerts": pending})
+}
+
+func AdminPaymentStatements(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		r.Body = http.MaxBytesReader(w, r.Body, 3*1024*1024)
+		var input model.PaymentStatementImport
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			common.ApiError(w, 400, "invalid statement import")
+			return
+		}
+		statement, err := model.ImportPaymentStatement(r.Context(), input, requestUserID(r), time.Now())
+		if err != nil {
+			adminFailure(w, err)
+			return
+		}
+		common.ApiSuccess(w, statement)
+		return
+	}
+	var items []model.PaymentStatement
+	q := model.DB.WithContext(r.Context()).Order("id DESC").Limit(100)
+	if day := r.URL.Query().Get("day"); day != "" {
+		q = q.Where("day = ?", day)
+	}
+	if err := q.Find(&items).Error; err != nil {
+		adminFailure(w, err)
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"items": items})
 }

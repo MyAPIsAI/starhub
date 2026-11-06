@@ -16,6 +16,8 @@ func (u *User) HasPlatformWorkspace() bool {
 }
 
 type User struct {
+	PreferredLanguage  string `gorm:"size:8;not null;default:''" json:"preferred_language"`
+	ReservedQuota      int64  `gorm:"not null;default:0" json:"-"`
 	ControlRevision    int64  `gorm:"not null;default:0" json:"-"`
 	Phone              string `gorm:"size:32;not null;default:''" json:"-"`
 	ConcurrencyLimit   int    `gorm:"not null;default:50" json:"concurrency_limit"`

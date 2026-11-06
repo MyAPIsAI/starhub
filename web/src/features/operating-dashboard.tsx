@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
@@ -74,7 +76,7 @@ function Distribution({
       <h2>{title}</h2>
       {!positive.length && (
         <p className="op-empty">
-          {t("暂无消耗数据", "No consumption yet", "لا توجد بيانات استهلاك")}
+          {t(...translatedMessage("no_consumption_yet_2db84d6a3c"))}
         </p>
       )}
       {visible.map((item) => row(label(item), item.amount_nano, item.id))}
@@ -82,9 +84,9 @@ function Distribution({
         positive.length > 5 &&
         row(
           t(
-            `其他 ${positive.length - 5} 项`,
-            `${positive.length - 5} other items`,
-            `${positive.length - 5} عناصر أخرى`,
+            ...translatedMessage("other_items_ab98177a82", {
+              p0: positive.length - 5,
+            }),
           ),
           remaining,
           "__remaining",
@@ -97,8 +99,8 @@ function Distribution({
           onClick={() => setExpanded(!expanded)}
         >
           {expanded
-            ? t("收起", "Show less", "عرض أقل")
-            : t("查看全部", "Show all", "عرض الكل")}
+            ? t(...translatedMessage("show_less_de99c9aeb4"))
+            : t(...translatedMessage("show_all_07b8e337c9"))}
         </Button>
       )}
     </article>
@@ -129,7 +131,7 @@ export function OperatingDashboard() {
   const data = query.error ? undefined : query.data;
   const chart = data ? operatingChart(data) : undefined;
   const label = (row: OperatingBucket) =>
-    row.name || row.id || t("未记录", "Not recorded", "غير مسجل");
+    row.name || row.id || t(...translatedMessage("not_recorded_4bbcb12676"));
   const updateRange = (value: string) => {
     setDateError(false);
     setParams((old) => {
@@ -158,7 +160,7 @@ export function OperatingDashboard() {
     });
   };
   const formatTime = (at: number, axis = false) => {
-    const value = new Intl.DateTimeFormat(language, {
+    const value = new Intl.DateTimeFormat(regionalLocale(language), {
       timeZone: data?.timezone || "UTC",
       ...(axis
         ? data?.granularity === "hour"
@@ -173,20 +175,12 @@ export function OperatingDashboard() {
       <header>
         <h2>{title}</h2>
         <p>
-          {t(
-            "前 20 名 · 按已结算消耗排序",
-            "Top 20 · settled consumption",
-            "أفضل 20 حسب الاستهلاك المسوّى",
-          )}
+          {t(...translatedMessage("top_20_settled_consumption_3043ca6083"))}
         </p>
       </header>
       {!rows.some((row) => BigInt(row.amount_nano) > 0n) ? (
         <p className="op-empty">
-          {t(
-            "暂无消耗排名",
-            "No consumption ranking yet",
-            "لا يوجد ترتيب للاستهلاك بعد",
-          )}
+          {t(...translatedMessage("no_consumption_ranking_yet_d751e956d6"))}
         </p>
       ) : (
         <ol>
@@ -227,13 +221,9 @@ export function OperatingDashboard() {
     <section className="op-dashboard">
       <header className="op-heading">
         <div>
-          <h1>{t("运营看板", "Operations dashboard", "لوحة العمليات")}</h1>
+          <h1>{t(...translatedMessage("operations_dashboard_7d445d520b"))}</h1>
           <p>
-            {t(
-              "客户经营概览",
-              "Customer business overview",
-              "نظرة عامة على نشاط العملاء",
-            )}
+            {t(...translatedMessage("customer_business_overview_22a29ba80a"))}
             {data && (
               <>
                 {" "}
@@ -248,28 +238,24 @@ export function OperatingDashboard() {
             size="small"
             disabled={query.isFetching || !valid}
             onClick={() => void query.refetch()}
-            aria-label={t(
-              "刷新经营数据",
-              "Refresh dashboard",
-              "تحديث لوحة العمليات",
-            )}
+            aria-label={t(...translatedMessage("refresh_dashboard_711c0a6aea"))}
           >
             <RefreshCw
               size={14}
               className={query.isFetching ? "op-spinning" : ""}
             />
-            {t("刷新", "Refresh", "تحديث")}
+            {t(...translatedMessage("refresh_9c83c3600a"))}
           </Button>
           <div
             className="op-periods"
             role="group"
-            aria-label={t("统计时间范围", "Reporting period", "فترة التقرير")}
+            aria-label={t(...translatedMessage("reporting_period_bc110d4c4c"))}
           >
             {[
-              ["today", t("今天", "Today", "اليوم")],
-              ["7d", t("近 7 天", "7 days", "7 أيام")],
-              ["30d", t("近 30 天", "30 days", "30 يومًا")],
-              ["custom", t("自定义", "Custom", "مخصص")],
+              ["today", t(...translatedMessage("today_3a255d525f"))],
+              ["7d", t(...translatedMessage("7_days_630bef729b"))],
+              ["30d", t(...translatedMessage("30_days_f526252351"))],
+              ["custom", t(...translatedMessage("custom_0bf4a1d1c3"))],
             ].map(([value, name]) => (
               <button
                 key={value}
@@ -285,7 +271,7 @@ export function OperatingDashboard() {
       {range === "custom" && (
         <form className="op-custom" onSubmit={applyDates}>
           <label>
-            {t("开始日期", "Start date", "تاريخ البداية")}
+            {t(...translatedMessage("start_date_761834f95f"))}
             <Input
               type="date"
               required
@@ -295,7 +281,7 @@ export function OperatingDashboard() {
             />
           </label>
           <label>
-            {t("结束日期", "End date", "تاريخ النهاية")}
+            {t(...translatedMessage("end_date_ddebce9446"))}
             <Input
               type="date"
               required
@@ -305,13 +291,13 @@ export function OperatingDashboard() {
             />
           </label>
           <Button type="submit" variant="secondary">
-            {t("应用", "Apply", "تطبيق")}
+            {t(...translatedMessage("apply_1cfc3807dc"))}
           </Button>
           <span>
             {t(
-              "按地区时区统计，最多一年。",
-              "Regional timezone, up to one year.",
-              "حسب توقيت المنطقة، حتى سنة واحدة.",
+              ...translatedMessage(
+                "regional_timezone_up_to_one_year_6e94fae25e",
+              ),
             )}
           </span>
         </form>
@@ -319,30 +305,24 @@ export function OperatingDashboard() {
       {dateError && (
         <p role="alert">
           {t(
-            "请选择有效的开始和结束日期。",
-            "Select valid start and end dates.",
-            "اختر تاريخي بداية ونهاية صالحين.",
+            ...translatedMessage("select_valid_start_and_end_dates_8242993706"),
           )}
         </p>
       )}
       {query.isPending && valid && (
         <p role="status" className="op-empty">
-          {t(
-            "正在汇总经营数据…",
-            "Loading business data…",
-            "جارٍ تحميل بيانات النشاط…",
-          )}
+          {t(...translatedMessage("loading_business_data_e941beb3c9"))}
         </p>
       )}
       {query.error && (
         <div role="alert" className="op-error">
           {t(
-            "经营数据暂时无法读取，请检查日期范围或重试。",
-            "Business data is unavailable. Check the date range or retry.",
-            "بيانات النشاط غير متاحة. تحقق من الفترة أو أعد المحاولة.",
+            ...translatedMessage(
+              "business_data_is_unavailable_check_the_date_r_cdfafafa42",
+            ),
           )}
           <Button variant="secondary" onClick={() => void query.refetch()}>
-            {t("重试", "Retry", "إعادة المحاولة")}
+            {t(...translatedMessage("retry_c16455021c"))}
           </Button>
         </div>
       )}
@@ -353,83 +333,75 @@ export function OperatingDashboard() {
               <bdi>{data.start_date}</bdi> — <bdi>{data.end_date}</bdi>
             </span>
             <span>
-              {t(
-                "每 5 分钟更新 · 数据更新于",
-                "Every 5 minutes · Updated",
-                "كل 5 دقائق · آخر تحديث",
-              )}{" "}
+              {t(...translatedMessage("every_5_minutes_updated_84a126b600"))}{" "}
               <bdi>{formatTime(data.updated_at)}</bdi>
             </span>
           </div>
           <div className="op-kpis">
             {[
               [
-                t("充值金额", "Top-ups", "مبلغ الشحن"),
+                t(...translatedMessage("top_ups_710ff622fa")),
                 formatOperatingAmount(data.totals.recharge_nano),
                 t(
-                  "已登记的线下收款；其他资金来源见统计口径。",
-                  "Registered offline receipts; see funding details below.",
-                  "المبالغ المسجلة خارج الإنترنت؛ انظر تفاصيل التمويل أدناه.",
+                  ...translatedMessage(
+                    "registered_offline_receipts_see_funding_detai_229d5b148d",
+                  ),
                 ),
               ],
               [
-                t("消耗金额", "Consumption", "مبلغ الاستهلاك"),
+                t(...translatedMessage("consumption_9ff97a41c3")),
                 formatOperatingAmount(data.totals.consumption_nano),
                 t(
-                  "调用明细中的实际结算金额。",
-                  "Actual settled charges from call records.",
-                  "الرسوم المسوّاة الفعلية من سجلات الطلبات.",
+                  ...translatedMessage(
+                    "actual_settled_charges_from_call_records_26fdb8d786",
+                  ),
                 ),
               ],
               [
-                t("调用次数", "Calls", "عدد الطلبات"),
+                t(...translatedMessage("calls_d84729ef0c")),
                 data.totals.requests.toLocaleString(language),
                 t(
-                  "已完成并记录的调用，含失败和取消；内部重试不重复计数。",
-                  "Recorded completed calls, including failures and cancellations; retries are not counted twice.",
-                  "الطلبات المكتملة المسجلة بما فيها الفشل والإلغاء؛ دون تكرار محاولات الإعادة.",
+                  ...translatedMessage(
+                    "recorded_completed_calls_including_failures_a_757266d604",
+                  ),
                 ),
               ],
               [
-                t(
-                  "客户最终成功率",
-                  "Final success rate",
-                  "معدل النجاح النهائي",
-                ),
+                t(...translatedMessage("final_success_rate_2c5f80901e")),
                 data.totals.requests
                   ? `${((data.totals.successful / data.totals.requests) * 100).toFixed(2)}%`
                   : "—",
                 t(
-                  "成功调用 ÷ 已完成调用；进行中的异步任务不计入。",
-                  "Successful / completed calls; pending asynchronous tasks are excluded.",
-                  "الطلبات الناجحة ÷ المكتملة؛ دون المهام غير المتزامنة قيد التنفيذ.",
+                  ...translatedMessage(
+                    "successful_completed_calls_pending_asynchrono_466bffff72",
+                  ),
                 ),
               ],
               [
-                t("活跃账号", "Active accounts", "الحسابات النشطة"),
+                t(...translatedMessage("active_accounts_f4443969e5")),
                 data.totals.active_accounts.toLocaleString(language),
                 t(
-                  "所选时间内有调用的客户账号，去重统计。",
-                  "Distinct customers with calls in this period.",
-                  "عدد العملاء الفريدين ذوي الطلبات خلال الفترة.",
+                  ...translatedMessage(
+                    "distinct_customers_with_calls_in_this_period_bc7092aa4e",
+                  ),
                 ),
               ],
               [
-                t("新注册账号", "New accounts", "الحسابات الجديدة"),
+                t(...translatedMessage("new_accounts_6e39edd7ae")),
                 data.totals.new_accounts.toLocaleString(language),
                 t(
-                  "所选时间内注册的客户账号。",
-                  "Customers registered in this period.",
-                  "العملاء المسجلون خلال الفترة.",
+                  ...translatedMessage(
+                    "customers_registered_in_this_period_d13a4eca33",
+                  ),
                 ),
               ],
               [
-                t("付费账号", "Paying accounts", "الحسابات الدافعة"),
+                t(...translatedMessage("paying_accounts_39c75640b6")),
                 data.totals.paying_accounts.toLocaleString(language),
                 t(
-                  "所选时间内有登记收款的客户账号，去重统计。",
-                  "Distinct customers with registered receipts in this period.",
-                  "العملاء الفريدون ذوو المدفوعات المسجلة خلال الفترة.",
+                  ...translatedMessage(
+                    "distinct_customers_with_registered_receipts_i_37a7444689",
+                  ),
                 ),
               ],
             ].map(([name, value, hint]) => (
@@ -442,13 +414,9 @@ export function OperatingDashboard() {
             ))}
           </div>
           <article className="op-card op-trend">
-            <h2>{t("消耗趋势", "Consumption trend", "اتجاه الاستهلاك")}</h2>
+            <h2>{t(...translatedMessage("consumption_trend_57ba5c4dc0"))}</h2>
             <p>
-              {t(
-                "按服务分组堆叠",
-                "Stacked by service group",
-                "مكدس حسب مجموعة الخدمة",
-              )}
+              {t(...translatedMessage("stacked_by_service_group_9f4ff0ed51"))}
             </p>
             <div className="op-legend">
               {chart.groups.map((row, index) => (
@@ -460,16 +428,16 @@ export function OperatingDashboard() {
               {chart.hasOther && (
                 <span>
                   <i style={{ background: colors[7] }} />
-                  {t("其他", "Other", "أخرى")}
+                  {t(...translatedMessage("other_f6ed33d295"))}
                 </span>
               )}
             </div>
             {BigInt(data.totals.consumption_nano) === 0n ? (
               <div className="op-chart-empty">
                 {t(
-                  "该时间段暂无已结算消耗",
-                  "No settled consumption in this period",
-                  "لا يوجد استهلاك مسوّى خلال هذه الفترة",
+                  ...translatedMessage(
+                    "no_settled_consumption_in_this_period_80bd69da54",
+                  ),
                 )}
               </div>
             ) : (
@@ -495,7 +463,7 @@ export function OperatingDashboard() {
                     />
                     <YAxis
                       tickFormatter={(value: number) =>
-                        new Intl.NumberFormat(language, {
+                        new Intl.NumberFormat(regionalLocale(language), {
                           style: "currency",
                           currency: "USD",
                           notation: "compact",
@@ -531,14 +499,18 @@ export function OperatingDashboard() {
                             ))}
                             {chart.hasOther && (
                               <div>
-                                <span>{t("其他", "Other", "أخرى")}</span>
+                                <span>
+                                  {t(...translatedMessage("other_f6ed33d295"))}
+                                </span>
                                 <bdi>
                                   {formatMoney(point.exact.other, "detail")}
                                 </bdi>
                               </div>
                             )}
                             <div>
-                              <strong>{t("合计", "Total", "الإجمالي")}</strong>
+                              <strong>
+                                {t(...translatedMessage("total_d1e199d65d"))}
+                              </strong>
                               <bdi>
                                 {formatMoney(point.amount_nano, "detail")}
                               </bdi>
@@ -574,19 +546,19 @@ export function OperatingDashboard() {
           </article>
           <div className="op-distributions">
             <Distribution
-              title={t("按服务分组", "By service group", "حسب مجموعة الخدمة")}
+              title={t(...translatedMessage("by_service_group_06692a3bb8"))}
               rows={data.groups}
               total={data.totals.consumption_nano}
               label={label}
             />
             <Distribution
-              title={t("按厂商", "By vendor", "حسب المزوّد")}
+              title={t(...translatedMessage("by_vendor_649a66b027"))}
               rows={data.vendors}
               total={data.totals.consumption_nano}
               label={label}
             />
             <Distribution
-              title={t("按调用类型", "By call type", "حسب نوع الطلب")}
+              title={t(...translatedMessage("by_call_type_fa3489bed8"))}
               rows={data.call_types}
               total={data.totals.consumption_nano}
               label={(row) =>
@@ -597,9 +569,7 @@ export function OperatingDashboard() {
           <div className="op-rankings">
             {rank(
               t(
-                "消耗排名 · 账号",
-                "Consumption ranking · accounts",
-                "ترتيب الاستهلاك · الحسابات",
+                ...translatedMessage("consumption_ranking_accounts_097c772fb8"),
               ),
               data.top_accounts,
               true,
@@ -607,9 +577,7 @@ export function OperatingDashboard() {
             <div>
               {rank(
                 t(
-                  "消耗排名 · 模型",
-                  "Consumption ranking · models",
-                  "ترتيب الاستهلاك · النماذج",
+                  ...translatedMessage("consumption_ranking_models_9130c87364"),
                 ),
                 data.top_models,
                 false,
@@ -621,14 +589,14 @@ export function OperatingDashboard() {
                 >
                   {showModels
                     ? t(
-                        "收起模型分布",
-                        "Hide model distribution",
-                        "إخفاء توزيع النماذج",
+                        ...translatedMessage(
+                          "hide_model_distribution_e2a9461bd4",
+                        ),
                       )
                     : t(
-                        "查看全部模型分布",
-                        "All model distribution",
-                        "توزيع جميع النماذج",
+                        ...translatedMessage(
+                          "all_model_distribution_cbf9e1e13d",
+                        ),
                       )}
                 </Button>
               )}
@@ -636,7 +604,7 @@ export function OperatingDashboard() {
           </div>
           {showModels && (
             <Distribution
-              title={t("按模型", "By model", "حسب النموذج")}
+              title={t(...translatedMessage("by_model_31a31dc6e4"))}
               rows={data.models}
               total={data.totals.consumption_nano}
               label={label}
@@ -645,52 +613,52 @@ export function OperatingDashboard() {
           <details className="op-method">
             <summary>
               {t(
-                "统计口径与资金来源",
-                "Definitions and funding sources",
-                "تعريف المقاييس ومصادر التمويل",
+                ...translatedMessage(
+                  "definitions_and_funding_sources_a480c67a43",
+                ),
               )}
             </summary>
             <p>
               {t(
-                "仅统计客户账号，排除内部员工。消耗按调用时的实际结算金额统计，不随当前价格变化。无调用时成功率显示为 —。",
-                "Customer accounts only; internal employees are excluded. Consumption uses original settled charges, unaffected by current prices. No calls means no success-rate value.",
-                "حسابات العملاء فقط، دون الموظفين الداخليين. يعتمد الاستهلاك على الرسوم المسوّاة الأصلية دون تأثير للأسعار الحالية. لا تُعرض نسبة نجاح عند غياب الطلبات.",
+                ...translatedMessage(
+                  "customer_accounts_only_internal_employees_are_16425ff120",
+                ),
               )}
             </p>
             <p>
               {t(
-                "充值金额与付费账号目前统计已登记的线下收款，尚未接入线上支付核验。以下模拟充值、未核验历史入账及赠送／补偿不计入充值指标，也不代表实际收入。",
-                "Top-ups and paying accounts currently reflect registered offline receipts; online payment verification is not connected. Simulated top-ups, unverified historical credits and gifts/compensation below are excluded and do not represent revenue.",
-                "يعكس الشحن والحسابات الدافعة الإيصالات المسجلة خارج الإنترنت؛ التحقق من الدفع الإلكتروني غير متصل. تُستبعد عمليات الشحن التجريبية والأرصدة التاريخية غير المتحققة والهدايا والتعويضات ولا تمثل إيرادات.",
+                ...translatedMessage(
+                  "top_ups_and_paying_accounts_currently_reflect_91fee0e62a",
+                ),
               )}
             </p>
             <dl>
               {[
                 [
                   t(
-                    "登记线下收款",
-                    "Registered offline receipts",
-                    "إيصالات مسجلة خارج الإنترنت",
+                    ...translatedMessage(
+                      "registered_offline_receipts_ef3d9b0dec",
+                    ),
                   ),
                   data.funding.offline_nano,
                 ],
                 [
-                  t("模拟充值", "Simulated top-ups", "شحن تجريبي"),
+                  t(...translatedMessage("simulated_top_ups_df7dda4967")),
                   data.funding.simulation_nano,
                 ],
                 [
                   t(
-                    "未核验历史入账",
-                    "Unverified historical credits",
-                    "أرصدة تاريخية غير متحققة",
+                    ...translatedMessage(
+                      "unverified_historical_credits_161a10d02f",
+                    ),
                   ),
                   data.funding.unverified_nano,
                 ],
                 [
                   t(
-                    "赠送／补偿等加款",
-                    "Gifts / compensation credits",
-                    "هدايا وتعويضات",
+                    ...translatedMessage(
+                      "gifts_compensation_credits_2daa7f2d65",
+                    ),
                   ),
                   data.funding.other_credit_nano,
                 ],

@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../components/ui/button";
@@ -29,47 +30,43 @@ export default function ExportHistory({ onCreate }: { onCreate: () => void }) {
     }
   };
   const types = {
-    requests: c("调用明细", "Requests", "الطلبات"),
-    ledger: c("账本流水", "Ledger", "السجل المالي"),
-    usage: c("用量报表", "Usage", "الاستخدام"),
+    requests: c(...translatedMessage("requests_bf1d814671")),
+    ledger: c(...translatedMessage("ledger_663f871935")),
+    usage: c(...translatedMessage("usage_8c28029dbc")),
   };
   return (
     <section className="export-history">
       <header>
         <div>
-          <h1>{c("导出记录", "Exports", "سجل التصدير")}</h1>
+          <h1>{c(...translatedMessage("exports_b2df1f0c09"))}</h1>
           <p>
             {c(
-              "文件保留 7 天；CSV 与字段说明使用创建任务时的界面语言。",
-              "Files are retained for 7 days. CSV headers and field descriptions use the language selected at creation.",
-              "تُحفظ الملفات 7 أيام. تستخدم العناوين وأوصاف الحقول لغة إنشاء المهمة.",
+              ...translatedMessage(
+                "files_are_retained_for_7_days_csv_headers_and_77c18e94d9",
+              ),
             )}
           </p>
         </div>
         <Button onClick={onCreate}>
-          {c("创建导出", "Create export", "إنشاء تصدير")}
+          {c(...translatedMessage("create_export_ba0af46356"))}
         </Button>
       </header>
       {(error || query.isError) && (
         <p role="alert">
           {error ||
-            c(
-              "导出记录加载失败，请重试。",
-              "Could not load exports. Retry.",
-              "تعذر تحميل السجلات. أعد المحاولة.",
-            )}
+            c(...translatedMessage("could_not_load_exports_retry_faf75ef72d"))}
           {query.isError && (
             <Button onClick={() => void query.refetch()}>
-              {c("重试", "Retry", "إعادة المحاولة")}
+              {c(...translatedMessage("retry_c16455021c"))}
             </Button>
           )}
         </p>
       )}
       {query.isLoading && (
-        <p role="status">{c("正在加载…", "Loading…", "جارٍ التحميل…")}</p>
+        <p role="status">{c(...translatedMessage("loading_f076a9d0d1"))}</p>
       )}
       {query.data?.length === 0 && (
-        <p>{c("暂无导出记录。", "No exports yet.", "لا توجد ملفات تصدير.")}</p>
+        <p>{c(...translatedMessage("no_exports_yet_39a30835d8"))}</p>
       )}
       <div className="export-history-list">
         {query.data?.map((row) => (
@@ -80,8 +77,8 @@ export default function ExportHistory({ onCreate }: { onCreate: () => void }) {
                 {row.start_date} — {row.end_date} · {row.timezone}
               </p>
               <small>
-                {c("行数", "Rows", "الصفوف")}: {row.row_count} ·{" "}
-                {c("到期", "Expires", "ينتهي")}:{" "}
+                {c(...translatedMessage("rows_c6b018fbba"))}: {row.row_count} ·{" "}
+                {c(...translatedMessage("expires_faf14f50a3"))}:{" "}
                 {new Date(row.expires_at * 1000).toLocaleDateString(
                   i18n.language,
                   { timeZone: row.timezone || "UTC" },
@@ -91,26 +88,26 @@ export default function ExportHistory({ onCreate }: { onCreate: () => void }) {
             <div className="export-history-actions">
               <span role="status">
                 {row.status === "completed"
-                  ? c("已完成", "Completed", "مكتمل")
+                  ? c(...translatedMessage("completed_190da088f0"))
                   : row.status === "processing"
-                    ? c("生成中…", "Processing…", "قيد الإنشاء…")
+                    ? c(...translatedMessage("processing_4d6bfc341f"))
                     : c(
-                        "生成失败，请重新创建。",
-                        "Failed. Create another export.",
-                        "فشل. أنشئ تصديرًا جديدًا.",
+                        ...translatedMessage(
+                          "failed_create_another_export_84db85cc08",
+                        ),
                       )}
               </span>
               <Button
                 disabled={row.status !== "completed"}
                 onClick={() => void download(row)}
               >
-                {c("下载 CSV", "Download CSV", "تنزيل CSV")}
+                {c(...translatedMessage("download_csv_d846ce8a1d"))}
               </Button>
               <Button
                 disabled={row.status !== "completed" || !row.dictionary_url}
                 onClick={() => void download(row, true)}
               >
-                {c("字段说明", "Field descriptions", "أوصاف الحقول")}
+                {c(...translatedMessage("field_descriptions_10060f8660"))}
               </Button>
             </div>
           </article>

@@ -1,3 +1,5 @@
+import { message as translatedMessage } from "../i18n/messages";
+
 import {
   useEffect,
   useId,
@@ -45,241 +47,137 @@ import type { RechargeOrder } from "../lib/billing";
 import "../components/recharge-flow.css";
 
 const messages = {
-  fundingSource: ["资金来源", "Funding source", "مصدر الأموال"],
-  quotaConversion: ["API 配额兑换", "API quota conversion", "تحويل رصيد API"],
-  conversionUnavailable: [
-    "当前不可兑换",
-    "Currently unavailable",
-    "غير متاح حاليًا",
-  ],
-  title: ["账户充值", "Add account credit", "شحن الحساب"],
-  intro: [
-    "为当前账号的预付费余额充值。",
-    "Add funds to this account’s prepaid balance.",
-    "أضف رصيدًا مسبق الدفع إلى الحساب الحالي.",
-  ],
-  orderTitle: ["确认充值订单", "Your recharge order", "طلب شحن الرصيد"],
-  orderIntro: [
-    "订单已保留，完成支付后才会入账。",
-    "Your order is saved. Credit is added only after payment succeeds.",
-    "تم حفظ الطلب. يُضاف الرصيد بعد نجاح الدفع فقط.",
-  ],
-  cashierTitle: ["演示收银台", "Demo checkout", "صفحة دفع تجريبية"],
-  cashierIntro: [
-    "选择一个支付结果，体验完整的充值流程。",
-    "Choose a payment result to explore the recharge flow.",
-    "اختر نتيجة دفع لتجربة عملية الشحن.",
-  ],
-  successTitle: ["充值成功", "Credit added", "تمت إضافة الرصيد"],
-  successIntro: [
-    "充值金额已加入当前账号余额。",
-    "The recharge amount is now in this account’s balance.",
-    "أُضيف مبلغ الشحن إلى رصيد الحساب.",
-  ],
-  incompleteTitle: ["充值未完成", "Recharge not completed", "لم يكتمل الشحن"],
-  incompleteIntro: [
-    "此次订单未入账，你可以重新创建充值订单。",
-    "This order has not added credit. You can create a new order.",
-    "لم يُضف هذا الطلب رصيدًا. يمكنك إنشاء طلب جديد.",
-  ],
-  amountStep: ["选择金额", "Amount", "المبلغ"],
-  paymentStep: ["确认支付", "Payment", "الدفع"],
-  creditedStep: ["余额到账", "Credited", "إضافة الرصيد"],
-  currentBalance: ["当前可用余额", "Available balance", "الرصيد المتاح"],
-  amountLabel: ["充值金额", "Recharge amount", "مبلغ الشحن"],
-  customLabel: [
-    "或输入其他金额",
-    "Or enter another amount",
-    "أو أدخل مبلغًا آخر",
-  ],
-  amountHint: [
-    "单次 $10–$10,000，最多保留两位小数。",
-    "$10–$10,000 per order, with up to 2 decimal places.",
-    "من 10 إلى 10,000 دولار للطلب، وبحد أقصى منزلتان عشريتان.",
-  ],
-  required: ["请输入充值金额。", "Enter an amount.", "أدخل مبلغ الشحن."],
-  format: [
-    "请输入有效金额，最多保留两位小数。",
-    "Enter a valid amount with up to 2 decimal places.",
-    "أدخل مبلغًا صالحًا بحد أقصى منزلتين عشريتين.",
-  ],
-  min: [
-    "单次充值最低为 $10。",
-    "The minimum recharge is $10.",
-    "الحد الأدنى للشحن هو 10 دولارات.",
-  ],
-  max: [
-    "单次充值最高为 $10,000。",
-    "The maximum recharge is $10,000.",
-    "الحد الأقصى للشحن هو 10,000 دولار.",
-  ],
-  channel: ["支付方式", "Payment method", "طريقة الدفع"],
-  card: ["银行卡", "Bank card", "بطاقة مصرفية"],
-  demoChannel: ["演示渠道", "Demo channel", "قناة تجريبية"],
-  cardHint: [
-    "通过本地演示收银台完成付款。",
-    "Complete payment in the local demo checkout.",
-    "أكمل الدفع في صفحة الدفع التجريبية المحلية.",
-  ],
-  creditedAmount: ["到账金额", "Amount credited", "المبلغ المضاف"],
-  expectedCredit: ["预计到账金额", "Expected credit", "الرصيد المتوقع"],
-  fee: ["额外手续费", "Additional fees", "رسوم إضافية"],
-  noFee: ["无", "None", "لا توجد"],
-  payable: ["实际支付", "Payment amount", "المبلغ المدفوع"],
-  equalAmount: [
-    "实付金额将全额计入预付费余额。",
-    "The full payment amount is added to your prepaid balance.",
-    "يُضاف المبلغ المدفوع كاملًا إلى رصيدك المسبق.",
-  ],
-  demoNote: [
-    "前端演示，不收集真实卡号，也不会发生真实扣款。",
-    "Frontend demo: no real card details or charges.",
-    "عرض تجريبي: لا تُجمع بيانات بطاقات حقيقية ولا يتم خصم أموال.",
-  ],
-  createOrder: [
-    "确认金额并创建订单",
-    "Confirm and create order",
-    "تأكيد وإنشاء الطلب",
-  ],
-  createHint: [
-    "确认后生成订单，30 分钟内有效。",
-    "Orders are valid for 30 minutes after confirmation.",
-    "يسري الطلب لمدة 30 دقيقة بعد التأكيد.",
-  ],
-  cancel: ["取消", "Cancel", "إلغاء"],
-  close: ["完成", "Done", "تم"],
-  later: ["稍后支付", "Pay later", "الدفع لاحقًا"],
-  continueLater: ["稍后继续", "Continue later", "المتابعة لاحقًا"],
-  goCheckout: [
-    "进入演示收银台",
-    "Open demo checkout",
-    "فتح صفحة الدفع التجريبية",
-  ],
-  resumeCheckout: [
-    "继续演示支付",
-    "Resume demo payment",
-    "متابعة الدفع التجريبي",
-  ],
-  backOrder: ["返回订单", "Back to order", "العودة إلى الطلب"],
-  pending: ["待支付", "Awaiting payment", "بانتظار الدفع"],
-  processing: ["等待支付确认", "Awaiting confirmation", "بانتظار تأكيد الدفع"],
-  paid: ["已到账", "Credited", "تمت الإضافة"],
-  failed: ["支付失败", "Payment failed", "فشل الدفع"],
-  cancelled: ["支付已取消", "Payment cancelled", "أُلغي الدفع"],
-  expired: ["订单已过期", "Order expired", "انتهت صلاحية الطلب"],
-  disputed: ["订单待核实", "Order under review", "الطلب قيد المراجعة"],
-  orderNumber: ["充值订单号", "Recharge order", "رقم طلب الشحن"],
-  account: ["到账账户", "Credit destination", "الحساب المستفيد"],
-  prepaid: ["账号预付费余额", "Account prepaid balance", "رصيد الحساب المسبق"],
-  validUntil: ["有效期至", "Valid until", "صالح حتى"],
-  remaining: ["付款剩余时间", "Time left to pay", "الوقت المتبقي للدفع"],
-  keepOrder: [
-    "离开此页后订单仍会保留，可从充值记录继续支付。",
-    "Closing keeps your order. Resume it from recharge records.",
-    "يبقى الطلب محفوظًا بعد الإغلاق. تابعه من سجل الشحن.",
-  ],
-  resultTitle: [
-    "选择演示支付结果",
-    "Choose a demo payment result",
-    "اختر نتيجة الدفع التجريبية",
-  ],
-  resultHint: [
-    "此处模拟银行卡支付，不需要填写任何卡片资料。",
-    "This simulates card payment. No card details are needed.",
-    "هذه محاكاة لدفع البطاقة؛ لا يلزم إدخال بيانات بطاقة.",
-  ],
-  simulateSuccess: ["模拟支付成功", "Simulate success", "محاكاة نجاح الدفع"],
-  simulateFailure: ["模拟支付失败", "Simulate failure", "محاكاة فشل الدفع"],
-  simulateCancel: [
-    "模拟取消支付",
-    "Simulate cancellation",
-    "محاكاة إلغاء الدفع",
-  ],
-  actualCredited: [
-    "本次实际到账",
-    "Credit added by this order",
-    "الرصيد المضاف بهذا الطلب",
-  ],
-  latestBalance: [
-    "当前账户余额",
-    "Current account balance",
-    "رصيد الحساب الحالي",
-  ],
-  viewRecords: ["查看充值记录", "View recharge records", "عرض سجل الشحن"],
-  newOrder: ["重新充值", "Start a new recharge", "بدء شحن جديد"],
-  failedReason: [
-    "本次演示支付未成功，余额未变动。请重新创建订单后再试。",
-    "The demo payment failed and no credit was added. Create a new order to try again.",
-    "فشل الدفع التجريبي ولم يُضف رصيد. أنشئ طلبًا جديدًا للمحاولة مجددًا.",
-  ],
-  cancelledReason: [
-    "你已取消本次演示支付，余额未变动。",
-    "You cancelled this demo payment. No credit was added.",
-    "ألغيت هذا الدفع التجريبي ولم يُضف رصيد.",
-  ],
-  expiredReason: [
-    "订单超过 30 分钟有效期，不能继续付款。请创建一笔新订单。",
-    "The 30-minute payment window has ended. Create a new order to pay.",
-    "انتهت مهلة الدفع البالغة 30 دقيقة. أنشئ طلبًا جديدًا للدفع.",
-  ],
-  disputedReason: [
-    "这笔订单需要进一步核实，请在充值记录中查看状态。",
-    "This order needs review. Check its status in recharge records.",
-    "يحتاج هذا الطلب إلى مراجعة. تحقق من حالته في سجل الشحن.",
-  ],
-  missing: [
-    "未找到这笔充值订单",
-    "Recharge order not found",
-    "لم يُعثر على طلب الشحن",
-  ],
-  missingHint: [
-    "演示数据可能已重置。你可以返回充值记录或创建新订单。",
-    "Demo data may have been reset. View records or create a new order.",
-    "ربما أُعيد ضبط البيانات التجريبية. راجع السجل أو أنشئ طلبًا جديدًا.",
-  ],
-  genericError: [
-    "暂时无法完成此操作，请检查订单状态后重试。",
-    "This action could not be completed. Check the order status and try again.",
-    "تعذر إكمال العملية. تحقق من حالة الطلب وحاول مجددًا.",
-  ],
-  notPayable: [
-    "这笔订单已不能继续付款，请查看当前状态或重新充值。",
-    "This order can no longer accept payment. Check its status or start a new recharge.",
-    "لم يعد الدفع متاحًا لهذا الطلب. تحقق من حالته أو ابدأ شحنًا جديدًا.",
-  ],
-  latePayment: [
-    "付款在订单到期后确认，充值金额已全额到账。",
-    "Payment was confirmed after expiry. The full amount has been credited.",
-    "تأكد الدفع بعد انتهاء الصلاحية وأُضيف المبلغ كاملًا.",
-  ],
-  scenarios: ["演示场景", "Demo scenarios", "سيناريوهات تجريبية"],
-  scenariosHint: [
-    "仅用于验证本地演示流程，不会发起真实支付。",
-    "For checking the local demo only; no real payment is initiated.",
-    "لاختبار العرض المحلي فقط؛ لن تبدأ أي عملية دفع حقيقية.",
-  ],
-  simulateExpiry: ["模拟订单过期", "Simulate expiry", "محاكاة انتهاء الصلاحية"],
-  repeatSuccess: [
-    "重复成功通知",
-    "Repeat success notification",
-    "تكرار إشعار النجاح",
-  ],
-  lateSuccess: ["模拟晚到支付", "Simulate late payment", "محاكاة دفع متأخر"],
-  repeated: [
-    "这笔充值已入账。重复通知没有再次增加余额。",
-    "This order was already credited. The repeated notification added no further credit.",
-    "أُضيف رصيد هذا الطلب سابقًا. لم يضف الإشعار المتكرر رصيدًا آخر.",
-  ],
-  expiredDemo: [
-    "已模拟订单到期。",
-    "Order expiry simulated.",
-    "تمت محاكاة انتهاء صلاحية الطلب.",
-  ],
-  expiryHint: [
-    "模拟过期会推进演示时间，其他同时到期的订单也会失效。",
-    "Simulating expiry advances demo time; other orders that are due also expire.",
-    "تقدم محاكاة الانتهاء وقت العرض؛ تنتهي أيضًا الطلبات التي حل موعدها.",
-  ],
+  fundingSource: translatedMessage("funding_source_355341b128"),
+  quotaConversion: translatedMessage("api_quota_conversion_78f6b675e2"),
+  conversionUnavailable: translatedMessage("currently_unavailable_fff1a9e4ff"),
+  title: translatedMessage("add_account_credit_153675939d"),
+  intro: translatedMessage(
+    "add_funds_to_this_account_s_prepaid_balance_b2d5bfa20b",
+  ),
+  orderTitle: translatedMessage("your_recharge_order_8ffcb4b96e"),
+  orderIntro: translatedMessage(
+    "your_order_is_saved_credit_is_added_only_afte_4f68eaff2f",
+  ),
+  cashierTitle: translatedMessage("demo_checkout_b416dec071"),
+  cashierIntro: translatedMessage(
+    "choose_a_payment_result_to_explore_the_rechar_47d2ba9f6b",
+  ),
+  successTitle: translatedMessage("credit_added_ae67aa3a6b"),
+  successIntro: translatedMessage(
+    "the_recharge_amount_is_now_in_this_account_s__4e91c024ee",
+  ),
+  incompleteTitle: translatedMessage("recharge_not_completed_01dee5f0bd"),
+  incompleteIntro: translatedMessage(
+    "this_order_has_not_added_credit_you_can_creat_798f5f58fe",
+  ),
+  amountStep: translatedMessage("amount_643d19b6a7"),
+  paymentStep: translatedMessage("payment_75233d5697"),
+  creditedStep: translatedMessage("credited_f63b00798e"),
+  currentBalance: translatedMessage("available_balance_ff3b5421e1"),
+  amountLabel: translatedMessage("recharge_amount_7ae3994595"),
+  customLabel: translatedMessage("or_enter_another_amount_2be11f8616"),
+  amountHint: translatedMessage(
+    "10_10_000_per_order_with_up_to_2_decimal_plac_8fb4bca206",
+  ),
+  required: translatedMessage("enter_an_amount_a8a78dc94e"),
+  format: translatedMessage(
+    "enter_a_valid_amount_with_up_to_2_decimal_pla_e2f1177c70",
+  ),
+  min: translatedMessage("the_minimum_recharge_is_10_1c8fc2f256"),
+  max: translatedMessage("the_maximum_recharge_is_10_000_6993d15e25"),
+  channel: translatedMessage("payment_method_3283479ba3"),
+  card: translatedMessage("bank_card_31663ab079"),
+  demoChannel: translatedMessage("demo_channel_8385cffea9"),
+  cardHint: translatedMessage(
+    "complete_payment_in_the_local_demo_checkout_786ffb553d",
+  ),
+  creditedAmount: translatedMessage("amount_credited_db2452b30c"),
+  expectedCredit: translatedMessage("expected_credit_a4b944f3ce"),
+  fee: translatedMessage("additional_fees_0c8dc29ba3"),
+  noFee: translatedMessage("none_fbfe0e70fb"),
+  payable: translatedMessage("payment_amount_fa6b120cbf"),
+  equalAmount: translatedMessage(
+    "the_full_payment_amount_is_added_to_your_prep_d03a15cb44",
+  ),
+  demoNote: translatedMessage(
+    "frontend_demo_no_real_card_details_or_charges_9714a40312",
+  ),
+  createOrder: translatedMessage("confirm_and_create_order_aa644e900b"),
+  createHint: translatedMessage(
+    "orders_are_valid_for_30_minutes_after_confirm_e708b944e8",
+  ),
+  cancel: translatedMessage("cancel_0828e4ce08"),
+  close: translatedMessage("done_981dc3f35b"),
+  later: translatedMessage("pay_later_52e3325a6d"),
+  continueLater: translatedMessage("continue_later_696f80a96d"),
+  goCheckout: translatedMessage("open_demo_checkout_63f5982683"),
+  resumeCheckout: translatedMessage("resume_demo_payment_3fe17ba600"),
+  backOrder: translatedMessage("back_to_order_e58d7f0d90"),
+  pending: translatedMessage("awaiting_payment_4166815c6e"),
+  processing: translatedMessage("awaiting_confirmation_48c279a77f"),
+  paid: translatedMessage("credited_c144ccc983"),
+  failed: translatedMessage("payment_failed_54d80406b3"),
+  cancelled: translatedMessage("payment_cancelled_a6229977a7"),
+  expired: translatedMessage("order_expired_e92ccb18be"),
+  disputed: translatedMessage("order_under_review_7da2006df6"),
+  orderNumber: translatedMessage("recharge_order_a56ed9c63f"),
+  account: translatedMessage("credit_destination_8cfb51f5c2"),
+  prepaid: translatedMessage("account_prepaid_balance_6f04be23bb"),
+  validUntil: translatedMessage("valid_until_6f24240fab"),
+  remaining: translatedMessage("time_left_to_pay_303434e702"),
+  keepOrder: translatedMessage(
+    "closing_keeps_your_order_resume_it_from_recha_e0473b8cff",
+  ),
+  resultTitle: translatedMessage("choose_a_demo_payment_result_22c7c9054f"),
+  resultHint: translatedMessage(
+    "this_simulates_card_payment_no_card_details_a_c639c76794",
+  ),
+  simulateSuccess: translatedMessage("simulate_success_8af25344dd"),
+  simulateFailure: translatedMessage("simulate_failure_1877882c62"),
+  simulateCancel: translatedMessage("simulate_cancellation_eceb26bace"),
+  actualCredited: translatedMessage("credit_added_by_this_order_2fe84c2811"),
+  latestBalance: translatedMessage("current_account_balance_78fdf2d6d5"),
+  viewRecords: translatedMessage("view_recharge_records_dc17345445"),
+  newOrder: translatedMessage("start_a_new_recharge_4b7995ef91"),
+  failedReason: translatedMessage(
+    "the_demo_payment_failed_and_no_credit_was_add_ec76461b3e",
+  ),
+  cancelledReason: translatedMessage(
+    "you_cancelled_this_demo_payment_no_credit_was_db52813af3",
+  ),
+  expiredReason: translatedMessage(
+    "the_30_minute_payment_window_has_ended_create_e07aa48207",
+  ),
+  disputedReason: translatedMessage(
+    "this_order_needs_review_check_its_status_in_r_f98478a086",
+  ),
+  missing: translatedMessage("recharge_order_not_found_32f6f3ac8e"),
+  missingHint: translatedMessage(
+    "demo_data_may_have_been_reset_view_records_or_d3933e6c62",
+  ),
+  genericError: translatedMessage(
+    "this_action_could_not_be_completed_check_the__fb65d28c54",
+  ),
+  notPayable: translatedMessage(
+    "this_order_can_no_longer_accept_payment_check_71c55d7551",
+  ),
+  latePayment: translatedMessage(
+    "payment_was_confirmed_after_expiry_the_full_a_e162ba4d41",
+  ),
+  scenarios: translatedMessage("demo_scenarios_740afd2ade"),
+  scenariosHint: translatedMessage(
+    "for_checking_the_local_demo_only_no_real_paym_5da8eb024e",
+  ),
+  simulateExpiry: translatedMessage("simulate_expiry_3711227cb7"),
+  repeatSuccess: translatedMessage("repeat_success_notification_250f4d51c5"),
+  lateSuccess: translatedMessage("simulate_late_payment_78b479bbc6"),
+  repeated: translatedMessage(
+    "this_order_was_already_credited_the_repeated__5da4629495",
+  ),
+  expiredDemo: translatedMessage("order_expiry_simulated_e143ad30a8"),
+  expiryHint: translatedMessage(
+    "simulating_expiry_advances_demo_time_other_or_c38e075abf",
+  ),
 } as const;
 
 function RechargePageLayout({
@@ -302,13 +200,13 @@ function RechargePageLayout({
     <section className="rf-page">
       <button className="rf-page-back" onClick={onExit}>
         <ArrowLeft size={16} className="directional" />
-        {text("返回上一页", "Back", "رجوع")}
+        {text(...translatedMessage("back_146b4da468"))}
       </button>
       <header className="rf-page-heading">
         <div>
           <span className="rf-page-eyebrow">
             <Wallet size={14} />
-            {text("账户与资金", "ACCOUNT & BILLING", "الحساب والفوترة")}
+            {text(...translatedMessage("account_billing_2dc8658792"))}
           </span>
           <h1>{title}</h1>
           <p>{description}</p>
@@ -316,11 +214,7 @@ function RechargePageLayout({
         <span className="rf-page-currency">
           USD
           <span>
-            {text(
-              "美元预付费账户",
-              "USD prepaid account",
-              "حساب مسبق بالدولار",
-            )}
+            {text(...translatedMessage("usd_prepaid_account_ed1e591a0a"))}
           </span>
         </span>
       </header>
@@ -331,9 +225,9 @@ function RechargePageLayout({
       <p className="rf-page-footnote">
         <ShieldCheck size={14} />
         {text(
-          "当前为交互演示，不会真实扣款。已创建的订单可在充值记录中继续查看。",
-          "Interactive demo; no real charges. Saved orders remain available in top-up history.",
-          "عرض تفاعلي بلا خصم حقيقي. تبقى الطلبات المحفوظة في سجل الشحن.",
+          ...translatedMessage(
+            "interactive_demo_no_real_charges_saved_orders_a1ecace918",
+          ),
         )}
       </p>
     </section>

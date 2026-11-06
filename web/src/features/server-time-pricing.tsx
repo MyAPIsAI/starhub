@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
@@ -63,54 +64,50 @@ export function ServerTimePricingEditor() {
         !issue &&
         (draft.locked || !Object.hasOwn(draft.base.rules, draft.id))));
   const weekdays = [
-    text("周日", "Sunday", "الأحد"),
-    text("周一", "Monday", "الاثنين"),
-    text("周二", "Tuesday", "الثلاثاء"),
-    text("周三", "Wednesday", "الأربعاء"),
-    text("周四", "Thursday", "الخميس"),
-    text("周五", "Friday", "الجمعة"),
-    text("周六", "Saturday", "السبت"),
+    text(...translatedMessage("sunday_82937de721")),
+    text(...translatedMessage("monday_7c39b82322")),
+    text(...translatedMessage("tuesday_49b912ebc9")),
+    text(...translatedMessage("wednesday_30e13d177b")),
+    text(...translatedMessage("thursday_499610b34d")),
+    text(...translatedMessage("friday_4023e1b4cd")),
+    text(...translatedMessage("saturday_75bbed5f03")),
   ];
   const issueText: Record<TimeScheduleError, string> = {
     timezone: text(
-      "请输入明确的 IANA 时区或 UTC，不可使用 Local。",
-      "Enter an explicit IANA timezone or UTC; Local is not supported.",
-      "أدخل منطقة IANA صريحة أو UTC؛ لا تُقبل Local.",
+      ...translatedMessage(
+        "enter_an_explicit_iana_timezone_or_utc_local__fdda7768ff",
+      ),
     ),
     limit: text(
-      "每个模型最多 32 个时段。",
-      "Each model supports at most 32 windows.",
-      "يدعم كل نموذج 32 فترة كحد أقصى.",
+      ...translatedMessage("each_model_supports_at_most_32_windows_459e6711ab"),
     ),
     id: text(
-      "时段标识须唯一，使用 1–64 个英文字母、数字、点、下划线或连字符。",
-      "Window IDs must be unique, using 1–64 ASCII letters, digits, dots, underscores or hyphens.",
-      "يجب أن تكون المعرفات فريدة من 1–64 حرفًا لاتينيًا أو رقمًا أو نقطة أو شرطة.",
+      ...translatedMessage(
+        "window_ids_must_be_unique_using_1_64_ascii_le_bba3856c3c",
+      ),
     ),
     label: text(
-      "时段名称须非空，最多 128 个 UTF-8 字节且无控制字符。",
-      "Window labels must be nonempty, at most 128 UTF-8 bytes, without control characters.",
-      "يجب أن يكون الاسم غير فارغ ولا يتجاوز 128 بايت UTF-8 دون محارف تحكم.",
+      ...translatedMessage(
+        "window_labels_must_be_nonempty_at_most_128_ut_584c062da5",
+      ),
     ),
     days: text(
-      "每个时段至少选择一个星期。",
-      "Select at least one weekday per window.",
-      "اختر يومًا واحدًا على الأقل لكل فترة.",
+      ...translatedMessage("select_at_least_one_weekday_per_window_404fa35fdc"),
     ),
     time: text(
-      "使用 HH:MM，结束可为 24:00；起止不能相同。整日请填 00:00–24:00。",
-      "Use HH:MM, with 24:00 allowed only as an end. Start and end must differ; use 00:00–24:00 for a whole day.",
-      "استخدم HH:MM مع 24:00 للنهاية فقط. يجب اختلاف البداية والنهاية؛ لليوم الكامل استخدم 00:00–24:00.",
+      ...translatedMessage(
+        "use_hh_mm_with_24_00_allowed_only_as_an_end_s_a63dda204d",
+      ),
     ),
     multiplier: text(
-      "倍率须大于 0 且不超过 100。",
-      "Multiplier must be greater than 0 and at most 100.",
-      "يجب أن يكون المعامل أكبر من صفر وألا يتجاوز 100.",
+      ...translatedMessage(
+        "multiplier_must_be_greater_than_0_and_at_most_fdab9eba54",
+      ),
     ),
     overlap: text(
-      "时段重叠，请检查星期及跨午夜范围。相邻边界可以共用。",
-      "Windows overlap. Check weekdays and overnight ranges; adjacent boundaries are allowed.",
-      "الفترات متداخلة. تحقق من الأيام وامتداد منتصف الليل؛ يُسمح بتجاور الحدود.",
+      ...translatedMessage(
+        "windows_overlap_check_weekdays_and_overnight__838187eb34",
+      ),
     ),
   };
   const begin = (id = "", remove = false) => {
@@ -160,29 +157,30 @@ export function ServerTimePricingEditor() {
       setDraft(null);
       setNotice(
         text(
-          `分时配置已保存 v${result.version}；响应进程加载 v${result.loaded_version}，其他实例请查看配置同步。`,
-          `Time pricing saved at v${result.version}; response process loaded v${result.loaded_version}. Check configuration sync for other instances.`,
-          `حُفظ التسعير الزمني بالإصدار ${result.version}؛ حمّلت العملية المستجيبة ${result.loaded_version}. راجع المزامنة للعمليات الأخرى.`,
+          ...translatedMessage(
+            "time_pricing_saved_at_v_response_process_load_5568185e02",
+            { p0: result.version, p1: result.loaded_version },
+          ),
         ),
       );
     } catch (caught) {
       setError(
         caught instanceof ApiError && caught.status === 409
           ? text(
-              "服务器配置已变化，未覆盖新版本。请刷新并重新打开编辑。",
-              "Server configuration changed; the newer version was not overwritten. Refresh and reopen the editor.",
-              "تغيّرت إعدادات الخادم ولم يُستبدل الإصدار الأحدث. حدّث وأعد فتح المحرر.",
+              ...translatedMessage(
+                "server_configuration_changed_the_newer_versio_40699aa766",
+              ),
             )
           : caught instanceof ApiError && caught.status === 400
             ? text(
-                "服务器拒绝了时区或时段规则，草稿已保留。请检查输入及限制。",
-                "The server rejected the timezone or schedule; the draft is retained. Check values and limits.",
-                "رفض الخادم المنطقة الزمنية أو الجدول واحتُفظ بالمسودة. تحقق من القيم والحدود.",
+                ...translatedMessage(
+                  "the_server_rejected_the_timezone_or_schedule__5e2bf605f6",
+                ),
               )
             : text(
-                "无法确认保存或重载结果，请刷新核对版本后再处理。",
-                "The save or reload result is unconfirmed. Refresh to verify versions before proceeding.",
-                "تعذر تأكيد الحفظ أو إعادة التحميل. حدّث للتحقق من الإصدارات قبل المتابعة.",
+                ...translatedMessage(
+                  "the_save_or_reload_result_is_unconfirmed_refr_7247813b2a",
+                ),
               ),
       );
     }
@@ -193,16 +191,14 @@ export function ServerTimePricingEditor() {
         <div>
           <h3>
             {text(
-              "服务器分时倍率",
-              "Server time-based multipliers",
-              "معاملات الخادم حسب الوقت",
+              ...translatedMessage("server_time_based_multipliers_1db7dcb25f"),
             )}
           </h3>
           <p>
             {text(
-              "真实周重复时段，适用于已接入的三类计价模式。未命中时使用倍率 1；不会创建渠道、投放或密钥权限。",
-              "Actual weekly windows apply to all three pricing modes. Unmatched windows use multiplier 1. Schedules do not create channels, placements or key permissions.",
-              "تطبق الفترات الأسبوعية الفعلية على أنماط التسعير الثلاثة. خارج الفترات يُستخدم المعامل 1 دون إنشاء قنوات أو موارد أو صلاحيات للمفاتيح.",
+              ...translatedMessage(
+                "actual_weekly_windows_apply_to_all_three_pric_2a15724f82",
+              ),
             )}
           </p>
         </div>
@@ -214,7 +210,7 @@ export function ServerTimePricingEditor() {
               void query.refetch();
             }}
           >
-            {text("刷新时段", "Refresh schedules", "تحديث الجداول")}
+            {text(...translatedMessage("refresh_schedules_f165f05804"))}
           </Button>
           <Button
             disabled={
@@ -222,25 +218,21 @@ export function ServerTimePricingEditor() {
             }
             onClick={() => begin()}
           >
-            {text("登记分时时段", "Configure time schedule", "تعيين جدول زمني")}
+            {text(...translatedMessage("configure_time_schedule_6ec512e131"))}
           </Button>
         </div>
       </header>
       {query.isLoading && (
         <p role="status">
-          {text(
-            "正在读取服务器时段…",
-            "Loading server schedules…",
-            "جارٍ تحميل جداول الخادم…",
-          )}
+          {text(...translatedMessage("loading_server_schedules_c8c565953f"))}
         </p>
       )}
       {query.isError && (
         <p role="alert">
           {text(
-            "无法确认实际分时规则、计费启用或版本保护，已隐藏缓存并暂停编辑。",
-            "Cannot verify actual schedules, billing activation or revision guards. Cached data is hidden and editing is paused.",
-            "تعذر التحقق من الجداول أو تفعيل الفوترة أو حماية الإصدار. أُخفيت البيانات السابقة وأُوقف التحرير.",
+            ...translatedMessage(
+              "cannot_verify_actual_schedules_billing_activa_bae65a9995",
+            ),
           )}
         </p>
       )}
@@ -249,9 +241,9 @@ export function ServerTimePricingEditor() {
         <>
           <p>
             {text(
-              "数据库 / 响应进程版本",
-              "Database / response process version",
-              "إصدار قاعدة البيانات / العملية المستجيبة",
+              ...translatedMessage(
+                "database_response_process_version_2e855ba12b",
+              ),
             )}
             :{" "}
             <bdi>
@@ -259,11 +251,7 @@ export function ServerTimePricingEditor() {
             </bdi>
           </p>
           <label className="stp-search">
-            {text(
-              "搜索分时模型",
-              "Search scheduled models",
-              "البحث في النماذج المجدولة",
-            )}
+            {text(...translatedMessage("search_scheduled_models_2fba1c79c6"))}
             <input
               value={search}
               onChange={(event) => {
@@ -277,18 +265,18 @@ export function ServerTimePricingEditor() {
             tabIndex={0}
             role="region"
             aria-label={text(
-              "分时时段表，可横向滚动",
-              "Time schedule table, horizontally scrollable",
-              "جدول الفترات، قابل للتمرير أفقيًا",
+              ...translatedMessage(
+                "time_schedule_table_horizontally_scrollable_153b9e55b3",
+              ),
             )}
           >
             <table>
               <thead>
                 <tr>
-                  <th>{text("模型标识", "Model ID", "معرّف النموذج")}</th>
-                  <th>{text("时区", "Timezone", "المنطقة الزمنية")}</th>
-                  <th>{text("时段数", "Windows", "الفترات")}</th>
-                  <th>{text("操作", "Action", "الإجراء")}</th>
+                  <th>{text(...translatedMessage("model_id_2e00e41239"))}</th>
+                  <th>{text(...translatedMessage("timezone_589797f8d4"))}</th>
+                  <th>{text(...translatedMessage("windows_cb0e7bb70d"))}</th>
+                  <th>{text(...translatedMessage("action_2a8e78b55a"))}</th>
                 </tr>
               </thead>
               <tbody>
@@ -310,7 +298,9 @@ export function ServerTimePricingEditor() {
                             disabled={!writable}
                             onClick={() => begin(id)}
                           >
-                            {text("编辑时段", "Edit schedule", "تحرير الجدول")}
+                            {text(
+                              ...translatedMessage("edit_schedule_f7b360bc8b"),
+                            )}
                           </Button>
                           <Button
                             size="small"
@@ -318,9 +308,9 @@ export function ServerTimePricingEditor() {
                             onClick={() => begin(id, true)}
                           >
                             {text(
-                              "删除时段配置",
-                              "Delete time schedule",
-                              "حذف الجدول الزمني",
+                              ...translatedMessage(
+                                "delete_time_schedule_e5f8f0e767",
+                              ),
                             )}
                           </Button>
                         </div>
@@ -333,9 +323,9 @@ export function ServerTimePricingEditor() {
           {!ids.length && (
             <p>
               {text(
-                "当前没有匹配的服务器时段，不回退演示规则。",
-                "No matching server schedules; Demo rules are not used.",
-                "لا توجد جداول خادم مطابقة؛ لا تُستخدم قواعد العرض التجريبي.",
+                ...translatedMessage(
+                  "no_matching_server_schedules_demo_rules_are_n_e6ae057b83",
+                ),
               )}
             </p>
           )}
@@ -344,7 +334,7 @@ export function ServerTimePricingEditor() {
               disabled={currentPage === 0}
               onClick={() => setPage(currentPage - 1)}
             >
-              {text("上一页", "Previous", "السابق")}
+              {text(...translatedMessage("previous_2672646f39"))}
             </Button>
             <span>
               {currentPage + 1} / {pages} · {ids.length}
@@ -353,7 +343,7 @@ export function ServerTimePricingEditor() {
               disabled={currentPage + 1 >= pages}
               onClick={() => setPage(currentPage + 1)}
             >
-              {text("下一页", "Next", "التالي")}
+              {text(...translatedMessage("next_c0fd39244f"))}
             </Button>
           </div>
         </>
@@ -368,20 +358,16 @@ export function ServerTimePricingEditor() {
         title={
           draft?.remove
             ? text(
-                "删除真实分时配置",
-                "Delete actual time schedule",
-                "حذف الجدول الزمني الفعلي",
+                ...translatedMessage("delete_actual_time_schedule_4fb03ab595"),
               )
             : text(
-                "修改真实分时配置",
-                "Change actual time schedule",
-                "تغيير الجدول الزمني الفعلي",
+                ...translatedMessage("change_actual_time_schedule_9c76a82ca5"),
               )
         }
         description={text(
-          "所选模型的全部时段按一个配置版本整体保存。取消仅放弃此草稿。",
-          "All windows for the selected model are saved together against one configuration version. Cancel discards this draft.",
-          "تُحفظ فترات النموذج المحدد معًا وفق إصدار إعدادات واحد. يلغي الإلغاء هذه المسودة.",
+          ...translatedMessage(
+            "all_windows_for_the_selected_model_are_saved__fd62a1845a",
+          ),
         )}
         footer={
           <>
@@ -389,7 +375,7 @@ export function ServerTimePricingEditor() {
               disabled={mutation.isPending}
               onClick={() => setDraft(null)}
             >
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             <Button
               variant="primary"
@@ -397,16 +383,8 @@ export function ServerTimePricingEditor() {
               onClick={() => (review ? void save() : setReview(true))}
             >
               {review
-                ? text(
-                    "确认分时变更",
-                    "Confirm time changes",
-                    "تأكيد تغييرات الوقت",
-                  )
-                : text(
-                    "预览分时变更",
-                    "Review time changes",
-                    "مراجعة تغييرات الوقت",
-                  )}
+                ? text(...translatedMessage("confirm_time_changes_ac098577f5"))
+                : text(...translatedMessage("review_time_changes_5bdebbc2df"))}
             </Button>
           </>
         }
@@ -421,14 +399,14 @@ export function ServerTimePricingEditor() {
                 <p>
                   {draft.remove
                     ? text(
-                        "删除此模型的时段配置，后续请求恢复基础倍率 1。",
-                        "Delete this model's schedule. Future requests use base multiplier 1.",
-                        "حذف جدول هذا النموذج. تستخدم الطلبات القادمة المعامل الأساسي 1.",
+                        ...translatedMessage(
+                          "delete_this_model_s_schedule_future_requests__0e66691eaf",
+                        ),
                       )
                     : text(
-                        "保存此模型的完整时段：",
-                        "Save this model's complete schedule:",
-                        "حفظ الجدول الكامل لهذا النموذج:",
+                        ...translatedMessage(
+                          "save_this_model_s_complete_schedule_1a675f0ebd",
+                        ),
                       )}
                 </p>
                 <p>
@@ -449,9 +427,9 @@ export function ServerTimePricingEditor() {
                 ))}
                 <p>
                   {text(
-                    "跨午夜时段归开始日，结束时刻不包含在内；未命中时段使用倍率 1。按当地实际时刻匹配：夏令时重复分钟均命中，跳过的分钟不会补造。新请求在准入时冻结价格，既有请求与历史账单不重写；其他模型、基础价格和权限保持原值。",
-                    "Overnight windows belong to their start weekday; ends are exclusive and unmatched windows use multiplier 1. Local wall-clock matching includes both repeated DST minutes and invents no skipped minutes. New requests capture pricing at admission; existing requests and historical bills are not rewritten. Other models, base prices and permissions retain their values.",
-                    "تُنسب فترات منتصف الليل إلى يوم البداية وتُستثنى النهاية؛ خارج الفترات يُستخدم المعامل 1. تطابق الدقائق المحلية المتكررة بالتوقيت الصيفي دون اختراع الدقائق المحذوفة. تلتقط الطلبات الجديدة السعر عند القبول؛ لا تتغير الطلبات الحالية أو الفواتير السابقة أو النماذج والأسعار والصلاحيات الأخرى.",
+                    ...translatedMessage(
+                      "overnight_windows_belong_to_their_start_weekd_c3953ae946",
+                    ),
                   )}
                 </p>
                 {!draft.remove && (
@@ -461,18 +439,14 @@ export function ServerTimePricingEditor() {
                       setError("");
                     }}
                   >
-                    {text("返回编辑", "Back to edit", "العودة للتحرير")}
+                    {text(...translatedMessage("back_to_edit_8e464c075a"))}
                   </Button>
                 )}
               </div>
             ) : (
               <div className="stp-fields">
                 <label>
-                  {text(
-                    "分时模型标识",
-                    "Scheduled model ID",
-                    "معرّف النموذج المجدول",
-                  )}
+                  {text(...translatedMessage("scheduled_model_id_97c646c482"))}
                   <input
                     dir="ltr"
                     readOnly={draft.locked}
@@ -485,9 +459,7 @@ export function ServerTimePricingEditor() {
                 </label>
                 <label>
                   {text(
-                    "IANA 时区或 UTC",
-                    "IANA timezone or UTC",
-                    "منطقة IANA أو UTC",
+                    ...translatedMessage("iana_timezone_or_utc_441e4d2fe7"),
                   )}
                   <input
                     dir="ltr"
@@ -509,20 +481,20 @@ export function ServerTimePricingEditor() {
                     className="time-window-fields"
                     key={index}
                     aria-label={text(
-                      `时段 ${index + 1}`,
-                      `Window ${index + 1}`,
-                      `الفترة ${index + 1}`,
+                      ...translatedMessage("window_ae6bb2941a", {
+                        p0: index + 1,
+                      }),
                     )}
                   >
                     <legend>
                       {text(
-                        `时段 ${index + 1}`,
-                        `Window ${index + 1}`,
-                        `الفترة ${index + 1}`,
+                        ...translatedMessage("window_ae6bb2941a", {
+                          p0: index + 1,
+                        }),
                       )}
                     </legend>
                     <label>
-                      {text("时段标识", "Window ID", "معرّف الفترة")}
+                      {text(...translatedMessage("window_id_d73926f6d2"))}
                       <input
                         dir="ltr"
                         maxLength={64}
@@ -533,7 +505,7 @@ export function ServerTimePricingEditor() {
                       />
                     </label>
                     <label>
-                      {text("时段名称", "Window label", "اسم الفترة")}
+                      {text(...translatedMessage("window_label_d2547826c7"))}
                       <input
                         maxLength={128}
                         value={window.label}
@@ -563,7 +535,7 @@ export function ServerTimePricingEditor() {
                       ))}
                     </div>
                     <label>
-                      {text("开始 HH:MM", "Start HH:MM", "البداية HH:MM")}
+                      {text(...translatedMessage("start_hh_mm_186a4d8d50"))}
                       <input
                         dir="ltr"
                         maxLength={5}
@@ -575,9 +547,9 @@ export function ServerTimePricingEditor() {
                     </label>
                     <label>
                       {text(
-                        "结束 HH:MM（可填 24:00）",
-                        "End HH:MM (24:00 allowed)",
-                        "النهاية HH:MM (يُسمح بـ 24:00)",
+                        ...translatedMessage(
+                          "end_hh_mm_24_00_allowed_60f391517d",
+                        ),
                       )}
                       <input
                         dir="ltr"
@@ -589,7 +561,9 @@ export function ServerTimePricingEditor() {
                       />
                     </label>
                     <label>
-                      {text("时段倍率", "Window multiplier", "معامل الفترة")}
+                      {text(
+                        ...translatedMessage("window_multiplier_b309f0fc1c"),
+                      )}
                       <input
                         dir="ltr"
                         inputMode="decimal"
@@ -616,9 +590,7 @@ export function ServerTimePricingEditor() {
                       }
                     >
                       {text(
-                        "移除此时段",
-                        "Remove this window",
-                        "إزالة هذه الفترة",
+                        ...translatedMessage("remove_this_window_3ef5184de9"),
                       )}
                     </Button>
                   </fieldset>
@@ -645,13 +617,13 @@ export function ServerTimePricingEditor() {
                     })
                   }
                 >
-                  {text("添加时段", "Add window", "إضافة فترة")}
+                  {text(...translatedMessage("add_window_971b01314f"))}
                 </Button>
                 <small>
                   {text(
-                    "每个模型最多 32 个互不重叠的周时段，倍率大于 0 且不超过 100。所有时段共享明确时区。本区编辑倍率，独立词元单价请在下方单独设置；服务器最终校验时区。",
-                    "At most 32 non-overlapping weekly windows per model, with multiplier greater than 0 and at most 100. All windows share an explicit timezone. This section edits multipliers; configure independent token prices separately below. The server validates timezone support.",
-                    "حتى 32 فترة أسبوعية غير متداخلة لكل نموذج، بمعامل أكبر من صفر وحتى 100 ومنطقة زمنية صريحة. يحرر هذا القسم المعاملات؛ عيّن أسعار الرموز المستقلة منفصلة أدناه. يتحقق الخادم من المنطقة الزمنية.",
+                    ...translatedMessage(
+                      "at_most_32_non_overlapping_weekly_windows_per_4dc8b73c07",
+                    ),
                   )}
                 </small>
                 {issue && <p role="alert">{issueText[issue]}</p>}
@@ -660,9 +632,9 @@ export function ServerTimePricingEditor() {
             {conflict && (
               <p role="alert">
                 {text(
-                  "配置版本变化或读取失败，请刷新并重新打开编辑。",
-                  "Configuration changed or could not be read. Refresh and reopen the editor.",
-                  "تغيّر الإعداد أو تعذرت قراءته. حدّث وأعد فتح المحرر.",
+                  ...translatedMessage(
+                    "configuration_changed_or_could_not_be_read_re_0bc0410fe4",
+                  ),
                 )}
               </p>
             )}

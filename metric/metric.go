@@ -138,6 +138,9 @@ func (a *AttemptSpan) RecordFirstToken() {
 	a.ttft = time.Since(a.start)
 }
 
+// TTFTMilliseconds exposes the measured attempt latency after EndAttempt.
+func (a *AttemptSpan) TTFTMilliseconds() float64 { return float64(a.ttft) / float64(time.Millisecond) }
+
 // EndAttempt finalizes the attempt and pushes a sample to the channel
 // rolling window. Safe to call once; subsequent calls are no-ops.
 func (s *RequestSpan) EndAttempt(a *AttemptSpan, outcome AttemptClass, statusCode int) {

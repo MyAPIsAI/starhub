@@ -1,3 +1,5 @@
+import { regionalLocale } from "../lib/locale-format";
+import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
@@ -69,17 +71,18 @@ function TokenTimeEditor() {
         !issue &&
         (draft.locked || !Object.hasOwn(draft.base.rules, draft.id))));
   const prices: Record<TokenPriceKey, string> = {
-    input_per_m: text("文字输入", "Text input", "إدخال نصي"),
-    output_per_m: text("文字输出", "Text output", "إخراج نصي"),
-    cache_read_per_m: text("缓存读取", "Cache read", "قراءة الذاكرة المؤقتة"),
-    cache_write_per_m: text("缓存写入", "Cache write", "كتابة الذاكرة المؤقتة"),
-    audio_input_per_m: text("音频输入", "Audio input", "إدخال صوتي"),
-    audio_output_per_m: text("音频输出", "Audio output", "إخراج صوتي"),
+    input_per_m: text(...translatedMessage("text_input_ec3230d3db")),
+    output_per_m: text(...translatedMessage("text_output_1e35e96b9d")),
+    cache_read_per_m: text(...translatedMessage("cache_read_45022ee2b3")),
+    cache_write_per_m: text(...translatedMessage("cache_write_bb46a7ab03")),
+    audio_input_per_m: text(...translatedMessage("audio_input_1ed2703c7e")),
+    audio_output_per_m: text(...translatedMessage("audio_output_f7c8200fa1")),
   };
   const weekdays = Array.from({ length: 7 }, (_, day) =>
-    new Intl.DateTimeFormat(lang, { weekday: "long", timeZone: "UTC" }).format(
-      new Date(Date.UTC(2026, 0, 4 + day)),
-    ),
+    new Intl.DateTimeFormat(regionalLocale(lang), {
+      weekday: "long",
+      timeZone: "UTC",
+    }).format(new Date(Date.UTC(2026, 0, 4 + day))),
   );
   const begin = (id = "", remove = false) => {
     if (!data) return;
@@ -131,9 +134,9 @@ function TokenTimeEditor() {
     } catch {
       setError(
         text(
-          "草稿超出限制或包含无效字段，尚未提交。",
-          "The draft exceeds limits or contains invalid fields; nothing was submitted.",
-          "تتجاوز المسودة الحدود أو تحتوي حقولًا غير صالحة؛ لم تُرسل.",
+          ...translatedMessage(
+            "the_draft_exceeds_limits_or_contains_invalid__bbfb007a01",
+          ),
         ),
       );
       return;
@@ -148,29 +151,30 @@ function TokenTimeEditor() {
       setDraft(null);
       setNotice(
         text(
-          `独立单价已保存 v${result.version}；响应进程加载 v${result.loaded_version}。`,
-          `Independent prices saved at v${result.version}; response process loaded v${result.loaded_version}.`,
-          `حُفظت الأسعار المستقلة بالإصدار ${result.version}؛ حمّلت العملية المستجيبة ${result.loaded_version}.`,
+          ...translatedMessage(
+            "independent_prices_saved_at_v_response_proces_16f65a0bce",
+            { p0: result.version, p1: result.loaded_version },
+          ),
         ),
       );
     } catch (caught) {
       setError(
         caught instanceof ApiError && caught.status === 409
           ? text(
-              "配置已变化，未覆盖新版本。请刷新并重新打开，草稿暂保留。",
-              "Configuration changed; the newer version was not overwritten. Refresh and reopen; the draft is retained.",
-              "تغيّرت الإعدادات ولم يُستبدل الإصدار الأحدث. حدّث وأعد الفتح؛ احتُفظ بالمسودة.",
+              ...translatedMessage(
+                "configuration_changed_the_newer_version_was_n_cb544b59e2",
+              ),
             )
           : caught instanceof ApiError && caught.status === 400
             ? text(
-                "服务器拒绝了规则。检查时区、完整单价及模型是否按词元计费，刷新后重新编辑。",
-                "The server rejected the rules. Check timezone, complete prices and token billing mode; refresh before editing again.",
-                "رفض الخادم القواعد. تحقق من المنطقة والأسعار الكاملة ونمط فوترة الرموز؛ حدّث قبل إعادة التحرير.",
+                ...translatedMessage(
+                  "the_server_rejected_the_rules_check_timezone__5d28be47c8",
+                ),
               )
             : text(
-                "提交结果未确认，草稿已保留。请先刷新核对服务器配置，不要直接重复提交。",
-                "The submission outcome is unconfirmed; the draft is retained. Refresh and inspect server configuration before submitting again.",
-                "لم تتأكد نتيجة الإرسال واحتُفظ بالمسودة. حدّث وتحقق من إعدادات الخادم قبل إعادة الإرسال.",
+                ...translatedMessage(
+                  "the_submission_outcome_is_unconfirmed_the_dra_55a8fa1ac3",
+                ),
               ),
       );
     }
@@ -189,25 +193,23 @@ function TokenTimeEditor() {
     <section
       className="server-time-pricing server-time-token-pricing"
       aria-label={text(
-        "服务器独立时段单价",
-        "Server independent window prices",
-        "أسعار فترات الخادم المستقلة",
+        ...translatedMessage("server_independent_window_prices_3e99534292"),
       )}
     >
       <header>
         <div>
           <h3>
             {text(
-              "服务器独立时段单价",
-              "Server independent window prices",
-              "أسعار فترات الخادم المستقلة",
+              ...translatedMessage(
+                "server_independent_window_prices_3e99534292",
+              ),
             )}
           </h3>
           <p>
             {text(
-              "每个时段明确填写六类词元单价，单位为美元/百万词元。支持同步请求与异步任务的词元计费；分组与分时倍率继续叠加。任务按提交费率冻结，有实际用量按实际结算；缺少用量时按提交估算结算并标注来源，失败退款、取消按一半估算。",
-              "Set all six token prices per window in USD per million tokens. Supports synchronous and asynchronous token billing with group and time multipliers. Tasks freeze admission prices and bill reported usage; missing usage uses the labelled admission estimate (failed: refund; cancelled: half estimate).",
-              "حدد أسعار فئات الرموز الست لكل فترة بالدولار لكل مليون رمز. تدعم الطلبات المتزامنة والمهام مع معاملات المجموعة والوقت. تُثبّت أسعار القبول وتُحسب الرموز الفعلية؛ عند غيابها يُستخدم تقدير القبول المعلن، مع رد الفشل ونصف التقدير للإلغاء.",
+              ...translatedMessage(
+                "set_all_six_token_prices_per_window_in_usd_pe_22702fa0a0",
+              ),
             )}
           </p>
         </div>
@@ -220,9 +222,7 @@ function TokenTimeEditor() {
             }}
           >
             {text(
-              "刷新独立单价",
-              "Refresh independent prices",
-              "تحديث الأسعار المستقلة",
+              ...translatedMessage("refresh_independent_prices_ecf6f83371"),
             )}
           </Button>
           <Button
@@ -232,28 +232,22 @@ function TokenTimeEditor() {
             onClick={() => begin()}
           >
             {text(
-              "登记独立单价",
-              "Configure independent prices",
-              "تعيين أسعار مستقلة",
+              ...translatedMessage("configure_independent_prices_03ee586732"),
             )}
           </Button>
         </div>
       </header>
       {query.isLoading && (
         <p role="status">
-          {text(
-            "正在读取独立单价…",
-            "Loading independent prices…",
-            "جارٍ تحميل الأسعار المستقلة…",
-          )}
+          {text(...translatedMessage("loading_independent_prices_ce26d71458"))}
         </p>
       )}
       {query.isError && (
         <p role="alert">
           {text(
-            "无法确认服务器独立单价、计费能力或版本保护，已隐藏缓存并暂停编辑。",
-            "Cannot verify server independent prices, billing capabilities or revision guards. Cached data is hidden and editing is paused.",
-            "تعذر التحقق من الأسعار أو إمكانات الفوترة أو حماية الإصدار. أُخفيت البيانات السابقة وأُوقف التحرير.",
+            ...translatedMessage(
+              "cannot_verify_server_independent_prices_billi_1d2a401fb1",
+            ),
           )}
         </p>
       )}
@@ -262,9 +256,9 @@ function TokenTimeEditor() {
         <>
           <p>
             {text(
-              "数据库 / 响应进程版本",
-              "Database / response process version",
-              "إصدار قاعدة البيانات / العملية المستجيبة",
+              ...translatedMessage(
+                "database_response_process_version_2e855ba12b",
+              ),
             )}
             :{" "}
             <bdi>
@@ -273,9 +267,9 @@ function TokenTimeEditor() {
           </p>
           <label className="stp-search">
             {text(
-              "搜索独立单价模型",
-              "Search independent-price models",
-              "البحث في نماذج الأسعار المستقلة",
+              ...translatedMessage(
+                "search_independent_price_models_f0d1899f30",
+              ),
             )}
             <input
               value={search}
@@ -290,18 +284,18 @@ function TokenTimeEditor() {
             tabIndex={0}
             role="region"
             aria-label={text(
-              "独立单价时段表，可横向滚动",
-              "Independent price schedule table, horizontally scrollable",
-              "جدول فترات الأسعار المستقلة، قابل للتمرير أفقيًا",
+              ...translatedMessage(
+                "independent_price_schedule_table_horizontally_cfbfe21fc8",
+              ),
             )}
           >
             <table>
               <thead>
                 <tr>
-                  <th>{text("模型标识", "Model ID", "معرّف النموذج")}</th>
-                  <th>{text("时区", "Timezone", "المنطقة الزمنية")}</th>
-                  <th>{text("时段数", "Windows", "الفترات")}</th>
-                  <th>{text("操作", "Action", "الإجراء")}</th>
+                  <th>{text(...translatedMessage("model_id_2e00e41239"))}</th>
+                  <th>{text(...translatedMessage("timezone_589797f8d4"))}</th>
+                  <th>{text(...translatedMessage("windows_cb0e7bb70d"))}</th>
+                  <th>{text(...translatedMessage("action_2a8e78b55a"))}</th>
                 </tr>
               </thead>
               <tbody>
@@ -324,9 +318,9 @@ function TokenTimeEditor() {
                             onClick={() => begin(id)}
                           >
                             {text(
-                              "编辑独立单价",
-                              "Edit independent prices",
-                              "تحرير الأسعار المستقلة",
+                              ...translatedMessage(
+                                "edit_independent_prices_f265903bbe",
+                              ),
                             )}
                           </Button>
                           <Button
@@ -335,9 +329,9 @@ function TokenTimeEditor() {
                             onClick={() => begin(id, true)}
                           >
                             {text(
-                              "删除独立单价配置",
-                              "Delete independent schedule",
-                              "حذف جدول الأسعار المستقلة",
+                              ...translatedMessage(
+                                "delete_independent_schedule_7d1b56466d",
+                              ),
                             )}
                           </Button>
                         </div>
@@ -350,9 +344,9 @@ function TokenTimeEditor() {
           {!ids.length && (
             <p>
               {text(
-                "当前没有匹配的服务器独立单价配置。",
-                "No matching independent server price schedules.",
-                "لا توجد جداول أسعار خادم مستقلة مطابقة.",
+                ...translatedMessage(
+                  "no_matching_independent_server_price_schedule_6b7fd107fe",
+                ),
               )}
             </p>
           )}
@@ -361,7 +355,7 @@ function TokenTimeEditor() {
               disabled={currentPage === 0}
               onClick={() => setPage(currentPage - 1)}
             >
-              {text("上一页", "Previous", "السابق")}
+              {text(...translatedMessage("previous_2672646f39"))}
             </Button>
             <span>
               {currentPage + 1} / {pages} · {ids.length}
@@ -370,7 +364,7 @@ function TokenTimeEditor() {
               disabled={currentPage + 1 >= pages}
               onClick={() => setPage(currentPage + 1)}
             >
-              {text("下一页", "Next", "التالي")}
+              {text(...translatedMessage("next_c0fd39244f"))}
             </Button>
           </div>
         </>
@@ -385,20 +379,18 @@ function TokenTimeEditor() {
         title={
           draft?.remove
             ? text(
-                "删除独立单价配置",
-                "Delete independent schedule",
-                "حذف جدول الأسعار المستقلة",
+                ...translatedMessage("delete_independent_schedule_7d1b56466d"),
               )
             : text(
-                "修改独立时段单价",
-                "Change independent window prices",
-                "تغيير أسعار الفترات المستقلة",
+                ...translatedMessage(
+                  "change_independent_window_prices_1aeed4f6dc",
+                ),
               )
         }
         description={text(
-          "按当前配置版本整体保存所选模型的全部独立时段；取消放弃此草稿。",
-          "Save all independent windows for the selected model against the captured configuration version. Cancel discards this draft.",
-          "احفظ جميع فترات النموذج المستقلة وفق إصدار الإعدادات الملتقط. يلغي الإلغاء هذه المسودة.",
+          ...translatedMessage(
+            "save_all_independent_windows_for_the_selected_0236233e61",
+          ),
         )}
         footer={
           <>
@@ -406,7 +398,7 @@ function TokenTimeEditor() {
               disabled={mutation.isPending}
               onClick={() => setDraft(null)}
             >
-              {text("取消", "Cancel", "إلغاء")}
+              {text(...translatedMessage("cancel_0828e4ce08"))}
             </Button>
             <Button
               variant="primary"
@@ -421,14 +413,14 @@ function TokenTimeEditor() {
             >
               {review
                 ? text(
-                    "确认独立单价变更",
-                    "Confirm independent price changes",
-                    "تأكيد تغييرات الأسعار المستقلة",
+                    ...translatedMessage(
+                      "confirm_independent_price_changes_5cfe79db24",
+                    ),
                   )
                 : text(
-                    "预览独立单价变更",
-                    "Review independent price changes",
-                    "مراجعة تغييرات الأسعار المستقلة",
+                    ...translatedMessage(
+                      "review_independent_price_changes_07d6b2746c",
+                    ),
                   )}
             </Button>
           </>
@@ -444,14 +436,14 @@ function TokenTimeEditor() {
                 <p>
                   {draft.remove
                     ? text(
-                        "删除后，后续请求使用基础词元单价；既有分时倍率继续适用。",
-                        "After deletion, future requests use base token prices; existing time multipliers still apply.",
-                        "بعد الحذف تستخدم الطلبات القادمة أسعار الرموز الأساسية مع استمرار معاملات الوقت الحالية.",
+                        ...translatedMessage(
+                          "after_deletion_future_requests_use_base_token_6bab9a163d",
+                        ),
                       )
                     : text(
-                        "保存以下完整独立时段单价，美元/百万词元：",
-                        "Save these complete independent window prices, USD per million tokens:",
-                        "حفظ أسعار الفترات المستقلة الكاملة التالية، بالدولار لكل مليون رمز:",
+                        ...translatedMessage(
+                          "save_these_complete_independent_window_prices_dcbaf4253e",
+                        ),
                       )}
                 </p>
                 <p>
@@ -471,9 +463,9 @@ function TokenTimeEditor() {
                 ))}
                 <p>
                   {text(
-                    "跨午夜归开始日，结束时刻不含在内；按当地时刻匹配夏令时。未命中使用基础单价。新请求准入时冻结价格，历史账单不回算。零单价表示该类用量免费；仍需最少 1 配额的预扣款，结算时退还。",
-                    "Overnight windows belong to their start weekday; ends are exclusive and local clock time handles DST. Outside windows, base prices apply. Pricing freezes at request admission; historical bills are not recalculated. A zero price makes that usage class free; the minimum one-quota reservation is refunded at settlement.",
-                    "تُنسب فترات منتصف الليل إلى يوم البداية وتُستثنى النهاية ويُطابق الوقت المحلي مع التوقيت الصيفي. خارج الفترات تُطبق الأسعار الأساسية. تُثبت الأسعار عند قبول الطلب دون إعادة حساب الفواتير السابقة. السعر الصفري يجعل الفئة مجانية؛ يُرد حجز وحدة الحصة الدنيا عند التسوية.",
+                    ...translatedMessage(
+                      "overnight_windows_belong_to_their_start_weekd_f4867c383b",
+                    ),
                   )}
                 </p>
                 {!draft.remove && (
@@ -481,7 +473,7 @@ function TokenTimeEditor() {
                     disabled={mutation.isPending || attempted}
                     onClick={() => setReview(false)}
                   >
-                    {text("返回编辑", "Back to edit", "العودة للتحرير")}
+                    {text(...translatedMessage("back_to_edit_8e464c075a"))}
                   </Button>
                 )}
               </div>
@@ -489,9 +481,9 @@ function TokenTimeEditor() {
               <div className="stp-fields">
                 <label>
                   {text(
-                    "独立单价模型标识",
-                    "Independent-price model ID",
-                    "معرّف نموذج السعر المستقل",
+                    ...translatedMessage(
+                      "independent_price_model_id_7f6b49865c",
+                    ),
                   )}
                   <input
                     dir="ltr"
@@ -505,9 +497,7 @@ function TokenTimeEditor() {
                 </label>
                 <label>
                   {text(
-                    "IANA 时区或 UTC",
-                    "IANA timezone or UTC",
-                    "منطقة IANA أو UTC",
+                    ...translatedMessage("iana_timezone_or_utc_441e4d2fe7"),
                   )}
                   <input
                     dir="ltr"
@@ -529,20 +519,21 @@ function TokenTimeEditor() {
                     className="time-window-fields"
                     key={index}
                     aria-label={text(
-                      `独立单价时段 ${index + 1}`,
-                      `Independent price window ${index + 1}`,
-                      `فترة سعر مستقلة ${index + 1}`,
+                      ...translatedMessage(
+                        "independent_price_window_3c94b15e59",
+                        { p0: index + 1 },
+                      ),
                     )}
                   >
                     <legend>
                       {text(
-                        `时段 ${index + 1}`,
-                        `Window ${index + 1}`,
-                        `الفترة ${index + 1}`,
+                        ...translatedMessage("window_ae6bb2941a", {
+                          p0: index + 1,
+                        }),
                       )}
                     </legend>
                     <label>
-                      {text("时段标识", "Window ID", "معرّف الفترة")}
+                      {text(...translatedMessage("window_id_d73926f6d2"))}
                       <input
                         dir="ltr"
                         maxLength={64}
@@ -553,7 +544,7 @@ function TokenTimeEditor() {
                       />
                     </label>
                     <label>
-                      {text("时段名称", "Window label", "اسم الفترة")}
+                      {text(...translatedMessage("window_label_d2547826c7"))}
                       <input
                         maxLength={128}
                         value={window.label}
@@ -582,7 +573,7 @@ function TokenTimeEditor() {
                     </div>
                     <div className="token-window-times">
                       <label>
-                        {text("开始 HH:MM", "Start HH:MM", "البداية HH:MM")}
+                        {text(...translatedMessage("start_hh_mm_186a4d8d50"))}
                         <input
                           dir="ltr"
                           maxLength={5}
@@ -594,9 +585,9 @@ function TokenTimeEditor() {
                       </label>
                       <label>
                         {text(
-                          "结束 HH:MM，可填 24:00",
-                          "End HH:MM; 24:00 allowed",
-                          "النهاية HH:MM؛ تُقبل 24:00",
+                          ...translatedMessage(
+                            "end_hh_mm_24_00_allowed_02828fe9c3",
+                          ),
                         )}
                         <input
                           dir="ltr"
@@ -613,9 +604,9 @@ function TokenTimeEditor() {
                         <label key={key}>
                           {prices[key]} ·{" "}
                           {text(
-                            "美元/百万词元",
-                            "USD / million tokens",
-                            "دولار / مليون رمز",
+                            ...translatedMessage(
+                              "usd_million_tokens_385fb62e60",
+                            ),
                           )}
                           <input
                             dir="ltr"
@@ -648,9 +639,7 @@ function TokenTimeEditor() {
                       }
                     >
                       {text(
-                        "移除此时段",
-                        "Remove this window",
-                        "إزالة هذه الفترة",
+                        ...translatedMessage("remove_this_window_3ef5184de9"),
                       )}
                     </Button>
                   </fieldset>
@@ -670,33 +659,33 @@ function TokenTimeEditor() {
                     })
                   }
                 >
-                  {text("添加时段", "Add window", "إضافة فترة")}
+                  {text(...translatedMessage("add_window_971b01314f"))}
                 </Button>
                 <small>
                   {text(
-                    "每个模型最多 32 个不重叠周时段，结束可为 24:00。六类价格均须明确填写，可为 0，最多 9 位小数且不超过 1,000,000 美元/百万词元；不自动继承基础价格。服务器最终校验时区和计费模式。",
-                    "At most 32 non-overlapping weekly windows per model; 24:00 is allowed as an end. All six prices are required, allow zero, and support up to 9 decimals and 1,000,000 USD per million tokens. Base prices are not inherited. The server validates timezone and billing mode.",
-                    "حتى 32 فترة أسبوعية غير متداخلة لكل نموذج؛ تُقبل 24:00 للنهاية. الأسعار الست مطلوبة وتقبل الصفر وحتى 9 منازل عشرية و1,000,000 دولار لكل مليون رمز، دون وراثة الأسعار الأساسية. يتحقق الخادم من المنطقة الزمنية ونمط الفوترة.",
+                    ...translatedMessage(
+                      "at_most_32_non_overlapping_weekly_windows_per_aab9ee4e6c",
+                    ),
                   )}
                 </small>
                 {issue && (
                   <p role="alert">
                     {issue === "prices"
                       ? text(
-                          "请填写全部六类有效单价。",
-                          "Enter all six valid prices.",
-                          "أدخل الأسعار الست الصالحة.",
+                          ...translatedMessage(
+                            "enter_all_six_valid_prices_17f3a4364d",
+                          ),
                         )
                       : issue === "overlap"
                         ? text(
-                            "时段重叠，请检查星期和跨午夜范围。",
-                            "Windows overlap; check weekdays and overnight ranges.",
-                            "الفترات متداخلة؛ تحقق من الأيام وامتداد منتصف الليل.",
+                            ...translatedMessage(
+                              "windows_overlap_check_weekdays_and_overnight__f8c190e8ed",
+                            ),
                           )
                         : text(
-                            "请检查时区、唯一标识、名称、星期及起止时间，并遵守时段数量限制。",
-                            "Check timezone, unique IDs, labels, weekdays and start/end times, and stay within the window limit.",
-                            "تحقق من المنطقة والمعرفات الفريدة والأسماء والأيام وأوقات البداية والنهاية وحدود عدد الفترات.",
+                            ...translatedMessage(
+                              "check_timezone_unique_ids_labels_weekdays_and_84fab1b7c6",
+                            ),
                           )}
                   </p>
                 )}
@@ -705,9 +694,9 @@ function TokenTimeEditor() {
             {conflict && (
               <p role="alert">
                 {text(
-                  "配置已变化或读取失败，请刷新并重新打开编辑。",
-                  "Configuration changed or could not be read. Refresh and reopen the editor.",
-                  "تغيّرت الإعدادات أو تعذرت قراءتها. حدّث وأعد فتح المحرر.",
+                  ...translatedMessage(
+                    "configuration_changed_or_could_not_be_read_re_236ae35825",
+                  ),
                 )}
               </p>
             )}

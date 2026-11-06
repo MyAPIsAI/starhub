@@ -11,6 +11,7 @@ package dto
 // the totals (OpenAI counts cached / audio tokens inside prompt_tokens and
 // completion_tokens) and drive the fine-grained settlement pricing.
 type Usage struct {
+	AcceptedAt           int64  `json:"-"`
 	ResourceID           string `json:"-"`
 	ResourceIDs          string `json:"-"`
 	SnapshotSequence     int64  `json:"-"`

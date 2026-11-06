@@ -26,6 +26,7 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 		ChannelID: task.ChannelID, Model: task.Model, RequestedModel: original, Protocol: task.Protocol,
 		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status}
 	entry.TraceID = task.TraceID
+	entry.AcceptedAt = task.SubmitTime
 	entry.DurationMs = max(task.CompleteTime-task.SubmitTime, 0) * 1000
 	callType := task.CallType
 	if callType == "" {

@@ -11,6 +11,7 @@
 import { apiGet, apiPost, type ApiRequestOptions } from "./http";
 
 export interface AuthUser {
+  preferred_language?: string;
   platform_admin?: boolean;
   account_kind?: "customer" | "staff";
   id: number;
