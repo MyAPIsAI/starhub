@@ -20,6 +20,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 starhub && mkdir /data && chown starhub /data
 COPY --from=backend /out/starhub /usr/local/bin/starhub
+COPY NOTICE THIRD-PARTY-LICENSES.md /licenses/
 USER starhub
 WORKDIR /data
 VOLUME ["/data"]
