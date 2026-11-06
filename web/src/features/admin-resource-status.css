@@ -96,75 +96,155 @@
 .resource-snapshot-panel [data-snapshot-state="clock_skew"] {
   color: var(--warning);
 }
-.resource-monitor-history h2 {
-  margin-bottom: 8px;
+.resource-monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
 }
-.resource-monitor-history > p {
+.resource-monitor-history {
+  padding: 20px;
+  min-height: 260px;
+}
+.resource-status-page .resource-monitor-history h2 {
+  font-size: 15px;
+  margin: 0;
+}
+.resource-monitor-history p {
   font-size: 12px;
-  margin: 10px 0;
+  margin: 6px 0;
 }
 .resource-monitor-history header p {
+  margin: 6px 0 14px;
+}
+.resource-monitor-toolbar,
+.resource-monitor-links,
+.resource-monitor-delivery,
+.resource-monitor-prices {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.resource-monitor-toolbar {
+  margin-bottom: 12px;
+}
+.resource-monitor-toolbar .button {
   font-size: 12px;
+}
+.resource-monitor-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  max-height: 440px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.resource-monitor-list > li {
+  padding: 14px 0;
+  overflow-wrap: anywhere;
+}
+.resource-monitor-list > li:first-child {
+  padding-top: 0;
+}
+.resource-monitor-list > li + li {
+  border-top: 1px solid var(--border);
+}
+.resource-monitor-entry-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.resource-monitor-entry-heading strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.resource-monitor-history time {
+  color: var(--muted);
+  font-size: 11px;
+}
+.resource-monitor-identifier {
+  display: block;
   margin-top: 8px;
+  font-size: 12px;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.resource-monitor-identifiers code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.resource-monitor-links,
+.resource-monitor-delivery {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.resource-monitor-delivery,
+.resource-monitor-missing {
+  color: var(--muted);
+}
+.resource-monitor-history .resource-status-badge {
+  font-size: 11px;
+  padding: 3px 6px;
+  white-space: normal;
+}
+.resource-monitor-details {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.resource-monitor-details summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.resource-monitor-details dl {
+  margin: 8px 0 0;
+}
+.resource-monitor-details dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 12px;
+  padding: 4px 0;
+}
+.resource-monitor-details dd {
+  margin: 0;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.resource-monitor-details code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.resource-monitor-list:focus-visible,
+.resource-monitor-details summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 .resource-monitor-notice {
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--warning-soft);
 }
-.resource-monitor-table {
-  overflow: auto;
-  margin-top: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.resource-monitor-table table {
-  min-width: 780px;
-  width: 100%;
-  border-collapse: collapse;
-}
-.admin-content .resource-monitor-table th,
-.admin-content .resource-monitor-table td {
-  padding: 10px 12px !important;
-  text-align: start;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  vertical-align: top;
-}
-.resource-monitor-table th {
-  background: var(--subtle);
-  color: var(--muted);
-  white-space: nowrap;
-}
-.resource-monitor-table small {
-  display: block;
-  max-width: 260px;
-  overflow-wrap: anywhere;
-  color: var(--muted);
-  font-size: 11px;
-  margin-top: 4px;
-}
-.resource-monitor-table code {
-  overflow-wrap: anywhere;
-}
 .resource-monitor-history .resource-status-pagination {
-  margin-inline: 0;
+  margin: 12px 0 0;
+  gap: 8px;
+  font-size: 12px;
 }
-.resource-status-failures {
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
+.resource-monitor-history .resource-monitor-empty {
+  margin-top: 18px;
 }
-.resource-status-failures summary {
-  cursor: pointer;
-}
-.resource-status-failures li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 8px 0;
-}
-.resource-status-failures ul {
-  padding: 0;
+@media (max-width: 1200px) {
+  .resource-monitor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .resource-monitor-history {
+    min-height: 180px;
+  }
 }
 .resource-status-filters {
   display: flex;

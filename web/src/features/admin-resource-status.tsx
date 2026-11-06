@@ -1,6 +1,6 @@
 import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 import {
@@ -73,6 +73,7 @@ const gatewayPriority: Record<string, number> = {
 export function AdminResourceStatus() {
   const t = useStaffText(),
     identity = useSessionQueryIdentity();
+  const queryClient = useQueryClient();
   const [confirm, setConfirm] = useState(false),
     [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -127,7 +128,13 @@ export function AdminResourceStatus() {
       apiPost<SyncStatus>("/api/admin/resource-sync", { confirm: true }),
     onSuccess: async () => {
       setConfirm(false);
-      await Promise.all([sync.refetch(), resources.refetch()]);
+      await Promise.all([
+        sync.refetch(),
+        resources.refetch(),
+        queryClient.invalidateQueries({
+          queryKey: ["staff-resource-monitoring", ...identity],
+        }),
+      ]);
     },
   });
   const data = sync.isError ? undefined : sync.data,
@@ -182,28 +189,11 @@ export function AdminResourceStatus() {
     video: t(...translatedMessage("video_e2fb3c780b")),
     embedding: t(...translatedMessage("embedding_379afcef40")),
   };
-  const failureLabels: Record<string, string> = {
-    source_unreachable: t(
-      ...translatedMessage("resource_platform_unreachable_6a0272d30e"),
-    ),
-    source_rejected: t(
-      ...translatedMessage("source_rejected_the_request_0c4725400b"),
-    ),
-    invalid_snapshot: t(
-      ...translatedMessage("resource_validation_failed_ec65090949"),
-    ),
-    invalid_payload: t(
-      ...translatedMessage("invalid_response_format_or_size_3f4b26609a"),
-    ),
-    version_conflict: t(
-      ...translatedMessage("version_rollback_or_content_conflict_93dba0a33b"),
-    ),
-    checksum_mismatch: t(
-      ...translatedMessage("catalog_checksum_mismatch_5d7315f458"),
-    ),
-    apply_failed: t(
-      ...translatedMessage("apply_failed_published_data_retained_0e039a8f8d"),
-    ),
+  const syncDisabled =
+    !data?.configured || mutation.isPending || data.status === "syncing";
+  const requestFullSync = () => {
+    mutation.reset();
+    setConfirm(true);
   };
   const error = t(
     ...translatedMessage("unable_to_load_current_status_retry_d200806886"),
@@ -228,22 +218,21 @@ export function AdminResourceStatus() {
             variant="secondary"
             disabled={sync.isFetching || resources.isFetching}
             onClick={() =>
-              void Promise.all([sync.refetch(), resources.refetch()])
+              void Promise.all([
+                sync.refetch(),
+                resources.refetch(),
+                queryClient.invalidateQueries({
+                  queryKey: ["staff-resource-monitoring", ...identity],
+                }),
+              ])
             }
           >
             {t(...translatedMessage("refresh_9c83c3600a"))}
           </Button>
           <Button
             data-testid="force-resource-sync"
-            disabled={
-              !data?.configured ||
-              mutation.isPending ||
-              data.status === "syncing"
-            }
-            onClick={() => {
-              mutation.reset();
-              setConfirm(true);
-            }}
+            disabled={syncDisabled}
+            onClick={requestFullSync}
           >
             {t(...translatedMessage("force_full_sync_fafc970d6d"))}
           </Button>
@@ -340,40 +329,6 @@ export function AdminResourceStatus() {
                 )}
               </p>
             )}
-            <details
-              className="resource-status-failures"
-              open={data.status === "alert"}
-            >
-              <summary>
-                {t(
-                  ...translatedMessage(
-                    "recent_synchronization_failures_5ee7da8fd5",
-                  ),
-                )}{" "}
-                ({data.failures.length})
-              </summary>
-              {data.failures.length ? (
-                <ul>
-                  {data.failures.map((f) => (
-                    <li key={f.id}>
-                      <time>{date(f.at)} UTC</time>
-                      <span>
-                        {failureLabels[f.code] ??
-                          t(
-                            ...translatedMessage(
-                              "synchronization_failed_6c3ef2b844",
-                            ),
-                          )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>
-                  {t(...translatedMessage("no_failure_records_7cbc91c430"))}
-                </p>
-              )}
-            </details>
           </>
         )}
         {mutation.isSuccess && !confirm && data?.status === "aligned" && (
@@ -392,6 +347,9 @@ export function AdminResourceStatus() {
         failed={sync.isError}
         pending={sync.isPending}
         selectResource={setSelected}
+        syncStatus={data}
+        syncDisabled={syncDisabled}
+        onForceSync={requestFullSync}
       >
         <section className="resource-status-panel resource-status-inventory">
           <header className="resource-status-heading">

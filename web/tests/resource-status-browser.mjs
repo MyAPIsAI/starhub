@@ -7,7 +7,7 @@ import { chromium } from "playwright";
 
 // Synthetic HTTP responses isolate presentation from the live database.
 const web = fileURLToPath(new URL("../", import.meta.url));
-const out = path.resolve(web, "../output/resource-status-browser");
+const out = path.resolve(web, "../output/resource-monitor-cards-browser");
 await mkdir(out, { recursive: true });
 const vite = await createServer({
   root: web,
@@ -36,7 +36,8 @@ try {
         );
         let phase = "alert",
           posts = 0,
-          reads = 0;
+          reads = 0,
+          mismatchRecovered = false;
         const now = Math.floor(Date.now() / 1000);
         const resources = Array.from({ length: 21 }, (_, i) => ({
           id: `resource-${String(i + 1).padStart(2, "0")}`,
@@ -112,6 +113,13 @@ try {
               };
             else if (url.pathname === "/api/admin/resource-sync") {
               reads++;
+              if (phase === "error") {
+                await route.fulfill({
+                  status: 500,
+                  json: { success: false, message: "Synthetic sync failure" },
+                });
+                return;
+              }
               if (phase === "legacy") {
                 await route.fulfill({
                   json: {
@@ -146,14 +154,17 @@ try {
                   age_seconds: phase === "alert" ? 190 : 1,
                   status: phase === "alert" ? "expired" : "fresh",
                 },
-                last_aligned_at: now - 600,
+                last_aligned_at: phase === "aligned" ? now + 1 : now - 600,
                 last_attempt_at: now,
                 observed_at: now,
                 failed_cycles: phase === "alert" ? 2 : 0,
-                failures: [
-                  { id: 1, at: now - 300, code: "source_unreachable" },
-                  { id: 2, at: now, code: "source_rejected" },
-                ],
+                failures:
+                  phase === "empty"
+                    ? []
+                    : [
+                        { id: 1, at: now - 300, code: "source_unreachable" },
+                        { id: 2, at: now, code: "source_rejected" },
+                      ],
               };
             } else if (url.pathname === "/api/admin/resource-monitoring") {
               if (phase === "error") {
@@ -174,17 +185,39 @@ try {
                 mismatches:
                   phase === "empty"
                     ? []
-                    : [1, 2].map((id) => ({
+                    : (phase === "paged"
+                        ? Array.from(
+                            {
+                              length:
+                                Number(
+                                  url.searchParams.get("mismatch_page") || 1,
+                                ) === 1
+                                  ? 20
+                                  : 5,
+                            },
+                            (_, i) =>
+                              i +
+                              1 +
+                              (Number(
+                                url.searchParams.get("mismatch_page") || 1,
+                              ) -
+                                1) *
+                                20,
+                          )
+                        : [1, 2]
+                      ).map((id) => ({
                         id: `mismatch-${id}`,
-                        resource_id: "resource-21",
+                        resource_id:
+                          id === 2 ? "retired-resource" : "resource-21",
                         snapshot_sequence: 298 + id,
                         snapshot_price: 4,
                         event_price: id === 1 ? 6 : 8,
                         event_version: id + 10,
                         at: now - 100 * id,
-                        resolved_at: phase === "aligned" ? now : 0,
+                        resolved_at: mismatchRecovered ? now : 0,
                       })),
-                mismatch_total: phase === "empty" ? 0 : 2,
+                mismatch_total:
+                  phase === "empty" ? 0 : phase === "paged" ? 25 : 2,
                 incidents:
                   phase === "empty"
                     ? []
@@ -237,7 +270,11 @@ try {
                 observed_at: now,
               };
             } else if (url.pathname === "/api/log") {
-              assert.equal(url.searchParams.get("resource_id"), "resource-21");
+              assert.ok(
+                ["resource-21", "retired-resource"].includes(
+                  url.searchParams.get("resource_id"),
+                ),
+              );
               data = {
                 items: [
                   {
@@ -283,11 +320,13 @@ try {
         );
         await page.locator('[data-snapshot-state="expired"]').waitFor();
         await page
-          .locator(".resource-monitor-history tbody tr")
+          .locator('.resource-monitor-list:not([data-history="sync"]) > li')
           .nth(3)
           .waitFor();
         assert.equal(
-          await page.locator(".resource-monitor-history tbody tr").count(),
+          await page
+            .locator('.resource-monitor-list:not([data-history="sync"]) > li')
+            .count(),
           4,
         );
         await page
@@ -301,10 +340,7 @@ try {
             `snapshot-history-${lang}-${theme}-${width}.png`,
           ),
         });
-        assert.equal(
-          await page.locator("html").getAttribute("dir"),
-          lang === "ar" ? "rtl" : "ltr",
-        );
+        assert.equal(await page.locator("html").getAttribute("dir"), "ltr");
         assert.ok(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -322,6 +358,60 @@ try {
         await page.screenshot({
           path: path.join(out, `histories-${lang}-${theme}-${width}.png`),
         });
+        const cards = page.locator(".resource-monitor-grid > section");
+        assert.equal(await cards.count(), 3);
+        const boxes = await cards.evaluateAll((nodes) =>
+          nodes.map((node) => ({
+            x: node.getBoundingClientRect().x,
+            y: node.getBoundingClientRect().y,
+            width: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+          })),
+        );
+        assert.ok(boxes.every((box) => box.scrollWidth <= box.width + 1));
+        if (width === 1440)
+          assert.ok(boxes.every((box) => Math.abs(box.y - boxes[0].y) < 2));
+        else assert.ok(boxes[0].y < boxes[1].y && boxes[1].y < boxes[2].y);
+        assert.equal(
+          await page.locator("html").getAttribute("lang"),
+          lang === "ar" ? "en" : lang,
+        );
+        const mismatchRows = page.locator('[data-history="mismatches"] > li');
+        const recordDetails = mismatchRows.first().locator("summary");
+        await recordDetails.focus();
+        await page.keyboard.press("Enter");
+        await mismatchRows.first().locator("details[open]").waitFor();
+        assert.ok(
+          (await mismatchRows.first().locator("dl").textContent()).includes(
+            "299",
+          ),
+        );
+        await page.keyboard.press("Enter");
+        const missingTrigger = mismatchRows
+          .nth(1)
+          .locator('[data-action="history-resource-detail"]');
+        await missingTrigger.click();
+        await page.locator('.resource-status-detail [role="status"]').waitFor();
+        await page.keyboard.press("Escape");
+        await page.getByRole("dialog").waitFor({ state: "hidden" });
+        await mismatchRows
+          .nth(1)
+          .locator(".resource-monitor-missing")
+          .waitFor();
+        await page.waitForFunction(
+          () =>
+            document.activeElement?.getAttribute("data-action") ===
+            "history-resource-detail",
+        );
+        await mismatchRows.nth(1).locator("a").click();
+        await page.getByTestId("calls-resource-filter").waitFor();
+        assert.equal(
+          new URL(page.url()).searchParams.get("resource_id"),
+          "retired-resource",
+        );
+        await page.goBack();
+        await page.locator(".resource-status-table tbody tr").first().waitFor();
+
         await page
           .locator(".resource-status-inventory")
           .evaluate((e) =>
@@ -338,7 +428,7 @@ try {
         });
         await page.locator(".resource-status-table").evaluate((e, rtl) => {
           e.scrollLeft = rtl ? -e.scrollWidth : e.scrollWidth;
-        }, lang === "ar");
+        }, false);
         await page.screenshot({
           path: path.join(out, `resources-${lang}-${theme}-${width}.png`),
         });
@@ -447,7 +537,7 @@ try {
             .querySelector(".resource-status-table tbody")
             ?.textContent.includes("resource-21"),
         );
-        const trigger = page.getByTestId("force-resource-sync");
+        const trigger = page.getByTestId("history-force-resource-sync");
         await trigger.click();
         const dialog = page.getByRole("dialog");
         await dialog.waitFor();
@@ -461,7 +551,9 @@ try {
         await page.waitForFunction(
           () =>
             document.activeElement ===
-            document.querySelector('[data-testid="force-resource-sync"]'),
+            document.querySelector(
+              '[data-testid="history-force-resource-sync"]',
+            ),
         );
         await trigger.click();
         await dialog.waitFor();
@@ -471,13 +563,81 @@ try {
         await page.locator('[data-state="aligned"]').waitFor();
         await page.locator('[data-snapshot-state="fresh"]').waitFor();
         assert.equal(
-          await page.locator(".resource-monitor-history tbody tr").count(),
+          await page
+            .locator('.resource-monitor-list:not([data-history="sync"]) > li')
+            .count(),
           4,
         );
+        assert.equal(
+          await page
+            .locator('[data-history="mismatches"] [data-state="alert"]')
+            .count(),
+          2,
+        );
+        await page
+          .locator('[data-history="sync"] [data-state="normal"]')
+          .first()
+          .waitFor();
+        mismatchRecovered = true;
+        await page.locator(".resource-monitor-toolbar button").last().click();
+        await page
+          .locator('[data-history="mismatches"] [data-state="normal"]')
+          .nth(1)
+          .waitFor();
+        assert.equal(
+          await page.locator('[data-history="sync"] > li').count(),
+          2,
+        );
+        await page.locator(".resource-monitor-grid").scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: path.join(out, `recovered-${lang}-${theme}-${width}.png`),
+        });
         if (lang === "zh" && theme === "light" && width === 1440) {
           const prior = reads;
           await page.waitForTimeout(5500);
           assert.ok(reads > prior);
+        }
+        if (lang === "zh" && theme === "light" && width === 1440) {
+          phase = "paged";
+          await page.reload();
+          await page
+            .locator('[data-history="mismatches"] > li')
+            .nth(19)
+            .waitFor();
+          const list = page.locator('[data-history="mismatches"]');
+          assert.ok(
+            await list.evaluate(
+              (node) => node.scrollHeight > node.clientHeight,
+            ),
+          );
+          await list.focus();
+          await page.keyboard.press("End");
+          await page.waitForFunction(
+            () =>
+              document.querySelector('[data-history="mismatches"]').scrollTop >
+              0,
+          );
+          await page
+            .locator(
+              '[aria-labelledby="resource-mismatch-title"] .resource-status-pagination button',
+            )
+            .last()
+            .click();
+          await page.waitForFunction(
+            () =>
+              document.querySelectorAll('[data-history="mismatches"] > li')
+                .length === 5,
+          );
+          await page
+            .locator(
+              '[aria-labelledby="resource-mismatch-title"] .resource-status-pagination button',
+            )
+            .first()
+            .click();
+          await page
+            .locator('[data-history="mismatches"] > li')
+            .nth(19)
+            .waitFor();
         }
         phase = "empty";
         await page.reload();
@@ -488,6 +648,11 @@ try {
           await page.locator(".resource-status-table tbody tr").count(),
           0,
         );
+        await page.locator(".resource-monitor-empty").nth(2).waitFor();
+        await page.locator(".resource-monitor-grid").scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: path.join(out, `empty-${lang}-${theme}-${width}.png`),
+        });
         phase = "error";
         await page.reload();
         await page
@@ -499,6 +664,15 @@ try {
           await page.locator(".resource-status-table tbody tr").count(),
           0,
         );
+        assert.equal(await page.locator(".resource-monitor-empty").count(), 0);
+        assert.equal(
+          await page.locator('.resource-monitor-grid [role="alert"]').count(),
+          3,
+        );
+        await page.locator(".resource-monitor-grid").scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: path.join(out, `error-${lang}-${theme}-${width}.png`),
+        });
         phase = "legacy";
         await page.reload();
         await page

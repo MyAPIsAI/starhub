@@ -1,6 +1,7 @@
 import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { apiGet } from "../lib/api/http";
 import { useStaffText } from "../lib/api/staff";
 import { useSessionQueryIdentity } from "../lib/system-access";
@@ -52,6 +53,9 @@ export function ResourceMonitorPanels({
   failed,
   pending,
   selectResource,
+  syncStatus,
+  syncDisabled,
+  onForceSync,
   children,
 }: {
   snapshot?: SnapshotStatus;
@@ -59,6 +63,12 @@ export function ResourceMonitorPanels({
   failed: boolean;
   pending: boolean;
   selectResource: (id: string) => void;
+  syncStatus?: {
+    last_aligned_at: number;
+    failures: { id: number; at: number; code: string }[];
+  };
+  syncDisabled: boolean;
+  onForceSync: () => void;
   children: ReactNode;
 }) {
   const t = useStaffText(),
@@ -129,6 +139,35 @@ export function ResourceMonitorPanels({
       ...translatedMessage("awaiting_report_configuration_d0cf5e6747"),
     ),
   };
+  const failureLabels: Record<string, string> = {
+    source_unreachable: t(
+      ...translatedMessage("resource_platform_unreachable_6a0272d30e"),
+    ),
+    source_rejected: t(
+      ...translatedMessage("source_rejected_the_request_0c4725400b"),
+    ),
+    invalid_snapshot: t(
+      ...translatedMessage("resource_validation_failed_ec65090949"),
+    ),
+    invalid_payload: t(
+      ...translatedMessage("invalid_response_format_or_size_3f4b26609a"),
+    ),
+    version_conflict: t(
+      ...translatedMessage("version_rollback_or_content_conflict_93dba0a33b"),
+    ),
+    checksum_mismatch: t(
+      ...translatedMessage("catalog_checksum_mismatch_5d7315f458"),
+    ),
+    apply_failed: t(
+      ...translatedMessage("apply_failed_published_data_retained_0e039a8f8d"),
+    ),
+  };
+  const timestamp = (value: number) => (
+    <time dateTime={value ? new Date(value * 1000).toISOString() : undefined}>
+      {date(value)}
+      {value ? " UTC" : ""}
+    </time>
+  );
   const paginate = (
     page: number,
     total: number,
@@ -156,11 +195,6 @@ export function ResourceMonitorPanels({
         {t(...translatedMessage("next_c0fd39244f"))}
       </Button>
     </div>
-  );
-  const resource = (id: string) => (
-    <button className="resource-status-link" onClick={() => selectResource(id)}>
-      <code dir="ltr">{id}</code>
-    </button>
   );
   return (
     <>
@@ -245,107 +279,141 @@ export function ResourceMonitorPanels({
         )}
       </section>
       {children}
-      <section
-        className="resource-status-panel resource-monitor-history"
-        aria-labelledby="resource-mismatch-title"
-      >
-        <header className="resource-status-heading">
-          <div>
+      <div className="resource-monitor-grid">
+        <section
+          className="resource-status-panel resource-monitor-history"
+          aria-labelledby="resource-failures-title"
+        >
+          <header>
+            <h2 id="resource-failures-title">
+              {t(...translatedMessage("sync_failure_history_title"))}
+            </h2>
+            <p>{t(...translatedMessage("sync_failure_history_description"))}</p>
+          </header>
+          {failed ? (
+            <p role="alert">{error}</p>
+          ) : pending ? (
+            <p role="status">{t(...translatedMessage("loading_4c20385375"))}</p>
+          ) : (
+            syncStatus &&
+            (syncStatus.failures.length ? (
+              <ul
+                className="resource-monitor-list"
+                data-history="sync"
+                tabIndex={0}
+                aria-labelledby="resource-failures-title"
+              >
+                {syncStatus.failures.map((row) => (
+                  <li key={row.id}>
+                    <div className="resource-monitor-entry-heading">
+                      {timestamp(row.at)}
+                      {syncStatus.last_aligned_at > row.at && (
+                        <span
+                          className="resource-status-badge"
+                          data-state="normal"
+                        >
+                          {t(
+                            ...translatedMessage("sync_aligned_since_failure"),
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    <p>
+                      {failureLabels[row.code] ??
+                        t(
+                          ...translatedMessage(
+                            "synchronization_failed_6c3ef2b844",
+                          ),
+                        )}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="resource-monitor-empty">
+                {t(...translatedMessage("no_failure_records_7cbc91c430"))}
+              </p>
+            ))
+          )}
+        </section>
+        <section
+          className="resource-status-panel resource-monitor-history"
+          aria-labelledby="resource-mismatch-title"
+        >
+          <header>
             <h2 id="resource-mismatch-title">
-              {t(...translatedMessage("price_tier_mismatch_alerts_13aafc19c7"))}
+              {t(...translatedMessage("price_mismatch_history_title"))}
             </h2>
             <p>
-              {t(
-                ...translatedMessage(
-                  "compare_snapshot_and_event_price_tiers_events_b05b142d76",
-                ),
-              )}
+              {t(...translatedMessage("price_mismatch_history_description"))}
             </p>
-          </div>
-          <Button
-            size="small"
-            disabled={history.isFetching}
-            onClick={() => void history.refetch()}
-          >
-            {t(...translatedMessage("refresh_history_e25eee27af"))}
-          </Button>
-        </header>
-        {history.isPending && (
-          <p role="status">{t(...translatedMessage("loading_4c20385375"))}</p>
-        )}
-        {history.isError && <p role="alert">{error}</p>}
-        {rows && (
-          <>
-            {!rows.events_configured && (
-              <p className="resource-monitor-notice">
-                {t(
-                  ...translatedMessage(
-                    "the_event_source_is_not_configured_price_cons_b3b4ef0f1d",
-                  ),
-                )}
-              </p>
-            )}
-            {rows.feeds
-              .filter((feed) => feed.error_code)
-              .map((feed) => (
-                <p
-                  key={feed.kind}
-                  role="alert"
-                  className="resource-monitor-notice"
-                >
-                  {feed.kind === "events"
-                    ? t(
-                        ...translatedMessage(
-                          "event_loading_failed_the_last_valid_data_is_r_e55829cf47",
-                        ),
-                      )
-                    : t(
-                        ...translatedMessage(
-                          "snapshot_loading_failed_the_last_valid_snapsh_ec3bf6b24b",
-                        ),
-                      )}{" "}
-                  {t(...translatedMessage("last_success_2d928f74f8"))}:{" "}
-                  {date(feed.last_success_at)} UTC
-                </p>
-              ))}
-            <div
-              className="resource-monitor-table"
-              role="region"
-              tabIndex={0}
-              aria-label={t(
-                ...translatedMessage(
-                  "price_mismatch_history_horizontally_scrollabl_0bed193285",
-                ),
-              )}
+          </header>
+          <div className="resource-monitor-toolbar">
+            <Button
+              size="small"
+              data-testid="history-force-resource-sync"
+              disabled={syncDisabled}
+              onClick={onForceSync}
             >
-              <table>
-                <thead>
-                  <tr>
-                    {[
-                      t(...translatedMessage("time_utc_f0c3e232cd")),
-                      t(...translatedMessage("resource_1a3d8d4288")),
-                      t(...translatedMessage("snapshot_seq_9eec99d0d4")),
-                      t(...translatedMessage("snapshot_p_93e887b871")),
-                      t(...translatedMessage("event_p_e8ab98d7ff")),
-                      t(...translatedMessage("event_version_ed1542f446")),
-                      t(...translatedMessage("status_dda39dcd63")),
-                    ].map((label) => (
-                      <th key={label} scope="col">
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
+              {t(...translatedMessage("force_full_sync_fafc970d6d"))}
+            </Button>
+            <Button
+              size="small"
+              variant="ghost"
+              disabled={history.isFetching}
+              onClick={() => void history.refetch()}
+            >
+              {t(...translatedMessage("refresh_history_e25eee27af"))}
+            </Button>
+          </div>
+          {history.isPending && (
+            <p role="status">{t(...translatedMessage("loading_4c20385375"))}</p>
+          )}
+          {history.isError && <p role="alert">{error}</p>}
+          {rows && (
+            <>
+              {!rows.events_configured && (
+                <p className="resource-monitor-notice">
+                  {t(
+                    ...translatedMessage(
+                      "the_event_source_is_not_configured_price_cons_b3b4ef0f1d",
+                    ),
+                  )}
+                </p>
+              )}
+              {rows.feeds
+                .filter((feed) => feed.error_code)
+                .map((feed) => (
+                  <p
+                    key={feed.kind}
+                    role="alert"
+                    className="resource-monitor-notice"
+                  >
+                    {feed.kind === "events"
+                      ? t(
+                          ...translatedMessage(
+                            "event_loading_failed_the_last_valid_data_is_r_e55829cf47",
+                          ),
+                        )
+                      : t(
+                          ...translatedMessage(
+                            "snapshot_loading_failed_the_last_valid_snapsh_ec3bf6b24b",
+                          ),
+                        )}{" "}
+                    {t(...translatedMessage("last_success_2d928f74f8"))}:{" "}
+                    {timestamp(feed.last_success_at)}
+                  </p>
+                ))}
+              {rows.mismatches.length ? (
+                <ul
+                  className="resource-monitor-list"
+                  data-history="mismatches"
+                  tabIndex={0}
+                  aria-labelledby="resource-mismatch-title"
+                >
                   {rows.mismatches.map((row) => (
-                    <tr key={row.id}>
-                      <td>{date(row.at)}</td>
-                      <td>{resource(row.resource_id)}</td>
-                      <td>{row.snapshot_sequence}</td>
-                      <td>P{row.snapshot_price}</td>
-                      <td>P{row.event_price}</td>
-                      <td>{row.event_version}</td>
-                      <td>
+                    <li key={row.id}>
+                      <div className="resource-monitor-entry-heading">
                         <span
                           className="resource-status-badge"
                           data-state={row.resolved_at ? "normal" : "alert"}
@@ -358,112 +426,140 @@ export function ResourceMonitorPanels({
                                 ),
                               )}
                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {!rows.mismatches.length && (
-              <p>
-                {t(
-                  ...translatedMessage(
-                    "no_recorded_price_mismatches_b710b9f493",
-                  ),
-                )}
-              </p>
-            )}
-            {paginate(mismatchPage, rows.mismatch_total, setMismatchPage)}
-          </>
-        )}
-      </section>
-      <section
-        className="resource-status-panel resource-monitor-history"
-        aria-labelledby="resource-incident-title"
-      >
-        <h2 id="resource-incident-title">
-          {t(...translatedMessage("incident_reports_a701f20f79"))}
-        </h2>
-        <p>
-          {t(
-            ...translatedMessage(
-              "gateway_incidents_and_their_delivery_results__bfe652790b",
-            ),
-          )}
-        </p>
-        {history.isError && <p role="alert">{error}</p>}
-        {history.isPending && (
-          <p role="status">{t(...translatedMessage("loading_4c20385375"))}</p>
-        )}
-        {rows && (
-          <>
-            {!rows.reports_configured && (
-              <p className="resource-monitor-notice">
-                {t(
-                  ...translatedMessage(
-                    "the_report_endpoint_is_not_configured_events__850ed8a730",
-                  ),
-                )}
-              </p>
-            )}
-            <div
-              className="resource-monitor-table"
-              role="region"
-              tabIndex={0}
-              aria-label={t(
-                ...translatedMessage(
-                  "incident_history_horizontally_scrollable_2cb57114d9",
-                ),
-              )}
-            >
-              <table>
-                <thead>
-                  <tr>
-                    {[
-                      t(...translatedMessage("occurred_at_utc_ef0bf696db")),
-                      t(...translatedMessage("event_type_8f67e63113")),
-                      t(...translatedMessage("resource_1a3d8d4288")),
-                      t(...translatedMessage("gateway_07318ec341")),
-                      t(...translatedMessage("delivery_status_96d9f75827")),
-                      t(...translatedMessage("reported_at_utc_44015dcecb")),
-                    ].map((label) => (
-                      <th key={label} scope="col">
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.incidents.map((row) => (
-                    <tr key={row.event_id}>
-                      <td>{date(row.occurred_at)}</td>
-                      <td>
+                        {timestamp(row.at)}
+                      </div>
+                      <code className="resource-monitor-identifier" dir="ltr">
+                        {row.resource_id}
+                      </code>
+                      <p className="resource-monitor-prices">
                         <span>
-                          {row.type === "half_open_failed"
-                            ? t(
+                          {t(...translatedMessage("snapshot_p_93e887b871"))}{" "}
+                          <bdi dir="ltr">P{row.snapshot_price}</bdi>
+                        </span>
+                        <span>
+                          {t(...translatedMessage("event_p_e8ab98d7ff"))}{" "}
+                          <bdi dir="ltr">P{row.event_price}</bdi>
+                        </span>
+                      </p>
+                      <ResourceHistoryLinks
+                        id={row.resource_id}
+                        selectResource={selectResource}
+                      />
+                      <details className="resource-monitor-details">
+                        <summary>
+                          {t(...translatedMessage("monitor_record_details"))}
+                        </summary>
+                        <dl>
+                          <div>
+                            <dt>
+                              {t(
+                                ...translatedMessage("snapshot_seq_9eec99d0d4"),
+                              )}
+                            </dt>
+                            <dd>{row.snapshot_sequence}</dd>
+                          </div>
+                          <div>
+                            <dt>
+                              {t(
                                 ...translatedMessage(
-                                  "five_failed_half_open_probes_4d808ab8db",
-                                ),
-                              )
-                            : t(
-                                ...translatedMessage(
-                                  "two_consecutive_ewma_breaches_e524b82efb",
+                                  "event_version_ed1542f446",
                                 ),
                               )}
-                        </span>
-                        <small>
-                          <code>{row.type}</code>
-                        </small>
-                        <small title={row.event_id}>
-                          {t(...translatedMessage("event_id_27eff7c057"))}:{" "}
-                          <code>{row.event_id}</code>
-                        </small>
-                      </td>
-                      <td>{resource(row.resource_id)}</td>
-                      <td>
+                            </dt>
+                            <dd>{row.event_version}</dd>
+                          </div>
+                          {row.resolved_at > 0 && (
+                            <div>
+                              <dt>
+                                {t(...translatedMessage("monitor_resolved_at"))}
+                              </dt>
+                              <dd>{timestamp(row.resolved_at)}</dd>
+                            </div>
+                          )}
+                        </dl>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="resource-monitor-empty">
+                  {t(
+                    ...translatedMessage(
+                      "no_recorded_price_mismatches_b710b9f493",
+                    ),
+                  )}
+                </p>
+              )}
+              {rows.mismatch_total > 20 &&
+                paginate(mismatchPage, rows.mismatch_total, setMismatchPage)}
+            </>
+          )}
+        </section>
+        <section
+          className="resource-status-panel resource-monitor-history"
+          aria-labelledby="resource-incident-title"
+        >
+          <header>
+            <h2 id="resource-incident-title">
+              {t(...translatedMessage("incident_reports_a701f20f79"))}
+            </h2>
+            <p>{t(...translatedMessage("incident_history_description"))}</p>
+          </header>
+          {history.isPending && (
+            <p role="status">{t(...translatedMessage("loading_4c20385375"))}</p>
+          )}
+          {history.isError && <p role="alert">{error}</p>}
+          {rows && (
+            <>
+              {!rows.reports_configured && (
+                <p className="resource-monitor-notice">
+                  {t(
+                    ...translatedMessage(
+                      "the_report_endpoint_is_not_configured_events__850ed8a730",
+                    ),
+                  )}
+                </p>
+              )}
+              {rows.incidents.length ? (
+                <ul
+                  className="resource-monitor-list"
+                  data-history="incidents"
+                  tabIndex={0}
+                  aria-labelledby="resource-incident-title"
+                >
+                  {rows.incidents.map((row) => (
+                    <li key={row.event_id}>
+                      <div className="resource-monitor-entry-heading">
+                        <strong>
+                          {row.type === "half_open_failed" ? (
+                            t(
+                              ...translatedMessage(
+                                "five_failed_half_open_probes_4d808ab8db",
+                              ),
+                            )
+                          ) : row.type === "ewma_breach_twice" ? (
+                            t(
+                              ...translatedMessage(
+                                "two_consecutive_ewma_breaches_e524b82efb",
+                              ),
+                            )
+                          ) : (
+                            <code dir="ltr">{row.type}</code>
+                          )}
+                        </strong>
+                        {timestamp(row.occurred_at)}
+                      </div>
+                      <p className="resource-monitor-identifiers">
+                        <code dir="ltr">{row.resource_id}</code>
+                        <span aria-hidden="true"> · </span>
                         <code dir="ltr">{row.gateway_id}</code>
-                      </td>
-                      <td>
+                      </p>
+                      <div className="resource-monitor-delivery">
+                        <span>
+                          {t(
+                            ...translatedMessage("delivery_status_96d9f75827"),
+                          )}
+                        </span>
                         <span
                           className="resource-status-badge"
                           data-state={
@@ -474,26 +570,114 @@ export function ResourceMonitorPanels({
                                 : "unknown"
                           }
                         >
-                          {statusText[row.delivery_status] ?? "—"}
+                          {statusText[row.delivery_status] ??
+                            statusText.unknown}
                         </span>
-                        <small>
-                          {t(...translatedMessage("attempts_4321915685"))}:{" "}
-                          {row.attempts}
-                        </small>
-                      </td>
-                      <td>{date(row.delivered_at)}</td>
-                    </tr>
+                      </div>
+                      <ResourceHistoryLinks
+                        id={row.resource_id}
+                        selectResource={selectResource}
+                      />
+                      <details className="resource-monitor-details">
+                        <summary>
+                          {t(...translatedMessage("monitor_record_details"))}
+                        </summary>
+                        <dl>
+                          <div>
+                            <dt>
+                              {t(...translatedMessage("event_id_27eff7c057"))}
+                            </dt>
+                            <dd>
+                              <code dir="ltr">{row.event_id}</code>
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>
+                              {t(...translatedMessage("event_type_8f67e63113"))}
+                            </dt>
+                            <dd>
+                              <code dir="ltr">{row.type}</code>
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>
+                              {t(...translatedMessage("attempts_4321915685"))}
+                            </dt>
+                            <dd>{row.attempts}</dd>
+                          </div>
+                          <div>
+                            <dt>
+                              {t(
+                                ...translatedMessage(
+                                  "reported_at_utc_44015dcecb",
+                                ),
+                              )}
+                            </dt>
+                            <dd>{timestamp(row.delivered_at)}</dd>
+                          </div>
+                        </dl>
+                      </details>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            </div>
-            {!rows.incidents.length && (
-              <p>{t(...translatedMessage("no_incident_reports_3df6b6cb8a"))}</p>
-            )}
-            {paginate(incidentPage, rows.incident_total, setIncidentPage)}
-          </>
-        )}
-      </section>
+                </ul>
+              ) : (
+                <p className="resource-monitor-empty">
+                  {t(...translatedMessage("no_incident_reports_3df6b6cb8a"))}
+                </p>
+              )}
+              {rows.incident_total > 20 &&
+                paginate(incidentPage, rows.incident_total, setIncidentPage)}
+            </>
+          )}
+        </section>
+      </div>
     </>
+  );
+}
+
+function ResourceHistoryLinks({
+  id,
+  selectResource,
+}: {
+  id: string;
+  selectResource: (id: string) => void;
+}) {
+  const t = useStaffText(),
+    identity = useSessionQueryIdentity();
+  // Subscribe to the existing detail lookup without fetching once per history row.
+  const detail = useQuery({
+    queryKey: ["staff-resource-detail", ...identity, id],
+    queryFn: () =>
+      apiGet<{ items: { id: string }[] }>(
+        `/api/admin/resource-instances?${new URLSearchParams({ resource_id: id })}`,
+      ),
+    enabled: false,
+  });
+  const missing = detail.isSuccess && detail.data.items.length === 0;
+  return (
+    <div className="resource-monitor-links">
+      <button
+        className="resource-status-link"
+        data-action="history-resource-detail"
+        onClick={() => selectResource(id)}
+      >
+        {t(...translatedMessage("view_resource_a4db550ee1"))}
+      </button>
+      <Link
+        className="resource-status-link"
+        to={`/admin?${new URLSearchParams({ tab: "calls", resource_id: id })}`}
+      >
+        {t(...translatedMessage("related_calls_fc23d01e81"))}
+      </Link>
+      {missing && (
+        <span className="resource-monitor-missing">
+          {t(
+            ...translatedMessage(
+              "resource_is_no_longer_in_the_current_snapshot_cfb013249e",
+            ),
+          )}
+        </span>
+      )}
+    </div>
   );
 }
