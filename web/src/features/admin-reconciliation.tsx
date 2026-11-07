@@ -1,6 +1,14 @@
 import { message as translatedMessage } from "../i18n/messages";
 
 import { useRef, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  FileCheck2,
+  RefreshCw,
+  Upload,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
@@ -16,6 +24,7 @@ import {
   adminAmount,
   adminDate,
 } from "./admin-shared";
+import "./admin-reconciliation.css";
 
 export interface ReconciliationDifference {
   kind: string;
@@ -61,11 +70,14 @@ type Text = ReturnType<typeof useStaffText>;
 export function reconciliationStatus(
   r: Pick<
     ReconciliationReport,
-    "checks_version" | "differences" | "provisional"
+    "checks_version" | "differences" | "provisional" | "admission_time_verified"
   >,
   t: Text,
 ) {
-  if (r.checks_version !== 2)
+  if (
+    r.checks_version !== 2 ||
+    (r.admission_time_verified === false && !r.differences.length)
+  )
     return t(...translatedMessage("recheck_required_85ada1f5d3"));
   if (r.differences.length)
     return t(...translatedMessage("differences_found_384b9ede6f"));
@@ -122,6 +134,35 @@ function externalLabel(status: string, t: Text) {
 const csvHeader =
   "provider_order_id,platform_order_id,user_id,amount_cents,currency,paid_at";
 
+export function reconciliationSummary(
+  rows: ReconciliationReport[],
+  end: string,
+) {
+  const latest = rows.filter((row) => row.date === end);
+  const differences = rows.filter((row) => row.differences.length > 0);
+  const unverified = (row: ReconciliationReport) =>
+    row.checks_version !== 2 || row.admission_time_verified === false;
+  return {
+    endState: !latest.length
+      ? "empty"
+      : latest.some((row) => row.differences.length)
+        ? "difference"
+        : latest.some(unverified)
+          ? "review"
+          : latest.some((row) => row.provisional)
+            ? "provisional"
+            : "matched",
+    checkedAt: latest.reduce(
+      (latestTime, row) => Math.max(latestTime, row.created_at),
+      0,
+    ),
+    differenceDays: new Set(differences.map((row) => row.date)).size,
+    affectedAccounts: new Set(differences.map((row) => row.user_id)).size,
+    provisionalReports: rows.filter((row) => row.provisional).length,
+    reviewReports: rows.filter(unverified).length,
+  } as const;
+}
+
 function importFailure(error: Error | null, t: Text): Error | null {
   if (!error) return null;
   const row = error.message.match(/CSV row (\d+)/)?.[1];
@@ -174,6 +215,7 @@ export function AdminReconciliation() {
     cache = useQueryClient();
   const [user, setUser] = useState(""),
     [end, setEnd] = useState(""),
+    [resultFilter, setResultFilter] = useState("all"),
     [page, setPage] = useState(1),
     [selectedID, setSelectedID] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false),
@@ -244,8 +286,36 @@ export function AdminReconciliation() {
     },
     retry: false,
   });
-  const rows = query.data?.items ?? [],
+  const data = query.error ? undefined : query.data;
+  const rows = [...(data?.items ?? [])].sort(
+      (a, b) => b.date.localeCompare(a.date) || a.user_id - b.user_id,
+    ),
     selected = rows.find((r) => r.id === selectedID);
+  const summary = reconciliationSummary(rows, data?.end ?? "");
+  const filtered = rows.filter(
+    (row) =>
+      resultFilter === "all" ||
+      (resultFilter === "difference"
+        ? row.differences.length > 0
+        : row.checks_version !== 2 || row.admission_time_verified === false),
+  );
+  const currentPage = Math.min(
+    page,
+    Math.max(1, Math.ceil(filtered.length / 20)),
+  );
+  const endStatus = {
+    empty: translatedMessage("reconciliation_no_end_report"),
+    difference: translatedMessage("differences_found_384b9ede6f"),
+    review: translatedMessage("recheck_required_85ada1f5d3"),
+    provisional: translatedMessage("no_differences_so_far_today_09bc70fed4"),
+    matched: translatedMessage("internal_checks_match_5188b672dc"),
+  } as const;
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: data?.timezone ?? "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   const amount = (value: string) => (
     <bdi dir="ltr" className="reconciliation-money">
       {formatMoney(value, "detail")}{" "}
@@ -256,65 +326,74 @@ export function AdminReconciliation() {
   );
   return (
     <section className="adm-page adm-reconciliation">
-      <header className="adm-heading">
+      <header className="adm-heading reconciliation-heading">
         <div>
           <h1>
             {t(...translatedMessage("financial_reconciliation_e3ba8c2ef5"))}
           </h1>
           <p>
-            {t(
-              ...translatedMessage(
-                "daily_checks_at_02_00_regional_time_late_sett_1409d199f8",
-              ),
-            )}
+            {data
+              ? t(
+                  ...translatedMessage("reconciliation_window", {
+                    timezone: data.timezone,
+                  }),
+                )
+              : t(
+                  ...translatedMessage(
+                    "daily_checks_at_02_00_regional_time_late_sett_1409d199f8",
+                  ),
+                )}
           </p>
         </div>
         <div className="reconciliation-actions">
           <Button
+            variant="secondary"
+            disabled={query.isFetching}
+            onClick={() => void query.refetch()}
+            data-testid="refresh-reconciliation"
+          >
+            <RefreshCw size={15} />
+            {t(...translatedMessage("refresh_9c83c3600a"))}
+          </Button>
+          <Button
+            variant="secondary"
+            data-testid="import-statement"
             onClick={() => {
-              setImportDay(end || query.data?.end || "");
+              setImportDay(end || data?.end || "");
               upload.reset();
               setImportOpen(true);
             }}
           >
+            <Upload size={15} />
             {t(...translatedMessage("import_statement_1557250744"))}
           </Button>
           <Button
             variant="primary"
-            disabled={run.isPending || !query.data}
+            disabled={run.isPending || !data || query.isFetching}
             onClick={() => run.mutate()}
+            data-testid="run-reconciliation"
           >
+            <RefreshCw
+              size={15}
+              className={run.isPending ? "animate-spin" : undefined}
+            />
             {run.isPending
               ? t(...translatedMessage("reconciling_36f92a34c0"))
-              : t(...translatedMessage("reconcile_ced0b1407e"))}
+              : t(...translatedMessage("reconciliation_run_again"))}
           </Button>
         </div>
       </header>
-      <div className="adm-notice">
-        {t(
-          ...translatedMessage(
-            "checks_cover_balances_charges_credits_and_key_5cad991db4",
-          ),
-        )}
-      </div>
-      {query.data && !query.data.alert_webhook_configured && (
-        <p className="reconciliation-warning">
-          {t(
-            ...translatedMessage(
-              "difference_alerts_are_retained_external_notif_182cb6ea11",
-            ),
-          )}
-        </p>
-      )}
-      <div className="adm-filters">
+      <div className="adm-filters reconciliation-filters">
         <label>
-          {t(...translatedMessage("account_b00965aefc"))}
+          {t(...translatedMessage("reconciliation_account"))}
           <select
             value={user}
             onChange={(e) => {
               setUser(e.target.value);
               setPage(1);
+              setSelectedID(null);
             }}
+            data-testid="reconciliation-account"
           >
             <option value="">
               {t(...translatedMessage("all_accounts_5a521a4986"))}
@@ -336,123 +415,334 @@ export function AdminReconciliation() {
               onChange={(e) => {
                 setUser(e.target.value);
                 setPage(1);
+                setSelectedID(null);
               }}
             />
           </label>
         )}
         <label>
-          {t(...translatedMessage("end_date_last_14_days_ff8609c3c9"))}
+          {t(...translatedMessage("reconciliation_end_date"))}
           <Input
             type="date"
-            value={end || query.data?.end || ""}
+            max={today}
+            value={end || data?.end || ""}
+            data-testid="reconciliation-end"
             onChange={(e) => {
               setEnd(e.target.value);
               setPage(1);
+              setSelectedID(null);
             }}
           />
         </label>
-        <span>{query.data?.timezone}</span>
+        <p className="reconciliation-filter-note">
+          <Clock3 size={15} />
+          {t(...translatedMessage("reconciliation_schedule"))}
+        </p>
       </div>
       <AdminFeedback
         pending={query.isPending}
-        error={query.error ?? run.error ?? customers.error}
+        error={query.error ?? run.error}
         retry={() => void query.refetch()}
       />
-      {query.data && (
+      <AdminFeedback
+        error={customers.error}
+        retry={() => void customers.refetch()}
+      />
+      {data && (
         <>
-          <AdminTable
-            label={t(
-              ...translatedMessage("daily_reconciliation_reports_27de52296f"),
-            )}
+          <div
+            className="reconciliation-summary"
+            data-testid="reconciliation-summary"
           >
-            <thead>
-              <tr>
-                {[
-                  t(...translatedMessage("day_account_b5d6021c3b")),
-                  t(...translatedMessage("usage_ledger_debits_2cf1405bd3")),
-                  t(...translatedMessage("paid_orders_credits_7d67beb3aa")),
-                  t(...translatedMessage("internal_checks_6b88e61fb4")),
-                  t(...translatedMessage("provider_checks_562ccb1286")),
-                  t(...translatedMessage("actions_d83f4ed14a")),
-                ].map((c) => (
-                  <th key={c}>{c}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice((page - 1) * 20, page * 20).map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <bdi>{r.date}</bdi>
-                    <small>
-                      <bdi>{r.username || `usr_${r.user_id}`}</bdi>
-                    </small>
-                  </td>
-                  <td>
-                    <bdi>{adminAmount(r.usage_nano)}</bdi>
-                    <small>
-                      <bdi>{adminAmount(r.api_ledger_nano)}</bdi>
-                    </small>
-                  </td>
-                  <td>
-                    <bdi>{adminAmount(r.order_nano)}</bdi>
-                    <small>
-                      <bdi>{adminAmount(r.recharge_ledger_nano)}</bdi>
-                    </small>
-                  </td>
-                  <td>
-                    <span
-                      className={
-                        r.differences.length ? "reconciliation-warning" : ""
-                      }
-                    >
-                      {reconciliationStatus(r, t)}
-                    </span>
-                    {r.differences.length > 0 && (
-                      <small>
-                        {r.differences.length}{" "}
-                        {t(...translatedMessage("differences_02d8cbe1c8"))}
-                      </small>
-                    )}
-                    {r.admission_time_verified === false && (
-                      <small>
-                        {t(
-                          ...translatedMessage(
-                            "historical_admission_times_unverified_55a88fda7f",
-                          ),
-                        )}
-                      </small>
-                    )}
-                    {r.provisional && r.differences.length > 0 && (
-                      <small>
-                        {t(
-                          ...translatedMessage(
-                            "today_still_in_progress_c42cf7050c",
-                          ),
-                        )}
-                      </small>
-                    )}
-                  </td>
-                  <td>{externalLabel(r.external_status, t)}</td>
-                  <td>
-                    <Button variant="ghost" onClick={() => setSelectedID(r.id)}>
-                      {t(...translatedMessage("details_a91e8f9bea"))}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </AdminTable>
-          {!rows.length && (
-            <p>
-              {t(
-                ...translatedMessage(
-                  "no_reports_yet_choose_reconcile_to_generate_t_faf9c69c05",
-                ),
+            <article className="reconciliation-summary-card">
+              <h2>{t(...translatedMessage("reconciliation_end_result"))}</h2>
+              <div
+                className={`reconciliation-summary-state is-${summary.endState}`}
+                data-testid="end-result"
+              >
+                {summary.endState === "matched" ? (
+                  <CheckCircle2 size={20} />
+                ) : summary.endState === "difference" ? (
+                  <AlertCircle size={20} />
+                ) : (
+                  <Clock3 size={20} />
+                )}
+                <strong>{t(...endStatus[summary.endState])}</strong>
+              </div>
+              <p>
+                <bdi>{data.end}</bdi> ·{" "}
+                {t(...translatedMessage("reconciliation_checked_at"))}{" "}
+                {adminDate(summary.checkedAt, data.timezone)}
+              </p>
+            </article>
+            <article className="reconciliation-summary-card">
+              <h2>
+                {t(...translatedMessage("reconciliation_period_differences"))}
+              </h2>
+              <div className="reconciliation-count">
+                <strong data-testid="difference-days">
+                  {rows.length ? summary.differenceDays : "—"}
+                </strong>
+                <span>
+                  {t(
+                    ...translatedMessage(
+                      "reconciliation_days_with_differences",
+                    ),
+                  )}
+                </span>
+              </div>
+              <p>
+                {t(
+                  ...translatedMessage("reconciliation_affected_accounts", {
+                    count: summary.affectedAccounts,
+                  }),
+                )}
+              </p>
+              {(summary.provisionalReports > 0 ||
+                summary.reviewReports > 0) && (
+                <p>
+                  {t(
+                    ...translatedMessage("reconciliation_pending_reports", {
+                      provisional: summary.provisionalReports,
+                      review: summary.reviewReports,
+                    }),
+                  )}
+                </p>
               )}
-            </p>
-          )}
-          <AdminPagination page={page} total={rows.length} onChange={setPage} />
+            </article>
+            <article className="reconciliation-summary-card reconciliation-scope">
+              <h2>
+                {t(...translatedMessage("reconciliation_basis"))}
+                <FileCheck2 size={17} />
+              </h2>
+              <p>
+                {t(...translatedMessage("reconciliation_basis_description"))}
+              </p>
+              <p>{t(...translatedMessage("reconciliation_external_scope"))}</p>
+            </article>
+          </div>
+          <div
+            className={`reconciliation-alert-strip ${!data.alert_webhook_configured || data.pending_alerts > 0 ? "has-warning" : ""}`}
+            data-testid="reconciliation-alerts"
+          >
+            <AlertCircle size={16} />
+            <span>
+              {data.alert_webhook_configured
+                ? t(...translatedMessage("reconciliation_alert_configured"))
+                : t(
+                    ...translatedMessage(
+                      "difference_alerts_are_retained_external_notif_182cb6ea11",
+                    ),
+                  )}
+            </span>
+            <span className="reconciliation-alert-count">
+              {t(
+                ...translatedMessage("reconciliation_pending_alerts", {
+                  count: data.pending_alerts,
+                }),
+              )}
+            </span>
+          </div>
+          <section className="reconciliation-results">
+            <header className="reconciliation-table-heading">
+              <div>
+                <h2>
+                  {t(
+                    ...translatedMessage(
+                      "daily_reconciliation_reports_27de52296f",
+                    ),
+                  )}
+                </h2>
+                <p>{t(...translatedMessage("reconciliation_table_note"))}</p>
+              </div>
+              <label>
+                <span className="sr-only">
+                  {t(...translatedMessage("reconciliation_result_filter"))}
+                </span>
+                <select
+                  value={resultFilter}
+                  onChange={(e) => {
+                    setResultFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  data-testid="reconciliation-result-filter"
+                >
+                  <option value="all">
+                    {t(...translatedMessage("reconciliation_all_results"))}
+                  </option>
+                  <option value="difference">
+                    {t(...translatedMessage("differences_found_384b9ede6f"))}
+                  </option>
+                  <option value="review">
+                    {t(...translatedMessage("recheck_required_85ada1f5d3"))}
+                  </option>
+                </select>
+              </label>
+            </header>
+            <AdminTable
+              label={t(
+                ...translatedMessage("daily_reconciliation_reports_27de52296f"),
+              )}
+            >
+              <thead>
+                <tr>
+                  <th>{t(...translatedMessage("day_account_b5d6021c3b"))}</th>
+                  <th className="reconciliation-numeric">
+                    {t(...translatedMessage("reconciliation_verified_balance"))}
+                  </th>
+                  <th className="reconciliation-numeric">
+                    {t(...translatedMessage("reconciliation_ledger_debits"))}
+                  </th>
+                  <th className="reconciliation-numeric">
+                    {t(...translatedMessage("reconciliation_call_cost"))}
+                  </th>
+                  <th className="reconciliation-numeric">
+                    {t(...translatedMessage("reconciliation_recharge_credits"))}
+                  </th>
+                  <th className="reconciliation-numeric">
+                    {t(...translatedMessage("reconciliation_paid_orders"))}
+                  </th>
+                  <th>{t(...translatedMessage("reconciliation_result"))}</th>
+                  <th>{t(...translatedMessage("actions_d83f4ed14a"))}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered
+                  .slice((currentPage - 1) * 20, currentPage * 20)
+                  .map((r) => {
+                    const reviewRequired =
+                      r.checks_version !== 2 ||
+                      r.admission_time_verified === false;
+                    const tone = r.differences.length
+                      ? "difference"
+                      : reviewRequired || r.provisional
+                        ? "review"
+                        : "matched";
+                    return (
+                      <tr
+                        key={r.id}
+                        className={
+                          r.differences.length
+                            ? "reconciliation-difference-row"
+                            : undefined
+                        }
+                      >
+                        <td>
+                          <strong>
+                            <bdi>{r.date}</bdi>
+                          </strong>
+                          <small>
+                            <bdi>{r.username || `usr_${r.user_id}`}</bdi>
+                          </small>
+                        </td>
+                        <td className="reconciliation-numeric">
+                          <bdi>
+                            {r.checks_version === 2
+                              ? adminAmount(r.balance_actual_nano)
+                              : "—"}
+                          </bdi>
+                          <small>
+                            {t(
+                              ...translatedMessage(
+                                "available_reserved_6927e4ae4c",
+                              ),
+                            )}
+                          </small>
+                        </td>
+                        <td className="reconciliation-numeric">
+                          <bdi>{adminAmount(r.api_ledger_nano)}</bdi>
+                        </td>
+                        <td
+                          className={`reconciliation-numeric ${r.usage_nano !== r.api_ledger_nano ? "reconciliation-warning" : ""}`}
+                        >
+                          <bdi>{adminAmount(r.usage_nano)}</bdi>
+                        </td>
+                        <td className="reconciliation-numeric">
+                          <bdi>{adminAmount(r.recharge_ledger_nano)}</bdi>
+                        </td>
+                        <td
+                          className={`reconciliation-numeric ${r.order_nano !== r.recharge_ledger_nano ? "reconciliation-warning" : ""}`}
+                        >
+                          <bdi>{adminAmount(r.order_nano)}</bdi>
+                        </td>
+                        <td>
+                          <span className={`reconciliation-badge is-${tone}`}>
+                            {r.differences.length ? (
+                              <AlertCircle size={13} />
+                            ) : tone === "matched" ? (
+                              <CheckCircle2 size={13} />
+                            ) : (
+                              <Clock3 size={13} />
+                            )}
+                            {reconciliationStatus(r, t)}
+                          </span>
+                          {r.differences.length > 0 && (
+                            <small>
+                              {r.differences.length}{" "}
+                              {t(
+                                ...translatedMessage("differences_02d8cbe1c8"),
+                              )}
+                            </small>
+                          )}
+                          {r.admission_time_verified === false && (
+                            <small>
+                              {t(
+                                ...translatedMessage(
+                                  "historical_admission_times_unverified_55a88fda7f",
+                                ),
+                              )}
+                            </small>
+                          )}
+                          {r.provisional && r.differences.length > 0 && (
+                            <small>
+                              {t(
+                                ...translatedMessage(
+                                  "today_still_in_progress_c42cf7050c",
+                                ),
+                              )}
+                            </small>
+                          )}
+                          <small className="reconciliation-external">
+                            {externalLabel(r.external_status, t)}
+                          </small>
+                        </td>
+                        <td>
+                          <Button
+                            variant="ghost"
+                            onClick={() => setSelectedID(r.id)}
+                          >
+                            {t(...translatedMessage("details_a91e8f9bea"))}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </AdminTable>
+            {!filtered.length && (
+              <div className="reconciliation-empty">
+                <FileCheck2 size={28} />
+                <p>
+                  {rows.length
+                    ? t(
+                        ...translatedMessage(
+                          "reconciliation_no_matching_results",
+                        ),
+                      )
+                    : t(
+                        ...translatedMessage(
+                          "no_reports_yet_choose_reconcile_to_generate_t_faf9c69c05",
+                        ),
+                      )}
+                </p>
+              </div>
+            )}
+            <AdminPagination
+              page={currentPage}
+              total={filtered.length}
+              onChange={setPage}
+            />
+          </section>
         </>
       )}
       <Drawer
@@ -468,12 +758,40 @@ export function AdminReconciliation() {
         }
       >
         {selected && (
-          <div className="adm-page">
+          <div className="adm-page reconciliation-detail">
             <p>
               {adminDate(selected.created_at, selected.timezone)} ·{" "}
               {selected.timezone}
             </p>
             <strong>{reconciliationStatus(selected, t)}</strong>
+            <article className="adm-card">
+              <h2>{t(...translatedMessage("reconciliation_daily_amounts"))}</h2>
+              <dl className="adm-info">
+                {[
+                  [
+                    t(...translatedMessage("reconciliation_ledger_debits")),
+                    selected.api_ledger_nano,
+                  ],
+                  [
+                    t(...translatedMessage("reconciliation_call_cost")),
+                    selected.usage_nano,
+                  ],
+                  [
+                    t(...translatedMessage("reconciliation_recharge_credits")),
+                    selected.recharge_ledger_nano,
+                  ],
+                  [
+                    t(...translatedMessage("reconciliation_paid_orders")),
+                    selected.order_nano,
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{amount(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </article>
             {selected.checks_version === 2 && (
               <article className="adm-card">
                 <h2>
@@ -556,6 +874,7 @@ export function AdminReconciliation() {
       </Drawer>
       <Drawer
         open={importOpen}
+        preventOutsideClose
         onOpenChange={(v) => {
           if (!upload.isPending) setImportOpen(v);
         }}
@@ -571,7 +890,7 @@ export function AdminReconciliation() {
         )}
       >
         <form
-          className="adm-page"
+          className="adm-page reconciliation-import"
           onSubmit={(e) => {
             e.preventDefault();
             upload.mutate();

@@ -16,7 +16,6 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/primitives";
 import { Modal } from "../../components/ui/overlay";
 import { useSystemAccess, ROLE_ROOT } from "../../lib/system-access";
-import { FinanceOverview } from "../../features/finance-overview";
 import { OperatingDashboard } from "../../features/operating-dashboard";
 import { AdminCustomers } from "../../features/admin-customers";
 import { AdminModels } from "../../features/admin-models";
@@ -839,21 +838,7 @@ export default function AdminPortal() {
 
         {tab === "audit" && <AdminAudit />}
 
-        {tab === "finance" && (
-          <>
-            <AdminReconciliation />
-            <details className="adm-card">
-              <summary>
-                {text(
-                  ...translatedMessage(
-                    "financial_summary_and_orders_02c9410d90",
-                  ),
-                )}
-              </summary>
-              <FinanceOverview />
-            </details>
-          </>
-        )}
+        {tab === "finance" && <AdminReconciliation />}
       </div>
 
       {/* Channel create/edit modal */}

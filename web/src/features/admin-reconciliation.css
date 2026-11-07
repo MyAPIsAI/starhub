@@ -1,0 +1,293 @@
+.adm-reconciliation {
+  --reconciliation-warn: #925300;
+  gap: 16px;
+}
+[data-theme="dark"] .adm-reconciliation {
+  --reconciliation-warn: #fbbf24;
+}
+.reconciliation-heading {
+  margin-bottom: 4px;
+}
+.reconciliation-heading p {
+  max-width: 700px;
+}
+.adm-reconciliation .reconciliation-filters {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  align-items: end;
+  gap: 16px;
+}
+.reconciliation-filters > label:first-child {
+  min-width: 240px;
+}
+.reconciliation-filters > label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+}
+.reconciliation-filters input,
+.reconciliation-filters select {
+  min-height: 36px;
+}
+.reconciliation-filter-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 9px;
+}
+.reconciliation-filter-note svg,
+.reconciliation-summary-state svg,
+.reconciliation-badge svg,
+.reconciliation-alert-strip > svg {
+  flex-shrink: 0;
+}
+.reconciliation-summary {
+  display: grid;
+  grid-template-columns: 1fr 0.9fr 1.2fr;
+  gap: 16px;
+}
+.reconciliation-summary-card {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+.reconciliation-summary-card h2,
+.reconciliation-table-heading h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.reconciliation-summary-card p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.reconciliation-summary-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  min-height: 32px;
+  font-size: 17px;
+  line-height: 1.5;
+}
+.reconciliation-summary-state.is-matched svg {
+  color: var(--success);
+}
+.reconciliation-summary-state.is-difference,
+.reconciliation-summary-state.is-review {
+  color: var(--reconciliation-warn);
+}
+.reconciliation-summary-state.is-empty,
+.reconciliation-summary-state.is-provisional {
+  color: var(--secondary);
+}
+.reconciliation-count {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+}
+.reconciliation-count strong {
+  font-size: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.reconciliation-count span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.reconciliation-scope h2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.reconciliation-scope h2 svg {
+  color: var(--muted);
+}
+.reconciliation-alert-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.reconciliation-alert-strip.has-warning {
+  background: var(--warning-soft);
+  color: var(--reconciliation-warn);
+  border-color: color-mix(in srgb, var(--warning) 25%, var(--border));
+}
+.reconciliation-alert-count {
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+.reconciliation-results {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.reconciliation-table-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 18px 20px;
+}
+.reconciliation-table-heading p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.reconciliation-table-heading select {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.reconciliation-results .adm-table-scroll {
+  border: 0;
+  border-radius: 0;
+}
+.adm-reconciliation .adm-table {
+  min-width: 1080px;
+}
+.admin-content .adm-reconciliation table.adm-table td {
+  vertical-align: middle;
+  padding: 12px 16px !important;
+}
+.admin-content .adm-reconciliation table.adm-table th {
+  padding: 12px 16px !important;
+}
+.adm-reconciliation .adm-table .reconciliation-numeric {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.admin-content .adm-reconciliation .adm-table tr.reconciliation-difference-row {
+  background: color-mix(
+    in srgb,
+    var(--warning-soft) 55%,
+    var(--surface)
+  ) !important;
+}
+.reconciliation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.reconciliation-badge.is-matched {
+  color: var(--success);
+  background: var(--success-soft);
+}
+.reconciliation-badge.is-difference,
+.reconciliation-badge.is-review {
+  color: var(--reconciliation-warn);
+  background: var(--warning-soft);
+}
+.adm-table small.reconciliation-external {
+  max-width: 195px;
+  line-height: 1.5;
+}
+.reconciliation-results .adm-pagination {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.reconciliation-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.reconciliation-empty p {
+  margin: 0;
+}
+.reconciliation-detail .adm-info {
+  grid-template-columns: minmax(0, 1fr);
+}
+.reconciliation-detail .adm-card {
+  padding: 18px;
+}
+.reconciliation-detail .adm-card h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.reconciliation-detail .adm-info > div {
+  align-items: start;
+  gap: 16px;
+}
+.reconciliation-detail .adm-info dd {
+  min-width: 0;
+  text-align: end;
+}
+.reconciliation-import label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+@media (max-width: 1050px) {
+  .reconciliation-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .reconciliation-scope {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 640px) {
+  .reconciliation-summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .reconciliation-summary-card {
+    padding: 16px;
+  }
+  .adm-reconciliation .reconciliation-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .reconciliation-filters > label:first-child {
+    min-width: 0;
+  }
+  .reconciliation-filters label,
+  .reconciliation-filters input,
+  .reconciliation-filters select {
+    width: 100%;
+  }
+  .reconciliation-filter-note {
+    margin: 0;
+    align-items: start;
+  }
+  .reconciliation-alert-count {
+    margin-inline-start: 24px;
+  }
+  .reconciliation-table-heading {
+    padding: 16px;
+  }
+}
