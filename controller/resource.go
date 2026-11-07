@@ -189,22 +189,10 @@ func decodeResourceBody(w http.ResponseWriter, r *http.Request, value any) bool 
 	return false
 }
 
-// Import numeric fields must be present and non-null before conversion to domain values.
-type resourceInstanceImport struct {
-	model.ResourceInstance
-	ContextLength *int64   `json:"contextLength"`
-	LatencyMS     *float64 `json:"latencyMs"`
-}
-
-type resourceSnapshotImport struct {
-	model.ResourceSnapshot
-	Instances []resourceInstanceImport `json:"instances"`
-}
-
 func UpdateResources(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		ExpectedRevision *int64                  `json:"expected_revision"`
-		Snapshot         *resourceSnapshotImport `json:"snapshot"`
+		Snapshot         *model.ResourceSnapshot `json:"snapshot"`
 	}
 	if !decodeResourceBody(w, r, &request) {
 		return
@@ -213,20 +201,7 @@ func UpdateResources(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "expected_revision and snapshot are required")
 		return
 	}
-	snapshot := request.Snapshot.ResourceSnapshot
-	if request.Snapshot.Instances != nil {
-		snapshot.Instances = make([]model.ResourceInstance, len(request.Snapshot.Instances))
-	}
-	for i, instance := range request.Snapshot.Instances {
-		if instance.ContextLength == nil || instance.LatencyMS == nil {
-			common.ApiError(w, http.StatusBadRequest, "contextLength and latencyMs are required numbers")
-			return
-		}
-		snapshot.Instances[i] = instance.ResourceInstance
-		snapshot.Instances[i].ContextLength = *instance.ContextLength
-		snapshot.Instances[i].LatencyMS = *instance.LatencyMS
-	}
-	catalog, err := model.SaveResourceSnapshot(r.Context(), *request.ExpectedRevision, snapshot)
+	catalog, err := model.SaveResourceSnapshot(r.Context(), *request.ExpectedRevision, *request.Snapshot)
 	writeResourceResult(w, catalog, err)
 }
 
@@ -275,5 +250,22 @@ func DeleteResourceRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	catalog, err := model.DeleteResourceRegion(r.Context(), *request.ExpectedRevision, r.PathValue("id"))
+	writeResourceResult(w, catalog, err)
+}
+
+func ClearRemovedResourcePlacement(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		ExpectedRevision *int64 `json:"expected_revision"`
+		Confirm          bool   `json:"confirm"`
+	}
+	if !decodeResourceBody(w, r, &request) {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 || request.ExpectedRevision == nil || !request.Confirm {
+		common.ApiError(w, 400, "confirmed archive cleanup and expected revision are required")
+		return
+	}
+	catalog, err := model.ClearRemovedResourcePlacement(r.Context(), *request.ExpectedRevision, id)
 	writeResourceResult(w, catalog, err)
 }

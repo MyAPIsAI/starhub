@@ -207,6 +207,36 @@ describe("standard catalog and mapped resource ownership", () => {
     commit(c);
     expect(readPricing().multipliers["enterprise-a"]).toBe("0.65");
   });
+  it("pauses channel changes and treats a reappearing identifier as new intake", () => {
+    const base = createDefaultPricing();
+    const incoming = nextDemoSnapshot(base, "restore");
+    const resource = incoming.instances[0];
+    const original = structuredClone(base.placements![resource.id]);
+    incoming.channels.push({
+      id: "replacement-channel",
+      name: "Replacement",
+      provider: "fixture",
+      enabled: true,
+    });
+    resource.channelId = "replacement-channel";
+    const changed = applyResourceSnapshot(base, incoming);
+    expect(changed.placements![resource.id]).toEqual({
+      ...original,
+      enabled: false,
+    });
+    const removed = structuredClone(incoming);
+    removed.sequence++;
+    removed.instances = removed.instances.filter(
+      (row) => row.id !== resource.id,
+    );
+    const absent = applyResourceSnapshot(changed, removed);
+    expect(absent.placements![resource.id].enabled).toBe(false);
+    const restored = { ...incoming, sequence: removed.sequence + 1 };
+    expect(
+      applyResourceSnapshot(absent, restored).placements![resource.id],
+    ).toEqual({ modelId: null, groupIds: [], enabled: false });
+    expect(base.placements![resource.id]).toEqual(original);
+  });
   it("enforces custom account authorization for old keys and prevents routing beyond allowlists", () => {
     const c = createDefaultPricing();
     c.groups.pro.visibility = "custom";
@@ -343,13 +373,11 @@ describe("standard catalog and mapped resource ownership", () => {
     c.multipliers["enterprise-persist"] = "0.5";
     c.placements!["resource-1-a"].groupIds.push("enterprise-persist");
     c = commit(c);
-    const key = useProductPreview
-      .getState()
-      .createKeyDetailed({
-        name: "持久化",
-        tier: "enterprise-persist",
-        model: "gpt-4.1",
-      });
+    const key = useProductPreview.getState().createKeyDetailed({
+      name: "持久化",
+      tier: "enterprise-persist",
+      model: "gpt-4.1",
+    });
     const call = useProductPreview
       .getState()
       .recordCall(key.id, false, "gpt-4.1")!;

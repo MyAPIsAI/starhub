@@ -12,7 +12,8 @@ import type {
 } from "../lib/resource-publication";
 import { ApiError } from "../lib/api/http";
 import {
-  isAdmin,
+  ROLE_TECHNICAL,
+  ROLE_ROOT,
   useSessionQueryIdentity,
   useSystemAccess,
 } from "../lib/system-access";
@@ -39,7 +40,8 @@ function PublicationPanel({
   const { text } = useSettingsText();
   const role = useSystemAccess((s) => s.role),
     account = useSystemAccess((s) => s.session.accountId);
-  const enabled = account !== null && isAdmin(role);
+  const enabled =
+    account !== null && (role === ROLE_TECHNICAL || role === ROLE_ROOT);
   const query = usePublicationContext(enabled);
   const [selected, setSelected] = useState(new Map<string, string>());
   const [preview, setPreview] = useState<PublicationPreview>();

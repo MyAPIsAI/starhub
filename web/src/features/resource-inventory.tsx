@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { useResourceCatalog, useResourceMutation } from "../lib/api/resource";
 import {
-  ROLE_ADMIN,
+  ROLE_TECHNICAL,
   ROLE_ROOT,
   useSessionQueryIdentity,
   useSystemAccess,
@@ -13,6 +13,7 @@ import {
 import {
   parseResourceSnapshot,
   resourceImportDiff,
+  type ResourceIdentityReview,
 } from "../lib/resource-catalog";
 import type { ResourceSnapshot } from "../config/models";
 import { useSettingsText } from "./settings-text";
@@ -33,6 +34,15 @@ type Draft =
       model: string;
       groups: string;
       enabled: boolean;
+      confirmIdentity: boolean;
+    }
+  | {
+      kind: "cleanup";
+      revision: number;
+      id: number;
+      resource: string;
+      model: string;
+      groups: string;
     };
 
 export function ResourceInventory() {
@@ -54,7 +64,7 @@ function ResourceInventoryView() {
   const [review, setReview] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  if (role !== ROLE_ADMIN && role !== ROLE_ROOT) return null;
+  if (role !== ROLE_TECHNICAL && role !== ROLE_ROOT) return null;
   const data = query.error ? undefined : query.data;
   const snapshot = data?.snapshot;
   const rows = (snapshot?.instances ?? []).filter(
@@ -107,7 +117,19 @@ function ResourceInventoryView() {
         if (next.sequence <= (snapshot?.sequence ?? 0))
           throw new Error("sequence");
         setDraft({ ...draft, snapshot: next });
-      } else {
+      } else if (draft.kind === "placement") {
+        if (
+          draft.enabled &&
+          data.placement_reviews?.[draft.id] &&
+          !draft.confirmIdentity
+        ) {
+          setError(
+            text(
+              ...translatedMessage("resource_identity_confirmation_required"),
+            ),
+          );
+          return;
+        }
         if (
           draft.enabled &&
           (!draft.model.trim() ||
@@ -131,20 +153,27 @@ function ResourceInventoryView() {
     if (!draft || !review || conflict || !data) return;
     try {
       const result = await mutation.mutateAsync(
-        draft.kind === "import"
-          ? { expected_revision: draft.revision, snapshot: draft.snapshot! }
-          : {
+        draft.kind === "cleanup"
+          ? {
               expected_revision: draft.revision,
-              id: draft.id,
-              placement: {
-                modelId: draft.model.trim() || null,
-                groupIds: draft.groups
-                  .split(",")
-                  .map((group) => group.trim())
-                  .filter(Boolean),
-                enabled: draft.enabled,
+              removedId: draft.id,
+              confirm: true,
+            }
+          : draft.kind === "import"
+            ? { expected_revision: draft.revision, snapshot: draft.snapshot! }
+            : {
+                expected_revision: draft.revision,
+                id: draft.id,
+                placement: {
+                  modelId: draft.model.trim() || null,
+                  groupIds: draft.groups
+                    .split(",")
+                    .map((group) => group.trim())
+                    .filter(Boolean),
+                  enabled: draft.enabled,
+                  ...(draft.confirmIdentity ? { confirmIdentity: true } : {}),
+                },
               },
-            },
       );
       setNotice(
         text(
@@ -450,6 +479,18 @@ function ResourceInventoryView() {
                                     ...translatedMessage("unmapped_6d198b7550"),
                                   )}
                               </span>
+                              {data.placement_reviews?.[row.id] && (
+                                <p
+                                  className="ri-review-required"
+                                  data-testid="identity-review-required"
+                                >
+                                  {text(
+                                    ...translatedMessage(
+                                      "resource_identity_changed",
+                                    ),
+                                  )}
+                                </p>
+                              )}
                               <small>
                                 {placement?.groupIds.join(", ") || "—"}
                               </small>
@@ -478,6 +519,7 @@ function ResourceInventoryView() {
                                     groups:
                                       placement?.groupIds.join(", ") ?? "",
                                     enabled: placement?.enabled ?? false,
+                                    confirmIdentity: false,
                                   })
                                 }
                               >
@@ -527,6 +569,57 @@ function ResourceInventoryView() {
           )}
         </>
       )}
+      {data && (data.removed_placements?.length ?? 0) > 0 && (
+        <section className="ri-removed" data-testid="removed-placements">
+          <h2>{text(...translatedMessage("resource_removed_history"))}</h2>
+          <p>
+            {text(
+              ...translatedMessage("resource_removed_description", {
+                count: data.removed_placement_total,
+              }),
+            )}
+          </p>
+          <ul>
+            {data.removed_placements!.map((row) => (
+              <li key={row.id}>
+                <div>
+                  <strong>
+                    <bdi>{row.resource_id}</bdi>
+                  </strong>
+                  <p>
+                    <bdi>{row.model_id ?? "—"}</bdi> ·{" "}
+                    <bdi>{row.group_ids.join(", ") || "—"}</bdi>
+                  </p>
+                  <p>
+                    <bdi>{row.identity.channel_id}</bdi> ·{" "}
+                    <bdi>{row.identity.upstream_model}</bdi>
+                  </p>
+                  <time>
+                    {new Date(row.removed_at * 1000)
+                      .toISOString()
+                      .replace("T", " ")
+                      .replace(".000Z", " UTC")}
+                  </time>
+                </div>
+                <Button
+                  onClick={() =>
+                    begin({
+                      kind: "cleanup",
+                      revision: data.revision,
+                      id: row.id,
+                      resource: row.resource_id,
+                      model: row.model_id ?? "—",
+                      groups: row.group_ids.join(", ") || "—",
+                    })
+                  }
+                >
+                  {text(...translatedMessage("resource_review_cleanup"))}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <ResourcePublication
         catalog={data}
         refreshCatalog={() => query.refetch()}
@@ -537,15 +630,19 @@ function ResourceInventoryView() {
         preventOutsideClose
         size="wide"
         title={
-          review
-            ? text(...translatedMessage("confirm_inventory_save_1f7d7b761f"))
-            : draft?.kind === "placement"
-              ? text(
-                  ...translatedMessage("edit_inventory_placement_09ffb0ccee"),
-                )
-              : text(
-                  ...translatedMessage("import_inventory_snapshot_01201cb36a"),
-                )
+          draft?.kind === "cleanup"
+            ? text(...translatedMessage("resource_review_cleanup"))
+            : review
+              ? text(...translatedMessage("confirm_inventory_save_1f7d7b761f"))
+              : draft?.kind === "placement"
+                ? text(
+                    ...translatedMessage("edit_inventory_placement_09ffb0ccee"),
+                  )
+                : text(
+                    ...translatedMessage(
+                      "import_inventory_snapshot_01201cb36a",
+                    ),
+                  )
         }
         description={
           data?.affects_gateway_routing
@@ -645,8 +742,48 @@ function ResourceInventoryView() {
                 </p>
               </>
             ))}
+          {draft?.kind === "cleanup" && (
+            <>
+              <p>
+                {text(...translatedMessage("resource_cleanup_confirmation"))}
+              </p>
+              <p>
+                <bdi>{draft.resource}</bdi> · <bdi>{draft.model}</bdi> ·{" "}
+                <bdi>{draft.groups}</bdi>
+              </p>
+            </>
+          )}
           {draft?.kind === "placement" && (
             <>
+              {data?.placement_reviews?.[draft.id] && (
+                <>
+                  <ResourceIdentityComparison
+                    review={data.placement_reviews[draft.id]}
+                  />
+                  <p>
+                    {text(
+                      ...translatedMessage(
+                        "resource_identity_restore_description",
+                      ),
+                    )}
+                  </p>
+                  <label className="ri-checkbox">
+                    <input
+                      type="checkbox"
+                      data-testid="confirm-resource-identity"
+                      disabled={review}
+                      checked={draft.confirmIdentity}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          confirmIdentity: e.target.checked,
+                        })
+                      }
+                    />
+                    {text(...translatedMessage("resource_identity_confirm"))}
+                  </label>
+                </>
+              )}
               <p>
                 <code>{draft.id}</code>
               </p>
@@ -719,5 +856,48 @@ function ResourceInventoryView() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+function ResourceIdentityComparison({
+  review,
+}: {
+  review: ResourceIdentityReview;
+}) {
+  const { text } = useSettingsText();
+  return (
+    <section className="ri-identity-review">
+      <strong>{text(...translatedMessage("resource_identity_changed"))}</strong>
+      <dl>
+        {(
+          [
+            [
+              "channel_id",
+              text(...translatedMessage("resource_identity_channel")),
+            ],
+            [
+              "upstream_model",
+              text(...translatedMessage("resource_identity_upstream")),
+            ],
+            [
+              "canonical_model",
+              text(...translatedMessage("resource_identity_canonical")),
+            ],
+            [
+              "provider",
+              text(...translatedMessage("resource_identity_provider")),
+            ],
+          ] as const
+        ).map(([key, label]) => (
+          <div key={key}>
+            <dt>{label}</dt>
+            <dd>
+              <bdi>{review.before[key] || "—"}</bdi> →{" "}
+              <bdi>{review.after[key] || "—"}</bdi>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }

@@ -224,7 +224,7 @@ func TestResourcePublicationPreviewFailsClosedForUnsupportedInventory(t *testing
 				if change == "duplicate-resource" {
 					resourceID = "duplicate"
 				}
-				state, err = SaveResourcePlacement(context.Background(), state.Revision, resourceID, ResourcePlacement{ModelID: &modelID, GroupIDs: []string{"default"}, Enabled: true})
+				state, err = SaveResourcePlacement(context.Background(), state.Revision, resourceID, ResourcePlacement{ModelID: &modelID, GroupIDs: []string{"default"}, Enabled: true, ConfirmIdentity: true})
 				if err != nil {
 					t.Fatal(err)
 				}

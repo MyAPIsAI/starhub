@@ -1,3 +1,4 @@
+import { parseResourceSnapshot } from "./resource-catalog";
 import {
   catalogModels,
   type ModelItem,
@@ -200,56 +201,12 @@ export function materializeAvailability(config: PricingCatalogConfig) {
   return next;
 }
 export function resourceSnapshotError(data: unknown): string | null {
-  if (!data || typeof data !== "object") return "快照不是有效对象";
-  const value = data as ResourceSnapshot;
-  if (
-    !value.id ||
-    !Number.isSafeInteger(value.sequence) ||
-    value.sequence < 1 ||
-    !Number.isFinite(Date.parse(value.publishedAt)) ||
-    !Array.isArray(value.channels) ||
-    !Array.isArray(value.instances)
-  )
-    return "快照版本、时间或列表无效";
-  if (
-    new Set(value.channels.map((c) => c?.id)).size !== value.channels.length ||
-    new Set(value.instances.map((r) => r?.id)).size !== value.instances.length
-  )
-    return "外部标识重复";
-  if (
-    value.channels.some(
-      (c) => !c || !c.id || !c.name || typeof c.enabled !== "boolean",
-    )
-  )
-    return "渠道字段无效";
-  if (
-    value.instances.some(
-      (r) =>
-        !r ||
-        !r.id ||
-        !r.upstreamModel ||
-        !r.canonicalModel ||
-        !value.channels.some((c) => c.id === r.channelId) ||
-        !["available", "unavailable", "retired"].includes(r.status) ||
-        !Array.isArray(r.protocols) ||
-        r.protocols.some(
-          (p) => !["OpenAI", "Anthropic", "Gemini"].includes(p),
-        ) ||
-        !Array.isArray(r.capabilities) ||
-        r.capabilities.some(
-          (p) =>
-            !["text", "code", "vision", "reasoning", "image", "video"].includes(
-              p,
-            ),
-        ) ||
-        !Number.isFinite(r.latencyMs) ||
-        r.latencyMs < 0 ||
-        !Number.isFinite(r.contextLength) ||
-        r.contextLength < 0,
-    )
-  )
-    return "资源实例引用、协议或能力字段无效";
-  return null;
+  try {
+    parseResourceSnapshot(data);
+    return null;
+  } catch {
+    return "Invalid resource snapshot";
+  }
 }
 export function applyResourceSnapshot(
   config: PricingCatalogConfig,
@@ -264,21 +221,37 @@ export function applyResourceSnapshot(
     ...structuredClone(snapshot),
     receivedAt: new Date().toISOString(),
   };
-  // New IDs have no local model mapping or group placement; source sync never expands access.
-  for (const resource of snapshot.instances)
-    next.placements![resource.id] ??= {
-      modelId: null,
-      groupIds: [],
-      enabled: false,
-    };
+  const incomingIds = new Set(
+    snapshot.instances.map((resource) => resource.id),
+  );
+  // Retain deleted mappings for inspection, but never retain callable authorization.
+  for (const [id, placement] of Object.entries(next.placements!)) {
+    if (!incomingIds.has(id)) placement.enabled = false;
+  }
   for (const resource of snapshot.instances) {
     const old = config.resources?.instances.find(
       (item) => item.id === resource.id,
     );
+    if (!old) {
+      next.placements![resource.id] = {
+        modelId: null,
+        groupIds: [],
+        enabled: false,
+      };
+      continue;
+    }
+    const provider = snapshot.channels.find(
+      (channel) => channel.id === resource.channelId,
+    )?.provider;
+    const oldProvider = config.resources?.channels.find(
+      (channel) => channel.id === old.channelId,
+    )?.provider;
     if (
-      old &&
-      (old.canonicalModel !== resource.canonicalModel ||
-        old.upstreamModel !== resource.upstreamModel)
+      old.channelId !== resource.channelId ||
+      old.canonicalModel !== resource.canonicalModel ||
+      old.upstreamModel !== resource.upstreamModel ||
+      provider !== oldProvider ||
+      resource.status === "retired"
     )
       next.placements![resource.id].enabled = false;
   }

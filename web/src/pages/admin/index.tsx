@@ -1,5 +1,6 @@
 import { message as translatedMessage } from "../../i18n/messages";
 import { AdminAnnouncements } from "../../features/admin-announcements";
+import { ResourceInventory } from "../../features/resource-inventory";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -168,6 +169,9 @@ export default function AdminPortal() {
               </div>
             </div>
 
+            <section style={{ marginBottom: "var(--space-6)" }}>
+              <ResourceInventory />
+            </section>
             {/* Channel list from backend */}
             <section
               style={{

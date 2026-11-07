@@ -35,29 +35,30 @@ const (
 type Resource string
 
 const (
-	ResourceUser            Resource = "user"
-	ResourceChannel         Resource = "channel"
-	ResourceTaskPlugin      Resource = "task_plugin"
-	ResourceToken           Resource = "token"
-	ResourceOption          Resource = "option"
-	ResourceLog             Resource = "log"
-	ResourceAudit           Resource = "audit"
-	ResourceRedemption      Resource = "redemption"
-	ResourceFinance         Resource = "finance"
-	ResourceInventory       Resource = "inventory"
-	ResourceRegion          Resource = "region"
-	ResourceServiceGroup    Resource = "service_group"
-	ResourceModelMeta       Resource = "model_metadata"
-	ResourceStaff           Resource = "staff_accounts"
-	ResourceSync            Resource = "resource_sync"
-	ResourceAdjustment      Resource = "financial_adjustment"
-	ResourceBilling         Resource = "billing"
-	ResourceExport          Resource = "export"
-	ResourceMetrics         Resource = "metrics"
-	ResourceSystem          Resource = "system"
-	ResourceCustomerControl Resource = "customer_control"
-	ResourceReconciliation  Resource = "reconciliation"
-	ResourceAnnouncements   Resource = "announcements"
+	ResourceUser             Resource = "user"
+	ResourceChannel          Resource = "channel"
+	ResourceTaskPlugin       Resource = "task_plugin"
+	ResourceToken            Resource = "token"
+	ResourceOption           Resource = "option"
+	ResourceLog              Resource = "log"
+	ResourceAudit            Resource = "audit"
+	ResourceRedemption       Resource = "redemption"
+	ResourceFinance          Resource = "finance"
+	ResourceInventory        Resource = "inventory"
+	ResourceInventoryArchive Resource = "inventory_archive"
+	ResourceRegion           Resource = "region"
+	ResourceServiceGroup     Resource = "service_group"
+	ResourceModelMeta        Resource = "model_metadata"
+	ResourceStaff            Resource = "staff_accounts"
+	ResourceSync             Resource = "resource_sync"
+	ResourceAdjustment       Resource = "financial_adjustment"
+	ResourceBilling          Resource = "billing"
+	ResourceExport           Resource = "export"
+	ResourceMetrics          Resource = "metrics"
+	ResourceSystem           Resource = "system"
+	ResourceCustomerControl  Resource = "customer_control"
+	ResourceReconciliation   Resource = "reconciliation"
+	ResourceAnnouncements    Resource = "announcements"
 )
 
 // policy maps role -> resource -> allowed actions. An empty action set means
@@ -65,9 +66,10 @@ const (
 // denied.
 var policy = map[int]map[Resource]map[Action]bool{
 	common.RoleRoot: {
-		ResourceAnnouncements:  {ActionRead: true, ActionWrite: true},
-		ResourceReconciliation: {},
-		ResourceStaff:          {}, ResourceSync: {}, ResourceAdjustment: {}, ResourceBilling: {}, ResourceExport: {}, ResourceMetrics: {}, ResourceSystem: {}, ResourceCustomerControl: {},
+		ResourceInventoryArchive: {ActionDelete: true},
+		ResourceAnnouncements:    {ActionRead: true, ActionWrite: true},
+		ResourceReconciliation:   {},
+		ResourceStaff:            {}, ResourceSync: {}, ResourceAdjustment: {}, ResourceBilling: {}, ResourceExport: {}, ResourceMetrics: {}, ResourceSystem: {}, ResourceCustomerControl: {},
 		ResourceUser:         {}, // all actions
 		ResourceChannel:      {}, // all actions
 		ResourceToken:        {}, // all actions
@@ -100,8 +102,9 @@ var policy = map[int]map[Resource]map[Action]bool{
 		ResourceFinance: {ActionRead: true},
 	},
 	common.RoleTechnical: {
-		ResourceCustomerControl: {ActionRead: true},
-		ResourceUser:            {ActionRead: true}, ResourceLog: {ActionRead: true}, ResourceAudit: {ActionRead: true}, ResourceChannel: {ActionRead: true, ActionWrite: true, ActionDelete: true}, ResourceInventory: {ActionRead: true, ActionWrite: true}, ResourceRegion: {ActionRead: true}, ResourceSync: {ActionRead: true, ActionWrite: true}, ResourceSystem: {ActionRead: true}, ResourceExport: {ActionRead: true, ActionWrite: true},
+		ResourceInventoryArchive: {ActionDelete: true},
+		ResourceCustomerControl:  {ActionRead: true},
+		ResourceUser:             {ActionRead: true}, ResourceLog: {ActionRead: true}, ResourceAudit: {ActionRead: true}, ResourceChannel: {ActionRead: true, ActionWrite: true, ActionDelete: true}, ResourceInventory: {ActionRead: true, ActionWrite: true}, ResourceRegion: {ActionRead: true}, ResourceSync: {ActionRead: true, ActionWrite: true}, ResourceSystem: {ActionRead: true}, ResourceExport: {ActionRead: true, ActionWrite: true},
 	},
 	common.RoleUser: {
 		ResourceToken: {ActionRead: true, ActionWrite: true, ActionDelete: true},
@@ -191,6 +194,8 @@ func pathResource(path string) (Resource, bool) {
 		return ResourceRedemption, true
 	case path == "/api/finance" || strings.HasPrefix(path, "/api/finance/"):
 		return ResourceFinance, true
+	case strings.HasPrefix(path, "/api/resource/removed-placements/"):
+		return ResourceInventoryArchive, true
 	case path == "/api/resource" || strings.HasPrefix(path, "/api/resource/"), path == "/api/placement" || strings.HasPrefix(path, "/api/placement/"):
 		return ResourceInventory, true
 	case path == "/api/region" || strings.HasPrefix(path, "/api/region/"):

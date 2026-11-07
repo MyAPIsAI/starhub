@@ -104,7 +104,7 @@ func TestResourceGatewayInventoryChangesRevokeWithoutAutomaticRestoration(t *tes
 				t.Fatal(err)
 			}
 			modelID := "alpha"
-			if _, err := SaveResourcePlacement(context.Background(), state.Revision, "resource-1", ResourcePlacement{ModelID: &modelID, GroupIDs: []string{"default"}, Enabled: true}); err != nil {
+			if _, err := SaveResourcePlacement(context.Background(), state.Revision, "resource-1", ResourcePlacement{ModelID: &modelID, GroupIDs: []string{"default"}, Enabled: true, ConfirmIdentity: true}); err != nil {
 				t.Fatal(err)
 			}
 			if err := RebuildAbilities(ch); err != nil {

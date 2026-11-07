@@ -1,6 +1,29 @@
 import type { ResourceSnapshot, ResourcePlacement } from "../config/models";
 
+export interface ResourceIdentity {
+  channel_id: string;
+  upstream_model: string;
+  canonical_model: string;
+  provider: string;
+}
+export interface ResourceIdentityReview {
+  before: ResourceIdentity;
+  after: ResourceIdentity;
+}
+export interface RemovedPlacement {
+  id: number;
+  resource_id: string;
+  model_id: string | null;
+  group_ids: string[];
+  removed_at: number;
+  sequence: number;
+  identity: ResourceIdentity;
+}
+
 export interface ResourceCatalog {
+  placement_reviews?: Record<string, ResourceIdentityReview>;
+  removed_placements?: RemovedPlacement[];
+  removed_placement_total?: number;
   revision: number;
   snapshot: ResourceSnapshot | null;
   placements: Record<string, ResourcePlacement>;
@@ -33,18 +56,53 @@ const enums = (value: unknown, allowed: string[]): boolean =>
   new Set(value).size === value.length &&
   value.every((entry) => typeof entry === "string" && allowed.includes(entry));
 
+const knownFields = (value: Record<string, unknown>, allowed: string[]) =>
+  Object.keys(value).every(
+    (key) => allowed.includes(key) && value[key] !== null,
+  );
+const publicationTime = (value: unknown) => {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      value,
+    ) ||
+    !Number.isFinite(Date.parse(value))
+  )
+    return false;
+  const year = Number(value.slice(0, 4)),
+    month = Number(value.slice(5, 7)),
+    day = Number(value.slice(8, 10));
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <=
+      [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1] &&
+    Number(value.slice(11, 13)) < 24
+  );
+};
+
 export function parseResourceSnapshot(value: unknown): ResourceSnapshot {
   const invalid = () => {
     throw new Error("Invalid resource snapshot");
   };
   if (
     !object(value) ||
+    !knownFields(value, [
+      "id",
+      "sequence",
+      "source",
+      "publishedAt",
+      "receivedAt",
+      "channels",
+      "instances",
+    ]) ||
     !text(value.id, 128) ||
     !integer(value.sequence) ||
     value.sequence < 1 ||
     !text(value.source, 256, false) ||
-    typeof value.publishedAt !== "string" ||
-    !Number.isFinite(Date.parse(value.publishedAt)) ||
+    !publicationTime(value.publishedAt) ||
     !Array.isArray(value.channels) ||
     !Array.isArray(value.instances) ||
     value.channels.length > 500 ||
@@ -55,6 +113,7 @@ export function parseResourceSnapshot(value: unknown): ResourceSnapshot {
   for (const channel of value.channels) {
     if (
       !object(channel) ||
+      !knownFields(channel, ["id", "name", "provider", "enabled"]) ||
       !text(channel.id, 128) ||
       channels.has(channel.id) ||
       !text(channel.name, 256) ||
@@ -89,6 +148,23 @@ export function parseResourceSnapshot(value: unknown): ResourceSnapshot {
       return invalid();
     if (
       !object(resource) ||
+      !knownFields(resource, [
+        "id",
+        "channelId",
+        "upstreamModel",
+        "canonicalModel",
+        "protocols",
+        "capabilities",
+        "contextLength",
+        "region",
+        "status",
+        "latencyMs",
+        "price_tier",
+        "quality_level",
+        "state",
+        "trend",
+        "score",
+      ]) ||
       !text(resource.id, 128) ||
       ids.has(resource.id) ||
       !text(resource.channelId, 128) ||
@@ -172,6 +248,53 @@ export function parseResourceCatalog(value: unknown): ResourceCatalog {
         (placement.modelId === null || placement.groupIds.length === 0))
     )
       throw new Error("Invalid resource placement");
+  }
+  const identity = (entry: unknown): boolean =>
+    object(entry) &&
+    text(entry.channel_id, 128) &&
+    model(entry.upstream_model) &&
+    model(entry.canonical_model) &&
+    text(entry.provider, 256, false);
+  if (value.placement_reviews !== undefined) {
+    if (!object(value.placement_reviews))
+      throw new Error("Invalid identity reviews");
+    for (const [id, review] of Object.entries(value.placement_reviews)) {
+      if (
+        !ids.has(id) ||
+        !object(review) ||
+        !identity(review.before) ||
+        !identity(review.after) ||
+        (value.placements[id] as ResourcePlacement).enabled
+      )
+        throw new Error("Invalid identity review");
+    }
+  }
+  if (value.removed_placements !== undefined) {
+    if (
+      !Array.isArray(value.removed_placements) ||
+      value.removed_placements.length > 100 ||
+      !integer(value.removed_placement_total) ||
+      value.removed_placement_total < value.removed_placements.length
+    )
+      throw new Error("Invalid removed placements");
+    const archiveIds = new Set<number>();
+    for (const row of value.removed_placements) {
+      if (
+        !object(row) ||
+        !integer(row.id) ||
+        row.id === 0 ||
+        archiveIds.has(row.id) ||
+        !text(row.resource_id, 128) ||
+        !(row.model_id === null || model(row.model_id)) ||
+        !Array.isArray(row.group_ids) ||
+        !row.group_ids.every((group) => text(group, 128)) ||
+        !integer(row.removed_at) ||
+        !integer(row.sequence) ||
+        !identity(row.identity)
+      )
+        throw new Error("Invalid removed placement");
+      archiveIds.add(row.id);
+    }
   }
   return value as unknown as ResourceCatalog;
 }

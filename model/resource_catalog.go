@@ -31,10 +31,11 @@ type ResourceCatalogRecord struct {
 }
 
 type ResourcePlacementRecord struct {
-	ResourceID string `gorm:"primaryKey;size:128"`
-	ModelID    *string
-	GroupIDs   string `gorm:"type:text;not null"`
-	Enabled    bool   `gorm:"not null;default:false"`
+	ResourceID     string `gorm:"primaryKey;size:128"`
+	ModelID        *string
+	GroupIDs       string `gorm:"type:text;not null"`
+	Enabled        bool   `gorm:"not null;default:false"`
+	IdentityReview string `gorm:"type:text;not null;default:''"`
 }
 
 type ResourceChannel struct {
@@ -73,18 +74,22 @@ type ResourceSnapshot struct {
 }
 
 type ResourcePlacement struct {
-	ModelID  *string  `json:"modelId"`
-	GroupIDs []string `json:"groupIds"`
-	Enabled  bool     `json:"enabled"`
+	ModelID         *string  `json:"modelId"`
+	GroupIDs        []string `json:"groupIds"`
+	Enabled         bool     `json:"enabled"`
+	ConfirmIdentity bool     `json:"confirmIdentity,omitempty"`
 }
 
 type ResourceCatalog struct {
-	Revision              int64                        `json:"revision"`
-	Snapshot              *ResourceSnapshot            `json:"snapshot"`
-	Placements            map[string]ResourcePlacement `json:"placements"`
-	Regions               map[string]ResourceRegion    `json:"regions"`
-	UpdatedAt             int64                        `json:"updated_at"`
-	AffectsGatewayRouting bool                         `json:"affects_gateway_routing"`
+	PlacementReviews      map[string]ResourcePlacementReview `json:"placement_reviews"`
+	RemovedPlacements     []RemovedResourcePlacement         `json:"removed_placements"`
+	RemovedPlacementTotal int64                              `json:"removed_placement_total"`
+	Revision              int64                              `json:"revision"`
+	Snapshot              *ResourceSnapshot                  `json:"snapshot"`
+	Placements            map[string]ResourcePlacement       `json:"placements"`
+	Regions               map[string]ResourceRegion          `json:"regions"`
+	UpdatedAt             int64                              `json:"updated_at"`
+	AffectsGatewayRouting bool                               `json:"affects_gateway_routing"`
 }
 
 func resourceText(value string, max int, required bool) bool {
@@ -174,6 +179,8 @@ func readResourceCatalog(tx *gorm.DB) (*ResourceCatalog, error) {
 		return nil, err
 	}
 	result := &ResourceCatalog{Revision: record.Revision, UpdatedAt: record.UpdatedAt, Placements: map[string]ResourcePlacement{}, Regions: map[string]ResourceRegion{}}
+	result.PlacementReviews = map[string]ResourcePlacementReview{}
+	result.RemovedPlacements = []RemovedResourcePlacement{}
 	if record.Snapshot != "" {
 		if err := json.Unmarshal([]byte(record.Snapshot), &result.Snapshot); err != nil {
 			return nil, err
@@ -189,6 +196,30 @@ func readResourceCatalog(tx *gorm.DB) (*ResourceCatalog, error) {
 			return nil, err
 		}
 		result.Placements[row.ResourceID] = ResourcePlacement{ModelID: row.ModelID, GroupIDs: groups, Enabled: row.Enabled}
+		if row.IdentityReview != "" {
+			var review ResourcePlacementReview
+			if err := json.Unmarshal([]byte(row.IdentityReview), &review); err != nil {
+				return nil, err
+			}
+			result.PlacementReviews[row.ResourceID] = review
+		}
+	}
+	if err := tx.Model(&ResourcePlacementArchive{}).Count(&result.RemovedPlacementTotal).Error; err != nil {
+		return nil, err
+	}
+	var archives []ResourcePlacementArchive
+	if err := tx.Order("id DESC").Limit(100).Find(&archives).Error; err != nil {
+		return nil, err
+	}
+	for _, archive := range archives {
+		row := RemovedResourcePlacement{ResourcePlacementArchive: archive}
+		if err := json.Unmarshal([]byte(archive.GroupIDs), &row.Groups); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(archive.Identity), &row.SourceIdentity); err != nil {
+			return nil, err
+		}
+		result.RemovedPlacements = append(result.RemovedPlacements, row)
 	}
 	var regions []ResourceRegion
 	if err := tx.Order("id").Find(&regions).Error; err != nil {
@@ -288,6 +319,9 @@ func saveResourceSnapshot(db *gorm.DB, expected int64, snapshot ResourceSnapshot
 		if err := invalidateResourceGatewaySources(tx, invalidatedResourceGatewaySources(previous.Snapshot, snapshot)); err != nil {
 			return err
 		}
+		if err := archiveRemovedResourcePlacements(tx, previous, snapshot); err != nil {
+			return err
+		}
 		old := map[string]ResourceInstance{}
 		if previous.Snapshot != nil {
 			for _, r := range previous.Snapshot.Instances {
@@ -302,6 +336,20 @@ func saveResourceSnapshot(db *gorm.DB, expected int64, snapshot ResourceSnapshot
 				return err
 			}
 			prior, exists := old[r.ID]
+			if exists && resourceIdentity(previous.Snapshot, prior) != resourceIdentity(&snapshot, r) {
+				review := ResourcePlacementReview{Before: resourceIdentity(previous.Snapshot, prior), After: resourceIdentity(&snapshot, r)}
+				if pending, ok := previous.PlacementReviews[r.ID]; ok {
+					review.Before = pending.Before
+				}
+				raw, _ := json.Marshal(review)
+				if err := tx.Model(&row).Updates(map[string]any{"identity_review": string(raw), "enabled": false}).Error; err != nil {
+					return err
+				}
+			} else if _, pending := previous.PlacementReviews[r.ID]; pending {
+				if err := tx.Model(&row).Update("enabled", false).Error; err != nil {
+					return err
+				}
+			}
 			if !exists || prior.UpstreamModel != r.UpstreamModel || prior.CanonicalModel != r.CanonicalModel || prior.ChannelID != r.ChannelID || r.Status == "retired" {
 				if err := tx.Model(&row).Update("enabled", false).Error; err != nil {
 					return err
@@ -348,6 +396,9 @@ func SaveResourcePlacement(ctx context.Context, expected int64, id string, place
 			return ErrInvalidResource
 		}
 		if placement.Enabled {
+			if _, pending := catalog.PlacementReviews[id]; pending && !placement.ConfirmIdentity {
+				return fmt.Errorf("%w: upstream identity confirmation required", ErrInvalidResource)
+			}
 			available := false
 			for _, c := range catalog.Snapshot.Channels {
 				if c.ID == resource.ChannelID {
@@ -366,6 +417,10 @@ func SaveResourcePlacement(ctx context.Context, expected int64, id string, place
 				return err
 			}
 		}
-		return tx.Model(&ResourcePlacementRecord{}).Where("resource_id = ?", id).Updates(map[string]any{"model_id": placement.ModelID, "group_ids": string(groups), "enabled": placement.Enabled}).Error
+		updates := map[string]any{"model_id": placement.ModelID, "group_ids": string(groups), "enabled": placement.Enabled}
+		if placement.Enabled && placement.ConfirmIdentity {
+			updates["identity_review"] = ""
+		}
+		return tx.Model(&ResourcePlacementRecord{}).Where("resource_id = ?", id).Updates(updates).Error
 	})
 }

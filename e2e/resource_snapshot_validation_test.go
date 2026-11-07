@@ -44,6 +44,45 @@ func TestResourceSnapshotInvalidNumbersPreservePublication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	invalidCases := map[string]func(map[string]any){
+		"sequence-replay":       func(s map[string]any) { s["sequence"] = 1 },
+		"sequence-fraction":     func(s map[string]any) { s["sequence"] = 1.5 },
+		"duplicate-resource":    func(s map[string]any) { rows := s["instances"].([]any); s["instances"] = append(rows, rows[0]) },
+		"duplicate-channel":     func(s map[string]any) { rows := s["channels"].([]any); s["channels"] = append(rows, rows[0]) },
+		"null-channel-state":    func(s map[string]any) { s["channels"].([]any)[0].(map[string]any)["enabled"] = nil },
+		"missing-channel-state": func(s map[string]any) { delete(s["channels"].([]any)[0].(map[string]any), "enabled") },
+		"invalid-channel-state": func(s map[string]any) { s["channels"].([]any)[0].(map[string]any)["enabled"] = "false" },
+		"channel-reference":     func(s map[string]any) { s["instances"].([]any)[0].(map[string]any)["channelId"] = "missing" },
+		"protocol":              func(s map[string]any) { s["instances"].([]any)[0].(map[string]any)["protocols"] = []string{"invalid"} },
+		"capability": func(s map[string]any) {
+			s["instances"].([]any)[0].(map[string]any)["capabilities"] = []string{"invalid"}
+		},
+		"status":             func(s map[string]any) { s["instances"].([]any)[0].(map[string]any)["status"] = "invalid" },
+		"null-score":         func(s map[string]any) { s["instances"].([]any)[0].(map[string]any)["score"] = nil },
+		"bad-date":           func(s map[string]any) { s["publishedAt"] = "2026-02-31T00:00:00Z" },
+		"injected-placement": func(s map[string]any) { s["placements"] = map[string]any{"resource": map[string]any{"enabled": true}} },
+	}
+	for name, mutate := range invalidCases {
+		t.Run(name, func(t *testing.T) {
+			var next map[string]any
+			if err := json.Unmarshal(encoded, &next); err != nil {
+				t.Fatal(err)
+			}
+			next["sequence"] = 2
+			next["instances"].([]any)[0].(map[string]any)["upstreamModel"] = "changed-upstream"
+			mutate(next)
+			response := doRequest(env.base, "PUT", "/api/resource", env.session, map[string]any{"expected_revision": before.Revision, "snapshot": next})
+			if response.Status != 400 && response.Status != 409 {
+				t.Fatalf("invalid import accepted: %d %s", response.Status, response.Body)
+			}
+			after := publicationAPIData[model.ResourceCatalog](t, doRequest(env.base, "GET", "/api/resource", env.session, nil))
+			bindings := publicationAPIData[model.ResourceBindingState](t, doRequest(env.base, "GET", "/api/resource/publication-state", env.session, nil))
+			if !reflect.DeepEqual(before, after) || !reflect.DeepEqual(bindingsBefore, bindings) {
+				t.Fatal("invalid import changed published state")
+			}
+		})
+	}
 	for _, field := range []string{"contextLength", "latencyMs"} {
 		for _, test := range []struct {
 			name  string

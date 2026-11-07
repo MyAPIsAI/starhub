@@ -43,7 +43,7 @@ func InitDB(path string) error {
 	legacyReservations := !db.Migrator().HasColumn(&User{}, "reserved_quota")
 	legacyQuotaLimits := !db.Migrator().HasColumn(&Token{}, "quota_limit")
 	legacyStaffAccounts := !db.Migrator().HasColumn(&User{}, "account_kind")
-	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourcePlacementArchive{}, &ResourceRegion{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 	if err := db.AutoMigrate(&ChannelConfigurationState{}, &TransactionalMail{}); err != nil {

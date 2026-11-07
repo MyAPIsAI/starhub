@@ -290,6 +290,7 @@ export interface ResourceSnapshot {
   instances: ResourceInstance[];
 }
 export interface ResourcePlacement {
+  confirmIdentity?: boolean;
   modelId: string | null;
   groupIds: string[];
   enabled: boolean;

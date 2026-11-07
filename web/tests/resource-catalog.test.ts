@@ -37,6 +37,68 @@ const catalog = () => ({
 });
 
 describe("server resource inventory boundaries", () => {
+  it("rejects null or ambiguous import fields without modifying the current catalog", () => {
+    const current = catalog(),
+      before = structuredClone(current);
+    for (const patch of [
+      { channels: [{ ...snapshot().channels[0], enabled: null }] },
+      { channels: [{ ...snapshot().channels[0], enabled: "false" }] },
+      { publishedAt: "2026-02-30T00:00:00Z" },
+      { publishedAt: "2026-11-07" },
+      { placements: current.placements },
+    ]) {
+      expect(() =>
+        parseResourceSnapshot({ ...snapshot(), ...patch }),
+      ).toThrow();
+      expect(current).toEqual(before);
+    }
+  });
+  it("keeps pending identity review and removed history separate from active authorization", () => {
+    const identity = {
+      channel_id: "supplier",
+      upstream_model: "upstream-text",
+      canonical_model: "standard-text",
+      provider: "",
+    };
+    const value = {
+      ...catalog(),
+      placement_reviews: {
+        resource: {
+          before: identity,
+          after: { ...identity, upstream_model: "changed" },
+        },
+      },
+      removed_placement_total: 1,
+      removed_placements: [
+        {
+          id: 1,
+          resource_id: "removed",
+          model_id: "standard-text",
+          group_ids: ["default"],
+          identity,
+          removed_at: 1793145601,
+          sequence: 2,
+        },
+      ],
+    };
+    expect(parseResourceCatalog(value).removed_placements).toHaveLength(1);
+    expect(parseResourceCatalog(value).placements.removed).toBeUndefined();
+    expect(() =>
+      parseResourceCatalog({
+        ...value,
+        placements: {
+          resource: {
+            modelId: "standard-text",
+            groupIds: ["default"],
+            enabled: true,
+          },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseResourceCatalog({ ...value, removed_placement_total: 0 }),
+    ).toThrow();
+  });
   it("preserves empty server state without seeding demo resources", () => {
     expect(
       parseResourceCatalog({

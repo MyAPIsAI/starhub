@@ -2,6 +2,8 @@
 
 The administration implementation covers ADM-2, ADM-3, ADM-4, ADM-8 and ADM-9 and their fourteen originally requested acceptance cases. The operating dashboard implements ADM-5 with ADM-AC-07 verification, resource monitoring covers ADM-6, and service announcements implement ADM-7 with ADM-AC-11 verification. It uses the supplied MyAPIs Demo for page structure and the existing application theme. Customer and employee sign-in use separate forms and credentials, with server-confirmed role permissions.
 
+The Channels and placement tab also exposes the server resource inventory, identity-change review, gateway publication and reviewed cleanup of removed source mappings. Technical and Root access follows the [M8 resource permission boundaries](m8-resource-boundaries.md).
+
 ## Personal workspace and back office
 
 Every staff account has a personal workspace. Staff sign-in at `/admin/login` opens that workspace by default. A direct request to the back office returns there after sign-in. The Workspace menu links directly to personal pages, and Platform management returns to the back office with the account's assigned staff role.

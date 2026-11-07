@@ -3,7 +3,7 @@ import { apiGet, apiPut, apiRequest } from "./http";
 import type { ResourcePlacement, ResourceSnapshot } from "../../config/models";
 import { parseResourceCatalog } from "../resource-catalog";
 import {
-  ROLE_ADMIN,
+  ROLE_TECHNICAL,
   ROLE_ROOT,
   useSessionQueryIdentity,
   useSystemAccess,
@@ -15,7 +15,8 @@ export function useResourceCatalog() {
   const role = useSystemAccess((s) => s.role);
   return useQuery({
     queryKey: ["resource-catalog", identity],
-    enabled: account !== null && (role === ROLE_ADMIN || role === ROLE_ROOT),
+    enabled:
+      account !== null && (role === ROLE_TECHNICAL || role === ROLE_ROOT),
     retry: false,
     queryFn: async ({ signal }) =>
       parseResourceCatalog(await apiGet<unknown>("/api/resource", signal)),
@@ -30,20 +31,32 @@ export function useResourceMutation() {
       input: { expected_revision: number } & (
         | { snapshot: ResourceSnapshot }
         | { id: string; placement: ResourcePlacement }
+        | { removedId: number; confirm: true }
       ),
     ) =>
       parseResourceCatalog(
-        await apiPut<unknown>(
-          "snapshot" in input
-            ? "/api/resource"
-            : `/api/placement/${encodeURIComponent(input.id)}`,
-          "snapshot" in input
-            ? input
-            : {
-                expected_revision: input.expected_revision,
-                placement: input.placement,
+        "removedId" in input
+          ? await apiRequest<unknown>(
+              `/api/resource/removed-placements/${input.removedId}`,
+              {
+                method: "DELETE",
+                body: JSON.stringify({
+                  expected_revision: input.expected_revision,
+                  confirm: input.confirm,
+                }),
               },
-        ),
+            )
+          : await apiPut<unknown>(
+              "snapshot" in input
+                ? "/api/resource"
+                : `/api/placement/${encodeURIComponent(input.id)}`,
+              "snapshot" in input
+                ? input
+                : {
+                    expected_revision: input.expected_revision,
+                    placement: input.placement,
+                  },
+            ),
       ),
     onSettled: () => {
       for (const key of [

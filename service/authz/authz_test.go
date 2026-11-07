@@ -18,6 +18,18 @@ func TestRootCanDoEverything(t *testing.T) {
 	}
 }
 
+func TestRemovedPlacementCleanupRequiresTechnicalOrRoot(t *testing.T) {
+	for _, role := range []int{common.RoleUser, common.RoleAdmin, common.RoleFinance, common.RoleTechnical, common.RoleRoot} {
+		request := httptest.NewRequest(http.MethodDelete, "/api/resource/removed-placements/1", nil)
+		if CheckRequest(role, request) != (role == common.RoleTechnical || role == common.RoleRoot) {
+			t.Fatalf("unexpected archive cleanup permission for role %d", role)
+		}
+		if CheckRequest(role, httptest.NewRequest(http.MethodDelete, "/api/resource", nil)) {
+			t.Fatalf("archive cleanup broadened inventory deletion for role %d", role)
+		}
+	}
+}
+
 func TestAdminCannotManageUsers(t *testing.T) {
 	if Allow(common.RoleAdmin, ResourceUser, ActionWrite) {
 		t.Fatal("Admin should not be able to write users (only Root can)")

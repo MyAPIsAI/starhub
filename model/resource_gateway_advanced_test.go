@@ -18,7 +18,7 @@ func TestAdvancedPublicationKeepsAliasPolicyAndRejectsConflictingTargets(t *test
 		t.Fatal(err)
 	}
 	name := "public-alpha"
-	if _, err := SaveResourcePlacement(ctx, catalog.Revision, "resource-1", ResourcePlacement{ModelID: &name, GroupIDs: []string{"default"}, Enabled: true}); err != nil {
+	if _, err := SaveResourcePlacement(ctx, catalog.Revision, "resource-1", ResourcePlacement{ModelID: &name, GroupIDs: []string{"default"}, Enabled: true, ConfirmIdentity: true}); err != nil {
 		t.Fatal(err)
 	}
 	plan := publicationPlan(t, bindings)
