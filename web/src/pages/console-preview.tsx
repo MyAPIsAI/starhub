@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "../components/responsive-table";
 import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1347,7 +1348,7 @@ function ConsoleWorkspace() {
                       </Link>
                     </div>
                     <div className="xy-table-scroll">
-                      <table>
+                      <ResponsiveTable>
                         <thead>
                           <tr>
                             <th>
@@ -1423,7 +1424,7 @@ function ConsoleWorkspace() {
                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                      </ResponsiveTable>
                       {!backendLogs.length && !logsQuery.isLoading && (
                         <p className="xy-empty">
                           {c(

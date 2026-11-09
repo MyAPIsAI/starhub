@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "../components/responsive-table";
 import { message as translatedMessage } from "../i18n/messages";
 import { useSearchParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -361,7 +362,7 @@ export default function RequestHistory({
         </div>
         {visibleRows.length > 0 && (
           <div className="request-history-table-wrap">
-            <table className="request-history-table">
+            <ResponsiveTable className="request-history-table">
               <thead>
                 <tr>
                   <th aria-sort="descending">
@@ -503,7 +504,7 @@ export default function RequestHistory({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ResponsiveTable>
           </div>
         )}
         {(serverPage?.loading || serverPage?.error) && (

@@ -1,0 +1,504 @@
+.brand-home.docs-refined {
+  background: var(--surface);
+  min-height: 100dvh;
+}
+.docs-refined .docs-layout {
+  max-width: 1380px;
+  grid-template-columns: 220px minmax(0, 1fr) 180px;
+  gap: 40px;
+  padding: 38px 28px 80px;
+  align-items: start;
+}
+.docs-refined .docs-sidebar {
+  position: sticky;
+  top: 112px;
+  margin: 0;
+  min-width: 0;
+}
+.docs-refined .docs-sidebar nav {
+  display: block;
+  max-height: calc(100dvh - 142px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 5px 16px 0;
+  scrollbar-width: thin;
+}
+.docs-menu-toggle {
+  display: none;
+}
+.docs-refined .docs-search-box {
+  position: relative;
+  margin: 0 0 25px;
+}
+.docs-search-box > svg {
+  position: absolute;
+  inset-inline-start: 11px;
+  top: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.docs-refined .docs-search-box input {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 9px 10px;
+  padding-inline-start: 34px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+.docs-nav-group {
+  margin-block: 0 24px;
+}
+.docs-nav-group h2 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--secondary);
+  margin: 0 9px 9px;
+}
+.docs-refined .docs-sidebar nav button {
+  display: block;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: start;
+  white-space: normal;
+}
+.docs-refined .docs-sidebar nav button.is-active {
+  border-color: color-mix(in srgb, var(--brand) 20%, transparent);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.docs-sidebar nav button.is-active::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -1px;
+  inset-block: 7px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--brand);
+}
+.docs-empty-search {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.docs-refined main.docs-article {
+  min-width: 0;
+  max-width: none;
+}
+.docs-refined .docs-breadcrumb {
+  margin: 1px 0 13px;
+}
+.docs-refined .docs-breadcrumb span {
+  color: var(--brand);
+  font-size: 12px;
+}
+.docs-refined .docs-article h1 {
+  font-size: 30px;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  margin: 0 0 20px;
+}
+.docs-refined .docs-article h2 {
+  font-size: 19px;
+  line-height: 1.5;
+  margin: 38px 0 14px;
+}
+.docs-refined .docs-article .docs-lead {
+  color: var(--secondary);
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+.docs-refined .docs-article p {
+  font-size: 13px;
+  line-height: 1.9;
+}
+.docs-refined .docs-callout {
+  padding: 14px 17px;
+  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  border-radius: 8px;
+  margin-block: 18px;
+}
+.docs-refined .docs-callout p {
+  margin: 0;
+  font-size: 12px;
+}
+.docs-availability {
+  margin-block-end: 28px;
+}
+.docs-preparation {
+  padding-inline-start: 20px;
+  margin: 0;
+  color: var(--secondary);
+  font-size: 13px;
+  line-height: 1.95;
+  list-style: decimal;
+}
+.docs-preparation li {
+  padding-inline-start: 3px;
+  margin-block: 9px;
+}
+.docs-preparation a,
+.docs-action {
+  color: var(--brand);
+  text-decoration: none;
+}
+.docs-preparation a:hover,
+.docs-action:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.docs-connection-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 20px;
+  align-items: start;
+}
+.docs-field {
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 0;
+}
+.docs-field input {
+  width: 100%;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 10px 11px;
+  font: 12px var(--font-mono);
+}
+.docs-endpoint [role="alert"] {
+  margin-block: 10px 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+.docs-field-help {
+  margin-top: 9px;
+  font-size: 12px;
+}
+.docs-field-help summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.docs-field-help p {
+  padding-top: 10px;
+}
+.docs-refined .docs-disclosure {
+  margin-block: 14px;
+  font-size: 12px;
+}
+.docs-disclosure > summary {
+  color: var(--secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.7;
+  padding-block: 4px;
+}
+.docs-disclosure > summary span {
+  color: var(--muted);
+  font-size: 11px;
+  margin-inline-start: 10px;
+}
+.docs-disclosure[open] > summary {
+  margin-bottom: 12px;
+}
+.docs-refined .docs-code {
+  min-width: 0;
+  max-width: 100%;
+  margin-block: 16px 24px;
+  border-radius: 8px;
+  background: var(--canvas);
+}
+.docs-refined .docs-code > div {
+  background: var(--surface);
+  padding: 9px 14px;
+  gap: 12px;
+}
+.docs-refined .docs-code > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.docs-refined .docs-code button {
+  flex-shrink: 0;
+}
+.docs-refined .docs-code pre {
+  min-width: 0;
+  max-width: 100%;
+  padding: 18px;
+  line-height: 1.85;
+  overflow-x: auto;
+  white-space: pre;
+  text-align: left;
+  font-size: 11px;
+}
+.docs-client-examples {
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.docs-client-tabs {
+  display: flex;
+  gap: 20px;
+  padding-inline: 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.docs-client-tabs [role="tab"] {
+  padding: 13px 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+.docs-client-tabs [data-state="active"] {
+  color: var(--text);
+  border-bottom-color: var(--brand);
+}
+.docs-environment {
+  padding-inline: 16px;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--border);
+}
+.docs-environment .docs-disclosure {
+  margin-block: 9px;
+}
+.docs-refined .docs-client-examples [role="tabpanel"] > .docs-code {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+}
+.docs-client-examples [role="tabpanel"] .docs-sdk-help {
+  padding: 16px 18px 0;
+  margin-bottom: 12px;
+}
+.docs-client-examples [role="tabpanel"] > .docs-action {
+  display: inline-block;
+  padding: 14px 18px;
+  font-size: 12px;
+}
+.docs-shell-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.docs-shell-options button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  background: var(--surface);
+  color: var(--secondary);
+}
+.docs-shell-options button[aria-pressed="true"] {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.docs-article-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  padding-block: 0 20px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.docs-article-settings > details {
+  font-size: 12px;
+  color: var(--muted);
+}
+.docs-article-settings > details[open] {
+  flex-basis: 100%;
+}
+.docs-article-settings > details > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  list-style: none;
+}
+.docs-article-settings > details > summary::-webkit-details-marker {
+  display: none;
+}
+.docs-article-settings .docs-endpoint {
+  padding-top: 14px;
+  max-width: 480px;
+}
+.docs-prerequisites p {
+  margin-top: 12px;
+}
+.docs-outline {
+  position: sticky;
+  top: 114px;
+  font-size: 12px;
+  min-width: 0;
+}
+.docs-outline nav > p {
+  font-weight: 600;
+  color: var(--secondary);
+  margin: 0 0 14px;
+}
+.docs-outline a {
+  display: block;
+  border-inline-start: 2px solid var(--border);
+  padding: 7px 0;
+  padding-inline-start: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.docs-outline a:hover,
+.docs-outline a[aria-current="location"] {
+  color: var(--brand);
+  border-inline-start-color: var(--brand);
+}
+.docs-anchor-target,
+#docs-article-title {
+  scroll-margin-top: 110px;
+}
+.docs-pagination {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 48px;
+}
+.docs-pagination button {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--secondary);
+  text-align: start;
+}
+.docs-pagination button:last-child {
+  text-align: end;
+}
+.docs-pagination button:hover {
+  border-color: var(--brand);
+}
+.docs-pagination small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.docs-pagination span {
+  font-size: 13px;
+}
+.docs-refined .docs-article-footer {
+  margin-top: 26px;
+}
+@media (max-width: 1199px) {
+  .docs-refined .docs-layout {
+    grid-template-columns: 210px minmax(0, 1fr);
+    gap: 36px;
+  }
+  .docs-outline {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .docs-refined .docs-layout {
+    display: block;
+    padding: 24px 20px 50px;
+  }
+  .docs-refined .docs-sidebar {
+    position: static;
+    margin-bottom: 32px;
+  }
+  .docs-menu-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 13px 15px;
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .docs-menu-toggle span {
+    flex: 1;
+    text-align: start;
+  }
+  .docs-menu-toggle[aria-expanded="true"] > svg:last-child {
+    transform: rotate(180deg);
+  }
+  .docs-refined .docs-sidebar nav {
+    display: none;
+    max-height: min(65dvh, 560px);
+    margin-top: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+  }
+  .docs-refined .docs-sidebar nav.is-open {
+    display: block;
+  }
+  .docs-nav-group {
+    margin-bottom: 20px;
+  }
+  .docs-refined .docs-article h1 {
+    font-size: 28px;
+  }
+  .docs-refined .docs-article h2 {
+    font-size: 18px;
+    margin-top: 32px;
+  }
+  .docs-refined .docs-connection-fields {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .docs-refined .docs-code pre {
+    font-size: 10px;
+    padding: 15px;
+  }
+  .docs-refined .docs-client-tabs {
+    gap: 22px;
+  }
+  .docs-refined .docs-callout {
+    padding: 13px 15px;
+  }
+  .docs-pagination {
+    gap: 10px;
+  }
+  .docs-pagination button {
+    padding: 13px;
+  }
+}
+
+.docs-refined .docs-table-wrap {
+  border-radius: 8px;
+}
+.docs-refined .docs-table-wrap th {
+  padding: 12px 14px;
+  white-space: nowrap;
+}
+.docs-refined .docs-table-wrap td {
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.docs-refined .docs-table-wrap td:first-child {
+  min-width: 140px;
+}
+.docs-refined .docs-table-wrap code {
+  font-size: 11px;
+}
+.docs-operation-examples {
+  margin-bottom: 24px;
+}

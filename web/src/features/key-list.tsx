@@ -1,3 +1,4 @@
+import { ListPagination, useListPage } from "../components/list-pagination";
 import { regionalLocale } from "../lib/locale-format";
 import { message as translatedMessage } from "../i18n/messages";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
@@ -291,6 +292,7 @@ export default function KeyList({
   onHide: (id: string) => void;
 }) {
   const { i18n } = useTranslation();
+  const pagination = useListPage(keys);
   const text: Text = (zh, en, ar) =>
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
   return (
@@ -345,7 +347,7 @@ export default function KeyList({
               </div>
             ))}
           </div>
-          {keys.map((item) => {
+          {pagination.rows.map((item) => {
             const quota = keyQuotaSummary(item, new Date(now).toISOString());
             const visible = Boolean(
               visibleKeyIds[item.id] && revealedKeyIds[item.id] > now,
@@ -511,6 +513,7 @@ export default function KeyList({
           })}
         </div>
       )}
+      <ListPagination {...pagination} />
       <p className="key-list-footnote">
         {text(
           ...translatedMessage(
@@ -548,8 +551,8 @@ export function KeyDetails({
       ? new Intl.DateTimeFormat(regionalLocale(i18n.language), {
           dateStyle: "medium",
           timeStyle: "short",
-          timeZone: "Asia/Dubai",
-        }).format(new Date(value))
+          timeZone: item.quotaTimezone || "UTC",
+        }).format(new Date(value)) + ` (${item.quotaTimezone || "UTC"})`
       : text(...translatedMessage("not_recorded_0407708992"));
   return (
     <div className="key-detail" data-key-detail={item.id}>

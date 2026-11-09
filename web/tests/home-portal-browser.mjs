@@ -72,17 +72,17 @@ try {
             json: { success: false, message: "login required" },
           });
         const data =
-          path === "/api/plaza/models"
-            ? { total: 0, page: 1, page_size: 20, group: "default", items: [] }
-            : path === "/api/plaza/filters"
-              ? {
-                  total: 0,
-                  group: "default",
-                  vendors: [],
-                  tags: [],
-                  price_histogram: [],
-                }
-              : [];
+          path === "/api/public/home"
+            ? { models: [], groups: [] }
+            : path === "/api/legal-policy"
+              ? { cookie_consent: false, timezone: "Asia/Dubai" }
+              : path === "/api/localization"
+                ? { languages: ["en", "zh", "ar"], default_language: "en" }
+                : path === "/api/catalog/models"
+                  ? { total: 0, page: 1, page_size: 20, items: [] }
+                  : path === "/api/catalog/filters"
+                    ? { total: 0, vendors: [], tags: [], price_histogram: [] }
+                    : [];
         return route.fulfill({ json: { success: true, data } });
       },
     );
@@ -173,8 +173,8 @@ try {
   await check("desktop full-screen scene and retained CTA", async () => {
     assert.equal(await page.locator(".portal-model").count(), 3);
     assert.equal(
-      await page.locator(".portal-actions a").getAttribute("href"),
-      "/console/connect",
+      await page.locator(".portal-actions a").first().getAttribute("href"),
+      "/register",
     );
     const bottom = await page
       .locator(".portal-hero")
@@ -329,17 +329,16 @@ try {
     await fits(page);
     await snap(page, "mobile-zh-light");
   });
-  await check("existing demo dialog remains usable", async () => {
-    await page.locator(".portal-demo").click();
-    await page.getByRole("dialog").waitFor();
-    await page.keyboard.press("Escape");
-    await page.getByRole("dialog").waitFor({ state: "hidden" });
-    assert.ok(
-      await page
-        .locator(".portal-demo")
-        .evaluate((el) => el === document.activeElement),
-    );
-  });
+  await check(
+    "documentation CTA opens the maintained documentation",
+    async () => {
+      await page.locator(".portal-demo").click();
+      await page.waitForURL("**/docs");
+      await page.locator(".home-portal").waitFor({ state: "detached" });
+      await page.goBack();
+      await page.locator(".portal-hero").waitFor();
+    },
+  );
   await check("navigation away unmounts the animation cleanly", async () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.locator('.veyra-public-nav a[href="/models"]').click();

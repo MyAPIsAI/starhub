@@ -12,7 +12,15 @@ export interface ModelItem {
   name: string;
   vendor: string;
   capabilities: (
-    "text" | "code" | "vision" | "reasoning" | "image" | "video"
+    | "text"
+    | "code"
+    | "vision"
+    | "reasoning"
+    | "image"
+    | "video"
+    | "audio"
+    | "embedding"
+    | "rerank"
   )[];
   contextLength: number; // in tokens
   contextDisplay: string; // e.g. "128k"
@@ -140,8 +148,8 @@ export const catalogModels: ModelItem[] = [
   },
   {
     id: "veyra-demo-image",
-    name: "Veyra Image（图片计费样例）",
-    vendor: "Veyra",
+    name: "MyAPIs Image（图片计费样例）",
+    vendor: "MyAPIs",
     capabilities: ["image"],
     contextLength: 0,
     contextDisplay: "—",
@@ -157,8 +165,8 @@ export const catalogModels: ModelItem[] = [
   },
   {
     id: "veyra-demo-video",
-    name: "Veyra Video（视频计费样例）",
-    vendor: "Veyra",
+    name: "MyAPIs Video（视频计费样例）",
+    vendor: "MyAPIs",
     capabilities: ["video"],
     contextLength: 0,
     contextDisplay: "—",
@@ -176,7 +184,7 @@ export const catalogModels: ModelItem[] = [
     id: "myapis-auto",
     name: "MyAPIs Auto",
     vendor: "MyAPIs",
-    capabilities: ["text", "code", "vision", "reasoning"],
+    capabilities: ["text"],
     contextLength: 0,
     contextDisplay: "—",
     pricing: { input_per_million_usd: "0", output_per_million_usd: "0" },

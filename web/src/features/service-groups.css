@@ -91,3 +91,15 @@
     grid-template-columns: 1fr;
   }
 }
+
+.public-status-settings {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 0;
+}
+.public-status-settings p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}

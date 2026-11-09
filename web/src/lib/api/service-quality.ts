@@ -37,7 +37,11 @@ export interface ServiceQualitySummary {
   by_day: ServiceQualityDailyMetric[];
 }
 
-export function useServiceQuality(hours: number = 24, model?: string) {
+export function useServiceQuality(
+  hours: number = 24,
+  model?: string,
+  enabled = true,
+) {
   const identity = useSessionQueryIdentity();
   const authenticated = useSystemAccess(
     (state) => state.session.accountId !== null,
@@ -48,7 +52,7 @@ export function useServiceQuality(hours: number = 24, model?: string) {
     queryKey: model
       ? (["service-quality", identity, hours, model] as const)
       : (["service-quality", identity, hours] as const),
-    enabled: authenticated,
+    enabled: authenticated && enabled,
     queryFn: ({ signal }) =>
       apiGet<ServiceQualitySummary>(`/api/service-quality?${params}`, signal),
   });

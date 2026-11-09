@@ -27,3 +27,20 @@ web/test-results/
 web/docs/
 web/dbg-tmp.ts
 web/HANDOFF.md
+
+# Local dependencies, caches, editor state, and generated verification evidence.
+/node_modules/
+/output/
+/.new-api-go-cache/
+/.idea/
+/.metrics.json
+/.starhub_session
+
+# Local logs, compiled executables, and deployment archives.
+/*.log
+/*.exe
+/*.bundle
+/*.tar.gz
+/starhub-test-linux-amd64
+/new-api-linux-amd64-*
+/deploy/docker-test/starhub-test-linux-amd64

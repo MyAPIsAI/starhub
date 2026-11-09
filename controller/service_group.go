@@ -15,6 +15,7 @@ type serviceGroupRequest struct {
 	GroupID               string          `json:"group_id"`
 	Name                  string          `json:"name"`
 	Description           string          `json:"description"`
+	StatusPageMode        string          `json:"status_page_mode"`
 	Enabled               *bool           `json:"enabled"`
 	Visibility            string          `json:"visibility"`
 	AccountIDs            []string        `json:"account_ids"`
@@ -113,13 +114,14 @@ func UpsertServiceGroup(w http.ResponseWriter, r *http.Request) {
 		enabled = *req.Enabled
 	}
 	sgc := &model.ServiceGroupConfig{
-		GroupID:     req.GroupID,
-		Name:        strings.TrimSpace(req.Name),
-		Description: strings.TrimSpace(req.Description),
-		Enabled:     enabled,
-		Visibility:  visibility,
-		AccountIDs:  strings.Join(req.AccountIDs, ","),
-		Multiplier:  multiplier,
+		GroupID:        req.GroupID,
+		Name:           strings.TrimSpace(req.Name),
+		Description:    strings.TrimSpace(req.Description),
+		StatusPageMode: req.StatusPageMode,
+		Enabled:        enabled,
+		Visibility:     visibility,
+		AccountIDs:     strings.Join(req.AccountIDs, ","),
+		Multiplier:     multiplier,
 	}
 	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
 	// Legacy callers may omit guards; their writes still advance the metadata revision.
@@ -200,6 +202,8 @@ func serviceGroupConfigurationError(w http.ResponseWriter, err error) {
 		status, message = http.StatusBadRequest, err.Error()
 	case errors.Is(err, model.ErrInvalidServiceGroupAccounts):
 		status, message = http.StatusBadRequest, err.Error()
+	case errors.Is(err, model.ErrInvalidStatusPageMode):
+		status, message = http.StatusBadRequest, err.Error()
 	}
 	common.ApiError(w, status, message)
 }
@@ -230,18 +234,19 @@ func serviceGroupJSON(sgc *model.ServiceGroupConfig) map[string]any {
 		accountIDs = []string{}
 	}
 	return map[string]any{
-		"id":          sgc.ID,
-		"group_id":    sgc.GroupID,
-		"name":        sgc.Name,
-		"description": sgc.Description,
-		"enabled":     sgc.Enabled,
-		"visibility":  sgc.Visibility,
-		"account_ids": accountIDs,
-		"multiplier":  sgc.Multiplier,
-		"revision":    sgc.Revision,
-		"created_at":  sgc.CreatedAt,
-		"updated_at":  sgc.UpdatedAt,
-		"sla":         sgc.ServiceLevel(),
+		"id":               sgc.ID,
+		"group_id":         sgc.GroupID,
+		"name":             sgc.Name,
+		"description":      sgc.Description,
+		"status_page_mode": sgc.StatusPageMode,
+		"enabled":          sgc.Enabled,
+		"visibility":       sgc.Visibility,
+		"account_ids":      accountIDs,
+		"multiplier":       sgc.Multiplier,
+		"revision":         sgc.Revision,
+		"created_at":       sgc.CreatedAt,
+		"updated_at":       sgc.UpdatedAt,
+		"sla":              sgc.ServiceLevel(),
 	}
 }
 

@@ -6,7 +6,10 @@ import type { PreviewKey } from "./product-preview";
 
 /** Routing belongs to the platform, regardless of the candidate vendors. */
 export function catalogVendor(model: DirectoryModel): string {
-  return model.kind === "smart" ? "MyAPIs" : model.vendor.trim();
+  return model.kind === "smart" &&
+    !("publicCatalog" in model && model.publicCatalog)
+    ? "MyAPIs"
+    : model.vendor.trim();
 }
 
 /** Counts come from the whole live directory, independently of search results. */

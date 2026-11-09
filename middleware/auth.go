@@ -9,6 +9,7 @@ import (
 	"starhub/common"
 	"starhub/config"
 	"starhub/model"
+	"starhub/observability"
 	"starhub/setting"
 )
 
@@ -246,6 +247,11 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 			writeRelayRequestError(w, r, http.StatusForbidden,
 				"authentication_error", "group_not_allowed", "API key owner cannot access the configured group")
 			return
+		}
+		if trace := observability.From(r.Context()); trace != nil {
+			trace.Labels(user.ID, "", group, "")
+			end := observability.Begin(r.Context(), "authentication", 0)
+			end("success", "")
 		}
 		ctx := common.WithValues(r.Context(),
 			common.CtxUserID, user.ID,

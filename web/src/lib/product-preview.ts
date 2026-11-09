@@ -854,7 +854,7 @@ const initialIncidents: IncidentAnnouncement[] = [
     updatedAt: "2026-09-18T12:00:00+04:00",
     content: {
       en: "Upstream provider resolved network packet drops. Intelligent routing successfully redirected 99.4% of traffic to healthy fallbacks during the window.",
-      zh: "上游供应商已完成网络丢包修复。Veyra智能路由在此期间成功将 99.4% 的流量无缝分流至健康节点。",
+      zh: "上游供应商已完成网络丢包修复。MyAPIs 智能路由在此期间成功将 99.4% 的流量无缝分流至健康节点。",
       ar: "تم حل المشكلة من قبل المزود. قام التوجيه الذكي بتحويل 99.4% من حركة المرور بنجاح.",
     },
   },

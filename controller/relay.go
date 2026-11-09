@@ -15,6 +15,7 @@ import (
 	"starhub/common"
 	"starhub/metric"
 	"starhub/model"
+	"starhub/observability"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
@@ -217,13 +218,15 @@ type relayFlow struct {
 	// Observability (P5): the request-level span and the current attempt
 	// span. The attempt span is set by runChannels before each attempt
 	// and read by callUpstream / the streaming loops to record TTFT.
-	span        *metric.RequestSpan
-	attempt     *metric.AttemptSpan
-	attemptSent bool
-	sw          *statusWriter
-	mode        string // relay mode for the metric label (chat, embeddings, ...)
-	traceID     string
-	ttftMs      int64
+	span                *metric.RequestSpan
+	attempt             *metric.AttemptSpan
+	attemptSent         bool
+	sw                  *statusWriter
+	mode                string // relay mode for the metric label (chat, embeddings, ...)
+	observedUpstream    string
+	observedUpstreamEnd int64
+	traceID             string
+	ttftMs              int64
 
 	// Affinity bookkeeping per request (used by pick and noteAffinity).
 	affinityPreferred int64 // channel picked by affinity (0 when none)
@@ -251,6 +254,10 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 			Stream:  req.stream,
 			Mode:    mode,
 		}),
+	}
+	if trace := observability.From(ctx); trace != nil {
+		flow.traceID = trace.Request.ID
+		trace.Labels(req.userID, req.modelName, req.group, model.TraceVendor(req.modelName))
 	}
 	w.Header().Set("X-Request-ID", flow.traceID)
 	if req.stream || req.requestSource == "playground" {
@@ -491,7 +498,7 @@ func (f *relayFlow) applyOutcome(res attemptResult) {
 func (f *relayFlow) exhausted() {
 	if f.sw.wrote {
 		if f.lastErr != nil {
-			log.Printf("relay stopped after the response was committed: %v", f.lastErr)
+			observability.Log(f.traceID, "committed_response", "failed")
 		}
 		return
 	}
@@ -532,12 +539,7 @@ func (f *relayFlow) refundUnlessSettled() {
 	if f.settled {
 		return
 	}
-	if err := relay.RefundPreConsumedQuota(f.req.tokenID, f.req.userID, f.req.tokenUnlimited, f.preQuota); err != nil {
-		log.Printf("refund after failed relay failed: %v", err)
-	} else {
-		log.Printf("relay for model %s failed on channels [%s], refunded %d quota",
-			f.req.modelName, f.trailString(), f.preQuota)
-	}
+	_ = relay.RefundQuotaObserved(f.ctx, f.req.tokenID, f.req.userID, f.req.tokenUnlimited, f.preQuota)
 	// Log the failed request for analytics (does not affect quota).
 	// Only when a channel was actually tried (trail is non-empty),
 	// so pre-channel failures (no channel available) don't inflate
@@ -549,7 +551,10 @@ func (f *relayFlow) refundUnlessSettled() {
 			code = "request_cancelled"
 			status = 3
 		} else if code == "" {
-			if f.sw.status >= 400 && f.sw.status < 500 {
+			if f.sw.status == http.StatusTooManyRequests {
+				// Upstream capacity failures count in public availability, unlike client errors.
+				code = "RATE_LIMITED"
+			} else if f.sw.status >= 400 && f.sw.status < 500 {
 				code = "upstream_client_error"
 			} else {
 				code = "upstream_unavailable"
@@ -638,6 +643,7 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 	}
 
 	f.attemptSent = true
+	req.Header.Set("X-Request-ID", f.traceID)
 	resp, err := upstreamHTTPClient.Do(req)
 	if err != nil {
 		if call.sideEffect {
@@ -650,7 +656,8 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 	// Record TTFT (time from attempt start to response headers) and the
 	// upstream request-id so a slow channel is identifiable end-to-end.
 	if f.attempt != nil {
-		f.attempt.RecordHeaders(upstreamRequestID(resp))
+		f.observedUpstream = upstreamRequestID(resp)
+		f.attempt.RecordHeaders(f.observedUpstream)
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -709,7 +716,28 @@ loop:
 		f.begin(ch)
 		f.attempt = f.span.BeginAttempt(ch.ID)
 		f.attemptSent = false
+		f.observedUpstream = ""
+		f.observedUpstreamEnd = 0
+		observedStart := time.Now().UnixMilli()
+		if trace := observability.From(f.ctx); trace != nil {
+			trace.Add(observability.Step{Stage: "routing", StartedAt: observedStart, EndedAt: observedStart, Status: "success", ChannelID: ch.ID})
+		}
 		res := attempt(ch)
+		if trace := observability.From(f.ctx); trace != nil {
+			trace.Labels(0, "", f.currentGroup, "")
+			status := "failed"
+			if res.outcome == attemptSuccess {
+				status = "success"
+			}
+			if !f.attemptSent {
+				status = "skipped"
+			}
+			end := f.observedUpstreamEnd
+			if end == 0 {
+				end = time.Now().UnixMilli()
+			}
+			trace.Add(observability.Step{Stage: "upstream", StartedAt: observedStart, EndedAt: end, Status: status, ChannelID: ch.ID, UpstreamID: f.observedUpstream})
+		}
 		f.span.EndAttempt(f.attempt, attemptOutcomeToMetric(res.outcome), res.statusCode)
 		if resource, ok := model.AdmissionResource(f.ctx, ch.ID, f.req.modelName, f.currentGroup); ok && f.attemptSent && res.outcome != attemptUnsupported {
 			outcome, ttft := "ignored", float64(0)
@@ -849,7 +877,7 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 	} else {
 		estimate = relay.EstimatePreConsumeQuotaWithPriceData(req.priceFor(billingGroup), req.body)
 	}
-	preQuota, preErr := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, estimate)
+	preQuota, preErr := relay.PreConsumeQuotaObserved(flow.ctx, req.userID, req.tokenID, req.tokenUnlimited, estimate)
 	if preErr != nil {
 		writePreConsumeError(flow.w, inbound, preErr)
 		return
@@ -941,7 +969,7 @@ func chatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, inboun
 	if passthrough {
 		usage, content, herr := adaptor.HandlePassthroughResponse(flow.w, resp, flow.req.stream)
 		if herr != nil {
-			log.Printf("relay response handling error: %v", herr)
+			observability.Log(flow.traceID, "response_handling", "failed")
 		}
 		return settleChatAttempt(flow, ch, ir, usage, content)
 	}
@@ -1002,7 +1030,7 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 		ev, err := reader.Next()
 		if err != nil {
 			if err != io.EOF {
-				log.Printf("chat stream ended with error: %v", err)
+				observability.Log(flow.traceID, "upstream_stream", "failed")
 			}
 			break
 		}
@@ -1046,7 +1074,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
-		log.Printf("post consume quota failed: %v", err)
+		observability.Log(flow.traceID, "quota_settlement", "failed")
 	}
 	flow.settled = true
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK, usage: usage, content: content}

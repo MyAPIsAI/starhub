@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/observability"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
@@ -116,7 +116,7 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 		Pricing:   req.priceFor(req.billingGroup()),
 	}
 
-	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, bill.PreQuota())
+	pre, err := relay.PreConsumeQuotaObserved(r.Context(), req.userID, req.tokenID, req.tokenUnlimited, bill.PreQuota())
 	if err != nil {
 		writePreConsumeError(w, "", err)
 		return
@@ -251,7 +251,7 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 		line, err := reader.Next()
 		if err != nil {
 			if err != io.EOF {
-				log.Printf("image stream read error: %v", err)
+				observability.Log(flow.traceID, "upstream_stream", "failed")
 			}
 			break
 		}
@@ -404,6 +404,7 @@ var (
 // settleImageAttempt balances the image bill (unit-based: the amount was
 // computed by ImageBill with the count/usage guards).
 func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64, bill *relay.ImageBill) {
+	flow.observedUpstreamEnd = time.Now().UnixMilli()
 	entry := &model.Log{AcceptedAt: flow.startTime.Unix(), TraceID: flow.traceID, RequestSource: flow.req.requestSource, TTFTMs: flow.ttftMs, UserID: flow.req.userID, TokenID: flow.req.tokenID, TokenName: flow.req.tokenName, TokenPeriodStartedAt: flow.req.tokenPeriodStartedAt, ChannelID: ch.ID, Model: flow.req.modelName, RequestedModel: flow.req.requestedModel, Protocol: flow.req.protocol, Quota: actual, UsedChannels: flow.trailString(), DurationMs: time.Since(flow.startTime).Milliseconds(), Status: 1, BillingDetail: bill.BillingDetail, UsageSource: bill.UsageSource}
 	model.FreezeLogLabels(entry, flow.settleGroup(), "images")
 	model.FreezeRoutingEvidence(flow.ctx, entry, flow.affinityPreferred != 0)
@@ -412,7 +413,7 @@ func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64, bill *
 		entry.CompletionTokens = bill.SettledUsage.CompletionTokens
 	}
 	if err := relay.PostConsumeRecordedQuota(entry, flow.req.tokenUnlimited, actual, flow.preQuota); err != nil {
-		log.Printf("post consume image quota failed: %v", err)
+		observability.Log(flow.traceID, "quota_settlement", "failed")
 	}
 	flow.settled = true
 }

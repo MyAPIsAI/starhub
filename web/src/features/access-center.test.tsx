@@ -62,7 +62,7 @@ describe("connection links respect authorized smart options", () => {
     fixture.active = true;
     fixture.rows = [];
   });
-  it.each(["myapis-auto", "veyra-auto"])(
+  it.each(["veyra-auto", "myapis-auto"])(
     "selects a compatible key and exports canonical configuration for %s",
     (model) => {
       const html = render(model);
@@ -75,7 +75,7 @@ describe("connection links respect authorized smart options", () => {
       expect(html).not.toContain("export OPENAI_API_KEY=&#x27;sk-review");
     },
   );
-  it.each(["myapis-auto", "veyra-auto"])(
+  it.each(["veyra-auto", "myapis-auto"])(
     "does not select a key without smart permission for %s",
     (model) => {
       fixture.smartAccess = false;
@@ -84,7 +84,7 @@ describe("connection links respect authorized smart options", () => {
   );
   it("does not select an inactive key through an alias", () => {
     fixture.active = false;
-    expect(render("myapis-auto")).not.toContain("export OPENAI_MODEL=");
+    expect(render("veyra-auto")).not.toContain("export OPENAI_MODEL=");
   });
   function request(
     overrides: Partial<PreviewRequestLike> = {},
@@ -94,7 +94,7 @@ describe("connection links respect authorized smart options", () => {
       time: "2026-10-28T00:00:00Z",
       model: "gpt-4.1",
       actual_model: "gpt-4.1",
-      requested_model: "myapis-auto",
+      requested_model: "veyra-auto",
       protocol: "OpenAI",
       vendor: "OpenAI",
       status: "success",
@@ -108,13 +108,13 @@ describe("connection links respect authorized smart options", () => {
       ...overrides,
     };
   }
-  it.each(["myapis-auto", "veyra-auto"])(
+  it.each(["veyra-auto", "myapis-auto"])(
     "matches the opposite historical entry for %s",
     (model) => {
       fixture.rows = [
         request({
           requested_model:
-            model === "myapis-auto" ? "veyra-auto" : "myapis-auto",
+            model === "veyra-auto" ? "myapis-auto" : "veyra-auto",
         }),
       ];
       expect(render(model)).toMatch(
@@ -127,17 +127,17 @@ describe("connection links respect authorized smart options", () => {
     { protocol: undefined },
     { protocol: "Anthropic" as const },
     { key_id: "other" },
-    { requested_model: "myapis-auto-preview" },
+    { requested_model: "veyra-auto-preview" },
   ])("does not verify mismatched or unknown metadata: %j", (overrides) => {
     fixture.rows = [request(overrides)];
-    expect(render("myapis-auto")).not.toContain("trace=log_7");
+    expect(render("veyra-auto")).not.toContain("trace=log_7");
   });
   it("uses the latest matching failure and does not infer that it was free", () => {
     fixture.rows = [
       request({ status: "failed", outcome: "cancelled" }),
       request({ trace_id: "log_6" }),
     ];
-    const html = render("veyra-auto");
+    const html = render("myapis-auto");
     expect(html).toContain("trace=log_7");
     expect(html).not.toMatch(/同协议成功调用|A matching API request succeeded/);
     expect(html).toMatch(/实际费用|actual charge/);
@@ -146,6 +146,6 @@ describe("connection links respect authorized smart options", () => {
   it("does not verify a disabled key using older successful calls", () => {
     fixture.active = false;
     fixture.rows = [request()];
-    expect(render("myapis-auto")).not.toContain("trace=log_7");
+    expect(render("veyra-auto")).not.toContain("trace=log_7");
   });
 });

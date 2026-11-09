@@ -3,7 +3,6 @@ package relay
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/observability"
 	"starhub/relay/dto"
 	"starhub/setting"
 )
@@ -57,7 +57,10 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		preUsage.CompletionTokens = common.DefaultCompletionBudgetTokens
 	}
 	preQuota := ComputeUsageQuota(pd, preUsage)
-	pre, err := PreConsumeQuotaAmount(userID, tokenID, tokenUnlimited, preQuota)
+	if trace := observability.From(ctx); trace != nil {
+		trace.Labels(userID, modelName, billingGroup, model.TraceVendor(modelName))
+	}
+	pre, err := PreConsumeQuotaObserved(ctx, userID, tokenID, tokenUnlimited, preQuota)
 	if err != nil {
 		writeRealtimePreConsumeError(w, err)
 		return
@@ -68,9 +71,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		if settled {
 			return
 		}
-		if err := RefundPreConsumedQuota(tokenID, userID, tokenUnlimited, pre); err != nil {
-			log.Printf("refund after failed realtime session failed: %v", err)
-		}
+		_ = RefundQuotaObserved(ctx, tokenID, userID, tokenUnlimited, pre)
 	}()
 
 	// Dial an upstream realtime channel first: a failure keeps the client
@@ -121,15 +122,18 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		header := http.Header{}
 		header.Set("Authorization", "Bearer "+key)
 		header.Set("OpenAI-Beta", "realtime=v1")
+		header.Set("X-Request-ID", observability.ID(ctx))
+		dialEnd := observability.Begin(ctx, "upstream_connect", ch.ID)
 		conn, err := WSDial(wsURL, header)
 		if err != nil {
-			log.Printf("realtime dial channel %d failed: %v", ch.ID, err)
+			dialEnd("failed", "upstream_unavailable")
 			if affinityOn && ch.ID == preferred {
 				model.ForgetAffinityIf(affinityKey, ch.ID)
 				model.CoolDownChannel(ch.ID, setting.RoutingAffinityCooldown())
 			}
 			continue
 		}
+		dialEnd("success", "")
 		if affinityOn {
 			model.RememberAffinity(affinityKey, ch.ID, keyIdx, setting.RoutingAffinityTTL())
 		}
@@ -154,7 +158,9 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Close()
 
+	upstreamEnd := observability.Begin(ctx, "upstream", upstreamChannel.ID)
 	usage, outputText := pipeRealtime(client, upstream)
+	upstreamEnd("completed", "")
 
 	// Settle: the response.done usage when the session reported one,
 	// otherwise the observed text estimate (audio usage is unavailable on
@@ -166,13 +172,14 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			CompletionTokens: EstimateTokens(outputText),
 		}
 	}
+	actualUsage.TraceID = observability.ID(ctx)
 	actualUsage.AcceptedAt = acceptedAt
 	actualUsage.RequestProtocol = "OpenAI"
 	actualUsage.TokenPeriodStartedAt, _ = ctx.Value(common.CtxTokenPeriodStartedAt).(int64)
 	if err := PostConsumeQuotaWithPrice(pd, userID, tokenID, tokenName, tokenUnlimited,
 		upstreamChannel.ID, modelName, actualUsage, pre,
 		fmt.Sprintf("%d", upstreamChannel.ID), 0); err != nil {
-		log.Printf("post consume realtime quota failed: %v", err)
+		observability.Log(observability.ID(ctx), "quota_settlement", "failed")
 	}
 	settled = true
 }

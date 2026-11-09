@@ -1,0 +1,24 @@
+.list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block: 16px;
+  font-size: 12px;
+}
+.list-pagination > span {
+  margin-inline-end: auto;
+  color: var(--muted);
+}
+@media (max-width: 420px) {
+  .list-pagination {
+    gap: 8px;
+  }
+  .list-pagination > span {
+    flex-basis: 100%;
+  }
+  .list-pagination .button {
+    padding-inline: 10px;
+  }
+}

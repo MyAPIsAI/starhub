@@ -36,7 +36,7 @@ const key: KeyModelPolicy = {
 };
 describe("client configuration respects model and credential boundaries", () => {
   describe("connection model selection", () => {
-    it.each(["myapis-auto", "veyra-auto"])(
+    it.each(["veyra-auto", "myapis-auto"])(
       "matches %s only to an authorized smart option",
       (requested) => {
         for (const target of ["openai", "claude-code"] as const) {
@@ -50,18 +50,18 @@ describe("client configuration respects model and credential boundaries", () => 
         }
       },
     );
-    it.each(["myapis-auto", "veyra-auto"])(
+    it.each(["veyra-auto", "myapis-auto"])(
       "matches either entry against %s options without changing them",
       (id) => {
         const options = [{ id, name: "Auto", kind: "smart" as const }];
         const snapshot = structuredClone(options);
-        for (const requested of ["myapis-auto", "veyra-auto"]) {
+        for (const requested of ["veyra-auto", "myapis-auto"]) {
           expect(findClientModel(options, requested)).toBe(options[0]);
         }
         expect(options).toEqual(snapshot);
       },
     );
-    it.each(["myapis-auto", "veyra-auto"])(
+    it.each(["veyra-auto", "myapis-auto"])(
       "does not grant smart access for %s through alias matching",
       (requested) => {
         const pricing = createDefaultPricing();
@@ -90,8 +90,8 @@ describe("client configuration respects model and credential boundaries", () => 
       for (const id of [
         "",
         "missing-model",
-        "myapis-auto-preview",
         "veyra-auto-preview",
+        "myapis-auto-preview",
         "MYAPIS-AUTO",
       ]) {
         expect(findClientModel(options, id)).toBeUndefined();
@@ -102,7 +102,7 @@ describe("client configuration respects model and credential boundaries", () => 
   describe.each(["openai", "claude-code"] as const)(
     "%s model exports",
     (target) => {
-      it.each(["myapis-auto", "veyra-auto"])(
+      it.each(["veyra-auto", "myapis-auto"])(
         "exports the canonical smart entry for %s",
         (model) => {
           const input = { target, model };
@@ -132,8 +132,8 @@ describe("client configuration respects model and credential boundaries", () => 
       it("preserves explicit model identifiers without prefix normalization", () => {
         for (const model of [
           "gpt-4.1",
-          "veyra-auto-preview",
           "myapis-auto-preview",
+          "veyra-auto-preview",
           "value'\"\n$(printf injected)",
         ]) {
           const config = buildClientConfiguration({ target, model })!;
@@ -147,7 +147,7 @@ describe("client configuration respects model and credential boundaries", () => 
         expect(() =>
           buildClientConfiguration({
             target,
-            model: "veyra-auto",
+            model: "myapis-auto",
             secret: "sk-review******mask",
           }),
         ).toThrow("masked");
@@ -156,8 +156,8 @@ describe("client configuration respects model and credential boundaries", () => 
   );
   it("only presents Anthropic candidates to Claude Code and never treats chat as Responses", () => {
     expect(getClientModels(key, "claude-code").map((item) => item.id)).toEqual([
-      "claude-sonnet-4-20250514",
       "myapis-auto",
+      "claude-sonnet-4-20250514",
     ]);
     expect(getClientModels(key, "codex")).toEqual([]);
     expect(
@@ -172,15 +172,15 @@ describe("client configuration respects model and credential boundaries", () => 
     };
     expect(getClientModels(limited, "claude-code")).toEqual([]);
     expect(getClientModels(limited, "openai").map((item) => item.id)).toEqual([
-      "deepseek-chat",
       "myapis-auto",
+      "deepseek-chat",
     ]);
   });
   it("uses the supplied gateway address for both supported clients", () => {
     for (const target of ["openai", "claude-code"] as const) {
       const config = buildClientConfiguration({
         target,
-        model: "veyra-auto",
+        model: "myapis-auto",
         apiBase: "http://127.0.0.1:8090/v1",
       })!;
       expect(config.baseUrl).toBe(

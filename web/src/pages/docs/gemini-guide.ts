@@ -3,9 +3,10 @@ import { placeholders } from "../../config/placeholders";
 
 export function geminiNativeGuide(
   text: (zh: string, en: string, ar: string) => string,
+  apiBase: string = placeholders.apiBase,
 ) {
   return {
-    example: `curl --fail --silent --show-error '${placeholders.apiBase.replace(/\/v1\/?$/, "")}/v1beta/models/YOUR_AUTHORIZED_GEMINI_MODEL:generateContent' \\
+    example: `curl --fail --silent --show-error '${apiBase.replace(/\/v1\/?$/, "")}/v1beta/models/YOUR_AUTHORIZED_GEMINI_MODEL:generateContent' \\
   -H "x-goog-api-key: $MYAPIS_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{

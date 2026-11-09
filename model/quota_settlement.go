@@ -28,6 +28,7 @@ func RecordQuotaSettlement(userID, tokenID int64, unlimited bool, delta, actual 
 	if entry == nil || entry.ID != 0 || actual < 0 || delta > actual {
 		return nil, errors.New("invalid quota settlement intent")
 	}
+	RecordTraceStep(entry.TraceID, "metering", "success", "", 0, time.Now())
 	frozen := *entry
 	frozen.UserID, frozen.TokenID = userID, tokenID
 	frozen.Quota = actual
@@ -38,6 +39,8 @@ func RecordQuotaSettlement(userID, tokenID int64, unlimited bool, delta, actual 
 	}
 	intent := &QuotaSettlement{UserID: userID, TokenID: tokenID, TokenUnlimited: unlimited, Delta: delta, Actual: actual, Payload: string(payload)}
 	if err := DB.Create(intent).Error; err != nil {
+		RecordTraceStep(entry.TraceID, "settlement", "failed", "settlement_intent_write_failed", 0, time.Now())
+		_ = RecordObservation("settlement", "intent", false, time.Now())
 		return nil, err
 	}
 	return intent, nil

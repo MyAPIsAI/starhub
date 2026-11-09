@@ -165,8 +165,32 @@ func PutDeploymentProfile(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, row)
 }
 func GetLegalVersions(w http.ResponseWriter, r *http.Request) {
-	rows := []model.LegalDocumentVersion{}
-	if err := model.DB.Order("kind, language, effective_at DESC").Find(&rows).Error; err != nil {
+	page, size := customerPage(r)
+	now := time.Now().Unix()
+	query := model.DB.WithContext(r.Context()).Model(&model.LegalDocumentVersion{})
+	for _, field := range []string{"kind", "language"} {
+		if value := r.URL.Query().Get(field); value != "" {
+			query = query.Where(field+" = ?", value)
+		}
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		adminFailure(w, err)
+		return
+	}
+	rows := []struct {
+		model.LegalDocumentVersion
+		Status string `json:"status"`
+	}{}
+	// Determine current status across the entire history, before pagination.
+	err := query.Select(`legal_document_versions.*, CASE WHEN effective_at > ? THEN 'scheduled'
+ WHEN EXISTS (SELECT 1 FROM legal_document_versions newer WHERE newer.kind = legal_document_versions.kind
+ AND newer.language = legal_document_versions.language AND newer.effective_at <= ?
+ AND (newer.effective_at > legal_document_versions.effective_at OR
+ (newer.effective_at = legal_document_versions.effective_at AND newer.id > legal_document_versions.id)))
+ THEN 'historical' ELSE 'current' END AS status`, now, now).
+		Order("kind, language, effective_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Scan(&rows).Error
+	if err != nil {
 		adminFailure(w, err)
 		return
 	}
@@ -175,8 +199,28 @@ func GetLegalVersions(w http.ResponseWriter, r *http.Request) {
 		adminFailure(w, err)
 		return
 	}
-	common.ApiSuccess(w, map[string]any{"items": rows, "timezone": profile.Profile.Timezone, "now": time.Now().Unix()})
+	common.ApiSuccess(w, map[string]any{"items": rows, "timezone": profile.Profile.Timezone, "now": now, "page": page, "page_size": size, "total": total})
 }
+
+// Only public legal and consent settings are exposed; deployment secrets stay private.
+func GetPublicLegalPolicy(w http.ResponseWriter, r *http.Request) {
+	profile, err := model.CurrentDeploymentProfile(r.Context())
+	if err != nil {
+		adminFailure(w, err)
+		return
+	}
+	mode := profile.Profile.CookieConsentMode
+	if mode == "" {
+		mode = "banner"
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	common.ApiSuccess(w, map[string]any{
+		"region_id": profile.Profile.RegionID, "timezone": profile.Profile.Timezone,
+		"cookie_consent": profile.Profile.CookieConsent, "cookie_consent_mode": mode,
+		"consent_version": "necessary-v1",
+	})
+}
+
 func PostLegalVersion(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		model.LegalDocumentVersion
@@ -207,7 +251,15 @@ func PublishedLegalAt(now time.Time) http.HandlerFunc {
 			adminFailure(w, err)
 			return
 		}
-		common.ApiSuccess(w, row)
+		var next struct{ At int64 }
+		if err := model.DB.WithContext(r.Context()).Model(&model.LegalDocumentVersion{}).
+			Select("COALESCE(MIN(effective_at), 0) AS at").Where("kind = ? AND language = ? AND effective_at > ?", row.Kind, row.Language, now.Unix()).Scan(&next).Error; err != nil {
+			adminFailure(w, err)
+			return
+		}
+		common.ApiSuccess(w, map[string]any{"kind": row.Kind, "language": row.Language, "version": row.Version,
+			"content": row.Content, "effective_at": row.EffectiveAt, "timezone": row.Timezone,
+			"now": now.Unix(), "next_effective_at": next.At})
 	}
 }
 func ListPricingHistory(w http.ResponseWriter, r *http.Request) {

@@ -65,6 +65,12 @@ jobs:
       - name: M9 language and RTL acceptance
         working-directory: web
         run: node tests/m9-browser.mjs
+      - name: Developer documentation browser and copied SDK examples
+        working-directory: web
+        run: |
+          python3 -m venv ../output/ui24/sdk-env
+          ../output/ui24/sdk-env/bin/python -m pip install -r tests/docs-sdk-requirements.txt
+          DOCS_PYTHON=../output/ui24/sdk-env/bin/python node tests/docs-browser.mjs
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -74,6 +80,8 @@ jobs:
             web/test-results/
             output/m9-browser/*.png
             output/m9-browser/report.json
+            output/ui24/browser/*.png
+            output/ui24/browser/report.json
 
   # Nightly job: shuffle tests to detect order-dependent failures.
   # Only runs on schedule (not on every push/PR).

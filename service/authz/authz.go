@@ -164,7 +164,7 @@ func pathResource(path string) (Resource, bool) {
 		return ResourceStaff, true
 	case path == "/api/admin/resource-sync" || path == "/api/admin/resource-instances" || path == "/api/admin/resource-monitoring":
 		return ResourceSync, true
-	case path == "/api/admin/system":
+	case path == "/api/admin/system" || path == "/api/admin/observability" || path == "/api/admin/alerts" || strings.HasPrefix(path, "/api/admin/traces/"):
 		return ResourceSystem, true
 	case strings.HasPrefix(path, "/api/admin/customers/") && strings.HasSuffix(path, "/adjustments"):
 		return ResourceAdjustment, true

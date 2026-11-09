@@ -30,6 +30,8 @@ export function readManagedServiceGroup(value: unknown): ManagedServiceGroup {
     typeof g.name !== "string" ||
     typeof g.description !== "string" ||
     typeof g.enabled !== "boolean" ||
+    (g.status_page_mode !== undefined &&
+      !["auto", "include", "exclude"].includes(g.status_page_mode as string)) ||
     (g.visibility !== "common" && g.visibility !== "custom") ||
     !Array.isArray(g.account_ids) ||
     g.account_ids.some((id) => typeof id !== "string") ||
@@ -45,6 +47,9 @@ export function readManagedServiceGroup(value: unknown): ManagedServiceGroup {
     name: g.name,
     description: g.description,
     enabled: g.enabled,
+    status_page_mode:
+      (g.status_page_mode as "auto" | "include" | "exclude" | undefined) ??
+      "auto",
     visibility: g.visibility,
     account_ids: [...g.account_ids] as string[],
     multiplier: g.multiplier,

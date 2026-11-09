@@ -51,7 +51,12 @@ func queueAPICharge(tx *gorm.DB, entry *Log) error {
 // FlushAPICharges atomically claims durable events into append-only minute batches.
 // Reads may flush the open minute so visible usage and the statement agree immediately.
 func FlushAPICharges(ctx context.Context, includeOpenMinute bool) error {
-	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return flushAPICharges(tx, includeOpenMinute) })
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return flushAPICharges(tx, includeOpenMinute) })
+	_ = RecordObservation("ledger", "accounting", err == nil, time.Now())
+	if err == nil {
+		recordPostedLedgerTraces(ctx)
+	}
+	return err
 }
 
 func flushAPICharges(tx *gorm.DB, includeOpenMinute bool) error {

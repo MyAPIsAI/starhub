@@ -1,3 +1,4 @@
+import { LegalDocumentContent } from "../legal/document";
 import { message as translatedMessage } from "../../i18n/messages";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -274,11 +275,7 @@ export default function AuthDialog() {
             ? c(...translatedMessage("reset_your_password_928072b65e"))
             : c(...translatedMessage("welcome_back_1d9c0d500a"));
   const description = policy
-    ? c(
-        ...translatedMessage(
-          "demo_draft_for_the_reading_and_consent_flow_o_9920278644",
-        ),
-      )
+    ? c(...translatedMessage("published_legal_help"))
     : mode === "register"
       ? c(
           ...translatedMessage(
@@ -464,94 +461,9 @@ export default function AuthDialog() {
           </div>
           <div className="auth-dialog-body" ref={bodyRef}>
             {policy ? (
-              <article className="auth-policy">
-                <div className="auth-notice">
-                  <Info size={16} />
-                  <span>
-                    {c(
-                      ...translatedMessage(
-                        "this_is_not_a_legal_document_or_a_production__30d94bd9fb",
-                      ),
-                    )}
-                  </span>
-                </div>
-                {policy === "terms" ? (
-                  <>
-                    <h3>
-                      {c(...translatedMessage("1_current_scope_c6c3998666"))}
-                    </h3>
-                    <p>
-                      {c(
-                        ...translatedMessage(
-                          "username_registration_and_password_login_use__a62e7e5ced",
-                        ),
-                      )}
-                    </p>
-                    <h3>
-                      {c(
-                        ...translatedMessage(
-                          "2_accounts_and_prepaid_balance_f7d87d3f36",
-                        ),
-                      )}
-                    </h3>
-                    <p>
-                      {c(
-                        ...translatedMessage(
-                          "registration_must_be_followed_by_login_new_ac_1caf302eb9",
-                        ),
-                      )}
-                    </p>
-                    <h3>
-                      {c(...translatedMessage("3_data_scope_e7f8bb57e3"))}
-                    </h3>
-                    <p>
-                      {c(
-                        ...translatedMessage(
-                          "server_account_data_is_separate_from_browser__dab9f4d9e4",
-                        ),
-                      )}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <h3>
-                      {c(...translatedMessage("1_what_is_stored_e1adc7b74e"))}
-                    </h3>
-                    <p>
-                      {c(
-                        ...translatedMessage(
-                          "the_server_stores_usernames_and_password_hash_f9d4d25011",
-                        ),
-                      )}
-                    </p>
-                    <h3>
-                      {c(
-                        ...translatedMessage("2_codes_and_details_b81e5f7b22"),
-                      )}
-                    </h3>
-                    <p>
-                      {c(
-                        ...translatedMessage(
-                          "sms_and_verification_email_are_unavailable_ph_31ad9f500a",
-                        ),
-                      )}
-                    </p>
-                    <h3>
-                      {c(...translatedMessage("3_clearing_data_7ebe3b96ed"))}
-                    </h3>
-                    <p>
-                      {c(
-                        ...translatedMessage(
-                          "use_sign_out_to_end_the_current_server_sessio_6296ae743f",
-                        ),
-                      )}
-                    </p>
-                  </>
-                )}
-                <Button className="auth-submit" onClick={backToForm}>
-                  {c(...translatedMessage("return_to_the_form_89781f8952"))}
-                </Button>
-              </article>
+              <div className="auth-policy">
+                <LegalDocumentContent kind={policy} />
+              </div>
             ) : (
               <>
                 {mode === "login" && registered && (

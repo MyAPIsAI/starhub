@@ -1,84 +1,45 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
-import { PublicHeader } from "../../components/product-shell";
-import { usePreferences } from "../../lib/preferences";
-import { apiGet, ApiError } from "../../lib/api/http";
-import { Button } from "../../components/ui/button";
-import DemoLegalPage from "./index";
 import { useTranslation } from "react-i18next";
-import { regionalLocale } from "../../lib/locale-format";
-
+import { Link, useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { PublicHeader } from "../../components/product-shell";
+import { legalKinds, type LegalKind } from "../../lib/api/legal";
+import { LegalDocumentContent, legalTitleKeys } from "./document";
+import { CookieSettingsButton } from "../../components/cookie-consent";
 export default function PublishedLegalPage() {
   const { t } = useTranslation();
-  const { doc = "privacy" } = useParams(),
-    lang = usePreferences((s) => s.language);
-  const query = useQuery({
-    queryKey: ["published-legal", doc, lang],
-    queryFn: () =>
-      apiGet<{
-        kind: string;
-        language: string;
-        version: string;
-        content: string;
-        effective_at: number;
-        timezone: string;
-      }>(`/api/legal/${encodeURIComponent(doc)}?language=${lang}`),
-    retry: false,
-    staleTime: 0,
-    refetchInterval: 30000,
-  });
-  if (query.error instanceof ApiError && query.error.status === 404)
-    return <DemoLegalPage />;
-  const titles: Record<string, string> = {
-    terms: t("legalTermsTitle"),
-    privacy: t("legalPrivacyTitle"),
-    cookies: t("legalCookiesTitle"),
-    refund: t("legalRefundTitle"),
-  };
+  const { doc = "privacy" } = useParams();
+  const valid = legalKinds.includes(doc as LegalKind);
   return (
-    <div className="brand-home public-refined" style={{ minHeight: "100vh" }}>
+    <div className="brand-home public-refined legal-page">
       <PublicHeader />
-      <main
-        className="public-page-container"
-        style={{ maxWidth: 780, padding: "var(--space-8) var(--space-6)" }}
-      >
-        <Link to="/">{t("legalBackHome")}</Link>
-        <nav className="adm-actions" style={{ marginBlock: 24 }}>
-          {Object.entries(titles).map(([key, title]) => (
-            <Link key={key} to={`/legal/${key}`}>
-              {title}
+      <main className="public-page-container legal-container">
+        <Link to="/" className="legal-back">
+          <ArrowLeft className="directional" size={15} />
+          {t("legalBackHome")}
+        </Link>
+        <nav className="legal-nav" aria-label={t("legalNavigation")}>
+          {legalKinds.map((kind) => (
+            <Link
+              key={kind}
+              to={`/legal/${kind}`}
+              aria-current={kind === doc ? "page" : undefined}
+            >
+              {t(legalTitleKeys[kind])}
             </Link>
           ))}
         </nav>
-        <h1>{titles[doc] ?? doc}</h1>
-        {query.isPending && <p role="status">{t("loading")}</p>}
-        {query.error && (
-          <div role="alert">
-            <p>{t("legalLoadFailed")}</p>
-            <Button onClick={() => void query.refetch()}>{t("retry")}</Button>
-          </div>
+        <h1>
+          {valid ? t(legalTitleKeys[doc as LegalKind]) : t("legalNotFound")}
+        </h1>
+        {valid ? (
+          <LegalDocumentContent kind={doc as LegalKind} />
+        ) : (
+          <p role="status">{t("legalNotFoundHelp")}</p>
         )}
-        {query.data && (
-          <article>
-            <p>
-              {query.data.version} ·{" "}
-              {new Intl.DateTimeFormat(regionalLocale(lang), {
-                dateStyle: "medium",
-                timeStyle: "short",
-                timeZone: query.data.timezone,
-              }).format(new Date(query.data.effective_at * 1000))}{" "}
-              · {query.data.timezone}
-            </p>
-            <div
-              style={{
-                whiteSpace: "pre-wrap",
-                overflowWrap: "anywhere",
-                lineHeight: 1.8,
-              }}
-            >
-              {query.data.content}
-            </div>
-          </article>
+        {doc === "cookies" && (
+          <div className="legal-settings">
+            <CookieSettingsButton />
+          </div>
         )}
       </main>
     </div>

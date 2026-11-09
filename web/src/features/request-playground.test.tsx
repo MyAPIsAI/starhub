@@ -79,7 +79,7 @@ describe("playground smart entry matching", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   describe.each(["OpenAI", "Anthropic"])("%s links", (protocol) => {
-    it.each(["myapis-auto", "veyra-auto"])(
+    it.each(["veyra-auto", "myapis-auto"])(
       "selects the authorized smart option while preserving %s in the request",
       (model) => {
         const html = render(model, protocol);
@@ -93,7 +93,7 @@ describe("playground smart entry matching", () => {
       },
     );
   });
-  it.each(["myapis-auto", "veyra-auto"])(
+  it.each(["veyra-auto", "myapis-auto"])(
     "matches the saved %s draft without overwriting its model",
     (model) => {
       const draft = JSON.stringify({
@@ -110,7 +110,7 @@ describe("playground smart entry matching", () => {
       expect(setItem).not.toHaveBeenCalled();
     },
   );
-  describe.each(["myapis-auto", "veyra-auto"])("%s authorization", (model) => {
+  describe.each(["veyra-auto", "myapis-auto"])("%s authorization", (model) => {
     function expectUnavailable(protocol = "OpenAI") {
       const html = render(model, protocol);
       expect(modelOptions(html)).toContain(`${model} · Unavailable`);
@@ -139,7 +139,7 @@ describe("playground smart entry matching", () => {
     expect(html).not.toContain(routingHint);
     expect(html).toContain("&quot;model&quot;: &quot;gpt-4.1&quot;");
   });
-  it.each(["myapis-auto-preview", "veyra-auto-preview", "missing-model"])(
+  it.each(["veyra-auto-preview", "myapis-auto-preview", "missing-model"])(
     "does not substitute %s with a smart model",
     (model) => {
       const html = render(model);

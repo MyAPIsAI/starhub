@@ -15,7 +15,28 @@ import { timeQuoteRefreshDelay, type TimeQuote } from "../time-quote";
 
 // --- Backend response types (mirror controller/plaza_pricing.go) ---
 
+export interface PublicGroupQuote {
+  id: string;
+  name: string;
+  available: boolean;
+  callable: boolean;
+  multiplier: number;
+  pricing: PlazaPricing;
+  protocols: string[];
+  service_level: ServiceLevel;
+}
+
+export interface CatalogStatus {
+  state: "normal" | "degraded" | "outage" | "insufficient_data";
+  samples: number;
+  success_rate: number | null;
+  ttft_p95_ms: number | null;
+  window_minutes: number;
+  at: number;
+}
+
 export interface PlazaPricing {
+  unit?: "million_tokens" | "request" | "image" | "second";
   mode: string;
   input_per_m: number | null;
   output_per_m: number | null;
@@ -24,7 +45,7 @@ export interface PlazaPricing {
   audio_input_per_m?: number | null;
   audio_output_per_m?: number | null;
   per_request: number | null;
-  expression: string | null;
+  expression?: string | null;
   official_input_per_m: number | null;
   official_output_per_m: number | null;
   official_cache_read_per_m: number | null;
@@ -37,6 +58,15 @@ export interface PlazaPricing {
 }
 
 export interface PlazaRow {
+  public_catalog?: boolean;
+  kind?: "specified" | "smart";
+  price_group?: string;
+  callable?: boolean;
+  group_prices?: PublicGroupQuote[];
+  official_source?: string;
+  official_verified?: string;
+  official_conditions?: string;
+  official_historical?: boolean;
   id: string;
   name: string;
   vendor: string;
@@ -88,6 +118,7 @@ export interface PlazaFiltersResponse {
 }
 
 export interface PlazaDetailResponse {
+  status?: CatalogStatus;
   model: PlazaRow;
   group: string;
   group_sla?: ServiceLevel | null;
@@ -101,13 +132,14 @@ export interface PlazaDetailResponse {
     sort_weight: number;
     created_at: number;
     per_request: number | null;
-    expression: string | null;
+    expression?: string | null;
   } | null;
 }
 
 // --- Query params ---
 
 export interface PlazaQuery {
+  scope?: "public";
   q?: string;
   vendors?: string;
   tags?: string;
@@ -142,67 +174,46 @@ export function usePlazaModels(query: PlazaQuery = {}, enabled = true) {
     refetchInterval: (state) =>
       timeQuoteRefreshDelay(
         state.state.data?.items.map((row) => row.pricing.time_pricing) ?? [],
-      ),
+      ) || (query.scope === "public" ? 60_000 : false),
+    staleTime: 60_000,
+    refetchOnWindowFocus: query.scope === "public",
     queryFn: ({ signal }) =>
       apiGet<PlazaListResponse>(
-        `/api/plaza/models${buildQueryString(query)}`,
+        `/api/${query.scope === "public" ? "catalog" : "plaza"}/models${buildQueryString(query)}`,
         signal,
       ),
   });
 }
 
-export function usePlazaModel(id: string | undefined) {
+export function usePlazaModel(id: string | undefined, publicCatalog = false) {
   const identity = usePlazaIdentity();
   return useQuery<PlazaDetailResponse>({
-    queryKey: ["plaza-model", identity, id],
+    queryKey: [publicCatalog ? "catalog-model" : "plaza-model", identity, id],
     enabled: Boolean(id),
     refetchInterval: (state) =>
-      timeQuoteRefreshDelay([state.state.data?.model.pricing.time_pricing]),
+      timeQuoteRefreshDelay([state.state.data?.model.pricing.time_pricing]) ||
+      (publicCatalog ? 60_000 : false),
+    staleTime: 60_000,
+    refetchOnWindowFocus: publicCatalog,
     queryFn: ({ signal }) =>
       apiGet<PlazaDetailResponse>(
-        `/api/plaza/models/${encodeURIComponent(id!)}`,
+        `/api/${publicCatalog ? "catalog" : "plaza"}/models/${encodeURIComponent(id!)}`,
         signal,
       ),
   });
 }
 
-export function usePlazaFilters() {
+export function usePlazaFilters(publicCatalog = false) {
   const identity = usePlazaIdentity();
   return useQuery({
-    queryKey: ["plaza-filters", identity],
+    queryKey: [publicCatalog ? "catalog-filters" : "plaza-filters", identity],
+    staleTime: 60_000,
     refetchInterval: 60_000,
     queryFn: ({ signal }) =>
-      apiGet<PlazaFiltersResponse>("/api/plaza/filters", signal),
-  });
-}
-
-// --- Plaza rank (GET /api/plaza/rank?type=value|hot|new) ---
-
-export type PlazaRankType = "value" | "hot" | "new";
-
-export interface PlazaRankItem {
-  rank: number;
-  model: PlazaRow;
-  metric_label: string;
-  metric_value: string;
-}
-
-export interface PlazaRankResponse {
-  type: string;
-  items: PlazaRankItem[];
-}
-
-export function usePlazaRank(rankType: PlazaRankType = "value") {
-  const identity = usePlazaIdentity();
-  return useQuery<PlazaRankResponse>({
-    queryKey: ["plaza-rank", identity, rankType] as const,
-    refetchInterval: (state) =>
-      timeQuoteRefreshDelay(
-        state.state.data?.items.map((row) => row.model.pricing.time_pricing) ??
-          [],
+      apiGet<PlazaFiltersResponse>(
+        `/api/${publicCatalog ? "catalog" : "plaza"}/filters`,
+        signal,
       ),
-    queryFn: ({ signal }) =>
-      apiGet<PlazaRankResponse>(`/api/plaza/rank?type=${rankType}`, signal),
   });
 }
 
@@ -224,6 +235,10 @@ function formatContextDisplay(length: number): string {
 const TIER_IDS: TierId[] = ["ultra", "pro", "standard", "lite"];
 
 export type PlazaDirectoryModel = DirectoryModel & {
+  publicCatalog?: boolean;
+  priceGroup?: string;
+  callable?: boolean;
+  groupPrices?: PublicGroupQuote[];
   vendorId: string;
   pricing: PlazaPricing;
   availableGroups: string[];
@@ -246,26 +261,46 @@ export function plazaToDirectoryModel(row: PlazaRow): PlazaDirectoryModel {
   const tags = row.tags ?? [];
   const capabilities = tags.filter(
     (t): t is DirectoryModel["capabilities"][number] =>
-      ["text", "code", "vision", "reasoning", "image", "video"].includes(t),
+      [
+        "text",
+        "code",
+        "vision",
+        "reasoning",
+        "image",
+        "video",
+        "audio",
+        "embedding",
+        "rerank",
+      ].includes(t),
   ) as DirectoryModel["capabilities"];
 
   // Derive tierAvailability from available_groups: any group means
   // available at all tiers (the backend doesn't expose per-tier yet).
-  const tierAvailability = TIER_IDS.reduce(
-    (acc, tier) => {
-      acc[tier] = row.is_available;
-      return acc;
-    },
-    {} as Record<TierId, boolean>,
-  );
+  const tierAvailability = row.group_prices
+    ? Object.fromEntries(row.group_prices.map((g) => [g.id, g.available]))
+    : TIER_IDS.reduce(
+        (acc, tier) => {
+          acc[tier] = row.is_available;
+          return acc;
+        },
+        {} as Record<TierId, boolean>,
+      );
 
   return {
+    publicCatalog: row.public_catalog,
+    priceGroup: row.price_group,
+    callable: row.callable,
+    groupPrices: row.group_prices,
     id: row.id,
     name: row.name,
     vendor: row.vendor_display || row.vendor,
     vendorId: row.vendor,
-    kind: "specified",
-    capabilities: capabilities.length ? capabilities : ["text"],
+    kind: row.kind ?? "specified",
+    capabilities: capabilities.length
+      ? capabilities
+      : row.public_catalog
+        ? []
+        : ["text"],
     contextLength: row.context_length,
     contextDisplay: formatContextDisplay(row.context_length),
     protocols: (row.protocols ?? []).filter(

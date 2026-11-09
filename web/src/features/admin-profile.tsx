@@ -1,5 +1,6 @@
+import { ListPagination } from "../components/list-pagination";
 import { messagePair } from "../i18n/messages";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
@@ -9,6 +10,7 @@ import { useSessionQueryIdentity } from "../lib/system-access";
 import {
   AdminFeedback,
   AdminTable,
+  AdminPagination,
   adminDate,
   useAdminText,
 } from "./admin-shared";
@@ -27,6 +29,7 @@ interface Profile {
   payment_channels: string[];
   payment_config_refs: Record<string, string>;
   cookie_consent: boolean;
+  cookie_consent_mode?: "banner" | "dialog";
   features: Record<string, boolean>;
   store_request_content: boolean;
 }
@@ -37,6 +40,7 @@ interface ProfileVersion {
   created_at: number;
 }
 interface LegalVersion {
+  status: "current" | "scheduled" | "historical";
   id: number;
   kind: string;
   language: string;
@@ -56,6 +60,7 @@ const featureNames = [
   ["arabic", "阿拉伯文", "Arabic"],
 ];
 export function AdminRegionProfile() {
+  const [historyPage, setHistoryPage] = useState(1);
   const t = useAdminText(),
     identity = useSessionQueryIdentity(),
     cache = useQueryClient();
@@ -252,20 +257,29 @@ export function AdminRegionProfile() {
                 )}
               </p>
             )}
-            {query.data?.history.map((v) => (
-              <div key={v.revision}>
-                <button onClick={() => setSelected(v.revision)}>
-                  v{v.revision}
-                  {v.revision === current?.revision
-                    ? ` · ${t(...messagePair("current_4e39c9b3d1"))}`
-                    : ""}
-                </button>
-                <p>
-                  {adminDate(v.created_at, v.profile.timezone)} ·{" "}
-                  {t(...messagePair("actor_965092921e"))} {v.actor_id}
-                </p>
-              </div>
-            ))}
+            {query.data?.history
+              .slice((historyPage - 1) * 10, historyPage * 10)
+              .map((v) => (
+                <div key={v.revision}>
+                  <button onClick={() => setSelected(v.revision)}>
+                    v{v.revision}
+                    {v.revision === current?.revision
+                      ? ` · ${t(...messagePair("current_4e39c9b3d1"))}`
+                      : ""}
+                  </button>
+                  <p>
+                    {adminDate(v.created_at, v.profile.timezone)} ·{" "}
+                    {v.profile.timezone} ·{" "}
+                    {t(...messagePair("actor_965092921e"))} {v.actor_id}
+                  </p>
+                </div>
+              ))}
+            <ListPagination
+              page={historyPage}
+              size={10}
+              total={query.data?.history.length ?? 0}
+              onChange={setHistoryPage}
+            />
             {selected !== null && (
               <Button variant="ghost" onClick={() => setSelected(null)}>
                 {t(...messagePair("return_to_current_version_95315e1718"))}
@@ -412,6 +426,25 @@ export function AdminRegionProfile() {
                 />
                 {t(...messagePair("show_cookie_consent_0582aa2432"))}
               </label>
+              <label>
+                {t(...messagePair("cookie_display_mode"))}
+                <select
+                  value={draft.cookie_consent_mode || "banner"}
+                  onChange={(e) =>
+                    patch({
+                      cookie_consent_mode: e.target.value as
+                        "banner" | "dialog",
+                    })
+                  }
+                >
+                  <option value="banner">
+                    {t(...messagePair("cookie_banner_mode"))}
+                  </option>
+                  <option value="dialog">
+                    {t(...messagePair("cookie_dialog_mode"))}
+                  </option>
+                </select>
+              </label>
               <div className="adm-wide">
                 <h2>{t(...messagePair("feature_flags_5b39d03ecb"))}</h2>
                 <div className="adm-checks">
@@ -463,17 +496,31 @@ export function AdminRegionProfile() {
 }
 
 export function AdminLegalVersions() {
+  const [page, setPage] = useState(1),
+    [filterKind, setFilterKind] = useState(""),
+    [filterLanguage, setFilterLanguage] = useState("");
   const t = useAdminText(),
     identity = useSessionQueryIdentity(),
     cache = useQueryClient();
   const query = useQuery({
-    queryKey: ["legal-versions", ...identity],
+    queryKey: ["legal-versions", ...identity, page, filterKind, filterLanguage],
     queryFn: () =>
-      apiGet<{ items: LegalVersion[]; timezone: string; now: number }>(
-        "/api/admin/legal",
+      apiGet<{
+        items: LegalVersion[];
+        timezone: string;
+        now: number;
+        total: number;
+      }>(
+        `/api/admin/legal?page=${page}&page_size=20&kind=${filterKind}&language=${filterLanguage}`,
       ),
     retry: false,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
+  useEffect(() => {
+    if (query.data && page > Math.max(1, Math.ceil(query.data.total / 20)))
+      setPage(Math.max(1, Math.ceil(query.data.total / 20)));
+  }, [query.data, page]);
   const [open, setOpen] = useState(false),
     [preview, setPreview] = useState<LegalVersion | null>(null);
   const [kind, setKind] = useState("terms"),
@@ -493,6 +540,7 @@ export function AdminLegalVersions() {
         effective_local: effective,
       }),
     onSuccess: async () => {
+      setPage(1);
       setOpen(false);
       setContent("");
       await cache.invalidateQueries({ queryKey: ["legal-versions"] });
@@ -533,6 +581,42 @@ export function AdminLegalVersions() {
           {t(...messagePair("upload_new_version_3f17bda7b0"))}
         </Button>
       </header>
+      <div className="adm-filters legal-history-filters">
+        <label>
+          {t(...messagePair("document_type_3d060d8b6b"))}
+          <select
+            value={filterKind}
+            onChange={(e) => {
+              setFilterKind(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">{t(...messagePair("legal_all_documents"))}</option>
+            {Object.entries(kinds).map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {t(...messagePair("language_8d96f89c3d"))}
+          <select
+            value={filterLanguage}
+            onChange={(e) => {
+              setFilterLanguage(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">{t(...messagePair("legal_all_languages"))}</option>
+            {["en", "zh", "ar"].map((lang) => (
+              <option key={lang} value={lang}>
+                {lang}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <AdminFeedback
         pending={query.isPending}
         error={query.error}
@@ -571,15 +655,9 @@ export function AdminLegalVersions() {
                     <small className="adm-meta">{d.timezone}</small>
                   </td>
                   <td>
-                    {d.effective_at > query.data!.now
+                    {d.status === "scheduled"
                       ? t(...messagePair("scheduled_ad1d12b5ae"))
-                      : query.data!.items.some(
-                            (other) =>
-                              other.kind === d.kind &&
-                              other.language === d.language &&
-                              other.effective_at <= query.data!.now &&
-                              other.effective_at > d.effective_at,
-                          )
+                      : d.status === "historical"
                         ? t(...messagePair("historical_510b42ac0c"))
                         : t(...messagePair("current_4e39c9b3d1"))}
                   </td>
@@ -587,6 +665,11 @@ export function AdminLegalVersions() {
               ))}
             </tbody>
           </AdminTable>
+          <AdminPagination
+            page={page}
+            total={query.data.total}
+            onChange={setPage}
+          />
           {query.data.items.length === 0 && (
             <p>{t(...messagePair("no_legal_versions_uploaded_e0c6a4b6e7"))}</p>
           )}

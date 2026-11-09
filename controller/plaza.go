@@ -1,10 +1,8 @@
 package controller
 
 import (
-	"math"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 
 	"starhub/common"
@@ -287,103 +285,4 @@ func PlazaFilters(w http.ResponseWriter, r *http.Request) {
 		"total":           len(rows),
 		"group":           group,
 	})
-}
-
-// PlazaRank handles GET /api/plaza/rank?type=value|hot|new.
-//
-// Every ranking is data-driven. A model without the required data is omitted;
-// nothing is given a placeholder score to make a list look full.
-func PlazaRank(w http.ResponseWriter, r *http.Request) {
-	group, userID := plazaSession(r)
-	rows, err := buildPlazaRows(r.Context(), group, group, userID)
-	if err != nil {
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	type rankItem struct {
-		Rank        int       `json:"rank"`
-		Model       *plazaRow `json:"model"`
-		MetricLabel string    `json:"metric_label"`
-		MetricValue string    `json:"metric_value"`
-	}
-
-	rankType := r.URL.Query().Get("type")
-	items := make([]rankItem, 0, 12)
-
-	switch rankType {
-	case "hot":
-		ranked := make([]plazaRow, 0, len(rows))
-		for i := range rows {
-			if rows[i].Calls7D != nil && *rows[i].Calls7D > 0 {
-				ranked = append(ranked, rows[i])
-			}
-		}
-		sort.SliceStable(ranked, func(i, j int) bool { return *ranked[i].Calls7D > *ranked[j].Calls7D })
-		if len(ranked) > 12 {
-			ranked = ranked[:12]
-		}
-		for i := range ranked {
-			items = append(items, rankItem{
-				Rank:        i + 1,
-				Model:       &ranked[i],
-				MetricLabel: "近 7 日调用",
-				MetricValue: strconv.FormatInt(*ranked[i].Calls7D, 10),
-			})
-		}
-
-	case "new":
-		ranked := make([]plazaRow, 0, len(rows))
-		for i := range rows {
-			if rows[i].CreatedAt > 0 {
-				ranked = append(ranked, rows[i])
-			}
-		}
-		sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].CreatedAt > ranked[j].CreatedAt })
-		if len(ranked) > 12 {
-			ranked = ranked[:12]
-		}
-		for i := range ranked {
-			items = append(items, rankItem{
-				Rank:        i + 1,
-				Model:       &ranked[i],
-				MetricLabel: "上架时间",
-				MetricValue: strconv.FormatInt(ranked[i].CreatedAt, 10),
-			})
-		}
-
-	default: // value
-		type scored struct {
-			row   plazaRow
-			index float64
-		}
-		ranked := make([]scored, 0, len(rows))
-		for i := range rows {
-			if rows[i].Score == nil {
-				continue
-			}
-			u := comparableUnit(&rows[i])
-			if isInf(u) || u <= 0 {
-				continue
-			}
-			// Capability per dollar, on a log scale so a 10x price gap does
-			// not swamp a 10-point capability gap.
-			idx := *rows[i].Score / math.Max(math.Log10(u)+3, 0.5)
-			ranked = append(ranked, scored{rows[i], idx})
-		}
-		sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].index > ranked[j].index })
-		if len(ranked) > 12 {
-			ranked = ranked[:12]
-		}
-		for i := range ranked {
-			items = append(items, rankItem{
-				Rank:        i + 1,
-				Model:       &ranked[i].row,
-				MetricLabel: "性价比指数",
-				MetricValue: strconv.FormatFloat(ranked[i].index, 'f', 1, 64),
-			})
-		}
-	}
-
-	common.ApiSuccess(w, map[string]any{"type": rankType, "items": items})
 }

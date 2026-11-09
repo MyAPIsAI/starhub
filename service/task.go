@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"starhub/model"
+	"starhub/observability"
 	"starhub/pkg/pricingtime"
 	"starhub/relay"
 	"starhub/relay/channel"
@@ -26,7 +26,15 @@ var taskHTTPClient = &http.Client{Timeout: 30 * time.Second}
 // commit the terminal state and bill together. Pending intents recover without
 // polling the upstream again.
 // It returns the task after the update.
-func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
+func PollTask(ctx context.Context, task *model.Task) (resultTask *model.Task, pollErr error) {
+	started := time.Now()
+	defer func() {
+		status, code := "success", ""
+		if pollErr != nil {
+			status, code = "failed", "task_poll_failed"
+		}
+		model.RecordTraceStep(task.TraceID, "upstream_poll", status, code, task.ID, started)
+	}()
 	if dto.IsTerminalTaskStatus(task.Status) {
 		return task, nil
 	}
@@ -103,6 +111,7 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 	if err := adaptor.PrepareRequest(req, upstreamKey, nil); err != nil {
 		return task, err
 	}
+	req.Header.Set("X-Request-ID", task.TraceID)
 	resp, err := taskHTTPClient.Do(req)
 	if err != nil {
 		// Network issues are transient: leave the task active.
@@ -137,7 +146,7 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 		return recordAndSettleTask(task, result, string(resultMeta), actual)
 	}
 	if err := model.UpdateTaskProgress(task.ID, result.Status, result.Progress, string(resultMeta)); err != nil {
-		log.Printf("update task %d progress failed: %v", task.ID, err)
+		observability.Log(task.TraceID, "task_processing", "failed")
 	} else {
 		task.Status = result.Status
 		task.Progress = result.Progress
@@ -152,7 +161,7 @@ func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
 func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.TaskResult) (int64, error) {
 	var req dto.TaskRequest
 	if err := json.Unmarshal([]byte(task.RequestMeta), &req); err != nil {
-		log.Printf("task %d has unreadable request metadata; settlement remains pending: %v", task.ID, err)
+		observability.Log(task.TraceID, "task_processing", "failed")
 		return 0, fmt.Errorf("unreadable task request metadata")
 	}
 	accepted := adaptor.EstimateBilling(task.Model, task.Group, &req)
@@ -169,7 +178,7 @@ func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.T
 	if task.PricingMeta != "" {
 		var snapshot relay.TaskBillingSnapshot
 		if err := json.Unmarshal([]byte(task.PricingMeta), &snapshot); err != nil {
-			log.Printf("task %d has an unreadable pricing snapshot; settlement remains pending: %v", task.ID, err)
+			observability.Log(task.TraceID, "task_processing", "failed")
 			return 0, err
 		} else {
 			priceData = &snapshot.PriceData
@@ -253,12 +262,12 @@ func RunTaskPollLoop(ctx context.Context, interval time.Duration) {
 func PollPendingTasksOnce(ctx context.Context) {
 	tasks, err := model.ListPendingTasks(200)
 	if err != nil {
-		log.Printf("list pending tasks failed: %v", err)
+		observability.Log("", "task_processing", "failed")
 		return
 	}
 	for i := range tasks {
 		if _, err := PollTask(ctx, &tasks[i]); err != nil {
-			log.Printf("poll task %d failed: %v", tasks[i].ID, err)
+			observability.Log(tasks[i].TraceID, "task_processing", "failed")
 		}
 	}
 }

@@ -169,15 +169,24 @@ func plazaPriceFromInputs(inputs setting.PricingInputs, group, userGroup string)
 // plazaRow is one model as the plaza API presents it. Prices are always USD;
 // currency conversion is a presentation concern and belongs to the client.
 type plazaRow struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Vendor        string   `json:"vendor"`
-	VendorDisplay string   `json:"vendor_display"`
-	Description   string   `json:"description"`
-	Tags          []string `json:"tags"`
-	ContextLength int64    `json:"context_length"`
-	MaxOutput     int64    `json:"max_output"`
-	Protocols     []string `json:"protocols"`
+	PublicCatalog      bool               `json:"public_catalog,omitempty"`
+	Kind               string             `json:"kind,omitempty"`
+	PriceGroup         string             `json:"price_group,omitempty"`
+	Callable           bool               `json:"callable"`
+	GroupPrices        []publicGroupQuote `json:"group_prices,omitempty"`
+	OfficialSource     string             `json:"official_source,omitempty"`
+	OfficialVerified   string             `json:"official_verified,omitempty"`
+	OfficialConditions string             `json:"official_conditions,omitempty"`
+	OfficialHistorical bool               `json:"official_historical,omitempty"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	Vendor             string             `json:"vendor"`
+	VendorDisplay      string             `json:"vendor_display"`
+	Description        string             `json:"description"`
+	Tags               []string           `json:"tags"`
+	ContextLength      int64              `json:"context_length"`
+	MaxOutput          int64              `json:"max_output"`
+	Protocols          []string           `json:"protocols"`
 
 	Pricing plazaPricingJSON `json:"pricing"`
 
@@ -199,6 +208,8 @@ type plazaRow struct {
 }
 
 type plazaPricingJSON struct {
+	Unit                   string         `json:"unit,omitempty"`
+	Expression             string         `json:"expression,omitempty"`
 	Mode                   string         `json:"mode"`
 	InputPerM              *float64       `json:"input_per_m"`
 	OutputPerM             *float64       `json:"output_per_m"`

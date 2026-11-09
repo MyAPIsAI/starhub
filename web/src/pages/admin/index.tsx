@@ -1,3 +1,4 @@
+import { AdminObservability } from "../../features/admin-observability";
 import { message as translatedMessage } from "../../i18n/messages";
 import { AdminAnnouncements } from "../../features/admin-announcements";
 import { ResourceInventory } from "../../features/resource-inventory";
@@ -125,6 +126,7 @@ export default function AdminPortal() {
         {tab === "regions" && isRoot && <AdminRegionProfile />}
         {tab === "groups" && <ServiceGroups role={authRole} />}
         {tab === "calls" && <StaffCalls />}
+        {tab === "observability" && <AdminObservability />}
         {tab === "models" && <AdminModels />}
         {tab === "system" && <AdminSystem />}
 

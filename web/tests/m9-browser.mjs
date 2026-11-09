@@ -30,7 +30,12 @@ async function capture(page, name) {
     animations: "disabled",
   });
   const baseline = path.join(baselines, name + ".png");
-  if (process.env.M9_UPDATE_SCREENSHOTS === "1" && !process.env.CI) {
+  if (
+    process.env.M9_UPDATE_SCREENSHOTS === "1" &&
+    !process.env.CI &&
+    (!process.env.M9_SCREENSHOT_FILTER ||
+      name.startsWith(process.env.M9_SCREENSHOT_FILTER))
+  ) {
     await writeFile(baseline, actual);
     return;
   }
@@ -496,11 +501,13 @@ try {
       await capture(page, "modal-ar-" + theme + "-" + width);
       await page.keyboard.press("Escape");
       await page.goto(base + "docs");
-      await page.locator("pre").first().waitFor();
+      await page.locator("pre:visible").first().waitFor();
       await page.waitForFunction(() => {
-        const pre = document.querySelector("pre");
+        const pre = [...document.querySelectorAll("pre")].find(element => element.checkVisibility());
         return pre && getComputedStyle(pre).direction === "ltr";
       });
+      await page.locator(".docs-endpoint input").fill("https://gateway.example/v1");
+      await page.locator(".docs-article h1").click();
       await capture(page, "docs-ar-" + theme + "-" + width);
       for (const route of ["", "keys", "connect", "service-quality", "smart-routing", "playground", "exports", "settings"]) {
         await page.goto(base + "console/" + route);

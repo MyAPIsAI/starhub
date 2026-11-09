@@ -35,6 +35,7 @@ type Draft = {
   visibility: "common" | "custom";
   accountText: string;
   replaceAccounts: boolean;
+  statusPageMode: "auto" | "include" | "exclude";
   optionVersion: number;
   ratios: Readonly<Record<string, number>>;
   remove: boolean;
@@ -116,6 +117,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
     setReview(deleting);
     setDraft({
       original,
+      statusPageMode: original?.status_page_mode ?? "auto",
       id,
       locked: !!id,
       name: original?.name ?? id,
@@ -162,6 +164,7 @@ export function ServiceGroups({ role: _role }: { role: number }) {
           name: draft.name.trim(),
           description: draft.description.trim(),
           enabled: draft.enabled,
+          status_page_mode: draft.statusPageMode,
           multiplier: draft.multiplier.trim(),
           visibility: draft.visibility,
           account_ids: draftAccounts ?? [],
@@ -562,6 +565,22 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                           ),
                         )}
                 </p>
+                {!draft.remove && (
+                  <p>
+                    {text(...translatedMessage("status_page_scope"))}:{" "}
+                    {
+                      {
+                        auto: text(...translatedMessage("status_page_auto")),
+                        include: text(
+                          ...translatedMessage("status_page_include"),
+                        ),
+                        exclude: text(
+                          ...translatedMessage("status_page_exclude"),
+                        ),
+                      }[draft.statusPageMode]
+                    }
+                  </p>
+                )}
                 {!draft.remove && draft.visibility === "custom" && (
                   <div className="sgm-legacy">
                     <strong>
@@ -649,6 +668,42 @@ export function ServiceGroups({ role: _role }: { role: number }) {
                     )}
                   </small>
                 </label>
+                <fieldset className="cm-wide public-status-settings">
+                  <legend>
+                    {text(...translatedMessage("status_page_scope"))}
+                  </legend>
+                  <label className="cm-check">
+                    <input
+                      type="checkbox"
+                      checked={draft.statusPageMode === "auto"}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          statusPageMode: e.target.checked ? "auto" : "exclude",
+                        })
+                      }
+                    />
+                    {text(...translatedMessage("status_page_auto"))}
+                  </label>
+                  {draft.statusPageMode !== "auto" && (
+                    <label className="cm-check">
+                      <input
+                        type="checkbox"
+                        checked={draft.statusPageMode === "include"}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            statusPageMode: e.target.checked
+                              ? "include"
+                              : "exclude",
+                          })
+                        }
+                      />
+                      {text(...translatedMessage("status_page_include"))}
+                    </label>
+                  )}
+                  <p>{text(...translatedMessage("status_page_help"))}</p>
+                </fieldset>
                 <label className="cm-check">
                   <input
                     type="checkbox"

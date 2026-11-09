@@ -460,7 +460,7 @@ export default function Playground({
                 )}
                 {options.map((option) => (
                   <option key={option.id} value={option.id}>
-                    {option.id} ·{" "}
+                    {option.kind === "smart" ? "MyAPIs Auto" : option.id} ·{" "}
                     {option.kind === "smart"
                       ? c(...translatedMessage("smart_routing_34b9b06792"))
                       : c(...translatedMessage("specified_model_19254d43b3"))}

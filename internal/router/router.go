@@ -28,6 +28,12 @@ import (
 // retries with failover).
 func New() http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("GET /api/admin/observability", middleware.AdminAuth(http.HandlerFunc(controller.StaffObservability)))
+	mux.Handle("GET /api/admin/alerts", middleware.AdminAuth(http.HandlerFunc(controller.StaffOperationalAlerts)))
+	mux.Handle("GET /api/admin/traces/{trace}", middleware.AdminAuth(http.HandlerFunc(controller.StaffTrace)))
+	mux.HandleFunc("GET /internal/health", controller.ObserverHealth)
+	mux.HandleFunc("POST /internal/observations/payment", controller.ObservePaymentCallback)
+
 	mux.HandleFunc("GET /api/localization", controller.GetLocalizationPolicy)
 	mux.Handle("PUT /api/user/language", middleware.UserAuth(http.HandlerFunc(controller.PutAccountLanguage)))
 	mux.Handle("PUT /api/admin/auth/language", middleware.StaffAuth(http.HandlerFunc(controller.PutAccountLanguage)))
@@ -58,6 +64,7 @@ func New() http.Handler {
 	mux.Handle("GET /api/admin/legal", middleware.AdminAuth(http.HandlerFunc(controller.GetLegalVersions)))
 	mux.Handle("POST /api/admin/legal", middleware.AdminAuth(http.HandlerFunc(controller.PostLegalVersion)))
 	mux.HandleFunc("GET /api/legal/{kind}", controller.GetPublishedLegal)
+	mux.HandleFunc("GET /api/legal-policy", controller.GetPublicLegalPolicy)
 	mux.Handle("GET /api/admin/pricing-history", middleware.AdminAuth(http.HandlerFunc(controller.ListPricingHistory)))
 	staffPublic := func(handler http.HandlerFunc) http.Handler { return middleware.StaffNetwork(handler) }
 	mux.Handle("GET /api/admin/install", staffPublic(controller.StaffInstallationState))
@@ -85,6 +92,9 @@ func New() http.Handler {
 	mux.Handle("POST /api/admin/announcements", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.PutServiceAnnouncement))))
 	mux.Handle("PUT /api/admin/announcements/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.PutServiceAnnouncement))))
 	mux.HandleFunc("GET /api/status/announcements", controller.GetPublishedAnnouncements)
+	mux.HandleFunc("GET /api/status/models", controller.GetPublicServiceStatus)
+	mux.HandleFunc("GET /api/status/models/{id}/history", controller.GetPublicStatusHistory)
+	mux.HandleFunc("GET /api/public/home", controller.GetPublicHome)
 
 	mux.HandleFunc("POST /api/user/login", controller.Login)
 	mux.HandleFunc("POST /api/user/register", controller.Register)
@@ -193,7 +203,9 @@ func New() http.Handler {
 	mux.HandleFunc("GET /api/plaza/models", controller.PlazaListModels)
 	mux.HandleFunc("GET /api/plaza/models/{id...}", controller.PlazaGetModel)
 	mux.HandleFunc("GET /api/plaza/filters", controller.PlazaFilters)
-	mux.HandleFunc("GET /api/plaza/rank", controller.PlazaRank)
+	mux.HandleFunc("GET /api/catalog/models", controller.PublicCatalogList)
+	mux.HandleFunc("GET /api/catalog/models/{id...}", controller.PublicCatalogDetail)
+	mux.HandleFunc("GET /api/catalog/filters", controller.PublicCatalogFilters)
 
 	// Metadata administration. Operators fill the catalog in; the plaza
 	// degrades gracefully for any model that has none.
@@ -288,5 +300,5 @@ func New() http.Handler {
 
 	mux.Handle("GET /v1/models", middleware.TokenAuth(http.HandlerFunc(controller.ListModels)))
 
-	return web.Handler(middleware.ManagementSecurity(middleware.IPRateLimit(mux)))
+	return web.Handler(middleware.ManagementSecurity(middleware.ObserveGateway(middleware.IPRateLimit(mux))))
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/observability"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
@@ -80,7 +80,7 @@ func RelayResponses(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, relay.EstimateResponsesPreConsumeQuotaWithPriceData(req.priceFor(flow.settleGroup()), parsed))
+	pre, err := relay.PreConsumeQuotaObserved(flow.ctx, req.userID, req.tokenID, req.tokenUnlimited, relay.EstimateResponsesPreConsumeQuotaWithPriceData(req.priceFor(flow.settleGroup()), parsed))
 	if err != nil {
 		writePreConsumeError(flow.w, dto.InboundOpenAI, err)
 		return
@@ -197,7 +197,7 @@ func settleNativeUsage(flow *relayFlow, ch *model.Channel, usage *relay.Usage, s
 	usage.AcceptedAt = flow.startTime.Unix()
 	usage.RequestStatus = status
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName, flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
-		log.Printf("%s quota settlement failed: %v", flow.mode, err)
+		observability.Log(flow.traceID, "quota_settlement", "failed")
 	}
 	flow.settled = true
 }

@@ -37,7 +37,10 @@ export function plazaOfficialReference(pricing: PlazaPricing) {
       status: "current" as const,
       rate: {
         mode: "unit" as const,
-        unit: "request" as const,
+        unit:
+          pricing.unit === "image" || pricing.unit === "second"
+            ? pricing.unit
+            : ("request" as const),
         priceUsd: perRequest,
       },
     };
@@ -74,7 +77,11 @@ export function describePlazaPrice(pricing: PlazaPricing, lang: Language) {
     unit: token
       ? text(...translatedMessage("input_output_usd_million_tokens_f00f399943"))
       : request
-        ? text(...translatedMessage("usd_request_5265075e68"))
+        ? pricing.unit === "second"
+          ? text(...translatedMessage("usd_second_b4496726da"))
+          : pricing.unit === "image"
+            ? text(...translatedMessage("usd_image_efd0385640"))
+            : text(...translatedMessage("usd_request_5265075e68"))
         : "",
     hasAmount,
     details:

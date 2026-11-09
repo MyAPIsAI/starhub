@@ -12,14 +12,17 @@ import (
 	"gorm.io/gorm"
 	"starhub/common"
 	"starhub/model"
+	"starhub/observability"
 	"starhub/relay"
 )
 
 func (f *relayFlow) setUsageMetadata(usage *relay.Usage) {
+	f.observedUpstreamEnd = time.Now().UnixMilli()
 	usage.CallType = f.req.callType
 	usage.TraceID = f.traceID
 	usage.RequestSource = f.req.requestSource
 	usage.TTFTMs = f.ttftMs
+	observability.From(f.ctx).Usage(f.ttftMs, usage.RequestStatus == 2, usage.RequestStatus == 3)
 	entry := &model.Log{ChannelID: f.lastChannelID, Model: f.req.modelName, ServiceGroup: f.settleGroup()}
 	model.FreezeRoutingEvidence(f.ctx, entry, f.affinityPreferred != 0)
 	usage.ResourceID, usage.ResourceIDs = entry.ResourceID, entry.ResourceIDs

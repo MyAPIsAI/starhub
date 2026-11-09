@@ -140,6 +140,11 @@ func RunDailyReconciliation(ctx context.Context, day string, userID, actor int64
 					}
 				}
 			}
+			if len(r.Differences) == 0 {
+				if err := alertCondition(tx, "reconciliation_difference", fmt.Sprintf("%d:%s", r.UserID, r.Date), "serious", false, 0, 0, now); err != nil {
+					return err
+				}
+			}
 			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "date"}, {Name: "user_id"}}, DoUpdates: clause.AssignmentColumns([]string{"timezone", "username", "usage_nano", "api_ledger_nano", "order_nano", "recharge_ledger_nano", "differences", "provisional", "actor_id", "created_at", "balance_expected_nano", "balance_actual_nano", "reserved_nano", "external_status", "imported_sources", "checks_version", "alert_fingerprint", "admission_time_verified"})}).Create(&r).Error; err != nil {
 				return err
 			}

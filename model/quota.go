@@ -91,7 +91,19 @@ func SettleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 	return settleQuota(userID, tokenID, tokenUnlimited, delta, actual, entry, nil)
 }
 
-func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64, entry *Log, claim func(*gorm.DB) error) error {
+func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64, entry *Log, claim func(*gorm.DB) error) (settleErr error) {
+	started := time.Now()
+	defer func() {
+		if entry == nil || entry.TraceID == "" || errors.Is(settleErr, errQuotaAlreadySettled) || errors.Is(settleErr, errTaskAlreadySettled) {
+			return
+		}
+		status, code := "success", ""
+		if settleErr != nil {
+			status, code = "failed", "settlement_failed"
+		}
+		RecordTraceStep(entry.TraceID, "settlement", status, code, entry.ID, started)
+		_ = RecordObservation("settlement", "accounting", settleErr == nil, time.Now())
+	}()
 	if actual < 0 || delta > actual {
 		return errors.New("invalid quota settlement amounts")
 	}

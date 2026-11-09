@@ -16,17 +16,17 @@ import "./home-portal.css";
 const routes = [
   {
     name: "OpenAI",
-    model: "gpt-4.1",
+    model: "/v1/chat/completions",
     protocol: "Chat Completions",
     symbol: "✳",
   },
   {
     name: "Claude",
-    model: "claude-sonnet-4",
+    model: "/v1/messages",
     protocol: "Anthropic Messages",
     symbol: "✺",
   },
-  { name: "Gemini", model: "gemini-2.5-pro", protocol: "Gemini", symbol: "✦" },
+  { name: "Gemini", model: "/v1beta/models", protocol: "Gemini", symbol: "✦" },
 ];
 
 const copy = {
@@ -34,8 +34,8 @@ const copy = {
     title: ["一把密钥，", "连接更多可能。"],
     intro:
       "从你的应用出发，让模型连接变得简单。\n统一接入、灵活选择，专注下一次创造。",
-    start: "开始接入",
-    demo: "体验演示",
+    start: "开始使用",
+    demo: "查看文档",
     app: "你的应用",
     idea: "从一个想法开始",
     gateway: "统一模型网关",
@@ -55,7 +55,7 @@ const copy = {
     intro:
       "From your application to your next great idea.\nOne gateway. Familiar protocols. Room to build.",
     start: "Start building",
-    demo: "Try the demo",
+    demo: "View documentation",
     app: "Your application",
     idea: "It starts with an idea",
     gateway: "One model gateway",
@@ -75,8 +75,8 @@ const copy = {
     title: ["مفتاح واحد.", "إمكانيات أكثر."],
     intro:
       "من تطبيقك إلى فكرتك القادمة.\nبوابة واحدة وبروتوكولات مألوفة ومساحة للإبداع.",
-    start: "ابدأ الاتصال",
-    demo: "جرّب العرض",
+    start: "ابدأ الاستخدام",
+    demo: "عرض الوثائق",
     app: "تطبيقك",
     idea: "كل شيء يبدأ بفكرة",
     gateway: "بوابة نماذج موحدة",
@@ -152,11 +152,9 @@ function PortalPaths({
 
 export function HomePortal({
   language,
-  onDemo,
   children,
 }: {
   language: Language;
-  onDemo: () => void;
   children: ReactNode;
 }) {
   const c = copy[writtenLanguage(language)];
@@ -317,14 +315,14 @@ export function HomePortal({
                 </h1>
                 <p>{c.intro}</p>
                 <div className="portal-actions">
-                  <Link className="xy-btn xy-btn-blue" to="/console/connect">
+                  <Link className="xy-btn xy-btn-blue" to="/register">
                     {c.start}
                     <ArrowUpRight size={17} />
                   </Link>
-                  <button className="portal-demo" onClick={onDemo}>
+                  <Link className="portal-demo" to="/docs">
                     {c.demo}
                     <ArrowRight size={16} />
-                  </button>
+                  </Link>
                 </div>
               </div>
               <div

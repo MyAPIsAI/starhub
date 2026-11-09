@@ -46,7 +46,7 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourcePlacementArchive{}, &ResourceRegion{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
-	if err := db.AutoMigrate(&ChannelConfigurationState{}, &TransactionalMail{}); err != nil {
+	if err := db.AutoMigrate(&ChannelConfigurationState{}, &TransactionalMail{}, &CatalogAvailability{}); err != nil {
 		return fmt.Errorf("migrate channel configuration revision: %w", err)
 	}
 	if err := db.AutoMigrate(&ResourceSyncState{}, &ResourceSyncFailure{}, &GatewayResourceReport{}); err != nil {
@@ -54,6 +54,9 @@ func InitDB(path string) error {
 	}
 	if err := db.AutoMigrate(&ResourceMonitorFeed{}, &ResourceDirectoryPrice{}, &ResourceObservedEvent{}, &ResourcePriceMismatch{}, &ResourceIncident{}); err != nil {
 		return fmt.Errorf("migrate resource monitoring history: %w", err)
+	}
+	if err := db.AutoMigrate(&TraceRequest{}, &TraceStep{}, &ObservationReceipt{}, &Observation{}, &ObservabilityPulse{}, &OperationalAlert{}, &AlertDelivery{}); err != nil {
+		return err
 	}
 	if err := db.AutoMigrate(&ServiceAnnouncement{}); err != nil {
 		return err

@@ -1,3 +1,5 @@
+import { ResponsiveTable } from "../components/responsive-table";
+import { ListPagination, useListPage } from "../components/list-pagination";
 import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -43,6 +45,12 @@ export default function UsageReports() {
   const query = useUsageReport(params.toString());
   const invalidReport = query.data !== undefined && !isUsageReport(query.data);
   const report = query.isError || invalidReport ? undefined : query.data;
+  const pagination = useListPage(report?.rows ?? [], params.toString());
+  const keyPagination = useListPage(report?.by_key ?? [], params.toString());
+  const modelPagination = useListPage(
+    report?.by_model ?? [],
+    params.toString(),
+  );
   const reportError =
     invalidReport || query.error instanceof UsageReportContractError
       ? c(
@@ -124,11 +132,14 @@ export default function UsageReports() {
       })
       .replace(/[\u200e\u200f\u061c]/g, ""),
   }));
-  const shares = (rows: UsageStats[], title: string) => (
+  const shares = (
+    pager: ReturnType<typeof useListPage<UsageStats>>,
+    title: string,
+  ) => (
     <section className="usage-card">
       <h2>{title}</h2>
-      {rows.length ? (
-        rows.map((row) => (
+      {pager.total ? (
+        pager.rows.map((row) => (
           <div className="usage-share" key={row.id}>
             <div>
               <span>
@@ -151,6 +162,7 @@ export default function UsageReports() {
           {c(...translatedMessage("no_usage_in_this_range_7a96e1f7d0"))}
         </p>
       )}
+      <ListPagination {...pager} />
     </section>
   );
   return (
@@ -422,11 +434,11 @@ export default function UsageReports() {
           </section>
           <div className="usage-shares">
             {shares(
-              report.by_key,
+              keyPagination,
               c(...translatedMessage("spend_by_key_08e3b37ac7")),
             )}
             {shares(
-              report.by_model,
+              modelPagination,
               c(...translatedMessage("spend_by_model_21e3406923")),
             )}
           </div>
@@ -436,7 +448,7 @@ export default function UsageReports() {
               {c(...translatedMessage("usage_breakdown_eccf106201"))}
             </h2>
             <div className="usage-table-scroll">
-              <table>
+              <ResponsiveTable>
                 <thead>
                   <tr>
                     <th>{labels[dimension]}</th>
@@ -456,7 +468,7 @@ export default function UsageReports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {report.rows.map((row) => (
+                  {pagination.rows.map((row) => (
                     <tr key={row.id}>
                       <td>
                         {dimension === "call_type"
@@ -480,8 +492,9 @@ export default function UsageReports() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
+            <ListPagination {...pagination} />
           </section>
         </>
       )}

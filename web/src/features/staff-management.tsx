@@ -1004,6 +1004,14 @@ export function StaffCalls() {
                   >
                     {row.trace_id}
                   </button>
+                  {row.trace_id && (
+                    <a
+                      className="adm-link"
+                      href={`/admin?tab=observability&trace=${encodeURIComponent(row.trace_id)}`}
+                    >
+                      {text(...translatedMessage("nfr_trace_title"))}
+                    </a>
+                  )}
                 </td>
                 <td
                   data-label={text(...translatedMessage("status_dda39dcd63"))}

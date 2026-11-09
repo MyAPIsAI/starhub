@@ -3,8 +3,11 @@ import { placeholders } from "../../config/placeholders";
 
 type Text = (zh: string, en: string, ar: string) => string;
 
-export function claudeCodeGuide(text: Text) {
-  const base = placeholders.apiBase.replace(/\/v1\/?$/, "");
+export function claudeCodeGuide(
+  text: Text,
+  apiBase: string = placeholders.apiBase,
+) {
+  const base = apiBase.replace(/\/v1\/?$/, "");
   return {
     lead: text(
       ...translatedMessage(

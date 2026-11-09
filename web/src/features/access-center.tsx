@@ -101,7 +101,7 @@ export default function AccessCenter({
           kind: "specified" as const,
         }));
     if (key.smartAccess && result.length)
-      result.push({ id: "myapis-auto", name: "MyAPIs Auto", kind: "smart" });
+      result.unshift({ id: "myapis-auto", name: "MyAPIs Auto", kind: "smart" });
     return result;
   };
   const requests = useBackendRequests(100).rows;

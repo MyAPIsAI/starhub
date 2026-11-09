@@ -94,7 +94,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
       const key = legacySmartKey();
       const historic = useProductPreview
         .getState()
-        .recordCall(key.id, false, "veyra-auto")!;
+        .recordCall(key.id, false, "myapis-auto")!;
       const snapshot = structuredClone(historic);
       const before = useProductPreview.getState();
       const call = before.recordCall(key.id)!;
@@ -131,7 +131,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
         after.requests.find((row) => row.trace_id === historic.trace_id),
       ).toEqual(snapshot);
     });
-    it.each(["myapis-auto", "veyra-auto"])(
+    it.each(["veyra-auto", "myapis-auto"])(
       "preserves an explicit %s request",
       (model) => {
         const key = legacySmartKey();
@@ -147,7 +147,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
     );
     it("preserves a submitted legacy request when the model argument is omitted", () => {
       const key = legacySmartKey();
-      const request = defaultDemoRequest("veyra-auto");
+      const request = defaultDemoRequest("myapis-auto");
       const snapshot = structuredClone(request);
       expect(
         useProductPreview
@@ -155,9 +155,9 @@ describe("credential permissions, per-request routing and exact actual-model bil
           .recordCall(key.id, false, undefined, request),
       ).toMatchObject({
         status: "success",
-        requested_model: "veyra-auto",
+        requested_model: "myapis-auto",
         actual_model: GPT,
-        request: { model: "veyra-auto" },
+        request: { model: "myapis-auto" },
       });
       expect(request).toEqual(snapshot);
     });
@@ -176,9 +176,9 @@ describe("credential permissions, per-request routing and exact actual-model bil
         requested_model: GPT,
         actual_model: GPT,
       });
-      rejectWithoutCharge(key.id, "myapis-auto");
+      rejectWithoutCharge(key.id, "veyra-auto");
     });
-    it.each(["myapis-auto", "veyra-auto"])(
+    it.each(["veyra-auto", "myapis-auto"])(
       "does not expand a %s-only allowlist for default routing",
       (entry) => {
         const key = legacySmartKey({ allowedModels: [entry] });
@@ -203,7 +203,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
   it("A: alternates two exact models and smart routing with the same unchanged key", () => {
     const key = createClientKey(),
       before = useProductPreview.getState();
-    const calls = [GPT, CLAUDE, "veyra-auto"].map((model) =>
+    const calls = [GPT, CLAUDE, "myapis-auto"].map((model) =>
       useProductPreview.getState().recordCall(key.id, false, model)!,
     );
     expect(calls.map((call) => call.status)).toEqual([
@@ -214,7 +214,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
     expect(calls.map((call) => call.requested_model)).toEqual([
       GPT,
       CLAUDE,
-      "veyra-auto",
+      "myapis-auto",
     ]);
     expect(calls.map((call) => call.actual_model)).toEqual([GPT, CLAUDE, GPT]);
     calls.forEach((call) => {
@@ -262,7 +262,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
     rejectWithoutCharge(key.id, CLAUDE);
     rejectWithoutCharge(key.id, "missing", "unknown_model");
     expect(
-      useProductPreview.getState().recordCall(key.id, false, "veyra-auto")
+      useProductPreview.getState().recordCall(key.id, false, "myapis-auto")
         ?.actual_model,
     ).toBe(GPT);
   });
@@ -278,7 +278,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
     useProductPreview.setState({ keys: [specified] });
     expect(getKeyModels(specified).map((model) => model.id)).toEqual([GPT]);
     rejectWithoutCharge(specified.id, CLAUDE);
-    rejectWithoutCharge(specified.id, "veyra-auto");
+    rejectWithoutCharge(specified.id, "myapis-auto");
     const smart: PreviewKey = {
       ...specified,
       type: "smart",
@@ -287,7 +287,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
     useProductPreview.setState({ keys: [smart] });
     rejectWithoutCharge(smart.id, GPT);
     expect(
-      useProductPreview.getState().recordCall(smart.id, false, "veyra-auto")
+      useProductPreview.getState().recordCall(smart.id, false, "myapis-auto")
         ?.actual_model,
     ).toBe(GPT);
   });
@@ -310,18 +310,18 @@ describe("credential permissions, per-request routing and exact actual-model bil
     config.models[DEEPSEEK].pricing.output_per_million_usd = "0";
     useModelPricing.setState({ config });
     const key = createClientKey();
-    expect(resolveKeyModel(key, "veyra-auto")?.id).toBe(GPT);
+    expect(resolveKeyModel(key, "myapis-auto")?.id).toBe(GPT);
     rejectWithoutCharge(key.id, DEEPSEEK);
     expect(
-      useProductPreview.getState().recordCall(key.id, false, "veyra-auto"),
+      useProductPreview.getState().recordCall(key.id, false, "myapis-auto"),
     ).toMatchObject({ status: "success", actual_model: GPT });
   });
   it("narrows smart candidates independently from direct model access", () => {
     const key = { ...createClientKey(), smartCandidates: [CLAUDE] };
-    expect(resolveKeyModel(key, "myapis-auto")?.id).toBe(CLAUDE);
+    expect(resolveKeyModel(key, "veyra-auto")?.id).toBe(CLAUDE);
     expect(resolveKeyModel(key, GPT)?.id).toBe(GPT);
     expect(
-      resolveKeyModel({ ...key, smartCandidates: [DEEPSEEK] }, "myapis-auto"),
+      resolveKeyModel({ ...key, smartCandidates: [DEEPSEEK] }, "veyra-auto"),
     ).toBeNull();
     expect(
       getKeyModelOptions({ ...key, smartCandidates: [] }).some(
@@ -329,7 +329,7 @@ describe("credential permissions, per-request routing and exact actual-model bil
       ),
     ).toBe(false);
   });
-  describe.each(["myapis-auto", "veyra-auto"])("smart entry %s", (entry) => {
+  describe.each(["veyra-auto", "myapis-auto"])("smart entry %s", (entry) => {
     it("preserves the requested entry and charges the allowed actual model once", () => {
       const key = createClientKey({ allowedModels: [GPT] });
       const before = useProductPreview.getState();

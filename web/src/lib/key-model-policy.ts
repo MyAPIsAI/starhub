@@ -73,7 +73,7 @@ export function getKeyModelOptions(
       (model) => !key.smartCandidates || key.smartCandidates.includes(model.id),
     )
   )
-    options.push({
+    options.unshift({
       id: SMART_MODEL_ID,
       name: "MyAPIs Auto（智能路由）",
       kind: "smart",

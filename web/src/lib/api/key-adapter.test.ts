@@ -59,8 +59,8 @@ describe("backend smart-routing capability", () => {
   it("uses the explicit capability and preserves the actual-model allowlist", () => {
     const key = tokenToPreviewKey({ ...token, smart_access: true });
     expect(getClientModels(key, "openai").map((model) => model.id)).toEqual([
-      "gpt-4.1",
       "myapis-auto",
+      "gpt-4.1",
     ]);
     expect(getClientModels(key, "claude-code")).toEqual([]);
     expect(key.allowedModels).toEqual(["gpt-4.1"]);
@@ -79,7 +79,7 @@ describe("backend smart-routing capability", () => {
     const key = tokenToPreviewKey({
       ...token,
       smart_access: true,
-      model_limits: "veyra-auto,myapis-auto",
+      model_limits: "myapis-auto,veyra-auto",
     });
     expect(getClientModels(key, "openai")).toEqual([]);
   });

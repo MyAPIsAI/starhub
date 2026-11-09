@@ -1,0 +1,189 @@
+.catalog-capability-filter,
+.catalog-group-select,
+.catalog-example-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.catalog-capability-filter select,
+.catalog-group-select select,
+.catalog-example-controls select {
+  min-height: 36px;
+  max-width: 100%;
+  padding: 6px 26px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.catalog-copy-prices {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.catalog-group-prices .access-table {
+  min-width: 730px;
+}
+.catalog-group-prices th code {
+  display: block;
+  margin-block-start: 6px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.catalog-cache-prices {
+  display: grid;
+  gap: 4px;
+  margin-block: 6px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.catalog-cache-prices small {
+  font-size: inherit;
+}
+.catalog-status-values,
+.catalog-example-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+.catalog-example-controls button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--brand);
+}
+.catalog-examples pre,
+.access-public-comparison pre {
+  background: var(--surface-muted, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  overflow: auto;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.65;
+  text-align: left;
+}
+.access-public-comparison a {
+  overflow-wrap: anywhere;
+}
+.catalog-group-prices .detail-group-unavailable {
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .catalog-capability-filter {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .catalog-capability-filter select {
+    flex: 1;
+  }
+  .catalog-example-controls label {
+    flex: 1;
+    min-width: 125px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .catalog-group-select {
+    flex-wrap: wrap;
+  }
+}
+
+.access-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.access-detail-meta small {
+  display: block;
+  color: var(--muted);
+  margin-block-end: 8px;
+}
+.access-detail-meta strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.catalog-status-values [data-catalog-status="outage"] {
+  color: var(--danger);
+}
+.catalog-public-status .access-muted,
+.catalog-group-prices .access-muted {
+  margin-block: 12px;
+}
+@media (max-width: 640px) {
+  .access-detail-meta {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .catalog-group-prices .access-table {
+    min-width: 0;
+    width: 100%;
+  }
+  .catalog-group-prices thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .catalog-group-prices tbody {
+    display: grid;
+    gap: 16px;
+  }
+  .catalog-group-prices tr {
+    display: block;
+    padding: 14px;
+    background: var(--canvas);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .catalog-group-prices th,
+  .catalog-group-prices td {
+    display: block;
+    padding: 8px 0;
+    border: 0;
+    white-space: normal;
+  }
+  .catalog-group-prices td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    margin-block-end: 6px;
+  }
+  .catalog-group-prices th {
+    font-size: 15px;
+  }
+  .catalog-example-controls label {
+    flex-basis: 100%;
+  }
+}
+.catalog-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-block: 24px;
+}
+.catalog-group-prices td,
+.catalog-group-prices th {
+  text-align: start;
+}

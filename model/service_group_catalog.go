@@ -14,6 +14,7 @@ type ServiceGroupCatalog struct {
 	Groups        []ServiceGroupConfig
 	OptionVersion int64
 	GroupRatios   map[string]float64
+	deletedGroups []ServiceGroupDeletion
 }
 
 // ReadServiceGroupCatalog observes metadata, configured ratios and version in one SQLite snapshot.
@@ -42,7 +43,10 @@ func ReadServiceGroupCatalog(ctx context.Context) (*ServiceGroupCatalog, error) 
 		if result.GroupRatios == nil {
 			result.GroupRatios = map[string]float64{}
 		}
-		return tx.Order("group_id").Find(&result.Groups).Error
+		if err := tx.Order("group_id").Find(&result.Groups).Error; err != nil {
+			return err
+		}
+		return tx.Find(&result.deletedGroups).Error
 	})
 	if err != nil {
 		return nil, err

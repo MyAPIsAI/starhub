@@ -80,32 +80,32 @@ describe("standard catalog and mapped resource ownership", () => {
     }
     expect(
       config.resources!.instances.some(
-        (resource) => resource.canonicalModel === "myapis-auto",
+        (resource) => resource.canonicalModel === "veyra-auto",
       ),
     ).toBe(false);
     const directory = getDirectoryModels(config);
     expect(directory.filter((model) => model.kind === "smart")).toHaveLength(1);
-    expect(getDirectoryModel("veyra-auto", config)!.candidateIds).not.toContain(
-      "myapis-auto",
-    );
+    expect(
+      getDirectoryModel("myapis-auto", config)!.candidateIds,
+    ).not.toContain("veyra-auto");
     expect(
       getKeyModels(keyPolicy, config).map((model) => model.id),
-    ).not.toContain("myapis-auto");
+    ).not.toContain("veyra-auto");
     expect(
       getKeyModelOptions(keyPolicy, "Anthropic", config).map(
         (model) => model.id,
       ),
-    ).toEqual(["claude-sonnet-4-20250514", "myapis-auto"]);
+    ).toEqual(["myapis-auto", "claude-sonnet-4-20250514"]);
     expect(
       resolveKeyModelResult(
-        { ...keyPolicy, modelAccess: "custom", allowedModels: ["myapis-auto"] },
-        "veyra-auto",
+        { ...keyPolicy, modelAccess: "custom", allowedModels: ["veyra-auto"] },
+        "myapis-auto",
         config,
       ),
     ).toEqual({ error: "model_unauthorized" });
     expect(config).toEqual(original);
   });
-  it.each(["myapis-auto", "veyra-auto"])(
+  it.each(["veyra-auto", "myapis-auto"])(
     "reserves %s against standard-model creation",
     (id) => {
       const config = createDefaultPricing();
@@ -241,7 +241,7 @@ describe("standard catalog and mapped resource ownership", () => {
     const c = createDefaultPricing();
     c.groups.pro.visibility = "custom";
     c.groups.pro.accountIds = ["account-partner"];
-    expect(resolveKeyModelResult(keyPolicy, "veyra-auto", c).error).toBe(
+    expect(resolveKeyModelResult(keyPolicy, "myapis-auto", c).error).toBe(
       "group_unauthorized",
     );
     expect(
@@ -252,7 +252,7 @@ describe("standard catalog and mapped resource ownership", () => {
           modelAccess: "custom",
           allowedModels: ["gpt-4.1"],
         },
-        "veyra-auto",
+        "myapis-auto",
         c,
       ).model?.id,
     ).toBe("gpt-4.1");
@@ -284,7 +284,7 @@ describe("standard catalog and mapped resource ownership", () => {
     expect(
       resolveKeyModelResult(
         { ...keyPolicy, modelAccess: "custom", allowedModels: ["gpt-4.1"] },
-        "veyra-auto",
+        "myapis-auto",
         c,
       ).error,
     ).toBe("resource_unavailable");

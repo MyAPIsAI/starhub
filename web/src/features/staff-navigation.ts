@@ -73,6 +73,13 @@ export const staffNavigation = [
     roles: [100, 20],
   },
   {
+    id: "observability",
+    group: "operations",
+    label: translatedMessage("nfr_title"),
+    Icon: Radio,
+    roles: [100, 20],
+  },
+  {
     id: "incidents",
     group: "operations",
     label: translatedMessage("incident_notices_04954219fa"),

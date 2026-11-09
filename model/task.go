@@ -143,6 +143,7 @@ func SettleTaskQuota(task *Task, entry *Log) (bool, error) {
 	if task.PendingQuota < 0 || (task.PendingStatus != "succeeded" && task.PendingStatus != "failed" && task.PendingStatus != "cancelled") {
 		return false, errors.New("task has no settlement intent")
 	}
+	RecordTraceStep(task.TraceID, "metering", "success", "", task.ID, time.Now())
 	err := settleQuota(task.UserID, task.TokenID, task.TokenUnlimited,
 		task.PendingQuota-task.Quota, task.PendingQuota, entry, func(tx *gorm.DB) error {
 			res := tx.Model(&Task{}).Where("id = ? AND pending_status = ? AND pending_quota = ? AND status NOT IN ?",

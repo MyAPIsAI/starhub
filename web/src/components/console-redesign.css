@@ -1951,3 +1951,29 @@
 .xy-sidebar-nav {
   scrollbar-color: var(--border-strong) transparent;
 }
+
+@media (max-width: 720px) {
+  .xy-topbar .xy-breadcrumb {
+    flex: 1;
+    min-width: 0;
+  }
+  .xy-topbar .xy-breadcrumb strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .xy-topbar .xy-menu-toggle,
+  .xy-topbar-actions {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .xy-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .xy-metric-middle strong {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

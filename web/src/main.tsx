@@ -43,6 +43,8 @@ import {
 } from "./lib/session-restore";
 import { Button } from "./components/ui/button";
 
+import CookieConsent from "./components/cookie-consent";
+
 const DesignSystem = lazy(() => import("./pages/design-system"));
 const BrandHome = lazy(() => import("./pages/brand-home"));
 const ModelSquare = lazy(() => import("./pages/models/index"));
@@ -314,6 +316,7 @@ function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Suspense>
+              <CookieConsent />
             </PortalSession>
           </BrowserRouter>
 

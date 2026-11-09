@@ -146,13 +146,13 @@ function renderPage({
         fetchStatus: "idle",
       });
   }
-  client.setQueryData(["plaza-filters", identity], filters);
+  client.setQueryData(["catalog-filters", identity], filters);
   const quoteIdentity = otherIdentityOnly ? "other-user" : identity;
   const url = new URL(route, "http://localhost");
   const isDetail = url.pathname !== "/models";
   const key = isDetail
     ? [
-        "plaza-model",
+        "catalog-model",
         quoteIdentity,
         decodeURIComponent(url.pathname.slice("/models/".length)),
       ]
@@ -166,6 +166,12 @@ function renderPage({
               url.searchParams.get("vendor") ?? "",
               filters.vendors,
             ) || undefined,
+          tags: url.searchParams.get("capability") || undefined,
+          scope: "public",
+          page:
+            Number(url.searchParams.get("page")) > 1
+              ? Number(url.searchParams.get("page"))
+              : undefined,
           page_size: 200,
         },
       ];
@@ -296,7 +302,8 @@ describe("backend-only plaza catalog", () => {
       expect(html).toContain("$10");
       expect(html).toContain("$3");
       expect(html).toContain("$12");
-      expect(html).toContain("接入此模型");
+      expect(html).toContain("查看详情");
+      expect(html).not.toContain("catalog-ranking");
       expect(html).not.toContain("模型不存在");
     },
   );
@@ -360,8 +367,69 @@ describe("backend-only plaza catalog", () => {
     const tiered = renderPage({
       items: [{ ...row, pricing: { ...row.pricing, mode: "tiered" } }],
     });
-    expect(tiered).toContain("按用量计价");
+    expect(tiered).toContain("条件计价");
     expect(tiered).not.toContain("$2.5");
+  });
+
+  it("uses public group quotes and retains hidden detail pages", () => {
+    const publicRow: PlazaRow = {
+      ...row,
+      protocols: [...row.protocols, "Responses"],
+      public_catalog: true,
+      price_group: "standard",
+      callable: true,
+      group_prices: [
+        {
+          id: "lite",
+          name: "Lite",
+          multiplier: 0.4,
+          available: false,
+          callable: false,
+          pricing: { ...row.pricing, input_per_m: 1, output_per_m: 4 },
+          protocols: [],
+          service_level: { revision: 0, updated_at: 0, targets: null },
+        },
+        {
+          id: "standard",
+          name: "Standard",
+          multiplier: 1,
+          available: true,
+          callable: true,
+          pricing: row.pricing,
+          protocols: row.protocols,
+          service_level: { revision: 0, updated_at: 0, targets: null },
+        },
+      ],
+    };
+    const listing = renderPage({ items: [publicRow], anonymous: true });
+    expect(listing).toContain("平台低至");
+    expect(listing).toContain('data-public-group="standard"');
+    expect(listing).toContain("catalog-copy-prices");
+    const grace = renderPage({
+      items: [{ ...publicRow, callable: false }],
+      anonymous: true,
+    });
+    expect(grace).toContain('class="catalog-try"');
+    expect(grace).toContain("查看详情");
+    const detail = renderPage({
+      route: "/models/gpt-4o",
+      items: [publicRow],
+      anonymous: true,
+    });
+    expect(detail).toContain(
+      'data-group-id="lite" class="detail-group-unavailable"',
+    );
+    expect(detail).toContain("$1");
+    expect(detail).toContain("$2.5");
+    expect(detail).toContain("OpenAI Responses");
+    expect(detail).not.toContain("/console/service-quality");
+    const hidden = renderPage({
+      route: "/models/gpt-4o",
+      items: [{ ...publicRow, is_available: false, callable: false }],
+      anonymous: true,
+    });
+    expect(hidden).toContain("catalog-group-prices");
+    expect(hidden).not.toContain('class="access-empty"');
   });
 
   it("does not connect unavailable models or models without protocols", () => {
@@ -371,7 +439,7 @@ describe("backend-only plaza catalog", () => {
     ]) {
       const html = renderPage({ items: [item] });
       expect(html).not.toContain("接入此模型");
-      expect(html).toContain("查看状态");
+      expect(html).toContain("查看详情");
     }
   });
 

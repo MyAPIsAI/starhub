@@ -1,3 +1,4 @@
+import { CatalogPriceCopy } from "./catalog-price-copy";
 import { message as translatedMessage } from "../i18n/messages";
 import type { DirectoryModel } from "../config/model-directory";
 import type { PricingCatalogConfig } from "../config/models";
@@ -47,9 +48,10 @@ export function CatalogPriceSummary({
     reference?.status === "legacy"
       ? text(...translatedMessage("historical_c557e619e9"))
       : text(...translatedMessage("official_df6a837000"));
-  const publicLabel = plazaQuote
-    ? text(...translatedMessage("platform_price_2386ba36c1"))
-    : text(...translatedMessage("platform_from_6b1eaf2b5e"));
+  const publicLabel =
+    plazaQuote && !plazaQuote.model.publicCatalog
+      ? text(...translatedMessage("platform_price_2386ba36c1"))
+      : text(...translatedMessage("platform_from_6b1eaf2b5e"));
   const tokenUnit = text(...translatedMessage("usd_million_tokens_6f08728512"));
   const statusLabels = {
     unknown: text(...translatedMessage("model_not_found_d96fc188df")),
@@ -121,6 +123,15 @@ export function CatalogPriceSummary({
             )}
           </span>
         </div>
+      ) : plazaQuote?.model.pricing.mode === "tiered" ? (
+        <div className="catalog-price-summary-message" data-price-kind="public">
+          <span className="catalog-price-summary-label">
+            {text(...translatedMessage("platform_pricing_524d3ef3f3"))}
+          </span>
+          <span className="catalog-price-summary-value">
+            {text(...translatedMessage("conditional_pricing_8a72d20e3e"))}
+          </span>
+        </div>
       ) : tokenComparison ? (
         <>
           <span className="catalog-price-summary-unit">{tokenUnit}</span>
@@ -172,6 +183,13 @@ export function CatalogPriceSummary({
               </tr>
             </tbody>
           </table>
+          {plazaQuote && (
+            <CatalogPriceCopy
+              model={model.id}
+              group={plazaQuote.group}
+              pricing={plazaQuote.model.pricing}
+            />
+          )}
           {!reference && (
             <span className="catalog-price-summary-note">
               {text(

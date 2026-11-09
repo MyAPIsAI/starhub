@@ -268,6 +268,11 @@ func TestM7AdministrationAcceptance(t *testing.T) {
 		}
 	})
 	t.Run("ADM-AC-18_scheduled_public_legal", func(t *testing.T) {
+		for _, c := range []*staffHTTP{ops, finance, tech} {
+			c.call("GET", "/api/admin/legal", nil, 403)
+			c.call("POST", "/api/admin/legal", map[string]string{"kind": "terms"}, 403)
+		}
+
 		for i, at := range []string{"2026-01-01T00:00", "2026-06-01T00:00", "2027-01-01T00:00"} {
 			root.call("POST", "/api/admin/legal", map[string]any{"kind": "terms", "language": "en", "version": fmt.Sprintf("v%d", i+1), "content": fmt.Sprintf("Synthetic legal version %d", i+1), "effective_local": at}, 200)
 		}

@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "../components/responsive-table";
 import { regionalLocale } from "../lib/locale-format";
 import { message as translatedMessage } from "../i18n/messages";
 
@@ -787,7 +788,7 @@ function BillingCenterView({
         ) : (
           <>
             <div className="bc-table-scroll">
-              <table>
+              <ResponsiveTable>
                 <thead>
                   <tr>
                     {(tab === "orders"
@@ -928,7 +929,7 @@ function BillingCenterView({
                         </tr>
                       ))}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
             <div className="bc-pagination">
               <span>

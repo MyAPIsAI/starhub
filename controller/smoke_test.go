@@ -123,9 +123,6 @@ func TestSmokeAllEndpoints(t *testing.T) {
 	expectOK(t, "PlazaFilters", call(PlazaFilters, testRequest{
 		method: http.MethodGet, target: "/api/plaza/filters",
 	}))
-	expectOK(t, "PlazaRank", call(PlazaRank, testRequest{
-		method: http.MethodGet, target: "/api/plaza/rank?type=value",
-	}))
 }
 
 func expectOK(t *testing.T, name string, rr *httptest.ResponseRecorder) {

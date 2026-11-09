@@ -18,11 +18,13 @@ func WatchAdministration(ctx context.Context) {
 			_ = config.SetRegionTimezone(profile.Profile.Timezone)
 		}
 		now := time.Now()
-        if now.Sub(lastRun) >= time.Minute {
-            if err:=RunScheduledReconciliation(ctx,now);err!=nil {log.Printf("daily reconciliation failed: %v",err)}
-            if err:=DeliverReconciliationAlerts(ctx,now);err!=nil {log.Printf("reconciliation alert delivery failed: %v",err)}
-            lastRun=now
-        }
+		if now.Sub(lastRun) >= time.Minute {
+			if err := RunScheduledReconciliation(ctx, now); err != nil {
+				log.Printf("daily reconciliation failed: %v", err)
+			}
+
+			lastRun = now
+		}
 		if now.Sub(lastPrune) >= time.Hour {
 			if err := PruneAdministrationAudit(ctx, now); err != nil {
 				log.Printf("audit retention failed: %v", err)

@@ -1,3 +1,4 @@
+import { ResponsiveTable } from "../components/responsive-table";
 import { message as translatedMessage } from "../i18n/messages";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -912,7 +913,7 @@ export default function ServiceQuality({
             ) : (
               <>
                 <div className="sq-table-scroll">
-                  <table>
+                  <ResponsiveTable>
                     <thead>
                       <tr>
                         {[
@@ -1034,7 +1035,7 @@ export default function ServiceQuality({
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </ResponsiveTable>
                 </div>
                 <div className="sq-mobile-units">
                   {visibleUnits.map((unit) => (

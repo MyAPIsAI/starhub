@@ -3,8 +3,11 @@ import { placeholders } from "../../config/placeholders";
 
 type Translate = (zh: string, en: string, ar: string) => string;
 
-export function responsesGuide(text: Translate) {
-  const request = `curl --fail --silent --show-error ${placeholders.apiBase}/responses \\
+export function responsesGuide(
+  text: Translate,
+  apiBase: string = placeholders.apiBase,
+) {
+  const request = `curl --fail --silent --show-error ${apiBase}/responses \\
   -H "Authorization: Bearer $MYAPIS_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -19,11 +22,11 @@ model_provider = "myapis"
 
 [model_providers.myapis]
 name = "MyAPIs"
-base_url = "${placeholders.apiBase}"
+base_url = "${apiBase}"
 env_key = "MYAPIS_API_KEY"
 wire_api = "responses"`;
   const retrieve = `: "\${RESPONSE_ID:?Set RESPONSE_ID to a response created with this API key}"
-curl --fail --silent --show-error "${placeholders.apiBase}/responses/$RESPONSE_ID" \\
+curl --fail --silent --show-error "${apiBase}/responses/$RESPONSE_ID" \\
   -H "Authorization: Bearer $MYAPIS_API_KEY"`;
   return {
     request,

@@ -13,6 +13,7 @@ import (
 	"starhub/internal/router"
 	"starhub/internal/staffcli"
 	"starhub/model"
+	"starhub/observability"
 	"starhub/service"
 	"starhub/web"
 )
@@ -66,10 +67,25 @@ func main() {
 		log.Fatalf("failed to load options: %v", err)
 	}
 	go model.WatchOptions(context.Background(), time.Second)
+	alertConfig, err := observability.LoadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// A stable deployment identity prevents ordinary restarts from leaving phantom dead instances.
+	model.LocalResources.ID = os.Getenv("STARHUB_GATEWAY_ID")
+	if model.LocalResources.ID == "" {
+		host, _ := os.Hostname()
+		model.LocalResources.ID = host + ":" + bootstrap.Port
+	}
+	if observability.SafeCode(model.LocalResources.ID) != model.LocalResources.ID {
+		log.Fatal("invalid STARHUB_GATEWAY_ID")
+	}
+	go service.WatchObservability(context.Background(), alertConfig)
 	go model.WatchAdministration(context.Background())
 	go model.WatchResourceSync(context.Background())
 	go model.WatchResourceMonitoring(context.Background())
 	go service.WatchResourceRuntime(context.Background())
+	go model.WatchPublicCatalog(context.Background())
 	go controller.RunExportJobs(context.Background())
 	if err := service.WatchTransactionalMail(context.Background()); err != nil {
 		log.Fatal(err)

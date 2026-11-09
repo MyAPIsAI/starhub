@@ -1,0 +1,6 @@
+{
+  "model": "YOUR_AUTHORIZED_CHAT_MODEL",
+  "messages": [{ "role": "user", "content": "Say hello" }],
+  "max_tokens": 64,
+  "stream": false
+}

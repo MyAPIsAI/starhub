@@ -49,9 +49,9 @@ describe("vendor directory navigation", () => {
       vendor: "New Provider",
     };
     const vendors = getCatalogVendors([...models, added]);
-    expect(vendors.find((vendor) => vendor.id === "Veyra")).toEqual({
-      id: "Veyra",
-      count: 2,
+    expect(vendors.find((vendor) => vendor.id === "MyAPIs")).toEqual({
+      id: "MyAPIs",
+      count: 3,
     });
     expect(vendors.find((vendor) => vendor.id === "New Provider")).toEqual({
       id: "New Provider",
@@ -67,19 +67,18 @@ describe("vendor directory navigation", () => {
 
   it("attributes routing to the platform while keeping sample providers unchanged", () => {
     const models = getDirectoryModels(createDefaultPricing());
-    const matches = filterCatalogModels(models, { vendor: "Veyra" });
+    const matches = filterCatalogModels(models, { vendor: "MyAPIs" });
     expect(matches.map((model) => model.id)).toEqual([
+      "myapis-auto",
       "veyra-demo-image",
       "veyra-demo-video",
     ]);
     expect(new Set(matches.map((model) => model.kind))).toEqual(
-      new Set(["specified"]),
+      new Set(["smart", "specified"]),
     );
     expect(
-      filterCatalogModels(models, { vendor: "MyAPIs" }).map(
-        (model) => model.id,
-      ),
-    ).toEqual(["myapis-auto"]);
+      filterCatalogModels(models, { vendor: "Veyra" }).map((model) => model.id),
+    ).toEqual([]);
     expect(filterCatalogModels(models, {})).toEqual(models);
   });
 

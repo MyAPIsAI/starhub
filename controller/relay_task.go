@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"starhub/model"
+	"starhub/observability"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
@@ -70,7 +70,7 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 	if priceData.HasIndependentTaskPricing() {
 		pricing = relay.TaskTokenEstimate(taskReq)
 	}
-	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited,
+	pre, err := relay.PreConsumeQuotaObserved(flow.ctx, req.userID, req.tokenID, req.tokenUnlimited,
 		relay.TaskPricingQuotaWithPriceData(priceData, pricing))
 	if err != nil {
 		writePreConsumeError(w, "", err)
@@ -143,7 +143,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 	}
 	model.FreezeTaskRouting(flow.ctx, task, flow.affinityPreferred == task.ChannelID)
 	if err := model.InsertTask(task); err != nil {
-		log.Printf("task persistence failed before upstream submit: %v", err)
+		observability.Log(flow.traceID, "task_persistence", "failed")
 		flow.lastErr = fmt.Errorf("task persistence failed: %v", err)
 		return attemptResult{outcome: attemptUncertain, cause: flow.lastErr}
 	}
@@ -157,7 +157,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		if !completed {
 			reason := "task submission failed; upstream execution may be uncertain"
 			if _, ferr := service.FailTaskSubmission(task, reason); ferr != nil {
-				log.Printf("task %d submission refund pending: %v", task.ID, ferr)
+				observability.Log(flow.traceID, "task_refund", "failed")
 			}
 		}
 	}()
@@ -183,7 +183,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 
 	taskID, err := adaptor.ParseSubmitResponse(resp.StatusCode, respBody)
 	if err != nil {
-		log.Printf("task submit: upstream %d accepted but parse submit response failed: %v", ch.ID, err)
+		observability.Log(flow.traceID, "task_submit_response", "failed")
 		flow.lastErr = fmt.Errorf("channel %d: parse submit response: %v", ch.ID, err)
 		dto.WriteUpstreamError(flow.w, http.StatusBadGateway, flow.inbound,
 			respBody, resp.Header.Get("Content-Type"))
@@ -192,7 +192,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 
 	// Bind the upstream task ID and advance to "submitted".
 	if err := model.CompleteTaskSubmission(task.ID, taskID); err != nil {
-		log.Printf("task %q accepted by upstream %d but ID persistence failed: %v", taskID, ch.ID, err)
+		observability.Log(flow.traceID, "task_identity_persistence", "failed")
 		flow.lastErr = fmt.Errorf("task accepted but ID not persisted: %v", err)
 		dto.WriteRelayError(flow.w, http.StatusInternalServerError, flow.inbound,
 			"server_error", "persistence_failed",
@@ -234,7 +234,7 @@ func RelayTaskGetVideo(w http.ResponseWriter, r *http.Request) {
 	}
 	if !dto.IsTerminalTaskStatus(task.Status) {
 		if _, err := service.PollTask(r.Context(), task); err != nil {
-			log.Printf("poll task %d failed: %v", task.ID, err)
+			observability.Log(task.TraceID, "task_poll", "failed")
 		}
 	}
 	writeTaskView(w, task)

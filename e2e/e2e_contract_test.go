@@ -15,15 +15,14 @@ func TestContractEnvelopeShape(t *testing.T) {
 
 	// Test cases: (name, method, path, body, expectSuccess)
 	cases := []struct {
-		name     string
-		method   string
-		path     string
-		body     string
-		anonOK   bool // true = works without auth
+		name   string
+		method string
+		path   string
+		body   string
+		anonOK bool // true = works without auth
 	}{
 		{"plaza/models GET anonymous", "GET", "/api/plaza/models", "", true},
 		{"plaza/filters GET anonymous", "GET", "/api/plaza/filters", "", true},
-		{"plaza/rank GET anonymous", "GET", "/api/plaza/rank?type=value", "", true},
 		{"user/self GET anonymous (401)", "GET", "/api/user/self", "", false},
 		{"token GET anonymous (401)", "GET", "/api/token", "", false},
 	}
@@ -163,22 +162,11 @@ func TestContractEnvelopeShape(t *testing.T) {
 		}
 	})
 
-	t.Run("plaza/rank structure", func(t *testing.T) {
-		res := doRequest(env.base, "GET", "/api/plaza/rank?type=value", "", nil)
-		if res.Status != 200 {
-			t.Fatalf("expected 200, got %d: %s", res.Status, res.Body)
-		}
-		var envelope map[string]any
-		if err := json.Unmarshal([]byte(res.Body), &envelope); err != nil {
-			t.Fatalf("invalid JSON: %v", err)
-		}
-		data, _ := envelope["data"].(map[string]any)
-		if data == nil {
-			t.Fatal("data should be an object for plaza/rank")
-		}
-		for _, field := range []string{"type", "items"} {
-			if _, exists := data[field]; !exists {
-				t.Fatalf("PlazaRankResponse missing required field %q", field)
+	t.Run("rankings are excluded from the product", func(t *testing.T) {
+		for _, path := range []string{"/api/plaza/rank", "/api/catalog/rank"} {
+			res := doRequest(env.base, "GET", path, "", nil)
+			if res.Status != 404 {
+				t.Fatalf("retired route %s returned %d", path, res.Status)
 			}
 		}
 	})

@@ -26,6 +26,7 @@ export interface ServiceGroup {
   multiplier: string;
   created_at: number;
   updated_at: number;
+  status_page_mode?: "auto" | "include" | "exclude";
   revision?: number;
   sla?: ServiceLevel;
 }
@@ -38,6 +39,7 @@ export interface ServiceGroupInput {
   visibility?: "common" | "custom";
   account_ids?: string[];
   multiplier: string;
+  status_page_mode?: "auto" | "include" | "exclude";
   expected_group_id: number;
   expected_revision: number;
   expected_option_version: number;
@@ -63,6 +65,10 @@ function invalidateGroupConfiguration(
   client: ReturnType<typeof useQueryClient>,
 ) {
   for (const queryKey of [
+    ["public-status"],
+    ["public-home"],
+    ["catalog-model"],
+    ["catalog-filters"],
     GROUPS_KEY,
     CATALOG_KEY,
     ["plaza-models"],
@@ -108,10 +114,7 @@ export function useUpdateServiceGroupSLA() {
       );
     },
     onSettled: () => {
-      void client.invalidateQueries({ queryKey: GROUPS_KEY });
-      void client.invalidateQueries({ queryKey: CATALOG_KEY });
-      void client.invalidateQueries({ queryKey: ["plaza-models"] });
-      void client.invalidateQueries({ queryKey: ["plaza-model"] });
+      invalidateGroupConfiguration(client);
     },
   });
 }

@@ -1,0 +1,252 @@
+.nfr-page {
+  display: grid;
+  gap: 18px;
+}
+.nfr-trace-identifier {
+  overflow-wrap: anywhere;
+  font-family: monospace;
+  font-size: 12px;
+}
+.nfr-page h2 {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+.nfr-page h3 {
+  font-size: 14px;
+}
+.nfr-page p,
+.nfr-page small {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.nfr-card {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  min-width: 0;
+}
+.nfr-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.nfr-number {
+  display: block;
+  font-size: 32px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+.nfr-badge {
+  display: inline-flex;
+  padding: 3px 9px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.nfr-critical,
+.nfr-failure {
+  color: #bd2937;
+}
+.nfr-serious {
+  color: #8c5500;
+}
+.nfr-general {
+  color: #315db3;
+}
+.nfr-good {
+  color: #10734a;
+}
+.nfr-muted {
+  color: var(--muted);
+}
+[data-theme="dark"] .nfr-critical,
+[data-theme="dark"] .nfr-failure {
+  color: #ff9da6;
+}
+[data-theme="dark"] .nfr-serious {
+  color: #ffd28c;
+}
+[data-theme="dark"] .nfr-general {
+  color: #aac6ff;
+}
+[data-theme="dark"] .nfr-good {
+  color: #7ce8ae;
+}
+.nfr-severity-counts {
+  display: flex;
+  gap: 18px;
+  margin: 18px 0;
+}
+.nfr-severity-counts > div {
+  display: grid;
+  gap: 9px;
+}
+.nfr-severity-counts strong {
+  font-size: 24px;
+}
+.nfr-channel-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 32px;
+}
+.nfr-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.nfr-notifications p {
+  margin-bottom: 0;
+  font-size: 12px;
+}
+.nfr-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.nfr-filters {
+  display: flex;
+  gap: 12px;
+}
+.nfr-filters label,
+.nfr-trace-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.nfr-filters select,
+.nfr-trace-form input {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+.nfr-trace-form {
+  display: grid;
+  gap: 8px;
+}
+.nfr-trace-form > div {
+  display: flex;
+  gap: 10px;
+}
+.nfr-trace-form input {
+  flex: 1;
+  min-width: 0;
+  font-family: monospace;
+}
+.nfr-alert-list .adm-table th,
+.nfr-alert-list .adm-table td {
+  padding: 12px !important;
+}
+.nfr-alert-list .adm-table {
+  min-width: 760px;
+}
+.nfr-empty {
+  padding: 20px 0;
+}
+.nfr-small-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin: 18px 0;
+}
+.nfr-small-metrics > div {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+.nfr-instance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+.nfr-instance {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  min-width: 0;
+}
+.nfr-page bdi {
+  overflow-wrap: anywhere;
+}
+.nfr-instance dl > div,
+.nfr-trace-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 8px 0;
+}
+.nfr-instance dd,
+.nfr-trace-facts dd {
+  margin: 0;
+}
+.nfr-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.nfr-timeline li {
+  border-inline-start: 2px solid var(--border);
+  padding: 0 0 24px 18px;
+  margin-inline-start: 6px;
+  position: relative;
+}
+.nfr-timeline li::before {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--accent, #6264ef);
+  border-radius: 50%;
+  inset-inline-start: -5px;
+  top: 5px;
+}
+.nfr-timeline li > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nfr-timeline p {
+  font-size: 12px;
+  margin: 6px 0;
+}
+.nfr-page summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+@media (max-width: 760px) {
+  .nfr-summary {
+    grid-template-columns: 1fr;
+  }
+  .nfr-card {
+    padding: 16px;
+  }
+  .nfr-section-heading {
+    flex-direction: column;
+  }
+  .nfr-filters {
+    width: 100%;
+  }
+  .nfr-filters label {
+    flex: 1;
+    min-width: 0;
+  }
+  .nfr-filters select {
+    width: 100%;
+  }
+  .nfr-channel-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .nfr-channel {
+    align-items: start;
+    flex-direction: column;
+    gap: 5px;
+  }
+}

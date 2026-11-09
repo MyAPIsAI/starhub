@@ -3,12 +3,12 @@ package controller
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/observability"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
@@ -282,7 +282,7 @@ func runPassthroughMode(w http.ResponseWriter, r *http.Request, req relayRequest
 		return
 	}
 
-	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, preQuota)
+	pre, err := relay.PreConsumeQuotaObserved(r.Context(), req.userID, req.tokenID, req.tokenUnlimited, preQuota)
 	if err != nil {
 		writePreConsumeError(w, "", err)
 		return
@@ -334,7 +334,7 @@ func settleModeAttempt(flow *relayFlow, ch *model.Channel, usage *relay.Usage) a
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
-		log.Printf("post consume quota failed: %v", err)
+		observability.Log(flow.traceID, "quota_settlement", "failed")
 	}
 	flow.settled = true
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK, usage: usage}

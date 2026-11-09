@@ -58,6 +58,7 @@ type DeploymentProfile struct {
 	PaymentChannels     []string          `json:"payment_channels"`
 	PaymentConfigRefs   map[string]string `json:"payment_config_refs"`
 	CookieConsent       bool              `json:"cookie_consent"`
+	CookieConsentMode   string            `json:"cookie_consent_mode"`
 	Features            map[string]bool   `json:"features"`
 	StoreRequestContent bool              `json:"store_request_content"`
 }
@@ -88,6 +89,9 @@ func CurrentDeploymentProfile(ctx context.Context) (DeploymentProfileVersion, er
 	return row, err
 }
 func ValidateDeploymentProfile(p DeploymentProfile) error {
+	if !slices.Contains([]string{"", "banner", "dialog"}, p.CookieConsentMode) {
+		return fmt.Errorf("%w: cookie consent mode", ErrAdminInvalid)
+	}
 	if !resourceText(p.RegionID, 64, true) || !resourceText(p.Brand, 128, true) || p.Currency != "USD" || p.StoreRequestContent {
 		return fmt.Errorf("%w: identity, USD currency or content retention", ErrAdminInvalid)
 	}

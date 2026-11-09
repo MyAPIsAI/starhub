@@ -1,3 +1,4 @@
+import { ListPagination, useListPage } from "../components/list-pagination";
 import { message as translatedMessage } from "../i18n/messages";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,7 @@ export default function ExportHistory({ onCreate }: { onCreate: () => void }) {
   const c = (zh: string, en: string, ar: string) =>
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
   const query = useExports();
+  const pagination = useListPage(query.data ?? []);
   const [error, setError] = useState("");
   const download = async (row: ExportRecord, dictionary = false) => {
     setError("");
@@ -69,7 +71,7 @@ export default function ExportHistory({ onCreate }: { onCreate: () => void }) {
         <p>{c(...translatedMessage("no_exports_yet_39a30835d8"))}</p>
       )}
       <div className="export-history-list">
-        {query.data?.map((row) => (
+        {pagination.rows.map((row) => (
           <article key={row.id}>
             <div>
               <strong>{types[row.type]}</strong>
@@ -82,7 +84,8 @@ export default function ExportHistory({ onCreate }: { onCreate: () => void }) {
                 {new Date(row.expires_at * 1000).toLocaleDateString(
                   i18n.language,
                   { timeZone: row.timezone || "UTC" },
-                )}
+                )}{" "}
+                · <bdi>{row.timezone || "UTC"}</bdi>
               </small>
             </div>
             <div className="export-history-actions">
@@ -113,6 +116,7 @@ export default function ExportHistory({ onCreate }: { onCreate: () => void }) {
           </article>
         ))}
       </div>
+      <ListPagination {...pagination} />
     </section>
   );
 }

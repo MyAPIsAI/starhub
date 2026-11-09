@@ -12,8 +12,10 @@ import "./announcements.css";
 
 export function PublicAnnouncements({
   query,
+  timezone,
 }: {
   query: ReturnType<typeof usePublishedAnnouncements>;
+  timezone?: string;
 }) {
   const t = useStaffText(),
     language = writtenLanguage(usePreferences((s) => s.language));
@@ -66,8 +68,15 @@ export function PublicAnnouncements({
               {new Intl.DateTimeFormat(regionalLocale(language), {
                 dateStyle: "medium",
                 timeStyle: "short",
+                timeZone: timezone,
               }).format(new Date(row.updated_at * 1000))}
             </time>
+            {timezone && (
+              <>
+                {" "}
+                · <bdi>{timezone}</bdi>
+              </>
+            )}
           </small>
         </article>
       ))}
