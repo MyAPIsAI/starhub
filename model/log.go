@@ -30,7 +30,13 @@ type Log struct {
 	// Streaming requests that span midnight are attributed to the admission
 	// day, not the completion day. Zero means legacy logs without admission day.
 	AdmissionDay int64 `gorm:"not null;default:0;index" json:"admission_day"`
-	CreatedAt    int64 `gorm:"index;autoCreateTime;index:idx_logs_quality_window,priority:1;index:idx_logs_quality_model,priority:2" json:"created_at"`
+	// PriceVersion records the option revision at billing time, enabling
+	// offline recomputation. Zero means legacy logs without version tracking.
+	PriceVersion int64 `gorm:"not null;default:0" json:"price_version"`
+	// ExactFeeMicroUSD is the precise fee in micro-USD (1 USD = 1,000,000)
+	// before rounding to quota. Enables audit reconstruction.
+	ExactFeeMicroUSD int64 `gorm:"not null;default:0" json:"exact_fee_micro_usd"`
+	CreatedAt        int64 `gorm:"index;autoCreateTime;index:idx_logs_quality_window,priority:1;index:idx_logs_quality_model,priority:2" json:"created_at"`
 }
 
 func InsertLog(l *Log) error {
