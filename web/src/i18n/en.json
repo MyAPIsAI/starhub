@@ -359,5 +359,6 @@
   "statusHourSuccess": "Hourly success rate",
   "statusHourNoData": "No eligible samples in this hour; service health cannot be inferred.",
   "statusMethodology": "Measurement rules and legend",
-  "statusAllTypes": "All"
+  "statusAllTypes": "All",
+  "languagePolicyFailed": "Unable to load available languages. Please retry."
 }

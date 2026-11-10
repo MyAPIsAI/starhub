@@ -1008,9 +1008,11 @@ export function ModelPricingAdmin({
             <div className="settings-quote-total">
               <span>
                 {text(
-                  key ? "预估演示费用" : "模型基准费用（未含分组倍率）",
-                  "Estimated demo charge",
-                  "التكلفة التجريبية المقدرة",
+                  ...(key
+                    ? translatedMessage("ui_estimated_demo_charge_de2d6fcf")
+                    : translatedMessage(
+                        "ui_model_base_charge_before_group_multiplier__fc478e11",
+                      )),
                 )}
               </span>
               <strong>{quote.amount}</strong>
@@ -1244,23 +1246,40 @@ export function ModelPricingAdmin({
                         })
                       }
                     />
-                    为此时段单独设置词元价格
+                    {text(
+                      ...translatedMessage(
+                        "ui_set_separate_token_prices_for_this_time_windo_2a0e869c",
+                      ),
+                    )}
                   </label>
                   <p className="pricing-help">
-                    适用于输入、输出或缓存折扣比例不同的高低峰价格。未覆盖的价格沿用常规基准；使用独立价格时不叠加时段系数。
+                    {text(
+                      ...translatedMessage(
+                        "ui_use_for_peak_and_off_peak_input_output_or_cac_9c65f3cb",
+                      ),
+                    )}
                   </p>
                   {window.tokenPrices && (
                     <div className="settings-fields">
                       {(Object.keys(labels) as (keyof ModelPricing)[]).map(
                         (field) => (
                           <label key={field}>
-                            {labels[field]}（美元 / 百万词元）
+                            {labels[field]}
+                            {text(
+                              ...translatedMessage(
+                                "ui__usd_million_tokens__609e7acd",
+                              ),
+                            )}
                             <input
                               aria-label={`${window.label} ${labels[field]}`}
                               inputMode="decimal"
                               disabled={!canEdit}
                               value={window.tokenPrices![field] ?? ""}
-                              placeholder="留空沿用常规价"
+                              placeholder={text(
+                                ...translatedMessage(
+                                  "ui_leave_blank_to_use_the_base_rate_26b64924",
+                                ),
+                              )}
                               onChange={(e) => {
                                 const prices = { ...window.tokenPrices };
                                 if (e.target.value === "") delete prices[field];
@@ -1299,21 +1318,10 @@ export function ModelPricingAdmin({
                         })
                       }
                     >
-                      {lang === "zh"
-                        ? ["日", "一", "二", "三", "四", "五", "六"][day]
-                        : lang === "ar"
-                          ? [
-                              "أحد",
-                              "اثنين",
-                              "ثلاثاء",
-                              "أربعاء",
-                              "خميس",
-                              "جمعة",
-                              "سبت",
-                            ][day]
-                          : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
-                              day
-                            ]}
+                      {new Intl.DateTimeFormat(
+                        lang === "ar" ? "ar" : lang === "zh" ? "zh-CN" : "en",
+                        { weekday: "short", timeZone: "UTC" },
+                      ).format(new Date(Date.UTC(2024, 0, 7 + day)))}
                     </button>
                   ))}
                 </div>
@@ -1539,7 +1547,12 @@ export function ModelPricingAdmin({
                         className="pricing-help"
                         style={{ display: "block" }}
                       >
-                        示例规格：{JSON.stringify(row.attributes)}
+                        {text(
+                          ...translatedMessage(
+                            "ui_sample_specification__5bf9ae0f",
+                          ),
+                        )}
+                        {JSON.stringify(row.attributes)}
                       </small>
                     )}
                   </th>

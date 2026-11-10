@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import assert from "node:assert/strict";
 import path from "node:path";
 import ts from "typescript";
+import { findUntranslatedUI } from "./i18n-source-check.mjs";
 const root = new URL("../", import.meta.url);
 const read = (name) =>
   JSON.parse(readFileSync(new URL(`src/i18n/${name}.json`, root), "utf8"));
@@ -10,7 +11,7 @@ const namespaces = [
   ["messages.", read("messages.en"), read("messages.zh"), read("messages.ar")],
 ];
 for (const [prefix, en, ...translations] of namespaces)
-  for (const target of translations) {
+  for (const target of [en, ...translations]) {
     assert.deepEqual(
       Object.keys(target).sort(),
       Object.keys(en).sort(),
@@ -40,6 +41,7 @@ for (const relative of readdirSync(src, { recursive: true })) {
   )
     continue;
   const source = readFileSync(url, "utf8");
+  errors.push(...findUntranslatedUI(source, relative));
   const ast = ts.createSourceFile(
     relative,
     source,

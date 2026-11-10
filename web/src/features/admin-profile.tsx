@@ -52,12 +52,12 @@ interface LegalVersion {
   created_at: number;
 }
 const featureNames = [
-  ["playground", "调试台", "Playground"],
-  ["models", "模型广场", "Model plaza"],
-  ["status", "服务状态页", "Service status"],
-  ["smart_entry", "智能路由入口（myapis-auto）", "Smart entry (myapis-auto)"],
-  ["video", "视频生成", "Video"],
-  ["arabic", "阿拉伯文", "Arabic"],
+  ["playground", ...messagePair("region_feature_playground")],
+  ["models", ...messagePair("region_feature_models")],
+  ["status", ...messagePair("region_feature_status")],
+  ["smart_entry", ...messagePair("region_feature_smart_entry")],
+  ["video", ...messagePair("region_feature_video")],
+  ["arabic", ...messagePair("region_feature_arabic")],
 ];
 export function AdminRegionProfile() {
   const [historyPage, setHistoryPage] = useState(1);

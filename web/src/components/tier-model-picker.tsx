@@ -1,3 +1,4 @@
+import { localizedMessage } from "../i18n/messages";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Check, Info, Layers3, Pin, X } from "lucide-react";
 import {
@@ -16,56 +17,37 @@ import { visibleGroups } from "../lib/platform-catalog";
 export const getTierModels = (tier: TierId, config = getPricingSnapshot()) =>
   getModelsForTier(tier, config);
 
-const copy = {
-  zh: {
-    title: "服务分组",
-    hint: "悬停或聚焦分组查看模型；点击信息按钮可固定预览。",
-    models: (count: number) => `${count} 个可用模型`,
-    multiplier: "价格系数",
-    selected: "已选择",
-    preview: "仅预览 · 未选择",
-    pinned: "预览已固定",
-    close: "关闭模型预览",
-    pin: (name: string) => `固定查看 ${name} 的模型`,
-    unpin: (name: string) => `取消固定 ${name} 的模型预览`,
-    available: "分组内模型",
-    empty: "此分组暂无可用模型，请选择其他分组。",
-    adjusted: (from: string, to: string) =>
-      `${from} 不在此分组内，指定模型已自动改为 ${to}。`,
-  },
-  en: {
-    title: "Service group",
-    hint: "Hover or focus a group to explore models. Use the info button to pin its preview.",
-    models: (count: number) => `${count} available models`,
-    multiplier: "Price multiplier",
-    selected: "Selected",
-    preview: "Preview only · not selected",
-    pinned: "Preview pinned",
-    close: "Close model preview",
-    pin: (name: string) => `Pin models in ${name}`,
-    unpin: (name: string) => `Unpin model preview for ${name}`,
-    available: "Models in this group",
-    empty: "No models are available in this group. Choose another group.",
-    adjusted: (from: string, to: string) =>
-      `${from} is not in this group. The fixed model has been changed to ${to}.`,
-  },
-  ar: {
-    title: "مجموعة الخدمة",
-    hint: "مرر المؤشر أو ركّز على مجموعة لعرض نماذجها. استخدم زر المعلومات لتثبيت المعاينة.",
-    models: (count: number) => `${count} نماذج متاحة`,
-    multiplier: "معامل السعر",
-    selected: "محددة",
-    preview: "معاينة فقط · غير محددة",
-    pinned: "المعاينة مثبتة",
-    close: "إغلاق معاينة النماذج",
-    pin: (name: string) => `تثبيت نماذج ${name}`,
-    unpin: (name: string) => `إلغاء تثبيت معاينة نماذج ${name}`,
-    available: "نماذج هذه المجموعة",
-    empty: "لا توجد نماذج متاحة في هذه المجموعة. اختر مجموعة أخرى.",
-    adjusted: (from: string, to: string) =>
-      `${from} غير متاح في هذه المجموعة. تم تغيير النموذج المحدد إلى ${to}.`,
-  },
-};
+const copy = (language: string) => ({
+  title: localizedMessage("service_group_1c6f8adf41", language),
+  hint: localizedMessage(
+    "ui_hover_or_focus_a_group_to_explore_models_use__2333a091",
+    language,
+  ),
+  models: (count: number) =>
+    localizedMessage("ui__available_models_3db1110e", language, { p0: count }),
+  multiplier: localizedMessage("price_multiplier_d2bec078c8", language),
+  selected: localizedMessage("ui_selected_22c76566", language),
+  preview: localizedMessage("ui_preview_only_not_selected_9d11602a", language),
+  pinned: localizedMessage("ui_preview_pinned_c6b920b2", language),
+  close: localizedMessage("ui_close_model_preview_d96eca09", language),
+  pin: (name: string) =>
+    localizedMessage("ui_pin_models_in__98fa7ac6", language, { p0: name }),
+  unpin: (name: string) =>
+    localizedMessage("ui_unpin_model_preview_for__dac88eb0", language, {
+      p0: name,
+    }),
+  available: localizedMessage("ui_models_in_this_group_17c3f418", language),
+  empty: localizedMessage(
+    "ui_no_models_are_available_in_this_group_choose__60ee0c4e",
+    language,
+  ),
+  adjusted: (from: string, to: string) =>
+    localizedMessage(
+      "ui__is_not_in_this_group_the_fixed_model_has_bee_868ced8f",
+      language,
+      { p0: from, p1: to },
+    ),
+});
 
 export function TierModelPicker({
   value,
@@ -80,7 +62,7 @@ export function TierModelPicker({
   const pricingConfig = useModelPricing((state) => state.config);
   const accountId = useProductPreview((s) => s.user.id);
   const groups = visibleGroups(pricingConfig, accountId);
-  const text = copy[writtenLanguage(language)];
+  const text = copy(writtenLanguage(language));
   const tierName = (tier: (typeof groups)[number]) =>
     serviceGroupLabel(tier.id, language, pricingConfig);
   const id = useId();

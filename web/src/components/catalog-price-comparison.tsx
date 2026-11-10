@@ -1,4 +1,5 @@
 import { message as translatedMessage } from "../i18n/messages";
+
 import type { DirectoryModel } from "../config/model-directory";
 import type { PricingCatalogConfig } from "../config/models";
 import {
@@ -74,9 +75,9 @@ export function CatalogPriceComparison({
     "no-public-group": text(...translatedMessage("no_public_offer_0104dbd32f")),
     "no-resource": text(...translatedMessage("no_public_resource_c1206fa683")),
     "quote-error": text(
-      plazaQuote ? "报价暂不可用" : "暂无法确定最低价",
-      plazaQuote ? "Quote unavailable" : "Minimum unavailable",
-      plazaQuote ? "السعر غير متاح" : "تعذر تحديد أقل سعر",
+      ...(plazaQuote
+        ? translatedMessage("ui_quote_unavailable_4fd877e3")
+        : translatedMessage("ui_minimum_unavailable_6a5d6f03")),
     ),
     ready: "",
   };
@@ -189,21 +190,17 @@ export function CatalogPriceComparison({
           </div>
           <small>
             {text(
-              offer.status !== "ready"
-                ? "公开分组报价暂不可用，可进入详情检查。"
+              ...(offer.status !== "ready"
+                ? translatedMessage(
+                    "ui_public_quote_unavailable_inspect_details__3663b00f",
+                  )
                 : smartTokenExample
-                  ? "估算 / 次：1,000 输入 + 300 输出词元，无缓存。"
-                  : "混合计价样例；每个候选的用量条件见下方。",
-              offer.status !== "ready"
-                ? "Public quote unavailable; inspect details."
-                : smartTokenExample
-                  ? "Estimate / call: 1,000 input + 300 output tokens, no cache."
-                  : "Mixed billing examples; candidate usage assumptions below.",
-              offer.status !== "ready"
-                ? "التسعير العام غير متاح؛ راجع التفاصيل."
-                : smartTokenExample
-                  ? "تقدير لكل طلب: 1000 إدخال + 300 إخراج بلا تخزين."
-                  : "أمثلة فوترة مختلطة؛ افتراضات استخدام المرشحين أدناه.",
+                  ? translatedMessage(
+                      "ui_estimate_call_1_000_input_300_output_tokens_n_46f5ea04",
+                    )
+                  : translatedMessage(
+                      "ui_mixed_billing_examples_candidate_usage_assump_9c1ea445",
+                    )),
             )}
           </small>
         </div>
@@ -312,13 +309,11 @@ export function CatalogPriceComparison({
               : serviceGroupLabel(offer.groupId!, lang, config)}{" "}
             ·{" "}
             {text(
-              plazaQuote ? "后端报价 · 已包含分组倍率" : "当前时段 · 模拟售价",
-              plazaQuote
-                ? "Backend quote · group multiplier included"
-                : "Current window · demo rate",
-              plazaQuote
-                ? "سعر الخادم شامل معامل المجموعة"
-                : "الفترة الحالية · سعر تجريبي",
+              ...(plazaQuote
+                ? translatedMessage(
+                    "ui_backend_quote_group_multiplier_included_42cd23f2",
+                  )
+                : translatedMessage("ui_current_window_demo_rate_d3ac4beb")),
             )}
           </p>
         )}
@@ -407,15 +402,13 @@ export function CatalogPriceComparison({
         {tokens && detailed && (
           <p className="price-reference-scope">
             {text(
-              plazaQuote
-                ? "— 表示未配置该项报价，不代表免费。平台价格取自后端当前分组，已包含分组倍率；不自动切换当前密钥分组。"
-                : "— 表示未配置该项报价，不代表免费。平台同一列取自同一公开分组，倍率仅计算一次；不自动切换当前密钥分组。",
-              plazaQuote
-                ? "— means no configured rate, not free. Backend prices include the current group multiplier; your key group is not changed."
-                : "— means no configured rate, not free. Platform rates come from one public group, with its multiplier applied once; your key group is not changed.",
-              plazaQuote
-                ? "— تعني عدم وجود سعر وليست مجانية. أسعار الخادم شاملة معامل المجموعة الحالية؛ لا تتغير مجموعة مفتاحك."
-                : "— تعني عدم وجود سعر وليست مجانية. أسعار المنصة من مجموعة عامة واحدة ومعامل واحد؛ لا تتغير مجموعة مفتاحك.",
+              ...(plazaQuote
+                ? translatedMessage(
+                    "ui__means_no_configured_rate_not_free_backend_pr_956b40df",
+                  )
+                : translatedMessage(
+                    "ui__means_no_configured_rate_not_free_platform_r_e6cada3f",
+                  )),
             )}
           </p>
         )}

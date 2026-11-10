@@ -542,10 +542,20 @@ export default function AccessCenter({
                     {config.protocol}
                     {lang === "zh"
                       ? config.protocol === "Anthropic"
-                        ? "（消息接口）"
+                        ? text(
+                            ...translatedMessage("ui__messages_api__cf7483e1"),
+                          )
                         : config.protocol === "Responses"
-                          ? "（响应接口）"
-                          : "（聊天补全接口）"
+                          ? text(
+                              ...translatedMessage(
+                                "ui__responses_api__8336b418",
+                              ),
+                            )
+                          : text(
+                              ...translatedMessage(
+                                "ui__chat_completions_api__950bac8e",
+                              ),
+                            )
                       : ""}
                   </dd>
                 </div>

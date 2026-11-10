@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { placeholders, type TierId } from "./placeholders";
 
 export interface ModelPricing {
@@ -51,9 +52,15 @@ export const catalogModels: ModelItem[] = [
     },
     protocols: ["OpenAI"],
     description: {
-      en: "Flagship general intelligence model with superior instruction following and multimodality.",
-      zh: "通用智能旗舰模型，具备卓越的代码生成、复杂推理与多模态理解能力。",
-      ar: "نموذج الذكاء العام الرائد مع قدرات فائقة في البرمجة والتفكير متعدد الوسائط.",
+      en: translatedMessage(
+        "ui_flagship_general_intelligence_model_with_supe_c5e4f938",
+      )[1],
+      zh: translatedMessage(
+        "ui_flagship_general_intelligence_model_with_supe_c5e4f938",
+      )[0],
+      ar: translatedMessage(
+        "ui_flagship_general_intelligence_model_with_supe_c5e4f938",
+      )[2],
     },
     tierAvailability: { ultra: true, pro: true, standard: true, lite: false },
     online: true,
@@ -73,9 +80,15 @@ export const catalogModels: ModelItem[] = [
     },
     protocols: ["Anthropic", "OpenAI"],
     description: {
-      en: "State-of-the-art coding and agentic execution with 200K context window and prompt caching.",
-      zh: "面向代码与智能体自动化的模型，超强结构化输出与超长上下文敏捷检索。",
-      ar: "أحدث نموذج للبرمجة وتنفيذ الوكلاء مع نافذة سياق 200 ألف وتخزين مؤقت للأوامر.",
+      en: translatedMessage(
+        "ui_state_of_the_art_coding_and_agentic_execution_b8e97b6f",
+      )[1],
+      zh: translatedMessage(
+        "ui_state_of_the_art_coding_and_agentic_execution_b8e97b6f",
+      )[0],
+      ar: translatedMessage(
+        "ui_state_of_the_art_coding_and_agentic_execution_b8e97b6f",
+      )[2],
     },
     tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
     online: true,
@@ -95,9 +108,15 @@ export const catalogModels: ModelItem[] = [
     },
     protocols: ["Gemini", "OpenAI"],
     description: {
-      en: "Massive 1M token context window model with extreme multi-modal ingestion efficiency.",
-      zh: "百万级超长上下文多模态模型，支持海量文档、音视频与代码库即时分析。",
-      ar: "نموذج بسياق هائل يبلغ مليون رمز مع كفاءة استيعاب وسائط متعددة متطرفة.",
+      en: translatedMessage(
+        "ui_massive_1m_token_context_window_model_with_ex_a974c0bf",
+      )[1],
+      zh: translatedMessage(
+        "ui_massive_1m_token_context_window_model_with_ex_a974c0bf",
+      )[0],
+      ar: translatedMessage(
+        "ui_massive_1m_token_context_window_model_with_ex_a974c0bf",
+      )[2],
     },
     tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
     online: true,
@@ -117,9 +136,15 @@ export const catalogModels: ModelItem[] = [
     },
     protocols: ["OpenAI"],
     description: {
-      en: "High-efficiency open architecture model with unrivaled cost-performance ratio.",
-      zh: "高性价比全能基座模型，在代码、中文及数学推理领域表现极具竞争力。",
-      ar: "نموذج معماري مفتوح عالي الكفاءة مع نسبة أداء إلى تكلفة لا تضاهى.",
+      en: translatedMessage(
+        "ui_high_efficiency_open_architecture_model_with__7608da99",
+      )[1],
+      zh: translatedMessage(
+        "ui_high_efficiency_open_architecture_model_with__7608da99",
+      )[0],
+      ar: translatedMessage(
+        "ui_high_efficiency_open_architecture_model_with__7608da99",
+      )[2],
     },
     tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
     online: true,
@@ -139,9 +164,15 @@ export const catalogModels: ModelItem[] = [
     },
     protocols: ["OpenAI"],
     description: {
-      en: "Versatile enterprise-grade model tailored for complex business workflows and tool calling.",
-      zh: "专为企业级复杂任务打造的模型，工具调用敏锐，中英双语表达自然流畅。",
-      ar: "نموذج متكامل للمؤسسات مصمم لمسارات العمل المعقدة واستدعاء الأدوات.",
+      en: translatedMessage(
+        "ui_versatile_enterprise_grade_model_tailored_for_11b2b934",
+      )[1],
+      zh: translatedMessage(
+        "ui_versatile_enterprise_grade_model_tailored_for_11b2b934",
+      )[0],
+      ar: translatedMessage(
+        "ui_versatile_enterprise_grade_model_tailored_for_11b2b934",
+      )[2],
     },
     tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
     online: true,
@@ -156,9 +187,15 @@ export const catalogModels: ModelItem[] = [
     pricing: { input_per_million_usd: "0", output_per_million_usd: "0" },
     protocols: [],
     description: {
-      zh: "按张计费演示；只验证用量和账本，不生成图片，也不提供客户端接口。",
-      en: "Per-image billing demonstration only. No image generation or client API.",
-      ar: "عرض فوترة الصور فقط؛ لا يُنشئ صورًا ولا يوفّر واجهة عميل.",
+      zh: translatedMessage(
+        "ui_per_image_billing_demonstration_only_no_image_9c60c98b",
+      )[0],
+      en: translatedMessage(
+        "ui_per_image_billing_demonstration_only_no_image_9c60c98b",
+      )[1],
+      ar: translatedMessage(
+        "ui_per_image_billing_demonstration_only_no_image_9c60c98b",
+      )[2],
     },
     tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
     online: true,
@@ -173,9 +210,15 @@ export const catalogModels: ModelItem[] = [
     pricing: { input_per_million_usd: "0", output_per_million_usd: "0" },
     protocols: [],
     description: {
-      zh: "按秒计费演示；只验证时长和账本，不生成视频，也不提供客户端接口。",
-      en: "Per-second billing demonstration only. No video generation or client API.",
-      ar: "عرض فوترة الثواني فقط؛ لا يُنشئ فيديو ولا يوفّر واجهة عميل.",
+      zh: translatedMessage(
+        "ui_per_second_billing_demonstration_only_no_vide_04556804",
+      )[0],
+      en: translatedMessage(
+        "ui_per_second_billing_demonstration_only_no_vide_04556804",
+      )[1],
+      ar: translatedMessage(
+        "ui_per_second_billing_demonstration_only_no_vide_04556804",
+      )[2],
     },
     tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
     online: true,
@@ -190,9 +233,15 @@ export const catalogModels: ModelItem[] = [
     pricing: { input_per_million_usd: "0", output_per_million_usd: "0" },
     protocols: ["OpenAI", "Anthropic", "Gemini"],
     description: {
-      zh: "智能路由模型。在密钥授权范围内自动选择成本最低的可用模型。填写 model 为 myapis-auto 即可；实际执行的模型在调用明细中记录。",
-      en: "Smart routing model. Automatically selects the lowest-cost available model within the key's authorized scope. Set model to myapis-auto; the actual model used is recorded in request logs.",
-      ar: "نموذج التوجيه الذكي. يختار تلقائيًا النموذج الأقل تكلفة المتاح ضمن نطاق المفتاح المصرّح به. اضبط model على myapis-auto؛ النموذج الفعلي يُسجّل في سجل الطلبات.",
+      zh: translatedMessage(
+        "ui_smart_routing_model_automatically_selects_the_b7a3d474",
+      )[0],
+      en: translatedMessage(
+        "ui_smart_routing_model_automatically_selects_the_b7a3d474",
+      )[1],
+      ar: translatedMessage(
+        "ui_smart_routing_model_automatically_selects_the_b7a3d474",
+      )[2],
     },
     tierAvailability: { ultra: true, pro: true, standard: true, lite: true },
     online: true,

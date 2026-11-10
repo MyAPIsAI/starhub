@@ -1,5 +1,5 @@
-import { regionalLocale } from "../lib/locale-format";
 import { message as translatedMessage } from "../i18n/messages";
+import { regionalLocale } from "../lib/locale-format";
 
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -106,11 +106,8 @@ export default function RequestInspector({
   const error = record?.error_code ? errors[record.error_code] : undefined;
   const reason = error
     ? error[lang === "zh" ? 0 : lang === "ar" ? 2 : 1]
-    : text(
-        record?.error_message ?? "请检查请求配置后重试。",
-        "Review the request configuration, then retry.",
-        "راجع إعداد الطلب ثم أعد المحاولة.",
-      );
+    : record?.error_message ||
+      text(...translatedMessage("request_configuration_retry"));
   const key = keys.find((item) => item.id === record?.key_id);
   const entry = ledger.find((item) => item.trace_id === record?.trace_id);
   const requestFix = [
@@ -196,9 +193,9 @@ export default function RequestInspector({
             disabled={record?.metered_demo && !isAdmin(role)}
           >
             {text(
-              failed ? "保留输入并重试" : "复用请求验证",
-              failed ? "Retry with input" : "Reuse request",
-              failed ? "إعادة المحاولة بالمدخلات" : "إعادة استخدام الطلب",
+              ...(failed
+                ? translatedMessage("ui_retry_with_input_9eba8a7d")
+                : translatedMessage("ui_reuse_request_50be7dfe")),
             )}
             <ArrowRight size={14} />
           </Button>

@@ -1,5 +1,6 @@
-import { CatalogPriceCopy } from "./catalog-price-copy";
 import { message as translatedMessage } from "../i18n/messages";
+import { CatalogPriceCopy } from "./catalog-price-copy";
+
 import type { DirectoryModel } from "../config/model-directory";
 import type { PricingCatalogConfig } from "../config/models";
 import type { PublicCatalogPrice } from "../lib/catalog-public-pricing";
@@ -59,9 +60,9 @@ export function CatalogPriceSummary({
     "no-public-group": text(...translatedMessage("no_public_offer_0104dbd32f")),
     "no-resource": text(...translatedMessage("no_public_resource_c1206fa683")),
     "quote-error": text(
-      plazaQuote ? "报价暂不可用" : "暂无法确定最低价",
-      plazaQuote ? "Quote unavailable" : "Minimum unavailable",
-      plazaQuote ? "السعر غير متاح" : "تعذر تحديد أقل سعر",
+      ...(plazaQuote
+        ? translatedMessage("ui_quote_unavailable_4fd877e3")
+        : translatedMessage("ui_minimum_unavailable_6a5d6f03")),
     ),
     ready: "",
   };

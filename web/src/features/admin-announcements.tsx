@@ -1,5 +1,6 @@
-import { regionalLocale } from "../lib/locale-format";
 import { message as translatedMessage } from "../i18n/messages";
+import { regionalLocale } from "../lib/locale-format";
+
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../components/ui/button";
@@ -307,7 +308,13 @@ export function AdminAnnouncements() {
                   dir={locale === "ar" ? "rtl" : "ltr"}
                 >
                   <legend>
-                    {{ zh: "中文", en: "English", ar: "العربية" }[locale]}
+                    {
+                      {
+                        zh: translatedMessage("ui_english_ce10e061")[0],
+                        en: translatedMessage("ui_english_ce10e061")[1],
+                        ar: translatedMessage("ui_english_ce10e061")[2],
+                      }[locale]
+                    }
                   </legend>
                   <label htmlFor={`notice-title-${locale}`}>
                     {t(...translatedMessage("title_98815d8ffe"))}

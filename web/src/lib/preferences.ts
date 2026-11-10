@@ -15,6 +15,7 @@ let account: {
   preferred_language?: string;
 } | null = null;
 let generation = 0;
+let policyGeneration = 0;
 let staffPortal =
   typeof location !== "undefined" &&
   (/^\/(admin|staff)(\/|$)/.test(location.pathname) ||
@@ -49,7 +50,9 @@ function selectedLanguage(): SupportedLanguage {
     saved && supported.includes(saved as SupportedLanguage)
       ? policy.languages.includes(saved as SupportedLanguage)
         ? (saved as SupportedLanguage)
-        : policy.default_language
+        : saved === "ar"
+          ? "en"
+          : policy.default_language
       : matchLanguage(
           typeof navigator === "undefined" ? [] : navigator.languages,
           policy,
@@ -78,11 +81,13 @@ export function setLanguagePortal(staff: boolean) {
   publishLanguage();
 }
 export async function refreshLanguagePolicy() {
+  const request = ++policyGeneration;
   const next = await apiGet<LanguagePolicy>(
     "/api/localization",
     AbortSignal.timeout(5000),
     { handleUnauthorizedLocally: true },
   );
+  if (request !== policyGeneration) return;
   if (
     !supported.includes(next.default_language) ||
     !Array.isArray(next.languages) ||

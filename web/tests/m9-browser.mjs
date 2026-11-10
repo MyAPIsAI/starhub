@@ -355,6 +355,110 @@ try {
     expected_user_id: user.id,
     language: "ar",
   });
+  // Exercise the real Root switch, then verify old accounts and a fresh device.
+  await secondPage.reload();
+  await secondPage.waitForFunction(
+    () => document.documentElement.lang === "ar",
+  );
+  await admin.goto(base + "admin?tab=regions");
+  await admin
+    .getByRole("button", { name: "Edit region profile", exact: true })
+    .click();
+  await admin
+    .getByRole("dialog")
+    .getByRole("checkbox", { name: "Arabic", exact: true })
+    .uncheck();
+  await admin
+    .getByRole("button", { name: "Save new version", exact: true })
+    .click();
+  await admin.getByRole("dialog").waitFor({ state: "hidden" });
+  const staffProfile = async (method, data) => {
+    const response = await root.request.fetch(
+      backend + "/api/admin/region-profile",
+      {
+        method,
+        data,
+        headers: { Origin: backend, "X-StarHub-Portal": "staff" },
+      },
+    );
+    assert.equal(response.status(), 200, await response.text());
+    return (await response.json()).data;
+  };
+  for (const defaultLanguage of ["en", "zh"]) {
+    const { current } = await staffProfile("GET");
+    await staffProfile("PUT", {
+      expected_revision: current.revision,
+      profile: { ...current.profile, default_language: defaultLanguage },
+    });
+    await secondPage
+      .locator('.product-preferences [role="combobox"]')
+      .first()
+      .click();
+    await secondPage
+      .getByRole("option", { name: "English", exact: true })
+      .waitFor();
+    await secondPage.waitForFunction(
+      () =>
+        document.documentElement.lang === "en" &&
+        document.documentElement.dir === "ltr",
+    );
+    assert.deepEqual(await secondPage.getByRole("option").allTextContents(), [
+      "English",
+      "中文",
+    ]);
+    await secondPage.keyboard.press("Escape");
+    assert.equal(
+      (await api(second, "GET", "/api/user/self")).preferred_language,
+      "ar",
+    );
+    await api(
+      second,
+      "PUT",
+      "/api/user/language",
+      { expected_user_id: user.id, language: "ar" },
+      400,
+    );
+    const fresh = await browser.newContext({ locale: "ar-AE" });
+    await api(fresh, "POST", "/api/user/login", {
+      username: "m9-customer",
+      password: "Synthetic-customer-123",
+    });
+    const freshPage = await fresh.newPage();
+    await freshPage.goto(base + "console");
+    await freshPage.waitForFunction(
+      () =>
+        document.documentElement.lang === "en" &&
+        document.documentElement.dir === "ltr",
+    );
+    await fresh.close();
+  }
+  const { current: disabledProfile } = await staffProfile("GET");
+  await staffProfile("PUT", {
+    expected_revision: disabledProfile.revision,
+    profile: {
+      ...disabledProfile.profile,
+      default_language: "en",
+      features: { ...disabledProfile.profile.features, arabic: true },
+    },
+  });
+  await secondPage.reload();
+  await secondPage.waitForFunction(
+    () =>
+      document.documentElement.lang === "ar" &&
+      document.documentElement.dir === "rtl",
+  );
+  results.push({
+    case: "I18N-AC-09",
+    checks: [
+      "Root feature switch",
+      "hidden Arabic option",
+      "English fallback with English and Chinese defaults",
+      "fresh device",
+      "disabled selection rejected",
+      "preference restored after reenabling",
+    ],
+    passed: true,
+  });
   const storageState = await second.storageState();
   const stats = (id, requests, amount) => ({
     id,
@@ -503,19 +607,47 @@ try {
       await page.goto(base + "docs");
       await page.locator("pre:visible").first().waitFor();
       await page.waitForFunction(() => {
-        const pre = [...document.querySelectorAll("pre")].find(element => element.checkVisibility());
+        const pre = [...document.querySelectorAll("pre")].find((element) =>
+          element.checkVisibility(),
+        );
         return pre && getComputedStyle(pre).direction === "ltr";
       });
-      await page.locator(".docs-endpoint input").fill("https://gateway.example/v1");
+      await page
+        .locator(".docs-endpoint input")
+        .fill("https://gateway.example/v1");
       await page.locator(".docs-article h1").click();
       await capture(page, "docs-ar-" + theme + "-" + width);
-      for (const route of ["", "keys", "connect", "service-quality", "smart-routing", "playground", "exports", "settings"]) {
+      for (const route of [
+        "",
+        "keys",
+        "connect",
+        "service-quality",
+        "smart-routing",
+        "playground",
+        "exports",
+        "settings",
+      ]) {
         await page.goto(base + "console/" + route);
         await page.locator(".product-preferences").first().waitFor();
         await page.waitForLoadState("networkidle");
-        assert.equal(await page.locator("html").getAttribute("dir"), "rtl", route);
-        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), route + " overflows viewport");
-        await page.screenshot({path: path.join(out, `page-${route || "overview"}-ar-${theme}-${width}.png`), animations: "disabled"});
+        assert.equal(
+          await page.locator("html").getAttribute("dir"),
+          "rtl",
+          route,
+        );
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+          route + " overflows viewport",
+        );
+        await page.screenshot({
+          path: path.join(
+            out,
+            `page-${route || "overview"}-ar-${theme}-${width}.png`,
+          ),
+          animations: "disabled",
+        });
       }
       results.push({ case: "I18N-AC-04/05/13", theme, width, passed: true });
       await context.close();

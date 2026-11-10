@@ -1,3 +1,5 @@
+import { message as translatedMessage } from "../i18n/messages";
+import { useSettingsText } from "./settings-text";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Route } from "lucide-react";
@@ -11,6 +13,7 @@ import { Button } from "../components/ui/button";
 import { formatMoney } from "../lib/money";
 import "../components/catalog-management.css";
 export default function ResourceRouting() {
+  const { text } = useSettingsText();
   const config = useModelPricing((s) => s.config),
     keys = useBackendKeys().keys,
     requests = useBackendRequests(20).rows,
@@ -37,57 +40,103 @@ export default function ResourceRouting() {
         <div>
           <span className="pricing-eyebrow">
             <Route size={16} />
-            智能路由
+            {text(...translatedMessage("ui_smart_routing_8483f2a7"))}
           </span>
-          <h1>路由候选与调用追踪</h1>
+          <h1>
+            {text(
+              ...translatedMessage(
+                "ui_routing_candidates_and_request_traces_2a74fc56",
+              ),
+            )}
+          </h1>
           <p>
-            请求模型为 myapis-auto（智能路由，兼容旧标识
-            veyra-auto）时，在分组、账号、密钥白名单与能力约束内选取实际模型；再选择该标准模型的可用资源实例。
+            {text(
+              ...translatedMessage(
+                "ui_requests_for_myapis_auto_with_legacy_veyra_au_cfc56e6b",
+              ),
+            )}
           </p>
         </div>
         <Button asChild>
-          <Link to="/console/playground">验证一次请求</Link>
+          <Link to="/console/playground">
+            {text(...translatedMessage("ui_test_a_request_528928a2"))}
+          </Link>
         </Button>
       </header>
       <section className="cm-callout">
         <label className="cm-actions">
-          查看密钥候选
+          {text(...translatedMessage("ui_view_key_candidates_abe3d683"))}
           <select
-            aria-label="查看路由密钥"
+            aria-label={text(
+              ...translatedMessage("ui_select_a_routing_key_e58d390c"),
+            )}
             value={key?.id ?? ""}
             onChange={(e) => setKeyId(e.target.value)}
           >
             {keys.map((k) => (
               <option key={k.id} value={k.id}>
                 {k.name}
-                {!k.active ? "（已停用）" : ""}
+                {!k.active
+                  ? text(...translatedMessage("ui__disabled__fadaeaa9"))
+                  : ""}
               </option>
             ))}
           </select>
         </label>
         <p>
-          估算条件：兼容 OpenAI（开放接口）文本协议、输入 1,000 词元、最大输出
-          500 词元。优先成本策略按当前计价规则估算，实际用量决定最终费用。
+          {text(
+            ...translatedMessage(
+              "ui_estimate_openai_compatible_text_protocol_1_00_01339517",
+            ),
+          )}
         </p>
         <p>
           {!key
-            ? "请先创建密钥。"
+            ? text(...translatedMessage("ui_create_a_key_first__b063c1e6"))
             : resolved?.model
-              ? `当前候选选择：${resolved.model.name}；仅为只读估算，没有发起请求或扣费。`
-              : `不可路由：${resolved?.error ?? "无候选"}。请检查分组授权、智能入口权限或资源状态。`}
+              ? text(
+                  ...translatedMessage(
+                    "ui_current_candidate_this_is_a_read_only_estimat_da594dbd",
+                    { p0: resolved.model.name },
+                  ),
+                )
+              : text(
+                  ...translatedMessage(
+                    "ui_cannot_route_check_group_access_smart_routing_9e86a483",
+                    {
+                      p0:
+                        resolved?.error ??
+                        text(...translatedMessage("ui_no_candidates_070a0c0a")),
+                    },
+                  ),
+                )}
         </p>
         <small>
-          未启用的密钥、余额或额度不足仍会在请求执行时拒绝；此预览不代表接通上游。
+          {text(
+            ...translatedMessage(
+              "ui_disabled_keys_or_insufficient_balance_or_quot_67485bb9",
+            ),
+          )}
         </small>
       </section>
       <div className="cm-table">
         <table>
           <thead>
             <tr>
-              <th>已授权标准模型</th>
-              <th>支持协议</th>
-              <th>可用实例数</th>
-              <th>状态</th>
+              <th>
+                {text(
+                  ...translatedMessage(
+                    "ui_authorized_standard_models_fc483283",
+                  ),
+                )}
+              </th>
+              <th>
+                {text(...translatedMessage("ui_supported_protocols_a3c15a59"))}
+              </th>
+              <th>
+                {text(...translatedMessage("ui_available_instances_bff9b979"))}
+              </th>
+              <th>{text(...translatedMessage("status_dda39dcd63"))}</th>
             </tr>
           </thead>
           <tbody>
@@ -97,12 +146,23 @@ export default function ResourceRouting() {
                   {m.name}
                   <code>{m.id}</code>
                 </td>
-                <td>{m.protocols.join(" / ") || "媒体计费"}</td>
+                <td>
+                  {m.protocols.join(" / ") ||
+                    text(...translatedMessage("ui_media_billing_8e5fdbc9"))}
+                </td>
                 <td>{key && groupResources(config, key.tier, m.id).length}</td>
                 <td>
                   {resolved?.model?.id === m.id
-                    ? "当前估算选择"
-                    : "待满足请求条件"}
+                    ? text(
+                        ...translatedMessage(
+                          "ui_current_estimated_selection_073f8f40",
+                        ),
+                      )
+                    : text(
+                        ...translatedMessage(
+                          "ui_request_requirements_pending_7c76a84a",
+                        ),
+                      )}
                 </td>
               </tr>
             ))}
@@ -110,12 +170,20 @@ export default function ResourceRouting() {
         </table>
         {!models.length && (
           <p className="cm-empty">
-            此密钥暂无可调用模型；权限或实例恢复后可继续验证。
+            {text(
+              ...translatedMessage(
+                "ui_no_callable_models_are_available_for_this_key_c766e942",
+              ),
+            )}
           </p>
         )}
       </div>
       <section className="cm-callout">
-        <h3>最近智能路由调用</h3>
+        <h3>
+          {text(
+            ...translatedMessage("ui_recent_smart_routing_requests_b3d697f2"),
+          )}
+        </h3>
         {smartRequests.slice(0, 8).map((r) => (
           <p key={r.trace_id}>
             <Link
@@ -129,23 +197,53 @@ export default function ResourceRouting() {
         ))}
         {!smartRequests.length && (
           <p>
-            还没有智能路由请求。可在客户端配置或可选调试台使用同一把密钥验证。
+            {text(
+              ...translatedMessage(
+                "ui_no_smart_routing_requests_yet_test_the_same_k_7be20bd0",
+              ),
+            )}
           </p>
         )}
       </section>
       {isAdmin(role) && (
         <details className="cm-callout">
-          <summary>高级视图 · 资源快照</summary>
+          <summary>
+            {text(
+              ...translatedMessage(
+                "ui_advanced_view_resource_snapshot_3deeaca3",
+              ),
+            )}
+          </summary>
           <p>
-            与渠道管理共用快照 <code>{config.resources?.id}</code>；当前{" "}
+            {text(
+              ...translatedMessage(
+                "ui_snapshot_shared_with_channel_management_f87c9ce7",
+              ),
+            )}
+            <code>{config.resources?.id}</code>
+            {text(...translatedMessage("ui__current_count__f2d2b631"))}{" "}
             {config.resources?.instances.length}{" "}
-            个实例。此处不维护另一份资源或路由记录。
+            {text(
+              ...translatedMessage(
+                "ui_instances_no_separate_resource_or_route_recor_e7734e9b",
+              ),
+            )}
           </p>
           <p>
-            资源来自本地模拟的资源管理平台。实例状态和演示延迟不代表真实服务质量。
+            {text(
+              ...translatedMessage(
+                "ui_resources_come_from_a_local_simulation_of_the_512a7061",
+              ),
+            )}
           </p>
           <Button asChild>
-            <Link to="/console/channels">检查渠道与资源投放</Link>
+            <Link to="/console/channels">
+              {text(
+                ...translatedMessage(
+                  "ui_inspect_channels_and_resource_placement_383f0b17",
+                ),
+              )}
+            </Link>
           </Button>
         </details>
       )}

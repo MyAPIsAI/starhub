@@ -42,18 +42,7 @@ func queueProfileMail(tx *gorm.DB, user *User, kind string) error {
 	if err == gorm.ErrRecordNotFound {
 		profile = DefaultDeploymentProfile()
 	}
-	allowed := false
-	for _, lang := range profile.Languages {
-		if language == lang && (lang != "ar" || profile.Features["arabic"]) {
-			allowed = true
-		}
-	}
-	if !allowed {
-		language = profile.DefaultLanguage
-		if language == "ar" && !profile.Features["arabic"] {
-			language = "en"
-		}
-	}
+	language = effectivePolicyLanguage(localizationPolicyForProfile(profile), language)
 	return tx.Create(&TransactionalMail{UserID: user.ID, Recipient: user.Email, Language: language, Kind: kind, Status: "pending"}).Error
 }
 

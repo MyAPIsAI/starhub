@@ -359,5 +359,6 @@
   "statusHourSuccess": "نسبة النجاح في الساعة",
   "statusHourNoData": "لا توجد عينات مؤهلة لهذه الساعة؛ لا يمكن استنتاج سلامة الخدمة.",
   "statusMethodology": "قواعد القياس ومفتاح الألوان",
-  "statusAllTypes": "الكل"
+  "statusAllTypes": "الكل",
+  "languagePolicyFailed": "تعذر تحميل اللغات المتاحة. يرجى إعادة المحاولة."
 }

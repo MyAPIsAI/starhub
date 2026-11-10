@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import { examplePricingAttributes } from "../lib/pricing-rules";
 import {
   modelCatalog,
@@ -37,9 +38,15 @@ export const smartDirectoryModel: DirectoryModel = {
     )
     .map((model) => model.id),
   description: {
-    zh: "智能路由入口：在当前密钥授权、服务分组与请求能力范围内，按估算费用选择候选模型。",
-    en: "Smart routing entry: choose an eligible model by estimated cost within key authorization, service group, and request capabilities.",
-    ar: "مدخل توجيه ذكي يختار نموذجًا مؤهلاً وفق التكلفة المقدرة ضمن صلاحيات المفتاح والمجموعة وقدرات الطلب.",
+    zh: translatedMessage(
+      "ui_smart_routing_entry_choose_an_eligible_model__78c4c1cd",
+    )[0],
+    en: translatedMessage(
+      "ui_smart_routing_entry_choose_an_eligible_model__78c4c1cd",
+    )[1],
+    ar: translatedMessage(
+      "ui_smart_routing_entry_choose_an_eligible_model__78c4c1cd",
+    )[2],
   },
 };
 export const directoryModels: DirectoryModel[] = [

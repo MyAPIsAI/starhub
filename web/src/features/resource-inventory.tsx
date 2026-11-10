@@ -706,7 +706,9 @@ function ResourceInventoryView() {
                 JSON
                 <textarea
                   dir="ltr"
-                  aria-label="Snapshot JSON"
+                  aria-label={text(
+                    ...translatedMessage("resource_snapshot_json_label"),
+                  )}
                   value={draft.json}
                   onChange={(e) =>
                     setDraft({

@@ -2,15 +2,70 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"starhub/common"
 	"starhub/model"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestDisabledArabicUsesEnglishForExistingAccountsAndMail(t *testing.T) {
+	for _, defaultLanguage := range []string{"en", "zh", "ar"} {
+		t.Run(defaultLanguage, func(t *testing.T) {
+			newTestDB(t)
+			owner := newUser(t, "arabic-owner", common.RoleUser, 0)
+			if err := model.DB.Model(owner).Updates(map[string]any{"preferred_language": "ar", "email": "owner@example.test"}).Error; err != nil {
+				t.Fatal(err)
+			}
+			profile := model.DefaultDeploymentProfile()
+			profile.DefaultLanguage = defaultLanguage
+			profile.Features["arabic"] = false
+			version, err := model.SaveDeploymentProfile(t.Context(), profile, 0, owner.ID, "127.0.0.1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := call(GetLocalizationPolicy, testRequest{target: "/api/localization"})
+			var body struct {
+				Data model.LocalizationPolicy `json:"data"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != 200 || slices.Contains(body.Data.Languages, "ar") || !slices.Contains(body.Data.Languages, "en") {
+				t.Fatalf("invalid disabled policy: %s / %v", response.Body, err)
+			}
+			language, err := model.EffectiveAccountLanguage(t.Context(), "ar")
+			if err != nil || language != "en" {
+				t.Fatalf("disabled Arabic resolved to %q: %v", language, err)
+			}
+			response = call(PutAccountLanguage, testRequest{method: http.MethodPut, target: "/api/user/language", userID: owner.ID, body: fmt.Sprintf(`{"expected_user_id":%d,"language":"ar"}`, owner.ID)})
+			if response.Code != 400 {
+				t.Fatal("disabled Arabic could be selected", response.Body)
+			}
+			user, _ := model.GetUserByID(owner.ID)
+			if user.PreferredLanguage != "ar" {
+				t.Fatal("disabling Arabic erased the saved preference")
+			}
+			if err := model.UpdateOwnedProfile(user, "password", user.Password); err != nil {
+				t.Fatal(err)
+			}
+			var mail model.TransactionalMail
+			if err := model.DB.First(&mail).Error; err != nil || mail.Language != "en" {
+				t.Fatalf("mail did not fall back to English: %+v / %v", mail, err)
+			}
+			profile.Features["arabic"] = true
+			if _, err := model.SaveDeploymentProfile(t.Context(), profile, version.Revision, owner.ID, "127.0.0.1"); err != nil {
+				t.Fatal(err)
+			}
+			language, err = model.EffectiveAccountLanguage(t.Context(), user.PreferredLanguage)
+			if err != nil || language != "ar" {
+				t.Fatal("reenabling Arabic lost the saved language", err)
+			}
+		})
+	}
+}
 
 func TestAccountLanguagePersistsAndLocalizesTransactionalMail(t *testing.T) {
 	newTestDB(t)

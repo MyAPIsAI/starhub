@@ -1,5 +1,5 @@
-import { ResponsiveTable } from "../components/responsive-table";
 import { message as translatedMessage } from "../i18n/messages";
+import { ResponsiveTable } from "../components/responsive-table";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -622,15 +622,13 @@ export default function ServiceQuality({
           </h1>
           <p>
             {text(
-              selectedId
-                ? "以下指标仅属于当前核算单元。"
-                : "按核算单元比较交付表现，进入详情查看分桶、趋势与核算结果。",
-              selectedId
-                ? "All metrics below belong to this accounting unit only."
-                : "Compare accounting units, then open details for latency buckets, trends and results.",
-              selectedId
-                ? "تخص جميع المقاييس أدناه هذه الوحدة فقط."
-                : "قارن الوحدات وافتح التفاصيل لمراجعة الحاويات والاتجاهات والنتائج.",
+              ...(selectedId
+                ? translatedMessage(
+                    "ui_all_metrics_below_belong_to_this_accounting_u_25b15950",
+                  )
+                : translatedMessage(
+                    "ui_compare_accounting_units_then_open_details_fo_7db312cf",
+                  )),
             )}
           </p>
         </div>

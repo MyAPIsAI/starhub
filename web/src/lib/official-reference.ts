@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 import type {
   OfficialPriceReference,
   PricingCatalogConfig,
@@ -17,9 +18,15 @@ const defaults: Record<string, OfficialPriceReference> = {
       },
     },
     scope: {
-      zh: "标准文本词元价格；非批处理，不含工具费。缓存读取单列，无独立缓存写入报价。",
-      en: "Standard text tokens, not batch; excludes tool fees. Cache reads are separate; no standalone cache-write quote.",
-      ar: "رموز نصية قياسية دون معالجة مجمعة أو رسوم أدوات. قراءة الذاكرة منفصلة ولا يوجد سعر مستقل لكتابتها.",
+      zh: translatedMessage(
+        "ui_standard_text_tokens_not_batch_excludes_tool__3d70dfff",
+      )[0],
+      en: translatedMessage(
+        "ui_standard_text_tokens_not_batch_excludes_tool__3d70dfff",
+      )[1],
+      ar: translatedMessage(
+        "ui_standard_text_tokens_not_batch_excludes_tool__3d70dfff",
+      )[2],
     },
     sourceUrl: "https://developers.openai.com/api/docs/models/gpt-4.1",
     verifiedAt: "2026-09-28",
@@ -37,9 +44,15 @@ const defaults: Record<string, OfficialPriceReference> = {
       },
     },
     scope: {
-      zh: "历史标准价，输入不超过 200,000 词元；缓存写入按 5 分钟。厂商直连接口已退役，非当前在售承诺；不含云渠道差异及工具费。",
-      en: "Historical standard rate for prompts up to 200,000 tokens; 5-minute cache writes. Retired from the direct provider API, not a current availability promise; cloud-channel differences and tool fees excluded.",
-      ar: "سعر قياسي تاريخي لمدخلات حتى 200,000 رمز وكتابة ذاكرة لمدة 5 دقائق. أوقف في واجهة المورد المباشرة ولا يعد بتوافر حالي؛ يستثني فروق القنوات السحابية ورسوم الأدوات.",
+      zh: translatedMessage(
+        "ui_historical_standard_rate_for_prompts_up_to_20_2ee322a3",
+      )[0],
+      en: translatedMessage(
+        "ui_historical_standard_rate_for_prompts_up_to_20_2ee322a3",
+      )[1],
+      ar: translatedMessage(
+        "ui_historical_standard_rate_for_prompts_up_to_20_2ee322a3",
+      )[2],
     },
     sourceUrl: "https://platform.claude.com/docs/en/about-claude/pricing",
     verifiedAt: "2026-09-28",
@@ -56,9 +69,15 @@ const defaults: Record<string, OfficialPriceReference> = {
       },
     },
     scope: {
-      zh: "标准付费，输入不超过 200,000 词元；输出包含思考词元。非批处理；不含缓存存储及搜索等工具费，长上下文另价。",
-      en: "Standard paid tier, prompts up to 200,000 tokens; output includes thinking tokens. Not batch; excludes cache storage and tools such as search. Longer contexts use different rates.",
-      ar: "الفئة المدفوعة القياسية لمدخلات حتى 200,000 رمز؛ يشمل الإخراج رموز التفكير. دون معالجة مجمعة أو رسوم تخزين الذاكرة وأدوات البحث. للسياقات الأطول أسعار مختلفة.",
+      zh: translatedMessage(
+        "ui_standard_paid_tier_prompts_up_to_200_000_toke_d71f236f",
+      )[0],
+      en: translatedMessage(
+        "ui_standard_paid_tier_prompts_up_to_200_000_toke_d71f236f",
+      )[1],
+      ar: translatedMessage(
+        "ui_standard_paid_tier_prompts_up_to_200_000_toke_d71f236f",
+      )[2],
     },
     sourceUrl: "https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-pro",
     verifiedAt: "2026-09-28",

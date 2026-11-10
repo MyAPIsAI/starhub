@@ -1,3 +1,4 @@
+import { localizedMessage } from "../i18n/messages";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -29,69 +30,40 @@ const routes = [
   { name: "Gemini", model: "/v1beta/models", protocol: "Gemini", symbol: "✦" },
 ];
 
-const copy = {
-  zh: {
-    title: ["一把密钥，", "连接更多可能。"],
-    intro:
-      "从你的应用出发，让模型连接变得简单。\n统一接入、灵活选择，专注下一次创造。",
-    start: "开始使用",
-    demo: "查看文档",
-    app: "你的应用",
-    idea: "从一个想法开始",
-    gateway: "统一模型网关",
-    gateNote: "协议 · 授权 · 路由",
-    choose: "选择模型协议",
-    selected: "当前协议",
-    note: "连接动效为示意，非实时请求",
-    pause: "暂停动效",
-    resume: "恢复动效",
-    reduced: "已遵循减少动态效果偏好",
-    scroll: "向下探索",
-    content: "了解平台与模型",
-    diagram: "应用经统一网关连接三种模型协议",
-  },
-  en: {
-    title: ["One key.", "More possibilities."],
-    intro:
-      "From your application to your next great idea.\nOne gateway. Familiar protocols. Room to build.",
-    start: "Start building",
-    demo: "View documentation",
-    app: "Your application",
-    idea: "It starts with an idea",
-    gateway: "One model gateway",
-    gateNote: "Protocols · Access · Routing",
-    choose: "Choose a model protocol",
-    selected: "Selected protocol",
-    note: "Illustrative flow, not a live request",
-    pause: "Pause motion",
-    resume: "Resume motion",
-    reduced: "Reduced motion enabled",
-    scroll: "Scroll to explore",
-    content: "Explore the platform and models",
-    diagram:
-      "An application connects to three model protocols through one gateway",
-  },
-  ar: {
-    title: ["مفتاح واحد.", "إمكانيات أكثر."],
-    intro:
-      "من تطبيقك إلى فكرتك القادمة.\nبوابة واحدة وبروتوكولات مألوفة ومساحة للإبداع.",
-    start: "ابدأ الاستخدام",
-    demo: "عرض الوثائق",
-    app: "تطبيقك",
-    idea: "كل شيء يبدأ بفكرة",
-    gateway: "بوابة نماذج موحدة",
-    gateNote: "بروتوكولات · صلاحيات · توجيه",
-    choose: "اختر بروتوكول النموذج",
-    selected: "البروتوكول المختار",
-    note: "رسم توضيحي وليس طلباً مباشراً",
-    pause: "إيقاف الحركة",
-    resume: "استئناف الحركة",
-    reduced: "تقليل الحركة مفعّل",
-    scroll: "مرر للاستكشاف",
-    content: "استكشف المنصة والنماذج",
-    diagram: "تطبيق يتصل بثلاثة بروتوكولات عبر بوابة واحدة",
-  },
-};
+const copy = (language: string) => ({
+  title: [
+    localizedMessage("ui_one_key__5e44746f", language),
+    localizedMessage("ui_more_possibilities__c5b3debc", language),
+  ],
+  intro: localizedMessage(
+    "ui_from_your_application_to_your_next_great_idea_a808565b",
+    language,
+  ),
+  start: localizedMessage("ui_start_building_7a27745d", language),
+  demo: localizedMessage("ui_view_documentation_25b1b737", language),
+  app: localizedMessage("ui_your_application_33cb3ed8", language),
+  idea: localizedMessage("ui_it_starts_with_an_idea_911197b8", language),
+  gateway: localizedMessage("ui_one_model_gateway_b01b80d6", language),
+  gateNote: localizedMessage("ui_protocols_access_routing_2fc3d7b4", language),
+  choose: localizedMessage("ui_choose_a_model_protocol_e84c61be", language),
+  selected: localizedMessage("ui_selected_protocol_491fae9b", language),
+  note: localizedMessage(
+    "ui_illustrative_flow_not_a_live_request_15b44b2b",
+    language,
+  ),
+  pause: localizedMessage("ui_pause_motion_fef373f0", language),
+  resume: localizedMessage("ui_resume_motion_6ffde64e", language),
+  reduced: localizedMessage("ui_reduced_motion_enabled_cfec3a56", language),
+  scroll: localizedMessage("ui_scroll_to_explore_33610305", language),
+  content: localizedMessage(
+    "ui_explore_the_platform_and_models_c2b13bba",
+    language,
+  ),
+  diagram: localizedMessage(
+    "ui_an_application_connects_to_three_model_protoc_f6001cba",
+    language,
+  ),
+});
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const smooth = (value: number) => {
@@ -157,7 +129,7 @@ export function HomePortal({
   language: Language;
   children: ReactNode;
 }) {
-  const c = copy[writtenLanguage(language)];
+  const c = copy(writtenLanguage(language));
   const root = useRef<HTMLDivElement>(null);
   const scene = useRef<HTMLElement>(null);
   const sticky = useRef<HTMLDivElement>(null);

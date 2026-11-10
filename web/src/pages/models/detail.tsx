@@ -1,5 +1,6 @@
-import { PublicModelContent } from "./public-detail";
 import { message as translatedMessage } from "../../i18n/messages";
+import { PublicModelContent } from "./public-detail";
+
 import { useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import {
@@ -176,7 +177,7 @@ export default function ModelDetail() {
                 <h1>
                   {model.name}
                   {lang === "zh" && model.kind === "smart"
-                    ? "（智能路由）"
+                    ? text(...translatedMessage("ui__smart_routing__a3cac924"))
                     : ""}
                 </h1>
                 <ModelIdCopy id={model.id} />
@@ -527,21 +528,15 @@ export default function ModelDetail() {
                           </strong>
                           <span>
                             {text(
-                              price.rates.every(
+                              ...(price.rates.every(
                                 (rate) => rate.rule.mode === "tokens",
                               )
-                                ? "每次模拟请求估算：普通输入 1,000 + 输出 300 词元，不含缓存。报价失败的候选不计入区间；具体原因见下表。下方仅含支持客户端协议的文本候选，实际范围还需满足密钥白名单及请求能力。"
-                                : "候选采用不同计价规则；区间按下方各自示例用量估算，不是统一词元单价。报价失败候选未计入区间；实际仍受密钥授权、协议和能力约束。",
-                              price.rates.every(
-                                (rate) => rate.rule.mode === "tokens",
-                              )
-                                ? "Estimate per request: 1,000 uncached input + 300 output tokens, no cache. Candidates below are further limited by the key allowlist and request capabilities."
-                                : "Candidates use different pricing rules and the example usage shown below. This is not a common token unit rate. Failed quotes are excluded; key permissions, protocols and capabilities still apply.",
-                              price.rates.every(
-                                (rate) => rate.rule.mode === "tokens",
-                              )
-                                ? "تقدير لكل طلب: 1000 رمز إدخال + 300 إخراج بلا تخزين. تخضع القائمة لصلاحيات المفتاح وقدرات الطلب."
-                                : "للمرشحين قواعد فوترة واستخدام أمثلة مختلفة كما هو مبين أدناه، وليس سعرا موحدا للرموز. تستثنى عروض الأسعار الفاشلة وتبقى قيود المفتاح والبروتوكولات والقدرات.",
+                                ? translatedMessage(
+                                    "ui_estimate_per_request_1_000_uncached_input_300_c090fa23",
+                                  )
+                                : translatedMessage(
+                                    "ui_candidates_use_different_pricing_rules_and_th_62cac442",
+                                  )),
                             )}
                           </span>
                         </div>

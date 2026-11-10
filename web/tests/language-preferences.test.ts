@@ -78,13 +78,62 @@ describe("M9 language selection", () => {
     setLanguagePortal(false);
     expect(usePreferences.getState().language).toBe("ar");
   });
-  it("falls back when the region disables a stored language", async () => {
-    bindAccountLanguage({ id: 1, preferred_language: "ar" });
+  it.each(["en", "zh"] as const)(
+    "falls back to English when Arabic is disabled with %s as the default",
+    async (defaultLanguage) => {
+      bindAccountLanguage({ id: 1, preferred_language: "ar" });
+      fake.get.mockResolvedValueOnce({
+        default_language: defaultLanguage,
+        languages: ["en", "zh"],
+      });
+      await refreshLanguagePolicy();
+      expect(usePreferences.getState().language).toBe("en");
+      expect(usePreferences.getState().languages).toEqual(["en", "zh"]);
+      await usePreferences.getState().setLanguage("ar");
+      expect(usePreferences.getState().language).toBe("en");
+      fake.get.mockResolvedValueOnce({
+        default_language: defaultLanguage,
+        languages: ["en", "zh", "ar"],
+      });
+      await refreshLanguagePolicy();
+      expect(usePreferences.getState().language).toBe("ar");
+    },
+  );
+  it("retains the regional default for a visitor without a saved Arabic preference", async () => {
     fake.get.mockResolvedValueOnce({
-      default_language: "en",
+      default_language: "zh",
+      languages: ["en", "zh"],
+    });
+    await refreshLanguagePolicy();
+    expect(usePreferences.getState().language).toBe("zh");
+  });
+  it("falls back for a saved device preference without overwriting it", async () => {
+    localStorage.setItem("xy-language", "ar");
+    fake.get.mockResolvedValueOnce({
+      default_language: "zh",
       languages: ["en", "zh"],
     });
     await refreshLanguagePolicy();
     expect(usePreferences.getState().language).toBe("en");
+    expect(localStorage.getItem("xy-language")).toBe("ar");
+  });
+  it("ignores an older policy response that would restore disabled Arabic", async () => {
+    bindAccountLanguage({ id: 1, preferred_language: "ar" });
+    let finish!: (value: unknown) => void;
+    fake.get.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const older = refreshLanguagePolicy();
+    fake.get.mockResolvedValueOnce({
+      default_language: "zh",
+      languages: ["en", "zh"],
+    });
+    await refreshLanguagePolicy();
+    finish({ default_language: "en", languages: ["en", "zh", "ar"] });
+    await older;
+    expect(usePreferences.getState().language).toBe("en");
+    expect(usePreferences.getState().languages).toEqual(["en", "zh"]);
   });
 });

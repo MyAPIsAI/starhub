@@ -19,7 +19,7 @@ import { Button } from "./ui/button";
 import { Select } from "./ui/primitives";
 import { Modal } from "./ui/overlay";
 import { BrandMark } from "./brand";
-import { usePreferences } from "../lib/preferences";
+import { usePreferences, refreshLanguagePolicy } from "../lib/preferences";
 import { useSessionRestore } from "../lib/session-restore";
 import { CodeExample } from "../features/code-example";
 import { type Language } from "../config/placeholders";
@@ -214,6 +214,34 @@ export function PublicHeader() {
 }
 export function Preferences() {
   const { t } = useTranslation();
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policyError, setPolicyError] = useState(false);
+  const menuRequest = useRef(0);
+  useEffect(
+    () => () => {
+      menuRequest.current++;
+    },
+    [],
+  );
+  const openLanguageMenu = async (open: boolean) => {
+    const request = ++menuRequest.current;
+    setLanguageOpen(false);
+    if (!open) {
+      setPolicyLoading(false);
+      return;
+    }
+    setPolicyLoading(true);
+    setPolicyError(false);
+    try {
+      await refreshLanguagePolicy();
+      if (request === menuRequest.current) setLanguageOpen(true);
+    } catch {
+      if (request === menuRequest.current) setPolicyError(true);
+    } finally {
+      if (request === menuRequest.current) setPolicyLoading(false);
+    }
+  };
   const {
     language,
     languages,
@@ -228,17 +256,20 @@ export function Preferences() {
       <Select
         label={t("language")}
         value={language}
-        disabled={languageSaving}
+        disabled={languageSaving || policyLoading}
+        open={languageOpen}
+        onOpenChange={(open) => void openLanguageMenu(open)}
         onChange={(v) => setLanguage(v as Language)}
         options={[
-          { value: "en", label: "English" },
-          { value: "zh", label: "中文" },
-          { value: "ar", label: "العربية" },
+          { value: "en", label: translatedMessage("ui_english_ce10e061")[1] },
+          { value: "zh", label: translatedMessage("ui_english_ce10e061")[0] },
+          { value: "ar", label: translatedMessage("ui_english_ce10e061")[2] },
         ].filter((option) =>
           languages.includes(option.value as "en" | "zh" | "ar"),
         )}
       />
       {languageError && <span role="alert">{t("languageSaveFailed")}</span>}
+      {policyError && <span role="alert">{t("languagePolicyFailed")}</span>}
       <Button
         variant="ghost"
         size="icon"

@@ -1,3 +1,4 @@
+import { message as translatedMessage } from "../i18n/messages";
 // All provisional product choices are centralized here. No live endpoints or secrets.
 export const placeholders = {
   brand: {
@@ -17,7 +18,11 @@ export const placeholders = {
     {
       id: "ultra",
       grade: 10,
-      name: { en: "Ultra", zh: "Ultra（旗舰）", ar: "ألترا" },
+      name: {
+        en: translatedMessage("ui_ultra_c53348c4")[1],
+        zh: translatedMessage("ui_ultra_c53348c4")[0],
+        ar: translatedMessage("ui_ultra_c53348c4")[2],
+      },
       multiplier: "1.0000",
       success: "99.5",
       p95: 800,
@@ -26,7 +31,11 @@ export const placeholders = {
     {
       id: "pro",
       grade: 8,
-      name: { en: "Pro", zh: "Pro（专业）", ar: "برو" },
+      name: {
+        en: translatedMessage("ui_pro_b9ce22e1")[1],
+        zh: translatedMessage("ui_pro_b9ce22e1")[0],
+        ar: translatedMessage("ui_pro_b9ce22e1")[2],
+      },
       multiplier: "0.8000",
       success: "99.0",
       p95: 1500,
@@ -35,7 +44,11 @@ export const placeholders = {
     {
       id: "standard",
       grade: 6,
-      name: { en: "Standard", zh: "Standard（标准）", ar: "قياسي" },
+      name: {
+        en: translatedMessage("ui_standard_3a68c577")[1],
+        zh: translatedMessage("ui_standard_3a68c577")[0],
+        ar: translatedMessage("ui_standard_3a68c577")[2],
+      },
       multiplier: "0.6000",
       success: "97.5",
       p95: 3000,
@@ -44,7 +57,11 @@ export const placeholders = {
     {
       id: "lite",
       grade: 4,
-      name: { en: "Lite", zh: "Lite（轻量）", ar: "لايت" },
+      name: {
+        en: translatedMessage("ui_lite_c5c821f6")[1],
+        zh: translatedMessage("ui_lite_c5c821f6")[0],
+        ar: translatedMessage("ui_lite_c5c821f6")[2],
+      },
       multiplier: "0.4000",
       success: "97.5",
       p95: 3000,

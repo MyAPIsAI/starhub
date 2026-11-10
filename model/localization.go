@@ -15,17 +15,22 @@ func ReadLocalizationPolicy(ctx context.Context) (LocalizationPolicy, error) {
 	if err != nil {
 		return LocalizationPolicy{}, err
 	}
-	policy := LocalizationPolicy{DefaultLanguage: profile.Profile.DefaultLanguage, Languages: []string{}}
-	for _, lang := range profile.Profile.Languages {
-		if lang == "ar" && !profile.Profile.Features["arabic"] {
+	return localizationPolicyForProfile(profile.Profile), nil
+}
+
+func localizationPolicyForProfile(profile DeploymentProfile) LocalizationPolicy {
+	policy := LocalizationPolicy{DefaultLanguage: profile.DefaultLanguage, Languages: []string{}}
+	for _, lang := range profile.Languages {
+		if lang == "ar" && !profile.Features["arabic"] {
 			continue
 		}
 		if slices.Contains([]string{"en", "zh", "ar"}, lang) {
 			policy.Languages = append(policy.Languages, lang)
 		}
 	}
-	if len(policy.Languages) == 0 {
-		policy.Languages = []string{"en"}
+	// English remains available for accounts whose Arabic preference is disabled.
+	if !slices.Contains(policy.Languages, "ar") && !slices.Contains(policy.Languages, "en") {
+		policy.Languages = append([]string{"en"}, policy.Languages...)
 	}
 	if !slices.Contains(policy.Languages, policy.DefaultLanguage) {
 		policy.DefaultLanguage = policy.Languages[0]
@@ -33,7 +38,17 @@ func ReadLocalizationPolicy(ctx context.Context) (LocalizationPolicy, error) {
 			policy.DefaultLanguage = "en"
 		}
 	}
-	return policy, nil
+	return policy
+}
+
+func effectivePolicyLanguage(policy LocalizationPolicy, language string) string {
+	if slices.Contains(policy.Languages, language) {
+		return language
+	}
+	if language == "ar" {
+		return "en"
+	}
+	return policy.DefaultLanguage
 }
 
 func EffectiveAccountLanguage(ctx context.Context, language string) (string, error) {
@@ -41,8 +56,5 @@ func EffectiveAccountLanguage(ctx context.Context, language string) (string, err
 	if err != nil {
 		return "", err
 	}
-	if slices.Contains(policy.Languages, language) {
-		return language, nil
-	}
-	return policy.DefaultLanguage, nil
+	return effectivePolicyLanguage(policy, language), nil
 }

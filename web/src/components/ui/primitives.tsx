@@ -55,6 +55,8 @@ export function Select({
   label,
   id,
   disabled,
+  open,
+  onOpenChange,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -62,11 +64,15 @@ export function Select({
   label: string;
   id?: string;
   disabled?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const rtl = usePreferences((s) => s.language === "ar");
   return (
     <SelectPrimitive.Root
       disabled={disabled}
+      open={open}
+      onOpenChange={onOpenChange}
       value={value}
       onValueChange={onChange}
       dir={rtl ? "rtl" : "ltr"}
