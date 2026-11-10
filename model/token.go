@@ -15,7 +15,12 @@ var ErrTokenLimitExceeded = errors.New("account has reached the maximum number o
 
 // AllowsSmartRouting describes existing routing semantics, not an extra grant.
 // Virtual-only allowlists cannot authorize any actual upstream model.
+// SmartAccess, when explicitly set to false, disables smart routing for
+// this token regardless of model authorization.
 func (t *Token) AllowsSmartRouting() bool {
+	if t.SmartAccess != nil && !*t.SmartAccess {
+		return false
+	}
 	if t.ModelLimits == "" {
 		return true
 	}
@@ -48,8 +53,14 @@ type Token struct {
 	// AutoGroups is a comma-separated group sequence tried in order when the
 	// token's group is "auto" (cheapest-first, degrade to pricier on failure).
 	AutoGroups string `gorm:"size:512;not null;default:''" json:"auto_groups"`
-	CreatedAt  int64  `gorm:"autoCreateTime" json:"created_at"`
-	Revision   int64  `gorm:"not null;default:0" json:"management_version"`
+	// SmartAccess is an independent flag controlling whether the token may
+	// use the smart routing entry (myapis-auto/veyra-auto). When false, the
+	// token can only call explicitly authorized models even if the group
+	// supports smart routing. When true (the default for backward compat),
+	// smart routing is allowed if the token also has model authorization.
+	SmartAccess *bool `gorm:"default:null" json:"smart_access,omitempty"`
+	CreatedAt   int64 `gorm:"autoCreateTime" json:"created_at"`
+	Revision    int64 `gorm:"not null;default:0" json:"management_version"`
 }
 
 // MaxTokensPerUser is the maximum number of API keys a single account may own.
