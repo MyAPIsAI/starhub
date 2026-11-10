@@ -3,7 +3,6 @@ package model
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -42,13 +41,13 @@ func AdjustUserQuota(userID int64, amount int64, expectedQuota int64, actorID in
 			Update("quota", newQuota).Error; err != nil {
 			return err
 		}
-		// Write ledger entry.
+		// Write ledger entry with actor attribution.
 		entry = LedgerEntry{
 			UserID:        userID,
 			Type:          "adjustment",
 			Amount:        amount,
 			BalanceAfter:  newQuota,
-			Description:   reason,
+			Description:   fmt.Sprintf("by admin %d: %s", actorID, reason),
 			FundingSource: FundingSourceLegacyUnverified,
 		}
 		return tx.Create(&entry).Error
@@ -58,6 +57,3 @@ func AdjustUserQuota(userID int64, amount int64, expectedQuota int64, actorID in
 	}
 	return &entry, nil
 }
-
-// _ keeps time imported for future use.
-var _ = time.Now
