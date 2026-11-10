@@ -12,6 +12,7 @@ import (
 
 var ErrTokenNotFound = errors.New("token not found")
 var ErrTokenLimitExceeded = errors.New("account has reached the maximum number of API keys (200)")
+var ErrTokenKeyGeneration = errors.New("failed to generate a unique key after 3 attempts")
 
 // AllowsSmartRouting describes existing routing semantics, not an extra grant.
 // Virtual-only allowlists cannot authorize any actual upstream model.
@@ -67,32 +68,33 @@ type Token struct {
 const MaxTokensPerUser = 200
 
 func InsertToken(t *Token) error {
-	var err error
-	// Check per-account key limit before attempting creation.
-	var count int64
-	if err := DB.Model(&Token{}).Where("user_id = ?", t.UserID).Count(&count).Error; err != nil {
-		return err
-	}
-	if count >= MaxTokensPerUser {
-		return ErrTokenLimitExceeded
-	}
-	for i := 0; i < 3; i++ {
-		plaintext := common.GenerateTokenKey()
-		t.KeyHash = common.HashKey(plaintext)
-		encrypted, encErr := common.Encrypt(plaintext)
-		if encErr != nil {
-			return encErr
-		}
-		t.Key = encrypted
-		err = DB.Create(t).Error
-		if err == nil {
-			return nil
-		}
-		if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+	// Check per-account key limit inside a transaction to avoid TOCTOU race.
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&Token{}).Where("user_id = ?", t.UserID).Count(&count).Error; err != nil {
 			return err
 		}
-	}
-	return err
+		if count >= MaxTokensPerUser {
+			return ErrTokenLimitExceeded
+		}
+		for i := 0; i < 3; i++ {
+			plaintext := common.GenerateTokenKey()
+			t.KeyHash = common.HashKey(plaintext)
+			encrypted, encErr := common.Encrypt(plaintext)
+			if encErr != nil {
+				return encErr
+			}
+			t.Key = encrypted
+			err := tx.Create(t).Error
+			if err == nil {
+				return nil
+			}
+			if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				return err
+			}
+		}
+		return errors.New("failed to generate a unique key after 3 attempts")
+	})
 }
 
 func GetTokenByKey(key string) (*Token, error) {
