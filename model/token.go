@@ -10,6 +10,7 @@ import (
 )
 
 var ErrTokenNotFound = errors.New("token not found")
+var ErrTokenLimitExceeded = errors.New("account has reached the maximum number of API keys (200)")
 
 // AllowsSmartRouting describes existing routing semantics, not an extra grant.
 // Virtual-only allowlists cannot authorize any actual upstream model.
@@ -29,7 +30,7 @@ type Token struct {
 	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID         int64  `gorm:"index;not null" json:"user_id"`
 	Name           string `gorm:"size:64;not null;default:''" json:"name"`
-	Key            string `gorm:"uniqueIndex;size:256;not null" json:"-"` // encrypted ciphertext or legacy plaintext
+	Key            string `gorm:"uniqueIndex;size:256;not null" json:"-"`           // encrypted ciphertext or legacy plaintext
 	KeyHash        string `gorm:"uniqueIndex;size:64;not null;default:''" json:"-"` // HMAC-SHA256 for lookup
 	Status         int    `gorm:"not null;default:1" json:"status"`
 	Group          string `gorm:"column:group;size:64;not null;default:''" json:"group"`
@@ -50,8 +51,19 @@ type Token struct {
 	Revision   int64  `gorm:"not null;default:0" json:"management_version"`
 }
 
+// MaxTokensPerUser is the maximum number of API keys a single account may own.
+const MaxTokensPerUser = 200
+
 func InsertToken(t *Token) error {
 	var err error
+	// Check per-account key limit before attempting creation.
+	var count int64
+	if err := DB.Model(&Token{}).Where("user_id = ?", t.UserID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count >= MaxTokensPerUser {
+		return ErrTokenLimitExceeded
+	}
 	for i := 0; i < 3; i++ {
 		plaintext := common.GenerateTokenKey()
 		t.KeyHash = common.HashKey(plaintext)

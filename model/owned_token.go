@@ -136,6 +136,16 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 		if choices.Revision != choiceRevision {
 			return ErrOwnedTokenConflict
 		}
+		// Enforce per-account key creation limit.
+		if action == "create" {
+			var tokenCount int64
+			if err := tx.Model(&Token{}).Where("user_id = ?", owner).Count(&tokenCount).Error; err != nil {
+				return err
+			}
+			if tokenCount >= MaxTokensPerUser {
+				return ErrTokenLimitExceeded
+			}
+		}
 		if action != "create" {
 			if err := tx.First(&result, "id = ? AND user_id = ?", id, owner).Error; err != nil {
 				return ErrOwnedTokenConflict
