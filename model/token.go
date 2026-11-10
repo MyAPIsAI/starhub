@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"net"
 	"strings"
 
 	"gorm.io/gorm"
@@ -217,15 +218,35 @@ func (t *Token) AllowsModel(model string) bool {
 }
 
 // AllowsIP reports whether the token may be used from the IP (AllowIps empty
-// means every IP is allowed).
+// means every IP is allowed). Supports CIDR notation (e.g. 10.0.0.0/8) and
+// bare IP addresses. Invalid CIDR entries are treated as exact string matches
+// for backward compatibility.
 func (t *Token) AllowsIP(ip string) bool {
 	ips := t.AllowIPList()
 	if len(ips) == 0 {
 		return true
 	}
-	for _, allowed := range ips {
-		if allowed == ip {
+	parsedIP := net.ParseIP(ip)
+	for _, entry := range ips {
+		entry = strings.TrimSpace(entry)
+		if entry == ip {
 			return true
+		}
+		// Try CIDR match.
+		if strings.Contains(entry, "/") {
+			if _, cidr, err := net.ParseCIDR(entry); err == nil {
+				if parsedIP != nil && cidr.Contains(parsedIP) {
+					return true
+				}
+			}
+		} else {
+			// Bare IP — exact match (already checked above, but handle
+			// IPv4-mapped IPv6 normalization).
+			if parsed := net.ParseIP(entry); parsed != nil && parsedIP != nil {
+				if parsed.Equal(parsedIP) {
+					return true
+				}
+			}
 		}
 	}
 	return false
