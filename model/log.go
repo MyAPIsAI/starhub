@@ -24,8 +24,13 @@ type Log struct {
 	DurationMs int64 `gorm:"not null;default:0;index:idx_logs_quality_window,priority:3" json:"duration_ms"`
 	// Status is 1=success, 2=failed, 3=cancelled, independent of charge. Defaults to
 	// 1 so existing log insertion code that omits the field is correct.
-	Status    int   `gorm:"not null;default:1;index:idx_logs_quality_window,priority:4" json:"status"`
-	CreatedAt int64 `gorm:"index;autoCreateTime;index:idx_logs_quality_window,priority:1;index:idx_logs_quality_model,priority:2" json:"created_at"`
+	Status int `gorm:"not null;default:1;index:idx_logs_quality_window,priority:4" json:"status"`
+	// AdmissionDay is the UTC date (unix midnight) when the request was
+	// admitted (pre-charged), used for cross-day settlement attribution.
+	// Streaming requests that span midnight are attributed to the admission
+	// day, not the completion day. Zero means legacy logs without admission day.
+	AdmissionDay int64 `gorm:"not null;default:0;index" json:"admission_day"`
+	CreatedAt    int64 `gorm:"index;autoCreateTime;index:idx_logs_quality_window,priority:1;index:idx_logs_quality_model,priority:2" json:"created_at"`
 }
 
 func InsertLog(l *Log) error {
