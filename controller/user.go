@@ -324,6 +324,7 @@ type userUpdateRequest struct {
 	Group         *string `json:"group"`
 	Password      *string `json:"password"`
 	ExpectedQuota *int64  `json:"expected_quota"`
+	Reason        string  `json:"reason"`
 }
 
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -335,11 +336,15 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "user id is required")
 		return
 	}
-	if _, err := model.GetUserByID(req.ID); err != nil {
+	user, err := model.GetUserByID(req.ID)
+	if err != nil {
 		common.ApiError(w, http.StatusNotFound, "user not found")
 		return
 	}
 	fields := map[string]any{}
+	// Quota changes go through AdjustUserQuota so they write a LedgerEntry
+	// with actor attribution and optimistic-concurrency guard. Other
+	// fields (status, group, password) still use UpdateUserFieldsWithQuota.
 	if req.Quota != nil {
 		if *req.Quota < 0 {
 			common.ApiError(w, http.StatusBadRequest, "quota must be >= 0")
@@ -349,7 +354,22 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, http.StatusBadRequest, "expected_quota is required when setting a balance")
 			return
 		}
-		fields["quota"] = *req.Quota
+		delta := *req.Quota - user.Quota
+		if delta != 0 {
+			reason := strings.TrimSpace(req.Reason)
+			if reason == "" {
+				common.ApiError(w, http.StatusBadRequest, "reason is required when adjusting quota")
+				return
+			}
+			if _, err := model.AdjustUserQuota(req.ID, delta, *req.ExpectedQuota, requestUserID(r), reason); err != nil {
+				if err == model.ErrAdjustmentConflict {
+					common.ApiError(w, http.StatusConflict, "balance changed; reload and confirm again")
+					return
+				}
+				common.ApiError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
 	}
 	if req.Status != nil {
 		if req.ID == requestUserID(r) && *req.Status != common.StatusEnabled {
@@ -381,17 +401,29 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		fields["password"] = hashed
 	}
-	if len(fields) == 0 {
+	// When quota was adjusted via AdjustUserQuota, other field updates may
+	// be empty (quota-only update). Skip the "nothing to update" guard in
+	// that case, and pass nil expectedQuota to UpdateUserFieldsWithQuota so
+	// it does not re-check the quota guard (already done by AdjustUserQuota).
+	var fieldsExpectedQuota *int64
+	if req.Quota != nil {
+		fieldsExpectedQuota = nil
+	} else {
+		fieldsExpectedQuota = req.ExpectedQuota
+	}
+	if len(fields) == 0 && req.Quota == nil {
 		common.ApiError(w, http.StatusBadRequest, "nothing to update")
 		return
 	}
-	if err := model.UpdateUserFieldsWithQuota(req.ID, fields, req.ExpectedQuota); err != nil {
-		if err == model.ErrQuotaConflict {
-			common.ApiError(w, http.StatusConflict, "balance changed; reload and confirm again")
+	if len(fields) > 0 {
+		if err := model.UpdateUserFieldsWithQuota(req.ID, fields, fieldsExpectedQuota); err != nil {
+			if err == model.ErrQuotaConflict {
+				common.ApiError(w, http.StatusConflict, "balance changed; reload and confirm again")
+				return
+			}
+			common.ApiError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		common.ApiError(w, http.StatusInternalServerError, err.Error())
-		return
 	}
 	// When the user is disabled, revoke all their sessions so active
 	// sessions cannot continue to make relay calls.

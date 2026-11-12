@@ -484,7 +484,7 @@ func TestUpdateUserAppliesFields(t *testing.T) {
 	rr := call(UpdateUser, testRequest{
 		method: http.MethodPut,
 		target: "/api/user",
-		body: fmt.Sprintf(`{"id":%s,"quota":500,"expected_quota":100,"status":%d,"group":%q,"password":"newpassword"}`,
+		body: fmt.Sprintf(`{"id":%s,"quota":500,"expected_quota":100,"status":%d,"group":%q,"password":"newpassword","reason":"admin top-up"}`,
 			itoa(u.ID), common.StatusDisabled, common.DefaultGroup),
 		userID: 1,
 		role:   common.RoleAdmin,
@@ -511,6 +511,57 @@ func TestUpdateUserAppliesFields(t *testing.T) {
 	if common.VerifyPassword("secret", got.Password) {
 		t.Fatal("the old password still verifies")
 	}
+}
+
+func TestUpdateUserQuotaWritesLedger(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 100)
+
+	rr := call(UpdateUser, testRequest{
+		method: http.MethodPut,
+		target: "/api/user",
+		body: fmt.Sprintf(`{"id":%s,"quota":500,"expected_quota":100,"reason":"admin credit"}`,
+			itoa(u.ID)),
+		userID: 1,
+		role:   common.RoleAdmin,
+	})
+	expectStatus(t, rr, http.StatusOK)
+
+	got, err := model.GetUserByID(u.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID failed: %v", err)
+	}
+	if got.Quota != 500 {
+		t.Fatalf("quota = %d, want 500", got.Quota)
+	}
+	entries, err := model.ListLedger(u.ID)
+	if err != nil {
+		t.Fatalf("ListLedgerEntries failed: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 ledger entry, got %d", len(entries))
+	}
+	if entries[0].Amount != 400 {
+		t.Fatalf("ledger amount = %d, want 400", entries[0].Amount)
+	}
+	if entries[0].Type != "adjustment" {
+		t.Fatalf("ledger type = %q, want adjustment", entries[0].Type)
+	}
+}
+
+func TestUpdateUserQuotaRequiresReason(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "alice", common.RoleUser, 100)
+
+	rr := call(UpdateUser, testRequest{
+		method: http.MethodPut,
+		target: "/api/user",
+		body: fmt.Sprintf(`{"id":%s,"quota":500,"expected_quota":100}`,
+			itoa(u.ID)),
+		userID: 1,
+		role:   common.RoleAdmin,
+	})
+	expectStatus(t, rr, http.StatusBadRequest)
 }
 
 func TestListUsersHidesPasswords(t *testing.T) {
