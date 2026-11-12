@@ -1,5 +1,19 @@
 package model
 
+import "time"
+
+// admissionDayColumn is a SQL expression that resolves to the effective
+// day for grouping. Logs written after T30 populate admission_day with
+// the UTC midnight of the admission (pre-charge) time; legacy logs with
+// admission_day == 0 fall back to created_at (completion time).
+const admissionDayColumn = "CASE WHEN admission_day > 0 THEN admission_day ELSE created_at END"
+
+// utcMidnight returns the Unix timestamp of the current UTC midnight.
+func utcMidnight() int64 {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Unix()
+}
+
 type Log struct {
 	UsageSource       string `gorm:"size:32;not null;default:''" json:"usage_source,omitempty"`
 	ID                int64  `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -40,6 +54,9 @@ type Log struct {
 }
 
 func InsertLog(l *Log) error {
+	if l.AdmissionDay == 0 {
+		l.AdmissionDay = utcMidnight()
+	}
 	return DB.Create(l).Error
 }
 
@@ -54,6 +71,9 @@ func InsertFailedLog(l *Log) error {
 	l.Status = 2 // failed
 	l.Quota = 0
 	l.UnfundedQuota = 0
+	if l.AdmissionDay == 0 {
+		l.AdmissionDay = utcMidnight()
+	}
 	return DB.Create(l).Error
 }
 
@@ -80,17 +100,17 @@ func CountLogs(userID int64) (int64, error) {
 
 func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
 	q := DB.Model(&Log{}).
-		Select("date(created_at, 'unixepoch') AS date, COUNT(*) AS requests, "+
-			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, "+
-			"SUM(completion_tokens) AS completion_tokens, "+
-			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, "+
+		Select("date(" + admissionDayColumn + ", 'unixepoch') AS date, COUNT(*) AS requests, " +
+			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, " +
+			"SUM(completion_tokens) AS completion_tokens, " +
+			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, " +
 			"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed_count").
 		Where("created_at >= ?", since)
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)
 	}
 	rows := make([]DailyUsage, 0)
-	err := q.Group("date(created_at, 'unixepoch')").Order("date ASC").Scan(&rows).Error
+	err := q.Group("date(" + admissionDayColumn + ", 'unixepoch')").Order("date ASC").Scan(&rows).Error
 	return rows, err
 }
 
@@ -107,15 +127,15 @@ type ModelDailyUsage struct {
 // SummarizeLogsByModel returns daily usage broken down by model.
 func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) {
 	q := DB.Model(&Log{}).
-		Select("date(created_at, 'unixepoch') AS date, model AS model, "+
-			"COUNT(*) AS requests, SUM(quota) AS quota, "+
+		Select("date(" + admissionDayColumn + ", 'unixepoch') AS date, model AS model, " +
+			"COUNT(*) AS requests, SUM(quota) AS quota, " +
 			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
 		Where("created_at >= ?", since)
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)
 	}
 	var rows []ModelDailyUsage
-	err := q.Group("date(created_at, 'unixepoch'), model").Order("date ASC, model ASC").Scan(&rows).Error
+	err := q.Group("date(" + admissionDayColumn + ", 'unixepoch'), model").Order("date ASC, model ASC").Scan(&rows).Error
 	return rows, err
 }
 
@@ -137,9 +157,9 @@ type TokenDailyUsage struct {
 // token id for stable display.
 func SummarizeLogsByToken(userID int64, tokenID int64, since int64) ([]TokenDailyUsage, error) {
 	q := DB.Model(&Log{}).
-		Select("date(created_at, 'unixepoch') AS date, token_id AS token_id, "+
-			"MAX(token_name) AS token_name, "+
-			"COUNT(*) AS requests, SUM(quota) AS quota, "+
+		Select("date(" + admissionDayColumn + ", 'unixepoch') AS date, token_id AS token_id, " +
+			"MAX(token_name) AS token_name, " +
+			"COUNT(*) AS requests, SUM(quota) AS quota, " +
 			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
 		Where("created_at >= ?", since)
 	if userID > 0 {
@@ -149,7 +169,7 @@ func SummarizeLogsByToken(userID int64, tokenID int64, since int64) ([]TokenDail
 		q = q.Where("token_id = ?", tokenID)
 	}
 	var rows []TokenDailyUsage
-	err := q.Group("date(created_at, 'unixepoch'), token_id").
+	err := q.Group("date(" + admissionDayColumn + ", 'unixepoch'), token_id").
 		Order("date ASC, token_id ASC").Scan(&rows).Error
 	return rows, err
 }

@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"starhub/common"
 )
@@ -65,6 +66,34 @@ func TestAllowsIPIPv6(t *testing.T) {
 
 // Ensure common is imported.
 var _ = common.StatusEnabled
+
+func TestInsertLogSetsAdmissionDay(t *testing.T) {
+	newTestDB(t)
+	l := &Log{UserID: 1, Model: "gpt-4o", Quota: 10}
+	if err := InsertLog(l); err != nil {
+		t.Fatalf("InsertLog: %v", err)
+	}
+	if l.AdmissionDay == 0 {
+		t.Fatal("AdmissionDay should be set by InsertLog")
+	}
+	now := time.Now().UTC()
+	expected := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Unix()
+	if l.AdmissionDay != expected {
+		t.Fatalf("AdmissionDay = %d, want %d", l.AdmissionDay, expected)
+	}
+}
+
+func TestInsertLogPreservesExplicitAdmissionDay(t *testing.T) {
+	newTestDB(t)
+	custom := int64(1234567890)
+	l := &Log{UserID: 1, Model: "gpt-4o", Quota: 10, AdmissionDay: custom}
+	if err := InsertLog(l); err != nil {
+		t.Fatalf("InsertLog: %v", err)
+	}
+	if l.AdmissionDay != custom {
+		t.Fatalf("AdmissionDay = %d, want %d (should not overwrite)", l.AdmissionDay, custom)
+	}
+}
 
 func TestValidateAllowIpsCount(t *testing.T) {
 	cases := []struct {
