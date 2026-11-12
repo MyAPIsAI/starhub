@@ -63,6 +63,7 @@ func main() {
 		return c.TaskPollInterval
 	}, service.RetryPendingQuotaSettlementsOnce)
 	go service.RunRoutingChainCleanup(context.Background(), 15*time.Minute)
+	go service.RunDailyReconciliationLoop(context.Background())
 	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, bootstrap.Port, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
 	// security, and IP rate limiting around the route table.
