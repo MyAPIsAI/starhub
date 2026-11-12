@@ -49,7 +49,7 @@ func TestBILL005ConcurrentPreConsume(t *testing.T) {
 	budget := pre + pre/10 // 110% of one pre-charge
 	currentUser, _ := model.GetUserByID(env.rootID)
 	res := doRequest(env.base, "PUT", "/api/user/", env.session,
-		map[string]any{"id": env.rootID, "quota": budget, "expected_quota": currentUser.Quota})
+		map[string]any{"id": env.rootID, "quota": budget, "expected_quota": currentUser.Quota, "reason": "test setup"})
 	if res.Status != 200 {
 		t.Fatalf("set user quota failed: %d %s", res.Status, res.Body)
 	}

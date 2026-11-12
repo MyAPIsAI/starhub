@@ -44,6 +44,7 @@ func TestBILL004FailoverThenSuccess(t *testing.T) {
 		"id":             env.rootID,
 		"quota":          10000000,
 		"expected_quota": userBefore.Quota,
+	"reason": "test setup",
 	})
 	if res.Status != 200 {
 		t.Fatalf("set user quota failed: %d %s", res.Status, res.Body)

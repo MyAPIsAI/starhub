@@ -288,7 +288,7 @@ func TestP4RedemptionAndAffCode(t *testing.T) {
 	invitee2ID := selfResp.Data.ID
 
 	_ = doRequest(env.base, "PUT", "/api/user/", env.session, map[string]any{
-		"id": invitee2ID, "quota": 10000000, "expected_quota": 0,
+		"id": invitee2ID, "quota": 10000000, "expected_quota": 0, "reason": "test setup",
 	})
 
 	res = doRequest(env.base, "POST", "/api/token/", invitee2Session, map[string]any{

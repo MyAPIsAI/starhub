@@ -225,11 +225,12 @@ func New() http.Handler {
 	// the inbound protocol they parse.
 	relayChain := func(inbound dto.InboundFormat, handler http.HandlerFunc) http.Handler {
 		return middleware.TokenAuth(
-			middleware.UserRateLimit(
-				middleware.TokenRateLimit(
-					middleware.Distribute(inbound)(
-						middleware.ModelRateLimitWithOverrides(
-							http.HandlerFunc(handler))))))
+			middleware.ConcurrencyLimit(
+				middleware.UserRateLimit(
+					middleware.TokenRateLimit(
+						middleware.Distribute(inbound)(
+							middleware.ModelRateLimitWithOverrides(
+								http.HandlerFunc(handler)))))))
 	}
 	mux.Handle("POST /v1/chat/completions", relayChain(dto.InboundOpenAI, controller.RelayChat))
 	mux.Handle("POST /v1/responses", relayChain(dto.InboundOpenAI, controller.RelayResponses))
@@ -251,11 +252,12 @@ func New() http.Handler {
 	// back to the legacy default "dall-e" (P3.1); edits reads the model
 	// from the multipart form.
 	mux.Handle("POST /v1/images/generations", middleware.TokenAuth(
-		middleware.UserRateLimit(
-			middleware.TokenRateLimit(
-				middleware.DistributeWithDefaultModel(dto.InboundOpenAI, "dall-e")(
-					middleware.ModelRateLimitWithOverrides(
-						http.HandlerFunc(controller.RelayImageGenerations)))))))
+		middleware.ConcurrencyLimit(
+			middleware.UserRateLimit(
+				middleware.TokenRateLimit(
+					middleware.DistributeWithDefaultModel(dto.InboundOpenAI, "dall-e")(
+						middleware.ModelRateLimitWithOverrides(
+							http.HandlerFunc(controller.RelayImageGenerations))))))))
 	mux.Handle("POST /v1/images/edits", relayChain(dto.InboundOpenAI, controller.RelayImageEdits))
 	mux.Handle("POST /v1/video/generations", relayChain(dto.InboundOpenAI, controller.RelayTaskSubmitVideo))
 	mux.Handle("GET /v1/video/generations/{id}", middleware.TokenAuth(http.HandlerFunc(controller.RelayTaskGetVideo)))
@@ -263,8 +265,9 @@ func New() http.Handler {
 	// Realtime websocket: the model rides the query string, no body to
 	// distribute.
 	mux.Handle("GET /v1/realtime", middleware.TokenAuth(
-		middleware.UserRateLimit(
-			middleware.TokenRateLimit(http.HandlerFunc(relay.RelayRealtime)))))
+		middleware.ConcurrencyLimit(
+			middleware.UserRateLimit(
+				middleware.TokenRateLimit(http.HandlerFunc(relay.RelayRealtime))))))
 
 	mux.Handle("GET /v1/models", middleware.TokenAuth(http.HandlerFunc(controller.ListModels)))
 

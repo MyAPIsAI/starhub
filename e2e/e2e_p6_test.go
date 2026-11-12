@@ -49,17 +49,17 @@ func TestP6ManagementContract(t *testing.T) {
 	}
 	request("GET", "/api/channel/", memberSession, nil, 403)
 	request("PUT", "/api/user/", env.session, map[string]any{"id": member.ID, "quota": 100}, 400)
-	request("PUT", "/api/user/", env.session, map[string]any{"id": member.ID, "quota": 100, "expected_quota": 0}, 200)
+	request("PUT", "/api/user/", env.session, map[string]any{"id": member.ID, "quota": 100, "expected_quota": 0, "reason": "test setup"}, 200)
 	if err := model.IncreaseUserQuota(member.ID, 7); err != nil {
 		t.Fatal(err)
 	}
-	request("PUT", "/api/user/", env.session, map[string]any{"id": member.ID, "quota": 500, "expected_quota": 100, "status": 2}, 409)
+	request("PUT", "/api/user/", env.session, map[string]any{"id": member.ID, "quota": 500, "expected_quota": 100, "status": 2, "reason": "test setup"}, 409)
 	u, _ := model.GetUserByID(member.ID)
 	if u.Quota != 107 || u.Status != 1 {
 		t.Fatalf("conflict changed record: %+v", u)
 	}
 	request("PUT", "/api/user/", env.session, map[string]any{"id": env.rootID, "status": 2}, 400)
-	request("PUT", "/api/user/", env.session, map[string]any{"id": member.ID, "quota": 0, "expected_quota": 107}, 200)
+	request("PUT", "/api/user/", env.session, map[string]any{"id": member.ID, "quota": 0, "expected_quota": 107, "reason": "test setup"}, 200)
 	var last model.AuditLog
 	if err := model.DB.Order("id DESC").First(&last).Error; err != nil {
 		t.Fatal(err)

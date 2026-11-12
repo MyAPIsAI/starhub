@@ -39,6 +39,7 @@ func TestBILL007RechargeThenConsume(t *testing.T) {
 		"id":             env.rootID,
 		"quota":          0,
 		"expected_quota": userBefore.Quota,
+	"reason": "test setup",
 	})
 	if res.Status != 200 {
 		t.Fatalf("set user quota to 0 failed: %d %s", res.Status, res.Body)
@@ -87,6 +88,7 @@ func TestBILL007RechargeThenConsume(t *testing.T) {
 		"id":             env.rootID,
 		"quota":          rechargeAmount,
 		"expected_quota": userZero.Quota, // 0
+	"reason": "test setup",
 	})
 	if res.Status != 200 {
 		t.Fatalf("admin top-up failed: %d %s", res.Status, res.Body)

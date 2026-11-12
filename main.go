@@ -10,6 +10,7 @@ import (
 	"starhub/common"
 	"starhub/config"
 	"starhub/internal/router"
+	"starhub/middleware"
 	"starhub/model"
 	"starhub/service"
 	"starhub/web"
@@ -50,6 +51,7 @@ func main() {
 		log.Fatalf("failed to load options: %v", err)
 	}
 	go model.WatchOptions(context.Background(), time.Second)
+	middleware.ConfigureConcurrency(50, 0)
 	startChannelTestTask()
 	startTaskPollTask()
 	go config.RunLoop(context.Background(), func(c config.Runtime) time.Duration {
