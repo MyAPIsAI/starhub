@@ -233,6 +233,8 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		UsedChannels:     usedChannels,
 		DurationMs:       durationMs,
 		Status:           status,
+		PriceVersion:     model.LoadedOptionVersion(),
+		ExactFeeMicroUSD: ExactFeeMicroUSD(pd, usage),
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
@@ -275,17 +277,19 @@ func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string,
 	}
 	delta := actual - preQuota
 	entry := &model.Log{
-		UserID:         userID,
-		TokenID:        tokenID,
-		TokenName:      tokenName,
-		ChannelID:      channelID,
-		Model:          modelName,
-		RequestedModel: originalModel,
-		Protocol:       protocol,
-		Quota:          actual,
-		UsedChannels:   usedChannels,
-		DurationMs:     durationMs,
-		Status:         status,
+		UserID:           userID,
+		TokenID:          tokenID,
+		TokenName:        tokenName,
+		ChannelID:        channelID,
+		Model:            modelName,
+		RequestedModel:   originalModel,
+		Protocol:         protocol,
+		Quota:            actual,
+		UsedChannels:     usedChannels,
+		DurationMs:       durationMs,
+		Status:           status,
+		PriceVersion:     model.LoadedOptionVersion(),
+		ExactFeeMicroUSD: QuotaToMicroUSD(actual),
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }

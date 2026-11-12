@@ -23,7 +23,9 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 	}
 	entry := &model.Log{UserID: task.UserID, TokenID: task.TokenID, TokenName: task.TokenName,
 		ChannelID: task.ChannelID, Model: task.Model, RequestedModel: original, Protocol: task.Protocol,
-		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status}
+		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status,
+		PriceVersion:     model.LoadedOptionVersion(),
+		ExactFeeMicroUSD: QuotaToMicroUSD(task.PendingQuota)}
 	if task.Platform == "responses" {
 		var result model.BackgroundResponseOutcome
 		if json.Unmarshal([]byte(task.PendingResultMeta), &result) == nil {

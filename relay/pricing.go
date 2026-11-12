@@ -267,3 +267,52 @@ func max64(a, b int64) int64 {
 	}
 	return b
 }
+
+// ExactFeeMicroUSD returns the precise fee in micro-USD (1 USD = 1,000,000)
+// before rounding to integer quota. This mirrors ComputeUsageQuota but
+// preserves the pre-rounding value so logs support offline recomputation.
+func ExactFeeMicroUSD(p *PriceData, usage *Usage) int64 {
+	if usage == nil {
+		usage = &Usage{}
+	}
+	if p.IsExpression() {
+		vars := map[string]float64{
+			"prompt_tokens":     float64(usage.PromptTokens),
+			"completion_tokens": float64(usage.CompletionTokens),
+			"total_tokens":      float64(usage.PromptTokens + usage.CompletionTokens),
+		}
+		usd, err := billingexpr.Eval(p.PriceExpr, vars)
+		if err == nil {
+			return int64(usd * float64(common.QuotaPerUSD) * p.EffectiveRatio() / float64(common.QuotaPerUSD) * 1e6)
+		}
+		// Fall through to per-call or token billing on eval failure.
+	}
+	if p.IsPerCall() {
+		return int64(p.ModelPriceUSD * p.EffectiveRatio() * 1e6)
+	}
+	// Token billing path: same formula as tokenUsageQuota but in micro-USD.
+	promptTokens := max64(usage.PromptTokens, 0)
+	completionTokens := max64(usage.CompletionTokens, 0)
+	cached := usage.CachedTokens()
+	inputAudio := usage.InputAudioTokens()
+	textInput := promptTokens - cached - inputAudio
+	if textInput < 0 {
+		textInput = 0
+	}
+	outputAudio := usage.OutputAudioTokens()
+	textOutput := completionTokens - outputAudio
+	if textOutput < 0 {
+		textOutput = 0
+	}
+	effectiveInput := float64(textInput) + float64(cached)*p.CacheRatio + float64(inputAudio)*p.AudioRatio
+	effectiveOutput := float64(textOutput)*p.CompletionRatio + float64(outputAudio)*p.AudioRatio
+	microUSD := (effectiveInput + effectiveOutput) * p.ModelRatio * p.EffectiveRatio()
+	return int64(microUSD)
+}
+
+// QuotaToMicroUSD converts an integer quota amount to micro-USD using the
+// platform's QuotaPerUSD constant. Used for unit-based billing paths where
+// the caller already computed the final quota.
+func QuotaToMicroUSD(quota int64) int64 {
+	return quota * 1e6 / common.QuotaPerUSD
+}
