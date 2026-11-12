@@ -305,6 +305,10 @@ func ValidOwnedTokenFields(fields map[string]any) error {
 			if value.(int64) < -1 {
 				return fmt.Errorf("invalid key expiry")
 			}
+		case "allow_ips":
+			if err := ValidateAllowIpsCount(value.(string)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

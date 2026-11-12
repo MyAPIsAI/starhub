@@ -1,6 +1,8 @@
 package model
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 
 	"starhub/common"
@@ -63,3 +65,37 @@ func TestAllowsIPIPv6(t *testing.T) {
 
 // Ensure common is imported.
 var _ = common.StatusEnabled
+
+func TestValidateAllowIpsCount(t *testing.T) {
+	cases := []struct {
+		name    string
+		ips     string
+		wantErr bool
+	}{
+		{"empty", "", false},
+		{"under limit", "10.0.0.1, 10.0.0.2, 10.0.0.3", false},
+		{"exactly 50", makeIPs(50), false},
+		{"51 entries", makeIPs(51), true},
+		{"whitespace only", "  ,  ,  ", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateAllowIpsCount(tc.ips)
+			if tc.wantErr && err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// makeIPs returns a comma-separated string of n IP entries.
+func makeIPs(n int) string {
+	parts := make([]string, n)
+	for i := range parts {
+		parts[i] = "10.0.0." + strconv.Itoa(i+1)
+	}
+	return strings.Join(parts, ",")
+}

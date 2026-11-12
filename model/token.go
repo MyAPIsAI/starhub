@@ -67,6 +67,23 @@ type Token struct {
 // MaxTokensPerUser is the maximum number of API keys a single account may own.
 const MaxTokensPerUser = 200
 
+// MaxAllowIpsPerToken is the maximum number of IP whitelist entries per key.
+const MaxAllowIpsPerToken = 50
+
+// ValidateAllowIpsCount checks that the comma-separated IP whitelist does not
+// exceed MaxAllowIpsPerToken entries. Empty is allowed (no restriction).
+var ErrTooManyAllowIps = errors.New("IP whitelist exceeds the maximum of 50 entries per key")
+
+func ValidateAllowIpsCount(allowIps string) error {
+	if allowIps == "" {
+		return nil
+	}
+	if len(SplitList(allowIps)) > MaxAllowIpsPerToken {
+		return ErrTooManyAllowIps
+	}
+	return nil
+}
+
 func InsertToken(t *Token) error {
 	// Check per-account key limit inside a transaction to avoid TOCTOU race.
 	return DB.Transaction(func(tx *gorm.DB) error {

@@ -63,6 +63,11 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 	if !validateTokenGroupAccess(w, r, requestUserID(r), group, autoGroups) {
 		return
 	}
+	allowIps := strings.TrimSpace(req.AllowIps)
+	if err := model.ValidateAllowIpsCount(allowIps); err != nil {
+		common.ApiError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	token := &model.Token{
 		UserID:         requestUserID(r),
 		Name:           strings.TrimSpace(req.Name),
@@ -72,7 +77,7 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		RemainQuota:    remainQuota,
 		UnlimitedQuota: unlimited,
 		ModelLimits:    strings.TrimSpace(req.ModelLimits),
-		AllowIps:       strings.TrimSpace(req.AllowIps),
+		AllowIps:       allowIps,
 		AutoGroups:     autoGroups,
 	}
 	if err := model.InsertToken(token); err != nil {
@@ -209,7 +214,12 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		fields["model_limits"] = strings.TrimSpace(*req.ModelLimits)
 	}
 	if req.AllowIps != nil {
-		fields["allow_ips"] = strings.TrimSpace(*req.AllowIps)
+		ips := strings.TrimSpace(*req.AllowIps)
+		if err := model.ValidateAllowIpsCount(ips); err != nil {
+			common.ApiError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		fields["allow_ips"] = ips
 	}
 	if req.AutoGroups != nil {
 		autoGroups := strings.TrimSpace(*req.AutoGroups)
