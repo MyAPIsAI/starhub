@@ -168,7 +168,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	actualUsage.RequestProtocol = "OpenAI"
 	if err := PostConsumeQuotaWithPrice(pd, userID, tokenID, tokenName, tokenUnlimited,
 		upstreamChannel.ID, modelName, actualUsage, pre,
-		fmt.Sprintf("%d", upstreamChannel.ID), 0); err != nil {
+		fmt.Sprintf("%d", upstreamChannel.ID), 0, ""); err != nil {
 		log.Printf("post consume realtime quota failed: %v", err)
 	}
 	settled = true

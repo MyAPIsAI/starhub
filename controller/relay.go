@@ -14,6 +14,7 @@ import (
 
 	"starhub/common"
 	"starhub/metric"
+	"starhub/middleware"
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
@@ -513,6 +514,7 @@ func (f *relayFlow) refundUnlessSettled() {
 			Protocol:       f.req.protocol,
 			UsedChannels:   f.trailString(),
 			DurationMs:     time.Since(f.startTime).Milliseconds(),
+			RequestID:      middleware.CtxRequestIDValue(f.ctx),
 		})
 	}
 }
@@ -960,8 +962,9 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	usage.RequestProtocol = flow.req.protocol
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
-		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
+		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), middleware.CtxRequestIDValue(flow.ctx), flow.req.requestedModel); err != nil {
 		log.Printf("post consume quota failed: %v", err)
+		service.NotifyBillingFailure(flow.req.userID, "settlement failed: "+err.Error())
 	}
 	flow.settled = true
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK, usage: usage, content: content}

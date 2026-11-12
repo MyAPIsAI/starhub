@@ -85,10 +85,10 @@ func TestAffiliateRebateUsesCollectedQuota(t *testing.T) {
 				t.Fatal(err)
 			}
 			if explicit {
-				err = PostConsumeQuotaAmount(user.ID, token.ID, "", false, 0, "m", 130, 80, "", 0)
+				err = PostConsumeQuotaAmount(user.ID, token.ID, "", false, 0, "m", 130, 80, "", 0, "")
 			} else {
 				pd := &PriceData{GroupRatio: 1, OtherRatio: 1, ModelPriceUSD: 0.00026}
-				err = PostConsumeQuotaWithPrice(pd, user.ID, token.ID, "", false, 0, "m", &Usage{}, 80, "", 0)
+				err = PostConsumeQuotaWithPrice(pd, user.ID, token.ID, "", false, 0, "m", &Usage{}, 80, "", 0, "")
 			}
 			if err != nil {
 				t.Fatal(err)

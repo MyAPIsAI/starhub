@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/middleware"
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
@@ -193,8 +194,9 @@ func responsesFallbackUsage(req *dto.ResponsesRequest, output json.RawMessage, t
 func settleNativeUsage(flow *relayFlow, ch *model.Channel, usage *relay.Usage, status int) {
 	usage.RequestProtocol = flow.req.protocol
 	usage.RequestStatus = status
-	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName, flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
+	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName, flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), middleware.CtxRequestIDValue(flow.ctx), flow.req.requestedModel); err != nil {
 		log.Printf("%s quota settlement failed: %v", flow.mode, err)
+		service.NotifyBillingFailure(flow.req.userID, fmt.Sprintf("%s settlement failed: %v", flow.mode, err))
 	}
 	flow.settled = true
 }

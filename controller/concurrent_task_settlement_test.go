@@ -169,7 +169,7 @@ func TestInvalidSettlementLogStatusPreservesQuota(t *testing.T) {
 		{-1, 1000},
 	} {
 		if err := relay.PostConsumeQuotaAmountWithStatus(user.ID, token.ID, "review", false,
-			0, "sora-2", tc.actual, 80000, "", 0, tc.status, "myapis-auto"); err == nil {
+			0, "sora-2", tc.actual, 80000, "", 0, tc.status, "", "myapis-auto"); err == nil {
 			t.Fatalf("invalid log status accepted: status=%d actual=%d", tc.status, tc.actual)
 		}
 	}

@@ -183,18 +183,18 @@ func RefundPreConsumedQuota(tokenID, userID int64, tokenUnlimited bool, amount i
 // the retry trail ("channelID->channelID") of the request for
 // troubleshooting.
 func PostConsumeQuota(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName, group string, usage *Usage, preQuota int64, usedChannels string, durationMs int64) error {
+	channelID int64, modelName, group string, usage *Usage, preQuota int64, usedChannels string, durationMs int64, requestID string) error {
 	return PostConsumeQuotaWithPrice(NewPriceData(modelName, group), userID, tokenID, tokenName,
-		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels, durationMs)
+		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels, durationMs, requestID)
 }
 
 // PostConsumeQuotaWithUserGroup is PostConsumeQuota with the user's own group
 // for the group x group matrix multiplier.
 // An optional requestedModel preserves the client model in the usage log.
 func PostConsumeQuotaWithUserGroup(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName, group, userGroup string, usage *Usage, preQuota int64, usedChannels string, durationMs int64, requestedModel ...string) error {
+	channelID int64, modelName, group, userGroup string, usage *Usage, preQuota int64, usedChannels string, durationMs int64, requestID string, requestedModel ...string) error {
 	return PostConsumeQuotaWithPrice(NewPriceDataWithUserGroup(modelName, group, userGroup), userID, tokenID, tokenName,
-		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels, durationMs, requestedModel...)
+		tokenUnlimited, channelID, modelName, usage, preQuota, usedChannels, durationMs, requestID, requestedModel...)
 }
 
 // PostConsumeQuotaWithPrice is the settlement entry for relay modes that
@@ -202,7 +202,7 @@ func PostConsumeQuotaWithUserGroup(userID, tokenID int64, tokenName string, toke
 // the caller resolves its own PriceData and this function only balances
 // the books.
 func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, usage *Usage, preQuota int64, usedChannels string, durationMs int64, requestedModel ...string) error {
+	channelID int64, modelName string, usage *Usage, preQuota int64, usedChannels string, durationMs int64, requestID string, requestedModel ...string) error {
 	if usage == nil {
 		usage = &Usage{}
 	}
@@ -235,6 +235,7 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		Status:           status,
 		PriceVersion:     model.LoadedOptionVersion(),
 		ExactFeeMicroUSD: ExactFeeMicroUSD(pd, usage),
+		RequestID:        requestID,
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
@@ -252,26 +253,26 @@ func applyAffiliateRebate(logID int64) {
 // rather than a usage report).
 // An optional requestedModel preserves the client model in the usage log.
 func PostConsumeQuotaAmount(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, requestedModel ...string) error {
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, requestID string, requestedModel ...string) error {
 	return PostConsumeQuotaAmountWithStatus(userID, tokenID, tokenName, tokenUnlimited,
-		channelID, modelName, actual, preQuota, usedChannels, durationMs, 1, requestedModel...)
+		channelID, modelName, actual, preQuota, usedChannels, durationMs, 1, requestID, requestedModel...)
 }
 
 // PostConsumeQuotaAmountWithStatus keeps the outcome and quota settlement in
 // the same transaction. Outcome is independent of the collected amount.
 func PostConsumeQuotaAmountWithStatus(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, requestedModel ...string) error {
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, requestID string, requestedModel ...string) error {
 	originalModel := modelName
 	if len(requestedModel) > 0 && requestedModel[0] != "" {
 		originalModel = requestedModel[0]
 	}
 	return PostConsumeQuotaAmountWithMetadata(userID, tokenID, tokenName, tokenUnlimited,
-		channelID, modelName, actual, preQuota, usedChannels, durationMs, status, originalModel, "")
+		channelID, modelName, actual, preQuota, usedChannels, durationMs, status, originalModel, "", requestID)
 }
 
 // PostConsumeQuotaAmountWithMetadata records gateway-owned request metadata.
 func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol string) error {
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol, requestID string) error {
 	if status < 1 || status > 3 {
 		return errors.New("unsupported settlement log status")
 	}
@@ -290,6 +291,7 @@ func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string,
 		Status:           status,
 		PriceVersion:     model.LoadedOptionVersion(),
 		ExactFeeMicroUSD: QuotaToMicroUSD(actual),
+		RequestID:        requestID,
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }

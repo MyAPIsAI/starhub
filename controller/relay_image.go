@@ -12,10 +12,12 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/middleware"
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
+	"starhub/service"
 )
 
 // ---------------------------------------------------------------------------
@@ -405,8 +407,9 @@ var (
 // computed by ImageBill with the count/usage guards).
 func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64) {
 	if err := relay.PostConsumeQuotaAmountWithMetadata(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
-		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, actual, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), 1, flow.req.requestedModel, flow.req.protocol); err != nil {
+		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, actual, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), 1, flow.req.requestedModel, flow.req.protocol, middleware.CtxRequestIDValue(flow.ctx)); err != nil {
 		log.Printf("post consume image quota failed: %v", err)
+		service.NotifyBillingFailure(flow.req.userID, "image settlement failed: "+err.Error())
 	}
 	flow.settled = true
 }

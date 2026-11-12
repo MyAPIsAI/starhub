@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/middleware"
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
+	"starhub/service"
 )
 
 // ---------------------------------------------------------------------------
@@ -327,8 +329,9 @@ func settleModeAttempt(flow *relayFlow, ch *model.Channel, usage *relay.Usage) a
 	usage.RequestProtocol = flow.req.protocol
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
-		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), flow.req.requestedModel); err != nil {
+		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), middleware.CtxRequestIDValue(flow.ctx), flow.req.requestedModel); err != nil {
 		log.Printf("post consume quota failed: %v", err)
+		service.NotifyBillingFailure(flow.req.userID, "passthrough settlement failed: "+err.Error())
 	}
 	flow.settled = true
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK, usage: usage}

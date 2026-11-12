@@ -271,5 +271,5 @@ func New() http.Handler {
 
 	mux.Handle("GET /v1/models", middleware.TokenAuth(http.HandlerFunc(controller.ListModels)))
 
-	return web.Handler(middleware.ManagementSecurity(middleware.IPRateLimit(mux)))
+	return web.Handler(middleware.RequestID(middleware.ManagementSecurity(middleware.IPRateLimit(mux))))
 }

@@ -31,6 +31,7 @@ func Audit(next http.Handler) http.Handler {
 				Path:     r.URL.Path,
 				Status:   rec.status,
 				IP:       clientIP(r),
+				RequestID: CtxRequestIDValue(r.Context()),
 			}
 			// Best-effort: an audit failure must not change the response.
 			_ = model.InsertAuditLog(entry)

@@ -60,7 +60,7 @@ func TestAffiliateRebateDeliveryRecoversWithoutRebilling(t *testing.T) {
 					t.Fatalf("rebate glitch failed task settlement: %v %v", claimed, err)
 				}
 			} else {
-				if err := PostConsumeQuotaAmount(user.ID, token.ID, "", false, 0, "m", 100, 80, "", 0); err != nil {
+				if err := PostConsumeQuotaAmount(user.ID, token.ID, "", false, 0, "m", 100, 80, "", 0, ""); err != nil {
 					t.Fatalf("rebate glitch failed customer settlement: %v", err)
 				}
 			}
@@ -126,7 +126,7 @@ func TestRebateOutboxFailureRollsBackCustomerSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer model.DB.Callback().Create().Remove(callback)
-	if err := PostConsumeQuotaAmount(user.ID, token.ID, "", false, 0, "m", 100, 80, "", 0); err == nil {
+	if err := PostConsumeQuotaAmount(user.ID, token.ID, "", false, 0, "m", 100, 80, "", 0, ""); err == nil {
 		t.Fatal("expected outbox persistence failure")
 	}
 	owner, _ := model.GetUserByID(user.ID)
