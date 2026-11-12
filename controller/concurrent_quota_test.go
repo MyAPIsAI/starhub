@@ -24,7 +24,7 @@ func TestConcurrentExpectedQuotaConflict(t *testing.T) {
 	rr := call(UpdateUser, testRequest{
 		method: http.MethodPut,
 		target: "/api/user",
-		body:   fmt.Sprintf(`{"id":%s,"quota":800,"expected_quota":1000,"status":%d}`, id, common.StatusDisabled),
+		body:   fmt.Sprintf(`{"id":%s,"quota":800,"expected_quota":1000,"status":%d,"reason":"test setup"}`, id, common.StatusDisabled),
 		userID: 1,
 		role:   common.RoleAdmin,
 	})
@@ -44,7 +44,7 @@ func TestConcurrentExpectedQuotaConflict(t *testing.T) {
 	rr = call(UpdateUser, testRequest{
 		method: http.MethodPut,
 		target: "/api/user",
-		body:   fmt.Sprintf(`{"id":%s,"quota":600,"expected_quota":1000}`, id),
+		body:   fmt.Sprintf(`{"id":%s,"quota":600,"expected_quota":1000,"reason":"test setup"}`, id),
 		userID: 1,
 		role:   common.RoleAdmin,
 	})
@@ -63,7 +63,7 @@ func TestConcurrentExpectedQuotaConflict(t *testing.T) {
 	rr = call(UpdateUser, testRequest{
 		method: http.MethodPut,
 		target: "/api/user",
-		body:   fmt.Sprintf(`{"id":%s,"quota":600,"expected_quota":800}`, id),
+		body:   fmt.Sprintf(`{"id":%s,"quota":600,"expected_quota":800,"reason":"test setup"}`, id),
 		userID: 1,
 		role:   common.RoleAdmin,
 	})
@@ -82,7 +82,7 @@ func TestConcurrentExpectedQuotaConflict(t *testing.T) {
 	rr = call(UpdateUser, testRequest{
 		method: http.MethodPut,
 		target: "/api/user",
-		body:   fmt.Sprintf(`{"id":%s,"quota":999,"expected_quota":800,"status":%d,"group":%q}`, id, common.StatusEnabled, "ultra"),
+		body:   fmt.Sprintf(`{"id":%s,"quota":999,"expected_quota":800,"status":%d,"group":%q,"reason":"test setup"}`, id, common.StatusEnabled, "ultra"),
 		userID: 1,
 		role:   common.RoleAdmin,
 	})

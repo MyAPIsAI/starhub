@@ -51,6 +51,7 @@ func main() {
 		log.Fatalf("failed to load options: %v", err)
 	}
 	go model.WatchOptions(context.Background(), time.Second)
+	middleware.SetTrustedProxies(os.Getenv("STARHUB_TRUSTED_PROXIES"))
 	middleware.ConfigureConcurrency(50, 0)
 	startChannelTestTask()
 	startTaskPollTask()

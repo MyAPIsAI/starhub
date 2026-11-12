@@ -75,13 +75,23 @@ func TestAdjustUserQuotaNegativeResult(t *testing.T) {
 }
 
 func TestAdjustUserQuotaDisabledUser(t *testing.T) {
+	// Admins can adjust quota for disabled users (e.g., refunds after
+	// disabling). The status check was removed to match the behavior of
+	// the legacy UpdateUserFieldsWithQuota path.
 	newTestDB(t)
 	user := &User{Username: "disabled-test", Password: "x", Role: 1, Status: 2, Quota: 1000, Group: "default", AffCode: common.GenerateAffCode()}
 	CreateUser(user)
 
-	_, err := AdjustUserQuota(user.ID, 100, 1000, 1, "disabled user")
-	if err == nil {
-		t.Fatal("should reject adjustment for disabled user")
+	entry, err := AdjustUserQuota(user.ID, 100, 1000, 1, "disabled user refund")
+	if err != nil {
+		t.Fatalf("should allow adjustment for disabled user: %v", err)
+	}
+	if entry.Amount != 100 {
+		t.Fatalf("amount = %d, want 100", entry.Amount)
+	}
+	got, _ := GetUserByID(user.ID)
+	if got.Quota != 1100 {
+		t.Fatalf("quota = %d, want 1100", got.Quota)
 	}
 }
 

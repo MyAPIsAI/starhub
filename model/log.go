@@ -55,7 +55,14 @@ type Log struct {
 
 func InsertLog(l *Log) error {
 	if l.AdmissionDay == 0 {
-		l.AdmissionDay = utcMidnight()
+		if l.CreatedAt > 0 {
+			// Derive admission day from the explicit CreatedAt value
+			// (used by tests and back-dated entries).
+			t := time.Unix(l.CreatedAt, 0).UTC()
+			l.AdmissionDay = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix()
+		} else {
+			l.AdmissionDay = utcMidnight()
+		}
 	}
 	return DB.Create(l).Error
 }
@@ -72,7 +79,12 @@ func InsertFailedLog(l *Log) error {
 	l.Quota = 0
 	l.UnfundedQuota = 0
 	if l.AdmissionDay == 0 {
-		l.AdmissionDay = utcMidnight()
+		if l.CreatedAt > 0 {
+			t := time.Unix(l.CreatedAt, 0).UTC()
+			l.AdmissionDay = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix()
+		} else {
+			l.AdmissionDay = utcMidnight()
+		}
 	}
 	return DB.Create(l).Error
 }

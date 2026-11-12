@@ -25,8 +25,8 @@ func AdjustUserQuota(userID int64, amount int64, expectedQuota int64, actorID in
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		// Lock the user row.
 		var user User
-		if err := tx.Where("id = ? AND status = ?", userID, 1).First(&user).Error; err != nil {
-			return fmt.Errorf("user not found or disabled: %w", err)
+		if err := tx.Where("id = ?", userID).First(&user).Error; err != nil {
+			return fmt.Errorf("user not found: %w", err)
 		}
 		// Optimistic concurrency: check expected quota.
 		if user.Quota != expectedQuota {

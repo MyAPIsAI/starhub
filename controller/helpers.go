@@ -3,11 +3,11 @@ package controller
 import (
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 
 	"starhub/common"
+	"starhub/middleware"
 )
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, v any) bool {
@@ -38,11 +38,9 @@ func requestRole(r *http.Request) int {
 	return v
 }
 
-// clientIP extracts the caller's IP from RemoteAddr (without the port).
+// clientIP extracts the caller's real IP. When trusted proxies are
+// configured (via middleware.SetTrustedProxies), it walks the
+// X-Forwarded-For chain from right to left. Otherwise it uses RemoteAddr.
 func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return middleware.ResolveClientIP(r)
 }
