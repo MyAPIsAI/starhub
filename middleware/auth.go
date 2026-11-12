@@ -35,7 +35,7 @@ func UserAuth(next http.Handler) http.Handler {
 }
 
 func AdminAuth(next http.Handler) http.Handler {
-	return UserAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return AdminIPRestrict(UserAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		role, _ := r.Context().Value(common.CtxRole).(int)
 		if !common.IsAdminRole(role) {
 			common.ApiError(w, http.StatusForbidden, "admin privilege required")
@@ -46,7 +46,7 @@ func AdminAuth(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
-	}))
+	})))
 }
 
 func TokenAuth(next http.Handler) http.Handler {

@@ -52,6 +52,7 @@ func main() {
 	}
 	go model.WatchOptions(context.Background(), time.Second)
 	middleware.SetTrustedProxies(os.Getenv("STARHUB_TRUSTED_PROXIES"))
+	middleware.SetAdminIPWhitelist(os.Getenv("STARHUB_ADMIN_IP_WHITELIST"))
 	middleware.ConfigureConcurrency(50, 0)
 	startChannelTestTask()
 	startTaskPollTask()
