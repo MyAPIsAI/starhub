@@ -39,6 +39,9 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&MoneyAccount{}, &MoneyEntry{}, &TokenUsageBaseline{}); err != nil {
 		return fmt.Errorf("migrate exact monetary journal: %w", err)
 	}
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key) WHERE report_key <> ''").Error; err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
 		return fmt.Errorf("migrate response ownership index: %w", err)
 	}

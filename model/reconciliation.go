@@ -9,6 +9,13 @@ import (
 // for one user. It enables audit reconstruction and difference tracking over
 // time. Each run at 02:00 UTC creates one row per active user.
 type ReconciliationRecord struct {
+	BusinessDaySnapshot
+	ReportKey             string `gorm:"size:64;not null;default:'';index" json:"report_key"`
+	Revision              int64  `gorm:"not null;default:0" json:"revision"`
+	SourceDigest          string `gorm:"size:64;not null;default:''" json:"source_digest"`
+	State                 string `gorm:"size:24;not null;default:''" json:"state"`
+	LedgerSpentNano       string `gorm:"size:64;not null;default:'0'" json:"ledger_spent_nano"`
+	UnverifiableLogs      int64  `gorm:"not null;default:0" json:"unverifiable_logs"`
 	AccountingVersion     int    `gorm:"not null;default:0" json:"accounting_version"`
 	LogQuotaNanoSum       string `gorm:"size:64;not null;default:'0'" json:"log_quota_nano_sum"`
 	UsedQuotaNanoSnapshot string `gorm:"size:64;not null;default:'0'" json:"used_quota_nano_snapshot"`
@@ -18,7 +25,7 @@ type ReconciliationRecord struct {
 	MoneySequence         int64  `gorm:"not null;default:0" json:"money_sequence"`
 	ID                    int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID                int64  `gorm:"index;not null" json:"user_id"`
-	Date                  string `gorm:"size:10;index;not null" json:"date"` // YYYY-MM-DD UTC
+	Date                  string `gorm:"size:10;index;not null" json:"date"`
 	LogQuotaSum           int64  `gorm:"not null;default:0" json:"log_quota_sum"`
 	UsedQuotaDelta        int64  `gorm:"not null;default:0" json:"used_quota_delta"`
 	Diff                  int64  `gorm:"not null;default:0" json:"diff"` // abs(LogQuotaSum - UsedQuotaDelta)
