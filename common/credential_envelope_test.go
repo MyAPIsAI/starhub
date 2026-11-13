@@ -25,6 +25,29 @@ func TestCredentialEnvelopeRetainsLegacyCustomerReadCompatibility(t *testing.T) 
 	}
 }
 
+func TestCredentialKeyringRejectsMalformedConfigurations(t *testing.T) {
+	key := strings.Repeat("11", 32)
+	large := map[string]string{}
+	for _, id := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"} {
+		large[id] = key
+	}
+	oversized, _ := json.Marshal(large)
+	for _, tc := range []struct{ name, raw, active string }{
+		{"invalid-json", "{", "a"}, {"empty-object", "{}", "a"}, {"null", "null", "a"}, {"wrong-type", "[]", "a"},
+		{"no-active", `{"a":"` + key + `"}`, ""}, {"missing-active", `{"a":"` + key + `"}`, "b"},
+		{"invalid-id", `{"a:b":"` + key + `"}`, "a:b"}, {"short-key", `{"a":"11"}`, "a"},
+		{"non-hex", `{"a":"` + strings.Repeat("zz", 32) + `"}`, "a"}, {"too-many", string(oversized), "a"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("STARHUB_CREDENTIAL_KEYS", tc.raw)
+			t.Setenv("STARHUB_CREDENTIAL_ACTIVE_KEY", tc.active)
+			if ciphertext, err := EncryptCredential("test-value", "upstream"); err == nil || ciphertext != "" {
+				t.Fatal("invalid keyring fell back to a usable key")
+			}
+		})
+	}
+}
+
 func TestCredentialEnvelopePurposeTamperingAndRotation(t *testing.T) {
 	key1, key2 := strings.Repeat("11", 32), strings.Repeat("22", 32)
 	setKeys := func(keys map[string]string, active string) {

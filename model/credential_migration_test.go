@@ -66,6 +66,39 @@ func TestCredentialMigrationAndRotationPreserveTokensAndChannelIdentity(t *testi
 	}
 }
 
+func TestCredentialMigrationRollsBackEarlierBatchesWhenLaterValueIsCorrupt(t *testing.T) {
+	newTestDB(t)
+	rows := make([]map[string]any, 501)
+	for i := range rows {
+		rows[i] = map[string]any{"id": int64(i + 1), "key": "legacy-batch-secret", "name": "migration-batch"}
+	}
+	rows[500]["key"] = "enc:v2:missing:invalid:invalid"
+	if err := DB.Table("channels").CreateInBatches(rows, 100).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count, err := MigrateCredentialStorage(false, "test-operator", "Verify multi-batch atomicity"); err == nil || count != 0 {
+		t.Fatal("corrupt second batch did not fail atomically")
+	}
+	var untouched int64
+	if err := DB.Table("channels").Where("id <= ? AND key = ?", 500, "legacy-batch-secret").Count(&untouched).Error; err != nil || untouched != 500 {
+		t.Fatal("earlier batch was partially migrated", err)
+	}
+	var audits int64
+	DB.Model(&AuditLog{}).Where("path = ?", "/operator/migrate-credentials").Count(&audits)
+	if audits != 0 {
+		t.Fatal("failed migration has a success audit")
+	}
+	if err := DB.Table("channels").Where("id = ?", 501).UpdateColumn("key", "legacy-batch-secret").Error; err != nil {
+		t.Fatal(err)
+	}
+	if count, err := MigrateCredentialStorage(false, "test-operator", "Retry repaired credential migration"); err != nil || count != 501 {
+		t.Fatalf("retry changed %d: %v", count, err)
+	}
+	if count, err := MigrateCredentialStorage(false, "test-operator", "Verify unchanged migration rerun"); err != nil || count != 0 {
+		t.Fatal("migration rerun was not idempotent", err)
+	}
+}
+
 func TestCredentialMigrationAuditFailureRollsBackAllValues(t *testing.T) {
 	newTestDB(t)
 	channel := &Channel{Name: "atomic-migration", Key: "legacy-secret", Models: "model", Group: "default", Status: 1}
