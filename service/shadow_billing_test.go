@@ -1,7 +1,12 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"math"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -47,6 +52,65 @@ func TestShadowBillingPreservesFractionalFeesAndMissingHistory(t *testing.T) {
 		if entry.Status == "difference" && (entry.StoredNano != "2" || entry.RecomputedNano != "1" || entry.Group != "vip" || entry.PriceVersion != 19) {
 			t.Fatalf("lost frozen facts: %+v", entry)
 		}
+	}
+}
+
+func TestShadowBillingIsReadOnlyAndNeverCallsAvailableUpstreams(t *testing.T) {
+	newTestDB(t)
+	setting.ResetAllToDefaults()
+	t.Cleanup(setting.ResetAllToDefaults)
+	var calls atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(500) }))
+	defer upstream.Close()
+	if err := model.InsertChannel(&model.Channel{Name: "shadow-read-only", Key: "fixture-only", Models: "read-only-model", Group: "default", Status: 1, BaseURL: upstream.URL}); err != nil {
+		t.Fatal(err)
+	}
+	user := &model.User{Username: "shadow-read-only", Status: 1, Quota: 100, AffCode: common.GenerateAffCode()}
+	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := model.ReadMoneyAccount(user.ID); err != nil {
+		t.Fatal(err)
+	}
+	price := &relay.PriceData{ModelName: "read-only-model", PriceVersion: 31, AmountUnit: common.MoneyUnitNano, HasModelPrice: true, ModelPriceUSD: 0.000000001, GroupRatio: 1, OtherRatio: 1, UsingGroup: "frozen-sale-group"}
+	raw, err := relay.EncodeTokenBillingEvidence(price, &relay.Usage{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := model.InsertLog(&model.Log{UserID: user.ID, Model: price.ModelName, PriceVersion: 31, AmountUnit: common.MoneyUnitNano, BillingEvidence: raw, QuotaRemainderNano: 2, Status: 1}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := func() []byte {
+		t.Helper()
+		tables := map[string][]map[string]any{}
+		for _, table := range []string{"users", "tokens", "channels", "logs", "money_accounts", "money_entries", "quota_reservations", "quota_settlements", "token_quota_periods"} {
+			var rows []map[string]any
+			if err := model.DB.Table(table).Find(&rows).Error; err != nil {
+				t.Fatal(err)
+			}
+			tables[table] = rows
+		}
+		data, err := json.Marshal(tables)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	before := snapshot()
+	for i := 0; i < 2; i++ {
+		if err := setting.ApplyVersionedOptions(map[string]string{"model_price": `{"read-only-model":999}`, "group_ratio": `{"frozen-sale-group":100}`}, int64(40+i)); err != nil {
+			t.Fatal(err)
+		}
+		report, err := RunShadowBillingVerification(1, 100)
+		if err != nil || report.Status != "differences" || report.VerifiedRecords != 1 || len(report.Entries) != 1 || report.Entries[0].StoredNano != "2" || report.Entries[0].RecomputedNano != "1" {
+			t.Fatalf("%+v %v", report, err)
+		}
+	}
+	if !bytes.Equal(before, snapshot()) {
+		t.Fatal("shadow verification mutated persisted source or financial state")
+	}
+	if calls.Load() != 0 {
+		t.Fatal("offline replay called an upstream")
 	}
 }
 
