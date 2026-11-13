@@ -31,7 +31,7 @@ type Channel struct {
 	TaskPluginID           int64           `gorm:"not null;default:0;index" json:"task_plugin_id"`
 	Name                   string          `gorm:"size:128;not null;default:''" json:"name"`
 	Type                   int             `gorm:"not null;default:1" json:"type"`
-	Key                    string          `gorm:"type:text;not null;default:''" json:"key"`
+	Key                    string          `gorm:"type:text;serializer:channel_credential;not null;default:''" json:"key"`
 	KeyMode                string          `gorm:"size:16;not null;default:''" json:"key_mode"`
 	MultiKeyStatus         string          `gorm:"size:512;not null;default:''" json:"multi_key_status"`
 	BaseURL                string          `gorm:"size:256;not null;default:''" json:"base_url"`
