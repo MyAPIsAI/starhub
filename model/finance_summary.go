@@ -13,6 +13,11 @@ import (
 // FinanceSummary keeps the two existing accounting systems separate. Money
 // travels as decimal integer strings, including totals exceeding int64.
 type FinanceSummary struct {
+	APIAvailableNano           string `json:"api_available_nano"`
+	APIRecordedReservedNano    string `json:"api_recorded_reserved_nano"`
+	APILifetimeSpentNano       string `json:"api_lifetime_spent_nano"`
+	CanonicalMoneyAccounts     int64  `json:"canonical_money_accounts"`
+	VerifiedPaymentsAvailable  bool   `json:"verified_payments_available"`
 	Since                      int64  `json:"since"`
 	Until                      int64  `json:"until"`
 	WalletBalanceNano          string `json:"wallet_balance_nano"`
@@ -51,7 +56,7 @@ func ReadFinanceSummary(ctx context.Context, since, until int64) (*FinanceSummar
 		return nil, errors.New("invalid finance summary time window")
 	}
 	result := &FinanceSummary{Since: since, Until: until}
-	var wallet, paid, credits, debits, collected, unfunded, operand big.Int
+	var wallet, paid, credits, debits, collected, unfunded, operand, apiAvailable, apiReserved, apiSpent big.Int
 	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := readFinanceRows(tx.Model(&Wallet{}).Select("balance"), func(rows *sql.Rows) error {
 			var amount int64
@@ -98,6 +103,33 @@ func ReadFinanceSummary(ctx context.Context, since, until int64) (*FinanceSummar
 		}); err != nil {
 			return err
 		}
+
+		if err := readFinanceRows(tx.Model(&User{}).Select("quota, quota_remainder_nano, used_quota, used_quota_remainder_nano"), func(rows *sql.Rows) error {
+			var available, remainder, spent, spentRemainder int64
+			if err := rows.Scan(&available, &remainder, &spent, &spentRemainder); err != nil {
+				return err
+			}
+			apiAvailable.Add(&apiAvailable, common.QuotaMoney(available, remainder))
+			apiSpent.Add(&apiSpent, common.QuotaMoney(spent, spentRemainder))
+			return nil
+		}); err != nil {
+			return err
+		}
+		if err := readFinanceRows(tx.Model(&MoneyAccount{}).Select("reserved_nano"), func(rows *sql.Rows) error {
+			var raw string
+			if err := rows.Scan(&raw); err != nil {
+				return err
+			}
+			amount, err := common.ParseNano(raw)
+			if err != nil {
+				return err
+			}
+			apiReserved.Add(&apiReserved, amount)
+			result.CanonicalMoneyAccounts++
+			return nil
+		}); err != nil {
+			return err
+		}
 		return readFinanceRows(tx.Model(&Log{}).Select("quota, quota_remainder_nano, unfunded_quota, unfunded_quota_remainder_nano, status").Where("created_at >= ? AND created_at < ?", since, until), func(rows *sql.Rows) error {
 			var quota, quotaRemainder, shortfall, shortfallRemainder int64
 			var status int
@@ -123,6 +155,9 @@ func ReadFinanceSummary(ctx context.Context, since, until int64) (*FinanceSummar
 	if err != nil {
 		return nil, err
 	}
+	result.APIAvailableNano = apiAvailable.String()
+	result.APIRecordedReservedNano = apiReserved.String()
+	result.APILifetimeSpentNano = apiSpent.String()
 	result.WalletBalanceNano = wallet.String()
 	result.PaidRechargeNano = paid.String()
 	result.LedgerCreditsNano = credits.String()

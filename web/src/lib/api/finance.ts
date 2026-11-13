@@ -11,6 +11,11 @@ import {
 } from "../system-access";
 
 export interface FinanceSummary {
+  api_available_nano?: string;
+  api_recorded_reserved_nano?: string;
+  api_lifetime_spent_nano?: string;
+  canonical_money_accounts?: number;
+  verified_payments_available?: boolean;
   since: number;
   until: number;
   wallet_balance_nano: string;
@@ -32,6 +37,19 @@ export function parseFinanceSummary(value: unknown): FinanceSummary {
   if (!value || typeof value !== "object")
     throw new Error("Invalid finance summary");
   const data = value as Record<string, unknown>;
+  for (const key of [
+    "api_available_nano",
+    "api_recorded_reserved_nano",
+    "api_lifetime_spent_nano",
+  ]) {
+    if (
+      data[key] !== undefined &&
+      (typeof data[key] !== "string" ||
+        !/^(0|[1-9][0-9]*)$/.test(data[key] as string) ||
+        (data[key] as string).length > 64)
+    )
+      throw Error("Canonical finance amounts were not confirmed");
+  }
   for (const key of [
     "wallet_balance_nano",
     "paid_recharge_nano",

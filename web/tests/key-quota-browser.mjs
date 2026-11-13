@@ -521,6 +521,28 @@ try {
       );
     },
   );
+  await check("finance view separates spendable API funds from legacy payment balances",async()=>{
+    const wallet=await api("GET","/api/wallet/v2");
+    const summary=await api("GET","/api/finance/summary?days=30");
+    assert.equal(summary.api_available_nano,wallet.balance_nano);
+    assert.equal(summary.api_recorded_reserved_nano,"0");
+    assert.equal(summary.wallet_balance_nano,"10000000000");
+    assert.equal(summary.verified_payments_available,false);
+    await page.goto(base+"/admin?tab=finance");
+    await page.locator('[data-metric="api-available"]').waitFor();
+    await page.locator('[data-metric="api-available"] summary').click();
+    assert.equal(await page.locator('[data-metric="api-available"] code').innerText(),wallet.balance_nano);
+    await capture("finance-canonical-desktop");
+    for(const [language,theme,width] of [["zh","light",390],["ar","dark",320]]) {
+      await page.evaluate(([language,theme])=>{localStorage.setItem("xy-language",language);localStorage.setItem("xy-theme",theme);},[language,theme]);
+      await page.setViewportSize({width,height:844});
+      await page.reload();
+      await page.locator('[data-metric="api-available"]').waitFor();
+      await page.locator('[data-metric="api-available"]').scrollIntoViewIfNeeded();
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),"finance viewport overflow");
+      await capture(`finance-canonical-${language}-${theme}-${width}`);
+    }
+  });
   await check("logout invalidates the server-side reveal grant", async () => {
     await api("POST", "/api/user/logout-current", {
       schema: "logout_current_v1",

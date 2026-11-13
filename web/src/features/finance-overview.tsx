@@ -104,20 +104,56 @@ export function FinanceOverview() {
           {!data.wallet_and_api_quota_linked && (
             <p className="finance-note">
               {text(
-                "现金钱包与 API 配额目前分别记账，下列金额不能相加作为可用余额或收入。钱包为当前快照，其余指标按所选周期统计。",
-                "Cash wallets and API quota use separate accounting. These amounts cannot be combined into an available balance or revenue. Wallet balances are a current snapshot; other metrics use the reporting window.",
-                "تستخدم المحافظ النقدية وحصة الواجهة حسابات منفصلة. لا يمكن جمع هذه المبالغ كرصيد متاح أو إيراد. أرصدة المحافظ لقطة حالية؛ وتستخدم المقاييس الأخرى فترة التقرير.",
+                "历史支付钱包包含模拟或来源未核验的记录，不能与 API 调用余额相加作为收入。余额为当前快照，用量按所选周期统计。",
+                "Legacy payment wallets include simulated or unverified funding and cannot be combined with API funds as revenue. Balances are current snapshots; usage follows the selected window.",
+                "تشمل محافظ الدفع السابقة تمويلاً تجريبيًا أو غير متحقق منه ولا تُجمع مع أموال الواجهة كإيراد. الأرصدة لقطات حالية والاستخدام حسب الفترة المحددة.",
               )}
             </p>
           )}
           <div className="finance-grid">
             {[
+              ...(data.api_available_nano === undefined
+                ? []
+                : [
+                    {
+                      key: "api-available",
+                      title: text(
+                        "API 调用可用余额",
+                        "Available API funds",
+                        "أموال الواجهة المتاحة",
+                      ),
+                      amount: data.api_available_nano,
+                      note: text(
+                        "当前可用于调用的余额，模拟充值不计入。",
+                        "Current spendable API balances; simulated top-ups are excluded.",
+                        "أرصدة الواجهة القابلة للاستخدام حاليًا؛ لا تشمل الشحن التجريبي.",
+                      ),
+                    },
+                  ]),
+              ...(data.api_recorded_reserved_nano === undefined
+                ? []
+                : [
+                    {
+                      key: "api-reserved",
+                      title: text(
+                        "已记录的在途预扣",
+                        "Recorded API reservations",
+                        "حجوزات الواجهة المسجلة",
+                      ),
+                      amount: data.api_recorded_reserved_nano,
+                      note: text(
+                        "统一账本中尚未结算或释放的预扣。",
+                        "Reservations still held in the canonical ledger.",
+                        "الحجوزات المعلقة في الدفتر الموحد.",
+                      ),
+                    },
+                  ]),
               {
                 key: "wallet",
                 title: text(
-                  "现金钱包余额快照",
-                  "Cash wallet balance snapshot",
-                  "لقطة رصيد المحافظ النقدية",
+                  "历史支付钱包余额",
+                  "Legacy payment wallet balances",
+                  "أرصدة محافظ الدفع السابقة",
                 ),
                 amount: data.wallet_balance_nano,
                 note: text(

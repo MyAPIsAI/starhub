@@ -80,3 +80,21 @@ func TestFinanceSummaryDoesNotReturnPartialOrInventedTotals(t *testing.T) {
 		t.Fatal("broken data source returned partial zero totals")
 	}
 }
+
+func TestFinanceSummarySeparatesCanonicalNanoFundsFromSimulatedWallets(t *testing.T) {
+	newTestDB(t)
+	user, token := newBillingUser(t, 1000)
+	if err := ReserveQuota(user.ID, token.ID, false, 1, "n2:finance-reserved"); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Create(&Wallet{UserID: user.ID, Balance: 9000000000}).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := ReadFinanceSummary(context.Background(), 1, 2000000000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.APIAvailableNano != "1999999" || result.APIRecordedReservedNano != "1" || result.APILifetimeSpentNano != "0" || result.WalletBalanceNano != "9000000000" || result.CanonicalMoneyAccounts != 1 || result.VerifiedPaymentsAvailable {
+		t.Fatalf("wallet provenance or exact snapshot changed: %+v", result)
+	}
+}
