@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -39,7 +38,7 @@ func TestPlazaTargetsFollowSessionGroupAndNeverChangeBilling(t *testing.T) {
 	if err := model.CreateUser(user); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(user.ID, time.Hour)
+	session := fixtureSession(t, user)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	before, err := model.OptionVersion()
 	if err != nil {

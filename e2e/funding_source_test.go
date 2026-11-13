@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -28,7 +27,7 @@ func TestFundingSourceActualSimulationCannotCertifyFundsOrMintAPIQuota(t *testin
 	if err := model.CreateUser(user); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(user.ID, time.Hour)
+	session := fixtureSession(t, user)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	for _, claim := range []map[string]any{{"funding_source": "verified_provider"}, {"api_quota_eligible": true}, {"trusted": true}, {"provider_transaction_id": "invented"}} {
 		body := map[string]any{"amount_usd": "10.00", "channel": "card"}
