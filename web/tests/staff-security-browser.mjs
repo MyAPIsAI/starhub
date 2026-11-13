@@ -14,6 +14,14 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const repo = path.resolve(root, "..");
 const temp = await mkdtemp(path.join(os.tmpdir(), "starhub-staff-security-"));
 const engine = process.env.STARHUB_TEST_BROWSER || "chromium";
+const cryptoEnv = {
+  STARHUB_CRYPTO_SECRET: "browser-staff-only-secret",
+  STARHUB_CREDENTIAL_KEYS: JSON.stringify({
+    old: "11".repeat(32),
+    new: "22".repeat(32),
+  }),
+  STARHUB_CREDENTIAL_ACTIVE_KEY: "old",
+};
 const out = path.join(root, "playwright-report", "staff-security", engine);
 await mkdir(out, { recursive: true });
 const report = { engine, checks: [], screenshots: [], pageErrors: [] };
@@ -64,7 +72,7 @@ try {
       STARHUB_PORT: String(port),
       STARHUB_BIND_ADDRESS: "127.0.0.1",
       STARHUB_ROOT_PASSWORD: "BrowserInitial92",
-      STARHUB_CRYPTO_SECRET: "browser-staff-only-secret",
+      ...cryptoEnv,
       RESOURCE_CATALOG_NOTIFY_URL: "",
     },
   });
@@ -214,6 +222,77 @@ try {
     },
   );
   await check(
+    "cross-process credential rotation preserves customer and channel identity",
+    async () => {
+      const api = async (method, url, data) => {
+        const response = await context.request.fetch(base + url, {
+          method,
+          data,
+        });
+        const result = await response.json();
+        assert.ok(response.ok() && result.success, result.message);
+        return result.data;
+      };
+      await api("PUT", "/api/option/", {
+        key: "resource_provider_mode",
+        value: "local",
+      });
+      const channel = await api("POST", "/api/channel", {
+        name: "Rotation fixture",
+        key: "test-upstream-key",
+        base_url: "http://127.0.0.1:1",
+        models: "rotation-fixture",
+        group: "default",
+        type: 1,
+      });
+      const token = await api("POST", "/api/token", {
+        name: "Rotation key",
+        unlimited_quota: true,
+      });
+      const rotationEnv = {
+        ...process.env,
+        ...cryptoEnv,
+        STARHUB_CREDENTIAL_ACTIVE_KEY: "new",
+      };
+      execFileSync(
+        "go",
+        [
+          "run",
+          "./cmd/credential-keys",
+          "-db",
+          path.join(temp, "starhub.db"),
+          "-rotate",
+          "-reason",
+          "Browser rotation fixture",
+        ],
+        { cwd: repo, stdio: "pipe", windowsHide: true, env: rotationEnv },
+      );
+      execFileSync(
+        "go",
+        ["run", "./cmd/credential-keys", "-db", path.join(temp, "starhub.db")],
+        {
+          cwd: repo,
+          stdio: "pipe",
+          windowsHide: true,
+          env: {
+            ...rotationEnv,
+            STARHUB_CREDENTIAL_KEYS: JSON.stringify({ new: "22".repeat(32) }),
+          },
+        },
+      );
+      const storedChannel = await api("GET", `/api/channel/${channel.id}`);
+      assert.equal(storedChannel.id, channel.id);
+      assert.equal(
+        (
+          await context.request.get(`http://127.0.0.1:${port}/v1/models`, {
+            headers: { Authorization: `Bearer ${token.key}` },
+          })
+        ).status(),
+        200,
+      );
+    },
+  );
+  await check(
     "mobile Arabic dark mode keeps security setup accessible",
     async () => {
       await context.request.post(base + "/api/user/logout");
@@ -231,7 +310,12 @@ try {
           "-reason",
           "Browser recovery fixture",
         ],
-        { cwd: repo, stdio: "pipe", windowsHide: true },
+        {
+          cwd: repo,
+          stdio: "pipe",
+          windowsHide: true,
+          env: { ...process.env, ...cryptoEnv },
+        },
       );
       const mobile = await browser.newContext({
         viewport: { width: 320, height: 900 },
