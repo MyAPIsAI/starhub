@@ -3,6 +3,9 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"math"
+	"math/big"
+	"starhub/common"
 	"time"
 
 	"gorm.io/gorm"
@@ -25,12 +28,22 @@ type QuotaSettlement struct {
 var errQuotaAlreadySettled = errors.New("quota intent already settled")
 
 func RecordQuotaSettlement(userID, tokenID int64, unlimited bool, delta, actual int64, entry *Log) (*QuotaSettlement, error) {
-	if entry == nil || entry.ID != 0 || actual < 0 || delta > actual {
+	if entry == nil || entry.ID != 0 || actual < 0 || delta > actual || delta < actual-math.MaxInt64 {
 		return nil, errors.New("invalid quota settlement intent")
 	}
 	frozen := *entry
 	frozen.UserID, frozen.TokenID = userID, tokenID
 	frozen.Quota = actual
+	if nanoAdmission(entry.QuotaReservationID) {
+		frozen.AmountUnit = common.MoneyUnitNano
+		var err error
+		frozen.Quota, frozen.QuotaRemainderNano, err = common.NanoQuotaParts(big.NewInt(actual))
+		if err != nil {
+			return nil, err
+		}
+	} else if entry.AmountUnit == common.MoneyUnitNano {
+		return nil, ErrQuotaReservation
+	}
 	if frozen.CreatedAt == 0 {
 		frozen.CreatedAt = time.Now().Unix()
 	}

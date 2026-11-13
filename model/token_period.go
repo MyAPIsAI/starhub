@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"math"
+	"starhub/common"
 	"time"
 	_ "time/tzdata"
 
@@ -71,16 +72,31 @@ func tokenPeriodBounds(period, timezone string, now time.Time) (int64, int64, er
 }
 
 func periodAvailable(p TokenQuotaPeriod) int64 {
-	return max(int64(0), p.QuotaLimit-p.CarryQuota-p.UsedQuota-p.ReservedQuota)
+	whole, _, err := common.NanoQuotaParts(periodMoneyAvailable(p))
+	if err != nil {
+		return 0
+	}
+	return whole
 }
 
 func syncTokenPeriod(tx *gorm.DB, t *Token, p TokenQuotaPeriod) error {
 	t.QuotaPeriodID, t.PeriodStart, t.PeriodEnd = p.ID, p.Start, p.End
-	t.PeriodUsedQuota, t.PeriodReservedQuota = p.UsedQuota+p.CarryQuota, p.ReservedQuota
-	t.RemainQuota = periodAvailable(p)
+	used := common.QuotaMoney(p.UsedQuota, p.UsedQuotaRemainderNano)
+	used.Add(used, common.QuotaMoney(p.CarryQuota, p.CarryQuotaRemainderNano))
+	var err error
+	t.PeriodUsedQuota, t.PeriodUsedQuotaRemainderNano, err = common.NanoQuotaParts(used)
+	if err != nil {
+		return err
+	}
+	t.PeriodReservedQuota, t.PeriodReservedQuotaRemainderNano = p.ReservedQuota, p.ReservedQuotaRemainderNano
+	t.RemainQuota, t.RemainQuotaRemainderNano, err = common.NanoQuotaParts(periodMoneyAvailable(p))
+	if err != nil {
+		return err
+	}
 	return tx.Model(&Token{}).Where("id = ?", t.ID).Updates(map[string]any{
 		"quota_period_id": p.ID, "period_start": p.Start, "period_end": p.End,
 		"period_used_quota": t.PeriodUsedQuota, "period_reserved_quota": p.ReservedQuota, "remain_quota": t.RemainQuota,
+		"period_used_quota_remainder_nano": t.PeriodUsedQuotaRemainderNano, "period_reserved_quota_remainder_nano": t.PeriodReservedQuotaRemainderNano, "remain_quota_remainder_nano": t.RemainQuotaRemainderNano,
 	}).Error
 }
 
@@ -100,7 +116,7 @@ func refreshTokenPeriod(tx *gorm.DB, t *Token, now time.Time) error {
 			return err
 		}
 	}
-	period := TokenQuotaPeriod{TokenID: t.ID, UserID: t.UserID, Period: t.QuotaPeriod, Timezone: t.QuotaTimezone, Start: start, End: end, QuotaLimit: t.PeriodQuotaLimit}
+	period := TokenQuotaPeriod{TokenID: t.ID, UserID: t.UserID, Period: t.QuotaPeriod, Timezone: t.QuotaTimezone, Start: start, End: end, QuotaLimit: t.PeriodQuotaLimit, QuotaLimitRemainderNano: t.PeriodQuotaLimitRemainderNano}
 	if err := tx.Create(&period).Error; err != nil {
 		return err
 	}
@@ -184,6 +200,7 @@ func configureTokenPeriod(tx *gorm.DB, t *Token, fields map[string]any, now time
 	}
 	if value, ok := fields["period_quota_limit"].(int64); ok {
 		next.PeriodQuotaLimit = value
+		next.PeriodQuotaLimitRemainderNano = 0
 	}
 	if next.PeriodQuotaLimit < 0 || next.PeriodQuotaLimit > 9_007_199_254_740_991 {
 		return ErrTokenPeriodPolicy
@@ -252,6 +269,7 @@ func configureTokenPeriod(tx *gorm.DB, t *Token, fields map[string]any, now time
 			}
 		}
 		fields["quota_period_id"], fields["period_start"], fields["period_end"], fields["period_used_quota"], fields["period_reserved_quota"] = int64(0), int64(0), int64(0), int64(0), int64(0)
+		fields["period_used_quota_remainder_nano"], fields["period_reserved_quota_remainder_nano"] = int64(0), int64(0)
 		return nil
 	}
 	var period TokenQuotaPeriod
@@ -259,10 +277,14 @@ func configureTokenPeriod(tx *gorm.DB, t *Token, fields map[string]any, now time
 		if err := tx.First(&period, t.QuotaPeriodID).Error; err != nil {
 			return err
 		}
-		if next.PeriodQuotaLimit < period.UsedQuota+period.CarryQuota+period.ReservedQuota {
+		required := common.QuotaMoney(period.UsedQuota, period.UsedQuotaRemainderNano)
+		required.Add(required, common.QuotaMoney(period.CarryQuota, period.CarryQuotaRemainderNano))
+		required.Add(required, common.QuotaMoney(period.ReservedQuota, period.ReservedQuotaRemainderNano))
+		if common.QuotaMoney(next.PeriodQuotaLimit, next.PeriodQuotaLimitRemainderNano).Cmp(required) < 0 {
 			return ErrTokenPeriodPolicy
 		}
 		period.QuotaLimit = next.PeriodQuotaLimit
+		period.QuotaLimitRemainderNano = next.PeriodQuotaLimitRemainderNano
 		if err := tx.Save(&period).Error; err != nil {
 			return err
 		}
@@ -277,19 +299,32 @@ func configureTokenPeriod(tx *gorm.DB, t *Token, fields map[string]any, now time
 			}
 		}
 		carry := int64(0)
+		carryRemainder := int64(0)
 		if tokenPeriodic(t) {
 			carry = t.PeriodUsedQuota
+			carryRemainder = t.PeriodUsedQuotaRemainderNano
 		}
-		if next.PeriodQuotaLimit < carry {
+		if common.QuotaMoney(next.PeriodQuotaLimit, next.PeriodQuotaLimitRemainderNano).Cmp(common.QuotaMoney(carry, carryRemainder)) < 0 {
 			return ErrTokenPeriodPolicy
 		}
-		period = TokenQuotaPeriod{TokenID: t.ID, UserID: t.UserID, Period: next.QuotaPeriod, Timezone: next.QuotaTimezone, Start: start, End: end, QuotaLimit: next.PeriodQuotaLimit, CarryQuota: carry}
+		period = TokenQuotaPeriod{TokenID: t.ID, UserID: t.UserID, Period: next.QuotaPeriod, Timezone: next.QuotaTimezone, Start: start, End: end, QuotaLimit: next.PeriodQuotaLimit, QuotaLimitRemainderNano: next.PeriodQuotaLimitRemainderNano, CarryQuota: carry, CarryQuotaRemainderNano: carryRemainder}
 		if err := tx.Create(&period).Error; err != nil {
 			return err
 		}
 	}
 	fields["quota_period_id"], fields["period_start"], fields["period_end"] = period.ID, period.Start, period.End
-	fields["period_used_quota"], fields["period_reserved_quota"], fields["remain_quota"] = period.UsedQuota+period.CarryQuota, period.ReservedQuota, periodAvailable(period)
+	used := common.QuotaMoney(period.UsedQuota, period.UsedQuotaRemainderNano)
+	used.Add(used, common.QuotaMoney(period.CarryQuota, period.CarryQuotaRemainderNano))
+	usedWhole, usedRemainder, err := common.NanoQuotaParts(used)
+	if err != nil {
+		return err
+	}
+	available, availableRemainder, err := common.NanoQuotaParts(periodMoneyAvailable(period))
+	if err != nil {
+		return err
+	}
+	fields["period_used_quota"], fields["period_reserved_quota"], fields["remain_quota"] = usedWhole, period.ReservedQuota, available
+	fields["period_used_quota_remainder_nano"], fields["period_reserved_quota_remainder_nano"], fields["remain_quota_remainder_nano"], fields["period_quota_limit_remainder_nano"] = usedRemainder, period.ReservedQuotaRemainderNano, availableRemainder, period.QuotaLimitRemainderNano
 	return nil
 }
 

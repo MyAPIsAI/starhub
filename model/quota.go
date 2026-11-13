@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"log"
+	"starhub/common"
 	"time"
 
 	"gorm.io/gorm"
@@ -34,6 +35,9 @@ func ReserveQuota(userID, tokenID int64, tokenUnlimited bool, amount int64, admi
 }
 
 func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amount int64, admissionID ...string) error {
+	if nanoAdmission(quotaAdmissionID(admissionID)) {
+		return reserveNanoQuota(tx, userID, tokenID, tokenUnlimited, amount, admissionID)
+	}
 	res := tx.Model(&User{}).
 		Where("id = ? AND quota >= ?", userID, amount).
 		Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount)})
@@ -85,6 +89,9 @@ func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64, admi
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if id := quotaAdmissionID(admissionID); id != "" {
+			if nanoAdmission(id) {
+				return releaseNanoQuota(tx, userID, tokenID, amount, id)
+			}
 			return releaseTokenAdmission(tx, userID, tokenID, amount, id, time.Now())
 		}
 		var token Token
@@ -115,6 +122,9 @@ func SettleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 }
 
 func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64, entry *Log, claim func(*gorm.DB) error) error {
+	if entry != nil && (entry.AmountUnit == common.MoneyUnitNano || nanoAdmission(entry.QuotaReservationID)) {
+		return settleNanoQuota(userID, tokenID, delta, actual, entry, claim)
+	}
 	if actual < 0 || delta > actual {
 		return errors.New("invalid quota settlement amounts")
 	}
