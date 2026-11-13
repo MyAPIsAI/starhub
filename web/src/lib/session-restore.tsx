@@ -12,6 +12,8 @@ import { authUserProfile, getSelf } from "./api/auth";
 import { ApiError } from "./api/http";
 import { useProductPreview } from "./product-preview";
 import { useSystemAccess } from "./system-access";
+import { usePreferences } from "./preferences";
+import { getPublicRegionPolicy } from "./locale-policy";
 
 type RestoreStatus = "checking" | "ready" | "unavailable";
 
@@ -32,6 +34,7 @@ export function useSessionRestore() {
 }
 
 export function SessionRestoreProvider({ children }: { children: ReactNode }) {
+  const accountId = useSystemAccess((state) => state.session.accountId);
   const [status, setStatus] = useState<RestoreStatus>("checking");
   const [attempt, setAttempt] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
@@ -43,6 +46,20 @@ export function SessionRestoreProvider({ children }: { children: ReactNode }) {
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   useEffect(() => {
+    if (accountId === null) usePreferences.getState().applyAccountLanguage("");
+  }, [accountId]);
+  useEffect(() => {
+    const abort = new AbortController();
+    getPublicRegionPolicy(abort.signal)
+      .then((policy) => {
+        if (!abort.signal.aborted)
+          usePreferences.getState().applyRegionPolicy(policy);
+      })
+      .catch(() => {});
+    return () => abort.abort();
+  }, [attempt]);
+
+  useEffect(() => {
     const controller = new AbortController();
     activeRequest.current = controller;
     setStatus("checking");
@@ -50,6 +67,7 @@ export function SessionRestoreProvider({ children }: { children: ReactNode }) {
       .then((user) => {
         if (controller.signal.aborted) return;
         useSystemAccess.getState().setSession(user);
+        usePreferences.getState().applyAccountLanguage(user.language);
         useProductPreview
           .getState()
           .login(user.email ?? "", user.username, authUserProfile(user));

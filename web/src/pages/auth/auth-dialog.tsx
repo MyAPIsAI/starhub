@@ -244,6 +244,7 @@ export default function AuthDialog() {
           .getState()
           .login(user.email ?? "", user.username, authUserProfile(user));
         useSystemAccess.getState().setSession(user);
+        usePreferences.getState().applyAccountLanguage(user.language);
         completeSessionRestore();
       }
       setPassword("");

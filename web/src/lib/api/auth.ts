@@ -23,6 +23,7 @@ export interface AuthUser {
   created_at: number;
   admin_password_change_required?: boolean;
   admin_security_required?: boolean;
+  language?: string;
 }
 
 interface LoginResponse {
@@ -62,8 +63,16 @@ export function registerUser(
   username: string,
   password: string,
   email: string,
+  agreementVersion = "",
+  language?: string,
 ): Promise<AuthUser> {
-  return apiPost<AuthUser>("/api/user/register", { username, password, email });
+  return apiPost<AuthUser>("/api/user/register", {
+    username,
+    password,
+    email,
+    agreement_version: agreementVersion,
+    language,
+  });
 }
 
 export function getSelf(
