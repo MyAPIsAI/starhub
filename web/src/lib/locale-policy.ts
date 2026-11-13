@@ -15,7 +15,7 @@ export interface PublicRegionPolicy {
 }
 
 export function getPublicRegionPolicy(signal?: AbortSignal) {
-  return apiGet<PublicRegionPolicy>("/api/region", signal);
+  return apiGet<PublicRegionPolicy>("/api/public/region", signal);
 }
 
 export function resolveClientLocale(

@@ -28,7 +28,7 @@ import (
 // retries with failover).
 func New() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/region", controller.ActiveRegionPublicHandler)
+	mux.HandleFunc("GET /api/public/region", controller.ActiveRegionPublicHandler)
 	mux.Handle("POST /api/metric/runtime/summary", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ReceiveRoutingSnapshot)))
 	mux.Handle("GET /api/metric/routing/policy-status", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourceRoutingStatus)))
 	mux.Handle("GET /api/resource/routing-status", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingStatus)))

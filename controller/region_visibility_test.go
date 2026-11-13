@@ -34,7 +34,7 @@ func TestRegionVisibilityMatchesCatalogAndRelayListings(t *testing.T) {
 			t.Fatalf("regional listing mismatch: %d %s", w.Code, w.Body.String())
 		}
 	}
-	w := call(ActiveRegionPublicHandler, testRequest{target: "/api/region"})
+	w := call(ActiveRegionPublicHandler, testRequest{target: "/api/public/region"})
 	if w.Code != 200 || strings.Contains(w.Body.String(), "region-allowed") || strings.Contains(w.Body.String(), "region-hidden") || !strings.Contains(w.Body.String(), "Asia/Dubai") {
 		t.Fatal("public region response leaked model policy or omitted locale")
 	}
