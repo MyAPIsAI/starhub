@@ -48,3 +48,17 @@ func TestMoneyAdjustmentHTTPGuardsOwnerPayloadAndRole(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMoneyReconciliationReportsNanoProjectionDriftAsConflict(t *testing.T) {
+	newTestDB(t)
+	root := newUser(t, "root-reconcile", common.RoleRoot, 0)
+	user := newUser(t, "reconcile-user", common.RoleUser, 1)
+	if _, err := model.ReadMoneyAccount(user.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.DB.Model(&model.User{}).Where("id = ?", user.ID).Update("quota_remainder_nano", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	w := call(MoneyReconciliation, testRequest{method: "GET", target: "/api/wallet/reconciliation?user_id=" + itoa(user.ID), userID: root.ID, role: root.Role})
+	expectStatus(t, w, 409)
+}

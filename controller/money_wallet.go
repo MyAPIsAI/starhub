@@ -118,13 +118,15 @@ func MoneyReconciliation(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, 400, "invalid reconciliation owner")
 		return
 	}
-	if _, err := model.ReadMoneyAccount(userID); err != nil {
-		common.ApiError(w, 500, "canonical account unavailable")
+
+	if _, err := model.AuditMoneyLedger(userID); err != nil {
+		if errors.Is(err, model.ErrMoneyConflict) {
+			common.ApiError(w, 409, "canonical ledger does not match account or reservation receipts")
+		} else {
+			common.ApiError(w, 500, "canonical account audit unavailable")
+		}
 		return
 	}
-	if err := model.VerifyMoneyLedger(userID); err != nil {
-		common.ApiError(w, 409, "canonical ledger does not match account")
-		return
-	}
+
 	common.ApiSuccess(w, map[string]any{"schema": "money_reconciliation_v2", "user_id": userID, "verified": true, "amount_unit": common.MoneyUnitNano})
 }

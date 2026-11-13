@@ -114,6 +114,9 @@ export interface ChannelTestResult {
 
 /** Per-key upstream usage from /api/channel/{id}/upstream-usage. */
 export interface UpstreamKeyUsage {
+  total_used_nano?: string;
+  total_available_nano?: string;
+  total_granted_nano?: string;
   key_index: number;
   key_masked: string;
   available: boolean;
@@ -136,6 +139,9 @@ export interface UpstreamUsageResult {
   channel_id: number;
   channel_name: string;
   local_used_quota: number;
+  local_used_quota_nano?: string;
+  upstream_total_used_nano?: string;
+  diff_nano?: string;
   keys: UpstreamKeyUsage[];
   upstream_total_used: number;
   diff: number;

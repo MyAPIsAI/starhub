@@ -53,3 +53,10 @@ func TestQuotaAdjustmentLedgerExposesNanoAmountsAndAccount(t *testing.T) {
 		t.Fatalf("wrong ledger scale: %+v", ledger)
 	}
 }
+
+func TestChannelProjectionIncludesTheFinalNano(t *testing.T) {
+	result := maskedChannel(&model.Channel{ID: 1, UsedQuotaRemainderNano: 1})
+	if result["used_quota_nano"] != "1" {
+		t.Fatal("channel API rounded the local charge to zero")
+	}
+}

@@ -1556,7 +1556,10 @@ export default function AdminPortal() {
                             className="mono"
                             style={{ fontSize: "var(--text-lg)" }}
                           >
-                            {quotaToUsd(upstreamModal.local_used_quota)}
+                            {quotaToUsd(
+                              upstreamModal.local_used_quota,
+                              upstreamModal.local_used_quota_nano,
+                            )}
                           </div>
                         </div>
                         <div>
@@ -1567,7 +1570,10 @@ export default function AdminPortal() {
                             className="mono"
                             style={{ fontSize: "var(--text-lg)" }}
                           >
-                            {quotaToUsd(upstreamModal.upstream_total_used)}
+                            {quotaToUsd(
+                              upstreamModal.upstream_total_used,
+                              upstreamModal.upstream_total_used_nano,
+                            )}
                           </div>
                         </div>
                         <div>
@@ -1584,8 +1590,18 @@ export default function AdminPortal() {
                                   : "var(--success)",
                             }}
                           >
-                            {upstreamModal.diff >= 0 ? "+" : ""}
-                            {quotaToUsd(upstreamModal.diff)}
+                            {BigInt(
+                              quotaMoneyNano(
+                                upstreamModal.diff_nano,
+                                upstreamModal.diff,
+                              ),
+                            ) >= 0n
+                              ? "+"
+                              : ""}
+                            {quotaToUsd(
+                              upstreamModal.diff,
+                              upstreamModal.diff_nano,
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1661,7 +1677,9 @@ export default function AdminPortal() {
                                   textAlign: "end",
                                 }}
                               >
-                                {k.available ? quotaToUsd(k.total_used) : "—"}
+                                {k.available
+                                  ? quotaToUsd(k.total_used, k.total_used_nano)
+                                  : "—"}
                               </td>
                               <td
                                 className="mono"
@@ -1679,7 +1697,10 @@ export default function AdminPortal() {
                                 {k.available
                                   ? k.unlimited
                                     ? text("无限", "Unlimited", "غير محدود")
-                                    : quotaToUsd(k.total_available)
+                                    : quotaToUsd(
+                                        k.total_available,
+                                        k.total_available_nano,
+                                      )
                                   : "—"}
                               </td>
                               <td

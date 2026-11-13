@@ -386,7 +386,7 @@ func maskedChannel(c *model.Channel) map[string]any {
 		"priority":         c.Priority,
 		"weight":           c.Weight,
 		"response_time":    c.ResponseTime,
-		"used_quota":       c.UsedQuota,
-		"created_at":       c.CreatedAt,
+		"used_quota":       c.UsedQuota, "used_quota_nano": common.QuotaMoney(c.UsedQuota, c.UsedQuotaRemainderNano).String(),
+		"created_at": c.CreatedAt,
 	}
 }

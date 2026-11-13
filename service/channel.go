@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
@@ -213,13 +215,16 @@ type UpstreamKeyUsage struct {
 
 // UpstreamUsageResult is the aggregated response for all keys of a channel.
 type UpstreamUsageResult struct {
-	ChannelID      int64              `json:"channel_id"`
-	ChannelName    string             `json:"channel_name"`
-	LocalUsedQuota int64              `json:"local_used_quota"`
-	Keys           []UpstreamKeyUsage `json:"keys"`
-	UpstreamTotal  int64              `json:"upstream_total_used"`
-	Diff           int64              `json:"diff"`
-	Supported      bool               `json:"supported"`
+	LocalUsedQuotaNano string             `json:"local_used_quota_nano"`
+	UpstreamTotalNano  string             `json:"upstream_total_used_nano,omitempty"`
+	DiffNano           string             `json:"diff_nano,omitempty"`
+	ChannelID          int64              `json:"channel_id"`
+	ChannelName        string             `json:"channel_name"`
+	LocalUsedQuota     int64              `json:"local_used_quota"`
+	Keys               []UpstreamKeyUsage `json:"keys"`
+	UpstreamTotal      int64              `json:"upstream_total_used"`
+	Diff               int64              `json:"diff"`
+	Supported          bool               `json:"supported"`
 }
 
 // FetchUpstreamTokenUsage queries the upstream new-api instance for each key
@@ -231,9 +236,9 @@ func FetchUpstreamTokenUsage(ctx context.Context, ch *model.Channel) (*UpstreamU
 	result := &UpstreamUsageResult{
 		ChannelID:      ch.ID,
 		ChannelName:    ch.Name,
-		LocalUsedQuota: ch.UsedQuota,
-		Keys:           nil,
-		Supported:      false,
+		LocalUsedQuota: ch.UsedQuota, LocalUsedQuotaNano: common.QuotaMoney(ch.UsedQuota, ch.UsedQuotaRemainderNano).String(),
+		Keys:      nil,
+		Supported: false,
 	}
 	if ch.BaseURL == "" {
 		return result, nil
@@ -265,16 +270,21 @@ func FetchUpstreamTokenUsage(ctx context.Context, ch *model.Channel) (*UpstreamU
 
 	result.Keys = results
 	supported := false
-	var upstreamTotal int64
+	upstreamTotal := new(big.Int)
 	for i := range results {
 		if results[i].Available {
 			supported = true
-			upstreamTotal += results[i].TotalUsed
+			upstreamTotal.Add(upstreamTotal, big.NewInt(results[i].TotalUsed))
 		}
 	}
 	result.Supported = supported
-	result.UpstreamTotal = upstreamTotal
-	result.Diff = upstreamTotal - ch.UsedQuota
+	result.UpstreamTotal = boundedUsageInteger(upstreamTotal)
+	nano := new(big.Int).Mul(upstreamTotal, big.NewInt(common.NanoPerLegacyQuota))
+	difference := new(big.Int).Sub(nano, common.QuotaMoney(ch.UsedQuota, ch.UsedQuotaRemainderNano))
+	result.Diff = boundedUsageInteger(new(big.Int).Quo(difference, big.NewInt(common.NanoPerLegacyQuota)))
+	if supported {
+		result.UpstreamTotalNano, result.DiffNano = nano.String(), difference.String()
+	}
 	return result, nil
 }
 
@@ -346,4 +356,27 @@ func maskKey(key string) string {
 		return strings.Repeat("*", len(key))
 	}
 	return key[:7] + strings.Repeat("*", len(key)-11) + key[len(key)-4:]
+}
+
+func boundedUsageInteger(value *big.Int) int64 {
+	if value.IsInt64() {
+		return value.Int64()
+	}
+	if value.Sign() < 0 {
+		return math.MinInt64
+	}
+	return math.MaxInt64
+}
+
+func (u UpstreamKeyUsage) MarshalJSON() ([]byte, error) {
+	type alias UpstreamKeyUsage
+	if !u.Available {
+		return json.Marshal(alias(u))
+	}
+	return json.Marshal(struct {
+		alias
+		UsedNano      string `json:"total_used_nano"`
+		AvailableNano string `json:"total_available_nano"`
+		GrantedNano   string `json:"total_granted_nano"`
+	}{alias(u), common.QuotaMoney(u.TotalUsed, 0).String(), common.QuotaMoney(u.TotalAvailable, 0).String(), common.QuotaMoney(u.TotalGranted, 0).String()})
 }
