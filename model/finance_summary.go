@@ -79,13 +79,17 @@ func ReadFinanceSummary(ctx context.Context, since, until int64) (*FinanceSummar
 		if err := tx.Model(&RechargeOrder{}).Where("status = ? AND paid_at <= 0", RechargePaid).Count(&result.PaidOrdersWithoutTimestamp).Error; err != nil {
 			return err
 		}
-		if err := readFinanceRows(tx.Model(&LedgerEntry{}).Select("amount").Where("created_at >= ? AND created_at < ?", since, until), func(rows *sql.Rows) error {
-			var amount int64
-			if err := rows.Scan(&amount); err != nil {
+		if err := readFinanceRows(tx.Model(&LedgerEntry{}).Select("amount, account, amount_unit, type, description").Where("created_at >= ? AND created_at < ?", since, until), func(rows *sql.Rows) error {
+			var entry LedgerEntry
+			if err := rows.Scan(&entry.Amount, &entry.Account, &entry.AmountUnit, &entry.Type, &entry.Description); err != nil {
 				return err
 			}
-			operand.SetInt64(amount)
-			if amount < 0 {
+			_, _, nano, _, err := LedgerMoney(entry)
+			if err != nil {
+				return err
+			}
+			operand.SetString(nano, 10)
+			if operand.Sign() < 0 {
 				debits.Sub(&debits, &operand)
 			} else {
 				credits.Add(&credits, &operand)

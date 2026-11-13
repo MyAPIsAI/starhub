@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	"gorm.io/gorm"
 )
@@ -24,6 +25,13 @@ func AdjustUserQuota(userID int64, amount int64, expectedQuota int64, actorID in
 	var entry LedgerEntry
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		// Lock the user row.
+		lock := tx.Model(&User{}).Where("id = ?", userID).UpdateColumn("quota", gorm.Expr("quota"))
+		if lock.Error != nil {
+			return lock.Error
+		}
+		if lock.RowsAffected != 1 {
+			return ErrUserNotFound
+		}
 		var user User
 		if err := tx.Where("id = ?", userID).First(&user).Error; err != nil {
 			return fmt.Errorf("user not found: %w", err)
@@ -33,16 +41,24 @@ func AdjustUserQuota(userID int64, amount int64, expectedQuota int64, actorID in
 			return ErrAdjustmentConflict
 		}
 		// Apply the adjustment.
+		if user.Quota < 0 || (amount > 0 && user.Quota > math.MaxInt64-amount) || (amount < 0 && amount < -user.Quota) {
+			return errors.New("quota adjustment exceeds balance bounds")
+		}
 		newQuota := user.Quota + amount
 		if newQuota < 0 {
 			return fmt.Errorf("adjustment would result in negative quota: %d", newQuota)
 		}
-		if err := tx.Model(&User{}).Where("id = ? AND quota = ?", userID, user.Quota).
-			Update("quota", newQuota).Error; err != nil {
-			return err
+		updated := tx.Model(&User{}).Where("id = ? AND quota = ?", userID, user.Quota).Update("quota", newQuota)
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected != 1 {
+			return ErrAdjustmentConflict
 		}
 		// Write ledger entry with actor attribution.
 		entry = LedgerEntry{
+			Account:       LedgerAccountQuota,
+			AmountUnit:    LedgerUnitLegacyQuota,
 			UserID:        userID,
 			Type:          "adjustment",
 			Amount:        amount,

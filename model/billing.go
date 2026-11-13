@@ -26,6 +26,8 @@ type Wallet struct {
 // resulting wallet balance for audit reconstruction.
 type LedgerEntry struct {
 	ID            int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	Account       string `gorm:"size:24;not null;default:''" json:"account"`
+	AmountUnit    string `gorm:"size:24;not null;default:''" json:"amount_unit"`
 	UserID        int64  `gorm:"index;not null" json:"user_id"`
 	Type          string `gorm:"size:32;not null;default:''" json:"type"` // recharge | call_summary | adjustment | refund
 	Amount        int64  `gorm:"not null;default:0" json:"amount"`        // signed nano-USD
@@ -267,6 +269,8 @@ func ResolveRechargeOrder(id int64, outcome string) (*RechargeOrder, error) {
 				return err
 			}
 			entry := &LedgerEntry{
+				Account:       LedgerAccountWallet,
+				AmountUnit:    LedgerUnitNano,
 				UserID:        o.UserID,
 				Type:          "recharge",
 				Amount:        o.Amount,

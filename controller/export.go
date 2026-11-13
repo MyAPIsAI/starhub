@@ -196,12 +196,16 @@ func buildLedgerExport(userID int64, from time.Time) ([]byte, int, error) {
 	writer := csv.NewWriter(&buf)
 	writer.Write([]string{"Ledger ID", "Time (UTC)", "Type", "Amount (nano-USD)", "Balance After (nano-USD)", "Description", "Order ID", "Trace ID", "Funding Source", "API Quota Eligible"})
 	for _, e := range entries {
+		_, _, amountNano, balanceNano, err := model.LedgerMoney(e)
+		if err != nil {
+			return nil, 0, err
+		}
 		writer.Write([]string{
 			strconv.FormatInt(e.ID, 10),
 			time.Unix(e.CreatedAt, 0).UTC().Format(time.RFC3339),
 			e.Type,
-			strconv.FormatInt(e.Amount, 10),
-			strconv.FormatInt(e.BalanceAfter, 10),
+			amountNano,
+			balanceNano,
 			e.Description,
 			e.OrderID,
 			e.TraceID,

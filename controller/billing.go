@@ -54,14 +54,21 @@ func ListLedger(w http.ResponseWriter, r *http.Request) {
 	data := make([]map[string]any, 0, len(entries))
 	for i := range entries {
 		e := &entries[i]
+		account, unit, amountNano, balanceNano, err := model.LedgerMoney(*e)
+		if err != nil {
+			common.ApiError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 		data = append(data, map[string]any{
+			"account":            account,
+			"amount_unit":        unit,
 			"id":                 e.ID,
 			"user_id":            e.UserID,
 			"type":               e.Type,
 			"amount":             e.Amount,
 			"balance_after":      e.BalanceAfter,
-			"amount_nano":        strconv.FormatInt(e.Amount, 10),
-			"balance_after_nano": strconv.FormatInt(e.BalanceAfter, 10),
+			"amount_nano":        amountNano,
+			"balance_after_nano": balanceNano,
 			"description":        e.Description,
 			"order_id":           e.OrderID,
 			"trace_id":           e.TraceID,

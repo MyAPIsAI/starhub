@@ -40,3 +40,16 @@ func TestWalletAndLedgerExposeExactNanoStrings(t *testing.T) {
 		t.Fatalf("read changed API quota: %+v %v", after, err)
 	}
 }
+
+func TestQuotaAdjustmentLedgerExposesNanoAmountsAndAccount(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "quota-ledger-unit", common.RoleUser, 1000)
+	if _, err := model.AdjustUserQuota(u.ID, 500, 1000, 1, "unit test"); err != nil {
+		t.Fatal(err)
+	}
+	var ledger []map[string]any
+	decodeData(t, call(ListLedger, testRequest{target: "/api/ledger", userID: u.ID, role: u.Role}), &ledger)
+	if len(ledger) != 1 || ledger[0]["amount_nano"] != "1000000" || ledger[0]["balance_after_nano"] != "3000000" || ledger[0]["account"] != model.LedgerAccountQuota || ledger[0]["amount_unit"] != model.LedgerUnitLegacyQuota {
+		t.Fatalf("wrong ledger scale: %+v", ledger)
+	}
+}
