@@ -54,16 +54,19 @@ export function Select({
   options,
   label,
   id,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   label: string;
   id?: string;
+  disabled?: boolean;
 }) {
   const rtl = usePreferences((s) => s.language === "ar");
   return (
     <SelectPrimitive.Root
+      disabled={disabled}
       value={value}
       onValueChange={onChange}
       dir={rtl ? "rtl" : "ltr"}

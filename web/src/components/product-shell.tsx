@@ -19,6 +19,8 @@ import { Select } from "./ui/primitives";
 import { Modal } from "./ui/overlay";
 import { BrandMark } from "./brand";
 import { usePreferences } from "../lib/preferences";
+import { apiPut } from "../lib/api/http";
+import { toast } from "sonner";
 import { useSessionRestore } from "../lib/session-restore";
 import { CodeExample } from "../features/code-example";
 import { type Language } from "../config/placeholders";
@@ -216,18 +218,49 @@ export function PublicHeader() {
 export function Preferences() {
   const { t } = useTranslation();
   const { language, setLanguage, theme, setTheme } = usePreferences();
+  const supported = usePreferences((state) => state.supportedLanguages);
+  const [savingLanguage, setSavingLanguage] = useState(false);
+  const languageWrite = useRef(false);
+  async function changeLanguage(value: string) {
+    if (languageWrite.current) return;
+    const owner = useSystemAccess.getState().session;
+    if (owner.accountId === null) {
+      setLanguage(value as Language);
+      return;
+    }
+    languageWrite.current = true;
+    setSavingLanguage(true);
+    try {
+      await apiPut("/api/user/self", { language: value });
+      if (useSystemAccess.getState().session.epoch === owner.epoch)
+        setLanguage(value as Language);
+    } catch {
+      if (useSystemAccess.getState().session.epoch === owner.epoch)
+        toast.error(
+          language === "zh"
+            ? "无法保存语言偏好，请重试。"
+            : language === "ar"
+              ? "تعذر حفظ اللغة المفضلة. حاول مجددًا."
+              : "Unable to save your language preference. Please retry.",
+        );
+    } finally {
+      languageWrite.current = false;
+      setSavingLanguage(false);
+    }
+  }
   return (
     <div className="product-preferences">
       <Select
         label={t("language")}
         value={language}
-        onChange={(v) => setLanguage(v as Language)}
+        onChange={changeLanguage}
+        disabled={savingLanguage}
         options={[
           { value: "en", label: "English" },
           { value: "zh", label: "中文" },
           { value: "ar", label: "العربية" },
           { value: "ko", label: "한국어" },
-        ]}
+        ].filter((option) => supported.includes(option.value as Language))}
       />
       <Button
         variant="ghost"
