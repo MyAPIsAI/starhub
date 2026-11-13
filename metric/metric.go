@@ -155,11 +155,15 @@ func (s *RequestSpan) EndAttempt(a *AttemptSpan, outcome AttemptClass, statusCod
 	}
 	duration := time.Since(a.start)
 	recordAttempt(a.channelID, a.ttft, duration, outcome == AttemptSuccess, statusCode, a.upstreamReqID)
+	recordPlatformAttempt(s.meta, a, len(s.attempts) > 1)
 }
 
 // EndRequest finalizes the request-level metric and folds it into the
 // global counters.
 func (s *RequestSpan) EndRequest(status int) {
+	if s.streamGone && len(s.attempts) > 0 {
+		recordPlatformInterruption(s.meta, s.attempts[len(s.attempts)-1])
+	}
 	class := classifyRequest(s, status)
 	duration := time.Since(s.start)
 	retries := len(s.attempts)
@@ -411,4 +415,5 @@ func Reset() {
 		return true
 	})
 	resetAffinity()
+	resetPlatformMetrics()
 }

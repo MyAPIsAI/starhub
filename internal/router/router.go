@@ -6,6 +6,7 @@ package router
 
 import (
 	"net/http"
+	"strings"
 
 	"starhub/controller"
 	"starhub/middleware"
@@ -28,6 +29,9 @@ import (
 func New() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("POST /api/metric/runtime/summary", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ReceiveRoutingSnapshot)))
+	for _, path := range []string{"/api/metric/redis", "/api/metric/mysql", "/api/metric/model/redis", "/api/metric/model/mysql"} {
+		mux.Handle("GET "+path, middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourcePlatformMetrics)))
+	}
 	for _, path := range []string{"/api/channel/models/details", "/api/channel/models/changes", "/api/channel/catalog/version"} {
 		mux.Handle("GET "+path, middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourcePlatformCatalog)))
 	}
@@ -276,5 +280,16 @@ func New() http.Handler {
 
 	mux.Handle("GET /v1/models", middleware.TokenAuth(http.HandlerFunc(controller.ListModels)))
 
-	return web.Handler(middleware.RequestID(middleware.ManagementSecurity(middleware.IPRateLimit(middleware.ResourceStartupGate(mux)))))
+	// Dispatch the compatibility probe path before ServeMux: its wildcard
+	// intersects the existing /channel/{id}/upstream-usage management route.
+	probe := middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourcePlatformProbe))
+	dispatch := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/channel/test/") {
+			r.SetPathValue("id", strings.TrimPrefix(r.URL.Path, "/api/channel/test/"))
+			probe.ServeHTTP(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+	return web.Handler(middleware.RequestID(middleware.ManagementSecurity(middleware.IPRateLimit(middleware.ResourceStartupGate(dispatch)))))
 }

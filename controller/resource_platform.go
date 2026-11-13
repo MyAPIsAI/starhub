@@ -6,10 +6,13 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"starhub/common"
+	"starhub/metric"
 	"starhub/model"
+	"starhub/service"
 )
 
 func ReceiveRoutingSnapshot(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +35,80 @@ func ReceiveRoutingSnapshot(w http.ResponseWriter, r *http.Request) {
 	common.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "protection_receipt": map[string]any{
 		"snapshot_version": body.Snapshot.SnapshotVersion, "checksum": body.Snapshot.Checksum, "applied": true, "shared": true,
 	}})
+}
+
+func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
+	byModel := strings.Contains(r.URL.Path, "/model/")
+	quarter := strings.HasSuffix(r.URL.Path, "/mysql")
+	start, end := time.Now().Add(-24*time.Hour).Unix(), time.Now().Unix()
+	for key, target := range map[string]*int64{"start_timestamp": &start, "end_timestamp": &end} {
+		if raw := r.URL.Query().Get(key); raw != "" {
+			v, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || v < 0 {
+				common.ApiError(w, 400, "invalid metric time range")
+				return
+			}
+			*target = v
+		}
+	}
+	if end < start {
+		common.ApiError(w, 400, "invalid metric time range")
+		return
+	}
+	rows := metric.PlatformMetricRows(byModel, quarter, start, end)
+	if quarter {
+		page, size := 1, 100
+		for key, target := range map[string]*int{"page": &page, "page_size": &size} {
+			if raw := r.URL.Query().Get(key); raw != "" {
+				v, err := strconv.Atoi(raw)
+				if err != nil || v < 1 || v > 1000000 {
+					common.ApiError(w, 400, "invalid pagination")
+					return
+				}
+				*target = v
+			}
+		}
+		size = min(size, 1000)
+		from := min(len(rows), (page-1)*size)
+		to := min(len(rows), from+size)
+		common.ApiSuccess(w, map[string]any{"page": page, "page_size": size, "total": len(rows), "items": rows[from:to]})
+		return
+	}
+	if !byModel {
+		common.ApiSuccess(w, map[string]any{"buckets": rows, "pending_count": 0})
+		return
+	}
+	buckets := []map[string]any{}
+	for i := 0; i < len(rows); {
+		j := i + 1
+		for j < len(rows) && rows[j].Minute == rows[i].Minute {
+			j++
+		}
+		buckets = append(buckets, map[string]any{"key": rows[i].Key, "minute": rows[i].Minute, "models": rows[i:j]})
+		i = j
+	}
+	common.ApiSuccess(w, map[string]any{"buckets": buckets})
+}
+
+// ResourcePlatformProbe intentionally avoids ApplyProbeResult: observation
+// traffic cannot modify customer billing, affinity, or production metrics.
+func ResourcePlatformProbe(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	ch, err := model.GetChannelByID(id)
+	if err != nil {
+		common.ApiError(w, 404, "channel not found")
+		return
+	}
+	name := r.URL.Query().Get("model")
+	if name == "" || !modelInList(name, model.SplitList(ch.Models)) {
+		common.ApiError(w, 400, "model does not belong to channel")
+		return
+	}
+	result := service.ProbeChannel(r.Context(), ch, name)
+	common.ApiSuccess(w, map[string]any{"success": result.OK, "ok": result.OK, "time": float64(result.ElapsedMs) / 1000, "elapsed_ms": result.ElapsedMs, "status": result.HTTPStatus})
 }
 
 func ResourcePlatformCatalog(w http.ResponseWriter, r *http.Request) {
