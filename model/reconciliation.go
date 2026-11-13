@@ -33,6 +33,13 @@ type ReconciliationRecord struct {
 	CreatedAt             int64  `gorm:"autoCreateTime" json:"created_at"`
 }
 
+type ReconciliationRevision struct {
+	ReportKey string `gorm:"primaryKey;size:64"`
+	Revision  int64  `gorm:"primaryKey;autoIncrement:false"`
+	Payload   string `gorm:"type:text;not null"`
+	CreatedAt int64  `gorm:"autoCreateTime"`
+}
+
 // InsertReconciliationRecord persists one reconciliation result. It is
 // best-effort: a failure is logged but does not abort the run.
 func InsertReconciliationRecord(r *ReconciliationRecord) error {

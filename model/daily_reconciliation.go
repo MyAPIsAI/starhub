@@ -101,7 +101,10 @@ func reconciliationLogs(tx *gorm.DB, userID int64, day BusinessDaySnapshot) *gor
 // ReconcileBusinessDay compares logs and canonical consumption in one database
 // snapshot. Opening observations are never treated as a day's spending.
 // Unchanged reruns return the same persisted revision and do not alert again.
-func ReconcileBusinessDay(userID int64, day BusinessDaySnapshot) (*ReconciliationRecord, bool, error) {
+func ReconcileBusinessDay(userID int64, day BusinessDaySnapshot, audit ...AuditLog) (*ReconciliationRecord, bool, error) {
+	if len(audit) > 1 || (len(audit) == 1 && (audit[0].Username == "" || audit[0].Reason == "" || len(audit[0].Reason) > 512)) {
+		return nil, false, ErrMoneyConflict
+	}
 	if day.BusinessDate == "" || day.BusinessEnd <= day.BusinessStart {
 		return nil, false, ErrMoneyConflict
 	}
@@ -110,7 +113,16 @@ func ReconcileBusinessDay(userID int64, day BusinessDaySnapshot) (*Reconciliatio
 	}
 	var record ReconciliationRecord
 	changed := false
-	err := DB.Transaction(func(tx *gorm.DB) error {
+	err := DB.Transaction(func(tx *gorm.DB) (txErr error) {
+		defer func() {
+			if txErr == nil && len(audit) == 1 {
+				entry := audit[0]
+				entry.Method = "LOCAL"
+				entry.Path = "/operator/reconciliation/" + reportKey(userID, day)
+				entry.Status = 200
+				txErr = tx.Create(&entry).Error
+			}
+		}()
 		// Acquire the SQLite writer before reading the source snapshot.
 		if err := tx.Model(&User{}).Where("id = ?", userID).UpdateColumn("quota", gorm.Expr("quota")).Error; err != nil {
 			return err
@@ -233,6 +245,13 @@ func ReconcileBusinessDay(userID int64, day BusinessDaySnapshot) (*Reconciliatio
 			return err
 		}
 		if err := tx.Save(&record).Error; err != nil {
+			return err
+		}
+		payload, err := json.Marshal(record)
+		if err != nil {
+			return err
+		}
+		if err := tx.Create(&ReconciliationRevision{ReportKey: record.ReportKey, Revision: record.Revision, Payload: string(payload)}).Error; err != nil {
 			return err
 		}
 		changed = true

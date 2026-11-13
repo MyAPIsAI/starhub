@@ -1,6 +1,7 @@
 package model
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -58,6 +59,96 @@ func TestDailyReconciliationIsIdempotentAndRevisesLateAdmission(t *testing.T) {
 	_, changed, err = ReconcileBusinessDay(u.ID, day)
 	if err != nil || changed {
 		t.Fatal("unchanged drift alerted twice", err)
+	}
+}
+
+func TestConcurrentReconciliationKeepsOneReportAndOneRevision(t *testing.T) {
+	newTestDB(t)
+	u, _ := newBillingUser(t, 1000)
+	day, _ := BusinessDayForDate("2026-11-10", "UTC", "", 0)
+	var wg sync.WaitGroup
+	errors := make(chan error, 8)
+	changes := make(chan bool, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, changed, err := ReconcileBusinessDay(u.ID, day)
+			errors <- err
+			changes <- changed
+		}()
+	}
+	wg.Wait()
+	close(errors)
+	close(changes)
+	for err := range errors {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	n := 0
+	for changed := range changes {
+		if changed {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("created %d revisions", n)
+	}
+	var reports, revisions int64
+	DB.Model(&ReconciliationRecord{}).Count(&reports)
+	DB.Model(&ReconciliationRevision{}).Count(&revisions)
+	if reports != 1 || revisions != 1 {
+		t.Fatalf("reports=%d revisions=%d", reports, revisions)
+	}
+}
+
+func TestManualReconciliationAuditFailureRollsBackReportAndHistory(t *testing.T) {
+	newTestDB(t)
+	u, _ := newBillingUser(t, 1000)
+	day, _ := BusinessDayForDate("2026-11-10", "UTC", "", 0)
+	if err := DB.Exec("CREATE TRIGGER reject_reconciliation_audit BEFORE INSERT ON audit_logs BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ReconcileBusinessDay(u.ID, day, AuditLog{Username: "test-operator", Reason: "Verify original admission day"}); err == nil {
+		t.Fatal("failed audit was reported as success")
+	}
+	var reports, revisions int64
+	DB.Model(&ReconciliationRecord{}).Count(&reports)
+	DB.Model(&ReconciliationRevision{}).Count(&revisions)
+	if reports != 0 || revisions != 0 {
+		t.Fatal("report persisted without audit")
+	}
+	DB.Exec("DROP TRIGGER reject_reconciliation_audit")
+	for i := 0; i < 2; i++ {
+		report, _, err := ReconcileBusinessDay(u.ID, day, AuditLog{Username: "test-operator", Reason: "Verify original admission day"})
+		if err != nil || report.Revision != 1 {
+			t.Fatal(report, err)
+		}
+	}
+	var audits int64
+	DB.Model(&AuditLog{}).Where("username = ?", "test-operator").Count(&audits)
+	if audits != 2 {
+		t.Fatal("manual attempts were not individually audited")
+	}
+}
+
+func TestReconciliationRetainsSpendWhenLogIsMissing(t *testing.T) {
+	newTestDB(t)
+	u, token := newBillingUser(t, 1000)
+	if err := ReserveQuota(u.ID, token.ID, false, 100, "n2:missing-log"); err != nil {
+		t.Fatal(err)
+	}
+	entry := &Log{QuotaReservationID: "n2:missing-log", Status: 1}
+	if err := SettleQuota(u.ID, token.ID, false, -99, 1, entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Delete(entry).Error; err != nil {
+		t.Fatal(err)
+	}
+	report, _, err := ReconcileBusinessDay(u.ID, entry.BusinessDaySnapshot)
+	if err != nil || report.LedgerSpentNano != "1" || report.LogQuotaNanoSum != "0" || report.DifferenceNano != "1" || report.UnverifiableLogs != 1 || !report.Alerted {
+		t.Fatalf("%+v %v", report, err)
 	}
 }
 
