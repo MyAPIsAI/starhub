@@ -54,8 +54,9 @@ type Log struct {
 	PriceVersion int64 `gorm:"not null;default:0" json:"price_version"`
 	// ExactFeeMicroUSD is the precise fee in micro-USD (1 USD = 1,000,000)
 	// before rounding to quota. Enables audit reconstruction.
-	ExactFeeMicroUSD int64 `gorm:"not null;default:0" json:"exact_fee_micro_usd"`
-	CreatedAt        int64 `gorm:"index;autoCreateTime;index:idx_logs_quality_window,priority:1;index:idx_logs_quality_model,priority:2" json:"created_at"`
+	ExactFeeMicroUSD int64  `gorm:"not null;default:0" json:"exact_fee_micro_usd"`
+	ExactFeeNanoUSD  string `gorm:"not null;default:''" json:"exact_fee_nano_usd"`
+	CreatedAt        int64  `gorm:"index;autoCreateTime;index:idx_logs_quality_window,priority:1;index:idx_logs_quality_model,priority:2" json:"created_at"`
 }
 
 func InsertLog(l *Log) error {

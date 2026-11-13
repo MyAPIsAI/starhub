@@ -3,6 +3,7 @@ package relay
 import (
 	"errors"
 	"log"
+	"strconv"
 
 	"starhub/common"
 	"starhub/model"
@@ -237,6 +238,7 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		Status:           status,
 		PriceVersion:     model.LoadedOptionVersion(),
 		ExactFeeMicroUSD: ExactFeeMicroUSD(pd, usage),
+		ExactFeeNanoUSD:  strconv.FormatInt(ComputeUsageNano(pd, usage), 10),
 		RequestID:        requestID,
 	}
 	if pd != nil {
@@ -297,6 +299,7 @@ func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string,
 		Status:             status,
 		PriceVersion:       model.LoadedOptionVersion(),
 		ExactFeeMicroUSD:   QuotaToMicroUSD(actual),
+		ExactFeeNanoUSD:    common.QuotaMoney(actual, 0).String(),
 		RequestID:          requestID,
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)

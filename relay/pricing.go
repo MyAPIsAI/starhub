@@ -2,6 +2,7 @@ package relay
 
 import (
 	"log"
+	"math/big"
 	"time"
 
 	"starhub/common"
@@ -20,6 +21,8 @@ import (
 // resolution, video seconds, ...) via AddOtherRatio — the image / video
 // relays (P3) plug in here without touching the settlement core.
 type PriceData struct {
+	AmountUnit             string `json:"amount_unit,omitempty"`
+	OtherRatioExact        string `json:"other_ratio_exact,omitempty"`
 	QuotaReservationID     string `json:"-"`
 	ModelName              string
 	ModelRatio             float64
@@ -127,6 +130,17 @@ func NewPriceDataWithUserGroup(modelName, group, userGroup string) *PriceData {
 // common.MaxRatioProduct — a clamped value is audited with the
 // quota_saturation marker instead of overflowing downstream.
 func (p *PriceData) AddOtherRatio(ratio float64) {
+	exact := decimalRatio(p.OtherRatio, "other")
+	if p.OtherRatioExact != "" {
+		if prior, ok := new(big.Rat).SetString(p.OtherRatioExact); ok {
+			exact = prior
+		}
+	}
+	exact.Mul(exact, decimalRatio(ratio, "other"))
+	if exact.Cmp(new(big.Rat).SetInt64(int64(common.MaxRatioProduct))) > 0 {
+		exact.SetInt64(int64(common.MaxRatioProduct))
+	}
+	p.OtherRatioExact = exact.RatString()
 	p.OtherRatio = common.ClampRatio(p.OtherRatio*ratio, "other")
 }
 

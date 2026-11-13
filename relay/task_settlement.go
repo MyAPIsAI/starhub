@@ -2,6 +2,7 @@ package relay
 
 import (
 	"encoding/json"
+	"starhub/common"
 	"starhub/model"
 	"starhub/relay/dto"
 	"strconv"
@@ -25,7 +26,7 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 		ChannelID: task.ChannelID, Model: task.Model, RequestedModel: original, Protocol: task.Protocol,
 		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status,
 		PriceVersion:     model.LoadedOptionVersion(),
-		ExactFeeMicroUSD: QuotaToMicroUSD(task.PendingQuota)}
+		ExactFeeMicroUSD: QuotaToMicroUSD(task.PendingQuota), ExactFeeNanoUSD: common.QuotaMoney(task.PendingQuota, 0).String()}
 	if task.Platform == "responses" {
 		var result model.BackgroundResponseOutcome
 		if json.Unmarshal([]byte(task.PendingResultMeta), &result) == nil {
