@@ -48,6 +48,11 @@ func attachTokenAccounting(tx *gorm.DB, account *MoneyAccount, entry *MoneyEntry
 		if periodID == 0 {
 			var token Token
 			if err := tx.First(&token, "id = ? AND user_id = ?", entry.TokenID, entry.UserID).Error; err != nil {
+				// Accepted work may settle after its key is deleted. Its journal
+				// and retained period still exist; a deleted counter has no head.
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					continue
+				}
 				return err
 			}
 			used = common.QuotaMoney(token.UsedQuota, token.UsedQuotaRemainderNano)

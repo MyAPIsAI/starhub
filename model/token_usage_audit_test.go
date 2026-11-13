@@ -29,6 +29,41 @@ func TestTokenAuditDetectsOneNanoWithoutChangingCounters(t *testing.T) {
 	}
 }
 
+func TestTokenAuditDoesNotBlockAcceptedNanoSettlementAfterKeyDeletion(t *testing.T) {
+	for _, periodic := range []bool{false, true} {
+		t.Run(map[bool]string{false: "lifetime", true: "periodic"}[periodic], func(t *testing.T) {
+			newTestDB(t)
+			var user *User
+			var token *Token
+			if periodic {
+				user, token = periodicBillingToken(t, 1)
+			} else {
+				user, token = newBillingUser(t, 1000)
+			}
+			id := "n2:deleted-key-audit"
+			if err := ReserveQuota(user.ID, token.ID, false, 100, id); err != nil {
+				t.Fatal(err)
+			}
+			intent, err := RecordQuotaSettlement(user.ID, token.ID, false, -99, 1, &Log{QuotaReservationID: id, Status: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := DeleteToken(token.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, won, err := ApplyQuotaSettlement(intent.ID); err != nil || !won {
+				t.Fatalf("accepted settlement blocked: %v %v", won, err)
+			}
+			if _, err := AuditMoneyLedger(user.ID); err != nil {
+				t.Fatal("accepted charge is not auditable", err)
+			}
+			if _, won, err := ApplyQuotaSettlement(intent.ID); err != nil || won {
+				t.Fatal("accepted settlement repeated", err)
+			}
+		})
+	}
+}
+
 func TestTokenPeriodAuditDetectsHistoricalPeriodDrift(t *testing.T) {
 	newTestDB(t)
 	u, token := periodicBillingToken(t, 1)
