@@ -60,18 +60,27 @@ export const canReadFinance = (role: SystemRole): boolean =>
 export const useSystemAccess = create<{
   role: SystemRole;
   session: SessionIdentity;
+  securitySetupRequired: boolean;
   setRole: (role: SystemRole) => void;
   setSession: (
-    user: { id: number; group: string; role: number; username?: string } | null,
+    user: {
+      id: number;
+      group: string;
+      role: number;
+      username?: string;
+      admin_security_required?: boolean;
+    } | null,
   ) => void;
 }>((set) => ({
   role: ROLE_USER,
+  securitySetupRequired: false,
   session: { accountId: null, group: null, epoch: 0, username: null },
   setRole: (role) => set({ role }),
   // Only confirmed session events rotate this identity, never Demo profile edits.
   setSession: (user) =>
     set((state) => ({
       role: user?.role ?? ROLE_USER,
+      securitySetupRequired: user?.admin_security_required === true,
       session: {
         accountId: user?.id ?? null,
         group: user?.group ?? null,

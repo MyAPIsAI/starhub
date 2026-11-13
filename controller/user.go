@@ -254,6 +254,7 @@ func GetSelf(w http.ResponseWriter, r *http.Request) {
 	}
 	data := publicUser(user)
 	data["request_count"] = requestCount
+	data["admin_security_required"] = common.IsStaffRole(user.Role) && (user.AdminPasswordChangedAt == 0 || !middleware.Sessions.StaffVerified(middleware.SessionToken(r), user))
 	common.ApiSuccess(w, data)
 }
 

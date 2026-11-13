@@ -1,0 +1,39 @@
+.staff-security {
+  width: min(100%, 34rem);
+  margin: 3rem auto;
+  padding: 1.25rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  overflow-wrap: anywhere;
+}
+.staff-security form,
+.staff-security label {
+  display: grid;
+  gap: 0.65rem;
+}
+.staff-security form {
+  gap: 1rem;
+}
+.staff-security p {
+  margin-block: 1rem;
+}
+.staff-security textarea,
+.staff-security pre {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 390px) {
+  .staff-security {
+    margin-block: 1rem;
+    border-inline: 0;
+    border-radius: 0;
+  }
+}

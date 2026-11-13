@@ -37,6 +37,7 @@ import {
   useSessionRestore,
 } from "./lib/session-restore";
 import { Button } from "./components/ui/button";
+import StaffSecuritySetup from "./features/staff-security-setup";
 
 const DesignSystem = lazy(() => import("./pages/design-system"));
 const BrandHome = lazy(() => import("./pages/brand-home"));
@@ -134,6 +135,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status, retry } = useSessionRestore();
   const language = usePreferences((s) => s.language);
   const isLoggedIn = useSystemAccess((s) => s.session.accountId !== null);
+  const securitySetupRequired = useSystemAccess((s) => s.securitySetupRequired);
   if (status === "unavailable") {
     const message =
       language === "zh"
@@ -158,6 +160,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     );
   }
   if (!isLoggedIn) return <Navigate to="/" replace />;
+  if (securitySetupRequired) return <StaffSecuritySetup />;
   return <>{children}</>;
 }
 
