@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -24,6 +25,22 @@ type saveRegionProfileRequest struct {
 	FeatureFlags       string `json:"feature_flags"`
 	Enabled            *bool  `json:"enabled"`
 	ExpectedRevision   *int64 `json:"expected_revision"`
+}
+
+// ActiveRegionPublicHandler exposes locale and enabled entry points only.
+// Private model lists and operator configuration are not part of this response.
+func ActiveRegionPublicHandler(w http.ResponseWriter, r *http.Request) {
+	profile, err := model.ActiveRegionProfile()
+	if err != nil {
+		common.ApiError(w, 503, "active deployment policy is unavailable")
+		return
+	}
+	var flags map[string]bool
+	if err := json.Unmarshal([]byte(profile.FeatureFlags), &flags); err != nil {
+		common.ApiError(w, 503, "active deployment policy is unavailable")
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"id": profile.ID, "revision": profile.Revision, "default_language": profile.DefaultLanguage, "supported_languages": profile.SupportedLanguageList(), "currency": profile.Currency, "accounting_currency": "USD", "timezone": profile.Timezone, "country_code": profile.CountryCode, "legal_version": profile.LegalVersion, "feature_flags": flags, "registration_enabled": profile.FeatureEnabled("registration")})
 }
 
 // ListRegionProfilesHandler handles GET /api/region-profile.
