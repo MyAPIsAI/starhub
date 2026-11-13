@@ -30,10 +30,10 @@ func TestTaskTokenTariffsNativeAndPluginRecoverWithoutRepricing(t *testing.T) {
 			t.Run(fmt.Sprintf("plugin=%v/%s/outside=%v/free=%v", plugin, status, tc.outside, tc.free), func(t *testing.T) {
 				newTestDB(t)
 				rules := taskAbsoluteRates
-				want := int64(1050)
+				want := int64(2100000)
 				if tc.outside {
 					rules = `{"sora-2":{"timezone":"UTC","windows":[]}}`
-					want = 950
+					want = 1900000
 				}
 				if tc.free {
 					rules = strings.NewReplacer(`:"1"`, `:"0"`, `:"2"`, `:"0"`, `:"3"`, `:"0"`, `:"4"`, `:"0"`, `:"5"`, `:"0"`, `:"6"`, `:"0"`).Replace(taskAbsoluteRates)
@@ -123,13 +123,16 @@ func TestTaskTokenTariffsNativeAndPluginRecoverWithoutRepricing(t *testing.T) {
 					}
 				}
 				logs, total, err := model.ListLogs(user.ID, 1, 10, "")
-				if err != nil || total != 1 || logs[0].Quota != want || logs[0].PromptTokens != 400 || logs[0].CompletionTokens != 200 || logs[0].UsageSource != "upstream" || gets.Load() != 1 || posts.Load() != 1 {
+				if err != nil || total != 1 || common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != want || logs[0].PromptTokens != 400 || logs[0].CompletionTokens != 200 || logs[0].UsageSource != "upstream" || gets.Load() != 1 || posts.Load() != 1 {
 					t.Fatalf("recovery duplicated, repriced or lost usage: %+v %v", logs, err)
 				}
 				afterUser, _ := model.GetUserByID(user.ID)
 				afterToken, _ := model.GetTokenByID(token.ID)
-				if afterUser.Quota != user.Quota-want || afterToken.RemainQuota != token.RemainQuota-want || afterUser.UsedQuota != want || afterToken.UsedQuota != want {
+				if common.QuotaMoney(afterUser.Quota, afterUser.QuotaRemainderNano).Int64() != user.Quota*common.NanoPerLegacyQuota-want || common.QuotaMoney(afterToken.RemainQuota, afterToken.RemainQuotaRemainderNano).Int64() != token.RemainQuota*common.NanoPerLegacyQuota-want || common.QuotaMoney(afterUser.UsedQuota, afterUser.UsedQuotaRemainderNano).Int64() != want || common.QuotaMoney(afterToken.UsedQuota, afterToken.UsedQuotaRemainderNano).Int64() != want {
 					t.Fatal("balances did not reconcile")
+				}
+				if err := model.VerifyMoneyLedger(user.ID); err != nil {
+					t.Fatal(err)
 				}
 			})
 		}

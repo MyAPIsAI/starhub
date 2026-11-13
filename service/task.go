@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"starhub/common"
 	"starhub/model"
 	"starhub/pkg/pricingtime"
 	"starhub/relay"
@@ -175,6 +176,9 @@ func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.T
 			priceData = &snapshot.PriceData
 			accepted = snapshot.Estimate
 		}
+	}
+	if common.IsNanoReservationID(task.QuotaReservationID) != (priceData.AmountUnit == common.MoneyUnitNano) {
+		return 0, fmt.Errorf("task monetary contract does not match its reservation")
 	}
 	pricing := adaptor.AdjustBillingOnComplete(task.Model, task.Group, &req, result, accepted)
 	if priceData.HasIndependentTaskPricing() {

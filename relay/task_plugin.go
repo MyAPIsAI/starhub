@@ -7,6 +7,7 @@ import (
 	"math"
 	"sync"
 
+	"starhub/common"
 	"starhub/model"
 	"starhub/pkg/billingexpr"
 	"starhub/pkg/pricingtime"
@@ -65,6 +66,12 @@ func PluginTaskQuota(pd *PriceData, usage taskplugin.Usage, status string) (int6
 	if !pd.HasModelPrice {
 		return 0, errors.New("configure a model unit price or expression before submitting plugin tasks")
 	}
+	if pd.AmountUnit == common.MoneyUnitNano {
+		exact := *pd
+		exact.AddOtherRatio(usage.Seconds)
+		exact.AddOtherRatio(usage.N)
+		return priceUSDNano(&exact, pd.ModelPriceUSD), nil
+	}
 	return priceUSDToQuota(pd, pd.ModelPriceUSD*usage.Seconds*usage.N), nil
 }
 
@@ -75,16 +82,35 @@ type PluginTaskPricingSnapshot struct {
 	Usage     taskplugin.Usage    `json:"usage"`
 }
 
+func (s PluginTaskPricingSnapshot) MarshalJSON() ([]byte, error) {
+	if s.Version < 0 || s.Version > 3 {
+		return nil, errors.New("unsupported plugin task pricing snapshot")
+	}
+	if s.PriceData.HasIndependentTaskPricing() {
+		s.Version = 2
+	}
+	if s.PriceData.AmountUnit == common.MoneyUnitNano {
+		s.Version = 3
+	} else if s.PriceData.AmountUnit != "" {
+		return nil, errors.New("unsupported plugin task monetary unit")
+	}
+	type snapshot PluginTaskPricingSnapshot
+	return json.Marshal(snapshot(s))
+}
+
 func PluginTaskFinalQuota(task *model.Task, result taskplugin.Result) (int64, error) {
 	var snapshot PluginTaskPricingSnapshot
 	if err := json.Unmarshal([]byte(task.PricingMeta), &snapshot); err != nil {
 		return 0, errors.New("invalid plugin task pricing snapshot")
 	}
+	if snapshot.Version < 0 || snapshot.Version > 3 || ((snapshot.Version == 3) != (snapshot.PriceData.AmountUnit == common.MoneyUnitNano)) || (snapshot.PriceData.AmountUnit != "" && snapshot.PriceData.AmountUnit != common.MoneyUnitNano) || (common.IsNanoReservationID(task.QuotaReservationID) != (snapshot.PriceData.AmountUnit == common.MoneyUnitNano)) {
+		return 0, errors.New("plugin task monetary contract does not match its reservation")
+	}
 	if snapshot.Version < 2 && !snapshot.PriceData.TokenRates.Valid() {
 		snapshot.PriceData.TokenTimeAdjustment = pricingtime.TokenAdjustment{}
 	}
 	if snapshot.PriceData.HasIndependentTaskPricing() {
-		if snapshot.Version != 2 {
+		if snapshot.Version < 2 {
 			return 0, errors.New("unsupported plugin task pricing snapshot")
 		}
 		if result.Usage != nil && result.Usage.Tokens != nil {
@@ -103,7 +129,7 @@ func PluginTaskFinalQuota(task *model.Task, result taskplugin.Result) (int64, er
 		}
 		return TaskPricingQuotaWithPriceData(&snapshot.PriceData, estimate), nil
 	}
-	if snapshot.Version < 0 || snapshot.Version > 2 {
+	if snapshot.Version < 0 || snapshot.Version > 3 {
 		return 0, errors.New("unsupported plugin task pricing snapshot")
 	}
 	if result.Usage != nil {

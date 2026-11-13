@@ -101,7 +101,7 @@ func TestPluginTaskLifecyclePinnedVersionAndRecovery(t *testing.T) {
 			if err := model.DB.First(&task, "id = ?", response.ID).Error; err != nil {
 				t.Fatal(err)
 			}
-			if task.TaskPluginID != stored.ID || task.Quota != 80000 || !strings.Contains(task.RequestMeta, `"seed":123`) {
+			if task.TaskPluginID != stored.ID || task.Quota != 160000000 || !strings.Contains(task.RequestMeta, `"seed":123`) {
 				t.Fatalf("snapshot incorrect: %+v", task)
 			}
 			if err := model.DeleteChannel(ch.ID); err == nil {
@@ -369,7 +369,7 @@ func TestPluginSubmissionProtectsOnlyItsChannel(t *testing.T) {
 	if err := model.DB.First(&admitted, "channel_id = ?", ch.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if admitted.Status != model.TaskStatusSubmitting || admitted.Quota != 80000 {
+	if admitted.Status != model.TaskStatusSubmitting || admitted.Quota != 160000000 {
 		t.Fatalf("missing durable admission: %+v", admitted)
 	}
 	update := make(chan error, 1)

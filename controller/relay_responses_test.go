@@ -57,7 +57,7 @@ func assertResponsesBill(t *testing.T, user *model.User, token *model.Token, pro
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterUser.Quota != user.Quota-entry.Quota || afterUser.UsedQuota != entry.Quota || afterToken.RemainQuota != token.RemainQuota-entry.Quota || afterToken.UsedQuota != entry.Quota {
+	if common.QuotaMoney(afterUser.Quota, afterUser.QuotaRemainderNano).Int64() != common.QuotaMoney(user.Quota, user.QuotaRemainderNano).Int64()-common.QuotaMoney(entry.Quota, entry.QuotaRemainderNano).Int64() || common.QuotaMoney(afterUser.UsedQuota, afterUser.UsedQuotaRemainderNano).Int64() != common.QuotaMoney(entry.Quota, entry.QuotaRemainderNano).Int64() || common.QuotaMoney(afterToken.RemainQuota, afterToken.RemainQuotaRemainderNano).Int64() != common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64()-common.QuotaMoney(entry.Quota, entry.QuotaRemainderNano).Int64() || common.QuotaMoney(afterToken.UsedQuota, afterToken.UsedQuotaRemainderNano).Int64() != common.QuotaMoney(entry.Quota, entry.QuotaRemainderNano).Int64() {
 		t.Fatalf("reservation or settlement mismatch: log=%+v user=%+v token=%+v", entry, afterUser, afterToken)
 	}
 }
@@ -88,8 +88,8 @@ func TestResponsesNativeJSONPreservesWireAndBillsDetails(t *testing.T) {
 	assertResponsesBill(t, user, token, 20, 10, 1)
 	logs, _, _ := model.ListLogs(user.ID, 1, 10, "")
 	usage, _ := dto.ParseResponsesUsage([]byte(responseBody))
-	want := relay.ComputeUsageQuota(relay.NewPriceDataWithUserGroup("gpt-4o", "default", "default"), usage)
-	if logs[0].Quota != want {
+	want := relay.ComputeUsageNano(relay.NewPriceDataWithUserGroup("gpt-4o", "default", "default"), usage)
+	if common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != want {
 		t.Fatalf("detail-aware bill = %d, want %d", logs[0].Quota, want)
 	}
 }
