@@ -54,7 +54,10 @@ func AuditMoneyLedger(userID int64) (*MoneyAccount, error) {
 		if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
 			return err
 		}
-		return verifyMoneyLedger(tx, userID)
+		if err := verifyMoneyLedger(tx, userID); err != nil {
+			return err
+		}
+		return verifyTokenAccounting(tx, userID)
 	})
 	return &account, err
 }

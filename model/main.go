@@ -36,7 +36,7 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&TokenQuotaPeriod{}, &QuotaReservation{}); err != nil {
 		return fmt.Errorf("migrate token quota periods: %w", err)
 	}
-	if err := db.AutoMigrate(&MoneyAccount{}, &MoneyEntry{}); err != nil {
+	if err := db.AutoMigrate(&MoneyAccount{}, &MoneyEntry{}, &TokenUsageBaseline{}); err != nil {
 		return fmt.Errorf("migrate exact monetary journal: %w", err)
 	}
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {

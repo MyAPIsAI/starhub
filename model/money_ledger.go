@@ -26,6 +26,8 @@ type MoneyAccount struct {
 }
 
 type MoneyEntry struct {
+	TokenID            int64  `gorm:"index;not null;default:0" json:"token_id,omitempty"`
+	PeriodID           int64  `gorm:"index;not null;default:0" json:"period_id,omitempty"`
 	ID                 int64  `gorm:"primaryKey" json:"id"`
 	UserID             int64  `gorm:"index;uniqueIndex:idx_money_sequence;uniqueIndex:idx_money_operation" json:"user_id"`
 	Sequence           int64  `gorm:"uniqueIndex:idx_money_sequence" json:"sequence"`
@@ -176,6 +178,9 @@ func recordMoneyMovement(tx *gorm.DB, account *MoneyAccount, m moneyMovement) (*
 		return nil, ErrMoneyConflict
 	}
 	entry := &MoneyEntry{UserID: account.UserID, Sequence: account.Sequence + 1, OperationID: m.OperationID, RequestDigest: m.Digest, Kind: m.Kind, AvailableDeltaNano: changes[0], ReservedDeltaNano: changes[1], SpentDeltaNano: changes[2], AvailableAfterNano: after[0], ReservedAfterNano: after[1], SpentAfterNano: after[2], ReservationID: m.ReservationID, LogID: m.LogID, ActorID: m.ActorID, Reason: m.Reason, FundingSource: m.FundingSource}
+	if err := attachTokenAccounting(tx, account, entry); err != nil {
+		return nil, err
+	}
 	if err := tx.Create(entry).Error; err != nil {
 		return nil, err
 	}
