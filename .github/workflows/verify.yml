@@ -71,6 +71,40 @@ jobs:
 
   # Nightly job: shuffle tests to detect order-dependent failures.
   # Only runs on schedule (not on every push/PR).
+  browser-security-regions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      CGO_ENABLED: "0"
+      STARHUB_TEST_BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+        working-directory: web
+      - run: node tests/staff-security-browser.mjs
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-regions-${{ matrix.browser }}
+          path: web/playwright-report/staff-security/${{ matrix.browser }}
+          retention-days: 7
+
   nightly-shuffle:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest

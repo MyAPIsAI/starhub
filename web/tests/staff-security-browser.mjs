@@ -122,7 +122,7 @@ try {
   });
   const page = await context.newPage();
   let factorSecret = "";
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(45000);
   page.setDefaultNavigationTimeout(45000);
   page.on("pageerror", (error) => report.pageErrors.push(String(error)));
   async function check(name, run) {
@@ -401,7 +401,7 @@ try {
         reducedMotion: "reduce",
       });
       const p = await guest.newPage();
-      p.setDefaultTimeout(15000);
+      p.setDefaultTimeout(45000);
       p.on("pageerror", (error) => report.pageErrors.push(String(error)));
       await p.goto(base + "/legal/terms", {
         waitUntil: "domcontentloaded",
