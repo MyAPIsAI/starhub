@@ -12,100 +12,51 @@ import (
 	"starhub/model"
 )
 
-// reconciliationDiffThreshold is the absolute quota difference above which
-// a reconciliation alert is triggered. 1000 quota = $0.002 — small enough
-// to catch any meaningful billing drift.
-const reconciliationDiffThreshold = int64(1000)
-
-// RunDailyReconciliationOnce computes a daily reconciliation snapshot:
-// compares the sum of Log.Quota against User.UsedQuota delta for each user,
-// persists the result, and alerts on threshold breaches.
-// It is safe to call concurrently; each run is independent and idempotent
-// (re-running for the same day overwrites the previous record).
+// RunDailyReconciliationOnce revisits settled business days, including historical
+// days changed by late receipts. Source-identical reports remain idempotent.
 func RunDailyReconciliationOnce(ctx context.Context) {
-	if ctx.Err() != nil {
-		return
-	}
-	yesterday := time.Now().UTC().Add(-24 * time.Hour)
-	dayStart := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC)
-	dayEnd := dayStart.Add(24 * time.Hour)
-	dateStr := dayStart.Format("2006-01-02")
-
 	users, err := model.ListUsers()
 	if err != nil {
 		log.Printf("daily reconciliation: list users failed: %v", err)
-		NotifyReconciliationDiff(0, "list users failed: "+err.Error())
 		return
 	}
-
 	for _, user := range users {
 		if ctx.Err() != nil {
 			return
 		}
-
-		collected, err := model.SumChargedLogMoney(user.ID, dayStart.Unix(), dayEnd.Unix())
+		days, err := model.ReconciliationDays(user.ID, time.Now())
 		if err != nil {
-			log.Printf("daily reconciliation: exact log sum for user %d failed: %v", user.ID, err)
+			log.Printf("daily reconciliation: calendar for user %d unavailable: %v", user.ID, err)
 			continue
 		}
-		account, verifyErr := model.AuditMoneyLedger(user.ID)
-		current := common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano)
-		sequence := int64(0)
-		if account != nil {
-			sequence = account.Sequence
-			if value, ok := new(big.Int).SetString(account.SpentNano, 10); ok {
-				current = value
+		for _, day := range days {
+			if ctx.Err() != nil {
+				return
 			}
-		}
-		previous := new(big.Int)
-		if prev, err := model.ReconciliationBeforeDate(user.ID, dateStr); err == nil {
-			previous = common.QuotaMoney(prev.UsedQuotaDelta, 0)
-			if prev.AccountingVersion == 2 {
-				if value, ok := new(big.Int).SetString(prev.UsedQuotaNanoSnapshot, 10); ok {
-					previous = value
-				}
+			record, changed, err := model.ReconcileBusinessDay(user.ID, day)
+			if err != nil {
+				log.Printf("daily reconciliation: user %d day %s failed: %v", user.ID, day.BusinessDate, err)
+				continue
 			}
-		}
-		usedDelta := new(big.Int).Sub(current, previous)
-		difference := new(big.Int).Sub(collected, usedDelta)
-		difference.Abs(difference)
-		alerted := false
-		if difference.Cmp(common.QuotaMoney(reconciliationDiffThreshold, 0)) > 0 {
-			NotifyReconciliationDiff(reconciliationQuotaProjection(difference), "user usage snapshot delta does not match daily log sum")
-			alerted = true
-		}
-		if verifyErr != nil {
-			NotifyReconciliationDiff(0, fmt.Sprintf("canonical money ledger verification failed for user %d", user.ID))
-			alerted = true
-		}
-		failure := ""
-		if verifyErr != nil {
-			failure = "canonical_money_verification_failed"
-		}
-		record := &model.ReconciliationRecord{UserID: user.ID, Date: dateStr, LogQuotaSum: reconciliationQuotaProjection(collected), UsedQuotaDelta: reconciliationQuotaProjection(current), Diff: reconciliationQuotaProjection(difference), Alerted: alerted, AccountingVersion: 2, LogQuotaNanoSum: collected.String(), UsedQuotaNanoSnapshot: current.String(), DifferenceNano: difference.String(), LedgerVerified: verifyErr == nil, LedgerError: failure, MoneySequence: sequence}
-
-		if err := model.InsertReconciliationRecord(record); err != nil {
-			log.Printf("daily reconciliation: persist record for user %d failed: %v", user.ID, err)
+			if changed && record.Alerted {
+				NotifyReconciliationDiff(record.Diff, fmt.Sprintf("user %d business day %s %s: %s; nano difference %s", user.ID, day.BusinessDate, day.BusinessTimezone, record.State, record.DifferenceNano))
+			}
 		}
 	}
-	log.Printf("daily reconciliation: completed for %s (%d users)", dateStr, len(users))
 }
 
-// RunDailyReconciliationLoop runs the reconciliation daily at 02:00 UTC.
+// Local 02:00 eligibility is evaluated against each frozen calendar, not UTC.
 func RunDailyReconciliationLoop(ctx context.Context) {
+	RunDailyReconciliationOnce(ctx)
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 	for {
-		now := time.Now().UTC()
-		next := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, time.UTC)
-		if next.Before(now) {
-			next = next.Add(24 * time.Hour)
-		}
-		wait := time.Until(next)
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(wait):
+		case <-ticker.C:
+			RunDailyReconciliationOnce(ctx)
 		}
-		RunDailyReconciliationOnce(ctx)
 	}
 }
 

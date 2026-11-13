@@ -18,7 +18,7 @@ func TestRunDailyReconciliationOnce(t *testing.T) {
 	}
 
 	// Insert a log entry with yesterday's timestamp and a matching quota amount.
-	yesterday := time.Now().UTC().Add(-24 * time.Hour)
+	yesterday := time.Now().UTC().Add(-48 * time.Hour)
 	if err := model.InsertLog(&model.Log{UserID: user.ID, Model: "gpt-4o", Quota: 500, Status: 1, CreatedAt: yesterday.Unix()}); err != nil {
 		t.Fatalf("InsertLog: %v", err)
 	}
@@ -27,7 +27,7 @@ func TestRunDailyReconciliationOnce(t *testing.T) {
 	RunDailyReconciliationOnce(context.Background())
 
 	// Verify a record was persisted.
-	record, err := model.GetLatestReconciliationForUser(user.ID)
+	record, err := reconciliationForDate(user.ID, yesterday.Format("2006-01-02"))
 	if err != nil {
 		t.Fatalf("GetLatestReconciliationForUser: %v", err)
 	}
@@ -48,14 +48,14 @@ func TestRunDailyReconciliationOnceAlertsOnLargeDiff(t *testing.T) {
 	}
 
 	// Insert a log entry with yesterday's timestamp and a large quota amount.
-	yesterday := time.Now().UTC().Add(-24 * time.Hour)
+	yesterday := time.Now().UTC().Add(-48 * time.Hour)
 	if err := model.InsertLog(&model.Log{UserID: user.ID, Model: "gpt-4o", Quota: 50000, Status: 1, CreatedAt: yesterday.Unix()}); err != nil {
 		t.Fatalf("InsertLog: %v", err)
 	}
 
 	RunDailyReconciliationOnce(context.Background())
 
-	record, err := model.GetLatestReconciliationForUser(user.ID)
+	record, err := reconciliationForDate(user.ID, yesterday.Format("2006-01-02"))
 	if err != nil {
 		t.Fatalf("GetLatestReconciliationForUser: %v", err)
 	}
@@ -76,16 +76,22 @@ func TestDailyMoneyAuditDetectsOneNanoAndNeverRepairsBalances(t *testing.T) {
 	if err := model.DB.Model(&model.User{}).Where("id = ?", user.ID).Update("quota_remainder_nano", 1).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := model.InsertLog(&model.Log{UserID: user.ID, QuotaRemainderNano: 1, Status: 1, CreatedAt: time.Now().Add(-24 * time.Hour).Unix()}); err != nil {
+	if err := model.InsertLog(&model.Log{UserID: user.ID, QuotaRemainderNano: 1, Status: 1, CreatedAt: time.Now().Add(-48 * time.Hour).Unix()}); err != nil {
 		t.Fatal(err)
 	}
 	RunDailyReconciliationOnce(context.Background())
-	record, err := model.GetLatestReconciliationForUser(user.ID)
-	if err != nil || record.AccountingVersion != 2 || record.LogQuotaNanoSum != "1" || !record.Alerted || record.LedgerVerified || record.LedgerError == "" {
+	record, err := reconciliationForDate(user.ID, time.Now().Add(-48*time.Hour).UTC().Format("2006-01-02"))
+	if err != nil || record.AccountingVersion != 3 || record.LogQuotaNanoSum != "1" || !record.Alerted || record.LedgerVerified || record.LedgerError == "" {
 		t.Fatalf("one-nano discrepancy disappeared: %+v %v", record, err)
 	}
 	after, _ := model.GetUserByID(user.ID)
 	if after.QuotaRemainderNano != 1 {
 		t.Fatal("audit silently repaired the balance")
 	}
+}
+
+func reconciliationForDate(userID int64, date string) (*model.ReconciliationRecord, error) {
+	var record model.ReconciliationRecord
+	err := model.DB.Where("user_id = ? AND date = ?", userID, date).First(&record).Error
+	return &record, err
 }
