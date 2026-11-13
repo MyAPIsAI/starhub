@@ -273,6 +273,9 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			}
 		}
 		if entry != nil || settled.UnfundedQuota > 0 {
+			if settled.BusinessDate == "" {
+				settled.BusinessDaySnapshot = legacyBusinessDay(settled.AdmittedAt)
+			}
 			if err := tx.Create(&settled).Error; err != nil {
 				return err
 			}

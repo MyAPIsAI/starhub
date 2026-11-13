@@ -12,6 +12,9 @@ import (
 // admission_day == 0 fall back to created_at (completion time).
 const admissionDayColumn = "CASE WHEN admission_day > 0 THEN admission_day ELSE created_at END"
 
+const businessDateColumn = "CASE WHEN business_date <> '' THEN business_date ELSE date(" + admissionDayColumn + ", 'unixepoch') END"
+const admissionTimeColumn = "CASE WHEN admitted_at > 0 THEN admitted_at ELSE created_at END"
+
 // utcMidnight returns the Unix timestamp of the current UTC midnight.
 func utcMidnight() int64 {
 	now := time.Now().UTC()
@@ -157,13 +160,13 @@ func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
 	rows := []DailyUsage{}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		query := func() *gorm.DB {
-			q := tx.Model(&Log{}).Where("created_at >= ?", since)
+			q := tx.Model(&Log{}).Where(admissionTimeColumn+" >= ?", since)
 			if userID > 0 {
 				q = q.Where("user_id = ?", userID)
 			}
 			return q
 		}
-		date := "date(" + admissionDayColumn + ", 'unixepoch')"
+		date := businessDateColumn
 		if err := query().Select(date + " AS date, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, SUM(CASE WHEN status IN (2,3) THEN 1 ELSE 0 END) AS failed_count").Group(date).Order("date ASC").Scan(&rows).Error; err != nil {
 			return err
 		}
@@ -200,13 +203,13 @@ func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) 
 	rows := []ModelDailyUsage{}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		query := func() *gorm.DB {
-			q := tx.Model(&Log{}).Where("created_at >= ?", since)
+			q := tx.Model(&Log{}).Where(admissionTimeColumn+" >= ?", since)
 			if userID > 0 {
 				q = q.Where("user_id = ?", userID)
 			}
 			return q
 		}
-		date := "date(" + admissionDayColumn + ", 'unixepoch')"
+		date := businessDateColumn
 		if err := query().Select(date + " AS date, model, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").Group(date + ", model").Order("date ASC, model ASC").Scan(&rows).Error; err != nil {
 			return err
 		}
@@ -247,7 +250,7 @@ func SummarizeLogsByToken(userID int64, tokenID int64, since int64) ([]TokenDail
 	rows := []TokenDailyUsage{}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		query := func() *gorm.DB {
-			q := tx.Model(&Log{}).Where("created_at >= ?", since)
+			q := tx.Model(&Log{}).Where(admissionTimeColumn+" >= ?", since)
 			if userID > 0 {
 				q = q.Where("user_id = ?", userID)
 			}
@@ -256,7 +259,7 @@ func SummarizeLogsByToken(userID int64, tokenID int64, since int64) ([]TokenDail
 			}
 			return q
 		}
-		date := "date(" + admissionDayColumn + ", 'unixepoch')"
+		date := businessDateColumn
 		if err := query().Select(date + " AS date, token_id, MAX(token_name) AS token_name, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").Group(date + ", token_id").Order("date ASC, token_id ASC").Scan(&rows).Error; err != nil {
 			return err
 		}
