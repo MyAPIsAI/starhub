@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -76,10 +77,11 @@ func main() {
 	go service.RunResourceObservations(context.Background())
 	go service.RunResourceEventDelivery(context.Background())
 	go service.RunLocalRoutingProbes(context.Background())
-	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, bootstrap.Port, bootstrap.DBPath)
+	address := net.JoinHostPort(bootstrap.BindAddress, bootstrap.Port)
+	log.Printf("starhub %s listening on %s (db: %s)", common.Version, address, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
 	// security, and IP rate limiting around the route table.
-	if err := http.ListenAndServe(":"+bootstrap.Port, router.New()); err != nil {
+	if err := http.ListenAndServe(address, router.New()); err != nil {
 		log.Fatal(err)
 	}
 }

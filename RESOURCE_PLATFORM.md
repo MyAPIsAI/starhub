@@ -193,3 +193,11 @@ These tests use local fixtures and HTTP test servers. They do not certify a
 live resource deployment, provider interoperability, mTLS infrastructure, load
 capacity, or multi-instance consistency. Local score generation (T55) and
 multi-instance sessions (T58) remain explicitly deferred by the requirements.
+
+## Optional tested mTLS transport
+
+[SERVICE_MTLS.md](SERVICE_MTLS.md) documents the ingress/egress sidecar,
+operator-provided certificate identities, the private gateway bind address,
+and the local certificate-rejection matrix. The sidecar preserves backend
+service authentication. Its local tests do not complete T10/V01 deployment,
+raw-port isolation, certificate provisioning, or real-provider acceptance.

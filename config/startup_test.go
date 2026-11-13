@@ -155,3 +155,15 @@ func TestApplyStartupValidatesBeforeChangingRuntime(t *testing.T) {
 		t.Fatal("valid startup was not applied")
 	}
 }
+
+func TestStartupBindAddressKeepsApplicationBehindProxy(t *testing.T) {
+	for _, address := range []string{"127.0.0.1", "::1", "0.0.0.0"} {
+		result, err := LoadStartup(nil, startupEnv(map[string]string{"STARHUB_BIND_ADDRESS": address}))
+		if err != nil || result.Bootstrap.BindAddress != address {
+			t.Fatalf("bind address was not retained: %v", err)
+		}
+	}
+	if _, err := LoadStartup(nil, startupEnv(map[string]string{"STARHUB_BIND_ADDRESS": "127.0.0.1:3000"})); err == nil {
+		t.Fatal("bind address accepted an embedded port")
+	}
+}

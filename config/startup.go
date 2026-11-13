@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 )
 
 type Bootstrap struct {
+	BindAddress       string
 	DBPath            string
 	Port              string
 	RootPassword      string
@@ -29,7 +31,8 @@ type Startup struct {
 type fileConfig struct {
 	Version int `yaml:"version"`
 	Server  struct {
-		Port *int `yaml:"port"`
+		Port        *int    `yaml:"port"`
+		BindAddress *string `yaml:"bind_address"`
 	} `yaml:"server"`
 	Database struct {
 		SQLitePath *string `yaml:"sqlite_path"`
@@ -93,6 +96,9 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 		if cfg.Version != 1 {
 			return Startup{}, fmt.Errorf("unsupported config version %d; expected 1", cfg.Version)
 		}
+		if cfg.Server.BindAddress != nil {
+			result.Bootstrap.BindAddress = strings.TrimSpace(*cfg.Server.BindAddress)
+		}
 		if cfg.Server.Port != nil {
 			result.Bootstrap.Port = strconv.Itoa(*cfg.Server.Port)
 		}
@@ -123,6 +129,9 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 			result.InitialOptions[OptionCookieSecure] = strconv.FormatBool(*cfg.InitialOptions.CookieSecure)
 		}
 	}
+	if value := getenv("STARHUB_BIND_ADDRESS"); value != "" {
+		result.Bootstrap.BindAddress = strings.TrimSpace(value)
+	}
 	if value := getenv("STARHUB_PORT"); value != "" {
 		result.Bootstrap.Port = value
 	}
@@ -144,6 +153,9 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 			return Startup{}, fmt.Errorf("STARHUB_COOKIE_SECURE: %w", err)
 		}
 		result.Bootstrap.ForceSecureCookie = result.Bootstrap.ForceSecureCookie || secure
+	}
+	if result.Bootstrap.BindAddress != "" && net.ParseIP(result.Bootstrap.BindAddress) == nil {
+		return Startup{}, fmt.Errorf("server bind_address must be an IP address")
 	}
 	port, err := strconv.Atoi(result.Bootstrap.Port)
 	if err != nil || port < 1 || port > 65535 {
