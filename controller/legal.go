@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -20,6 +21,11 @@ type publishLegalRequest struct {
 // GetLegalDocumentHandler handles GET /api/legal/{type}.
 // Returns the latest legal document in the requested language and region.
 func GetLegalDocumentHandler(w http.ResponseWriter, r *http.Request) {
+	profile, err := model.ActiveRegionProfile()
+	if err != nil {
+		common.ApiError(w, 503, "active deployment policy is unavailable")
+		return
+	}
 	docType := r.PathValue("type")
 	if docType == "" {
 		common.ApiError(w, http.StatusBadRequest, "legal document type is required")
@@ -27,10 +33,20 @@ func GetLegalDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := r.URL.Query().Get("lang")
 	if lang == "" {
-		lang = middleware.ResolveLanguage("", r.Header.Get("Accept-Language"))
+		lang = middleware.ResolveRegionLanguage("", r.Header.Get("Accept-Language"), profile)
 	}
 	regionID := r.URL.Query().Get("region")
-	doc, err := model.GetLegalDocument(docType, lang, regionID)
+	if regionID == "" {
+		regionID = profile.ID
+	}
+	version := ""
+	if regionID == profile.ID {
+		version = profile.LegalVersion
+	}
+	doc, err := model.GetLegalDocumentVersion(docType, lang, regionID, version)
+	if errors.Is(err, model.ErrLegalDocumentNotFound) && lang != profile.DefaultLanguage {
+		doc, err = model.GetLegalDocumentVersion(docType, profile.DefaultLanguage, regionID, version)
+	}
 	if err != nil {
 		common.ApiError(w, http.StatusNotFound, err.Error())
 		return

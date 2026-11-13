@@ -60,9 +60,20 @@ func PublishLegalDocument(doc *LegalDocument) error {
 // in the requested language and region. Falls back to global (empty region)
 // if no region-specific document exists.
 func GetLegalDocument(docType, language, regionID string) (*LegalDocument, error) {
+	return GetLegalDocumentVersion(docType, language, regionID, "")
+}
+
+func GetLegalDocumentVersion(docType, language, regionID, version string) (*LegalDocument, error) {
+	published := func() *gorm.DB {
+		query := DB.Model(&LegalDocument{})
+		if version != "" {
+			query = query.Where("version = ?", version)
+		}
+		return query
+	}
 	// Try region-specific first.
 	var doc LegalDocument
-	err := DB.Where("type = ? AND language = ? AND region_id = ? AND published_at > 0",
+	err := published().Where("type = ? AND language = ? AND region_id = ? AND published_at > 0",
 		docType, language, regionID).
 		Order("published_at DESC").First(&doc).Error
 	if err == nil {
@@ -72,12 +83,12 @@ func GetLegalDocument(docType, language, regionID string) (*LegalDocument, error
 		return nil, err
 	}
 	// Fall back to global.
-	err = DB.Where("type = ? AND language = ? AND region_id = '' AND published_at > 0",
+	err = published().Where("type = ? AND language = ? AND region_id = '' AND published_at > 0",
 		docType, language).
 		Order("published_at DESC").First(&doc).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		// Fall back to English global.
-		err = DB.Where("type = ? AND language = 'en' AND region_id = '' AND published_at > 0",
+		err = published().Where("type = ? AND language = 'en' AND region_id = '' AND published_at > 0",
 			docType).
 			Order("published_at DESC").First(&doc).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
