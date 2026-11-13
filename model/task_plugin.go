@@ -129,7 +129,7 @@ func ReservePluginTask(task *Task, expected *Channel) error {
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		// The first balance write also takes SQLite's writer before channel reads.
-		if err := reserveQuota(tx, task.UserID, task.TokenID, task.TokenUnlimited, task.Quota); err != nil {
+		if err := reserveQuota(tx, task.UserID, task.TokenID, task.TokenUnlimited, task.Quota, task.QuotaReservationID); err != nil {
 			return err
 		}
 		var current Channel

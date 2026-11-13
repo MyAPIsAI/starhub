@@ -33,6 +33,9 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&ChannelConfigurationState{}); err != nil {
 		return fmt.Errorf("migrate channel configuration revision: %w", err)
 	}
+	if err := db.AutoMigrate(&TokenQuotaPeriod{}, &QuotaReservation{}); err != nil {
+		return fmt.Errorf("migrate token quota periods: %w", err)
+	}
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
 		return fmt.Errorf("migrate response ownership index: %w", err)
 	}

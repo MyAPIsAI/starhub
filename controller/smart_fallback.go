@@ -26,7 +26,7 @@ func (f *relayFlow) nextSmartModel() bool {
 		if f.preQuota > 0 {
 			estimate := relay.EstimateIRPreConsumeQuotaWithPriceData(&price, f.chatIR)
 			if estimate > f.preQuota {
-				additional, err := relay.PreConsumeQuotaAmount(f.req.userID, f.req.tokenID, f.req.tokenUnlimited, estimate-f.preQuota)
+				additional, err := relay.PreConsumeQuotaAmount(f.req.userID, f.req.tokenID, f.req.tokenUnlimited, estimate-f.preQuota, f.req.quotaReservationID)
 				if err != nil {
 					f.lastErr = err
 					continue

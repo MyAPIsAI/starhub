@@ -20,6 +20,7 @@ import (
 // resolution, video seconds, ...) via AddOtherRatio — the image / video
 // relays (P3) plug in here without touching the settlement core.
 type PriceData struct {
+	QuotaReservationID     string `json:"-"`
 	ModelName              string
 	ModelRatio             float64
 	CompletionRatio        float64

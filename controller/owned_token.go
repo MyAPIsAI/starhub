@@ -100,6 +100,7 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 	}
 	p := input.Payload
 	fields := map[string]any{}
+	addTokenPeriodFields(fields, p)
 	if p.SmartAccess != nil {
 		fields["smart_access"] = *p.SmartAccess
 	}
@@ -176,7 +177,7 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, 409, "key balance changed")
 			return
 		}
-		if p.UnlimitedQuota != nil && !*p.UnlimitedQuota && token.UnlimitedQuota && p.RemainQuota == nil {
+		if p.UnlimitedQuota != nil && !*p.UnlimitedQuota && token.UnlimitedQuota && p.RemainQuota == nil && (p.QuotaPeriod == nil || *p.QuotaPeriod == "never") {
 			common.ApiError(w, 400, "remaining quota required")
 			return
 		}

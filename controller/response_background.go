@@ -29,7 +29,7 @@ func beginBackgroundResponse(flow *relayFlow, ch *model.Channel, capture *respon
 	if err != nil {
 		return nil, err
 	}
-	task := &model.Task{Platform: "responses", Action: "responses", Status: "submitting", Model: r.Model, RequestedModel: flow.req.requestedModel, Protocol: "OpenAI", UserID: r.UserID, TokenID: r.TokenID, TokenName: flow.req.tokenName, TokenUnlimited: flow.req.tokenUnlimited, ChannelID: ch.ID, Group: r.Group, UserGroup: flow.req.userGroup, Quota: flow.preQuota, RequestMeta: string(raw)}
+	task := &model.Task{QuotaReservationID: flow.req.quotaReservationID, Platform: "responses", Action: "responses", Status: "submitting", Model: r.Model, RequestedModel: flow.req.requestedModel, Protocol: "OpenAI", UserID: r.UserID, TokenID: r.TokenID, TokenName: flow.req.tokenName, TokenUnlimited: flow.req.tokenUnlimited, ChannelID: ch.ID, Group: r.Group, UserGroup: flow.req.userGroup, Quota: flow.preQuota, RequestMeta: string(raw)}
 	if err := model.InsertTask(task); err != nil {
 		return nil, err
 	}

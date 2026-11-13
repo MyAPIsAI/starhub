@@ -3,9 +3,53 @@ package model
 import (
 	"errors"
 	"gorm.io/gorm"
+	"starhub/common"
 	"sync"
 	"testing"
 )
+
+func TestOwnedTokenSecretsAreEncryptedAndRotationReplacesLookupIndex(t *testing.T) {
+	newTestDB(t)
+	u := &User{Username: "encrypted-owned", Status: 1, AffCode: "encrypted-owned"}
+	if err := CreateUser(u); err != nil {
+		t.Fatal(err)
+	}
+	if err := InsertChannel(&Channel{Name: "models", Type: 1, Status: 1, Key: "fixture", Models: "server-only", Group: "default"}); err != nil {
+		t.Fatal(err)
+	}
+	choices, err := ReadOwnedTokenChoices(u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first *Token
+	for _, operation := range []string{"first", "second"} {
+		token, _, err := MutateOwnedToken(u.ID, operation, "create", 0, "", choices.Revision, map[string]any{"name": operation, "group": "default", "model_limits": "server-only"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		plaintext := token.PlaintextKey()
+		if !common.IsEncrypted(token.Key) || token.KeyHash != common.HashKey(plaintext) {
+			t.Fatal("owned key stored recoverable plaintext or missing lookup index")
+		}
+		if found, err := GetTokenByKey(plaintext); err != nil || found.ID != token.ID {
+			t.Fatal("encrypted owned key cannot authenticate")
+		}
+		if first == nil {
+			first = token
+		}
+	}
+	oldKey := first.PlaintextKey()
+	rotated, _, err := MutateOwnedToken(u.ID, "rotation", "regenerate", first.ID, TokenManagementRevision(first), choices.Revision, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !common.IsEncrypted(rotated.Key) || rotated.KeyHash == first.KeyHash {
+		t.Fatal("rotation retained old lookup index")
+	}
+	if _, err := GetTokenByKey(oldKey); !errors.Is(err, ErrTokenNotFound) {
+		t.Fatal("old key still authenticates after rotation")
+	}
+}
 
 func TestOwnedTokenMetadataEditPreservesLegacyAutoPolicy(t *testing.T) {
 	newTestDB(t)

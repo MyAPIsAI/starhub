@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"gorm.io/gorm"
+	"time"
 )
 
 var ErrQuotaConflict = errors.New("quota changed since the record was read")
@@ -32,6 +33,21 @@ func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64)
 }
 
 func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {
-	fields["revision"] = gorm.Expr("revision + 1")
-	return updateFieldsWithQuota(&Token{}, id, fields, "remain_quota", expected)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Token{}).Where("id = ?", id).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+			return err
+		}
+		var token Token
+		if err := tx.First(&token, id).Error; err != nil {
+			return err
+		}
+		if _, changed := fields["remain_quota"]; changed && (expected == nil || token.RemainQuota != *expected) {
+			return ErrQuotaConflict
+		}
+		if err := configureTokenPeriod(tx, &token, fields, time.Now()); err != nil {
+			return err
+		}
+		fields["revision"] = gorm.Expr("revision + 1")
+		return tx.Model(&Token{}).Where("id = ?", id).Updates(fields).Error
+	})
 }

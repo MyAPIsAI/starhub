@@ -77,7 +77,7 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 		pricing = relay.TaskTokenEstimate(taskReq)
 	}
 	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited,
-		relay.TaskPricingQuotaWithPriceData(priceData, pricing))
+		relay.TaskPricingQuotaWithPriceData(priceData, pricing), req.quotaReservationID)
 	if err != nil {
 		writePreConsumeError(w, "", err)
 		return
@@ -125,7 +125,7 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 	// and tracks the task if the upstream call is uncertain. The stored
 	// key index lets the terminal poll reuse the same upstream account.
 	requestMeta, _ := json.Marshal(taskReq)
-	task := &model.Task{
+	task := &model.Task{QuotaReservationID: flow.req.quotaReservationID,
 		TaskID:         "",
 		Platform:       platform,
 		Action:         taskReq.Action,

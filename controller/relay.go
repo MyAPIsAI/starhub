@@ -115,41 +115,43 @@ type attemptResult struct {
 // relayRequest is the per-request state every relay mode shares (extracted
 // from the middleware chain context).
 type relayRequest struct {
-	fallbacks       []middleware.SmartFallback
-	fallbackPricing map[string]map[string]relay.PriceData
-	userID          int64
-	tokenID         int64
-	tokenName       string
-	tokenUnlimited  bool
-	group           string
-	userGroup       string
-	autoGroups      []string
-	modelName       string
-	requestedModel  string
-	protocol        string
-	body            []byte
-	contentType     string
-	stream          bool
-	prefixHash      string // prompt-prefix scope for prefix-cache affinity
-	channelCheck    func(*model.Channel, string) (bool, error)
-	chainAdmission  func() error
-	pricing         map[string]relay.PriceData
+	quotaReservationID string
+	fallbacks          []middleware.SmartFallback
+	fallbackPricing    map[string]map[string]relay.PriceData
+	userID             int64
+	tokenID            int64
+	tokenName          string
+	tokenUnlimited     bool
+	group              string
+	userGroup          string
+	autoGroups         []string
+	modelName          string
+	requestedModel     string
+	protocol           string
+	body               []byte
+	contentType        string
+	stream             bool
+	prefixHash         string // prompt-prefix scope for prefix-cache affinity
+	channelCheck       func(*model.Channel, string) (bool, error)
+	chainAdmission     func() error
+	pricing            map[string]relay.PriceData
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
 	ctx := r.Context()
 	req := relayRequest{
-		userID:         ctxValueInt64(ctx, common.CtxUserID),
-		tokenID:        ctxValueInt64(ctx, common.CtxTokenID),
-		tokenName:      ctxValueString(ctx, common.CtxTokenName),
-		tokenUnlimited: ctxValueBool(ctx, common.CtxTokenUnlimited),
-		group:          ctxValueString(ctx, common.CtxUsingGroup),
-		userGroup:      ctxValueString(ctx, common.CtxUserGroup),
-		modelName:      ctxValueString(ctx, common.CtxRequestModel),
-		requestedModel: ctxValueString(ctx, common.CtxRequestedModel),
-		contentType:    ctxValueString(ctx, common.CtxRequestContentType),
-		stream:         ctxValueBool(ctx, common.CtxRequestStream),
-		prefixHash:     ctxValueString(ctx, common.CtxRequestPrefixHash),
+		quotaReservationID: common.GenerateSessionKey(),
+		userID:             ctxValueInt64(ctx, common.CtxUserID),
+		tokenID:            ctxValueInt64(ctx, common.CtxTokenID),
+		tokenName:          ctxValueString(ctx, common.CtxTokenName),
+		tokenUnlimited:     ctxValueBool(ctx, common.CtxTokenUnlimited),
+		group:              ctxValueString(ctx, common.CtxUsingGroup),
+		userGroup:          ctxValueString(ctx, common.CtxUserGroup),
+		modelName:          ctxValueString(ctx, common.CtxRequestModel),
+		requestedModel:     ctxValueString(ctx, common.CtxRequestedModel),
+		contentType:        ctxValueString(ctx, common.CtxRequestContentType),
+		stream:             ctxValueBool(ctx, common.CtxRequestStream),
+		prefixHash:         ctxValueString(ctx, common.CtxRequestPrefixHash),
 	}
 	req.autoGroups, _ = ctx.Value(common.CtxAutoGroups).([]string)
 	req.channelCheck, _ = ctx.Value(common.CtxSmartChannelCheck).(func(*model.Channel, string) (bool, error))
@@ -180,10 +182,13 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 
 func (req relayRequest) priceFor(group string) *relay.PriceData {
 	if price, ok := req.pricing[group]; ok {
+		price.QuotaReservationID = req.quotaReservationID
 		return &price
 	}
 	// Direct internal callers may construct relayRequest without HTTP context.
-	return relay.NewPriceDataWithUserGroup(req.modelName, group, req.userGroup)
+	p := relay.NewPriceDataWithUserGroup(req.modelName, group, req.userGroup)
+	p.QuotaReservationID = req.quotaReservationID
+	return p
 }
 
 // billingGroup returns the group used for the pre-charge: the first auto
@@ -543,7 +548,7 @@ func (f *relayFlow) refundUnlessSettled() {
 	if f.settled {
 		return
 	}
-	if err := relay.RefundPreConsumedQuota(f.req.tokenID, f.req.userID, f.req.tokenUnlimited, f.preQuota); err != nil {
+	if err := relay.RefundPreConsumedQuota(f.req.tokenID, f.req.userID, f.req.tokenUnlimited, f.preQuota, f.req.quotaReservationID); err != nil {
 		log.Printf("refund after failed relay failed: %v", err)
 	} else {
 		log.Printf("relay for model %s failed on channels [%s], refunded %d quota",
@@ -555,16 +560,17 @@ func (f *relayFlow) refundUnlessSettled() {
 	// usage counts.
 	if len(f.trail) > 0 {
 		_ = model.InsertFailedLog(&model.Log{
-			UserID:         f.req.userID,
-			TokenID:        f.req.tokenID,
-			TokenName:      f.req.tokenName,
-			ChannelID:      f.lastChannelID,
-			Model:          f.req.modelName,
-			RequestedModel: f.req.requestedModel,
-			Protocol:       f.req.protocol,
-			UsedChannels:   f.trailString(),
-			DurationMs:     time.Since(f.startTime).Milliseconds(),
-			RequestID:      middleware.CtxRequestIDValue(f.ctx),
+			QuotaReservationID: f.req.quotaReservationID,
+			UserID:             f.req.userID,
+			TokenID:            f.req.tokenID,
+			TokenName:          f.req.tokenName,
+			ChannelID:          f.lastChannelID,
+			Model:              f.req.modelName,
+			RequestedModel:     f.req.requestedModel,
+			Protocol:           f.req.protocol,
+			UsedChannels:       f.trailString(),
+			DurationMs:         time.Since(f.startTime).Milliseconds(),
+			RequestID:          middleware.CtxRequestIDValue(f.ctx),
 		})
 	}
 }
@@ -871,7 +877,7 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 	} else {
 		estimate = relay.EstimatePreConsumeQuotaWithPriceData(flow.req.priceFor(billingGroup), flow.req.body)
 	}
-	preQuota, preErr := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, estimate)
+	preQuota, preErr := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, estimate, req.quotaReservationID)
 	if preErr != nil {
 		writePreConsumeError(flow.w, inbound, preErr)
 		return

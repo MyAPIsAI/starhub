@@ -10,6 +10,7 @@ import (
 	"starhub/common"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var ErrOwnedTokenConflict = errors.New("owned token state changed")
@@ -219,7 +220,13 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 		}
 		switch action {
 		case "create":
-			data := map[string]any{"user_id": owner, "key": result.Key, "status": 1, "expired_time": int64(-1)}
+			plaintext := result.Key
+			encrypted, err := common.Encrypt(plaintext)
+			if err != nil {
+				return err
+			}
+			result.Key = encrypted
+			data := map[string]any{"user_id": owner, "key": encrypted, "key_hash": common.HashKey(plaintext), "status": 1, "expired_time": int64(-1)}
 			for k, v := range fields {
 				data[k] = v
 			}
@@ -229,18 +236,30 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 			if err := tx.First(&result, "key = ?", result.Key).Error; err != nil {
 				return err
 			}
+			if err := configureTokenPeriod(tx, &result, fields, time.Now()); err != nil {
+				return err
+			}
+			if err := tx.Model(&Token{}).Where("id = ?", result.ID).Updates(fields).Error; err != nil {
+				return err
+			}
+			if err := tx.First(&result, result.ID).Error; err != nil {
+				return err
+			}
 		case "update", "regenerate":
 			updates := map[string]any{}
 			for k, v := range fields {
 				updates[k] = v
+			}
+			if err := configureTokenPeriod(tx, &result, updates, time.Now()); err != nil {
+				return err
 			}
 			// When the lifetime limit is being edited, subtract the
 			// in-flight pre-charge held by pending tasks. Without this,
 			// remain_quota is set to (new_total - used_quota) which
 			// ignores pending reservations; when those tasks settle,
 			// the cumulative (remain + used) silently inflates.
-			if rq, ok := updates["remain_quota"]; ok && action == "update" {
-				pending, err := SumPendingTaskQuota(tx, id)
+			if rq, ok := updates["remain_quota"]; ok && action == "update" && !tokenPeriodic(&result) {
+				pending, err := TokenPendingQuota(tx, id)
 				if err != nil {
 					return err
 				}
@@ -253,7 +272,12 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 				}
 			}
 			if action == "regenerate" {
-				updates["key"] = common.GenerateTokenKey()
+				plaintext := common.GenerateTokenKey()
+				encrypted, err := common.Encrypt(plaintext)
+				if err != nil {
+					return err
+				}
+				updates["key"], updates["key_hash"] = encrypted, common.HashKey(plaintext)
 			}
 			updates["revision"] = gorm.Expr("revision + 1")
 			if err := tx.Model(&Token{}).Where("id = ? AND user_id = ?", id, owner).Updates(updates).Error; err != nil {
@@ -288,6 +312,18 @@ func ReadOwnedTokenReceipt(owner int64, operation string) (*OwnedTokenReceipt, e
 func ValidOwnedTokenFields(fields map[string]any) error {
 	for key, value := range fields {
 		switch key {
+		case "quota_period":
+			if value != "never" && value != "daily" && value != "monthly" {
+				return ErrTokenPeriodPolicy
+			}
+		case "period_quota_limit":
+			if n := value.(int64); n < 0 || n > 9_007_199_254_740_991 {
+				return ErrTokenPeriodPolicy
+			}
+		case "quota_region":
+			if len(value.(string)) > 64 {
+				return ErrTokenPeriodPolicy
+			}
 		case "smart_candidates":
 			if len(value.(string)) > 1024 {
 				return fmt.Errorf("smart candidate list is too long")

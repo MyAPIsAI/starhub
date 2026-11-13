@@ -18,6 +18,16 @@ import {
 } from "../system-access";
 
 export interface Token {
+  quota_period?: "never" | "daily" | "monthly";
+  period_quota_limit?: number;
+  quota_region?: string;
+  quota_timezone?: string;
+  quota_period_id?: number;
+  period_start?: number;
+  period_end?: number;
+  period_used_quota?: number;
+  period_reserved_quota?: number;
+  pending_quota?: number;
   management_schema?: string;
   management_revision?: string;
   id: number;
@@ -38,6 +48,9 @@ export interface Token {
 }
 
 export interface TokenCreateInput {
+  quota_period?: "never" | "daily" | "monthly";
+  period_quota_limit?: number;
+  quota_region?: string;
   choices_revision?: string;
   name: string;
   remain_quota?: number;
@@ -50,6 +63,9 @@ export interface TokenCreateInput {
 }
 
 export interface TokenUpdateInput {
+  quota_period?: "never" | "daily" | "monthly";
+  period_quota_limit?: number;
+  quota_region?: string;
   choices_revision?: string;
   expected_revision?: string;
   id: number;
@@ -152,6 +168,7 @@ export function useTokens() {
     queryKey: [...TOKENS_KEY, identity],
     enabled: identity[1] !== null,
     staleTime: 0,
+    refetchInterval: 30_000,
     retry: false,
     queryFn: async ({ signal }) => {
       assertTokenSession(identity);
@@ -173,6 +190,39 @@ export function useTokens() {
       )
         throw Error("API key ownership could not be verified");
       return tokens;
+    },
+  });
+}
+
+export interface TokenQuotaRegion {
+  id: string;
+  name: string;
+  timezone: string;
+}
+export function useTokenQuotaRegions() {
+  const identity = useSessionQueryIdentity();
+  return useQuery({
+    queryKey: ["token-quota-regions", identity],
+    enabled: identity[1] !== null,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      assertTokenSession(identity);
+      const rows = await apiGet<TokenQuotaRegion[]>(
+        "/api/token/quota-regions",
+        signal,
+      );
+      assertTokenSession(identity);
+      if (
+        !Array.isArray(rows) ||
+        rows.some(
+          (row) =>
+            typeof row.id !== "string" ||
+            typeof row.name !== "string" ||
+            typeof row.timezone !== "string",
+        )
+      )
+        throw Error("Quota regions were not confirmed");
+      return rows;
     },
   });
 }

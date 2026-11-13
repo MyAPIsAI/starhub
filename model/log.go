@@ -45,7 +45,10 @@ type Log struct {
 	// admitted (pre-charged), used for cross-day settlement attribution.
 	// Streaming requests that span midnight are attributed to the admission
 	// day, not the completion day. Zero means legacy logs without admission day.
-	AdmissionDay int64 `gorm:"not null;default:0;index" json:"admission_day"`
+	AdmissionDay       int64  `gorm:"not null;default:0;index" json:"admission_day"`
+	AdmittedAt         int64  `gorm:"not null;default:0;index" json:"admitted_at"`
+	QuotaPeriodID      int64  `gorm:"not null;default:0;index" json:"quota_period_id"`
+	QuotaReservationID string `gorm:"size:64;not null;default:'';index" json:"quota_reservation_id,omitempty"`
 	// PriceVersion records the option revision at billing time, enabling
 	// offline recomputation. Zero means legacy logs without version tracking.
 	PriceVersion int64 `gorm:"not null;default:0" json:"price_version"`
@@ -76,6 +79,15 @@ func InsertLog(l *Log) error {
 func InsertFailedLog(l *Log) error {
 	if l == nil || l.ChannelID == 0 {
 		return nil
+	}
+	if l.QuotaReservationID != "" {
+		var reservation QuotaReservation
+		if err := DB.First(&reservation, "id = ? AND user_id = ? AND token_id = ?", l.QuotaReservationID, l.UserID, l.TokenID).Error; err != nil {
+			return err
+		}
+		l.AdmittedAt, l.QuotaPeriodID = reservation.AdmittedAt, reservation.PeriodID
+		at := time.Unix(reservation.AdmittedAt, 0).UTC()
+		l.AdmissionDay = time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Unix()
 	}
 	l.Status = 2 // failed
 	l.Quota = 0

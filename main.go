@@ -67,6 +67,7 @@ func main() {
 	}, service.RetryPendingQuotaSettlementsOnce)
 	go service.RunRoutingChainCleanup(context.Background(), 15*time.Minute)
 	go service.RunDailyReconciliationLoop(context.Background())
+	go service.RunTokenPeriodRollover(context.Background())
 	go service.RunResourcePlatform(context.Background())
 	go service.RunResourceObservations(context.Background())
 	go service.RunResourceEventDelivery(context.Background())

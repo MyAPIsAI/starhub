@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"log"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -23,16 +24,16 @@ var (
 // is not unlimited) from the token. It returns ErrUserQuotaShort /
 // ErrTokenQuotaShort without touching any balance when the funds are
 // insufficient.
-func ReserveQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) error {
+func ReserveQuota(userID, tokenID int64, tokenUnlimited bool, amount int64, admissionID ...string) error {
 	if amount <= 0 {
 		return nil
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		return reserveQuota(tx, userID, tokenID, tokenUnlimited, amount)
+		return reserveQuota(tx, userID, tokenID, tokenUnlimited, amount, admissionID...)
 	})
 }
 
-func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amount int64) error {
+func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amount int64, admissionID ...string) error {
 	res := tx.Model(&User{}).
 		Where("id = ? AND quota >= ?", userID, amount).
 		Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount)})
@@ -41,6 +42,26 @@ func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amoun
 	}
 	if res.RowsAffected == 0 {
 		return ErrUserQuotaShort
+	}
+	if id := quotaAdmissionID(admissionID); id != "" {
+		if err := reserveTokenAdmission(tx, userID, tokenID, tokenUnlimited, amount, id, time.Now()); err != nil {
+			return err
+		}
+		var reservation QuotaReservation
+		if err := tx.First(&reservation, "id = ?", id).Error; err != nil {
+			return err
+		}
+		if reservation.PeriodID > 0 {
+			return nil
+		}
+	} else {
+		var token Token
+		if err := tx.Select("id", "quota_period").Where("id = ?", tokenID).Find(&token).Error; err != nil {
+			return err
+		}
+		if tokenPeriodic(&token) {
+			return ErrQuotaReservation
+		}
 	}
 	if !tokenUnlimited {
 		res := tx.Model(&Token{}).
@@ -58,11 +79,21 @@ func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amoun
 
 // ReleaseQuota returns a reservation (full refund when a relay attempt
 // fails). Token and user balances are restored together.
-func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64) error {
+func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64, admissionID ...string) error {
 	if amount <= 0 {
 		return nil
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
+		if id := quotaAdmissionID(admissionID); id != "" {
+			return releaseTokenAdmission(tx, userID, tokenID, amount, id, time.Now())
+		}
+		var token Token
+		if err := tx.Select("id", "quota_period").Where("id = ?", tokenID).Find(&token).Error; err != nil {
+			return err
+		}
+		if tokenPeriodic(&token) {
+			return ErrQuotaReservation
+		}
 		if !tokenUnlimited {
 			if err := tx.Model(&Token{}).Where("id = ?", tokenID).
 				Updates(map[string]any{"remain_quota": gorm.Expr("remain_quota + ?", amount)}).Error; err != nil {
@@ -123,7 +154,28 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 				return err
 			}
 		}
-		if delta > 0 {
+		var reservation *QuotaReservation
+		if settled.QuotaReservationID != "" {
+			var r QuotaReservation
+			if err := tx.First(&r, "id = ?", settled.QuotaReservationID).Error; err != nil {
+				return err
+			}
+			if r.UserID != userID || r.TokenID != tokenID || r.CompletedAt != 0 || r.Amount != actual-delta {
+				return ErrQuotaReservation
+			}
+			reservation = &r
+			settled.AdmittedAt = r.AdmittedAt
+			at := time.Unix(r.AdmittedAt, 0).UTC()
+			settled.AdmissionDay = time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Unix()
+			settled.QuotaPeriodID = r.PeriodID
+		} else if tokenPeriodic(&token) {
+			return ErrQuotaReservation
+		}
+		if reservation != nil && reservation.PeriodID > 0 {
+			if err := settleTokenAdmission(tx, &token, *reservation, delta, actual, &settled, time.Now()); err != nil {
+				return err
+			}
+		} else if delta > 0 {
 			var user User
 			if err := tx.First(&user, userID).Error; err != nil {
 				return err
@@ -153,6 +205,11 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			}
 			if err := tx.Model(&User{}).Where("id = ?", userID).
 				Updates(map[string]any{"quota": gorm.Expr("quota + ?", -delta)}).Error; err != nil {
+				return err
+			}
+		}
+		if reservation != nil {
+			if err := tx.Model(&QuotaReservation{}).Where("id = ? AND completed_at = 0", reservation.ID).Update("completed_at", time.Now().Unix()).Error; err != nil {
 				return err
 			}
 		}

@@ -118,7 +118,7 @@ func relayImage(w http.ResponseWriter, r *http.Request, req relayRequest,
 		Pricing:   req.priceFor(req.billingGroup()),
 	}
 
-	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, bill.PreQuota())
+	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, bill.PreQuota(), req.quotaReservationID)
 	if err != nil {
 		writePreConsumeError(w, "", err)
 		return
@@ -407,7 +407,7 @@ var (
 // computed by ImageBill with the count/usage guards).
 func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64) {
 	if err := relay.PostConsumeQuotaAmountWithMetadata(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
-		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, actual, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), 1, flow.req.requestedModel, flow.req.protocol, middleware.CtxRequestIDValue(flow.ctx)); err != nil {
+		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, actual, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), 1, flow.req.requestedModel, flow.req.protocol, middleware.CtxRequestIDValue(flow.ctx), flow.req.quotaReservationID); err != nil {
 		log.Printf("post consume image quota failed: %v", err)
 		service.NotifyBillingFailure(flow.req.userID, "image settlement failed: "+err.Error())
 	}

@@ -136,6 +136,10 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 				"API key has expired")
 			return
 		}
+		if err := model.RefreshTokenQuota(token, time.Now()); err != nil {
+			writeRelayRequestError(w, r, 503, "server_error", "quota_period_unavailable", "API key quota period is unavailable")
+			return
+		}
 		if !readOnly && !token.UnlimitedQuota && token.RemainQuota <= 0 {
 			writeRelayRequestError(w, r, http.StatusForbidden,
 				"insufficient_quota", "token_quota_exhausted",

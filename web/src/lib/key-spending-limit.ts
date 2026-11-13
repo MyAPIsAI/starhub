@@ -29,3 +29,14 @@ export function remainingQuotaForLifetimeLimit(
   if (remaining > BigInt(Number.MAX_SAFE_INTEGER)) throw Error("too_large");
   return Number(remaining);
 }
+
+export function quotaForPeriodLimit(value: string, key?: PreviewKey): number {
+  const limit = remainingQuotaForLifetimeLimit(value);
+  const held = BigInt(key?.currentPeriodReserved_nano ?? "0");
+  const used =
+    key?.quotaPeriod !== "never"
+      ? BigInt(key?.currentPeriodUsed_nano ?? "0")
+      : 0n;
+  if (BigInt(limit) * 2000n < held + used) throw Error("below_used");
+  return limit;
+}

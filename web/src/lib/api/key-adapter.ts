@@ -103,9 +103,15 @@ export function tokenToPreviewKey(
     ? null
     : (
         (BigInt(Math.trunc(token.remain_quota)) +
+          BigInt(Math.trunc(token.pending_quota ?? 0)) +
           BigInt(Math.trunc(token.used_quota))) *
         NANO_PER_QUOTA
       ).toString();
+  const periodic =
+    token.quota_period === "daily" || token.quota_period === "monthly";
+  const limit = periodic
+    ? quotaToNanoUsd(token.period_quota_limit ?? 0)
+    : lifetimeLimit;
   return {
     id: String(token.id),
     managementRevision: token.management_revision,
@@ -125,13 +131,23 @@ export function tokenToPreviewKey(
     allowedModels: token.model_limits
       ? splitList(token.model_limits)
       : undefined,
-    quotaLimit_usd:
-      lifetimeLimit === null ? null : Number(lifetimeLimit) / NANO_PER_USD,
-    quotaLimit_nano: lifetimeLimit,
-    // Backend has no period-reset concept; "never" means the limit is
-    // lifetime and totalUsed_nano is the sole usage counter.
-    quotaPeriod: "never",
-    currentPeriodUsed_nano: quotaToNanoUsd(token.used_quota),
+    quotaLimit_usd: limit === null ? null : Number(limit) / NANO_PER_USD,
+    quotaLimit_nano: limit,
+    quotaPeriod: token.quota_period ?? "never",
+    quotaRegion: token.quota_region ?? "",
+    quotaTimezone: token.quota_timezone ?? "UTC",
+    usagePeriodStartedAt: token.period_start
+      ? new Date(token.period_start * 1000).toISOString()
+      : undefined,
+    quotaPeriodEndsAt: token.period_end
+      ? new Date(token.period_end * 1000).toISOString()
+      : undefined,
+    currentPeriodReserved_nano: quotaToNanoUsd(
+      token.period_reserved_quota ?? 0,
+    ),
+    currentPeriodUsed_nano: quotaToNanoUsd(
+      periodic ? (token.period_used_quota ?? 0) : token.used_quota,
+    ),
     totalUsed_nano: quotaToNanoUsd(token.used_quota),
     validUntil:
       token.expired_time > 0

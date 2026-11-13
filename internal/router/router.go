@@ -144,6 +144,7 @@ func New() http.Handler {
 	mux.Handle("POST /api/token/{id}/regenerate", middleware.UserAuth(http.HandlerFunc(controller.RegenerateToken)))
 	mux.Handle("POST /api/token/{id}/verify-password", middleware.UserAuth(middleware.PasswordVerificationRateLimit(http.HandlerFunc(controller.VerifyTokenPassword))))
 	mux.Handle("POST /api/token/{id}/unlock", middleware.UserAuth(middleware.PasswordVerificationRateLimit(http.HandlerFunc(controller.UnlockToken))))
+	mux.Handle("GET /api/token/quota-regions", middleware.UserAuth(http.HandlerFunc(controller.TokenQuotaRegions)))
 	mux.Handle("POST /api/token/{id}/reveal", middleware.UserAuth(http.HandlerFunc(controller.RevealToken)))
 
 	mux.Handle("GET /api/option", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))

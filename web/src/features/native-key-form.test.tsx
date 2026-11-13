@@ -23,6 +23,10 @@ vi.mock("../lib/api/key-adapter", async (original) => ({
 vi.mock("../lib/api/tokens", () => ({
   useCreateToken: () => ({ isPending: false }),
   useUpdateToken: () => ({ isPending: false }),
+  useTokenQuotaRegions: () => ({
+    data: [{ id: "", name: "UTC", timezone: "UTC" }],
+    isError: false,
+  }),
 }));
 vi.mock("../components/ui/overlay", () => ({
   Modal: ({ children }: { children: ReactNode }) =>

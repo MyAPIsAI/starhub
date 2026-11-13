@@ -56,7 +56,9 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		preUsage.CompletionTokens = common.DefaultCompletionBudgetTokens
 	}
 	preQuota := ComputeUsageQuota(pd, preUsage)
-	pre, err := PreConsumeQuotaAmount(userID, tokenID, tokenUnlimited, preQuota)
+	admissionID := common.GenerateSessionKey()
+	pd.QuotaReservationID = admissionID
+	pre, err := PreConsumeQuotaAmount(userID, tokenID, tokenUnlimited, preQuota, admissionID)
 	if err != nil {
 		writeRealtimePreConsumeError(w, err)
 		return
@@ -67,7 +69,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		if settled {
 			return
 		}
-		if err := RefundPreConsumedQuota(tokenID, userID, tokenUnlimited, pre); err != nil {
+		if err := RefundPreConsumedQuota(tokenID, userID, tokenUnlimited, pre, admissionID); err != nil {
 			log.Printf("refund after failed realtime session failed: %v", err)
 		}
 	}()

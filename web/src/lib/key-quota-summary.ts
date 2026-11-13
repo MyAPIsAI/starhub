@@ -10,6 +10,7 @@ export function keyQuotaSummary(
   now = new Date().toISOString(),
 ) {
   const used = keyPeriodUsed(key, now);
+  const reserved = BigInt(key.currentPeriodReserved_nano ?? "0");
   const limit =
     key.quotaLimit_nano != null
       ? BigInt(key.quotaLimit_nano)
@@ -18,16 +19,19 @@ export function keyQuotaSummary(
         : decimalUsdNano(key.quotaLimit_usd);
   return {
     usedNano: used.toString(),
+    reservedNano: reserved.toString(),
     limitNano: limit?.toString() ?? null,
     remainingNano:
-      limit === null ? null : (limit > used ? limit - used : 0n).toString(),
+      limit === null
+        ? null
+        : (limit > used + reserved ? limit - used - reserved : 0n).toString(),
     percentage:
       limit === null
         ? null
         : limit === 0n || used >= limit
           ? 100
           : Number((used * 10_000n) / limit) / 100,
-    exhausted: limit !== null && used >= limit,
+    exhausted: limit !== null && used + reserved >= limit,
     exceeded: limit !== null && used > limit,
     nearLimit: limit !== null && (limit === 0n || used * 100n >= limit * 90n),
     period: key.quotaPeriod ?? "never",

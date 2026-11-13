@@ -152,15 +152,15 @@ func PreConsumeIRQuotaWithUserGroup(userID, tokenID int64, tokenUnlimited bool, 
 // PreConsumeQuotaAmount reserves an explicit amount. The image / audio /
 // task flows compute their estimates with mode-specific multipliers and
 // hand the number to the same overdraft-safe reservation.
-func PreConsumeQuotaAmount(userID, tokenID int64, tokenUnlimited bool, amount int64) (int64, error) {
-	return reservePreConsumed(userID, tokenID, tokenUnlimited, amount)
+func PreConsumeQuotaAmount(userID, tokenID int64, tokenUnlimited bool, amount int64, admissionID ...string) (int64, error) {
+	return reservePreConsumed(userID, tokenID, tokenUnlimited, amount, admissionID...)
 }
 
-func reservePreConsumed(userID, tokenID int64, tokenUnlimited bool, pre int64) (int64, error) {
+func reservePreConsumed(userID, tokenID int64, tokenUnlimited bool, pre int64, admissionID ...string) (int64, error) {
 	if pre < 1 {
 		pre = 1
 	}
-	if err := model.ReserveQuota(userID, tokenID, tokenUnlimited, pre); err != nil {
+	if err := model.ReserveQuota(userID, tokenID, tokenUnlimited, pre, admissionID...); err != nil {
 		switch {
 		case errors.Is(err, model.ErrUserQuotaShort):
 			return 0, ErrInsufficientUserQuota
@@ -174,8 +174,8 @@ func reservePreConsumed(userID, tokenID int64, tokenUnlimited bool, pre int64) (
 
 // RefundPreConsumedQuota returns the full pre-payment when every attempt of
 // a relay failed.
-func RefundPreConsumedQuota(tokenID, userID int64, tokenUnlimited bool, amount int64) error {
-	return model.ReleaseQuota(userID, tokenID, tokenUnlimited, amount)
+func RefundPreConsumedQuota(tokenID, userID int64, tokenUnlimited bool, amount int64, admissionID ...string) error {
+	return model.ReleaseQuota(userID, tokenID, tokenUnlimited, amount, admissionID...)
 }
 
 // PostConsumeQuota settles the pre-payment against the real usage (with
@@ -239,6 +239,9 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		ExactFeeMicroUSD: ExactFeeMicroUSD(pd, usage),
 		RequestID:        requestID,
 	}
+	if pd != nil {
+		entry.QuotaReservationID = pd.QuotaReservationID
+	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
 
@@ -274,26 +277,34 @@ func PostConsumeQuotaAmountWithStatus(userID, tokenID int64, tokenName string, t
 
 // PostConsumeQuotaAmountWithMetadata records gateway-owned request metadata.
 func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string, tokenUnlimited bool,
-	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol, requestID string) error {
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol, requestID string, admissionID ...string) error {
 	if status < 1 || status > 3 {
 		return errors.New("unsupported settlement log status")
 	}
 	delta := actual - preQuota
 	entry := &model.Log{
-		UserID:           userID,
-		TokenID:          tokenID,
-		TokenName:        tokenName,
-		ChannelID:        channelID,
-		Model:            modelName,
-		RequestedModel:   originalModel,
-		Protocol:         protocol,
-		Quota:            actual,
-		UsedChannels:     usedChannels,
-		DurationMs:       durationMs,
-		Status:           status,
-		PriceVersion:     model.LoadedOptionVersion(),
-		ExactFeeMicroUSD: QuotaToMicroUSD(actual),
-		RequestID:        requestID,
+		UserID:             userID,
+		TokenID:            tokenID,
+		TokenName:          tokenName,
+		ChannelID:          channelID,
+		Model:              modelName,
+		RequestedModel:     originalModel,
+		Protocol:           protocol,
+		QuotaReservationID: firstAdmissionID(admissionID),
+		Quota:              actual,
+		UsedChannels:       usedChannels,
+		DurationMs:         durationMs,
+		Status:             status,
+		PriceVersion:       model.LoadedOptionVersion(),
+		ExactFeeMicroUSD:   QuotaToMicroUSD(actual),
+		RequestID:          requestID,
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
+}
+
+func firstAdmissionID(ids []string) string {
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
 }

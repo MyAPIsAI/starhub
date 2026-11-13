@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -59,10 +60,20 @@ type Token struct {
 	// token can only call explicitly authorized models even if the group
 	// supports smart routing. When true (the default for backward compat),
 	// smart routing is allowed if the token also has model authorization.
-	SmartAccess     *bool  `gorm:"default:null" json:"smart_access,omitempty"`
-	SmartCandidates string `gorm:"size:1024;not null;default:''" json:"smart_candidates"`
-	CreatedAt       int64  `gorm:"autoCreateTime" json:"created_at"`
-	Revision        int64  `gorm:"not null;default:0" json:"management_version"`
+	SmartAccess         *bool  `gorm:"default:null" json:"smart_access,omitempty"`
+	SmartCandidates     string `gorm:"size:1024;not null;default:''" json:"smart_candidates"`
+	CreatedAt           int64  `gorm:"autoCreateTime" json:"created_at"`
+	Revision            int64  `gorm:"not null;default:0" json:"management_version"`
+	QuotaPeriod         string `gorm:"size:16;not null;default:'never'" json:"quota_period"`
+	PeriodQuotaLimit    int64  `gorm:"not null;default:0" json:"period_quota_limit"`
+	QuotaRegion         string `gorm:"size:64;not null;default:''" json:"quota_region"`
+	QuotaTimezone       string `gorm:"size:64;not null;default:'UTC'" json:"quota_timezone"`
+	QuotaPeriodID       int64  `gorm:"not null;default:0" json:"quota_period_id"`
+	PeriodStart         int64  `gorm:"not null;default:0" json:"period_start"`
+	PeriodEnd           int64  `gorm:"not null;default:0;index" json:"period_end"`
+	PeriodUsedQuota     int64  `gorm:"not null;default:0" json:"period_used_quota"`
+	PeriodReservedQuota int64  `gorm:"not null;default:0" json:"period_reserved_quota"`
+	PendingQuota        int64  `gorm:"-" json:"-"`
 }
 
 // MaxTokensPerUser is the maximum number of API keys a single account may own.
@@ -108,7 +119,14 @@ func InsertToken(t *Token) error {
 			t.Key = encrypted
 			err := tx.Create(t).Error
 			if err == nil {
-				return nil
+				fields := map[string]any{"quota_period": t.QuotaPeriod, "period_quota_limit": t.PeriodQuotaLimit, "quota_region": t.QuotaRegion}
+				if err := configureTokenPeriod(tx, t, fields, time.Now()); err != nil {
+					return err
+				}
+				if err := tx.Model(t).Updates(fields).Error; err != nil {
+					return err
+				}
+				return tx.First(t, t.ID).Error
 			}
 			if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
 				return err
@@ -170,12 +188,23 @@ func (t *Token) PlaintextKey() string {
 }
 
 func ListTokens(userID int64) ([]Token, error) {
+	if err := RefreshDueTokenPeriods(time.Now(), userID); err != nil {
+		return nil, err
+	}
 	var tokens []Token
 	q := DB.Model(&Token{})
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)
 	}
 	err := q.Order("id DESC").Find(&tokens).Error
+	if err == nil {
+		for i := range tokens {
+			tokens[i].PendingQuota, err = TokenPendingQuota(DB, tokens[i].ID)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	return tokens, err
 }
 
@@ -185,6 +214,9 @@ func UpdateTokenFields(id int64, fields map[string]any) error {
 	}
 	if len(fields) == 0 {
 		return nil
+	}
+	if periodPolicyFields(fields) {
+		return UpdateTokenFieldsWithQuota(id, fields, nil)
 	}
 	fields["revision"] = gorm.Expr("revision + 1")
 	return DB.Model(&Token{}).Where("id = ?", id).Updates(fields).Error

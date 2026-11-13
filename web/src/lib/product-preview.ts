@@ -105,6 +105,10 @@ export interface PreviewKey {
   quotaLimit_usd?: number | null;
   quotaLimit_nano?: string | null;
   quotaPeriod?: "never" | "daily" | "monthly";
+  quotaRegion?: string;
+  quotaTimezone?: string;
+  quotaPeriodEndsAt?: string;
+  currentPeriodReserved_nano?: string;
   currentPeriodUsed_nano?: string;
   usagePeriodStartedAt?: string;
   credentialVersion?: string;
@@ -531,6 +535,8 @@ export function keyPeriodUsed(
   key: PreviewKey,
   now = new Date().toISOString(),
 ): bigint {
+  if (key.quotaTimezone !== undefined && key.quotaPeriod !== "never")
+    return BigInt(key.currentPeriodUsed_nano ?? "0");
   if (!key.quotaPeriod || key.quotaPeriod === "never")
     return BigInt(key.totalUsed_nano ?? key.currentPeriodUsed_nano ?? "0");
   const previous = key.usagePeriodStartedAt ?? key.lastUsedAt;

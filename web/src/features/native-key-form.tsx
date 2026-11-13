@@ -9,6 +9,7 @@ import {
   useCreateToken,
   useUpdateToken,
   readOwnedKeyReceipt,
+  useTokenQuotaRegions,
   type Token,
 } from "../lib/api/tokens";
 import { useBackendKeys } from "../lib/api/key-adapter";
@@ -18,6 +19,7 @@ import { isSmartModelId } from "../lib/smart-model";
 import {
   keySpendingLimitValue,
   remainingQuotaForLifetimeLimit,
+  quotaForPeriodLimit,
 } from "../lib/key-spending-limit";
 import { copyText } from "./code-example";
 export function NativeKeyForm({
@@ -37,6 +39,7 @@ export function NativeKeyForm({
     navigate = useNavigate(),
     scope = useSessionQueryIdentity(),
     query = useTokenChoices(),
+    quotaRegions = useTokenQuotaRegions(),
     create = useCreateToken(),
     update = useUpdateToken(),
     { keys } = useBackendKeys();
@@ -52,6 +55,10 @@ export function NativeKeyForm({
       item?.allowedModels ?? null,
     ),
     [quota, setQuota] = useState(() => keySpendingLimitValue(item)),
+    [period, setPeriod] = useState<"never" | "daily" | "monthly">(
+      item?.quotaPeriod ?? "never",
+    ),
+    [region, setRegion] = useState(item?.quotaRegion ?? ""),
     [ips, setIps] = useState(item?.ipWhitelist?.join("\n") ?? ""),
     [error, setError] = useState(""),
     [operation, setOperation] = useState(""),
@@ -89,7 +96,11 @@ export function NativeKeyForm({
     (!preservingAutoGroup &&
       models !== null &&
       models.join(",") !== (item.allowedModels ?? []).join(","));
-  const quotaChanged = !item || quota !== keySpendingLimitValue(item);
+  const quotaChanged =
+    !item ||
+    quota !== keySpendingLimitValue(item) ||
+    period !== (item.quotaPeriod ?? "never") ||
+    region !== (item.quotaRegion ?? "");
   const reusable = initialModel
     ? keys.find(
         (k) =>
@@ -129,17 +140,34 @@ export function NativeKeyForm({
       return;
     }
     let remain: number | undefined;
+    let periodLimit: number | undefined;
+    if (
+      quotaChanged &&
+      period !== "never" &&
+      (!quotaRegions.data || quotaRegions.isError || quota === "")
+    ) {
+      setError(
+        c(
+          "请选择可用的额度地区并填写周期上限。",
+          "Choose an available quota region and enter a period limit.",
+          "اختر منطقة حصة متاحة وأدخل حد الفترة.",
+        ),
+      );
+      return;
+    }
     if (quotaChanged && quota !== "") {
       try {
-        remain = remainingQuotaForLifetimeLimit(quota, item);
+        if (period === "never")
+          remain = remainingQuotaForLifetimeLimit(quota, item);
+        else periodLimit = quotaForPeriodLimit(quota, item);
       } catch (e) {
         const reason = e instanceof Error ? e.message : "invalid_amount";
         setError(
           reason === "below_used"
             ? c(
-                "累计额度不能低于已消费金额。",
-                "The lifetime limit cannot be below the amount already spent.",
-                "لا يمكن أن يكون الحد التراكمي أقل من المبلغ المنفق.",
+                "额度不能低于已消费及在途预扣金额。",
+                "The limit cannot be below spending and pending reservations.",
+                "لا يمكن أن يقل الحد عن الإنفاق والحجوزات المعلقة.",
               )
             : reason === "too_large"
               ? c(
@@ -170,7 +198,16 @@ export function NativeKeyForm({
           .map((x) => x.trim())
           .filter(Boolean)
           .join(","),
-        ...(quotaChanged ? { unlimited_quota: quota === "" } : {}),
+        ...(quotaChanged
+          ? {
+              quota_period: period,
+              quota_region: period === "never" ? "" : region,
+              unlimited_quota: period === "never" && quota === "",
+            }
+          : {}),
+        ...(periodLimit === undefined
+          ? {}
+          : { period_quota_limit: periodLimit }),
         ...(remain === undefined ? {} : { remain_quota: remain }),
         choices_revision: initialRevision.current,
       };
@@ -427,12 +464,71 @@ export function NativeKeyForm({
                   onChange={(e) => setQuota(e.target.value)}
                 />
               </label>
+              <label>
+                {c("额度周期", "Quota period", "فترة الحصة")}
+                <select
+                  id="native-key-period"
+                  className="select-trigger"
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value as typeof period)}
+                >
+                  <option value="never">
+                    {c(
+                      "累计，不重置",
+                      "Lifetime, no reset",
+                      "تراكمي دون إعادة",
+                    )}
+                  </option>
+                  <option value="daily">
+                    {c("每日重置", "Resets daily", "إعادة يومية")}
+                  </option>
+                  <option value="monthly">
+                    {c("每月重置", "Resets monthly", "إعادة شهرية")}
+                  </option>
+                </select>
+              </label>
+              {period !== "never" && (
+                <label>
+                  {c(
+                    "额度地区与时区",
+                    "Quota region and timezone",
+                    "منطقة الحصة والمنطقة الزمنية",
+                  )}
+                  <select
+                    id="native-key-quota-region"
+                    className="select-trigger"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                  >
+                    {quotaRegions.data?.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name} · {option.timezone}
+                      </option>
+                    ))}
+                    {item &&
+                      region &&
+                      !quotaRegions.data?.some(
+                        (option) => option.id === region,
+                      ) && (
+                        <option value={region}>
+                          {region} · {item.quotaTimezone}
+                        </option>
+                      )}
+                  </select>
+                </label>
+              )}
               <p>
-                {c(
-                  "额度为累计上限，不会按日或按月重置。",
-                  "The spending limit is lifetime; it does not reset daily or monthly.",
-                  "حد الإنفاق تراكمي ولا يُعاد يوميًا أو شهريًا.",
-                )}
+                {period === "never"
+                  ? c(
+                      "额度为累计上限，不会按日或按月重置。",
+                      "The spending limit is lifetime; it does not reset daily or monthly.",
+                      "حد الإنفاق تراكمي ولا يُعاد يوميًا أو شهريًا.",
+                    )
+                  : c(
+                      "周期上限按所选地区的零点重置，累计消费保留。更改周期或地区前需等待在途请求结算。",
+                      "The limit resets at midnight in the selected region. Lifetime spending is retained. Pending requests must settle before changing the period or region.",
+                      "يُعاد الحد عند منتصف الليل في المنطقة المحددة مع الاحتفاظ بإجمالي الإنفاق. يجب تسوية الطلبات المعلقة قبل تغيير الفترة أو المنطقة.",
+                    )}
               </p>
               <label>
                 {c(

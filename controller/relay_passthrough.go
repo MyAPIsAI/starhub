@@ -284,7 +284,7 @@ func runPassthroughMode(w http.ResponseWriter, r *http.Request, req relayRequest
 		return
 	}
 
-	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, preQuota)
+	pre, err := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, preQuota, req.quotaReservationID)
 	if err != nil {
 		writePreConsumeError(w, "", err)
 		return
