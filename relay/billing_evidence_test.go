@@ -7,8 +7,39 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/pkg/taskplugin"
+	"starhub/relay/channel"
 	"starhub/setting"
 )
+
+func TestBillingEvidenceReplaysNativeAndPluginMeterFacts(t *testing.T) {
+	price := &PriceData{ModelName: "task-evidence", PriceVersion: 31, AmountUnit: common.MoneyUnitNano, ModelPriceUSD: 0.000000001, HasModelPrice: true, GroupRatio: 1, OtherRatio: 1}
+	pricing := channel.TaskPricing{PerCallUSD: 0.000000001, Units: 3}
+	raw, err := EncodeNativeBillingEvidence(price, pricing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := &model.Log{Model: price.ModelName, AmountUnit: price.AmountUnit}
+	if err := ApplyBillingEvidence(entry, raw); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := RecomputeBilledNano(entry); err != nil || got != "3" {
+		t.Fatalf("native replay: %s %v", got, err)
+	}
+	snapshot := PluginTaskPricingSnapshot{Version: 3, PriceData: *price, Usage: taskplugin.Usage{Seconds: 2, N: 1}}
+	result := taskplugin.Result{Status: "succeeded", Usage: &taskplugin.Usage{Seconds: 4, N: 2}}
+	raw, err = EncodePluginBillingEvidence(snapshot, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry.QuotaReservationID = common.NewNanoReservationID()
+	if err := ApplyBillingEvidence(entry, raw); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := RecomputeBilledNano(entry); err != nil || got != "8" {
+		t.Fatalf("plugin replay: %s %v", got, err)
+	}
+}
 
 func TestBillingEvidenceSurvivesDurableSettlementSerialization(t *testing.T) {
 	if err := model.InitDB(filepath.Join(t.TempDir(), "evidence.db")); err != nil {
