@@ -45,3 +45,32 @@ func TestRegionalRegistrationPinsLegalVersionAndRollsBackFailedConsent(t *testin
 		t.Fatal("accepted legal version not retained")
 	}
 }
+
+func TestRegistrationRejectsChangedProfileEvenWhenLegalVersionIsUnchanged(t *testing.T) {
+	newTestDB(t)
+	t.Setenv("STARHUB_REGION_PROFILE", "registration-revision")
+	profile := &RegionProfile{ID: "registration-revision", Name: "Registration", LegalVersion: "v1", Enabled: true}
+	if err := SaveRegionProfile(profile, -1); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"user_agreement", "privacy_policy"} {
+		if err := PublishLegalDocument(&LegalDocument{Type: kind, Version: "v1", Language: "en", Content: "Published fixture terms", RegionID: profile.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	accepted := *profile
+	profile.FeatureFlags = `{"registration":false}`
+	if err := SaveRegionProfile(profile, profile.Revision); err != nil {
+		t.Fatal(err)
+	}
+	user := &User{Username: "stale-policy-consent", Status: 1, Role: 1, AffCode: common.GenerateAffCode()}
+	if err := CreateRegisteredUser(user, "v1", &accepted); err != ErrRegionRegistrationChanged {
+		t.Fatalf("stale policy accepted: %v", err)
+	}
+	for _, table := range []string{"users", "user_agreements"} {
+		var count int64
+		if err := DB.Table(table).Count(&count).Error; err != nil || count != 0 {
+			t.Fatalf("partial %s record: %d %v", table, count, err)
+		}
+	}
+}

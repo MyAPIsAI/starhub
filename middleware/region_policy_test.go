@@ -55,3 +55,50 @@ func TestDeploymentRegionBlocksExplicitAndSmartCandidatesBeforeAdmission(t *test
 	}
 	call("allowed", 403)
 }
+
+func TestUnavailableRegionRejectsModelAdmissionWithoutFinancialEffects(t *testing.T) {
+	setupAutoRoutingDB(t)
+	user := &model.User{Username: "region-admission", Quota: 1000, Status: 1, AffCode: common.GenerateAffCode()}
+	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	token := &model.Token{UserID: user.ID, Name: "region-admission", UnlimitedQuota: true, Status: 1}
+	if err := model.InsertToken(token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := model.ReadMoneyAccount(user.ID); err != nil {
+		t.Fatal(err)
+	}
+	profile := &model.RegionProfile{ID: "disabled-region", Name: "Disabled", Enabled: true}
+	if err := model.SaveRegionProfile(profile, -1); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.DB.Model(profile).UpdateColumn("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, region := range []string{"missing-region", "disabled-region"} {
+		t.Run(region, func(t *testing.T) {
+			t.Setenv("STARHUB_REGION_PROFILE", region)
+			r := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(`{"model":"allowed","messages":[{"role":"user","content":"fixture"}]}`))
+			r.Header.Set("Content-Type", "application/json")
+			r = r.WithContext(common.WithValues(r.Context(), common.CtxUserID, user.ID, common.CtxTokenID, token.ID, common.CtxUsingGroup, "default"))
+			called := false
+			response := httptest.NewRecorder()
+			Distribute(dto.InboundOpenAI)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })).ServeHTTP(response, r)
+			if response.Code != 503 || called {
+				t.Fatalf("unavailable policy admitted consumption: %d %s", response.Code, response.Body.String())
+			}
+			after, err := model.GetUserByID(user.ID)
+			if err != nil || after.Quota != 1000 || after.UsedQuota != 0 {
+				t.Fatal("failed admission changed balances", err)
+			}
+			var receipts int64
+			if err := model.DB.Model(&model.QuotaReservation{}).Where("user_id = ?", user.ID).Count(&receipts).Error; err != nil || receipts != 0 {
+				t.Fatal("failed admission created a hold", err)
+			}
+			if err := model.VerifyMoneyLedger(user.ID); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

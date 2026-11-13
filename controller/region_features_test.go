@@ -29,3 +29,20 @@ func TestRegionFeatureFlagsRejectWritesBeforeSideEffects(t *testing.T) {
 		t.Fatal("disabled payment created an order")
 	}
 }
+
+func TestMissingActiveRegionRejectsRegistrationWithoutPartialRows(t *testing.T) {
+	newTestDB(t)
+	t.Setenv("STARHUB_REGION_PROFILE", "unavailable-registration")
+	w := call(Register, testRequest{method: "POST", target: "/api/user/register", body: `{"username":"unavailable-policy-user","password":"RegionPassword93"}`})
+	expectStatus(t, w, http.StatusServiceUnavailable)
+	for _, table := range []string{"users", "user_agreements"} {
+		var count int64
+		query := model.DB.Table(table)
+		if table == "users" {
+			query = query.Where("username = ?", "unavailable-policy-user")
+		}
+		if err := query.Count(&count).Error; err != nil || count != 0 {
+			t.Fatalf("partial %s row: %d %v", table, count, err)
+		}
+	}
+}
