@@ -62,7 +62,10 @@ func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64)
 	})
 }
 
-func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {
+func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64, expectedNano ...string) error {
+	if err := NormalizeTokenMoneyFields(fields); err != nil {
+		return err
+	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&Token{}).Where("id = ?", id).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
 			return err
@@ -71,8 +74,18 @@ func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64
 		if err := tx.First(&token, id).Error; err != nil {
 			return err
 		}
-		if _, changed := fields["remain_quota"]; changed && (expected == nil || token.RemainQuota != *expected) {
-			return ErrQuotaConflict
+		if _, changed := fields["remain_quota"]; changed {
+			if len(expectedNano) > 0 {
+				exact, err := common.ParseNano(expectedNano[0])
+				if err != nil || common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Cmp(exact) != 0 {
+					return ErrQuotaConflict
+				}
+			} else if expected == nil || token.RemainQuota != *expected {
+				return ErrQuotaConflict
+			}
+			if _, exact := fields["remain_quota_remainder_nano"]; !exact {
+				fields["remain_quota_remainder_nano"] = token.RemainQuotaRemainderNano
+			}
 		}
 		if err := configureTokenPeriod(tx, &token, fields, time.Now()); err != nil {
 			return err

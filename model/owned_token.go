@@ -113,6 +113,9 @@ func readOwnedTokenChoices(tx *gorm.DB, owner int64) (*OwnedTokenChoices, error)
 // MutateOwnedToken serializes ownership, exact row/config snapshots and the
 // durable operation receipt. Plaintext keys are never stored in receipts.
 func MutateOwnedToken(owner int64, operation, action string, id int64, revision, choiceRevision string, fields map[string]any) (*Token, *OwnedTokenReceipt, error) {
+	if err := NormalizeTokenMoneyFields(fields); err != nil {
+		return nil, nil, err
+	}
 	var result Token
 	var receipt OwnedTokenReceipt
 	err := DB.Transaction(func(tx *gorm.DB) error {
@@ -263,7 +266,7 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 				if err != nil {
 					return err
 				}
-				remaining := common.QuotaMoney(rq.(int64), 0)
+				remaining := common.QuotaMoney(rq.(int64), result.RemainQuotaRemainderNano)
 				if r, ok := updates["remain_quota_remainder_nano"].(int64); ok {
 					remaining = common.QuotaMoney(rq.(int64), r)
 				}

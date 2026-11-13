@@ -96,3 +96,50 @@ func TestOwnedTokenUsageRejectsForeignKeysAndInvalidPages(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenNanoBudgetHTTPAndExactBalanceFence(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "nano-budget", common.RoleUser, 100)
+	for _, body := range []string{
+		`{"name":"nano","remain_quota_nano":"1"}`,
+		`{"name":"nano-period","quota_period":"daily","period_quota_limit_nano":"2001"}`,
+	} {
+		w := call(CreateToken, testRequest{method: "POST", target: "/api/token", userID: u.ID, role: 1, body: body})
+		if w.Code != 200 {
+			t.Fatalf("exact budget creation: %d %s", w.Code, w.Body)
+		}
+		var data map[string]any
+		decodeData(t, w, &data)
+		expected := "1"
+		if data["quota_period"] == "daily" {
+			expected = "2001"
+		}
+		if data["remain_quota_nano"] != expected {
+			t.Fatalf("fractional budget was rounded: %s", w.Body)
+		}
+		if expected == "1" {
+			id := int64(data["id"].(float64))
+			for _, check := range []struct {
+				expected string
+				status   int
+			}{{"0", 409}, {"1", 200}, {"1", 409}} {
+				body := fmt.Sprintf(`{"id":%d,"remain_quota_nano":"2","expected_quota_nano":"%s"}`, id, check.expected)
+				edited := call(UpdateToken, testRequest{method: "PUT", target: "/api/token", userID: u.ID, role: 1, body: body})
+				if edited.Code != check.status {
+					t.Fatalf("fractional balance fence: %d %s", edited.Code, edited.Body)
+				}
+			}
+		}
+	}
+	for _, body := range []string{
+		`{"name":"bad","remain_quota_nano":"1","remain_quota":1}`,
+		`{"name":"bad","remain_quota_nano":"1.1"}`,
+		`{"name":"bad","remain_quota_nano":1}`,
+		`{"name":"bad","quota_period":"daily","period_quota_limit_nano":"1","remain_quota_nano":"0"}`,
+	} {
+		w := call(CreateToken, testRequest{method: "POST", target: "/api/token", userID: u.ID, role: 1, body: body})
+		if w.Code != 400 {
+			t.Fatalf("invalid monetary contract accepted: %d %s", w.Code, w.Body)
+		}
+	}
+}

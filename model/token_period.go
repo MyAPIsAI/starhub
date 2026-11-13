@@ -201,7 +201,7 @@ func configureTokenPeriod(tx *gorm.DB, t *Token, fields map[string]any, now time
 	}
 	if value, ok := fields["period_quota_limit"].(int64); ok {
 		next.PeriodQuotaLimit = value
-		next.PeriodQuotaLimitRemainderNano = 0
+		next.PeriodQuotaLimitRemainderNano, _ = fields["period_quota_limit_remainder_nano"].(int64)
 	}
 	if next.PeriodQuotaLimit < 0 || next.PeriodQuotaLimit > 9_007_199_254_740_991 {
 		return ErrTokenPeriodPolicy
@@ -262,6 +262,7 @@ func configureTokenPeriod(tx *gorm.DB, t *Token, fields map[string]any, now time
 			return ErrTokenPeriodBusy
 		}
 	}
+	fields["period_quota_limit_remainder_nano"] = next.PeriodQuotaLimitRemainderNano
 	fields["quota_period"], fields["period_quota_limit"], fields["quota_region"], fields["quota_timezone"] = next.QuotaPeriod, next.PeriodQuotaLimit, next.QuotaRegion, next.QuotaTimezone
 	if !tokenPeriodic(&next) {
 		if t.QuotaPeriodID > 0 {

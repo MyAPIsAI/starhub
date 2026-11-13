@@ -126,7 +126,7 @@ func InsertToken(t *Token) error {
 			t.Key = encrypted
 			err := tx.Create(t).Error
 			if err == nil {
-				fields := map[string]any{"quota_period": t.QuotaPeriod, "period_quota_limit": t.PeriodQuotaLimit, "quota_region": t.QuotaRegion}
+				fields := map[string]any{"quota_period": t.QuotaPeriod, "period_quota_limit": t.PeriodQuotaLimit, "period_quota_limit_remainder_nano": t.PeriodQuotaLimitRemainderNano, "quota_region": t.QuotaRegion}
 				if err := configureTokenPeriod(tx, t, fields, time.Now()); err != nil {
 					return err
 				}

@@ -145,3 +145,30 @@ func TestNanoConcurrentReservationsAndDurableSettlementRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNanoOwnedLifetimeEditSubtractsExactPendingHolds(t *testing.T) {
+	newTestDB(t)
+	u, token := newBillingUser(t, 1000)
+	if err := ReserveQuota(u.ID, token.ID, false, 1, "n2:edit-held"); err != nil {
+		t.Fatal(err)
+	}
+	choices, err := ReadOwnedTokenChoices(u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _ = GetTokenByID(token.ID)
+	updated, _, err := MutateOwnedToken(u.ID, "edit-exact", "update", token.ID, TokenManagementRevision(token), choices.Revision, map[string]any{"remain_quota_nano": "2001"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if common.QuotaMoney(updated.RemainQuota, updated.RemainQuotaRemainderNano).String() != "2000" {
+		t.Fatal("pending nano hold was rounded or counted twice")
+	}
+	if err := SettleQuota(u.ID, token.ID, false, 0, 1, &Log{QuotaReservationID: "n2:edit-held", AmountUnit: common.MoneyUnitNano}); err != nil {
+		t.Fatal(err)
+	}
+	updated, _ = GetTokenByID(token.ID)
+	if common.QuotaMoney(updated.UsedQuota, updated.UsedQuotaRemainderNano).String() != "1" || common.QuotaMoney(updated.RemainQuota, updated.RemainQuotaRemainderNano).String() != "2000" {
+		t.Fatal("settlement changed the edited lifetime budget")
+	}
+}

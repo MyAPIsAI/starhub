@@ -125,10 +125,17 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 	if p.RemainQuota != nil {
 		fields["remain_quota"] = *p.RemainQuota
 	}
+	if p.RemainQuotaNano != nil {
+		fields["remain_quota_nano"] = *p.RemainQuotaNano
+	}
+	if err := model.NormalizeTokenMoneyFields(fields); err != nil {
+		common.ApiError(w, 400, err.Error())
+		return
+	}
 	if p.UnlimitedQuota != nil {
 		fields["unlimited_quota"] = *p.UnlimitedQuota
 		if *p.UnlimitedQuota {
-			fields["remain_quota"] = int64(0)
+			fields["remain_quota"], fields["remain_quota_remainder_nano"] = int64(0), int64(0)
 		}
 	}
 	if p.Status != nil {
@@ -177,7 +184,7 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, 409, "key balance changed")
 			return
 		}
-		if p.UnlimitedQuota != nil && !*p.UnlimitedQuota && token.UnlimitedQuota && p.RemainQuota == nil && (p.QuotaPeriod == nil || *p.QuotaPeriod == "never") {
+		if p.UnlimitedQuota != nil && !*p.UnlimitedQuota && token.UnlimitedQuota && p.RemainQuota == nil && p.RemainQuotaNano == nil && (p.QuotaPeriod == nil || *p.QuotaPeriod == "never") {
 			common.ApiError(w, 400, "remaining quota required")
 			return
 		}

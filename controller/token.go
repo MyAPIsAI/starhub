@@ -11,19 +11,21 @@ import (
 )
 
 type tokenPayload struct {
-	QuotaPeriod      string `json:"quota_period"`
-	PeriodQuotaLimit *int64 `json:"period_quota_limit"`
-	QuotaRegion      string `json:"quota_region"`
-	SmartAccess      *bool  `json:"smart_access"`
-	SmartCandidates  string `json:"smart_candidates"`
-	Name             string `json:"name"`
-	RemainQuota      *int64 `json:"remain_quota"`
-	UnlimitedQuota   *bool  `json:"unlimited_quota"`
-	ExpiredTime      *int64 `json:"expired_time"`
-	Group            string `json:"group"`
-	ModelLimits      string `json:"model_limits"`
-	AllowIps         string `json:"allow_ips"`
-	AutoGroups       string `json:"auto_groups"`
+	RemainQuotaNano      *string `json:"remain_quota_nano"`
+	PeriodQuotaLimitNano *string `json:"period_quota_limit_nano"`
+	QuotaPeriod          string  `json:"quota_period"`
+	PeriodQuotaLimit     *int64  `json:"period_quota_limit"`
+	QuotaRegion          string  `json:"quota_region"`
+	SmartAccess          *bool   `json:"smart_access"`
+	SmartCandidates      string  `json:"smart_candidates"`
+	Name                 string  `json:"name"`
+	RemainQuota          *int64  `json:"remain_quota"`
+	UnlimitedQuota       *bool   `json:"unlimited_quota"`
+	ExpiredTime          *int64  `json:"expired_time"`
+	Group                string  `json:"group"`
+	ModelLimits          string  `json:"model_limits"`
+	AllowIps             string  `json:"allow_ips"`
+	AutoGroups           string  `json:"auto_groups"`
 }
 
 func CreateToken(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +39,7 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	periodic := req.QuotaPeriod == "daily" || req.QuotaPeriod == "monthly"
-	if periodic && (req.PeriodQuotaLimit == nil || req.RemainQuota != nil || unlimited) {
+	if periodic && ((req.PeriodQuotaLimit == nil && req.PeriodQuotaLimitNano == nil) || req.RemainQuota != nil || req.RemainQuotaNano != nil || unlimited) {
 		common.ApiError(w, 400, "period quota limit required without a lifetime balance")
 		return
 	}
@@ -102,6 +104,39 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 	if req.PeriodQuotaLimit != nil {
 		token.PeriodQuotaLimit = *req.PeriodQuotaLimit
 	}
+
+	money := map[string]any{}
+	if req.RemainQuota != nil {
+		money["remain_quota"] = *req.RemainQuota
+	}
+	if req.PeriodQuotaLimit != nil {
+		money["period_quota_limit"] = *req.PeriodQuotaLimit
+	}
+	if req.RemainQuotaNano != nil {
+		money["remain_quota_nano"] = *req.RemainQuotaNano
+	}
+	if req.PeriodQuotaLimitNano != nil {
+		money["period_quota_limit_nano"] = *req.PeriodQuotaLimitNano
+	}
+	if err := model.NormalizeTokenMoneyFields(money); err != nil {
+		common.ApiError(w, 400, err.Error())
+		return
+	}
+	if v, ok := money["remain_quota"].(int64); ok {
+		token.RemainQuota = v
+	}
+	if v, ok := money["remain_quota_remainder_nano"].(int64); ok {
+		token.RemainQuotaRemainderNano = v
+	}
+	if v, ok := money["period_quota_limit"].(int64); ok {
+		token.PeriodQuotaLimit = v
+	}
+	if v, ok := money["period_quota_limit_remainder_nano"].(int64); ok {
+		token.PeriodQuotaLimitRemainderNano = v
+	}
+	if unlimited {
+		token.RemainQuota, token.RemainQuotaRemainderNano = 0, 0
+	}
 	if err := model.InsertToken(token); err != nil {
 		status := 500
 		if errors.Is(err, model.ErrTokenPeriodPolicy) || errors.Is(err, model.ErrTokenPeriodBusy) {
@@ -164,22 +199,25 @@ func maskedToken(t *model.Token) map[string]any {
 }
 
 type tokenUpdateRequest struct {
-	QuotaPeriod      *string `json:"quota_period"`
-	PeriodQuotaLimit *int64  `json:"period_quota_limit"`
-	QuotaRegion      *string `json:"quota_region"`
-	SmartAccess      *bool   `json:"smart_access"`
-	SmartCandidates  *string `json:"smart_candidates"`
-	ID               int64   `json:"id"`
-	Name             *string `json:"name"`
-	RemainQuota      *int64  `json:"remain_quota"`
-	ExpectedQuota    *int64  `json:"expected_quota"`
-	UnlimitedQuota   *bool   `json:"unlimited_quota"`
-	ExpiredTime      *int64  `json:"expired_time"`
-	Group            *string `json:"group"`
-	ModelLimits      *string `json:"model_limits"`
-	AllowIps         *string `json:"allow_ips"`
-	AutoGroups       *string `json:"auto_groups"`
-	Status           *int    `json:"status"`
+	RemainQuotaNano      *string `json:"remain_quota_nano"`
+	PeriodQuotaLimitNano *string `json:"period_quota_limit_nano"`
+	ExpectedQuotaNano    *string `json:"expected_quota_nano"`
+	QuotaPeriod          *string `json:"quota_period"`
+	PeriodQuotaLimit     *int64  `json:"period_quota_limit"`
+	QuotaRegion          *string `json:"quota_region"`
+	SmartAccess          *bool   `json:"smart_access"`
+	SmartCandidates      *string `json:"smart_candidates"`
+	ID                   int64   `json:"id"`
+	Name                 *string `json:"name"`
+	RemainQuota          *int64  `json:"remain_quota"`
+	ExpectedQuota        *int64  `json:"expected_quota"`
+	UnlimitedQuota       *bool   `json:"unlimited_quota"`
+	ExpiredTime          *int64  `json:"expired_time"`
+	Group                *string `json:"group"`
+	ModelLimits          *string `json:"model_limits"`
+	AllowIps             *string `json:"allow_ips"`
+	AutoGroups           *string `json:"auto_groups"`
+	Status               *int    `json:"status"`
 }
 
 func UpdateToken(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +249,7 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 	// Track whether the caller explicitly set remain_quota (which needs
 	// the optimistic-concurrency guard) vs. an implicit reset caused
 	// by switching to unlimited_quota (which does not).
-	quotaSetByUser := false
+	quotaSetByUser := req.RemainQuotaNano != nil
 	if req.Name != nil {
 		fields["name"] = strings.TrimSpace(*req.Name)
 	}
@@ -229,8 +267,10 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 			// Atomic reset alongside the flag; the guard below
 			// skips remain_quota when it was set implicitly by
 			// unlimited_quota, not explicitly by the caller.
-			fields["remain_quota"] = int64(0)
-		} else if !*req.UnlimitedQuota && token.UnlimitedQuota && req.RemainQuota == nil && (req.QuotaPeriod == nil || *req.QuotaPeriod == "never") {
+			if req.RemainQuotaNano == nil {
+				fields["remain_quota"] = int64(0)
+			}
+		} else if !*req.UnlimitedQuota && token.UnlimitedQuota && req.RemainQuota == nil && req.RemainQuotaNano == nil && (req.QuotaPeriod == nil || *req.QuotaPeriod == "never") {
 			// Turning off unlimited without specifying a new balance
 			// would leave remain_quota at 0 (from the unlimited reset),
 			// effectively disabling the token. Require remain_quota.
@@ -300,7 +340,17 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 	if (req.Group != nil || req.AutoGroups != nil) && !validateTokenGroupAccess(w, r, token.UserID, group, autoGroups) {
 		return
 	}
-	if quotaSetByUser && req.ExpectedQuota == nil {
+	if req.RemainQuotaNano != nil {
+		fields["remain_quota_nano"] = *req.RemainQuotaNano
+	}
+	if err := model.NormalizeTokenMoneyFields(fields); err != nil {
+		common.ApiError(w, 400, err.Error())
+		return
+	}
+	if req.UnlimitedQuota != nil && *req.UnlimitedQuota {
+		fields["remain_quota"], fields["remain_quota_remainder_nano"] = int64(0), int64(0)
+	}
+	if quotaSetByUser && req.ExpectedQuota == nil && req.ExpectedQuotaNano == nil {
 		common.ApiError(w, http.StatusBadRequest, "expected_quota is required when setting a balance")
 		return
 	}
@@ -318,7 +368,15 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		current := token.RemainQuota
 		expected = &current
 	}
-	if err := model.UpdateTokenFieldsWithQuota(req.ID, fields, expected); err != nil {
+	var exact []string
+	if req.ExpectedQuotaNano != nil {
+		exact = append(exact, *req.ExpectedQuotaNano)
+	}
+	if req.RemainQuotaNano != nil && len(exact) == 0 {
+		common.ApiError(w, 400, "expected_quota_nano is required for an exact balance edit")
+		return
+	}
+	if err := model.UpdateTokenFieldsWithQuota(req.ID, fields, expected, exact...); err != nil {
 		if err == model.ErrQuotaConflict {
 			common.ApiError(w, http.StatusConflict, "balance changed; reload and confirm again")
 			return
@@ -334,6 +392,9 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func addTokenPeriodFields(fields map[string]any, p tokenUpdateRequest) {
+	if p.PeriodQuotaLimitNano != nil {
+		fields["period_quota_limit_nano"] = *p.PeriodQuotaLimitNano
+	}
 	if p.QuotaPeriod != nil {
 		fields["quota_period"] = strings.TrimSpace(*p.QuotaPeriod)
 	}
