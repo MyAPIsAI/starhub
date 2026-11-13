@@ -69,6 +69,13 @@ type Log struct {
 }
 
 func InsertLog(l *Log) error {
+	if l.BusinessDate == "" {
+		at := l.AdmittedAt
+		if at == 0 {
+			at = l.CreatedAt
+		}
+		l.BusinessDaySnapshot = legacyBusinessDay(at)
+	}
 	if l.AdmissionDay == 0 {
 		if l.CreatedAt > 0 {
 			// Derive admission day from the explicit CreatedAt value
@@ -96,12 +103,22 @@ func InsertFailedLog(l *Log) error {
 			return err
 		}
 		l.AdmittedAt, l.QuotaPeriodID = reservation.AdmittedAt, reservation.PeriodID
+		assignReservationDay(l, reservation)
 		at := time.Unix(reservation.AdmittedAt, 0).UTC()
 		l.AdmissionDay = time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Unix()
 	}
 	l.Status = 2 // failed
 	l.Quota = 0
+	l.QuotaRemainderNano = 0
 	l.UnfundedQuota = 0
+	l.UnfundedQuotaRemainderNano = 0
+	if l.BusinessDate == "" {
+		at := l.AdmittedAt
+		if at == 0 {
+			at = l.CreatedAt
+		}
+		l.BusinessDaySnapshot = legacyBusinessDay(at)
+	}
 	if l.AdmissionDay == 0 {
 		if l.CreatedAt > 0 {
 			t := time.Unix(l.CreatedAt, 0).UTC()

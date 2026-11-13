@@ -354,6 +354,10 @@ func reserveTokenAdmission(tx *gorm.DB, userID, tokenID int64, unlimited bool, a
 	err := tx.First(&reservation, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		reservation = QuotaReservation{ID: id, UserID: userID, TokenID: tokenID, PeriodID: token.QuotaPeriodID, Limited: !unlimited || tokenPeriodic(&token), AdmittedAt: now.Unix()}
+		reservation.BusinessDaySnapshot, err = captureBusinessDay(tx, now)
+		if err != nil {
+			return err
+		}
 	} else if err != nil {
 		return err
 	} else if reservation.UserID != userID || reservation.TokenID != tokenID || reservation.CompletedAt != 0 {

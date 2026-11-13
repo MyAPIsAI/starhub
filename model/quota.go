@@ -204,6 +204,7 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			}
 			reservation = &r
 			settled.AdmittedAt = r.AdmittedAt
+			assignReservationDay(&settled, r)
 			at := time.Unix(r.AdmittedAt, 0).UTC()
 			settled.AdmissionDay = time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Unix()
 			settled.QuotaPeriodID = r.PeriodID

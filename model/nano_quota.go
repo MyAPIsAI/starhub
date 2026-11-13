@@ -47,6 +47,10 @@ func reserveNanoQuota(tx *gorm.DB, userID, tokenID int64, unlimited bool, amount
 	err = tx.First(&reservation, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		reservation = QuotaReservation{ID: id, UserID: userID, TokenID: tokenID, PeriodID: token.QuotaPeriodID, Limited: !unlimited || tokenPeriodic(&token), AdmittedAt: time.Now().Unix()}
+		reservation.BusinessDaySnapshot, err = captureBusinessDay(tx, time.Unix(reservation.AdmittedAt, 0))
+		if err != nil {
+			return err
+		}
 	} else if err != nil {
 		return err
 	} else if reservation.UserID != userID || reservation.TokenID != tokenID || reservation.CompletedAt != 0 {
@@ -314,6 +318,7 @@ func settleNanoQuota(userID, tokenID int64, delta, actual int64, entry *Log, cla
 			settled.ExactFeeNanoUSD = strconv.FormatInt(actual, 10)
 		}
 		settled.AdmittedAt, settled.QuotaPeriodID = reservation.AdmittedAt, reservation.PeriodID
+		assignReservationDay(&settled, reservation)
 		at := time.Unix(reservation.AdmittedAt, 0).UTC()
 		settled.AdmissionDay = time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Unix()
 		if err := tx.Create(&settled).Error; err != nil {
