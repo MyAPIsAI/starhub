@@ -9,6 +9,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/pkg/pricingtime"
 	"starhub/pkg/taskplugin"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
@@ -43,6 +44,87 @@ func TestImageBillingEvidenceReplaysEverySettlementModeWithoutPrompt(t *testing.
 			}
 			if replay, err := RecomputeBilledNano(entry); err != nil || replay != strconv.FormatInt(want, 10) {
 				t.Fatalf("image replay: %s %v", replay, err)
+			}
+		})
+	}
+}
+
+func TestFrozenBillingEvidenceMatchesIndependentClassifiedGoldenAmounts(t *testing.T) {
+	setting.ResetAllToDefaults()
+	t.Cleanup(setting.ResetAllToDefaults)
+	rates, err := pricingtime.NewTokenRates(pricingtime.TokenPrices{InputPerM: "2", OutputPerM: "6", CacheReadPerM: "0.2", CacheWritePerM: "3", AudioInputPerM: "8", AudioOutputPerM: "10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name        string
+		independent bool
+		want        string
+	}{{"ratio", false, "756000"}, {"six-explicit-rates", true, "786000"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			price := &PriceData{PriceVersion: 71, AmountUnit: common.MoneyUnitNano, ModelName: "classified-golden", ModelRatio: 2, CompletionRatio: 3, CacheRatio: 0.1, AudioRatio: 4, GroupRatio: 0.5, GroupGroupRatio: 1.5, OtherRatio: 2, UserGroup: "customer-tier", UsingGroup: "sale-tier"}
+			if tc.independent {
+				price.TokenRates = rates
+			}
+			usage := &Usage{PromptTokens: 100, CompletionTokens: 40, PromptTokensDetails: &PromptTokensDetails{CachedTokens: 20, CacheWriteTokens: 10, AudioTokens: 15}, CompletionTokensDetails: &CompletionTokensDetails{AudioTokens: 5, ReasoningTokens: 7}}
+			entry := &model.Log{Model: price.ModelName, AmountUnit: price.AmountUnit}
+			if err := attachTokenBillingEvidence(entry, price, usage); err != nil {
+				t.Fatal(err)
+			}
+			// Golden amounts are calculated from the six disjoint classes and the
+			// 0.5 x 1.5 x 2 group multiplier, independently of production helpers.
+			if err := setting.ApplyVersionedOptions(map[string]string{"model_ratio": `{"classified-golden":999}`, "group_ratio": `{"sale-tier":99}`}, 72); err != nil {
+				t.Fatal(err)
+			}
+			price.ModelRatio = 999
+			usage.PromptTokensDetails.CachedTokens = 0
+			got, err := RecomputeBilledNano(entry)
+			if err != nil || got != tc.want {
+				t.Fatalf("got %q want %q: %v", got, tc.want, err)
+			}
+		})
+	}
+}
+
+func TestBillingEvidenceRejectsCorruptUnsupportedAndMismatchedRecords(t *testing.T) {
+	price := &PriceData{PriceVersion: 81, AmountUnit: common.MoneyUnitNano, ModelName: "replay-validation", ModelRatio: 1, CompletionRatio: 1, GroupRatio: 1, OtherRatio: 1}
+	base := &model.Log{Model: price.ModelName, AmountUnit: price.AmountUnit}
+	if err := attachTokenBillingEvidence(base, price, &Usage{PromptTokens: 2}); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"truncated", "unsupported-version", "unsupported-kind", "missing-usage", "different-model", "different-unit", "different-price", "different-usage"} {
+		t.Run(mode, func(t *testing.T) {
+			entry := *base
+			var evidence BillingEvidence
+			if err := json.Unmarshal([]byte(base.BillingEvidence), &evidence); err != nil {
+				t.Fatal(err)
+			}
+			switch mode {
+			case "unsupported-version":
+				evidence.Version = 2
+			case "unsupported-kind":
+				evidence.Kind = "future-kind"
+			case "missing-usage":
+				evidence.Usage = nil
+			case "different-model":
+				entry.Model = "other-model"
+			case "different-unit":
+				entry.AmountUnit = "unsupported-unit"
+			case "different-price":
+				entry.PriceVersion++
+			case "different-usage":
+				entry.PromptTokens++
+			}
+			raw, err := json.Marshal(evidence)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry.BillingEvidence = string(raw)
+			if mode == "truncated" {
+				entry.BillingEvidence = "{"
+			}
+			if amount, err := RecomputeBilledNano(&entry); err == nil || amount != "" {
+				t.Fatalf("unverifiable record returned %q: %v", amount, err)
 			}
 		})
 	}
