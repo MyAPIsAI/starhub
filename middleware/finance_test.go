@@ -12,8 +12,11 @@ import (
 
 func TestFinanceAuthReadsCurrentRoleAndDeniesWrites(t *testing.T) {
 	setupAutoRoutingDB(t)
-	user := &model.User{Username: "finance-session", Role: common.RoleFinance, Status: common.StatusEnabled, Group: "default"}
+	user := &model.User{Username: "finance-session", Role: common.RoleFinance, Status: common.StatusEnabled, Group: "default", AdminPasswordChangedAt: 1}
 	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.DB.Create(&model.TwoFA{UserID: user.ID, Secret: "test-factor", IsEnabled: true}).Error; err != nil {
 		t.Fatal(err)
 	}
 	session := Sessions.Create(user.ID, time.Hour)
@@ -33,6 +36,9 @@ func TestFinanceAuthReadsCurrentRoleAndDeniesWrites(t *testing.T) {
 		if err := model.UpdateUserFields(user.ID, map[string]any{"role": role}); err != nil {
 			t.Fatal(err)
 		}
+		Sessions.Remove(session)
+		user.Role = role
+		session = Sessions.CreateConfirmed(user, time.Hour, "", "", "test-factor")
 		want := 403
 		if role == common.RoleFinance || role == common.RoleAdmin || role == common.RoleRoot {
 			want = 204

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -16,7 +15,7 @@ func TestFinanceRoleAssignmentIsRootOnlyAndRevocable(t *testing.T) {
 	if err := model.CreateUser(user); err != nil {
 		t.Fatal(err)
 	}
-	userSession := middleware.Sessions.Create(user.ID, time.Hour)
+	userSession := fixtureSession(t, user)
 	t.Cleanup(func() { middleware.Sessions.Remove(userSession) })
 	path := fmt.Sprintf("/api/user/%d/finance-role", user.ID)
 	body := map[string]any{"enabled": true, "expected_role": common.RoleUser}
@@ -30,6 +29,11 @@ func TestFinanceRoleAssignmentIsRootOnlyAndRevocable(t *testing.T) {
 	if err != nil || got.Role != common.RoleFinance || got.IsAdmin() {
 		t.Fatalf("finance became admin: %+v %v", got, err)
 	}
+	if res := doRequest(env.base, "GET", "/api/finance/summary", userSession, nil); res.Status != 403 {
+		t.Fatalf("promotion bypassed staff security setup: %d %s", res.Status, res.Body)
+	}
+	middleware.Sessions.Remove(userSession)
+	userSession = fixtureSession(t, got)
 	if res := doRequest(env.base, "GET", "/api/finance/summary?days=7", userSession, nil); res.Status != 200 {
 		t.Fatalf("finance role cannot read summary: %d %s", res.Status, res.Body)
 	}

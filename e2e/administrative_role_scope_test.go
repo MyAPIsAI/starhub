@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -18,7 +17,7 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 	if err := model.CreateUser(actor); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(actor.ID, time.Hour)
+	session := fixtureSession(t, actor)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	ownedToken := &model.Token{UserID: actor.ID, Name: "Owned key", Status: common.StatusEnabled, UnlimitedQuota: true, ExpiredTime: -1}
 	if err := model.InsertToken(ownedToken); err != nil {
@@ -71,6 +70,8 @@ func TestUnknownNumericRolesCannotReadOrManageOtherAccounts(t *testing.T) {
 			if err != nil || storedActor.IsAdmin() != admin {
 				t.Fatal("model authority disagrees with assigned role")
 			}
+			middleware.Sessions.Remove(session)
+			session = fixtureSession(t, storedActor)
 			for _, path := range []string{"/api/token", "/api/ledger", "/api/recharge", "/api/export"} {
 				response := doRequest(env.base, "GET", path, session, nil)
 				var body struct {
