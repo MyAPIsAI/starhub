@@ -46,6 +46,9 @@ func SendPhoneRegistrationVerification(w http.ResponseWriter, r *http.Request) {
 }
 
 func sendPhoneVerification(w http.ResponseWriter, r *http.Request, purpose string, requireExistingUser bool) {
+	if _, ok := requireRegionFeature(w, "sms", "sms"); !ok {
+		return
+	}
 	if !service.IsSMSEnabled() {
 		common.ApiError(w, http.StatusBadRequest, "SMS service is not enabled")
 		return
@@ -91,6 +94,9 @@ func sendPhoneVerification(w http.ResponseWriter, r *http.Request, purpose strin
 // PhoneLogin handles POST /api/user/login/phone.
 // Passwordless login via SMS verification code.
 func PhoneLogin(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRegionFeature(w, "sms", "sms"); !ok {
+		return
+	}
 	if !service.IsSMSEnabled() {
 		common.ApiError(w, http.StatusBadRequest, "SMS service is not enabled")
 		return
@@ -145,6 +151,9 @@ func PhoneLogin(w http.ResponseWriter, r *http.Request) {
 // ResetPasswordByPhone handles POST /api/user/reset-password.
 // Resets the password using a phone verification code.
 func ResetPasswordByPhone(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRegionFeature(w, "sms", "sms"); !ok {
+		return
+	}
 	if !service.IsSMSEnabled() {
 		common.ApiError(w, http.StatusBadRequest, "SMS service is not enabled")
 		return
@@ -202,6 +211,9 @@ func SendPhoneResetVerification(w http.ResponseWriter, r *http.Request) {
 // ChangePhone handles POST /api/user/change-phone.
 // Changes the bound phone number (requires verification of both old and new phones).
 func ChangePhone(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRegionFeature(w, "sms", "sms"); !ok {
+		return
+	}
 	if !service.IsSMSEnabled() {
 		common.ApiError(w, http.StatusBadRequest, "SMS service is not enabled")
 		return
@@ -244,6 +256,9 @@ func ChangePhone(w http.ResponseWriter, r *http.Request) {
 // SendPhoneChangeVerification handles POST /api/user/phone-verification/change.
 // Sends an SMS code to the current phone for the change-phone flow.
 func SendPhoneChangeVerification(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRegionFeature(w, "sms", "sms"); !ok {
+		return
+	}
 	if !service.IsSMSEnabled() {
 		common.ApiError(w, http.StatusBadRequest, "SMS service is not enabled")
 		return
@@ -285,6 +300,9 @@ type verifyEmailRequest struct {
 // SendEmailVerificationHandler handles POST /api/user/email-verification.
 // Sends a verification code to the target email for binding/confirmation.
 func SendEmailVerificationHandler(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRegionFeature(w, "email", "email"); !ok {
+		return
+	}
 	if !service.IsEmailEnabled() {
 		common.ApiError(w, http.StatusBadRequest, "email service is not enabled")
 		return
@@ -318,6 +336,9 @@ func SendEmailVerificationHandler(w http.ResponseWriter, r *http.Request) {
 // VerifyEmailHandler handles POST /api/user/email-verification/verify.
 // Verifies the code and binds the email to the current user if successful.
 func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRegionFeature(w, "email", "email"); !ok {
+		return
+	}
 	var req verifyEmailRequest
 	if !decodeJSONBody(w, r, &req) {
 		return

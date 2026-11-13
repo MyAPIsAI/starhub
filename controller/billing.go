@@ -103,6 +103,14 @@ func CreateRechargeOrder(w http.ResponseWriter, r *http.Request) {
 	if channel == "" {
 		channel = "card"
 	}
+	region, ok := requireRegionFeature(w, "payments", "")
+	if !ok {
+		return
+	}
+	if !region.PaymentEnabled(channel) {
+		common.ApiError(w, 403, "payment channel is disabled in the deployment region")
+		return
+	}
 	userID := requestUserID(r)
 	// Ensure the wallet row exists so GetWallet never 404s after a recharge.
 	if _, err := model.GetOrCreateWallet(userID); err != nil {
