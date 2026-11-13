@@ -431,18 +431,19 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 func publicUser(u *model.User) map[string]any {
 	return map[string]any{
 		"quota_nano": common.QuotaMoney(u.Quota, u.QuotaRemainderNano).String(), "used_quota_nano": common.QuotaMoney(u.UsedQuota, u.UsedQuotaRemainderNano).String(),
-		"id":         u.ID,
-		"username":   u.Username,
-		"email":      u.Email,
-		"role":       u.Role,
-		"status":     u.Status,
-		"quota":      u.Quota,
-		"used_quota": u.UsedQuota,
-		"group":      u.Group,
-		"aff_code":   u.AffCode,
-		"inviter_id": u.InviterID,
-		"language":   u.Language,
-		"created_at": u.CreatedAt,
+		"id":                             u.ID,
+		"username":                       u.Username,
+		"email":                          u.Email,
+		"role":                           u.Role,
+		"status":                         u.Status,
+		"quota":                          u.Quota,
+		"used_quota":                     u.UsedQuota,
+		"group":                          u.Group,
+		"aff_code":                       u.AffCode,
+		"inviter_id":                     u.InviterID,
+		"language":                       u.Language,
+		"created_at":                     u.CreatedAt,
+		"admin_password_change_required": common.IsStaffRole(u.Role) && u.AdminPasswordChangedAt == 0,
 	}
 }
 
@@ -480,12 +481,19 @@ func UpdateSelf(w http.ResponseWriter, r *http.Request) {
 				"password must be 8-64 characters with at least one letter and one digit")
 			return
 		}
+		if common.IsStaffRole(user.Role) && common.VerifyPassword(pw, user.Password) {
+			common.ApiError(w, http.StatusBadRequest, "new password must differ from the current password")
+			return
+		}
 		hashed, err := common.HashPassword(pw)
 		if err != nil {
 			common.ApiError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		fields["password"] = hashed
+		if common.IsStaffRole(user.Role) {
+			fields["admin_password_changed_at"] = time.Now().Unix()
+		}
 	}
 	if req.Email != nil {
 		email := strings.TrimSpace(*req.Email)

@@ -13,6 +13,10 @@ func IsAdminRole(role int) bool {
 	return role == RoleAdmin || role == RoleRoot
 }
 
+func IsStaffRole(role int) bool {
+	return IsAdminRole(role) || role == RoleFinance || role == RoleTech
+}
+
 const (
 	StatusEnabled  = 1
 	StatusDisabled = 2

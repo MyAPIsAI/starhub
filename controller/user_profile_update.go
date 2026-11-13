@@ -52,6 +52,10 @@ func UpdateProfileState(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, http.StatusForbidden, "current password is incorrect")
 			return
 		}
+		if common.IsStaffRole(owner.Role) && (!validPassword(*input.NewPassword) || common.VerifyPassword(*input.NewPassword, owner.Password)) {
+			common.ApiError(w, http.StatusBadRequest, "choose a different strong password")
+			return
+		}
 		field = "password"
 		value, err = common.HashPassword(*input.NewPassword)
 		if err != nil {

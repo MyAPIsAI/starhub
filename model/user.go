@@ -12,6 +12,7 @@ import (
 var ErrUserNotFound = errors.New("user not found")
 
 type User struct {
+	AdminPasswordChangedAt int64  `gorm:"not null;default:0" json:"-"`
 	QuotaRemainderNano     int64  `gorm:"not null;default:0" json:"-"`
 	UsedQuotaRemainderNano int64  `gorm:"not null;default:0" json:"-"`
 	ID                     int64  `gorm:"primaryKey;autoIncrement" json:"id"`
