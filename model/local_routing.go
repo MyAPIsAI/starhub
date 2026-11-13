@@ -21,22 +21,25 @@ type RoutingAttempt struct {
 }
 
 type LocalRoutingState struct {
-	ResourceKey         string  `gorm:"primaryKey" json:"resource_key"`
-	EndpointGeneration  string  `json:"endpoint_generation"`
-	RecoveryEpoch       int64   `json:"recovery_epoch"`
-	FailureGeneration   uint64  `json:"failure_generation"`
-	ConsecutiveFailures int     `json:"consecutive_failures"`
-	HalfOpenFailures    int     `json:"half_open_failures"`
-	OpenUntil           int64   `json:"open_until"`
-	ProbeLeaseUntil     int64   `json:"probe_lease_until"`
-	ProbeID             string  `json:"probe_id"`
-	BackoffSeconds      int     `json:"backoff_seconds"`
-	EWMA                float64 `json:"ewma_ms"`
-	Samples             int     `json:"samples"`
-	Degraded            bool    `json:"degraded"`
-	HealthySince        int64   `json:"healthy_since"`
-	HealthyStreak       int     `json:"healthy_streak"`
-	LastCause           string  `json:"last_cause"`
+	LatencyThreshold        float64 `json:"latency_threshold_ms"`
+	LatencyVersion          int64   `json:"latency_version"`
+	PublishedLatencyVersion int64   `json:"published_latency_version"`
+	ResourceKey             string  `gorm:"primaryKey" json:"resource_key"`
+	EndpointGeneration      string  `json:"endpoint_generation"`
+	RecoveryEpoch           int64   `json:"recovery_epoch"`
+	FailureGeneration       uint64  `json:"failure_generation"`
+	ConsecutiveFailures     int     `json:"consecutive_failures"`
+	HalfOpenFailures        int     `json:"half_open_failures"`
+	OpenUntil               int64   `json:"open_until"`
+	ProbeLeaseUntil         int64   `json:"probe_lease_until"`
+	ProbeID                 string  `json:"probe_id"`
+	BackoffSeconds          int     `json:"backoff_seconds"`
+	EWMA                    float64 `json:"ewma_ms"`
+	Samples                 int     `json:"samples"`
+	Degraded                bool    `json:"degraded"`
+	HealthySince            int64   `json:"healthy_since"`
+	HealthyStreak           int     `json:"healthy_streak"`
+	LastCause               string  `json:"last_cause"`
 }
 
 type ResourceEventOutbox struct {
@@ -178,11 +181,15 @@ func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttf
 				state.OpenUntil = now.Add(time.Duration(state.BackoffSeconds) * time.Second).Unix()
 			}
 		}
+		if err := publishLatencyTransition(tx, attempt.Item, &state, threshold, now); err != nil {
+			return err
+		}
 		return tx.Save(&state).Error
 	})
 }
 
 func updateRoutingLatency(state *LocalRoutingState, item RouteItem, policy routingExecution, threshold float64, ttft time.Duration, now time.Time) {
+	before := state.Degraded
 	if ttft > 0 {
 		ms := float64(ttft.Microseconds()) / 1000
 		if state.Samples == 0 {
@@ -190,7 +197,7 @@ func updateRoutingLatency(state *LocalRoutingState, item RouteItem, policy routi
 		} else {
 			state.EWMA += policy.EWMAAlpha * (ms - state.EWMA)
 		}
-		state.Samples++
+		state.Samples = min(state.Samples+1, 1000000000)
 		overrun := policy.EWMAOverrunS
 		if qualityRank(item.QualityLevel) == 0 {
 			overrun = policy.EWMAOverrunU
@@ -215,6 +222,9 @@ func updateRoutingLatency(state *LocalRoutingState, item RouteItem, policy routi
 			state.HealthySince = 0
 			state.HealthyStreak = 0
 		}
+	}
+	if before != state.Degraded {
+		state.LatencyVersion++
 	}
 }
 
@@ -287,6 +297,9 @@ func CompleteLocalRoutingProbe(probe RoutingProbe, success bool, now time.Time, 
 			} else {
 				state.HealthyStreak, state.HealthySince = 0, 0
 			}
+			if err := publishLatencyTransition(tx, probe.Item, &state, threshold, now); err != nil {
+				return err
+			}
 			return tx.Save(&state).Error
 		}
 		state.ProbeLeaseUntil = 0
@@ -334,11 +347,34 @@ func enqueueProtectionEvent(tx *gorm.DB, item RouteItem, state LocalRoutingState
 	}
 	id := uuid.NewString()
 	payload := map[string]any{"schema": 1, "event_id": id, "source": source, "instance_id": os.Getenv("NODE_NAME"), "instance_boot_id": routingBootID, "resource_key": state.ResourceKey, "endpoint_generation": state.EndpointGeneration, "recovery_epoch": state.RecoveryEpoch, "failure_generation": state.FailureGeneration, "probe_id": probeID, "policy_fingerprint": item.PolicyFingerprint, "cause": cause, "half_open_failures": min(state.HalfOpenFailures, 1000), "observed_at": now.Unix()}
+	if cause == "ewma_latency" || cause == "ewma_recovered" {
+		payload["half_open_failures"] = 0
+		payload["latency"] = map[string]any{"schema": 1, "version": state.LatencyVersion, "ewma_ms": state.EWMA, "threshold_ms": state.LatencyThreshold, "samples": state.Samples, "degraded": state.Degraded}
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 	return tx.Create(&ResourceEventOutbox{ID: id, Path: "/internal/routing/protection-events", Payload: string(raw), CreatedAt: now.Unix()}).Error
+}
+
+func publishLatencyTransition(tx *gorm.DB, item RouteItem, state *LocalRoutingState, threshold float64, now time.Time) error {
+	if state.Samples > 0 && state.LatencyVersion == 0 {
+		state.LatencyVersion = 1
+	}
+	if state.LatencyVersion <= state.PublishedLatencyVersion || item.Protection == nil || os.Getenv("RESOURCE_CATALOG_NOTIFY_URL") == "" {
+		return nil
+	}
+	cause := "ewma_recovered"
+	state.LatencyThreshold = threshold
+	if state.Degraded {
+		cause = "ewma_latency"
+	}
+	if err := enqueueProtectionEvent(tx, item, *state, cause, uuid.NewString(), now); err != nil {
+		return err
+	}
+	state.PublishedLatencyVersion = state.LatencyVersion
+	return nil
 }
 
 func ResourceEventRetryDelay(attempts int) time.Duration {

@@ -95,6 +95,16 @@ epoch changes fence obsolete state. Slow resources leave the normal pool;
 isolated probes allow recovery even when customer traffic never selects them.
 Probes use platform credentials and do not create customer usage or charges.
 
+EWMA baselines, degradation and recovery transitions publish versioned latency
+evidence through the durable protection outbox. The resource receiver retains
+these as per-node local signals, independently of its global protection mode.
+Out-of-order reports cannot replace a newer signal, and a latency recovery can
+never clear an operator disable. Inspect the receiver's authenticated
+`GET /api/routing/latency-signals` endpoint with resource/node filters. Upgrade
+the receiver before the gateway sender; the earlier receiver rejects these
+additional causes. Unknown, expired and old-generation reports do not mutate
+global protection epochs.
+
 Smart entry compares input-plus-output unit prices rather than the current
 prompt's estimated bill. `smart_candidates` is an optional comma-separated
 subset on a token; it cannot expand ordinary model authorization. Stateless
