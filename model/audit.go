@@ -4,6 +4,7 @@ package model
 // The audit middleware writes one row per matching request after the
 // handler returns, regardless of the response status.
 type AuditLog struct {
+	Reason    string `gorm:"size:512;not null;default:''" json:"reason,omitempty"`
 	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID    int64  `gorm:"index;not null;default:0" json:"user_id"`
 	Username  string `gorm:"size:64;not null;default:''" json:"username"`
