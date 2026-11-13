@@ -115,26 +115,27 @@ type attemptResult struct {
 // relayRequest is the per-request state every relay mode shares (extracted
 // from the middleware chain context).
 type relayRequest struct {
-	quotaReservationID string
-	fallbacks          []middleware.SmartFallback
-	fallbackPricing    map[string]map[string]relay.PriceData
-	userID             int64
-	tokenID            int64
-	tokenName          string
-	tokenUnlimited     bool
-	group              string
-	userGroup          string
-	autoGroups         []string
-	modelName          string
-	requestedModel     string
-	protocol           string
-	body               []byte
-	contentType        string
-	stream             bool
-	prefixHash         string // prompt-prefix scope for prefix-cache affinity
-	channelCheck       func(*model.Channel, string) (bool, error)
-	chainAdmission     func() error
-	pricing            map[string]relay.PriceData
+	requestedCapabilities []string
+	quotaReservationID    string
+	fallbacks             []middleware.SmartFallback
+	fallbackPricing       map[string]map[string]relay.PriceData
+	userID                int64
+	tokenID               int64
+	tokenName             string
+	tokenUnlimited        bool
+	group                 string
+	userGroup             string
+	autoGroups            []string
+	modelName             string
+	requestedModel        string
+	protocol              string
+	body                  []byte
+	contentType           string
+	stream                bool
+	prefixHash            string // prompt-prefix scope for prefix-cache affinity
+	channelCheck          func(*model.Channel, string) (bool, error)
+	chainAdmission        func() error
+	pricing               map[string]relay.PriceData
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
@@ -167,6 +168,7 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 		req.requestedModel = req.modelName
 	}
 	req.body, _ = ctx.Value(common.CtxRequestBody).([]byte)
+	req.requestedCapabilities = middleware.TelemetryCapabilities(r, req.body)
 	groups := []string{req.billingGroup()}
 	if req.group == common.AutoGroup {
 		groups = append(groups, req.autoGroups...)
@@ -643,6 +645,7 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 	if ch.RuntimeRoute != nil {
 		ch.RuntimeRoute.Sent = true
 	}
+	f.attempt.MarkSent()
 	resp, err := upstreamHTTPClient.Do(req)
 	if err != nil {
 		if call.sideEffect {
@@ -685,6 +688,22 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 // enforces the total attempt budget (RetryTimes+1), a client-cancel guard
 // and a response-committed safety boundary. Unsupported skips do not
 // consume the attempt budget.
+func (f *relayFlow) beginMetricAttempt(ch *model.Channel) {
+	f.attempt = f.span.BeginAttempt(ch.ID)
+	affinity := "disabled"
+	if f.affinityEligible() {
+		affinity = "miss"
+		if f.affinityPreferred == ch.ID {
+			affinity = "hit"
+		}
+	}
+	key := fmt.Sprintf("%d:%s", ch.ID, f.req.modelName)
+	if ch.RuntimeRoute != nil {
+		key = model.RoutingResourceKey(ch.RuntimeRoute.Item)
+	}
+	f.attempt.SetRouteMetadata(metric.AttemptMetadata{ResourceKey: key, Generation: model.ChannelEndpointGeneration(ch), Protocol: f.req.protocol, Capability: f.mode, RequestedCapabilities: f.req.requestedCapabilities, Group: f.currentGroup, Affinity: affinity})
+}
+
 func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
 	if f.req.chainAdmission != nil {
 		if err := f.req.chainAdmission(); err != nil {
@@ -712,7 +731,7 @@ loop:
 			break
 		}
 		f.begin(ch)
-		f.attempt = f.span.BeginAttempt(ch.ID)
+		f.beginMetricAttempt(ch)
 		f.sw.firstContent = f.attempt.RecordFirstToken
 		res := attempt(ch)
 		if ch.RuntimeRoute != nil {

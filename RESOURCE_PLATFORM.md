@@ -133,15 +133,32 @@ retry the stored result; explicit conflict or invalid-result responses retain
 a terminal rejected work record. Claims, local probes, catalog notifications,
 and event delivery run independently.
 
-Minute telemetry retains at most 100,000 channel/model/minute entries for
-24 hours in process memory, and exposes minute and 15-minute projections.
-Restart loses this telemetry window. Unsupported calls and ordinary customer
-errors do not become provider failures. Streaming headers are not content
-events. Schema 2 TTFT includes only successful first-content observations with
-provider-reported input counts from 1 to 2,000; unknown and long inputs are
-excluded. Counters expose reported token usage and elapsed attempt time, and
-the success rate is a fraction from 0 to 1. These pull endpoints do not assert
-the resource platform's newer complete-minute production coverage manifests.
+The model minute endpoint exports durable sealed production batches and complete
+minute coverage manifests. The first partial minute after startup, open minutes,
+collection loss, and unavailable intervals never claim complete zero traffic.
+Generation changes remain separate partitions. Production counts and optional
+health counters follow `confirmed-production-attempts-v2` and
+`confirmed-production-health-v1`; TTFT requires successful first content and
+provider-reported input counts from 1 to 2,000. Legacy aggregate and 15-minute
+projections remain process-local.
+
+Metadata-only attempts are sent asynchronously to
+`POST /internal/routing/attempt-metadata`, in batches of at most 64. Upgrade the
+resource receiver before the gateway sender. Stable attempt IDs, exact receipt
+validation, and durable retries prevent duplicate ingestion. Neither customer
+identifiers, prompt hashes, request/response content nor credentials are included.
+The sender and receiver retain at most 100,000 attempts for at most 24 hours;
+the separate sealed minute aggregates retain 24 hours. The gateway also exposes
+the sealed journal at `GET /api/metric/attempts`, protected by the dedicated
+service credential. Bounded retention is not a permanent audit archive.
+
+Relay handling never waits for telemetry HTTP delivery or SQLite writes. Failed
+local persistence retries the same sealed batch; overflow marks its minute
+incomplete. Unsupported calls, unsent attempts, uncertain outcomes and ordinary
+customer validation errors do not become confirmed provider failures. Actual
+transported attempts include protocol, endpoint capability, parsed requested
+capabilities, resource generation, serving group, affinity outcome, usage and
+timings. Client content and credentials must remain absent from these records.
 
 ## Credential rotation
 

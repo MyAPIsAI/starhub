@@ -29,6 +29,16 @@ type smartRequirements struct {
 	multipart      bool
 }
 
+// TelemetryCapabilities returns parsed feature names without retaining content
+// or chain identifiers. Failure leaves evidence unknown and cannot alter routing.
+func TelemetryCapabilities(r *http.Request, body []byte) []string {
+	requirements, err := readSmartRequirements(r, body, isMultipart(r.Header.Get("Content-Type")))
+	if err != nil {
+		return nil
+	}
+	return append([]string(nil), requirements.capabilities...)
+}
+
 var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,100}$`)
 
 var smartEndpointTags = map[string][]string{

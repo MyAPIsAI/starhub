@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/metric"
 	"starhub/model"
 	"starhub/relay/dto"
 	"starhub/setting"
@@ -90,6 +91,10 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	}
 	var upstream *WSConn
 	var upstreamChannel *model.Channel
+	span := metric.BeginRequest(metric.RequestMeta{Model: modelName, Group: group, Mode: "realtime"})
+	status := 502
+	defer func() { span.EndRequest(status) }()
+	var servingAttempt *metric.AttemptSpan
 	for {
 		ch, err := model.GetSatisfiedChannelPreferred(group, modelName, tried, preferred)
 		if err != nil {
@@ -122,8 +127,19 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		header := http.Header{}
 		header.Set("Authorization", "Bearer "+key)
 		header.Set("OpenAI-Beta", "realtime=v1")
+		a := span.BeginAttempt(ch.ID)
+		affinity := "disabled"
+		if affinityOn {
+			affinity = "miss"
+			if ch.ID == preferred {
+				affinity = "hit"
+			}
+		}
+		a.SetRouteMetadata(metric.AttemptMetadata{ResourceKey: fmt.Sprintf("%d:%s", ch.ID, modelName), Generation: model.ChannelEndpointGeneration(ch), Protocol: "OpenAI", Capability: "realtime", Group: group, Affinity: affinity})
+		a.MarkSent()
 		conn, err := WSDial(wsURL, header)
 		if err != nil {
+			span.EndAttempt(a, metric.AttemptUpstreamError, 0)
 			log.Printf("realtime dial channel %d failed: %v", ch.ID, err)
 			if affinityOn && ch.ID == preferred {
 				model.ForgetAffinityIf(affinityKey, ch.ID)
@@ -136,6 +152,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		}
 		upstream = conn
 		upstreamChannel = ch
+		servingAttempt = a
 		break
 	}
 	if upstream == nil {
@@ -148,6 +165,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	// Upgrade the client.
 	client, err := WSAccept(w, r)
 	if err != nil {
+		span.EndAttempt(servingAttempt, metric.AttemptClientError, 400)
 		// No upgrade happened: the client still sees an HTTP error.
 		common.RelayError(w, http.StatusBadRequest, "invalid_request_error", "invalid_upgrade",
 			"websocket upgrade required: "+err.Error())
@@ -156,6 +174,11 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	defer client.Close()
 
 	usage, outputText := pipeRealtime(client, upstream)
+	if usage != nil {
+		servingAttempt.RecordUsage(usage.PromptTokens, usage.CompletionTokens)
+	}
+	span.EndAttempt(servingAttempt, metric.AttemptSuccess, 200)
+	status = 101
 
 	// Settle: the response.done usage when the session reported one,
 	// otherwise the observed text estimate (audio usage is unavailable on

@@ -80,6 +80,9 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&ResourceFailureStream{}); err != nil {
 		return fmt.Errorf("migrate resource failure stream: %w", err)
 	}
+	if err := db.AutoMigrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}); err != nil {
+		return fmt.Errorf("migrate production telemetry: %w", err)
+	}
 	ResetRoutingFailureStream()
 	DB = db
 	return nil

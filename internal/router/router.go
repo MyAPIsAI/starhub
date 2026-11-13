@@ -33,7 +33,7 @@ func New() http.Handler {
 	mux.Handle("GET /api/resource/routing-status", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingStatus)))
 	mux.Handle("GET /api/service-group/{group}/routing", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingPolicy)))
 	mux.Handle("PUT /api/service-group/{group}/routing", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingPolicy)))
-	for _, path := range []string{"/api/metric/redis", "/api/metric/mysql", "/api/metric/model/redis", "/api/metric/model/mysql"} {
+	for _, path := range []string{"/api/metric/redis", "/api/metric/mysql", "/api/metric/model/redis", "/api/metric/model/mysql", "/api/metric/attempts"} {
 		mux.Handle("GET "+path, middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourcePlatformMetrics)))
 	}
 	for _, path := range []string{"/api/channel/models/details", "/api/channel/models/changes", "/api/channel/catalog/version"} {

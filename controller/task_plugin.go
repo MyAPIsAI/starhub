@@ -171,12 +171,19 @@ func submitPluginTask(flow *relayFlow, picked *model.Channel) bool {
 			}
 		}
 	}()
-	flow.attempt = flow.span.BeginAttempt(ch.ID)
-	outcome, status := metric.AttemptUpstreamError, http.StatusBadGateway
+	flow.beginMetricAttempt(ch)
+	outcome, status := metric.AttemptUncertain, http.StatusBadGateway
 	defer func() { flow.span.EndAttempt(flow.attempt, outcome, status); flow.attempt = nil }()
 	key, _ := ch.SelectKey()
+	flow.attempt.MarkSent()
 	response, err := plugin.Do(flow.ctx, ch.BaseURL, key, prepared.Request, http.MethodPost)
 	if err != nil || response.Status < 200 || response.Status >= 300 {
+		if err == nil {
+			outcome, status = metric.AttemptUpstreamError, response.Status
+			if response.Status < 500 {
+				outcome = metric.AttemptClientError
+			}
+		}
 		flow.errorOut(502, "server_error", "plugin_submit_failed", "Upstream submission failed; execution may be uncertain. No automatic retry was made.")
 		return true
 	}

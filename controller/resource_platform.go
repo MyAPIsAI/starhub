@@ -106,6 +106,47 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, 400, "invalid metric time range")
 		return
 	}
+	if strings.HasSuffix(r.URL.Path, "/attempts") {
+		page, size := 1, 100
+		for key, target := range map[string]*int{"page": &page, "page_size": &size} {
+			if raw := r.URL.Query().Get(key); raw != "" {
+				v, e := strconv.Atoi(raw)
+				if e != nil || v < 1 || v > 1000000 || key == "page_size" && v > 1000 {
+					common.ApiError(w, 400, "invalid attempt page")
+					return
+				}
+				*target = v
+			}
+		}
+		if err := service.FlushProductionTelemetry(time.Now()); err != nil {
+			common.ApiError(w, 500, "attempt journal unavailable")
+			return
+		}
+		rows, err := model.ReadProductionAttempts(max(start/60*60, time.Now().Add(-24*time.Hour).Unix()/60*60), end/60*60, page, size)
+		if err != nil {
+			common.ApiError(w, 500, "attempt journal unavailable")
+			return
+		}
+		items := []json.RawMessage{}
+		for _, row := range rows {
+			if !json.Valid([]byte(row.Payload)) {
+				common.ApiError(w, 500, "corrupt attempt journal")
+				return
+			}
+			items = append(items, json.RawMessage(row.Payload))
+		}
+		common.ApiSuccess(w, map[string]any{"schema": "attempt-metadata-v1", "page": page, "page_size": size, "items": items, "retention_hours": 24, "max_retained_attempts": 100000, "sealed_minutes_only": true})
+		return
+	}
+	if byModel && !quarter {
+		buckets, err := service.ProductionMetricBuckets(start, end, time.Now())
+		if err != nil {
+			common.ApiError(w, 500, "production metrics unavailable")
+			return
+		}
+		common.ApiSuccess(w, map[string]any{"buckets": buckets})
+		return
+	}
 	rows := metric.PlatformMetricRows(byModel, quarter, start, end)
 	if quarter {
 		page, size := 1, 100

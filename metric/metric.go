@@ -8,8 +8,8 @@
 //   - Channel level: rolling success rate, TTFT and duration windows,
 //     exposed via Snapshot for the admin surface.
 //
-// All state is in-memory and process-local; the registry resets on
-// restart. It is safe for concurrent use.
+// Rolling windows are process-local. Production batches are sealed here and
+// persisted by the service worker. The registry is safe for concurrent use.
 package metric
 
 import (
@@ -86,6 +86,9 @@ type RequestSpan struct {
 
 // AttemptSpan tracks one upstream attempt.
 type AttemptSpan struct {
+	sent          bool
+	route         AttemptMetadata
+	interrupted   bool
 	channelID     int64
 	start         time.Time
 	upstreamReqID string
@@ -171,6 +174,7 @@ func (s *RequestSpan) EndAttempt(a *AttemptSpan, outcome AttemptClass, statusCod
 	a.endedAt = time.Now()
 	a.outcome = outcome
 	a.statusCode = statusCode
+	a.interrupted = s.streamGone
 	// TTFT falls back to the header time when no streaming first-token
 	// was observed (non-streaming responses, or streams that errored
 	// before emitting).
@@ -180,6 +184,7 @@ func (s *RequestSpan) EndAttempt(a *AttemptSpan, outcome AttemptClass, statusCod
 	duration := time.Since(a.start)
 	recordAttempt(a.channelID, a.ttft, duration, outcome == AttemptSuccess, statusCode, a.upstreamReqID)
 	recordPlatformAttempt(s.meta, a, len(s.attempts) > 1)
+	recordProductionAttempt(s.meta, a, len(s.attempts) > 1)
 }
 
 // EndRequest finalizes the request-level metric and folds it into the
@@ -440,4 +445,9 @@ func Reset() {
 	})
 	resetAffinity()
 	resetPlatformMetrics()
+	production.Lock()
+	production.started = 0
+	production.buckets = map[int64]*ProductionMinute{}
+	production.retained = 0
+	production.Unlock()
 }

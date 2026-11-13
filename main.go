@@ -10,6 +10,7 @@ import (
 	"starhub/common"
 	"starhub/config"
 	"starhub/internal/router"
+	"starhub/metric"
 	"starhub/middleware"
 	"starhub/model"
 	"starhub/service"
@@ -68,6 +69,9 @@ func main() {
 	go service.RunRoutingChainCleanup(context.Background(), 15*time.Minute)
 	go service.RunDailyReconciliationLoop(context.Background())
 	go service.RunTokenPeriodRollover(context.Background())
+	metric.StartProduction(time.Now())
+	go service.RunProductionTelemetry(context.Background())
+	go service.RunProductionAttemptDelivery(context.Background())
 	go service.RunResourcePlatform(context.Background())
 	go service.RunResourceObservations(context.Background())
 	go service.RunResourceEventDelivery(context.Background())
