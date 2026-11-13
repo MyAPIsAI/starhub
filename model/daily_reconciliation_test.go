@@ -62,6 +62,39 @@ func TestDailyReconciliationIsIdempotentAndRevisesLateAdmission(t *testing.T) {
 	}
 }
 
+func TestLocalReconciliationTwoAMAcrossDSTGapAndFold(t *testing.T) {
+	newTestDB(t)
+	user, _ := newBillingUser(t, 1000)
+	for _, tc := range []struct{ date, cutoff string }{{"2026-03-07", "2026-03-08T07:00:00Z"}, {"2026-10-31", "2026-11-01T07:00:00Z"}} {
+		day, err := BusinessDayForDate(tc.date, "America/New_York", "us", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := InsertLog(&Log{UserID: user.ID, BusinessDaySnapshot: day, Status: 2}); err != nil {
+			t.Fatal(err)
+		}
+		cutoff, err := time.Parse(time.RFC3339, tc.cutoff)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, offset := range []time.Duration{-time.Second, 0} {
+			days, err := ReconciliationDays(user.ID, cutoff.Add(offset))
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, candidate := range days {
+				if candidate.BusinessDate == tc.date && candidate.BusinessRegion == "us" {
+					found = true
+				}
+			}
+			if found != (offset == 0) {
+				t.Fatalf("date %s offset %s eligibility=%v", tc.date, offset, found)
+			}
+		}
+	}
+}
+
 func TestConcurrentReconciliationKeepsOneReportAndOneRevision(t *testing.T) {
 	newTestDB(t)
 	u, _ := newBillingUser(t, 1000)
