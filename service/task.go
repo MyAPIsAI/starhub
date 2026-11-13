@@ -196,6 +196,14 @@ func taskFinalQuota(task *model.Task, adaptor channel.TaskAdaptor, result *dto.T
 		}
 	}
 	actual := relay.TaskPricingQuotaWithPriceData(priceData, pricing)
+	if priceData.ModelName == "" {
+		priceData.ModelName = task.Model
+	}
+	evidence, err := relay.EncodeNativeBillingEvidence(priceData, pricing)
+	if err != nil {
+		return 0, err
+	}
+	result.BillingEvidence = evidence
 	return actual, nil
 }
 

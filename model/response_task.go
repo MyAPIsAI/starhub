@@ -7,6 +7,7 @@ import (
 
 // BackgroundResponseOutcome stores accounting metadata only, never response text.
 type BackgroundResponseOutcome struct {
+	BillingEvidence  string `json:"billing_evidence,omitempty"`
 	UsageSource      string `json:"usage_source,omitempty"`
 	ResponseStatus   string `json:"response_status"`
 	PromptTokens     int64  `json:"prompt_tokens"`

@@ -25,7 +25,6 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 	entry := &model.Log{UserID: task.UserID, TokenID: task.TokenID, TokenName: task.TokenName,
 		ChannelID: task.ChannelID, Model: task.Model, RequestedModel: original, Protocol: task.Protocol,
 		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status,
-		PriceVersion:     model.LoadedOptionVersion(),
 		ExactFeeMicroUSD: QuotaToMicroUSD(task.PendingQuota), ExactFeeNanoUSD: common.QuotaMoney(task.PendingQuota, 0).String()}
 	if common.IsNanoReservationID(task.QuotaReservationID) {
 		entry.AmountUnit = common.MoneyUnitNano
@@ -38,6 +37,11 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 			entry.UsageSource = result.UsageSource
 			entry.PromptTokens = result.PromptTokens
 			entry.CompletionTokens = result.CompletionTokens
+			if result.BillingEvidence != "" {
+				if err := ApplyBillingEvidence(entry, result.BillingEvidence); err != nil {
+					return false, err
+				}
+			}
 		}
 	}
 	if task.Platform != "responses" {
@@ -47,6 +51,11 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 			if result.Usage != nil {
 				entry.PromptTokens = result.Usage.PromptTokens
 				entry.CompletionTokens = result.Usage.CompletionTokens
+			}
+			if result.BillingEvidence != "" {
+				if err := ApplyBillingEvidence(entry, result.BillingEvidence); err != nil {
+					return false, err
+				}
 			}
 		}
 	}

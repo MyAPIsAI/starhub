@@ -102,6 +102,9 @@ func TestTaskSettlementRecoversDurableIntent(t *testing.T) {
 			if err != nil || total != 1 || logs[0].Quota != tc.actual || logs[0].Status != tc.logStatus || logs[0].RequestedModel != "veyra-auto" || logs[0].Protocol != "OpenAI" {
 				t.Fatalf("recovered log incorrect: %+v %v", logs, err)
 			}
+			if replay, err := relay.RecomputeBilledNano(&logs[0]); err != nil || replay != common.QuotaMoney(tc.actual, 0).String() {
+				t.Fatalf("recovered native billing evidence cannot be replayed: %s %v", replay, err)
+			}
 			afterUser, _ := model.GetUserByID(user.ID)
 			afterToken, _ := model.GetTokenByID(token.ID)
 			afterChannel, _ := model.GetChannelByID(ch.ID)

@@ -101,6 +101,7 @@ func ParseVideoTaskRequest(body []byte) (*TaskRequest, error) {
 
 // TaskResult is the normalized result of one upstream poll.
 type TaskResult struct {
+	BillingEvidence    string   `json:"billing_evidence,omitempty"`
 	UsageError         string   `json:"-"`
 	BillingUsageSource string   `json:"billing_usage_source,omitempty"`
 	Status             string   `json:"status"` // submitted / in_progress / succeeded / failed / cancelled
