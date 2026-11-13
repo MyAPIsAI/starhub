@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"starhub/common"
 	"starhub/middleware"
 	"starhub/model"
+	"starhub/pkg/localepolicy"
 	"starhub/setting"
 )
 
@@ -18,6 +20,7 @@ type loginRequest struct {
 }
 
 type registerRequest struct {
+	Language         string `json:"language"`
 	Username         string `json:"username"`
 	Password         string `json:"password"`
 	Email            string `json:"email"`
@@ -91,6 +94,14 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	region, ok := requireRegionFeature(w, "registration", "password")
+	if !ok {
+		return
+	}
+	if region.LegalVersion != "" && req.AgreementVersion != region.LegalVersion {
+		common.ApiError(w, 409, "confirm the current regional legal version before registering")
+		return
+	}
 	req.Username = strings.TrimSpace(req.Username)
 	if !validUsername(req.Username) {
 		common.ApiError(w, http.StatusBadRequest,
@@ -120,6 +131,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := &model.User{
+		Language: localepolicy.Resolve(req.Language, r.Header.Get("Accept-Language"), region.DefaultLanguage, region.SupportedLanguageList()),
 		Username: req.Username,
 		Email:    req.Email,
 		Password: hashed,
@@ -139,7 +151,15 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			user.InviterID = inviterID
 		}
 	}
-	if err := model.CreateUser(user); err != nil {
+	if err := model.CreateRegisteredUser(user, req.AgreementVersion, region); err != nil {
+		if errors.Is(err, model.ErrRegionRegistrationChanged) {
+			common.ApiError(w, 409, err.Error())
+			return
+		}
+		if errors.Is(err, model.ErrRegionLegalUnavailable) {
+			common.ApiError(w, 503, err.Error())
+			return
+		}
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			common.ApiError(w, http.StatusConflict, "username already exists")
 			return
@@ -149,9 +169,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 	// Record agreement consent (best-effort: a failure does not roll back
 	// the registration).
-	if req.AgreementVersion != "" {
-		_ = model.RecordAgreementConsent(nil, user.ID, req.AgreementVersion)
-	}
 	// Credit the inviter's register bonus (best-effort: a failure must not
 	// roll back the registration).
 	if inviterID > 0 {
@@ -185,6 +202,11 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	if user.Status != common.StatusEnabled {
 		common.ApiError(w, http.StatusForbidden, "user is disabled")
 		return
+	}
+	if !common.IsStaffRole(user.Role) {
+		if _, ok := requireRegionFeature(w, "password_login", "password"); !ok {
+			return
+		}
 	}
 	if beginTwoFactor(w, r, user) {
 		return
