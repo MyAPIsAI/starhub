@@ -15,22 +15,25 @@ func utcMidnight() int64 {
 }
 
 type Log struct {
-	RoutingFallback   bool   `gorm:"not null;default:false" json:"routing_fallback"`
-	ActualVendor      string `gorm:"size:128;not null;default:''" json:"actual_vendor"`
-	UsageSource       string `gorm:"size:32;not null;default:''" json:"usage_source,omitempty"`
-	ID                int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID            int64  `gorm:"index;not null;default:0" json:"user_id"`
-	TokenID           int64  `gorm:"index;not null;default:0" json:"token_id"`
-	TokenName         string `gorm:"size:64;not null;default:''" json:"token_name"`
-	ChannelID         int64  `gorm:"index;not null;default:0" json:"channel_id"`
-	Model             string `gorm:"size:128;not null;default:'';index:idx_logs_quality_window,priority:2;index:idx_logs_quality_model,priority:1" json:"model"`
-	RequestedModel    string `gorm:"size:128;not null;default:''" json:"requested_model"`
-	Protocol          string `gorm:"size:16;not null;default:''" json:"protocol"`
-	RequestID         string `gorm:"size:64;not null;default:''" json:"request_id"`
-	UpstreamRequestID string `gorm:"size:64;not null;default:''" json:"upstream_request_id"`
-	PromptTokens      int64  `gorm:"not null;default:0" json:"prompt_tokens"`
-	CompletionTokens  int64  `gorm:"not null;default:0" json:"completion_tokens"`
-	Quota             int64  `gorm:"not null;default:0;index:idx_logs_quality_window,priority:5" json:"quota"`
+	AmountUnit                 string `gorm:"size:24;not null;default:''" json:"amount_unit,omitempty"`
+	QuotaRemainderNano         int64  `gorm:"not null;default:0" json:"-"`
+	UnfundedQuotaRemainderNano int64  `gorm:"not null;default:0" json:"-"`
+	RoutingFallback            bool   `gorm:"not null;default:false" json:"routing_fallback"`
+	ActualVendor               string `gorm:"size:128;not null;default:''" json:"actual_vendor"`
+	UsageSource                string `gorm:"size:32;not null;default:''" json:"usage_source,omitempty"`
+	ID                         int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID                     int64  `gorm:"index;not null;default:0" json:"user_id"`
+	TokenID                    int64  `gorm:"index;not null;default:0" json:"token_id"`
+	TokenName                  string `gorm:"size:64;not null;default:''" json:"token_name"`
+	ChannelID                  int64  `gorm:"index;not null;default:0" json:"channel_id"`
+	Model                      string `gorm:"size:128;not null;default:'';index:idx_logs_quality_window,priority:2;index:idx_logs_quality_model,priority:1" json:"model"`
+	RequestedModel             string `gorm:"size:128;not null;default:''" json:"requested_model"`
+	Protocol                   string `gorm:"size:16;not null;default:''" json:"protocol"`
+	RequestID                  string `gorm:"size:64;not null;default:''" json:"request_id"`
+	UpstreamRequestID          string `gorm:"size:64;not null;default:''" json:"upstream_request_id"`
+	PromptTokens               int64  `gorm:"not null;default:0" json:"prompt_tokens"`
+	CompletionTokens           int64  `gorm:"not null;default:0" json:"completion_tokens"`
+	Quota                      int64  `gorm:"not null;default:0;index:idx_logs_quality_window,priority:5" json:"quota"`
 	// UnfundedQuota is the priced usage that could not be collected. Quota
 	// records the actual charge; their sum is the full priced usage.
 	UnfundedQuota int64  `gorm:"not null;default:0" json:"unfunded_quota"`

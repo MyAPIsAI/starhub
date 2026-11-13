@@ -35,17 +35,22 @@ func (t *Token) AllowsSmartRouting() bool {
 }
 
 type Token struct {
-	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID         int64  `gorm:"index;not null" json:"user_id"`
-	Name           string `gorm:"size:64;not null;default:''" json:"name"`
-	Key            string `gorm:"uniqueIndex;size:256;not null" json:"-"`           // encrypted ciphertext or legacy plaintext
-	KeyHash        string `gorm:"uniqueIndex;size:64;not null;default:''" json:"-"` // HMAC-SHA256 for lookup
-	Status         int    `gorm:"not null;default:1" json:"status"`
-	Group          string `gorm:"column:group;size:64;not null;default:''" json:"group"`
-	ExpiredTime    int64  `gorm:"not null;default:-1" json:"expired_time"`
-	RemainQuota    int64  `gorm:"not null;default:0" json:"remain_quota"`
-	UnlimitedQuota bool   `gorm:"not null;default:false" json:"unlimited_quota"`
-	UsedQuota      int64  `gorm:"not null;default:0" json:"used_quota"`
+	RemainQuotaRemainderNano         int64  `gorm:"not null;default:0" json:"-"`
+	UsedQuotaRemainderNano           int64  `gorm:"not null;default:0" json:"-"`
+	PeriodQuotaLimitRemainderNano    int64  `gorm:"not null;default:0" json:"-"`
+	PeriodUsedQuotaRemainderNano     int64  `gorm:"not null;default:0" json:"-"`
+	PeriodReservedQuotaRemainderNano int64  `gorm:"not null;default:0" json:"-"`
+	ID                               int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID                           int64  `gorm:"index;not null" json:"user_id"`
+	Name                             string `gorm:"size:64;not null;default:''" json:"name"`
+	Key                              string `gorm:"uniqueIndex;size:256;not null" json:"-"`           // encrypted ciphertext or legacy plaintext
+	KeyHash                          string `gorm:"uniqueIndex;size:64;not null;default:''" json:"-"` // HMAC-SHA256 for lookup
+	Status                           int    `gorm:"not null;default:1" json:"status"`
+	Group                            string `gorm:"column:group;size:64;not null;default:''" json:"group"`
+	ExpiredTime                      int64  `gorm:"not null;default:-1" json:"expired_time"`
+	RemainQuota                      int64  `gorm:"not null;default:0" json:"remain_quota"`
+	UnlimitedQuota                   bool   `gorm:"not null;default:false" json:"unlimited_quota"`
+	UsedQuota                        int64  `gorm:"not null;default:0" json:"used_quota"`
 	// ModelLimits is a comma-separated model whitelist; empty means no limit.
 	// A sub-key can be restricted to cheaper models only.
 	ModelLimits string `gorm:"size:1024;not null;default:''" json:"model_limits"`

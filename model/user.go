@@ -11,15 +11,17 @@ import (
 var ErrUserNotFound = errors.New("user not found")
 
 type User struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	Username  string `gorm:"uniqueIndex;size:64;not null" json:"username"`
-	Email     string `gorm:"size:64;not null;default:''" json:"email"`
-	Password  string `gorm:"size:256;not null;default:''" json:"-"`
-	Role      int    `gorm:"not null;default:1" json:"role"`
-	Status    int    `gorm:"not null;default:1" json:"status"`
-	Quota     int64  `gorm:"not null;default:0" json:"quota"`
-	UsedQuota int64  `gorm:"not null;default:0" json:"used_quota"`
-	Group     string `gorm:"column:group;size:64;not null;default:'default'" json:"group"`
+	QuotaRemainderNano     int64  `gorm:"not null;default:0" json:"-"`
+	UsedQuotaRemainderNano int64  `gorm:"not null;default:0" json:"-"`
+	ID                     int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	Username               string `gorm:"uniqueIndex;size:64;not null" json:"username"`
+	Email                  string `gorm:"size:64;not null;default:''" json:"email"`
+	Password               string `gorm:"size:256;not null;default:''" json:"-"`
+	Role                   int    `gorm:"not null;default:1" json:"role"`
+	Status                 int    `gorm:"not null;default:1" json:"status"`
+	Quota                  int64  `gorm:"not null;default:0" json:"quota"`
+	UsedQuota              int64  `gorm:"not null;default:0" json:"used_quota"`
+	Group                  string `gorm:"column:group;size:64;not null;default:'default'" json:"group"`
 	// AffCode is the user's invite code (others register with it to become
 	// their invitees). Auto-generated on first read when empty.
 	AffCode string `gorm:"uniqueIndex;size:32;not null;default:''" json:"aff_code"`
