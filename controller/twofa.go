@@ -145,7 +145,7 @@ func Verify2FALogin(w http.ResponseWriter, r *http.Request) {
 	}
 	middleware.RecordLoginSuccess(user.Username)
 	const sessionTTL = 7 * 24 * time.Hour
-	token := middleware.Sessions.CreateConfirmed(user, sessionTTL, clientIP(r), r.UserAgent())
+	token := middleware.Sessions.CreateConfirmed(user, sessionTTL, clientIP(r), r.UserAgent(), factor.Secret)
 	if token == "" {
 		common.ApiError(w, http.StatusConflict, "account changed during login; retry sign-in")
 		return

@@ -11,13 +11,16 @@ import (
 )
 
 type sessionData struct {
-	userID     int64
-	expires    time.Time
-	created    time.Time
-	lastActive time.Time
-	ip         string
-	deviceName string
-	keyUnlocks map[int64]keyUnlock
+	factorSecret   string
+	factorPassword string
+	factorRole     int
+	userID         int64
+	expires        time.Time
+	created        time.Time
+	lastActive     time.Time
+	ip             string
+	deviceName     string
+	keyUnlocks     map[int64]keyUnlock
 }
 
 type keyUnlock struct {
@@ -89,16 +92,25 @@ const (
 // CreateConfirmed serializes the final login check and session insertion with
 // account-wide revocation. A password check started before closure cannot
 // create an active session after closure has revoked the account's sessions.
-func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration, ip, deviceName string) string {
+func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration, ip, deviceName string, verifiedFactor ...string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	fresh, err := model.GetUserByID(user.ID)
-	if err != nil || fresh.Status != common.StatusEnabled || fresh.Password != user.Password || fresh.DeactivationVersion != user.DeactivationVersion {
+	if err != nil || fresh.Status != common.StatusEnabled || fresh.Password != user.Password || fresh.Role != user.Role || fresh.DeactivationVersion != user.DeactivationVersion {
 		return ""
+	}
+	factorSecret := ""
+	if len(verifiedFactor) > 0 {
+		factor, err := model.GetTwoFA(user.ID)
+		if err != nil || !factor.IsEnabled || len(verifiedFactor) != 1 || verifiedFactor[0] == "" || factor.Secret != verifiedFactor[0] {
+			return ""
+		}
+		factorSecret = factor.Secret
 	}
 	token := common.GenerateSessionKey()
 	now := time.Now()
 	s.data[token] = &sessionData{
+		factorSecret: factorSecret, factorPassword: fresh.Password, factorRole: fresh.Role,
 		userID:     user.ID,
 		expires:    now.Add(ttl),
 		created:    now,
@@ -107,6 +119,24 @@ func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration, ip, 
 		deviceName: deviceName,
 	}
 	return token
+}
+
+// StaffVerified requires current password and factor evidence, not enrollment
+// alone. Existing sessions cannot gain authority after a role or factor change.
+func (s *SessionStore) StaffVerified(token string, user *model.User) bool {
+	s.mu.RLock()
+	sd := s.data[token]
+	valid := activeSession(sd, time.Now()) && sd.userID == user.ID && sd.factorSecret != "" && sd.factorPassword == user.Password && sd.factorRole == user.Role
+	secret := ""
+	if valid {
+		secret = sd.factorSecret
+	}
+	s.mu.RUnlock()
+	if !valid {
+		return false
+	}
+	factor, err := model.GetTwoFA(user.ID)
+	return err == nil && factor.IsEnabled && factor.Secret == secret
 }
 
 func (s *SessionStore) Create(userID int64, ttl time.Duration) string {

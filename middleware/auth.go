@@ -27,6 +27,9 @@ func UserAuth(next http.Handler) http.Handler {
 		if !guardSessionOwner(w, r, user.ID) {
 			return
 		}
+		if !staffSecurityReady(w, r, user) {
+			return
+		}
 		ctx := common.WithValues(r.Context(),
 			common.CtxUserID, user.ID,
 			common.CtxRole, user.Role)

@@ -12,8 +12,11 @@ import (
 
 func TestAdminAuthRequiresAnExplicitAdministrativeRole(t *testing.T) {
 	setupAutoRoutingDB(t)
-	user := &model.User{Username: "admin-role-boundary", Status: common.StatusEnabled, Role: common.RoleUser}
+	user := &model.User{Username: "admin-role-boundary", Status: common.StatusEnabled, Role: common.RoleUser, AdminPasswordChangedAt: 1}
 	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.DB.Create(&model.TwoFA{UserID: user.ID, Secret: "test-factor", IsEnabled: true}).Error; err != nil {
 		t.Fatal(err)
 	}
 	session := Sessions.Create(user.ID, time.Hour)
@@ -23,6 +26,9 @@ func TestAdminAuthRequiresAnExplicitAdministrativeRole(t *testing.T) {
 		if err := model.UpdateUserFields(user.ID, map[string]any{"role": role}); err != nil {
 			t.Fatal(err)
 		}
+		Sessions.Remove(session)
+		user.Role = role
+		session = Sessions.CreateConfirmed(user, time.Hour, "", "", "test-factor")
 		for _, path := range []string{"/api/metrics", "/api/plaza/meta/configuration", "/api/unmapped-management"} {
 			r := httptest.NewRequest("GET", path, nil)
 			r.AddCookie(&http.Cookie{Name: "session", Value: session})
