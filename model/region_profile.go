@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -76,6 +77,35 @@ func SaveRegionProfile(profile *RegionProfile, expectedRevision int64) error {
 	if profile.Name == "" {
 		return errors.New("region profile name is required")
 	}
+	if profile.Timezone == "" {
+		profile.Timezone = "UTC"
+	}
+	if profile.DefaultLanguage == "" {
+		profile.DefaultLanguage = "en"
+	}
+	if profile.SupportedLanguages == "" {
+		profile.SupportedLanguages = profile.DefaultLanguage
+	}
+	if profile.Currency == "" {
+		profile.Currency = "USD"
+	}
+	if profile.FeatureFlags == "" {
+		profile.FeatureFlags = "{}"
+	}
+	var flags map[string]bool
+	if json.Unmarshal([]byte(profile.FeatureFlags), &flags) != nil || flags == nil {
+		return errors.New("feature flags must be a JSON object of boolean values")
+	}
+	foundDefault := false
+	for _, lang := range profile.SupportedLanguageList() {
+		if lang != "zh" && lang != "en" && lang != "ar" && lang != "ko" {
+			return errors.New("unsupported region language")
+		}
+		foundDefault = foundDefault || lang == profile.DefaultLanguage
+	}
+	if !foundDefault {
+		return errors.New("default language must be supported by the region")
+	}
 	// Validate timezone.
 	if profile.Timezone != "" {
 		if _, err := time.LoadLocation(profile.Timezone); err != nil {
@@ -123,6 +153,9 @@ func ListRegionProfiles() ([]RegionProfile, error) {
 // DeleteRegionProfile removes a region profile. Refuses if it is the only
 // enabled profile (must always have at least one).
 func DeleteRegionProfile(id string) error {
+	if id == ActiveRegionID() {
+		return errors.New("cannot delete the active region profile")
+	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := tx.Model(&RegionProfile{}).Where("enabled = true").Count(&count).Error; err != nil {
