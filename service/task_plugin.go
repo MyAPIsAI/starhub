@@ -111,6 +111,21 @@ func pollPluginTask(ctx context.Context, task *model.Task, ch *model.Channel) (*
 		if err != nil {
 			return task, err
 		}
+		if err := json.Unmarshal([]byte(task.PricingMeta), &pricing); err != nil {
+			return task, err
+		}
+		if pricing.PriceData.ModelName == "" {
+			pricing.PriceData.ModelName = task.Model
+		}
+		evidence, err := relay.EncodePluginBillingEvidence(pricing, parsed)
+		if err != nil {
+			return task, err
+		}
+		result.BillingEvidence = evidence
+		metadata, err = json.Marshal(result)
+		if err != nil {
+			return task, err
+		}
 		return recordAndSettleTask(task, result, string(metadata), quota)
 	}
 	if err := model.UpdateTaskProgress(task.ID, result.Status, result.Progress, string(metadata)); err != nil {
