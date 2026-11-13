@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -52,7 +51,7 @@ func TestResourceBindingChangeActualPolicyAndGatewayRevocation(t *testing.T) {
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := fixtureSession(t, user)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		if res := doRequest(env.base, "PUT", path, session, command("revoke", requestID)); res.Status != 403 {
 			t.Fatalf("role%d reached binding write: %d", role, res.Status)
@@ -74,7 +73,7 @@ func TestResourceBindingChangeActualPolicyAndGatewayRevocation(t *testing.T) {
 	if err := model.CreateUser(admin); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(admin.ID, time.Hour)
+	session := fixtureSession(t, admin)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	before, _ := model.GetUserByID(env.rootID)
 	keyBefore, _ := model.GetTokenByID(env.tokenID)

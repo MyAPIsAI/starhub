@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -84,7 +83,7 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := fixtureSession(t, user)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		for _, request := range []struct {
 			method, path string
@@ -108,7 +107,7 @@ func TestResourcePublicationActualPolicyReceiptAndGatewayEffects(t *testing.T) {
 	if err := model.CreateUser(admin); err != nil {
 		t.Fatal(err)
 	}
-	adminSession := middleware.Sessions.Create(admin.ID, time.Hour)
+	adminSession := fixtureSession(t, admin)
 	t.Cleanup(func() { middleware.Sessions.Remove(adminSession) })
 	before, err := model.GetUserByID(env.rootID)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -20,7 +19,7 @@ func TestResourceCatalogUsesActualAdminPolicyAndPersistsPlacement(t *testing.T) 
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := fixtureSession(t, user)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		for _, request := range []struct {
 			method, path string
@@ -56,7 +55,7 @@ func TestResourceCatalogUsesActualAdminPolicyAndPersistsPlacement(t *testing.T) 
 	if err := model.CreateUser(admin); err != nil {
 		t.Fatal(err)
 	}
-	session := middleware.Sessions.Create(admin.ID, time.Hour)
+	session := fixtureSession(t, admin)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	standard := "gpt-4o"
 	placement := model.ResourcePlacement{ModelID: &standard, GroupIDs: []string{"default"}, Enabled: true}
