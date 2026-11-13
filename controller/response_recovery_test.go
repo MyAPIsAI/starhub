@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"starhub/common"
 	"starhub/model"
+	"starhub/relay"
 	"starhub/service"
 	"starhub/setting"
 	"sync/atomic"
@@ -127,5 +128,8 @@ func TestBackgroundResponsePendingSettlementRecoversAfterRestartWithoutRepoll(t 
 	logs, total, err := model.ListLogs(u.ID, 1, 10, "")
 	if err != nil || total != 1 || common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != pending.PendingQuota {
 		t.Fatal("recovery repriced or double-billed")
+	}
+	if replay, err := relay.RecomputeBilledNano(&logs[0]); err != nil || replay != common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).String() {
+		t.Fatalf("recovered response billing evidence cannot be replayed: %s %v", replay, err)
 	}
 }

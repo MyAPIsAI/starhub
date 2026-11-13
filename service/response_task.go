@@ -170,7 +170,18 @@ func ObserveBackgroundResponse(task *model.Task, raw []byte) (*model.Task, error
 			outcome.HasImages, outcome.HasTools, outcome.HasReasoning = true, true, true
 		}
 	}
-	meta, _ := json.Marshal(outcome)
+	if snapshot.PriceData.ModelName == "" {
+		snapshot.PriceData.ModelName = task.Model
+	}
+	evidence, err := relay.EncodeTokenBillingEvidence(&snapshot.PriceData, usage)
+	if err != nil {
+		return task, err
+	}
+	outcome.BillingEvidence = evidence
+	meta, err := json.Marshal(outcome)
+	if err != nil {
+		return task, err
+	}
 	actual := relay.ComputeUsageQuota(&snapshot.PriceData, usage)
 	return recordAndSettleTask(task, &dto.TaskResult{Status: status}, string(meta), actual)
 }
