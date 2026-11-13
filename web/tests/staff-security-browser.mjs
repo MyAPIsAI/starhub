@@ -2,7 +2,7 @@ import { createServer as createViteServer } from "vite";
 import { chromium, firefox, webkit } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 import { execFileSync, spawn } from "node:child_process";
-import { createHmac } from "node:crypto";
+import { authenticatorCode } from "./browser-totp.mjs";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -37,23 +37,7 @@ async function freePort() {
     });
   });
 }
-function authenticatorCode(secret) {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits = "";
-  for (const c of secret)
-    bits += alphabet.indexOf(c).toString(2).padStart(5, "0");
-  const bytes = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8)
-    bytes.push(parseInt(bits.slice(i, i + 8), 2));
-  const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
-  const digest = createHmac("sha1", Buffer.from(bytes))
-    .update(counter)
-    .digest();
-  return String(
-    (digest.readUInt32BE(digest[19] & 15) & 0x7fffffff) % 1000000,
-  ).padStart(6, "0");
-}
+
 try {
   const binary = path.join(
     temp,
@@ -303,6 +287,58 @@ try {
     },
   );
   await check(
+    "failed account language saves preserve local and server preferences",
+    async () => {
+      const before = (
+        await (await context.request.get(base + "/api/user/self")).json()
+      ).data.language;
+      const localBefore = await page.evaluate(() =>
+        localStorage.getItem("xy-language"),
+      );
+      await page.route("**/api/user/self", async (route) => {
+        if (route.request().method() === "PUT") {
+          await route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({
+              success: false,
+              message: "Fixture write unavailable",
+            }),
+          });
+        } else await route.continue();
+      });
+      try {
+        await page
+          .locator(".product-preferences [role=combobox]")
+          .first()
+          .click();
+        await page
+          .getByRole("option", { name: "العربية", exact: true })
+          .click();
+        await page
+          .getByText("Unable to save your language preference. Please retry.", {
+            exact: true,
+          })
+          .waitFor();
+        assert.equal(
+          await page.evaluate(() => document.documentElement.lang),
+          "en",
+        );
+        assert.equal(
+          await page.evaluate(() => localStorage.getItem("xy-language")),
+          localBefore,
+        );
+        const after = (
+          await (await context.request.get(base + "/api/user/self")).json()
+        ).data.language;
+        assert.equal(after, before);
+        await capture("account-language-save-error");
+      } finally {
+        await page.unroute("**/api/user/self");
+      }
+    },
+  );
+  await check(
     "account language is saved through the console and restored on another device",
     async () => {
       await page
@@ -467,6 +503,69 @@ try {
       });
       assert.equal((await login.json()).data.user.language, "ar");
       await guest.close();
+    },
+  );
+  await check(
+    "unpublished regional legal documents block registration without creating an account",
+    async () => {
+      const list = await (
+        await context.request.get(base + "/api/region-profile")
+      ).json();
+      const profile = list.data.find((entry) => entry.id === "default");
+      assert.ok(profile);
+      const update = await context.request.put(base + "/api/region-profile", {
+        data: {
+          ...profile,
+          legal_version: "browser-unpublished",
+          expected_revision: profile.revision,
+        },
+      });
+      assert.equal(update.status(), 200);
+      const guest = await browser.newContext({
+        viewport: { width: 390, height: 900 },
+        locale: "en-US",
+        reducedMotion: "reduce",
+      });
+      try {
+        const p = await guest.newPage();
+        p.setDefaultTimeout(45000);
+        p.on("pageerror", (error) => report.pageErrors.push(String(error)));
+        await p.goto(base + "/register", {
+          waitUntil: "domcontentloaded",
+          timeout: 45000,
+        });
+        await p.locator("#auth-username").fill("unpublished-legal-member");
+        await p.locator("#auth-new-password").fill("RegionalMember95");
+        await p.locator("#auth-confirm-password").fill("RegionalMember95");
+        await p.locator('[data-auth-policy="terms"]').click();
+        await p.locator(".regional-legal-document [role=alert]").waitFor();
+        assert.equal(
+          await p.locator(".regional-legal-document [lang]").count(),
+          0,
+        );
+        await p.locator(".auth-back").click();
+        await p.locator("#auth-consent").check();
+        await p.locator(".auth-submit").click();
+        await p.locator(".auth-error").waitFor();
+        assert.equal(
+          await p.locator("#auth-username").inputValue(),
+          "unpublished-legal-member",
+        );
+        const users = await (
+          await context.request.get(base + "/api/user")
+        ).json();
+        assert.equal(
+          JSON.stringify(users.data).includes("unpublished-legal-member"),
+          false,
+        );
+        await p.screenshot({
+          path: path.join(out, "unpublished-legal-registration-error-390.png"),
+          mask: [p.locator("input[type=password]")],
+        });
+        report.screenshots.push("unpublished-legal-registration-error-390.png");
+      } finally {
+        await guest.close();
+      }
     },
   );
   await check(
