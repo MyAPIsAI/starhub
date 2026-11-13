@@ -3,6 +3,8 @@ StarHub uses the following third-party dependencies:
 - github.com/glebarez/sqlite — MIT License
 - gorm.io/gorm — MIT License
 - github.com/pquerna/otp — Apache License 2.0
+- github.com/nyaruka/phonenumbers/v2 — MIT License ([source](https://github.com/nyaruka/phonenumbers)); Go port of Google's libphonenumber
+- google.golang.org/protobuf — BSD-3-Clause License
 - github.com/nicksnyder/go-i18n — MIT License
 - golang.org/x/text — BSD-3-Clause License
 - github.com/gin-contrib/gzip — MIT License
