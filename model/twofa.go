@@ -8,12 +8,14 @@ import (
 )
 
 var (
-	Err2FANotEnabled     = errString("2FA is not enabled for this user")
-	Err2FAAlreadyOn      = errString("2FA is already enabled")
-	Err2FALocked         = errString("2FA has too many failed attempts")
-	Err2FAInvalidCode    = errString("invalid 2FA code")
-	ErrBackupCodeUsed    = errString("backup code was already used")
-	ErrBackupCodeInvalid = errString("invalid backup code")
+	Err2FANotEnabled         = errString("2FA is not enabled for this user")
+	Err2FAAlreadyOn          = errString("2FA is already enabled")
+	Err2FALocked             = errString("2FA has too many failed attempts")
+	Err2FAInvalidCode        = errString("invalid 2FA code")
+	ErrBackupCodeUsed        = errString("backup code was already used")
+	ErrBackupCodeInvalid     = errString("invalid backup code")
+	ErrStaffFactorRequired   = errString("staff 2FA requires an audited operator reset")
+	ErrStaffPasswordRequired = errString("change the initial staff password before enabling 2FA")
 )
 
 func errString(s string) error { return &simpleErr{s} }
@@ -62,22 +64,39 @@ func GetTwoFA(userID int64) (*TwoFA, error) {
 // If a record already exists (enabled or not), it is replaced.
 func CreateTwoFASetup(userID int64, secret string) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ?", userID).Delete(&TwoFA{}).Error; err != nil {
-			return err
+		result := tx.Model(&TwoFA{}).Where("user_id = ? AND is_enabled = ?", userID, false).
+			Updates(map[string]any{"secret": secret, "failed_attempts": 0, "locked_until": nil})
+		if result.Error != nil {
+			return result.Error
 		}
-		return tx.Create(&TwoFA{
-			UserID:    userID,
-			Secret:    secret,
-			IsEnabled: false,
-		}).Error
+		if result.RowsAffected == 0 {
+			var count int64
+			if err := tx.Model(&TwoFA{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count != 0 {
+				return Err2FAAlreadyOn
+			}
+			if err := tx.Create(&TwoFA{UserID: userID, Secret: secret}).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Where("user_id = ?", userID).Delete(&TwoFABackupCode{}).Error
 	})
 }
 
 // EnableTwoFA activates 2FA after verifying the first TOTP code. Generates
 // backup codes in the same transaction.
 func EnableTwoFA(userID int64, code string) ([]string, error) {
+	user, err := GetUserByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	if common.IsStaffRole(user.Role) && user.AdminPasswordChangedAt == 0 {
+		return nil, ErrStaffPasswordRequired
+	}
 	var twofa TwoFA
-	err := DB.Where("user_id = ?", userID).First(&twofa).Error
+	err = DB.Where("user_id = ?", userID).First(&twofa).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, Err2FANotEnabled
 	}
@@ -95,16 +114,22 @@ func EnableTwoFA(userID int64, code string) ([]string, error) {
 		return nil, err
 	}
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&TwoFA{}).Where("id = ?", twofa.ID).
-			Update("is_enabled", true).Error; err != nil {
-			return err
+		result := tx.Model(&TwoFA{}).Where("id = ? AND secret = ? AND is_enabled = ?", twofa.ID, twofa.Secret, false).Update("is_enabled", true)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return Err2FAAlreadyOn
 		}
 		// Delete old backup codes
 		if err := tx.Where("user_id = ?", userID).Delete(&TwoFABackupCode{}).Error; err != nil {
 			return err
 		}
 		for _, c := range codes {
-			hashed, _ := common.HashPassword(c)
+			hashed, err := common.HashPassword(c)
+			if err != nil {
+				return err
+			}
 			if err := tx.Create(&TwoFABackupCode{
 				UserID:   userID,
 				CodeHash: hashed,
@@ -122,6 +147,13 @@ func EnableTwoFA(userID int64, code string) ([]string, error) {
 
 // DisableTwoFA deactivates 2FA after verifying a TOTP code or backup code.
 func DisableTwoFA(userID int64, code string) error {
+	user, err := GetUserByID(userID)
+	if err != nil {
+		return err
+	}
+	if common.IsStaffRole(user.Role) {
+		return ErrStaffFactorRequired
+	}
 	twofa, err := GetTwoFA(userID)
 	if err != nil {
 		return err
@@ -129,24 +161,36 @@ func DisableTwoFA(userID int64, code string) error {
 	if !twofa.IsEnabled {
 		return Err2FANotEnabled
 	}
-	// Check if it's a TOTP code or a backup code.
-	if common.ValidateTOTPCode(twofa.Secret, code) {
-		return DB.Model(&TwoFA{}).Where("user_id = ?", userID).
-			Update("is_enabled", false).Error
-	}
-	// Try backup code.
-	return consumeBackupCode(userID, code)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&TwoFA{}).Where("id = ? AND secret = ? AND is_enabled = ?", twofa.ID, twofa.Secret, true).Update("is_enabled", false)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return Err2FANotEnabled
+		}
+		if !common.ValidateTOTPCode(twofa.Secret, code) {
+			return consumeBackupCodeTx(tx, userID, code)
+		}
+		return nil
+	})
 }
 
-func consumeBackupCode(userID int64, code string) error {
+func consumeBackupCodeTx(tx *gorm.DB, userID int64, code string) error {
 	var codes []TwoFABackupCode
-	if err := DB.Where("user_id = ? AND is_used = false", userID).Find(&codes).Error; err != nil {
+	if err := tx.Where("user_id = ? AND is_used = false", userID).Find(&codes).Error; err != nil {
 		return err
 	}
 	for i := range codes {
 		if common.VerifyPassword(code, codes[i].CodeHash) {
-			return DB.Model(&TwoFABackupCode{}).Where("id = ?", codes[i].ID).
-				Update("is_used", true).Error
+			result := tx.Model(&TwoFABackupCode{}).Where("id = ? AND is_used = ?", codes[i].ID, false).Update("is_used", true)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrBackupCodeUsed
+			}
+			return nil
 		}
 	}
 	return ErrBackupCodeInvalid

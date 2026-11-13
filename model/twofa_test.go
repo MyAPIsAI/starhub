@@ -132,6 +132,80 @@ func TestTwoFALockout(t *testing.T) {
 	}
 }
 
+func TestTwoFAEnrollmentCannotReplaceAnEnabledFactor(t *testing.T) {
+	newTestDB(t)
+	user := &User{Username: "protected-factor", Role: common.RoleAdmin, Status: 1, AffCode: common.GenerateAffCode()}
+	if err := CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	key, err := common.GenerateTOTPSecret(user.Username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateTwoFASetup(user.ID, key.Secret()); err != nil {
+		t.Fatal(err)
+	}
+	code := generateValidTOTP(t, key.Secret())
+	if _, err := EnableTwoFA(user.ID, code); err != ErrStaffPasswordRequired {
+		t.Fatalf("initial password guard: %v", err)
+	}
+	if err := UpdateUserFields(user.ID, map[string]any{"admin_password_changed_at": 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EnableTwoFA(user.ID, code); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateTwoFASetup(user.ID, "replacement"); err != Err2FAAlreadyOn {
+		t.Fatalf("enabled factor replacement: %v", err)
+	}
+	if err := DisableTwoFA(user.ID, code); err != ErrStaffFactorRequired {
+		t.Fatalf("staff factor disable: %v", err)
+	}
+	factor, err := GetTwoFA(user.ID)
+	if err != nil || !factor.IsEnabled || factor.Secret != key.Secret() {
+		t.Fatal("staff factor changed")
+	}
+}
+
+func TestTwoFABackupDisableIsAtomicAndSingleUse(t *testing.T) {
+	newTestDB(t)
+	user := &User{Username: "backup-disable", Role: common.RoleUser, Status: 1, AffCode: common.GenerateAffCode()}
+	if err := CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	key, err := common.GenerateTOTPSecret(user.Username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateTwoFASetup(user.ID, key.Secret()); err != nil {
+		t.Fatal(err)
+	}
+	codes, err := EnableTwoFA(user.ID, generateValidTOTP(t, key.Secret()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := DisableTwoFA(user.ID, "invalid-backup"); err == nil {
+		t.Fatal("invalid code disabled factor")
+	}
+	factor, _ := GetTwoFA(user.ID)
+	if !factor.IsEnabled {
+		t.Fatal("failed disable did not roll back")
+	}
+	if err := DisableTwoFA(user.ID, codes[0]); err != nil {
+		t.Fatal(err)
+	}
+	factor, _ = GetTwoFA(user.ID)
+	if factor.IsEnabled {
+		t.Fatal("backup code did not disable factor")
+	}
+	if err := DB.Model(&TwoFA{}).Where("user_id = ?", user.ID).Update("is_enabled", true).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := DisableTwoFA(user.ID, codes[0]); err == nil {
+		t.Fatal("backup code was reused")
+	}
+}
+
 // generateValidTOTP uses the same library to produce a valid code for testing.
 func generateValidTOTP(t *testing.T, secret string) string {
 	t.Helper()
