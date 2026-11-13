@@ -22,6 +22,7 @@ import (
 // resolution, video seconds, ...) via AddOtherRatio — the image / video
 // relays (P3) plug in here without touching the settlement core.
 type PriceData struct {
+	PriceVersion           int64  `json:"price_version"`
 	AmountUnit             string `json:"amount_unit,omitempty"`
 	OtherRatioExact        string `json:"other_ratio_exact,omitempty"`
 	QuotaReservationID     string `json:"-"`
@@ -91,6 +92,7 @@ func capturedPriceData(modelName, userGroup string, inputs map[string]setting.Pr
 
 func priceDataFromInputs(modelName, group, userGroup string, inputs setting.PricingInputs) *PriceData {
 	pd := &PriceData{
+		PriceVersion:           inputs.Version,
 		ModelName:              modelName,
 		ModelRatio:             inputs.ModelRatio,
 		CompletionRatio:        inputs.CompletionRatio,

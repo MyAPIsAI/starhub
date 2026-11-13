@@ -6,6 +6,7 @@ import (
 )
 
 type PricingInputs struct {
+	Version         int64
 	ModelRatio      float64
 	HasModelRatio   bool
 	CompletionRatio float64
@@ -22,6 +23,8 @@ type PricingInputs struct {
 	TokenRates      pricingtime.TokenRates
 	PricingAt       time.Time
 }
+
+var pricingVersion int64
 
 // ResolvePricing reads every billing option under one update barrier.
 func ResolvePricing(model, group, userGroup string) PricingInputs {
@@ -71,7 +74,7 @@ func resolvePricingGroups(model string, groups []string, userGroup string, at ti
 }
 
 func resolvePricing(model, group, userGroup string, at time.Time) PricingInputs {
-	p := PricingInputs{}
+	p := PricingInputs{Version: pricingVersion}
 	p.ModelRatio, p.HasModelRatio = LookupModelRatio(model)
 	p.CompletionRatio, p.HasCompletion = LookupCompletionRatio(model)
 	p.GroupRatio, _ = GroupRatioValue(group)

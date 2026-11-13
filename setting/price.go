@@ -80,11 +80,21 @@ func UpdateOption(key, value string) error {
 	if err := validateTokenPriceUpdate(map[string]string{key: value}); err != nil {
 		return err
 	}
-	return updateOption(key, value)
+	err := updateOption(key, value)
+	if err == nil {
+		pricingVersion = 0
+	}
+	return err
 }
 
 // ApplyOptions replaces a validated option set without exposing partial prices.
 func ApplyOptions(values map[string]string) error {
+	return ApplyVersionedOptions(values, 0)
+}
+
+// ApplyVersionedOptions publishes prices and their persisted revision under
+// the same barrier used by request snapshots. Zero denotes unversioned input.
+func ApplyVersionedOptions(values map[string]string, version int64) error {
 	for key, value := range values {
 		if _, err := NormalizeOption(key, value); err != nil {
 			return err
@@ -100,6 +110,7 @@ func ApplyOptions(values map[string]string) error {
 			return err
 		}
 	}
+	pricingVersion = version
 	return nil
 }
 
@@ -167,7 +178,11 @@ func UpdatePricing(key, value string) error {
 	if err := validateTokenPriceUpdate(map[string]string{key: value}); err != nil {
 		return err
 	}
-	return updatePricing(key, value)
+	err := updatePricing(key, value)
+	if err == nil {
+		pricingVersion = 0
+	}
+	return err
 }
 
 func updatePricing(key, value string) error {
@@ -350,6 +365,9 @@ func ResetPricingToDefaults() {
 // test (that may have failed before cleanup) from being seeded into the
 // new DB.
 func ResetAllToDefaults() {
+	optionMu.Lock()
+	pricingVersion = 0
+	optionMu.Unlock()
 	ResetRatiosToDefaults()
 	ResetPricingToDefaults()
 	ResetGroupGroupRatioToDefaults()

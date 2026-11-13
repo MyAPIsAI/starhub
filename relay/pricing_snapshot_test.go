@@ -37,13 +37,13 @@ func TestCapturedGroupPricesShareOneAtomicOptionVersion(t *testing.T) {
 	setting.ResetAllToDefaults()
 	t.Cleanup(setting.ResetAllToDefaults)
 	values := []map[string]string{{"model_ratio": `{"m":2}`, "completion_ratio": `{"m":3}`, "group_ratio": `{"default":1,"vip":0.5}`}, {"model_ratio": `{"m":20}`, "completion_ratio": `{"m":30}`, "group_ratio": `{"default":2,"vip":3}`}}
-	if err := setting.ApplyOptions(values[0]); err != nil {
+	if err := setting.ApplyVersionedOptions(values[0], 11); err != nil {
 		t.Fatal(err)
 	}
 	var writer sync.WaitGroup
 	writer.Go(func() {
 		for i := 0; i < 100; i++ {
-			if err := setting.ApplyOptions(values[i%2]); err != nil {
+			if err := setting.ApplyVersionedOptions(values[i%2], int64(11+i%2)); err != nil {
 				t.Error(err)
 			}
 		}
@@ -52,11 +52,20 @@ func TestCapturedGroupPricesShareOneAtomicOptionVersion(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		prices := CapturePricing("m", []string{"default", "vip"}, "")
 		a, b := prices["default"], prices["vip"]
+		if a.PriceVersion != b.PriceVersion {
+			t.Fatal("groups have different price versions")
+		}
 		if a.ModelRatio == 2 {
+			if a.PriceVersion != 11 {
+				t.Fatal("price version does not identify captured input")
+			}
 			if a.CompletionRatio != 3 || a.GroupRatio != 1 || b.ModelRatio != 2 || b.CompletionRatio != 3 || b.GroupRatio != 0.5 {
 				t.Fatal("mixed first pricing version")
 			}
 		} else if a.ModelRatio == 20 {
+			if a.PriceVersion != 12 {
+				t.Fatal("price version does not identify captured input")
+			}
 			if a.CompletionRatio != 30 || a.GroupRatio != 2 || b.ModelRatio != 20 || b.CompletionRatio != 30 || b.GroupRatio != 3 {
 				t.Fatal("mixed second pricing version")
 			}

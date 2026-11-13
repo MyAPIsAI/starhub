@@ -287,7 +287,7 @@ func LoadOptionsToSettings() error {
 		}
 		values[o.Key] = o.Value
 	}
-	if err := setting.ApplyOptions(values); err != nil {
+	if err := setting.ApplyVersionedOptions(values, version); err != nil {
 		return err
 	}
 	for _, o := range opts {
