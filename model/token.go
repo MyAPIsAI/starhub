@@ -188,8 +188,7 @@ func GetTokenByID(id int64) (*Token, error) {
 func (t *Token) PlaintextKey() string {
 	plaintext, err := common.Decrypt(t.Key)
 	if err != nil {
-		// Decryption failed — return the raw stored value (best effort).
-		return t.Key
+		return ""
 	}
 	return plaintext
 }

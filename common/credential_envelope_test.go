@@ -1,10 +1,29 @@
 package common
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
 )
+
+func TestCredentialEnvelopeRetainsLegacyCustomerReadCompatibility(t *testing.T) {
+	legacy, err := credentialSeal(getEncryptionKey(), []byte("legacy-customer-key"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := Decrypt("enc:" + hex.EncodeToString(legacy))
+	if err != nil || value != "legacy-customer-key" {
+		t.Fatal("legacy customer key became unreadable")
+	}
+	upstream, err := EncryptCredential("upstream-key", "upstream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Decrypt(upstream); err == nil {
+		t.Fatal("customer decrypt accepted upstream credential")
+	}
+}
 
 func TestCredentialEnvelopePurposeTamperingAndRotation(t *testing.T) {
 	key1, key2 := strings.Repeat("11", 32), strings.Repeat("22", 32)

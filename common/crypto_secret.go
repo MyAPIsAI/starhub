@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -49,32 +50,18 @@ func getEncryptionKey() []byte {
 	return encryptionKey
 }
 
-// Encrypt encrypts plaintext using AES-256-GCM and returns a hex-encoded
-// string prefixed with "enc:". The nonce is prepended to the ciphertext.
+// Encrypt writes versioned customer envelopes. Legacy values remain readable.
 func Encrypt(plaintext string) (string, error) {
-	if plaintext == "" {
-		return "", nil
-	}
-	block, err := aes.NewCipher(getEncryptionKey())
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return "", err
-	}
-	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
-	return EncryptedPrefix + hex.EncodeToString(ciphertext), nil
+	return EncryptCredential(plaintext, "customer")
 }
 
 // Decrypt decrypts a value produced by Encrypt. If the value does not have
 // the "enc:" prefix, it is returned as-is (backward compatible with
 // plaintext stored before migration).
 func Decrypt(stored string) (string, error) {
+	if strings.HasPrefix(stored, CredentialEnvelopePrefix) {
+		return DecryptCredential(stored, "customer")
+	}
 	if stored == "" {
 		return "", nil
 	}
