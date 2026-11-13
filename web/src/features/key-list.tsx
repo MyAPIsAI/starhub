@@ -27,7 +27,7 @@ import {
 } from "../lib/key-model-policy";
 import { modelCatalog } from "../lib/platform-catalog";
 import { useModelPricing } from "../lib/model-pricing";
-import { useTokenUsage } from "../lib/api/usage";
+import TokenQuotaDetails from "./token-quota-details";
 import "./key-list.css";
 
 type Text = (zh: string, en: string, ar: string) => string;
@@ -511,9 +511,9 @@ export default function KeyList({
       )}
       <p className="key-list-footnote">
         {text(
-          `${keys.length} 把密钥 · 消费金额为模拟数据`,
-          `${keys.length} keys · Spending amounts are simulated`,
-          `${keys.length} مفاتيح · مبالغ الإنفاق تجريبية`,
+          `${keys.length} 把密钥 · 消费金额来自服务端结算`,
+          `${keys.length} keys · Spending reflects server settlement`,
+          `${keys.length} مفاتيح · يعكس الإنفاق التسوية على الخادم`,
         )}
       </p>
     </section>
@@ -545,7 +545,7 @@ export function KeyDetails({
       ? new Intl.DateTimeFormat(i18n.language, {
           dateStyle: "medium",
           timeStyle: "short",
-          timeZone: "Asia/Dubai",
+          timeZone: item.quotaTimezone ?? "UTC",
         }).format(new Date(value))
       : text("尚无记录", "Not recorded", "غير مسجّل");
   return (
@@ -597,56 +597,18 @@ export function KeyDetails({
         </dl>
         <p className="key-detail-hint">
           {text(
-            "时间按迪拜时区显示。",
-            "Times are shown in Dubai time.",
-            "تُعرض الأوقات بتوقيت دبي.",
+            `时区：${item.quotaTimezone ?? "UTC"}。`,
+            `Timezone: ${item.quotaTimezone ?? "UTC"}.`,
+            `المنطقة الزمنية: ${item.quotaTimezone ?? "UTC"}.`,
           )}
         </p>
       </section>
-      <section>
-        <h3>{text("消费额度", "Spending limit", "حد الإنفاق")}</h3>
-        <dl>
-          <div>
-            <dt>
-              {text("当前周期已用", "Used this period", "المستخدم خلال الفترة")}
-            </dt>
-            <dd dir="ltr">{money(quota.usedNano)}</dd>
-          </div>
-          <div>
-            <dt>{text("额度上限", "Limit", "الحد")}</dt>
-            <dd>
-              {quota.limitNano === null ? (
-                text("不限额", "Unlimited", "بلا حد")
-              ) : (
-                <bdi dir="ltr">{money(quota.limitNano)}</bdi>
-              )}
-            </dd>
-          </div>
-          {quota.remainingNano !== null && (
-            <div>
-              <dt>{text("剩余额度", "Remaining", "المتبقي")}</dt>
-              <dd dir="ltr">{money(quota.remainingNano)}</dd>
-            </div>
-          )}
-          <div>
-            <dt>{text("额度周期", "Quota period", "فترة الحصة")}</dt>
-            <dd>{periodName(quota.period, text)}</dd>
-          </div>
-          <div>
-            <dt>{text("累计消费", "Lifetime spending", "إجمالي الإنفاق")}</dt>
-            <dd dir="ltr">
-              {money(item.totalUsed_nano ?? item.currentPeriodUsed_nano ?? "0")}
-            </dd>
-          </div>
-        </dl>
-        <p className="key-detail-hint">
-          {text(
-            "按模拟请求实际累计；周期以迪拜时间为准。",
-            "Totals reflect simulated requests; periods use Dubai time.",
-            "تعكس الإجماليات الطلبات التجريبية؛ الفترات بتوقيت دبي.",
-          )}
-        </p>
-      </section>
+      <TokenQuotaDetails
+        key={item.id}
+        tokenID={Number(item.id)}
+        locale={i18n.language}
+        text={text}
+      />
       <section>
         <h3>{text("模型授权", "Model access", "صلاحيات النماذج")}</h3>
         <dl>
@@ -738,7 +700,6 @@ export function KeyDetails({
           </p>
         )}
       </section>
-      <KeyUsageTrend itemId={item.id} text={text} />
       <section>
         <h3>{text("来源地址限制", "IP restrictions", "قيود عناوين المصدر")}</h3>
         {item.ipWhitelist?.length ? (
@@ -763,84 +724,5 @@ export function KeyDetails({
         {text("编辑密钥设置", "Edit key settings", "تعديل إعدادات المفتاح")}
       </Button>
     </div>
-  );
-}
-
-const QUOTA_PER_USD = 500_000;
-
-function KeyUsageTrend({
-  itemId,
-  text,
-}: {
-  itemId: string;
-  text: Text;
-}) {
-  const tokenId = parseInt(itemId, 10);
-  const usage = useTokenUsage(tokenId, 7);
-  if (usage.isLoading) {
-    return (
-      <section>
-        <h3>{text("近 7 天用量", "7-day usage", "استخدام 7 أيام")}</h3>
-        <p className="key-detail-hint">
-          {text("加载中…", "Loading…", "جارٍ التحميل…")}
-        </p>
-      </section>
-    );
-  }
-  if (usage.isError || !usage.data?.by_token?.length) {
-    return null;
-  }
-  const rows = usage.data.by_token;
-  const maxQuota = Math.max(...rows.map((r) => r.quota), 1);
-  return (
-    <section>
-      <h3>{text("近 7 天用量", "7-day usage", "استخدام 7 أيام")}</h3>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          gap: 4,
-          height: 80,
-          padding: "8px 0",
-        }}
-      >
-        {rows.map((r) => (
-          <div
-            key={r.date}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                maxWidth: 32,
-                height: `${(r.quota / maxQuota) * 60}px`,
-                minHeight: r.quota > 0 ? 2 : 0,
-                background: "var(--accent-soft, #6366f1)",
-                borderRadius: 3,
-              }}
-              title={`${r.date}: $${(r.quota / QUOTA_PER_USD).toFixed(4)} (${r.requests} requests)`}
-            />
-            <span
-              style={{ fontSize: 9, color: "var(--muted)", lineHeight: 1 }}
-            >
-              {r.date.slice(5)}
-            </span>
-          </div>
-        ))}
-      </div>
-      <p className="key-detail-hint">
-        {text(
-          "按 UTC 日期统计；费用以服务端记录为准。",
-          "Aggregated by UTC date; fees per server records.",
-          "مُجمّعة بتاريخ UTC؛ الرسوم حسب سجلات الخادم.",
-        )}
-      </p>
-    </section>
   );
 }

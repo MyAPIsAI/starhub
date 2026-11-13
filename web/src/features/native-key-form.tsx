@@ -452,11 +452,17 @@ export function NativeKeyForm({
                 ))}
               </div>
               <label>
-                {c(
-                  "消费额度（美元，留空不限额）",
-                  "Spending limit (USD, empty for unlimited)",
-                  "حد الإنفاق بالدولار، فارغ بلا حد",
-                )}
+                {period === "never"
+                  ? c(
+                      "消费额度（美元，留空不限额）",
+                      "Spending limit (USD, empty for unlimited)",
+                      "حد الإنفاق بالدولار، فارغ بلا حد",
+                    )
+                  : c(
+                      "周期额度（美元，必填）",
+                      "Period limit (USD, required)",
+                      "حد الفترة بالدولار، مطلوب",
+                    )}
                 <Input
                   id="new-key-quota"
                   inputMode="decimal"

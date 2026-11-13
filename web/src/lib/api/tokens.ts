@@ -83,7 +83,9 @@ export interface TokenUpdateInput {
 
 const TOKENS_KEY = ["tokens"] as const;
 
-function assertTokenSession(identity: ReturnType<typeof sessionQueryIdentity>) {
+export function assertTokenSession(
+  identity: ReturnType<typeof sessionQueryIdentity>,
+) {
   if (
     identity[1] === null ||
     !Number.isSafeInteger(identity[1]) ||

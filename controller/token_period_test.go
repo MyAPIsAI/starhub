@@ -79,3 +79,20 @@ func TestCreatePeriodicKeyValidatesQuotaPolicyAndMasksOutput(t *testing.T) {
 		t.Fatal("period list leaked credential")
 	}
 }
+
+func TestOwnedTokenUsageRejectsForeignKeysAndInvalidPages(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "usage-owner", common.RoleUser, 0)
+	other := newUser(t, "usage-root", common.RoleRoot, 0)
+	token := mustToken(t, u.ID, 10)
+	for _, sample := range []struct {
+		uid    int64
+		query  string
+		status int
+	}{{u.ID, "", 200}, {other.ID, "", 404}, {u.ID, "?period_page=0", 400}, {u.ID, "?model_page=1000001", 400}, {u.ID, "?model_page=bad", 400}} {
+		w := call(OwnedTokenUsage, testRequest{method: "GET", target: "/api/token/usage" + sample.query, userID: sample.uid, role: common.RoleRoot, path: map[string]string{"id": itoa(token.ID)}})
+		if w.Code != sample.status || !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
+			t.Fatalf("usage scope/page: %d %s", w.Code, w.Body)
+		}
+	}
+}

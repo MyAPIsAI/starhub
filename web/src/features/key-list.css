@@ -311,6 +311,81 @@
   display: grid;
   gap: 22px;
 }
+.key-usage-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.key-usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  text-align: start;
+}
+.key-usage-table :is(th, td) {
+  padding: 10px;
+  text-align: start;
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.key-usage-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.key-usage-table tr + tr td,
+.key-usage-table tbody tr:first-child td {
+  border-top: 1px solid var(--border);
+}
+.key-usage-table td small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  white-space: normal;
+}
+.key-usage-pages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 11px;
+}
+.key-usage-chart {
+  margin: 0;
+}
+.key-usage-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 100px;
+  border-bottom: 1px solid var(--border);
+}
+.key-usage-bars > div {
+  flex: 1;
+  min-width: 0;
+  background: var(--primary, #2563eb);
+  border-radius: 3px 3px 0 0;
+}
+.key-usage-bars > .is-empty {
+  background: var(--border);
+}
+.key-usage-chart figcaption {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.key-usage-daily {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.key-usage-daily summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
 .key-detail section {
   border-bottom: 1px solid var(--border);
   padding-bottom: 20px;

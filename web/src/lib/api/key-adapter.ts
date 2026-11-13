@@ -143,7 +143,9 @@ export function tokenToPreviewKey(
       ? new Date(token.period_end * 1000).toISOString()
       : undefined,
     currentPeriodReserved_nano: quotaToNanoUsd(
-      token.period_reserved_quota ?? 0,
+      periodic
+        ? (token.period_reserved_quota ?? 0)
+        : (token.pending_quota ?? 0),
     ),
     currentPeriodUsed_nano: quotaToNanoUsd(
       periodic ? (token.period_used_quota ?? 0) : token.used_quota,

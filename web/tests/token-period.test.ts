@@ -63,5 +63,7 @@ describe("server-owned key quota periods", () => {
       pending_quota: 100,
     });
     expect(key.quotaLimit_nano).toBe("2000000");
+    expect(keyQuotaSummary(key).reservedNano).toBe("200000");
+    expect(keyQuotaSummary(key).remainingNano).toBe("1400000");
   });
 });

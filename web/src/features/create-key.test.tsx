@@ -36,6 +36,7 @@ vi.mock("../lib/api/tokens", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api/tokens")>()),
   useCreateToken: () => ({ isPending: false }),
   useUpdateToken: () => ({ isPending: false }),
+  useTokenQuotaRegions: () => ({ data: [], isError: false }),
 }));
 vi.mock("../components/ui/overlay", () => ({
   Modal: ({ children }: { children: ReactNode }) =>
