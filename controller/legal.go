@@ -32,9 +32,7 @@ func GetLegalDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lang := r.URL.Query().Get("lang")
-	if lang == "" {
-		lang = middleware.ResolveRegionLanguage("", r.Header.Get("Accept-Language"), profile)
-	}
+	lang = middleware.ResolveRegionLanguage(lang, r.Header.Get("Accept-Language"), profile)
 	regionID := r.URL.Query().Get("region")
 	if regionID == "" {
 		regionID = profile.ID

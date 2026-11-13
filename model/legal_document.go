@@ -87,6 +87,15 @@ func GetLegalDocumentVersion(docType, language, regionID, version string) (*Lega
 		docType, language).
 		Order("published_at DESC").First(&doc).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		if language != "en" && regionID != "" {
+			regionalErr := published().Where("type = ? AND language = 'en' AND region_id = ? AND published_at > 0", docType, regionID).Order("published_at DESC").First(&doc).Error
+			if regionalErr == nil {
+				return &doc, nil
+			}
+			if !errors.Is(regionalErr, gorm.ErrRecordNotFound) {
+				return nil, regionalErr
+			}
+		}
 		// Fall back to English global.
 		err = published().Where("type = ? AND language = 'en' AND region_id = '' AND published_at > 0",
 			docType).

@@ -532,6 +532,15 @@ func UpdateSelf(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, http.StatusBadRequest, "unsupported language; use zh, en, ar or ko")
 			return
 		}
+		region, err := model.ActiveRegionProfile()
+		if err != nil {
+			common.ApiError(w, 503, "active deployment policy is unavailable")
+			return
+		}
+		if lang != "" && region.ResolveLanguage(lang, "") != lang {
+			common.ApiError(w, 400, "language is not supported in the deployment region")
+			return
+		}
 		fields["language"] = lang
 	}
 	if len(fields) == 0 {
