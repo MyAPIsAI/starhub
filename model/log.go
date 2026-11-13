@@ -19,6 +19,7 @@ func utcMidnight() int64 {
 }
 
 type Log struct {
+	BillingEvidence            string `gorm:"type:text;not null;default:''" json:"billing_evidence,omitempty"`
 	AmountUnit                 string `gorm:"size:24;not null;default:''" json:"amount_unit,omitempty"`
 	QuotaRemainderNano         int64  `gorm:"not null;default:0" json:"-"`
 	UnfundedQuotaRemainderNano int64  `gorm:"not null;default:0" json:"-"`

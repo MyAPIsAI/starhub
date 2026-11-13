@@ -236,7 +236,6 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		UsedChannels:     usedChannels,
 		DurationMs:       durationMs,
 		Status:           status,
-		PriceVersion:     model.LoadedOptionVersion(),
 		ExactFeeMicroUSD: ExactFeeMicroUSD(pd, usage),
 		ExactFeeNanoUSD:  strconv.FormatInt(ComputeUsageNano(pd, usage), 10),
 		RequestID:        requestID,
@@ -244,6 +243,9 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 	if pd != nil {
 		entry.QuotaReservationID = pd.QuotaReservationID
 		entry.AmountUnit = pd.AmountUnit
+	}
+	if err := attachTokenBillingEvidence(entry, pd, usage); err != nil {
+		return err
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
