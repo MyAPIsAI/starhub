@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -38,6 +39,8 @@ func UserAuth(next http.Handler) http.Handler {
 		ctx := common.WithValues(r.Context(),
 			common.CtxUserID, user.ID,
 			common.CtxRole, user.Role)
+		profile, _ := model.ActiveRegionProfile()
+		ctx = context.WithValue(ctx, ctxLanguageKey{}, ResolveRegionLanguage(user.Language, r.Header.Get("Accept-Language"), profile))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

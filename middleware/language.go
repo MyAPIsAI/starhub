@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"starhub/common"
+	"starhub/model"
+	"starhub/pkg/localepolicy"
 )
 
 // CtxLanguage is the context key for the resolved request language.
@@ -27,22 +29,16 @@ var supportedLanguages = map[string]bool{
 //  2. Accept-Language header
 //  3. Default "en"
 //
-// Region-level defaults (tier 3 in the PRD) will be wired when RegionProfile
-// is consumed at the middleware layer; for now the fallback is English.
+// ResolveRegionLanguage applies the deployment language set and default.
+func ResolveRegionLanguage(userLang, header string, profile *model.RegionProfile) string {
+	if profile != nil {
+		return profile.ResolveLanguage(userLang, header)
+	}
+	return ResolveLanguage(userLang, header)
+}
+
 func ResolveLanguage(userLang, acceptLangHeader string) string {
-	// 1. Account preference.
-	if userLang != "" && supportedLanguages[userLang] {
-		return userLang
-	}
-	// 2. Accept-Language header.
-	if acceptLangHeader != "" {
-		lang := parseAcceptLanguage(acceptLangHeader)
-		if lang != "" && supportedLanguages[lang] {
-			return lang
-		}
-	}
-	// 3. Default.
-	return "en"
+	return localepolicy.Resolve(userLang, acceptLangHeader, "en", []string{"zh", "en", "ar", "ko"})
 }
 
 // parseAcceptLanguage extracts the first supported language tag from
@@ -73,10 +69,14 @@ func parseAcceptLanguage(header string) string {
 // takes priority over the Accept-Language header.
 func LanguageMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userLang, _ := r.Context().Value(common.CtxUserID).(int64)
-		_ = userLang // UserID is available but the language is read from the user record in the auth handler.
-		// For now, resolve from Accept-Language; the auth handler can override.
-		lang := ResolveLanguage("", r.Header.Get("Accept-Language"))
+		userLang := ""
+		if userID, ok := r.Context().Value(common.CtxUserID).(int64); ok && model.DB != nil {
+			if user, err := model.GetUserByID(userID); err == nil {
+				userLang = user.Language
+			}
+		}
+		profile, _ := model.ActiveRegionProfile()
+		lang := ResolveRegionLanguage(userLang, r.Header.Get("Accept-Language"), profile)
 		ctx := context.WithValue(r.Context(), ctxLanguageKey{}, lang)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

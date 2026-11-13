@@ -4,11 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"starhub/pkg/localepolicy"
 	"strings"
 	"time"
 )
 
 var ErrRegionUnavailable = errors.New("active region profile is unavailable")
+
+func (profile *RegionProfile) ResolveLanguage(account, header string) string {
+	return localepolicy.Resolve(account, header, profile.DefaultLanguage, profile.SupportedLanguageList())
+}
 
 func ActiveRegionID() string {
 	if id := strings.TrimSpace(os.Getenv("STARHUB_REGION_PROFILE")); id != "" {
@@ -21,6 +26,9 @@ func ActiveRegionID() string {
 // An absent default preserves legacy deployments; an explicitly selected or
 // disabled profile fails closed. Saved quota periods retain their own timezone.
 func ActiveRegionProfile() (*RegionProfile, error) {
+	if DB == nil {
+		return nil, ErrRegionUnavailable
+	}
 	profile, err := GetRegionProfile(ActiveRegionID())
 	if errors.Is(err, ErrRegionProfileNotFound) && os.Getenv("STARHUB_REGION_PROFILE") == "" {
 		return &RegionProfile{DefaultLanguage: "en", SupportedLanguages: "zh,en,ar,ko", Currency: "USD", Timezone: "UTC", FeatureFlags: "{}", Enabled: true}, nil
