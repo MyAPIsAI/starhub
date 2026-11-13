@@ -192,6 +192,9 @@ func evalExpression(p *PriceData, vars map[string]float64) (int64, bool) {
 // (saturating, audited); a failed expression evaluation falls back to token
 // billing and is audited with the quota_saturation marker.
 func ComputeUsageQuota(p *PriceData, usage *Usage) int64 {
+	if p.AmountUnit == common.MoneyUnitNano {
+		return ComputeUsageNano(p, usage)
+	}
 	if usage == nil {
 		usage = &Usage{}
 	}
@@ -215,6 +218,9 @@ func ComputeUsageQuota(p *PriceData, usage *Usage) int64 {
 // A configured positive price always bills at least 1 quota so rounding can
 // never silently wash out a paid model.
 func priceUSDToQuota(p *PriceData, usd float64) int64 {
+	if p.AmountUnit == common.MoneyUnitNano {
+		return priceUSDNano(p, usd)
+	}
 	if usd <= 0 {
 		return 0
 	}
@@ -234,6 +240,9 @@ func priceUSDToQuota(p *PriceData, usd float64) int64 {
 // Cached / audio tokens are subsets of the usage totals, so a lying upstream
 // cannot inflate the discount beyond the totals (clamped in Usage helpers).
 func tokenUsageQuota(p *PriceData, usage *Usage) int64 {
+	if p.AmountUnit == common.MoneyUnitNano {
+		return tokenUsageNano(p, usage)
+	}
 	if p.TokenRates.Valid() {
 		return independentUsageQuota(p, usage)
 	}

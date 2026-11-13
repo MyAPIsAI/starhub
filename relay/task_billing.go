@@ -17,11 +17,16 @@ type TaskBillingSnapshot struct {
 
 // Version two snapshots carry independent unit prices and complete token facts.
 func (s TaskBillingSnapshot) MarshalJSON() ([]byte, error) {
-	if s.Version < 0 || s.Version > 2 {
+	if s.Version < 0 || s.Version > 3 {
 		return nil, fmt.Errorf("unsupported task pricing snapshot version")
 	}
 	if s.PriceData.HasIndependentTaskPricing() {
 		s.Version = 2
+	}
+	if s.PriceData.AmountUnit == common.MoneyUnitNano {
+		s.Version = 3
+	} else if s.PriceData.AmountUnit != "" {
+		return nil, fmt.Errorf("unsupported task monetary unit")
 	}
 	type snapshot TaskBillingSnapshot
 	return json.Marshal(snapshot(s))
@@ -32,7 +37,7 @@ func (s *TaskBillingSnapshot) UnmarshalJSON(raw []byte) error {
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return err
 	}
-	if value.Version < 0 || value.Version > 2 || (value.PriceData.TokenRates.Valid() && value.Version != 2) {
+	if value.Version < 0 || value.Version > 3 || (value.PriceData.TokenRates.Valid() && value.Version < 2) || ((value.Version == 3) != (value.PriceData.AmountUnit == common.MoneyUnitNano)) || (value.PriceData.AmountUnit != "" && value.PriceData.AmountUnit != common.MoneyUnitNano) {
 		return fmt.Errorf("unsupported task pricing snapshot version")
 	}
 	if value.Estimate.PromptTokens < 0 || value.Estimate.CompletionTokens < 0 {
@@ -87,6 +92,11 @@ func TaskPricingQuotaWithPriceData(pd *PriceData, p channel.TaskPricing) int64 {
 		// expression failed: fall through to per-call / token
 	}
 	if p.PerCallUSD > 0 && p.Units > 0 {
+		if pd.AmountUnit == common.MoneyUnitNano {
+			copy := *pd
+			copy.AddOtherRatio(p.Units)
+			return priceUSDNano(&copy, p.PerCallUSD)
+		}
 		return common.QuotaFromFloat64(
 			p.PerCallUSD * p.Units * float64(common.QuotaPerUSD) * pd.EffectiveRatio())
 	}

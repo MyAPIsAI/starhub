@@ -4,12 +4,16 @@ import (
 	"errors"
 	"math/big"
 	"regexp"
+	"strings"
 )
 
 const NanoPerUSD int64 = 1_000_000_000
 const NanoPerLegacyQuota int64 = 2000
 const MoneyUnitNano = "usd_nano"
 const MaxNanoPerRequest = MaxQuotaPerRequest * NanoPerLegacyQuota
+
+func NewNanoReservationID() string       { return "n2:" + GenerateSessionKey()[:48] }
+func IsNanoReservationID(id string) bool { return strings.HasPrefix(id, "n2:") }
 
 var nanoInteger = regexp.MustCompile(`^-?(0|[1-9][0-9]*)$`)
 var usdDecimal = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]{1,9})?$`)

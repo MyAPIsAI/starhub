@@ -133,7 +133,8 @@ func ListTokens(w http.ResponseWriter, r *http.Request) {
 }
 
 func maskedToken(t *model.Token) map[string]any {
-	return map[string]any{
+	out := map[string]any{
+		"remain_quota_nano": common.QuotaMoney(t.RemainQuota, t.RemainQuotaRemainderNano).String(), "used_quota_nano": common.QuotaMoney(t.UsedQuota, t.UsedQuotaRemainderNano).String(), "period_quota_limit_nano": common.QuotaMoney(t.PeriodQuotaLimit, t.PeriodQuotaLimitRemainderNano).String(), "period_used_quota_nano": common.QuotaMoney(t.PeriodUsedQuota, t.PeriodUsedQuotaRemainderNano).String(), "period_reserved_quota_nano": common.QuotaMoney(t.PeriodReservedQuota, t.PeriodReservedQuotaRemainderNano).String(),
 		"pending_quota": t.PendingQuota,
 		"quota_period":  t.QuotaPeriod, "period_quota_limit": t.PeriodQuotaLimit, "quota_region": t.QuotaRegion, "quota_timezone": t.QuotaTimezone,
 		"quota_period_id": t.QuotaPeriodID, "period_start": t.PeriodStart, "period_end": t.PeriodEnd, "period_used_quota": t.PeriodUsedQuota, "period_reserved_quota": t.PeriodReservedQuota,
@@ -156,6 +157,10 @@ func maskedToken(t *model.Token) map[string]any {
 		"management_schema":   "owned_token_v1",
 		"management_revision": model.TokenManagementRevision(t),
 	}
+	if t.PendingQuotaNano != "" {
+		out["pending_quota_nano"] = t.PendingQuotaNano
+	}
+	return out
 }
 
 type tokenUpdateRequest struct {

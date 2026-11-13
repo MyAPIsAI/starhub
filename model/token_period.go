@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"math"
+	"math/big"
 	"starhub/common"
 	"time"
 	_ "time/tzdata"
@@ -387,17 +388,41 @@ func quotaAdmissionID(ids []string) string {
 }
 
 func TokenPendingQuota(tx *gorm.DB, tokenID int64) (int64, error) {
-	var held, legacy int64
-	if err := tx.Model(&QuotaReservation{}).Where("token_id = ? AND completed_at = 0", tokenID).Select("COALESCE(SUM(amount),0)").Scan(&held).Error; err != nil {
+	amount, err := TokenPendingMoney(tx, tokenID)
+	if err != nil {
 		return 0, err
 	}
-	if err := tx.Model(&Task{}).Where("token_id = ? AND quota_reservation_id = '' AND status NOT IN ?", tokenID, []string{"succeeded", "failed", "cancelled"}).Select("COALESCE(SUM(quota),0)").Scan(&legacy).Error; err != nil {
-		return 0, err
+	whole, _, err := common.NanoQuotaParts(amount)
+	return whole, err
+}
+
+func TokenPendingMoney(tx *gorm.DB, tokenID int64) (*big.Int, error) {
+	amount := new(big.Int)
+	var receipts []QuotaReservation
+	if err := tx.Where("token_id = ? AND completed_at = 0", tokenID).Find(&receipts).Error; err != nil {
+		return nil, err
 	}
-	if legacy > math.MaxInt64-held {
-		return 0, ErrQuotaReservation
+	for _, r := range receipts {
+		if r.Amount < 0 {
+			return nil, ErrQuotaReservation
+		}
+		value := big.NewInt(r.Amount)
+		if !nanoAdmission(r.ID) {
+			value = common.QuotaMoney(r.Amount, 0)
+		}
+		amount.Add(amount, value)
 	}
-	return held + legacy, nil
+	var tasks []Task
+	if err := tx.Where("token_id = ? AND quota_reservation_id = '' AND status NOT IN ?", tokenID, []string{"succeeded", "failed", "cancelled"}).Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	for _, task := range tasks {
+		if task.Quota < 0 {
+			return nil, ErrQuotaReservation
+		}
+		amount.Add(amount, common.QuotaMoney(task.Quota, 0))
+	}
+	return amount, nil
 }
 
 func releaseTokenAdmission(tx *gorm.DB, userID, tokenID, amount int64, id string, now time.Time) error {

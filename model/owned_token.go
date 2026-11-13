@@ -259,17 +259,23 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 			// ignores pending reservations; when those tasks settle,
 			// the cumulative (remain + used) silently inflates.
 			if rq, ok := updates["remain_quota"]; ok && action == "update" && !tokenPeriodic(&result) {
-				pending, err := TokenPendingQuota(tx, id)
+				pending, err := TokenPendingMoney(tx, id)
 				if err != nil {
 					return err
 				}
-				if pending > 0 {
-					newRemain := rq.(int64) - pending
-					if newRemain < 0 {
-						return fmt.Errorf("quota limit is below in-flight task reservations (%d)", pending)
-					}
-					updates["remain_quota"] = newRemain
+				remaining := common.QuotaMoney(rq.(int64), 0)
+				if r, ok := updates["remain_quota_remainder_nano"].(int64); ok {
+					remaining = common.QuotaMoney(rq.(int64), r)
 				}
+				remaining.Sub(remaining, pending)
+				if remaining.Sign() < 0 {
+					return fmt.Errorf("quota limit is below in-flight task reservations")
+				}
+				whole, remainder, err := common.NanoQuotaParts(remaining)
+				if err != nil {
+					return err
+				}
+				updates["remain_quota"], updates["remain_quota_remainder_nano"] = whole, remainder
 			}
 			if action == "regenerate" {
 				plaintext := common.GenerateTokenKey()

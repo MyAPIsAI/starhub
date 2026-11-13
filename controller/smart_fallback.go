@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"starhub/common"
 	"starhub/relay"
 )
@@ -23,10 +24,13 @@ func (f *relayFlow) nextSmartModel() bool {
 		if !ok {
 			continue
 		}
+		if common.IsNanoReservationID(f.req.quotaReservationID) {
+			price.AmountUnit = common.MoneyUnitNano
+		}
 		if f.preQuota > 0 {
 			estimate := relay.EstimateIRPreConsumeQuotaWithPriceData(&price, f.chatIR)
 			if estimate > f.preQuota {
-				additional, err := relay.PreConsumeQuotaAmount(f.req.userID, f.req.tokenID, f.req.tokenUnlimited, estimate-f.preQuota, f.req.quotaReservationID)
+				additional, err := relay.PreConsumeQuotaAmount(f.req.userID, f.req.tokenID, f.req.tokenUnlimited, estimate-f.preQuota, f.req.quotaReservationID, fmt.Sprintf("target:%d", estimate))
 				if err != nil {
 					f.lastErr = err
 					continue

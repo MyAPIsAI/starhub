@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"math/big"
 	"net"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ func (t *Token) AllowsSmartRouting() bool {
 }
 
 type Token struct {
+	PendingQuotaNano                 string `gorm:"-" json:"-"`
 	RemainQuotaRemainderNano         int64  `gorm:"not null;default:0" json:"-"`
 	UsedQuotaRemainderNano           int64  `gorm:"not null;default:0" json:"-"`
 	PeriodQuotaLimitRemainderNano    int64  `gorm:"not null;default:0" json:"-"`
@@ -204,7 +206,13 @@ func ListTokens(userID int64) ([]Token, error) {
 	err := q.Order("id DESC").Find(&tokens).Error
 	if err == nil {
 		for i := range tokens {
-			tokens[i].PendingQuota, err = TokenPendingQuota(DB, tokens[i].ID)
+			var money *big.Int
+			money, err = TokenPendingMoney(DB, tokens[i].ID)
+			if err != nil {
+				return nil, err
+			}
+			tokens[i].PendingQuotaNano = money.String()
+			tokens[i].PendingQuota, _, err = common.NanoQuotaParts(money)
 			if err != nil {
 				return nil, err
 			}

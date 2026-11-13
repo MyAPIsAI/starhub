@@ -143,12 +143,14 @@ func TestReserveReleaseSettleRoundTrip(t *testing.T) {
 		t.Fatalf("settle log missing: total=%d %+v", total, logs)
 	}
 
-	// a settle that overdraws (actual > pre) deducts the delta from the
-	// remaining balance — the balance is sufficient here so the full delta
-	// is taken
-	if err := SettleQuota(user.ID, token.ID, false, 500, 1300, &Log{
+	// Reserve the next attempt before settling more than its estimate. A
+	// settlement cannot claim a prepayment that was never actually held.
+	if err := ReserveQuota(user.ID, token.ID, false, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := SettleQuota(user.ID, token.ID, false, 400, 500, &Log{
 		UserID: user.ID, TokenID: token.ID, ChannelID: 0,
-		Model: "m", Quota: 1300}); err != nil {
+		Model: "m", Quota: 500}); err != nil {
 		t.Fatalf("overdrawing settle failed: %v", err)
 	}
 	gotUser, _ = GetUserByID(user.ID)
@@ -158,13 +160,19 @@ func TestReserveReleaseSettleRoundTrip(t *testing.T) {
 	}
 
 	// full refund of a reservation
+	if err := ReserveQuota(user.ID, token.ID, false, 300); err != nil {
+		t.Fatal(err)
+	}
 	if err := ReleaseQuota(user.ID, token.ID, false, 300); err != nil {
 		t.Fatalf("ReleaseQuota failed: %v", err)
 	}
 	gotUser, _ = GetUserByID(user.ID)
 	gotToken, _ = GetTokenByID(token.ID)
-	if gotUser.Quota != 600 || gotToken.RemainQuota != 600 {
-		t.Fatalf("after release: user %d token %d, want 600/600", gotUser.Quota, gotToken.RemainQuota)
+	if gotUser.Quota != 300 || gotToken.RemainQuota != 300 {
+		t.Fatalf("after release: user %d token %d, want 300/300", gotUser.Quota, gotToken.RemainQuota)
+	}
+	if err := VerifyMoneyLedger(user.ID); err != nil {
+		t.Fatal(err)
 	}
 }
 

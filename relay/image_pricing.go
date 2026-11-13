@@ -212,7 +212,8 @@ func (b *ImageBill) quotaForCount(count int) int64 {
 	pd := b.priceData()
 	// Fold size x quality x count into the special-multiplier chain: the
 	// per-call price is multiplied by the full chain (group ratio included).
-	pd.AddOtherRatio(ImagePriceRatio(b.Model, b.Size, b.Quality))
+	pd.AddOtherRatio(sizeRatio(b.Model, b.Size))
+	pd.AddOtherRatio(imageQualityValue(b.Quality))
 	pd.AddOtherRatio(float64(count))
 	return ComputeUsageQuota(pd, &Usage{})
 }

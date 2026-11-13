@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"encoding/json"
 	"testing"
 
 	"starhub/common"
@@ -258,5 +259,30 @@ func TestVideoTaskTokenFallback(t *testing.T) {
 	}
 	if pricing.PromptTokens <= 0 {
 		t.Fatalf("token fallback must set PromptTokens, got %d", pricing.PromptTokens)
+	}
+}
+
+func TestNanoTaskSnapshotRetainsUnitAcrossRestart(t *testing.T) {
+	pd := NewPriceData("nano-task", "default")
+	pd.AmountUnit = common.MoneyUnitNano
+	raw, err := json.Marshal(TaskBillingSnapshot{PriceData: *pd, Estimate: channel.TaskPricing{PerCallUSD: 0.000000001, Units: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored TaskBillingSnapshot
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.Version != 3 || TaskPricingQuotaWithPriceData(&restored.PriceData, restored.Estimate) != 1 {
+		t.Fatalf("nano snapshot lost its monetary contract: %s", raw)
+	}
+	for _, invalid := range []string{`{"version":2,"price_data":{"amount_unit":"usd_nano"}}`, `{"version":3,"price_data":{}}`} {
+		if json.Unmarshal([]byte(invalid), &restored) == nil {
+			t.Fatal("mixed monetary snapshot was accepted")
+		}
+	}
+	legacy := NewPriceData("legacy-task", "default")
+	if got := TaskPricingQuotaWithPriceData(legacy, channel.TaskPricing{PerCallUSD: 0.001, Units: 1}); got != 500 {
+		t.Fatalf("legacy task was rescaled: %d", got)
 	}
 }

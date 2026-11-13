@@ -51,13 +51,14 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		billingGroup = autoGroups[0]
 	}
 	pd := NewPriceDataWithUserGroup(modelName, billingGroup, userGroup)
+	pd.AmountUnit = common.MoneyUnitNano
 	preUsage := &Usage{}
 	if !pd.IsPerCall() && !pd.IsExpression() {
 		preUsage.PromptTokens = 1
 		preUsage.CompletionTokens = common.DefaultCompletionBudgetTokens
 	}
 	preQuota := ComputeUsageQuota(pd, preUsage)
-	admissionID := common.GenerateSessionKey()
+	admissionID := common.NewNanoReservationID()
 	pd.QuotaReservationID = admissionID
 	pre, err := PreConsumeQuotaAmount(userID, tokenID, tokenUnlimited, preQuota, admissionID)
 	if err != nil {

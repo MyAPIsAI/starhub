@@ -243,6 +243,7 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 	}
 	if pd != nil {
 		entry.QuotaReservationID = pd.QuotaReservationID
+		entry.AmountUnit = pd.AmountUnit
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
@@ -301,6 +302,11 @@ func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string,
 		ExactFeeMicroUSD:   QuotaToMicroUSD(actual),
 		ExactFeeNanoUSD:    common.QuotaMoney(actual, 0).String(),
 		RequestID:          requestID,
+	}
+	if common.IsNanoReservationID(entry.QuotaReservationID) {
+		entry.AmountUnit = common.MoneyUnitNano
+		entry.ExactFeeMicroUSD = actual / 1000
+		entry.ExactFeeNanoUSD = strconv.FormatInt(actual, 10)
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }

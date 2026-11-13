@@ -141,7 +141,7 @@ type relayRequest struct {
 func relayRequestFromContext(r *http.Request) relayRequest {
 	ctx := r.Context()
 	req := relayRequest{
-		quotaReservationID: common.GenerateSessionKey(),
+		quotaReservationID: common.NewNanoReservationID(),
 		userID:             ctxValueInt64(ctx, common.CtxUserID),
 		tokenID:            ctxValueInt64(ctx, common.CtxTokenID),
 		tokenName:          ctxValueString(ctx, common.CtxTokenName),
@@ -185,11 +185,17 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 func (req relayRequest) priceFor(group string) *relay.PriceData {
 	if price, ok := req.pricing[group]; ok {
 		price.QuotaReservationID = req.quotaReservationID
+		if common.IsNanoReservationID(req.quotaReservationID) {
+			price.AmountUnit = common.MoneyUnitNano
+		}
 		return &price
 	}
 	// Direct internal callers may construct relayRequest without HTTP context.
 	p := relay.NewPriceDataWithUserGroup(req.modelName, group, req.userGroup)
 	p.QuotaReservationID = req.quotaReservationID
+	if common.IsNanoReservationID(req.quotaReservationID) {
+		p.AmountUnit = common.MoneyUnitNano
+	}
 	return p
 }
 

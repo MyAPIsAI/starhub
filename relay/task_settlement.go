@@ -27,6 +27,11 @@ func FinalizeTaskQuota(task *model.Task) (bool, error) {
 		Quota: task.PendingQuota, UsedChannels: strconv.FormatInt(task.ChannelID, 10), Status: status,
 		PriceVersion:     model.LoadedOptionVersion(),
 		ExactFeeMicroUSD: QuotaToMicroUSD(task.PendingQuota), ExactFeeNanoUSD: common.QuotaMoney(task.PendingQuota, 0).String()}
+	if common.IsNanoReservationID(task.QuotaReservationID) {
+		entry.AmountUnit = common.MoneyUnitNano
+		entry.ExactFeeMicroUSD = task.PendingQuota / 1000
+		entry.ExactFeeNanoUSD = strconv.FormatInt(task.PendingQuota, 10)
+	}
 	if task.Platform == "responses" {
 		var result model.BackgroundResponseOutcome
 		if json.Unmarshal([]byte(task.PendingResultMeta), &result) == nil {

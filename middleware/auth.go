@@ -140,7 +140,7 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 			writeRelayRequestError(w, r, 503, "server_error", "quota_period_unavailable", "API key quota period is unavailable")
 			return
 		}
-		if !readOnly && !token.UnlimitedQuota && token.RemainQuota <= 0 {
+		if !readOnly && !token.UnlimitedQuota && token.RemainQuota <= 0 && token.RemainQuotaRemainderNano <= 0 {
 			writeRelayRequestError(w, r, http.StatusForbidden,
 				"insufficient_quota", "token_quota_exhausted",
 				"API key quota is exhausted")

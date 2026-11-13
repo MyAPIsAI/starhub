@@ -11,6 +11,9 @@ import (
 // independentTokenQuota keeps decimal prices and token products exact through
 // final rounding, including counts too large for int64 multiplication.
 func independentTokenQuota(p *PriceData, counts [6]int64) int64 {
+	if p.AmountUnit == common.MoneyUnitNano {
+		return independentTokenNano(p, counts)
+	}
 	nanos := p.TokenRates.NanoPrices()
 	total := new(big.Int)
 	for index, count := range counts {

@@ -201,8 +201,8 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("topup failed: %d %s", res.Status, res.Body)
 	}
 	user, _ := model.GetUserByID(rootID)
-	if user.Quota != 10000000 {
-		t.Fatalf("user quota should be 10000000, got %d", user.Quota)
+	if common.QuotaMoney(user.Quota, user.QuotaRemainderNano).Int64() != 10000000*common.NanoPerLegacyQuota {
+		t.Fatalf("user quota should be 10000000, got %d", common.QuotaMoney(user.Quota, user.QuotaRemainderNano).Int64())
 	}
 
 	// 5. create token
@@ -224,8 +224,8 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("token key should start with sk-: %q", apiKey)
 	}
 	token, _ := model.GetTokenByID(tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota {
-		t.Fatalf("token should start with default quota, got %d", token.RemainQuota)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota * common.NanoPerLegacyQuota) {
+		t.Fatalf("token should start with default quota, got %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64())
 	}
 
 	// 6. non-stream relay round trip
@@ -241,27 +241,27 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("unexpected relay response: %s", res.Body)
 	}
 
-	expected := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	expected := computeNanoQuota("gpt-4o-mini", "default", 100, 50)
 	if expected <= 0 {
 		t.Fatalf("expected quota should be positive, got %d", expected)
 	}
 	token, _ = model.GetTokenByID(tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-expected {
-		t.Fatalf("token remain quota = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-expected)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-expected {
+		t.Fatalf("token remain quota = %d, want %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-expected)
 	}
 	channel, _ := model.GetChannelByID(channelID)
-	if channel.UsedQuota != expected {
-		t.Fatalf("channel used quota = %d, want %d", channel.UsedQuota, expected)
+	if common.QuotaMoney(channel.UsedQuota, channel.UsedQuotaRemainderNano).Int64() != expected {
+		t.Fatalf("channel used quota = %d, want %d", common.QuotaMoney(channel.UsedQuota, channel.UsedQuotaRemainderNano).Int64(), expected)
 	}
 	user, _ = model.GetUserByID(rootID)
-	if user.Quota != 10000000-expected || user.UsedQuota != expected {
-		t.Fatalf("user quota = %d used = %d, want %d / %d", user.Quota, user.UsedQuota, 10000000-expected, expected)
+	if common.QuotaMoney(user.Quota, user.QuotaRemainderNano).Int64() != 10000000*common.NanoPerLegacyQuota-expected || common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano).Int64() != expected {
+		t.Fatalf("user quota = %d used = %d, want %d / %d", common.QuotaMoney(user.Quota, user.QuotaRemainderNano).Int64(), common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano).Int64(), 10000000*common.NanoPerLegacyQuota-expected, expected)
 	}
 	logs, total, err := model.ListLogs(rootID, 1, 10, "gpt-4o-mini")
 	if err != nil || total != 1 || len(logs) != 1 {
 		t.Fatalf("log record missing: total=%d err=%v", total, err)
 	}
-	if logs[0].PromptTokens != 100 || logs[0].CompletionTokens != 50 || logs[0].Quota != expected {
+	if logs[0].PromptTokens != 100 || logs[0].CompletionTokens != 50 || common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != expected {
 		t.Fatalf("log fields wrong: %+v", logs[0])
 	}
 
@@ -280,12 +280,12 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("stream response incomplete: %s", res.Body)
 	}
 	token, _ = model.GetTokenByID(tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-2*expected {
-		t.Fatalf("token remain after stream = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-2*expected)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected {
+		t.Fatalf("token remain after stream = %d, want %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected)
 	}
 	channel, _ = model.GetChannelByID(channelID)
-	if channel.UsedQuota != 2*expected {
-		t.Fatalf("channel used after stream = %d, want %d", channel.UsedQuota, 2*expected)
+	if common.QuotaMoney(channel.UsedQuota, channel.UsedQuotaRemainderNano).Int64() != 2*expected {
+		t.Fatalf("channel used after stream = %d, want %d", common.QuotaMoney(channel.UsedQuota, channel.UsedQuotaRemainderNano).Int64(), 2*expected)
 	}
 
 	// 8. GET /v1/models
@@ -310,8 +310,8 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("unknown model should give 503 no_available_channel, got %d %s", res.Status, res.Body)
 	}
 	tokenAfter, _ := model.GetTokenByID(tokenID)
-	if tokenAfter.RemainQuota != token.RemainQuota {
-		t.Fatalf("failed requests must not consume quota: %d vs %d", tokenAfter.RemainQuota, token.RemainQuota)
+	if common.QuotaMoney(tokenAfter.RemainQuota, tokenAfter.RemainQuotaRemainderNano).Int64() != common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() {
+		t.Fatalf("failed requests must not consume quota: %d vs %d", common.QuotaMoney(tokenAfter.RemainQuota, tokenAfter.RemainQuotaRemainderNano).Int64(), common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64())
 	}
 
 	// 11. insufficient token quota
@@ -360,8 +360,8 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("broken channel should be auto-disabled, got status %d", broken.Status)
 	}
 	tokenAfter, _ = model.GetTokenByID(tokenID)
-	if tokenAfter.RemainQuota != common.DefaultTokenQuota-2*expected {
-		t.Fatalf("refunded request should keep quota at %d, got %d", common.DefaultTokenQuota-2*expected, tokenAfter.RemainQuota)
+	if common.QuotaMoney(tokenAfter.RemainQuota, tokenAfter.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected {
+		t.Fatalf("refunded request should keep quota at %d, got %d", (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected, common.QuotaMoney(tokenAfter.RemainQuota, tokenAfter.RemainQuotaRemainderNano).Int64())
 	}
 
 	// 13. traffic falls back to the healthy channel
@@ -370,8 +370,8 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("should route to healthy channel after auto-disable, got %d %s", res.Status, res.Body)
 	}
 	channel, _ = model.GetChannelByID(channelID)
-	if channel.UsedQuota != 3*expected {
-		t.Fatalf("channel used = %d, want %d", channel.UsedQuota, 3*expected)
+	if common.QuotaMoney(channel.UsedQuota, channel.UsedQuotaRemainderNano).Int64() != 3*expected {
+		t.Fatalf("channel used = %d, want %d", common.QuotaMoney(channel.UsedQuota, channel.UsedQuotaRemainderNano).Int64(), 3*expected)
 	}
 
 	// 14. disabled token is rejected
@@ -508,7 +508,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	}
 	aliceItems := parseUsage(res.Body)
 	if len(aliceItems) != 1 || aliceItems[0].Date != today ||
-		aliceItems[0].Requests != 1 || aliceItems[0].SuccessCount != 1 || aliceItems[0].FailedCount != 0 || aliceItems[0].Quota != expected {
+		aliceItems[0].Requests != 1 || aliceItems[0].SuccessCount != 1 || aliceItems[0].FailedCount != 0 || aliceItems[0].Quota != 1*(expected/common.NanoPerLegacyQuota) {
 		t.Fatalf("alice usage wrong: %+v (want 1 request, quota %d)", aliceItems, expected)
 	}
 	res = doRequest(base, "GET", "/api/user/usage?days=7&user_id=0", aliceSession, nil)
@@ -520,7 +520,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("root usage failed: %d %s", res.Status, res.Body)
 	}
 	rootItems := parseUsage(res.Body)
-	if len(rootItems) != 1 || rootItems[0].Requests != 4 || rootItems[0].SuccessCount != 3 || rootItems[0].FailedCount != 1 || rootItems[0].Quota != 3*expected {
+	if len(rootItems) != 1 || rootItems[0].Requests != 4 || rootItems[0].SuccessCount != 3 || rootItems[0].FailedCount != 1 || rootItems[0].Quota != 3*(expected/common.NanoPerLegacyQuota) {
 		t.Fatalf("root usage wrong (want 3 successes, 1 failure, quota %d): %+v", 3*expected, rootItems)
 	}
 	res = doRequest(base, "GET", "/api/user/usage?days=7&user_id=0", session, nil)
@@ -528,7 +528,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("global usage failed: %d %s", res.Status, res.Body)
 	}
 	globalItems := parseUsage(res.Body)
-	if len(globalItems) != 1 || globalItems[0].Requests != 5 || globalItems[0].SuccessCount != 4 || globalItems[0].FailedCount != 1 || globalItems[0].Quota != 4*expected {
+	if len(globalItems) != 1 || globalItems[0].Requests != 5 || globalItems[0].SuccessCount != 4 || globalItems[0].FailedCount != 1 || globalItems[0].Quota != 4*(expected/common.NanoPerLegacyQuota) {
 		t.Fatalf("global usage wrong (want 4 successes, 1 failure, quota %d): %+v", 4*expected, globalItems)
 	}
 
@@ -964,11 +964,11 @@ func TestP1MultiKeyChannelKeyIsolation(t *testing.T) {
 	if res.Status != 200 || !strings.Contains(res.Body, "hello world") {
 		t.Fatalf("round robin should alternate the good keys: %d %s", res.Status, res.Body)
 	}
-	expected := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	expected := computeNanoQuota("gpt-4o-mini", "default", 100, 50)
 	token, _ := model.GetTokenByID(env.tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-2*expected {
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected {
 		t.Fatalf("token quota = %d, want %d (401 refunded, 2 successes charged)",
-			token.RemainQuota, common.DefaultTokenQuota-2*expected)
+			common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected)
 	}
 
 	// the channel API exposes the multi-key state but never the raw keys
@@ -1153,21 +1153,21 @@ func TestP2SettlementUsesCacheTokenDetail(t *testing.T) {
 		return doRequest(env.base, "POST", "/v1/chat/completions", env.apiKey,
 			map[string]any{"model": "gpt-4o-mini", "messages": []map[string]string{{"role": "user", "content": "hi"}}})
 	}
-	expected := relay.ComputeUsageQuota(relay.NewPriceData("gpt-4o-mini", "default"),
+	expected := relay.ComputeUsageNano(relay.NewPriceData("gpt-4o-mini", "default"),
 		&relay.Usage{PromptTokens: 100, CompletionTokens: 50,
 			PromptTokensDetails: &relay.PromptTokensDetails{CachedTokens: 80}})
-	if expected != 20 {
-		t.Fatalf("cached-detail settlement math changed: %d, want 20", expected)
+	if expected != 39000 {
+		t.Fatalf("cached-detail settlement math changed: %d, want 39000 nano-USD", expected)
 	}
-	plain := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	plain := computeNanoQuota("gpt-4o-mini", "default", 100, 50)
 
 	if res := chat(); res.Status != 200 {
 		t.Fatalf("cached-token relay failed: %d %s", res.Status, res.Body)
 	}
 	token, _ := model.GetTokenByID(env.tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-expected {
-		t.Fatalf("cached-token billing = %d, want %d (plain %d)", token.RemainQuota,
-			common.DefaultTokenQuota-expected, plain)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-expected {
+		t.Fatalf("cached-token billing = %d, want %d (plain %d)", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(),
+			(common.DefaultTokenQuota*common.NanoPerLegacyQuota)-expected, plain)
 	}
 
 	// the same detail applies to streaming usage chunks
@@ -1178,8 +1178,8 @@ func TestP2SettlementUsesCacheTokenDetail(t *testing.T) {
 		t.Fatalf("cached-token stream relay failed: %d %s", streamRes.Status, streamRes.Body)
 	}
 	token, _ = model.GetTokenByID(env.tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-2*expected {
-		t.Fatalf("cached-token stream billing = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-2*expected)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected {
+		t.Fatalf("cached-token stream billing = %d, want %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected)
 	}
 }
 
@@ -1196,7 +1196,7 @@ func TestP2StreamWithoutUsageStillBills(t *testing.T) {
 		"messages": []map[string]string{{"role": "user", "content": "hi"}}}
 	bodyBytes, _ := json.Marshal(chatBody)
 	est := relay.EstimateUsage(bodyBytes, "hello world")
-	expected := relay.ComputeQuota("gpt-4o-mini", "default", est.PromptTokens, est.CompletionTokens)
+	expected := computeNanoQuota("gpt-4o-mini", "default", est.PromptTokens, est.CompletionTokens)
 	if expected <= 0 {
 		t.Fatalf("estimated billing should be positive, got %d (usage %+v)", expected, est)
 	}
@@ -1213,16 +1213,16 @@ func TestP2StreamWithoutUsageStillBills(t *testing.T) {
 	}
 
 	token, _ := model.GetTokenByID(env.tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-2*expected {
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected {
 		t.Fatalf("usage-less relay must still bill the estimate: %d, want %d",
-			token.RemainQuota, common.DefaultTokenQuota-2*expected)
+			common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected)
 	}
 	logs, total, err := model.ListLogs(env.rootID, 1, 10, "gpt-4o-mini")
 	if err != nil || total != 2 {
 		t.Fatalf("usage-less relay must leave audit logs: total=%d err=%v", total, err)
 	}
 	for _, l := range logs {
-		if l.Quota != expected || l.PromptTokens != est.PromptTokens || l.CompletionTokens != est.CompletionTokens {
+		if common.QuotaMoney(l.Quota, l.QuotaRemainderNano).Int64() != expected || l.PromptTokens != est.PromptTokens || l.CompletionTokens != est.CompletionTokens {
 			t.Fatalf("estimated log row wrong: %+v (want quota %d tokens %d/%d)",
 				l, expected, est.PromptTokens, est.CompletionTokens)
 		}
@@ -1308,23 +1308,27 @@ func TestP2ConcurrentPreConsumeNoOverdraft(t *testing.T) {
 	}
 
 	// after settlement the books balance: each success cost the real usage
-	actual := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	actual := computeNanoQuota("gpt-4o-mini", "default", 100, 50)
 	token, _ := model.GetTokenByID(tokenResp.Data.ID)
-	if token.RemainQuota != budget-2*actual {
-		t.Fatalf("token balance after concurrency = %d, want %d", token.RemainQuota, budget-2*actual)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != budget*common.NanoPerLegacyQuota-2*actual {
+		t.Fatalf("token balance after concurrency = %d, want %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), budget*common.NanoPerLegacyQuota-2*actual)
 	}
 	user, _ := model.GetUserByID(env.rootID)
-	if user.Quota != budget-2*actual {
-		t.Fatalf("user balance after concurrency = %d, want %d", user.Quota, budget-2*actual)
+	if common.QuotaMoney(user.Quota, user.QuotaRemainderNano).Int64() != budget*common.NanoPerLegacyQuota-2*actual {
+		t.Fatalf("user balance after concurrency = %d, want %d", common.QuotaMoney(user.Quota, user.QuotaRemainderNano).Int64(), budget*common.NanoPerLegacyQuota-2*actual)
 	}
-	if user.Quota < 0 || token.RemainQuota < 0 {
+	if common.QuotaMoney(user.Quota, user.QuotaRemainderNano).Int64() < 0 || common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() < 0 {
 		t.Fatal("balances must never go negative")
 	}
-	if user.UsedQuota != 2*actual || token.UsedQuota != 2*actual {
+	if common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano).Int64() != 2*actual || common.QuotaMoney(token.UsedQuota, token.UsedQuotaRemainderNano).Int64() != 2*actual {
 		t.Fatalf("used quota after concurrency: user %d token %d, want %d",
-			user.UsedQuota, token.UsedQuota, 2*actual)
+			common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano).Int64(), common.QuotaMoney(token.UsedQuota, token.UsedQuotaRemainderNano).Int64(), 2*actual)
 	}
 	if _, total, _ := model.ListLogs(env.rootID, 1, 10, "gpt-4o-mini"); total != 2 {
 		t.Fatalf("both successes must be logged, got %d rows", total)
 	}
+}
+
+func computeNanoQuota(modelName, group string, prompt, completion int64) int64 {
+	return relay.ComputeUsageNano(relay.NewPriceData(modelName, group), &relay.Usage{PromptTokens: prompt, CompletionTokens: completion})
 }
