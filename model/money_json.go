@@ -47,3 +47,11 @@ func (p TokenQuotaPeriod) MarshalJSON() ([]byte, error) {
 		CarryNano    string `json:"carry_quota_nano"`
 	}{alias(p), common.QuotaMoney(p.QuotaLimit, p.QuotaLimitRemainderNano).String(), common.QuotaMoney(p.UsedQuota, p.UsedQuotaRemainderNano).String(), common.QuotaMoney(p.ReservedQuota, p.ReservedQuotaRemainderNano).String(), common.QuotaMoney(p.CarryQuota, p.CarryQuotaRemainderNano).String()})
 }
+
+func (r Redemption) MarshalJSON() ([]byte, error) {
+	type alias Redemption
+	return json.Marshal(struct {
+		alias
+		QuotaNano string `json:"quota_nano"`
+	}{alias(r), common.QuotaMoney(r.Quota, r.QuotaRemainderNano).String()})
+}

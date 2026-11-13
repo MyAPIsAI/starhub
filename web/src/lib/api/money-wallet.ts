@@ -1,7 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "./http";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiPost } from "./http";
 import { assertTokenSession } from "./tokens";
-import { useSessionQueryIdentity } from "../system-access";
+import {
+  useSessionQueryIdentity,
+  useSystemAccess,
+  ROLE_ROOT,
+} from "../system-access";
 import { exactNano } from "../money";
 
 export interface SpendableWallet {
@@ -143,6 +147,70 @@ export function useMoneyLedger(page: number) {
       );
       assertTokenSession(identity);
       return validateMoneyLedger(value, identity[1]!, page, size);
+    },
+  });
+}
+
+export interface MoneyAdjustmentInput {
+  user_id: number;
+  operation_id: string;
+  amount_nano: string;
+  expected_available_nano: string;
+  reason: string;
+}
+export function useMoneyAdjustment() {
+  const identity = useSessionQueryIdentity(),
+    client = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async (input: MoneyAdjustmentInput) => {
+      assertTokenSession(identity);
+      if (useSystemAccess.getState().role !== ROLE_ROOT)
+        throw Error("Root authorization is required");
+      exactNano(input.amount_nano);
+      exactNano(input.expected_available_nano);
+      const receipt = await apiPost<{
+        schema: string;
+        actor_id: number;
+        user_id: number;
+        operation_id: string;
+        entry: MoneyEntry;
+      }>("/api/wallet/adjustments", {
+        schema: "money_adjustment_v2",
+        expected_actor_id: identity[1],
+        ...input,
+      });
+      assertTokenSession(identity);
+      if (
+        receipt?.schema !== "money_adjustment_receipt_v2" ||
+        receipt.actor_id !== identity[1] ||
+        receipt.user_id !== input.user_id ||
+        receipt.operation_id !== input.operation_id ||
+        receipt.entry?.available_delta_nano !== input.amount_nano
+      )
+        throw Error(
+          "Money adjustment was not confirmed. Retry the same operation.",
+        );
+      validateMoneyLedger(
+        {
+          schema: "money_ledger_v2",
+          amount_unit: "usd_nano",
+          user_id: input.user_id,
+          page: 1,
+          page_size: 1,
+          total: 1,
+          items: [receipt.entry],
+        },
+        input.user_id,
+        1,
+        1,
+      );
+      return receipt;
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ["admin-users"] });
+      void client.invalidateQueries({ queryKey: ["wallet"] });
+      void client.invalidateQueries({ queryKey: ["ledger"] });
     },
   });
 }

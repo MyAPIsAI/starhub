@@ -10,7 +10,8 @@ import { apiGet, apiPost, apiDelete } from "./http";
 export interface Redemption {
   id: number;
   code: string;
-  quota: number; // nano-USD
+  quota: number; // Legacy quota ticks.
+  quota_nano?: string;
   status: number; // 1 = unused (enabled), 2 = used (disabled)
   used_by: number;
   used_at: number; // unix seconds
@@ -19,7 +20,8 @@ export interface Redemption {
 }
 
 export interface CreateRedemptionInput {
-  quota: number; // nano-USD
+  quota?: number; // Legacy quota ticks.
+  quota_nano?: string;
   count?: number; // batch size 1-100
   expired_at?: number; // unix seconds, 0 = never
   code?: string; // optional custom code
@@ -70,7 +72,10 @@ export function useRedeemCode() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (code: string) =>
-      apiPost<{ quota: number; message: string }>("/api/user/redeem", { code }),
+      apiPost<{ quota: number; quota_nano?: string; message: string }>(
+        "/api/user/redeem",
+        { code },
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
       queryClient.invalidateQueries({ queryKey: ["ledger"] });

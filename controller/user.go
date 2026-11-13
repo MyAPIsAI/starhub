@@ -435,6 +435,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 func publicUser(u *model.User) map[string]any {
 	return map[string]any{
+		"quota_nano": common.QuotaMoney(u.Quota, u.QuotaRemainderNano).String(), "used_quota_nano": common.QuotaMoney(u.UsedQuota, u.UsedQuotaRemainderNano).String(),
 		"id":         u.ID,
 		"username":   u.Username,
 		"email":      u.Email,

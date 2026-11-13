@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"math/big"
 	"net/http"
 	"strings"
 
@@ -11,10 +12,11 @@ import (
 // --- Admin endpoints ---
 
 type redemptionCreateRequest struct {
-	Quota     int64  `json:"quota"`
-	Count     int    `json:"count"` // batch size (1-N)
-	ExpiredAt int64  `json:"expired_at"`
-	Code      string `json:"code"` // optional: admin can specify a custom code
+	Quota     *int64  `json:"quota"`
+	QuotaNano *string `json:"quota_nano"`
+	Count     int     `json:"count"` // batch size (1-N)
+	ExpiredAt int64   `json:"expired_at"`
+	Code      string  `json:"code"` // optional: admin can specify a custom code
 }
 
 // CreateRedemption serves POST /api/redemption (admin only). It creates one
@@ -24,10 +26,31 @@ func CreateRedemption(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	if req.Quota <= 0 {
-		common.ApiError(w, http.StatusBadRequest, "quota must be positive")
+
+	var quota, remainder int64
+	if req.QuotaNano != nil {
+		if req.Quota != nil {
+			common.ApiError(w, 400, "conflicting quota units")
+			return
+		}
+		amount, err := common.ParseNano(*req.QuotaNano)
+		if err != nil || amount.Sign() <= 0 {
+			common.ApiError(w, 400, "quota must be positive")
+			return
+		}
+		quota, remainder, err = common.NanoQuotaParts(amount)
+		if err != nil {
+			common.ApiError(w, 400, "quota exceeds storage bounds")
+			return
+		}
+	} else if req.Quota != nil {
+		quota = *req.Quota
+	}
+	if common.QuotaMoney(quota, remainder).Sign() <= 0 {
+		common.ApiError(w, 400, "quota must be positive")
 		return
 	}
+
 	count := req.Count
 	if count < 1 {
 		count = 1
@@ -42,7 +65,7 @@ func CreateRedemption(w http.ResponseWriter, r *http.Request) {
 			code = "" // custom code only makes sense for a single code
 		}
 		rd := &model.Redemption{
-			Quota:     req.Quota,
+			Quota: quota, QuotaRemainderNano: remainder,
 			Status:    common.StatusEnabled,
 			ExpiredAt: req.ExpiredAt,
 			Code:      code,
@@ -104,13 +127,13 @@ func RedeemCode(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "code is required")
 		return
 	}
-	credited, err := model.RedeemCode(code, requestUserID(r))
+	credited, err := model.RedeemCodeMoney(code, requestUserID(r))
 	if err != nil {
 		common.ApiError(w, http.StatusNotFound, "invalid or already used code")
 		return
 	}
 	common.ApiSuccess(w, map[string]any{
-		"quota":   credited,
+		"quota": new(big.Int).Quo(credited, big.NewInt(common.NanoPerLegacyQuota)).Int64(), "quota_nano": credited.String(),
 		"message": "redemption successful",
 	})
 }

@@ -1,3 +1,4 @@
+import { quotaMoneyNano, formatMoney } from "../money";
 // Admin API hooks — typed wrappers around the Go backend's admin-only
 // endpoints: /api/user (list + update), /api/audit, /api/metrics,
 // /api/channel (list + test).
@@ -17,8 +18,10 @@ export interface AdminUser {
   email: string;
   role: number;
   status: number; // 1 = enabled, 2 = disabled
-  quota: number; // nano-USD
-  used_quota: number; // nano-USD
+  quota_nano?: string;
+  used_quota_nano?: string;
+  quota: number; // Legacy quota ticks.
+  used_quota: number; // Legacy quota ticks.
   group: string;
   aff_code: string;
   inviter_id: number;
@@ -230,7 +233,7 @@ export function userIsActive(status: number): boolean {
   return status === STATUS_ENABLED;
 }
 
-/** Convert nano-USD quota to a display string like "100.00". */
-export function quotaToUsd(quota: number): string {
-  return (quota / 1e9).toFixed(2);
+/** Preserve exact server money and support legacy quota projections. */
+export function quotaToUsd(quota: number, exact?: string): string {
+  return formatMoney(quotaMoneyNano(exact, quota), "detail").replace("$", "");
 }

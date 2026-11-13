@@ -382,3 +382,29 @@ func countRedemptions(t *testing.T) int {
 	}
 	return len(codes)
 }
+
+func TestNanoRedemptionCreationAndCreditRetainOneNano(t *testing.T) {
+	newTestDB(t)
+	u := newUser(t, "redeem-nano", common.RoleUser, 0)
+	uid, role := admin()
+	w := call(CreateRedemption, testRequest{method: "POST", target: "/api/redemption", userID: uid, role: role, body: `{"quota_nano":"1","code":"RD-one-nano"}`})
+	expectStatus(t, w, 200)
+	for _, status := range []int{200, 404} {
+		w = call(RedeemCode, testRequest{method: "POST", target: "/api/user/redeem", userID: u.ID, role: u.Role, body: `{"code":"RD-one-nano"}`})
+		expectStatus(t, w, status)
+		if status == 200 {
+			var data map[string]any
+			decodeData(t, w, &data)
+			if data["quota_nano"] != "1" {
+				t.Fatal("redemption lost a nano")
+			}
+		}
+	}
+	user, _ := model.GetUserByID(u.ID)
+	if common.QuotaMoney(user.Quota, user.QuotaRemainderNano).String() != "1" {
+		t.Fatal("redemption balance mismatch")
+	}
+	if err := model.VerifyMoneyLedger(u.ID); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"gorm.io/gorm"
@@ -17,14 +18,15 @@ var ErrRedemptionNotFound = errors.New("redemption code not found")
 // Redemption is a prepaid quota code: an admin creates a batch, a user
 // redeems one to top up their quota. The code is single-use.
 type Redemption struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	Code      string `gorm:"uniqueIndex;size:64;not null" json:"code"`
-	Quota     int64  `gorm:"not null;default:0" json:"quota"`
-	Status    int    `gorm:"not null;default:1" json:"status"` // 1=unused (Enabled), 2=used (Disabled)
-	UsedBy    int64  `gorm:"index;not null;default:0" json:"used_by"`
-	UsedAt    int64  `gorm:"not null;default:0" json:"used_at"`
-	CreatedAt int64  `gorm:"autoCreateTime" json:"created_at"`
-	ExpiredAt int64  `gorm:"not null;default:0" json:"expired_at"` // 0 = never expires
+	QuotaRemainderNano int64  `gorm:"not null;default:0" json:"-"`
+	ID                 int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	Code               string `gorm:"uniqueIndex;size:64;not null" json:"code"`
+	Quota              int64  `gorm:"not null;default:0" json:"quota"`
+	Status             int    `gorm:"not null;default:1" json:"status"` // 1=unused (Enabled), 2=used (Disabled)
+	UsedBy             int64  `gorm:"index;not null;default:0" json:"used_by"`
+	UsedAt             int64  `gorm:"not null;default:0" json:"used_at"`
+	CreatedAt          int64  `gorm:"autoCreateTime" json:"created_at"`
+	ExpiredAt          int64  `gorm:"not null;default:0" json:"expired_at"` // 0 = never expires
 }
 
 // GenerateRedemptionCode generates a random redemption code.
@@ -82,7 +84,16 @@ func DeleteRedemption(id int64) error {
 // quota. It returns ErrRedemptionNotFound when the code does not exist,
 // is already used, disabled, or expired.
 func RedeemCode(code string, userID int64) (int64, error) {
-	var credited int64
+	amount, err := RedeemCodeMoney(code, userID)
+	if err != nil {
+		return 0, err
+	}
+	whole, _, err := common.NanoQuotaParts(amount)
+	return whole, err
+}
+
+func RedeemCodeMoney(code string, userID int64) (*big.Int, error) {
+	credited := new(big.Int)
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		if _, _, err := lockMoneyUser(tx, userID); err != nil {
 			return err
@@ -94,7 +105,7 @@ func RedeemCode(code string, userID int64) (int64, error) {
 			}
 			return err
 		}
-		if r.Status != common.StatusEnabled || r.Quota <= 0 {
+		if r.Status != common.StatusEnabled || common.QuotaMoney(r.Quota, r.QuotaRemainderNano).Sign() <= 0 {
 			return ErrRedemptionNotFound
 		}
 		if r.ExpiredAt > 0 && time.Now().Unix() > r.ExpiredAt {
@@ -116,10 +127,10 @@ func RedeemCode(code string, userID int64) (int64, error) {
 			return ErrRedemptionNotFound
 		}
 		// Credit the user.
-		if _, err := applyUserMoneyDelta(tx, userID, common.QuotaMoney(r.Quota, 0), "redemption", fmt.Sprintf("redemption:%d", r.ID), "Redeem administrator-issued prepaid code", "redemption", 0); err != nil {
+		if _, err := applyUserMoneyDelta(tx, userID, common.QuotaMoney(r.Quota, r.QuotaRemainderNano), "redemption", fmt.Sprintf("redemption:%d", r.ID), "Redeem administrator-issued prepaid code", "redemption", 0); err != nil {
 			return err
 		}
-		credited = r.Quota
+		credited.Set(common.QuotaMoney(r.Quota, r.QuotaRemainderNano))
 		return nil
 	})
 	return credited, err

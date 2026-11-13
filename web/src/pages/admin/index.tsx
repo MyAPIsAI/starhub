@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useMoneyAdjustment } from "../../lib/api/money-wallet";
+import { decimalUsdToNano, quotaMoneyNano, formatMoney } from "../../lib/money";
+import { useEffect, useState, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -80,6 +82,11 @@ export default function AdminPortal() {
 
   const authRole = useSystemAccess((s) => s.role);
   const isRoot = authRole === ROLE_ROOT;
+  const moneyAdjustment = useMoneyAdjustment();
+  const moneyOperation = useRef<{
+    signature: string;
+    operation: string;
+  } | null>(null);
   const validTabs = [
     "customers",
     "models",
@@ -145,7 +152,8 @@ export default function AdminPortal() {
 
   // Upstream usage reconciliation modal state.
   const upstreamMut = useUpstreamUsage();
-  const [upstreamModal, setUpstreamModal] = useState<UpstreamUsageResult | null>(null);
+  const [upstreamModal, setUpstreamModal] =
+    useState<UpstreamUsageResult | null>(null);
   const [upstreamLoading, setUpstreamLoading] = useState(false);
   const [upstreamError, setUpstreamError] = useState<string | null>(null);
 
@@ -227,44 +235,70 @@ export default function AdminPortal() {
 
   const handleTopUpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topUpTarget) return;
-    const amt = parseFloat(topUpAmount);
-    if (isNaN(amt) || amt === 0) return;
-
-    const currentQuota = topUpTarget.quota;
-    const deltaNano = Math.round(amt * 1e9);
-    const newQuota =
-      topUpType === "clawback"
-        ? Math.max(0, currentQuota + deltaNano)
-        : currentQuota + deltaNano;
-
-    setTopUpNotice("");
-    updateUserMut.mutate(
-      {
-        id: topUpTarget.id,
-        quota: newQuota,
-        expected_quota: currentQuota,
-      },
-      {
-        onSuccess: () => {
-          setTopUpNotice(
-            text(
-              `已为 ${topUpTarget.username} ${topUpType === "clawback" ? "扣除" : "入账"} $${Math.abs(amt).toFixed(2)}。`,
-              `Credited $${Math.abs(amt).toFixed(2)} to ${topUpTarget.username}.`,
-              `تم إيداع $${Math.abs(amt).toFixed(2)} في حساب ${topUpTarget.username}.`,
+    if (!topUpTarget || !isRoot || moneyAdjustment.isPending) return;
+    try {
+      const amount = BigInt(decimalUsdToNano(topUpAmount));
+      if (
+        amount === 0n ||
+        (topUpType === "clawback" ? amount >= 0n : amount <= 0n)
+      )
+        throw Error(
+          text(
+            "请检查金额及调整类型。",
+            "Check the amount and adjustment type.",
+            "تحقق من المبلغ ونوع التعديل.",
+          ),
+        );
+      const expected = quotaMoneyNano(
+        topUpTarget.quota_nano,
+        topUpTarget.quota,
+      );
+      const reason = `${topUpType}: ${topUpReason.trim()}`;
+      if (!topUpReason.trim())
+        throw Error(
+          text(
+            "请填写调整原因。",
+            "Enter a reason for the adjustment.",
+            "أدخل سبب التعديل.",
+          ),
+        );
+      const signature = JSON.stringify([
+        topUpTarget.id,
+        amount.toString(),
+        expected,
+        reason,
+      ]);
+      if (moneyOperation.current?.signature !== signature)
+        moneyOperation.current = { signature, operation: crypto.randomUUID() };
+      setTopUpNotice("");
+      moneyAdjustment.mutate(
+        {
+          user_id: topUpTarget.id,
+          amount_nano: amount.toString(),
+          expected_available_nano: expected,
+          reason,
+          operation_id: moneyOperation.current.operation,
+        },
+        {
+          onSuccess: () => {
+            setTopUpNotice(
+              text(
+                "余额调整已入账。",
+                "Balance adjustment recorded.",
+                "تم تسجيل تعديل الرصيد.",
+              ),
+            );
+            setTopUpOpen(false);
+          },
+          onError: (error) =>
+            setTopUpNotice(
+              error instanceof Error ? error.message : String(error),
             ),
-          );
-          setTopUpOpen(false);
         },
-        onError: (err) => {
-          const msg =
-            err instanceof ApiError
-              ? err.message
-              : text("操作失败", "Operation failed", "فشلت العملية");
-          setTopUpNotice(msg);
-        },
-      },
-    );
+      );
+    } catch (error) {
+      setTopUpNotice(error instanceof Error ? error.message : String(error));
+    }
   };
 
   const handleToggleStatus = (user: AdminUser) => {
@@ -680,7 +714,7 @@ export default function AdminPortal() {
                           color: "var(--brand)",
                         }}
                       >
-                        ${quotaToUsd(u.quota)}
+                        ${quotaToUsd(u.quota, u.quota_nano)}
                       </td>
                       <td
                         className="mono"
@@ -690,7 +724,7 @@ export default function AdminPortal() {
                           color: "var(--muted)",
                         }}
                       >
-                        ${quotaToUsd(u.used_quota)}
+                        ${quotaToUsd(u.used_quota, u.used_quota_nano)}
                       </td>
                       <td style={{ padding: "10px 14px" }}>
                         <span
@@ -715,6 +749,8 @@ export default function AdminPortal() {
                           <Button
                             size="small"
                             variant="secondary"
+                            disabled={!isRoot || moneyAdjustment.isPending}
+                            data-admin-money-user={u.id}
                             onClick={() => {
                               setTopUpTarget(u);
                               setTopUpAmount("");
@@ -1309,7 +1345,10 @@ export default function AdminPortal() {
                             <Button
                               size="small"
                               variant="secondary"
-                              disabled={upstreamLoading && upstreamModal?.channel_id === ch.id}
+                              disabled={
+                                upstreamLoading &&
+                                upstreamModal?.channel_id === ch.id
+                              }
                               onClick={() => {
                                 setUpstreamModal(null);
                                 setUpstreamError(null);
@@ -1323,14 +1362,19 @@ export default function AdminPortal() {
                                     setUpstreamError(
                                       err instanceof ApiError
                                         ? err.message
-                                        : text("查询失败", "Query failed", "فشل الاستعلام"),
+                                        : text(
+                                            "查询失败",
+                                            "Query failed",
+                                            "فشل الاستعلام",
+                                          ),
                                     );
                                     setUpstreamLoading(false);
                                   },
                                 });
                               }}
                             >
-                              {upstreamLoading && upstreamMut.variables === ch.id
+                              {upstreamLoading &&
+                              upstreamMut.variables === ch.id
                                 ? text("查询中…", "Querying…", "استعلام…")
                                 : text("上游对账", "Reconcile", "مطابقة")}
                             </Button>
@@ -1462,7 +1506,11 @@ export default function AdminPortal() {
                     }}
                   >
                     <h3 style={{ margin: 0, fontSize: "var(--text-lg)" }}>
-                      {text("上游对账", "Upstream Reconciliation", "مطابقة المنبع")}
+                      {text(
+                        "上游对账",
+                        "Upstream Reconciliation",
+                        "مطابقة المنبع",
+                      )}
                     </h3>
                     <Button
                       size="small"
@@ -1472,8 +1520,15 @@ export default function AdminPortal() {
                       {text("关闭", "Close", "إغلاق")}
                     </Button>
                   </div>
-                  <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)", margin: "0 0 16px 0" }}>
-                    {upstreamModal.channel_name} (ID: {upstreamModal.channel_id})
+                  <p
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "var(--text-sm)",
+                      margin: "0 0 16px 0",
+                    }}
+                  >
+                    {upstreamModal.channel_name} (ID: {upstreamModal.channel_id}
+                    )
                   </p>
                   {!upstreamModal.supported ? (
                     <p style={{ color: "var(--muted)" }}>
@@ -1497,7 +1552,10 @@ export default function AdminPortal() {
                           <div style={{ fontSize: 11, color: "var(--muted)" }}>
                             {text("本地累计", "Local Used", "المحلي")}
                           </div>
-                          <div className="mono" style={{ fontSize: "var(--text-lg)" }}>
+                          <div
+                            className="mono"
+                            style={{ fontSize: "var(--text-lg)" }}
+                          >
                             {quotaToUsd(upstreamModal.local_used_quota)}
                           </div>
                         </div>
@@ -1505,7 +1563,10 @@ export default function AdminPortal() {
                           <div style={{ fontSize: 11, color: "var(--muted)" }}>
                             {text("上游累计", "Upstream Used", "المنبع")}
                           </div>
-                          <div className="mono" style={{ fontSize: "var(--text-lg)" }}>
+                          <div
+                            className="mono"
+                            style={{ fontSize: "var(--text-lg)" }}
+                          >
                             {quotaToUsd(upstreamModal.upstream_total_used)}
                           </div>
                         </div>
@@ -1536,15 +1597,30 @@ export default function AdminPortal() {
                         }}
                       >
                         <thead>
-                          <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                            <th style={{ textAlign: "start", padding: "8px 12px" }}>Key</th>
-                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                          <tr
+                            style={{ borderBottom: "1px solid var(--border)" }}
+                          >
+                            <th
+                              style={{
+                                textAlign: "start",
+                                padding: "8px 12px",
+                              }}
+                            >
+                              Key
+                            </th>
+                            <th
+                              style={{ textAlign: "end", padding: "8px 12px" }}
+                            >
                               {text("已用", "Used", "مستخدم")}
                             </th>
-                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                            <th
+                              style={{ textAlign: "end", padding: "8px 12px" }}
+                            >
                               {text("剩余", "Available", "متاح")}
                             </th>
-                            <th style={{ textAlign: "end", padding: "8px 12px" }}>
+                            <th
+                              style={{ textAlign: "end", padding: "8px 12px" }}
+                            >
                               {text("过期", "Expires", "تنتهي")}
                             </th>
                           </tr>
@@ -1553,7 +1629,9 @@ export default function AdminPortal() {
                           {upstreamModal.keys.map((k) => (
                             <tr
                               key={k.key_index}
-                              style={{ borderBottom: "1px solid var(--border)" }}
+                              style={{
+                                borderBottom: "1px solid var(--border)",
+                              }}
                             >
                               <td
                                 className="mono"
@@ -1571,13 +1649,17 @@ export default function AdminPortal() {
                                       color: "var(--danger)",
                                     }}
                                   >
-                                    {k.error || text("不可用", "N/A", "غير متاح")}
+                                    {k.error ||
+                                      text("不可用", "N/A", "غير متاح")}
                                   </span>
                                 )}
                               </td>
                               <td
                                 className="mono"
-                                style={{ padding: "8px 12px", textAlign: "end" }}
+                                style={{
+                                  padding: "8px 12px",
+                                  textAlign: "end",
+                                }}
                               >
                                 {k.available ? quotaToUsd(k.total_used) : "—"}
                               </td>
@@ -1602,17 +1684,28 @@ export default function AdminPortal() {
                               </td>
                               <td
                                 className="mono"
-                                style={{ padding: "8px 12px", textAlign: "end" }}
+                                style={{
+                                  padding: "8px 12px",
+                                  textAlign: "end",
+                                }}
                               >
                                 {k.available && k.expires_at > 0
-                                  ? new Date(k.expires_at * 1000).toLocaleDateString()
+                                  ? new Date(
+                                      k.expires_at * 1000,
+                                    ).toLocaleDateString()
                                   : "—"}
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 16 }}>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "var(--muted)",
+                          marginTop: 16,
+                        }}
+                      >
                         {text(
                           "差异可能来自倍率不同、精度差异或退款同步延迟，不一定代表计费错误。",
                           "The diff may stem from different multipliers, rounding, or refund sync delays, and does not necessarily indicate a billing error.",
@@ -2043,7 +2136,10 @@ export default function AdminPortal() {
                         className="mono"
                         style={{ padding: "10px 14px", color: "var(--brand)" }}
                       >
-                        ${(rd.quota / 1e9).toFixed(2)}
+                        {formatMoney(
+                          quotaMoneyNano(rd.quota_nano, rd.quota),
+                          "detail",
+                        )}
                       </td>
                       <td style={{ padding: "10px 14px" }}>
                         <span
@@ -2157,7 +2253,7 @@ export default function AdminPortal() {
               variant="primary"
               type="submit"
               form="admin-top-up-form"
-              disabled={updateUserMut.isPending}
+              disabled={!isRoot || moneyAdjustment.isPending}
             >
               {text("提交充值", "Submit top-up", "إرسال الشحن")}
             </Button>
@@ -2191,7 +2287,7 @@ export default function AdminPortal() {
                 }}
               >
                 {text("当前余额", "Current balance", "الرصيد الحالي")}: $
-                {quotaToUsd(topUpTarget.quota)}
+                {quotaToUsd(topUpTarget.quota, topUpTarget.quota_nano)}
               </span>
             </div>
           )}
@@ -2209,7 +2305,8 @@ export default function AdminPortal() {
             </label>
             <Input
               id="admin-top-up-amount"
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={topUpAmount}
               onChange={(e) => setTopUpAmount(e.target.value)}
               placeholder={text(
@@ -2712,11 +2809,16 @@ export default function AdminPortal() {
           id="admin-redeem-form"
           onSubmit={(e) => {
             e.preventDefault();
-            const usd = parseFloat(redeemQuota);
-            if (isNaN(usd) || usd <= 0) return;
+            let nano: string;
+            try {
+              nano = decimalUsdToNano(redeemQuota);
+              if (BigInt(nano) <= 0n) return;
+            } catch {
+              return;
+            }
             const count = parseInt(redeemCount) || 1;
             createRedemptionMut.mutate(
-              { quota: Math.round(usd * 1e9), count },
+              { quota_nano: nano, count },
               {
                 onSuccess: (result) => {
                   setRedeemNotice(
@@ -2934,7 +3036,7 @@ export default function AdminPortal() {
                   className="mono"
                   style={{ fontWeight: 600, color: "var(--brand)" }}
                 >
-                  ${quotaToUsd(detailUser.quota)}
+                  ${quotaToUsd(detailUser.quota, detailUser.quota_nano)}
                 </div>
               </div>
               <div>
@@ -2942,7 +3044,11 @@ export default function AdminPortal() {
                   {text("已用", "Used", "المستخدم")}
                 </small>
                 <div className="mono" style={{ color: "var(--muted)" }}>
-                  ${quotaToUsd(detailUser.used_quota)}
+                  $
+                  {quotaToUsd(
+                    detailUser.used_quota,
+                    detailUser.used_quota_nano,
+                  )}
                 </div>
               </div>
               <div>

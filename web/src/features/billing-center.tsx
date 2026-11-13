@@ -40,7 +40,7 @@ import {
 } from "../lib/api/billing";
 import { useRedeemCode } from "../lib/api/redemption";
 import { ApiError } from "../lib/api/http";
-import { formatMoney } from "../lib/money";
+import { formatMoney, quotaMoneyNano } from "../lib/money";
 import {
   billingDate,
   filterLedger,
@@ -460,7 +460,7 @@ function BillingCenterView({
                     setRedeemMsg(
                       c(
                         "兑换成功",
-                        `Redeemed $${(res.quota / 1e9).toFixed(2)}`,
+                        `Redeemed ${formatMoney(quotaMoneyNano(res.quota_nano, res.quota), "detail")}`,
                         "تم الاسترداد",
                       ),
                     );

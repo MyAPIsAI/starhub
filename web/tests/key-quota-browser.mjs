@@ -159,6 +159,32 @@ try {
     });
     report.screenshots.push(name + ".png");
   }
+  await check(
+    "one-nano redemption credits the canonical wallet through the console",
+    async () => {
+      const before = await api("GET", "/api/wallet/v2");
+      const codes = await api("POST", "/api/redemption", {
+        quota_nano: "1",
+        count: 1,
+      });
+      await page.goto(base + "/console/billing");
+      await page.locator("#redeem-code-input").fill(codes.codes[0]);
+      const response = page.waitForResponse(
+        (r) =>
+          r.url().endsWith("/api/user/redeem") &&
+          r.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Redeem", exact: true }).click();
+      const redeemed = await (await response).json();
+      assert.ok(redeemed.success, redeemed.message);
+      assert.equal(redeemed.data.quota_nano, "1");
+      await page.getByText("Redeemed $0.000000001", { exact: true }).waitFor();
+      assert.equal(
+        BigInt((await api("GET", "/api/wallet/v2")).balance_nano),
+        BigInt(before.balance_nano) + 1n,
+      );
+    },
+  );
   await keys();
   await check(
     "existing masked key can be recovered after reload and a password check",
@@ -451,6 +477,33 @@ try {
         );
         await capture(`canonical-wallet-${language}-${theme}-${width}`);
       }
+    },
+  );
+  // Let the real per-minute API limit replenish before testing more writes.
+  await new Promise(resolve => setTimeout(resolve, 60_000));
+  await check(
+    "Root console grants one nano without legacy quota scaling",
+    async () => {
+      await page.evaluate(() => {
+        localStorage.setItem("xy-language", "en");
+        localStorage.setItem("xy-theme", "light");
+      });
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      const before = await api("GET", "/api/wallet/v2");
+      await page.goto(base + "/admin?tab=customers");
+      await page
+        .locator(`[data-admin-money-user="${created.user_id}"]`)
+        .click();
+      await page.locator("#admin-top-up-amount").fill("0.000000001");
+      await page.locator("#admin-top-up-type").selectOption("gift");
+      await page.locator("#admin-top-up-reason").fill("Browser nano grant");
+      await capture("root-nano-adjustment-desktop");
+      await page.locator('button[form="admin-top-up-form"]').click();
+      await page.locator("#admin-top-up-amount").waitFor({ state: "hidden" });
+      assert.equal(
+        BigInt((await api("GET", "/api/wallet/v2")).balance_nano),
+        BigInt(before.balance_nano) + 1n,
+      );
     },
   );
   await check("logout invalidates the server-side reveal grant", async () => {
