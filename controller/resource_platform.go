@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,56 @@ func ReceiveRoutingSnapshot(w http.ResponseWriter, r *http.Request) {
 	common.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "protection_receipt": map[string]any{
 		"snapshot_version": body.Snapshot.SnapshotVersion, "checksum": body.Snapshot.Checksum, "applied": true, "shared": true,
 	}})
+}
+
+func ResourceRoutingPolicy(w http.ResponseWriter, r *http.Request) {
+	group := r.PathValue("group")
+	if r.Method == http.MethodPut {
+		var p model.RoutingGroupPolicy
+		if !decodeJSONBody(w, r, &p) {
+			return
+		}
+		p.GroupID = group
+		if err := model.SaveRoutingGroupPolicy(p); err != nil {
+			common.ApiError(w, 400, err.Error())
+			return
+		}
+	}
+	p, err := model.GetRoutingGroupPolicy(group)
+	if err != nil {
+		common.ApiError(w, 500, "routing policy unavailable")
+		return
+	}
+	common.ApiSuccess(w, p)
+}
+
+func ResourceRoutingStatus(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/api/metric/routing/policy-status" {
+		common.ApiSuccess(w, map[string]any{"instances": []any{model.RoutingPolicyInstanceStatus(time.Now())}, "error": ""})
+		return
+	}
+	version, age, ready := model.RoutingSnapshotStatus()
+	var states []model.LocalRoutingState
+	if err := model.DB.Order("resource_key").Find(&states).Error; err != nil {
+		common.ApiError(w, 500, "routing state unavailable")
+		return
+	}
+	var events []model.ResourceEventOutbox
+	if err := model.DB.Order("created_at DESC").Limit(100).Find(&events).Error; err != nil {
+		common.ApiError(w, 500, "event state unavailable")
+		return
+	}
+	var observations []model.ResourceObservationWork
+	if err := model.DB.Omit("task", "result").Order("created_at DESC").Limit(100).Find(&observations).Error; err != nil {
+		common.ApiError(w, 500, "observation state unavailable")
+		return
+	}
+	var pending int64
+	if err := model.DB.Model(&model.ResourceEventOutbox{}).Where("delivered_at = 0").Count(&pending).Error; err != nil {
+		common.ApiError(w, 500, "event count unavailable")
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"instance_id": os.Getenv("NODE_NAME"), "snapshot_version": version, "snapshot_age_seconds": max(0, int64(age.Seconds())), "ready": ready, "fallback": ready && age > 3*time.Minute, "local_states": states, "events": events, "pending_events": pending, "observations": observations, "storage": "sqlite", "scope": "single_instance"})
 }
 
 func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {

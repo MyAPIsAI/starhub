@@ -288,6 +288,10 @@ func ReadOwnedTokenReceipt(owner int64, operation string) (*OwnedTokenReceipt, e
 func ValidOwnedTokenFields(fields map[string]any) error {
 	for key, value := range fields {
 		switch key {
+		case "smart_candidates":
+			if len(value.(string)) > 1024 {
+				return fmt.Errorf("smart candidate list is too long")
+			}
 		case "name":
 			v := value.(string)
 			if strings.TrimSpace(v) == "" || len(v) > 64 {

@@ -94,7 +94,7 @@ func ReadPlatformCatalog() (PlatformCatalog, error) {
 			metadata[metas[i].Model] = &metas[i]
 		}
 		for _, ch := range channels {
-			generation := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%d|%d|%s|%s", ch.ID, ch.Type, ch.BaseURL, ch.Key))))
+			generation := ChannelEndpointGeneration(&ch)
 			entry := PlatformChannel{ID: ch.ID, Name: ch.Name, Type: ch.Type, Status: ch.Status, BaseURL: ch.BaseURL, EndpointGeneration: generation, Groups: ChannelGroups(&ch), Priority: ch.Priority, Weight: ch.Weight, CreatedTime: ch.CreatedAt, ModelMappingValid: true, Models: []PlatformModel{}}
 			byModel := map[string][]Ability{}
 			for _, ability := range abilities {
@@ -144,6 +144,10 @@ func ReadPlatformCatalog() (PlatformCatalog, error) {
 		return nil
 	})
 	return result, err
+}
+
+func ChannelEndpointGeneration(ch *Channel) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%d|%d|%s|%s", ch.ID, ch.Type, ch.BaseURL, ch.Key))))
 }
 
 // Pricing evidence explicitly marks context-dependent expressions unavailable;

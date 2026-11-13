@@ -153,6 +153,11 @@ func handleStream(w http.ResponseWriter, resp *http.Response) (*dto.Usage, strin
 		}
 		textDelta, chunkUsage, _, perr := dto.ParseOpenAIStreamPayload([]byte(payload))
 		if perr == nil {
+			if textDelta != "" {
+				if observer, ok := w.(interface{ RecordFirstContent() }); ok {
+					observer.RecordFirstContent()
+				}
+			}
 			if chunkUsage != nil && chunkUsage.TotalTokens() > 0 {
 				usage = chunkUsage
 			}

@@ -36,6 +36,10 @@ type PlatformMetric struct {
 	SuccessRate            float64          `json:"success_rate"`
 	TTFTHistogram          map[string]int64 `json:"ttft_histogram"`
 	TTFTHistogramJSON      string           `json:"ttft_histogram_json"`
+	TTFTSchema             int              `json:"ttft_schema"`
+	InputTokens            int64            `json:"input_tokens"`
+	OutputTokens           int64            `json:"output_tokens"`
+	DurationSumMS          int64            `json:"duration_sum_ms"`
 }
 
 type platformMetricKey struct {
@@ -46,21 +50,25 @@ type platformMetricKey struct {
 
 var platformMetrics = struct {
 	sync.Mutex
-	rows map[platformMetricKey]*PlatformMetric
+	rows       map[platformMetricKey]*PlatformMetric
+	lastPruned int64
 }{rows: map[platformMetricKey]*PlatformMetric{}}
 
 func recordPlatformAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	if a.outcome == AttemptUnsupported || (a.outcome == AttemptClientError && a.statusCode != 429 && a.statusCode != 401 && a.statusCode != 403 && a.statusCode != 404) {
 		return
 	}
-	now := time.Now().Unix()
+	now := a.endedAt.Unix()
 	minute := now / 60 * 60
 	platformMetrics.Lock()
 	defer platformMetrics.Unlock()
-	for key := range platformMetrics.rows {
-		if key.minute < minute-86400 {
-			delete(platformMetrics.rows, key)
+	if platformMetrics.lastPruned != minute {
+		for key := range platformMetrics.rows {
+			if key.minute < minute-86400 {
+				delete(platformMetrics.rows, key)
+			}
 		}
+		platformMetrics.lastPruned = minute
 	}
 	key := platformMetricKey{a.channelID, meta.Model, minute}
 	row := platformMetrics.rows[key]
@@ -73,6 +81,9 @@ func recordPlatformAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 		platformMetrics.rows[key] = row
 	}
 	row.AttemptCount++
+	row.InputTokens += a.inputTokens
+	row.OutputTokens += a.outputTokens
+	row.DurationSumMS += a.endedAt.Sub(a.start).Milliseconds()
 	row.TotalCount++
 	if a.outcome == AttemptSuccess {
 		row.SuccessCount++
@@ -90,33 +101,41 @@ func recordPlatformAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 		row.RetryCount++
 	}
 	// Header latency is not a first content event. Never label it as streaming TTFT.
-	if a.hasFirstToken || (!meta.Stream && a.ttft > 0) {
-		ms := max(int64(1), a.ttft.Milliseconds())
+	if a.hasFirstToken {
 		row.FirstTokenCount++
+	} else if meta.Stream {
+		row.FirstTokenMissingCount++
+	}
+	// The platform's schema 2 admits successful, reported inputs up to 2K.
+	// Unknown or estimated input sizes never become ranking evidence.
+	row.TTFTSchema = 2
+	if a.hasFirstToken && a.inputTokens > 0 && a.inputTokens <= 2000 && a.outcome == AttemptSuccess {
+		ms := max(int64(1), a.ttft.Milliseconds())
 		row.TTFTCount++
 		row.TTFTSum += ms
-		bound := int64(1)
-		for bound < ms && bound < 131072 {
-			bound *= 2
+		for _, bound := range platformTTFTBounds {
+			if ms <= bound {
+				row.TTFTHistogram["le_"+strconv.FormatInt(bound, 10)]++
+			}
 		}
-		row.TTFTHistogram[strconv.FormatInt(bound, 10)]++
+		row.TTFTHistogram["inf"]++
 		if row.TTFTCount == 1 {
 			row.TTFTEWMA5 = float64(ms)
 		} else {
 			row.TTFTEWMA5 += (float64(ms) - row.TTFTEWMA5) / 3
 		}
-	} else if meta.Stream {
-		row.FirstTokenMissingCount++
 	}
 }
 
+var platformTTFTBounds = []int64{10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000, 120000, 300000}
+
 func recordPlatformInterruption(meta RequestMeta, a *AttemptSpan) {
-	if a == nil {
+	if a == nil || !a.hasFirstToken {
 		return
 	}
 	platformMetrics.Lock()
 	defer platformMetrics.Unlock()
-	key := platformMetricKey{a.channelID, meta.Model, a.start.Unix() / 60 * 60}
+	key := platformMetricKey{a.channelID, meta.Model, a.endedAt.Unix() / 60 * 60}
 	if row := platformMetrics.rows[key]; row != nil {
 		row.StreamInterruptedCount++
 	}
@@ -124,6 +143,10 @@ func recordPlatformInterruption(meta RequestMeta, a *AttemptSpan) {
 
 func addPlatformMetric(dst *PlatformMetric, src PlatformMetric) {
 	dst.AttemptCount += src.AttemptCount
+	dst.TTFTSchema = 2
+	dst.InputTokens += src.InputTokens
+	dst.OutputTokens += src.OutputTokens
+	dst.DurationSumMS += src.DurationSumMS
 	dst.TotalCount += src.TotalCount
 	dst.SuccessCount += src.SuccessCount
 	dst.FailedCount += src.FailedCount
@@ -146,18 +169,10 @@ func addPlatformMetric(dst *PlatformMetric, src PlatformMetric) {
 
 func finishPlatformMetric(row *PlatformMetric) {
 	if row.TotalCount > 0 {
-		row.SuccessRate = 100 * float64(row.SuccessCount) / float64(row.TotalCount)
+		row.SuccessRate = float64(row.SuccessCount) / float64(row.TotalCount)
 	}
-	bounds := make([]int, 0, len(row.TTFTHistogram))
-	for bound := range row.TTFTHistogram {
-		v, _ := strconv.Atoi(bound)
-		bounds = append(bounds, v)
-	}
-	sort.Ints(bounds)
-	var total int64
-	for _, bound := range bounds {
-		total += row.TTFTHistogram[strconv.Itoa(bound)]
-		if total >= (row.TTFTCount*95+99)/100 {
+	for _, bound := range platformTTFTBounds {
+		if row.TTFTCount > 0 && row.TTFTHistogram["le_"+strconv.FormatInt(bound, 10)] >= (row.TTFTCount*95+99)/100 {
 			row.TTFTP95 = float64(bound)
 			break
 		}
@@ -224,4 +239,5 @@ func resetPlatformMetrics() {
 	platformMetrics.Lock()
 	defer platformMetrics.Unlock()
 	platformMetrics.rows = map[platformMetricKey]*PlatformMetric{}
+	platformMetrics.lastPruned = 0
 }

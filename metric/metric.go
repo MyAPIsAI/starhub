@@ -93,8 +93,29 @@ type AttemptSpan struct {
 	ttft          time.Duration // time to first token (headerTime when not streamed)
 	hasFirstToken bool
 	ended         bool
+	endedAt       time.Time
 	outcome       AttemptClass
 	statusCode    int
+	inputTokens   int64
+	outputTokens  int64
+}
+
+// RecordUsage accepts provider-reported usage only, before billing estimates.
+func (a *AttemptSpan) RecordUsage(input, output int64) {
+	if a != nil {
+		a.inputTokens, a.outputTokens = max(0, input), max(0, output)
+	}
+}
+
+// FirstContentLatency excludes header-only streaming attempts from EWMA.
+func (a *AttemptSpan) FirstContentLatency(stream bool) time.Duration {
+	if a == nil || (stream && !a.hasFirstToken) {
+		return 0
+	}
+	if a.hasFirstToken {
+		return a.ttft
+	}
+	return a.headerTime
 }
 
 // BeginRequest opens a request-level span. Always pair with EndRequest
@@ -102,6 +123,8 @@ type AttemptSpan struct {
 func BeginRequest(meta RequestMeta) *RequestSpan {
 	return &RequestSpan{meta: meta, start: time.Now()}
 }
+
+func (s *RequestSpan) SetModel(name string) { s.meta.Model = name }
 
 // BeginAttempt opens an attempt-level span for one channel. The returned
 // handle is ended by EndAttempt.
@@ -145,6 +168,7 @@ func (s *RequestSpan) EndAttempt(a *AttemptSpan, outcome AttemptClass, statusCod
 		return
 	}
 	a.ended = true
+	a.endedAt = time.Now()
 	a.outcome = outcome
 	a.statusCode = statusCode
 	// TTFT falls back to the header time when no streaming first-token

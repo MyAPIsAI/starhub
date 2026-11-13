@@ -29,6 +29,10 @@ import (
 func New() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("POST /api/metric/runtime/summary", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ReceiveRoutingSnapshot)))
+	mux.Handle("GET /api/metric/routing/policy-status", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourceRoutingStatus)))
+	mux.Handle("GET /api/resource/routing-status", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingStatus)))
+	mux.Handle("GET /api/service-group/{group}/routing", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingPolicy)))
+	mux.Handle("PUT /api/service-group/{group}/routing", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingPolicy)))
 	for _, path := range []string{"/api/metric/redis", "/api/metric/mysql", "/api/metric/model/redis", "/api/metric/model/mysql"} {
 		mux.Handle("GET "+path, middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourcePlatformMetrics)))
 	}

@@ -30,8 +30,15 @@ var upstreamHTTPClient = &http.Client{Timeout: 10 * time.Minute}
 // poking at the writer from every error path.
 type statusWriter struct {
 	http.ResponseWriter
-	status int
-	wrote  bool
+	status       int
+	wrote        bool
+	firstContent func()
+}
+
+func (w *statusWriter) RecordFirstContent() {
+	if w.firstContent != nil {
+		w.firstContent()
+	}
 }
 
 func newStatusWriter(w http.ResponseWriter) *statusWriter {
@@ -108,23 +115,25 @@ type attemptResult struct {
 // relayRequest is the per-request state every relay mode shares (extracted
 // from the middleware chain context).
 type relayRequest struct {
-	userID         int64
-	tokenID        int64
-	tokenName      string
-	tokenUnlimited bool
-	group          string
-	userGroup      string
-	autoGroups     []string
-	modelName      string
-	requestedModel string
-	protocol       string
-	body           []byte
-	contentType    string
-	stream         bool
-	prefixHash     string // prompt-prefix scope for prefix-cache affinity
-	channelCheck   func(*model.Channel, string) (bool, error)
-	chainAdmission func() error
-	pricing        map[string]relay.PriceData
+	fallbacks       []middleware.SmartFallback
+	fallbackPricing map[string]map[string]relay.PriceData
+	userID          int64
+	tokenID         int64
+	tokenName       string
+	tokenUnlimited  bool
+	group           string
+	userGroup       string
+	autoGroups      []string
+	modelName       string
+	requestedModel  string
+	protocol        string
+	body            []byte
+	contentType     string
+	stream          bool
+	prefixHash      string // prompt-prefix scope for prefix-cache affinity
+	channelCheck    func(*model.Channel, string) (bool, error)
+	chainAdmission  func() error
+	pricing         map[string]relay.PriceData
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
@@ -161,6 +170,11 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 		groups = append(groups, req.autoGroups...)
 	}
 	req.pricing = relay.CapturePricing(req.modelName, groups, req.userGroup)
+	req.fallbacks, _ = ctx.Value(common.CtxSmartFallbacks).([]middleware.SmartFallback)
+	req.fallbackPricing = map[string]map[string]relay.PriceData{}
+	for _, candidate := range req.fallbacks {
+		req.fallbackPricing[candidate.Model] = relay.CapturePricing(candidate.Model, groups, req.userGroup)
+	}
 	return req
 }
 
@@ -187,32 +201,37 @@ func (req relayRequest) billingGroup() string {
 // flow owns the trail bookkeeping, the terminal error surface and the
 // pre-payment state (refund / settle).
 type relayFlow struct {
-	ctx          context.Context
-	w            http.ResponseWriter
-	req          relayRequest
-	inbound      dto.InboundFormat // error envelope format; "" defaults to openai
-	preQuota     int64
-	settled      bool
-	tried        map[int64]bool
-	trail        []string
-	lastErr      error
-	unsupported  int
-	sent         int       // actual upstream send attempts (unsupported skips excluded)
-	uncertain    bool      // a side-effecting attempt may have executed upstream
-	budgetStop   bool      // stopped because the total attempt budget was exhausted
-	currentGroup string    // group of the current attempt (for auto-group walk)
-	groupIdx     int       // cursor into req.autoGroups (auto-group mode)
-	startTime    time.Time // request start for duration_ms logging
+	chatIR        *dto.ChatRequest
+	modelFallback bool
+	vendor        string
+	cancel        context.CancelFunc
+	ctx           context.Context
+	w             http.ResponseWriter
+	req           relayRequest
+	inbound       dto.InboundFormat // error envelope format; "" defaults to openai
+	preQuota      int64
+	settled       bool
+	tried         map[int64]bool
+	trail         []string
+	lastErr       error
+	unsupported   int
+	sent          int       // actual upstream send attempts (unsupported skips excluded)
+	uncertain     bool      // a side-effecting attempt may have executed upstream
+	budgetStop    bool      // stopped because the total attempt budget was exhausted
+	currentGroup  string    // group of the current attempt (for auto-group walk)
+	groupIdx      int       // cursor into req.autoGroups (auto-group mode)
+	startTime     time.Time // request start for duration_ms logging
 
 	lastChannelID int64 // last selected channel for the terminal failure log
 
 	// Observability (P5): the request-level span and the current attempt
 	// span. The attempt span is set by runChannels before each attempt
 	// and read by callUpstream / the streaming loops to record TTFT.
-	span    *metric.RequestSpan
-	attempt *metric.AttemptSpan
-	sw      *statusWriter
-	mode    string // relay mode for the metric label (chat, embeddings, ...)
+	span            *metric.RequestSpan
+	attempt         *metric.AttemptSpan
+	sw              *statusWriter
+	mode            string // relay mode for the metric label (chat, embeddings, ...)
+	upstreamCancels []context.CancelFunc
 
 	// Affinity bookkeeping per request (used by pick and noteAffinity).
 	affinityPreferred int64 // channel picked by affinity (0 when none)
@@ -222,6 +241,10 @@ type relayFlow struct {
 }
 
 func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat, mode string) *relayFlow {
+	var cancel context.CancelFunc
+	if setting.IsCommercialMode() {
+		ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	}
 	if inbound == "" {
 		inbound = dto.InboundOpenAI
 	}
@@ -229,6 +252,7 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 	flow := &relayFlow{
 		ctx: ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
 		startTime:      time.Now(),
+		cancel:         cancel,
 		tried:          map[int64]bool{},
 		affinityKeyIdx: -1,
 		span: metric.BeginRequest(metric.RequestMeta{
@@ -254,6 +278,12 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 // finish closes the request-level metric span. Install it with defer
 // right after newRelayFlow.
 func (f *relayFlow) finish() {
+	for _, cancel := range f.upstreamCancels {
+		cancel()
+	}
+	if f.cancel != nil {
+		defer f.cancel()
+	}
 	if f.span == nil {
 		return
 	}
@@ -292,7 +322,9 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			ch  *model.Channel
 			err error
 		)
-		if hashKey != "" {
+		if setting.IsCommercialMode() {
+			ch, err = model.GetScoredChannel(f.currentGroup, f.req.modelName, f.tried, preferred, hashKey, model.RoutingTextMode(f.mode), f.req.channelCheck)
+		} else if hashKey != "" {
 			ch, err = model.GetSatisfiedChannelHashed(f.currentGroup, f.req.modelName, f.tried, hashKey)
 		} else {
 			ch, err = model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred)
@@ -327,6 +359,9 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		}
 		// Current group exhausted: advance to the next auto group, if any.
 		if f.req.group != common.AutoGroup || f.groupIdx >= len(f.req.autoGroups)-1 {
+			if f.nextSmartModel() {
+				continue
+			}
 			return nil, model.ErrNoChannel
 		}
 		f.groupIdx++
@@ -376,6 +411,17 @@ func (f *relayFlow) settleGroup() string {
 // inside the attempt reads the trail, so the current channel must already
 // be on it.
 func (f *relayFlow) begin(ch *model.Channel) {
+	model.BeginRoutingAttempt(ch.RuntimeRoute)
+	if meta, found, err := model.GetModelMeta(f.req.modelName); err == nil && found {
+		f.vendor = meta.Vendor
+	} else {
+		f.vendor = ""
+	}
+	for _, prefix := range []string{"X-MyAPIs-", "X-Veyra-"} {
+		f.w.Header().Set(prefix+"Actual-Model", f.req.modelName)
+		f.w.Header().Set(prefix+"Provider", f.vendor)
+		f.w.Header().Set(prefix+"Fallback", strconv.FormatBool(f.modelFallback || len(f.trail) > 0))
+	}
 	f.tried[ch.ID] = true
 	f.trail = append(f.trail, strconv.FormatInt(ch.ID, 10))
 	f.lastChannelID = ch.ID
@@ -416,7 +462,11 @@ func (f *relayFlow) noteAffinity(ch *model.Channel, outcome attemptOutcome) {
 		if ch.IsMultiKey() {
 			keyIdx = f.affinityKeyIdx
 		}
-		model.RememberAffinity(key, ch.ID, keyIdx, setting.RoutingAffinityTTL())
+		ttl := setting.RoutingAffinityTTL()
+		if setting.IsCommercialMode() {
+			ttl = min(ttl, 10*time.Minute)
+		}
+		model.RememberAffinity(key, ch.ID, keyIdx, ttl)
 		metric.RecordAffinity(metric.AffinityWrite)
 		if f.affinityFailed {
 			metric.RecordAffinity(metric.AffinityFallbackSuccess)
@@ -556,6 +606,13 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 	ctx := f.ctx
 	if call.ctx != nil {
 		ctx = call.ctx
+		if setting.IsCommercialMode() {
+			if deadline, ok := f.ctx.Deadline(); ok {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(ctx, deadline)
+				f.upstreamCancels = append(f.upstreamCancels, cancel)
+			}
+		}
 	}
 	call, rewriteErr := resourceUpstreamCall(ch, f.req.modelName, call)
 	if rewriteErr != nil {
@@ -577,6 +634,9 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 			cause: fmt.Errorf("channel %d: prepare request: %v", ch.ID, err)}
 	}
 
+	if ch.RuntimeRoute != nil {
+		ch.RuntimeRoute.Sent = true
+	}
 	resp, err := upstreamHTTPClient.Do(req)
 	if err != nil {
 		if call.sideEffect {
@@ -647,9 +707,41 @@ loop:
 		}
 		f.begin(ch)
 		f.attempt = f.span.BeginAttempt(ch.ID)
+		f.sw.firstContent = f.attempt.RecordFirstToken
 		res := attempt(ch)
+		if ch.RuntimeRoute != nil {
+			class := "unknown"
+			switch {
+			case res.outcome == attemptSuccess:
+				class = "success"
+			case res.statusCode == 401 || res.statusCode == 403:
+				class = "credential_error"
+			case res.statusCode == 404:
+				class = "model_not_found"
+			case res.statusCode == 408 || res.statusCode == 504:
+				class = "upstream_timeout"
+			case res.statusCode >= 500:
+				class = "upstream_unavailable"
+			case res.statusCode == 429:
+				class = "rate_limited"
+			case res.outcome == attemptClientError:
+				class = "customer_error"
+			}
+			if f.ctx.Err() != nil {
+				class = "cancelled"
+			}
+			if err := model.EndRoutingAttempt(ch.RuntimeRoute, middleware.CtxRequestIDValue(f.ctx), class, res.statusCode, time.Now()); err != nil {
+				log.Printf("routing event persistence failed: %v", err)
+			}
+		}
+		if setting.IsCommercialMode() && res.outcome != attemptUnsupported && res.outcome != attemptUncertain && f.ctx.Err() == nil {
+			if err := model.RecordRoutingOutcome(ch.RuntimeRoute, res.outcome == attemptSuccess, res.statusCode, f.attempt.FirstContentLatency(f.req.stream), time.Now()); err != nil {
+				log.Printf("routing outcome persistence failed: %v", err)
+			}
+		}
 		f.span.EndAttempt(f.attempt, attemptOutcomeToMetric(res.outcome), res.statusCode)
 		f.attempt = nil
+		f.sw.firstContent = nil
 		f.applyOutcome(res)
 		f.noteAffinity(ch, res.outcome)
 		switch res.outcome {
@@ -665,7 +757,11 @@ loop:
 			return
 		case attemptUpstreamError:
 			f.sent++
-			if f.sent > common.RetryTimes {
+			limit := common.RetryTimes + 1
+			if setting.IsCommercialMode() {
+				limit = min(limit, 3)
+			}
+			if f.sent >= limit {
 				f.budgetStop = true
 				if f.lastErr == nil {
 					f.lastErr = fmt.Errorf("retry budget exhausted after %d upstream send(s)", f.sent)
@@ -752,6 +848,7 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 	// Use the same constrained group walk for admission and later attempts.
 	// The first eligible group supplies the pre-charge price.
 	flow := newRelayFlow(r.Context(), w, req, inbound, "chat")
+	flow.chatIR = ir
 	defer flow.finish()
 	if _, err := flow.pick(); err != nil {
 		if errors.Is(err, model.ErrNoChannel) {
@@ -770,9 +867,9 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 	// actual serving group if a later attempt fails over.
 	var estimate int64
 	if inbound == dto.InboundClaude {
-		estimate = relay.EstimateIRPreConsumeQuotaWithPriceData(req.priceFor(billingGroup), ir)
+		estimate = relay.EstimateIRPreConsumeQuotaWithPriceData(flow.req.priceFor(billingGroup), ir)
 	} else {
-		estimate = relay.EstimatePreConsumeQuotaWithPriceData(req.priceFor(billingGroup), req.body)
+		estimate = relay.EstimatePreConsumeQuotaWithPriceData(flow.req.priceFor(billingGroup), flow.req.body)
 	}
 	preQuota, preErr := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, estimate)
 	if preErr != nil {
@@ -822,6 +919,7 @@ func writePreConsumeError(w http.ResponseWriter, inbound dto.InboundFormat, err 
 // channel speaks the client's protocol natively the bodies pass through
 // byte-faithfully; otherwise the IR conversion path applies (P3.2 matrix).
 func chatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, inbound dto.InboundFormat) attemptResult {
+	ir.Model = flow.req.modelName
 	adaptor, err := relay.GetChatAdaptor(ch.Type)
 	if err != nil {
 		return attemptResult{outcome: attemptUpstreamError, cause: fmt.Errorf("channel %d: %v", ch.ID, err)}
@@ -860,10 +958,15 @@ func chatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, inboun
 
 	if passthrough {
 		usage, content, herr := adaptor.HandlePassthroughResponse(flow.w, resp, flow.req.stream)
+		result := settleChatAttempt(flow, ch, ir, usage, content)
 		if herr != nil {
 			log.Printf("relay response handling error: %v", herr)
+			result.outcome, result.cause = attemptUpstreamError, herr
+			if flow.req.stream {
+				flow.span.MarkStreamInterrupted()
+			}
 		}
-		return settleChatAttempt(flow, ch, ir, usage, content)
+		return result
 	}
 	return convertedChatAttempt(flow, ch, adaptor, ir, inbound, resp)
 }
@@ -918,11 +1021,13 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 	var content strings.Builder
 	var finishReason string
 	clientGone := false
+	var streamError error
 	for {
 		ev, err := reader.Next()
 		if err != nil {
 			if err != io.EOF {
 				log.Printf("chat stream ended with error: %v", err)
+				streamError = err
 			}
 			break
 		}
@@ -949,17 +1054,30 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 	if clientGone {
 		flow.span.MarkStreamInterrupted()
 	}
-	return settleChatAttempt(flow, ch, ir, lastUsage, content.String())
+	result := settleChatAttempt(flow, ch, ir, lastUsage, content.String())
+	if streamError != nil {
+		result.outcome, result.cause = attemptUpstreamError, streamError
+		flow.span.MarkStreamInterrupted()
+	}
+	return result
 }
 
 // settleChatAttempt balances the books of a successful attempt: missing
 // usage falls back to the IR-based estimate so a usage-less upstream still
 // bills (P2 invariant).
 func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, usage *relay.Usage, content string) attemptResult {
+	if usage != nil && flow.attempt != nil {
+		flow.attempt.RecordUsage(usage.PromptTokens, usage.CompletionTokens)
+		if !flow.req.stream && content != "" {
+			flow.attempt.RecordFirstToken()
+		}
+	}
 	if usage == nil || usage.TotalTokens() == 0 {
 		usage = relay.EstimateIRUsage(ir, content)
 	}
 	usage.RequestProtocol = flow.req.protocol
+	usage.RoutingFallback = flow.modelFallback || len(flow.trail) > 1
+	usage.ActualVendor = flow.vendor
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), middleware.CtxRequestIDValue(flow.ctx), flow.req.requestedModel); err != nil {

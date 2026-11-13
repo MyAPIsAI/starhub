@@ -10,14 +10,16 @@ import (
 )
 
 type tokenPayload struct {
-	Name           string `json:"name"`
-	RemainQuota    *int64 `json:"remain_quota"`
-	UnlimitedQuota *bool  `json:"unlimited_quota"`
-	ExpiredTime    *int64 `json:"expired_time"`
-	Group          string `json:"group"`
-	ModelLimits    string `json:"model_limits"`
-	AllowIps       string `json:"allow_ips"`
-	AutoGroups     string `json:"auto_groups"`
+	SmartAccess     *bool  `json:"smart_access"`
+	SmartCandidates string `json:"smart_candidates"`
+	Name            string `json:"name"`
+	RemainQuota     *int64 `json:"remain_quota"`
+	UnlimitedQuota  *bool  `json:"unlimited_quota"`
+	ExpiredTime     *int64 `json:"expired_time"`
+	Group           string `json:"group"`
+	ModelLimits     string `json:"model_limits"`
+	AllowIps        string `json:"allow_ips"`
+	AutoGroups      string `json:"auto_groups"`
 }
 
 func CreateToken(w http.ResponseWriter, r *http.Request) {
@@ -69,16 +71,18 @@ func CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := &model.Token{
-		UserID:         requestUserID(r),
-		Name:           strings.TrimSpace(req.Name),
-		Status:         common.StatusEnabled,
-		Group:          group,
-		ExpiredTime:    expiredTime,
-		RemainQuota:    remainQuota,
-		UnlimitedQuota: unlimited,
-		ModelLimits:    strings.TrimSpace(req.ModelLimits),
-		AllowIps:       allowIps,
-		AutoGroups:     autoGroups,
+		SmartAccess:     req.SmartAccess,
+		SmartCandidates: strings.TrimSpace(req.SmartCandidates),
+		UserID:          requestUserID(r),
+		Name:            strings.TrimSpace(req.Name),
+		Status:          common.StatusEnabled,
+		Group:           group,
+		ExpiredTime:     expiredTime,
+		RemainQuota:     remainQuota,
+		UnlimitedQuota:  unlimited,
+		ModelLimits:     strings.TrimSpace(req.ModelLimits),
+		AllowIps:        allowIps,
+		AutoGroups:      autoGroups,
 	}
 	if err := model.InsertToken(token); err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
@@ -122,6 +126,7 @@ func maskedToken(t *model.Token) map[string]any {
 		"allow_ips":           t.AllowIps,
 		"auto_groups":         t.AutoGroups,
 		"smart_access":        t.AllowsSmartRouting(),
+		"smart_candidates":    t.SmartCandidates,
 		"created_at":          t.CreatedAt,
 		"management_schema":   "owned_token_v1",
 		"management_revision": model.TokenManagementRevision(t),
@@ -129,17 +134,19 @@ func maskedToken(t *model.Token) map[string]any {
 }
 
 type tokenUpdateRequest struct {
-	ID             int64   `json:"id"`
-	Name           *string `json:"name"`
-	RemainQuota    *int64  `json:"remain_quota"`
-	ExpectedQuota  *int64  `json:"expected_quota"`
-	UnlimitedQuota *bool   `json:"unlimited_quota"`
-	ExpiredTime    *int64  `json:"expired_time"`
-	Group          *string `json:"group"`
-	ModelLimits    *string `json:"model_limits"`
-	AllowIps       *string `json:"allow_ips"`
-	AutoGroups     *string `json:"auto_groups"`
-	Status         *int    `json:"status"`
+	SmartAccess     *bool   `json:"smart_access"`
+	SmartCandidates *string `json:"smart_candidates"`
+	ID              int64   `json:"id"`
+	Name            *string `json:"name"`
+	RemainQuota     *int64  `json:"remain_quota"`
+	ExpectedQuota   *int64  `json:"expected_quota"`
+	UnlimitedQuota  *bool   `json:"unlimited_quota"`
+	ExpiredTime     *int64  `json:"expired_time"`
+	Group           *string `json:"group"`
+	ModelLimits     *string `json:"model_limits"`
+	AllowIps        *string `json:"allow_ips"`
+	AutoGroups      *string `json:"auto_groups"`
+	Status          *int    `json:"status"`
 }
 
 func UpdateToken(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +168,12 @@ func UpdateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fields := map[string]any{}
+	if req.SmartAccess != nil {
+		fields["smart_access"] = *req.SmartAccess
+	}
+	if req.SmartCandidates != nil {
+		fields["smart_candidates"] = strings.TrimSpace(*req.SmartCandidates)
+	}
 	// Track whether the caller explicitly set remain_quota (which needs
 	// the optimistic-concurrency guard) vs. an implicit reset caused
 	// by switching to unlimited_quota (which does not).

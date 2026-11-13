@@ -24,7 +24,7 @@ func TestPlatformMetricsSeparateModelsAndExcludeClientErrors(t *testing.T) {
 		t.Fatalf("incorrect attempt classification: %+v", rows)
 	}
 	all := PlatformMetricRows(false, true, 0, time.Now().Unix())
-	if len(all) != 1 || all[0].AttemptCount != 2 || all[0].SuccessRate != 50 || all[0].WindowEnd.Sub(all[0].WindowStart) != 15*time.Minute {
+	if len(all) != 1 || all[0].AttemptCount != 2 || all[0].SuccessRate != .5 || all[0].WindowEnd.Sub(all[0].WindowStart) != 15*time.Minute {
 		t.Fatalf("incorrect window: %+v", all)
 	}
 }
@@ -39,5 +39,22 @@ func TestPlatformMetricsDoNotInventStreamingFirstToken(t *testing.T) {
 	rows := PlatformMetricRows(true, false, 0, time.Now().Unix())
 	if len(rows) != 1 || rows[0].TTFTCount != 0 || rows[0].FirstTokenMissingCount != 1 {
 		t.Fatalf("headers mistaken for content: %+v", rows)
+	}
+}
+
+func TestPlatformTTFTRequiresReportedSmallInputAndCompletedAttempt(t *testing.T) {
+	Reset()
+	t.Cleanup(Reset)
+	for _, input := range []int64{0, 2000, 2001} {
+		span := BeginRequest(RequestMeta{Model: "stream", Stream: true})
+		a := span.BeginAttempt(1)
+		a.RecordUsage(input, 3)
+		a.RecordFirstToken()
+		a.ttft = 75 * time.Millisecond
+		span.EndAttempt(a, AttemptSuccess, 200)
+	}
+	rows := PlatformMetricRows(true, false, 0, time.Now().Unix())
+	if len(rows) != 1 || rows[0].TTFTSchema != 2 || rows[0].TTFTCount != 1 || rows[0].FirstTokenCount != 3 || rows[0].TTFTHistogram["le_100"] != 1 || rows[0].TTFTP95 != 100 || rows[0].SuccessRate != 1 {
+		t.Fatalf("invalid input-conditioned telemetry: %+v", rows)
 	}
 }

@@ -5,8 +5,9 @@ import "context"
 type ctxKey string
 
 const (
-	CtxUsingGroup   ctxKey = "using_group"
-	CtxRequestModel ctxKey = "request_model"
+	CtxSmartFallbacks ctxKey = "smart_fallbacks"
+	CtxUsingGroup     ctxKey = "using_group"
+	CtxRequestModel   ctxKey = "request_model"
 	// CtxRequestedModel retains the client model before routing rewrites it.
 	CtxRequestedModel     ctxKey = "requested_model"
 	CtxRequestBody        ctxKey = "request_body"
@@ -25,6 +26,7 @@ const (
 	// CtxTokenModelLimits carries the token's model whitelist (comma-separated)
 	// so the distributor can enforce it once the model name is parsed.
 	CtxTokenModelLimits ctxKey = "token_model_limits"
+	CtxSmartCandidates  ctxKey = "smart_candidates"
 	// CtxRequestPrefixHash carries a stable hash of the prompt prefix so
 	// prefix-cache affinity can keep a conversation on the same upstream.
 	// Empty when prefix affinity is disabled or no prefix could be derived.

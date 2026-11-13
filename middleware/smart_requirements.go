@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"regexp"
 	"starhub/common"
@@ -11,10 +12,12 @@ import (
 	"starhub/relay"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
+	"starhub/setting"
 	"strings"
 )
 
 type smartRequirements struct {
+	excluded       map[string]bool
 	ctx            context.Context
 	body           []byte
 	textValidation *managedTextValidation
@@ -259,6 +262,7 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 		groups, _ = r.Context().Value(common.CtxAutoGroups).([]string)
 	}
 	limits, _ := r.Context().Value(common.CtxTokenModelLimits).(string)
+	subset, _ := r.Context().Value(common.CtxSmartCandidates).(string)
 	for _, candidateGroup := range groups {
 		candidates := model.SplitList(limits)
 		if limits == "" {
@@ -269,7 +273,14 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 			}
 		}
 		best, bestQuota := "", int64(1<<62)
+		bestUnit, bestScore := math.Inf(1), float64(-1)
 		for _, name := range candidates {
+			if requirements.excluded[name] {
+				continue
+			}
+			if subset != "" && !modelInList(name, model.SplitList(subset)) {
+				continue
+			}
 			if isAutoModel(name) || (pinned != "" && name != pinned) {
 				continue
 			}
@@ -278,6 +289,17 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 				return "", err
 			}
 			if !ok {
+				continue
+			}
+			if setting.IsCommercialMode() {
+				unit, ok := smartUnitPrice(name, candidateGroup)
+				if !ok {
+					continue
+				}
+				score := model.RoutingModelScore(name, candidateGroup)
+				if unit < bestUnit || (unit == bestUnit && (score > bestScore || (score == bestScore && (best == "" || name < best)))) {
+					best, bestUnit, bestScore = name, unit, score
+				}
 				continue
 			}
 			cost := relay.ComputeQuota(name, candidateGroup, requirements.input, requirements.output)
@@ -290,4 +312,64 @@ func chooseSmartModel(r *http.Request, requirements smartRequirements) (string, 
 		}
 	}
 	return "", nil
+}
+
+// smartUnitPrice compares one input unit plus one output unit, independent of
+// the current prompt length. Context-dependent expressions are not comparable.
+func smartUnitPrice(name, group string) (float64, bool) {
+	p := setting.ResolvePricing(name, group, "")
+	if p.PriceExpr != "" {
+		return 0, false
+	}
+	price := p.ModelRatio * (1 + p.CompletionRatio)
+	if p.TokenRates.Valid() {
+		rates := p.TokenRates.NanoPrices()
+		price = float64(rates[0]+rates[1]) / 1e9
+	} else if p.HasModelPrice {
+		price = p.ModelPriceUSD
+	} else if !p.HasModelRatio {
+		return 0, false
+	}
+	price *= p.GroupRatio
+	if p.TimeAdjustment.Multiplier > 0 {
+		price *= p.TimeAdjustment.Multiplier
+	}
+	return price, !math.IsNaN(price) && !math.IsInf(price, 0) && price >= 0
+}
+
+// SmartFallback is prepared only for stateless text requests after authorization.
+type SmartFallback struct {
+	Model string
+	Body  []byte
+	Check func(*model.Channel, string) (bool, error)
+}
+
+func prepareSmartFallbacks(r *http.Request, req smartRequirements, best string) ([]SmartFallback, error) {
+	if !setting.IsCommercialMode() || req.chain != "" || req.continuation || req.multipart || (r.URL.Path != "/v1/chat/completions" && r.URL.Path != "/v1/messages") {
+		return nil, nil
+	}
+	result := []SmartFallback{}
+	req.excluded = map[string]bool{best: true}
+	for len(result) < 2 {
+		name, err := chooseSmartModel(r, req)
+		if err != nil {
+			return nil, err
+		}
+		if name == "" {
+			break
+		}
+		req.excluded[name] = true
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(req.body, &fields); err != nil {
+			return nil, err
+		}
+		fields["model"], _ = json.Marshal(name)
+		body, err := json.Marshal(fields)
+		if err != nil {
+			return nil, err
+		}
+		check := func(ch *model.Channel, group string) (bool, error) { return req.compatible(name, group, ch) }
+		result = append(result, SmartFallback{Model: name, Body: body, Check: resourceGatewayChannelCheck(r, body, false, name, check)})
+	}
+	return result, nil
 }

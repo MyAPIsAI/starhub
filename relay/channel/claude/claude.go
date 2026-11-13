@@ -111,6 +111,11 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 		}
 		switch ev.Type {
 		case "content_block_delta":
+			if ev.TextDelta != "" {
+				if observer, ok := w.(interface{ RecordFirstContent() }); ok {
+					observer.RecordFirstContent()
+				}
+			}
 			content.WriteString(ev.TextDelta)
 		}
 	}

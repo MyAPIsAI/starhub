@@ -32,6 +32,9 @@ func main() {
 	if err := config.ApplyStartup(startup); err != nil {
 		log.Fatalf("apply startup configuration: %v", err)
 	}
+	if os.Getenv("RESOURCE_CATALOG_NOTIFY_URL") != "" && (os.Getenv("NODE_NAME") == "" || len(os.Getenv("NODE_NAME")) > 128) {
+		log.Fatal("resource platform integration requires a stable NODE_NAME of 1 to 128 bytes")
+	}
 	bootstrap := startup.Bootstrap
 	if startup.ConfigPath != "" {
 		log.Printf("configuration: %s", startup.ConfigPath)
@@ -65,6 +68,9 @@ func main() {
 	go service.RunRoutingChainCleanup(context.Background(), 15*time.Minute)
 	go service.RunDailyReconciliationLoop(context.Background())
 	go service.RunResourcePlatform(context.Background())
+	go service.RunResourceObservations(context.Background())
+	go service.RunResourceEventDelivery(context.Background())
+	go service.RunLocalRoutingProbes(context.Background())
 	log.Printf("starhub %s listening on :%s (db: %s)", common.Version, bootstrap.Port, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
 	// security, and IP rate limiting around the route table.

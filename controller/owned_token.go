@@ -100,6 +100,12 @@ func WriteOwnedToken(w http.ResponseWriter, r *http.Request) {
 	}
 	p := input.Payload
 	fields := map[string]any{}
+	if p.SmartAccess != nil {
+		fields["smart_access"] = *p.SmartAccess
+	}
+	if p.SmartCandidates != nil {
+		fields["smart_candidates"] = strings.TrimSpace(*p.SmartCandidates)
+	}
 	if p.Name != nil {
 		fields["name"] = strings.TrimSpace(*p.Name)
 	}

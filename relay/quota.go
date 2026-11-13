@@ -226,6 +226,8 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		ChannelID:        channelID,
 		Model:            modelName,
 		RequestedModel:   originalModel,
+		RoutingFallback:  usage.RoutingFallback,
+		ActualVendor:     usage.ActualVendor,
 		Protocol:         usage.RequestProtocol,
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,

@@ -187,6 +187,12 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 					return
 				}
 				if best != "" {
+					fallbacks, err := prepareSmartFallbacks(r, requirements, best)
+					if err != nil {
+						dto.WriteRelayError(w, 500, inbound, "server_error", "routing_candidates_failed", "failed to prepare routing candidates")
+						return
+					}
+					r = r.WithContext(common.WithValues(r.Context(), common.CtxSmartFallbacks, fallbacks))
 					modelName = best
 					autoModelSelected = true
 					channelCheck = func(ch *model.Channel, group string) (bool, error) {

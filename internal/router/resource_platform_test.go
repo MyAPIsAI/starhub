@@ -19,6 +19,7 @@ func TestResourceSnapshotWireReceiptAndStartupGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = model.CloseDB(); setting.ResetAllToDefaults() })
+	t.Cleanup(setting.ResetResourceProviderModeToDefault)
 	token := strings.Repeat("s", 32)
 	t.Setenv("METRIC_AUTHORIZATION", token)
 	_ = setting.UpdateResourceProviderMode(setting.OptionKeyResourceProviderMode, "commercial")
@@ -62,5 +63,20 @@ func TestResourceSnapshotWireReceiptAndStartupGate(t *testing.T) {
 	}
 	if w := call("GET", "/api/channel/models/details", token, nil); w.Code != 200 {
 		t.Fatalf("catalog endpoint: %s", w.Body)
+	}
+	w = call("GET", "/api/metric/routing/policy-status", token, nil)
+	var status struct {
+		Data struct {
+			Instances []struct {
+				Version string `json:"snapshot_version"`
+				Shared  bool   `json:"shared"`
+			} `json:"instances"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || len(status.Data.Instances) != 1 || status.Data.Instances[0].Version != "v1" || !status.Data.Instances[0].Shared {
+		t.Fatalf("policy status: %s", w.Body)
 	}
 }

@@ -59,9 +59,10 @@ type Token struct {
 	// token can only call explicitly authorized models even if the group
 	// supports smart routing. When true (the default for backward compat),
 	// smart routing is allowed if the token also has model authorization.
-	SmartAccess *bool `gorm:"default:null" json:"smart_access,omitempty"`
-	CreatedAt   int64 `gorm:"autoCreateTime" json:"created_at"`
-	Revision    int64 `gorm:"not null;default:0" json:"management_version"`
+	SmartAccess     *bool  `gorm:"default:null" json:"smart_access,omitempty"`
+	SmartCandidates string `gorm:"size:1024;not null;default:''" json:"smart_candidates"`
+	CreatedAt       int64  `gorm:"autoCreateTime" json:"created_at"`
+	Revision        int64  `gorm:"not null;default:0" json:"management_version"`
 }
 
 // MaxTokensPerUser is the maximum number of API keys a single account may own.
@@ -85,6 +86,9 @@ func ValidateAllowIpsCount(allowIps string) error {
 }
 
 func InsertToken(t *Token) error {
+	if len(t.SmartCandidates) > 1024 {
+		return errors.New("smart candidate list is too long")
+	}
 	// Check per-account key limit inside a transaction to avoid TOCTOU race.
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var count int64
@@ -176,6 +180,9 @@ func ListTokens(userID int64) ([]Token, error) {
 }
 
 func UpdateTokenFields(id int64, fields map[string]any) error {
+	if candidates, ok := fields["smart_candidates"].(string); ok && len(candidates) > 1024 {
+		return errors.New("smart candidate list is too long")
+	}
 	if len(fields) == 0 {
 		return nil
 	}

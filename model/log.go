@@ -15,6 +15,8 @@ func utcMidnight() int64 {
 }
 
 type Log struct {
+	RoutingFallback   bool   `gorm:"not null;default:false" json:"routing_fallback"`
+	ActualVendor      string `gorm:"size:128;not null;default:''" json:"actual_vendor"`
 	UsageSource       string `gorm:"size:32;not null;default:''" json:"usage_source,omitempty"`
 	ID                int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID            int64  `gorm:"index;not null;default:0" json:"user_id"`
@@ -112,10 +114,10 @@ func CountLogs(userID int64) (int64, error) {
 
 func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
 	q := DB.Model(&Log{}).
-		Select("date(" + admissionDayColumn + ", 'unixepoch') AS date, COUNT(*) AS requests, " +
-			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, " +
-			"SUM(completion_tokens) AS completion_tokens, " +
-			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, " +
+		Select("date("+admissionDayColumn+", 'unixepoch') AS date, COUNT(*) AS requests, "+
+			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, "+
+			"SUM(completion_tokens) AS completion_tokens, "+
+			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, "+
 			"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed_count").
 		Where("created_at >= ?", since)
 	if userID > 0 {
@@ -139,8 +141,8 @@ type ModelDailyUsage struct {
 // SummarizeLogsByModel returns daily usage broken down by model.
 func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) {
 	q := DB.Model(&Log{}).
-		Select("date(" + admissionDayColumn + ", 'unixepoch') AS date, model AS model, " +
-			"COUNT(*) AS requests, SUM(quota) AS quota, " +
+		Select("date("+admissionDayColumn+", 'unixepoch') AS date, model AS model, "+
+			"COUNT(*) AS requests, SUM(quota) AS quota, "+
 			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
 		Where("created_at >= ?", since)
 	if userID > 0 {
@@ -169,9 +171,9 @@ type TokenDailyUsage struct {
 // token id for stable display.
 func SummarizeLogsByToken(userID int64, tokenID int64, since int64) ([]TokenDailyUsage, error) {
 	q := DB.Model(&Log{}).
-		Select("date(" + admissionDayColumn + ", 'unixepoch') AS date, token_id AS token_id, " +
-			"MAX(token_name) AS token_name, " +
-			"COUNT(*) AS requests, SUM(quota) AS quota, " +
+		Select("date("+admissionDayColumn+", 'unixepoch') AS date, token_id AS token_id, "+
+			"MAX(token_name) AS token_name, "+
+			"COUNT(*) AS requests, SUM(quota) AS quota, "+
 			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
 		Where("created_at >= ?", since)
 	if userID > 0 {

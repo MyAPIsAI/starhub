@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"starhub/common"
+	"starhub/setting"
 )
 
 var ErrNoChannel = errors.New("no available channel")
@@ -111,6 +112,9 @@ func GetSatisfiedChannelHashed(group, model string, exclude map[int64]bool, hash
 }
 
 func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred int64, hashKey string) (*Channel, error) {
+	if setting.IsCommercialMode() {
+		return GetScoredChannel(group, model, exclude, preferred, hashKey, modelIsText(model), nil)
+	}
 	var rows []Ability
 	query := DB.Where("\"group\" = ? AND model = ? AND enabled = ?", group, model, true)
 	query = query.Where(resourceGatewayAbilityCondition("abilities"))

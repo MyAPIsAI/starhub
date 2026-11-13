@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
+	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -48,18 +50,19 @@ type RouteGroupPrice struct {
 }
 
 type RouteItem struct {
-	ResourceID   string             `json:"resource_id"`
-	ChannelID    string             `json:"channel_id"`
-	ModelID      string             `json:"model_id"`
-	ModelName    string             `json:"model_name"`
-	PriceTier    int                `json:"price_tier"`
-	QualityLevel string             `json:"quality_level"`
-	State        string             `json:"state"`
-	Trend        string             `json:"trend"`
-	Score        *float64           `json:"score"`
-	DimScores    map[string]float64 `json:"dim_scores"`
-	Protection   *RouteProtection   `json:"protection"`
-	Pricing      *struct {
+	PolicyFingerprint string             `json:"-"`
+	ResourceID        string             `json:"resource_id"`
+	ChannelID         string             `json:"channel_id"`
+	ModelID           string             `json:"model_id"`
+	ModelName         string             `json:"model_name"`
+	PriceTier         int                `json:"price_tier"`
+	QualityLevel      string             `json:"quality_level"`
+	State             string             `json:"state"`
+	Trend             string             `json:"trend"`
+	Score             *float64           `json:"score"`
+	DimScores         map[string]float64 `json:"dim_scores"`
+	Protection        *RouteProtection   `json:"protection"`
+	Pricing           *struct {
 		SchemaVersion int               `json:"schema_version"`
 		CostBasis     string            `json:"cost_basis"`
 		Groups        []RouteGroupPrice `json:"groups"`
@@ -82,8 +85,12 @@ type RoutingSnapshotRecord struct {
 
 var routingSnapshotState struct {
 	sync.RWMutex
-	snapshot *RouteSnapshot
-	items    []RouteItem
+	snapshot        *RouteSnapshot
+	items           []RouteItem
+	loadedAt        time.Time
+	rejectedError   string
+	rejectedVersion string
+	rejectedAt      time.Time
 }
 
 func ResetRoutingSnapshot() {
@@ -91,6 +98,10 @@ func ResetRoutingSnapshot() {
 	defer routingSnapshotState.Unlock()
 	routingSnapshotState.snapshot = nil
 	routingSnapshotState.items = nil
+	routingSnapshotState.loadedAt = time.Time{}
+	routingSnapshotState.rejectedError = ""
+	routingSnapshotState.rejectedVersion = ""
+	routingSnapshotState.rejectedAt = time.Time{}
 }
 
 func (s RouteSnapshot) PolicyChecksum() string {
@@ -169,6 +180,26 @@ func (s RouteSnapshot) Validate(now time.Time) ([]RouteItem, error) {
 				return nil, errors.New("invalid protection mode")
 			}
 		}
+		if p := item.Pricing; p != nil {
+			if p.SchemaVersion != 4 || p.CostBasis != "group_ratio" {
+				return nil, errors.New("unsupported resource pricing")
+			}
+			groups := map[string]bool{}
+			for _, price := range p.Groups {
+				if price.Group == "" || groups[price.Group] {
+					return nil, errors.New("invalid pricing group")
+				}
+				groups[price.Group] = true
+				if price.Error != "" || price.Status == "invalid" {
+					continue
+				}
+				ratio, ok := new(big.Rat).SetString(price.Ratio)
+				if !ok || ratio.Sign() < 0 {
+					return nil, errors.New("invalid resource ratio")
+				}
+			}
+		}
+		item.PolicyFingerprint = s.PolicyFingerprint
 		items = append(items, item)
 	}
 	return items, nil
@@ -177,7 +208,16 @@ func (s RouteSnapshot) Validate(now time.Time) ([]RouteItem, error) {
 func finiteScore(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 && v <= 100 }
 
 // ApplyRoutingSnapshot commits before publishing; duplicates never refresh age.
-func ApplyRoutingSnapshot(s RouteSnapshot, now time.Time) error {
+func ApplyRoutingSnapshot(s RouteSnapshot, now time.Time) (applyErr error) {
+	defer func() {
+		if applyErr != nil {
+			routingSnapshotState.Lock()
+			defer routingSnapshotState.Unlock()
+			routingSnapshotState.rejectedError = applyErr.Error()
+			routingSnapshotState.rejectedVersion = s.SnapshotVersion
+			routingSnapshotState.rejectedAt = now
+		}
+	}()
 	items, err := s.Validate(now)
 	if err != nil {
 		return err
@@ -213,8 +253,25 @@ func ApplyRoutingSnapshot(s RouteSnapshot, now time.Time) error {
 		_ = json.Unmarshal(payload, &stored)
 		routingSnapshotState.snapshot = &stored
 		routingSnapshotState.items = items
+		routingSnapshotState.loadedAt = now
 	}
 	return err
+}
+
+func RoutingPolicyInstanceStatus(now time.Time) map[string]any {
+	routingSnapshotState.RLock()
+	defer routingSnapshotState.RUnlock()
+	version, fingerprint := "", ""
+	stale := true
+	if s := routingSnapshotState.snapshot; s != nil {
+		version, fingerprint = s.SnapshotVersion, s.PolicyFingerprint
+		stale = now.Sub(s.PublishedAt) > 3*time.Minute
+	}
+	return map[string]any{"instance_id": os.Getenv("NODE_NAME"), "policy_fingerprint": fingerprint,
+		"snapshot_version": version, "loaded_at": routingSnapshotState.loadedAt, "observed_at": now,
+		"stale": stale, "last_error": "", "last_rejected_error": routingSnapshotState.rejectedError,
+		"last_rejected_version": routingSnapshotState.rejectedVersion, "last_rejected_at": routingSnapshotState.rejectedAt,
+		"shared": true, "snapshot_ttl_seconds": 180, "reload_interval_seconds": 0}
 }
 
 func RoutingSnapshotStatus() (version string, age time.Duration, ready bool) {
