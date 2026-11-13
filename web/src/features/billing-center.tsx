@@ -1,3 +1,5 @@
+import MoneyLedger from "./money-ledger";
+import { useSpendableWallet } from "../lib/api/money-wallet";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
@@ -33,7 +35,6 @@ import type { LedgerEntry, RechargeOrder } from "../lib/product-preview";
 import {
   useLedger,
   useRechargeOrders,
-  useWallet,
   adaptRechargeOrder,
   adaptLedgerEntry,
 } from "../lib/api/billing";
@@ -121,7 +122,7 @@ function BillingCenterView({
   // The wallet is authoritative; ledger rows may include other users for admins.
   const ledgerQuery = useLedger();
   const ordersQuery = useRechargeOrders();
-  const walletQuery = useWallet();
+  const walletQuery = useSpendableWallet();
   const ledger = useMemo(
     () =>
       (ledgerQuery.error ? [] : (ledgerQuery.data ?? [])).map(
@@ -236,20 +237,6 @@ function BillingCenterView({
   const pending = orders.filter((o) =>
     ["pending", "processing"].includes(o.status),
   );
-  const spend = ledger
-    .filter(
-      (e) => e.type === "call_summary" && billingDate(e.time).startsWith(month),
-    )
-    .reduce(
-      (sum, e) =>
-        sum + (BigInt(e.amount_nano) < 0n ? -BigInt(e.amount_nano) : 0n),
-      0n,
-    );
-  const funded = ledger
-    .filter(
-      (e) => e.type === "recharge" && billingDate(e.time).startsWith(month),
-    )
-    .reduce((sum, e) => sum + BigInt(e.amount_nano), 0n);
   const isLow = balanceKnown && BigInt(balance) < 5_000_000_000n;
   const isEmpty = balanceKnown && BigInt(balance) <= 0n;
   const date = (value: string) =>
@@ -361,7 +348,11 @@ function BillingCenterView({
         <section className="bc-wallet-card">
           <div className="bc-wallet-top">
             <span>
-              {c("支付钱包余额", "Payment wallet balance", "رصيد محفظة الدفع")}
+              {c(
+                "API 可用余额",
+                "Available API balance",
+                "رصيد الواجهة المتاح",
+              )}
             </span>
             <span className={`bc-wallet-health ${isLow ? "is-low" : ""}`}>
               <i />
@@ -390,15 +381,15 @@ function BillingCenterView({
           </div>
           <p>
             {c(
-              "支付钱包与 API 配额分别记账；模拟充值不会增加 API 配额。",
-              "Payment wallet and API quota are separate; simulated top-ups do not add API quota.",
-              "المحفظة وحصة الواجهة منفصلتان؛ لا تزيد تعبئة المحاكاة حصة الواجهة.",
+              "此余额用于 API 调用，预扣金额单独保留；模拟充值不会增加调用余额。",
+              "This balance pays for API calls; reservations are held separately. Simulated top-ups do not add API funds.",
+              "يدفع هذا الرصيد لتكاليف الواجهة؛ تُحجز المبالغ المعلقة بشكل منفصل. الشحن التجريبي لا يضيف رصيد الواجهة.",
             )}
           </p>
           <div className="bc-wallet-actions">
             <Button variant="primary" onClick={() => onRecharge()}>
               <CreditCard size={16} />
-              {c("在线充值", "Add funds", "شحن الرصيد")}
+              {c("模拟充值", "Simulate top-up", "تجربة الشحن")}
               <ArrowRight size={14} />
             </Button>
             <Link to="/console/usage">
@@ -508,17 +499,21 @@ function BillingCenterView({
 
         <section className="bc-month-card">
           <div className="bc-small-heading">
-            <span>{c("本月资金概览", "This month", "هذا الشهر")}</span>
-            <bdi>{month}</bdi>
+            <span>{c("API 资金状态", "API funds", "أموال الواجهة")}</span>
+            <bdi>USD</bdi>
           </div>
           <div className="bc-month-metric">
             <span className="bc-metric-icon">
               <ArrowUpRight size={17} />
             </span>
             <div>
-              <span>{c("本月消费", "Usage this month", "استهلاك الشهر")}</span>
+              <span>
+                {c("累计结算消费", "Lifetime spending", "الإنفاق التراكمي")}
+              </span>
               <strong dir="ltr">
-                {ledgerKnown ? formatMoney(spend.toString(), "total") : "—"}
+                {balanceKnown
+                  ? formatMoney(walletQuery.data!.spent_nano, "detail")
+                  : "—"}
               </strong>
             </div>
           </div>
@@ -528,18 +523,20 @@ function BillingCenterView({
             </span>
             <div>
               <span>
-                {c("本月充值到账", "Top-ups credited", "الشحن المضاف")}
+                {c("在途预扣", "Pending reservations", "الحجوزات المعلقة")}
               </span>
               <strong dir="ltr">
-                {ledgerKnown ? formatMoney(funded.toString()) : "—"}
+                {balanceKnown
+                  ? formatMoney(walletQuery.data!.reserved_nano, "detail")
+                  : "—"}
               </strong>
             </div>
           </div>
           <p>
             {c(
-              "按迪拜时区的自然月统计",
-              "Calendar month in Dubai time",
-              "الشهر التقويمي بتوقيت دبي",
+              "预扣释放或结算后，余额会相应更新。",
+              "Balances update when reservations settle or are released.",
+              "يتحدث الرصيد عند تسوية الحجوزات أو تحريرها.",
             )}
           </p>
         </section>
@@ -561,9 +558,9 @@ function BillingCenterView({
           </div>
           <small>
             {c(
-              "支付钱包余额不代表 API 配额；实际调用以 API 配额和密钥授权为准。",
-              "Payment wallet balance is separate from API quota; calls require API quota and key authorization.",
-              "رصيد المحفظة منفصل عن حصة الواجهة؛ تتطلب الطلبات حصة واجهة وتفويض المفتاح.",
+              "调用需要足够的 API 余额及有效密钥授权。",
+              "Calls require sufficient API funds and valid key authorization.",
+              "تتطلب الطلبات رصيد واجهة كافيًا وتفويض مفتاح صالحًا.",
             )}
           </small>
         </section>
@@ -572,9 +569,9 @@ function BillingCenterView({
         <Info size={14} />
         <span>
           {c(
-            "充值与余额已联通后端；支付确认由手动模拟，不产生真实扣款。",
-            "Balance and recharge are backed by the server; payment confirmation is manually simulated — no real charges.",
-            "الرصيد والشحن مدعومان من الخادم؛ تأكيد الدفع محاكى يدويًا بلا خصم حقيقي.",
+            "下方充值订单仍为支付模拟，不产生真实扣款，也不会增加 API 余额。",
+            "Top-up orders below use payment simulation. They do not charge real funds or add API funds.",
+            "طلبات الشحن أدناه تجريبية. لا تخصم أموالًا حقيقية ولا تضيف رصيد الواجهة.",
           )}
         </span>
       </div>
@@ -603,6 +600,7 @@ function BillingCenterView({
           </Button>
         </div>
       )}
+      <MoneyLedger text={c} />
       <section className="bc-history-card">
         <div className="bc-history-heading">
           <nav aria-label={c("账务记录", "Billing records", "السجلات المالية")}>
@@ -1074,9 +1072,9 @@ function BillingCenterView({
             <ShieldCheck size={22} />
             <p>
               {c(
-                "支付钱包与 API 配额分别记账，当前不会自动互通。",
-                "Payment wallet balance and API quota are recorded separately and are not automatically linked.",
-                "تُسجّل المحفظة وحصة الواجهة بشكل منفصل ولا ترتبطان تلقائيًا حاليًا.",
+                "API 余额由后端账本记录；模拟支付余额单独保存，不能用于 API 调用。",
+                "API funds are recorded in the server ledger. Simulated payment balances are separate and cannot pay for API calls.",
+                "تُسجّل أموال الواجهة في دفتر الخادم. أرصدة الدفع التجريبية منفصلة ولا تدفع تكاليف الواجهة.",
               )}
             </p>
           </div>

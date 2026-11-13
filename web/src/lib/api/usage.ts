@@ -4,6 +4,7 @@
 // These power the console overview's metrics, charts, and recent-
 // requests table with real backend data instead of the demo store.
 
+import { quotaMoneyNano } from "../money";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { apiGet } from "./http";
@@ -12,6 +13,8 @@ import { catalogModels } from "../../config/models";
 // --- Types matching the backend DailyUsage struct (model/log.go) ---
 
 export interface DailyUsage {
+  quota_nano?: string;
+  unfunded_quota_nano?: string;
   date: string; // "2006-01-02"
   requests: number;
   quota: number; // backend quota units (1 USD = 500,000 quota)
@@ -23,6 +26,8 @@ export interface DailyUsage {
 }
 
 export interface ModelDailyUsage {
+  quota_nano?: string;
+  unfunded_quota_nano?: string;
   date: string;
   model: string;
   requests: number;
@@ -32,6 +37,8 @@ export interface ModelDailyUsage {
 }
 
 export interface TokenDailyUsage {
+  quota_nano?: string;
+  unfunded_quota_nano?: string;
   date: string;
   token_id: number;
   token_name: string;
@@ -51,6 +58,8 @@ export interface UsageResponse {
 // --- Types matching the backend Log struct (model/log.go) ---
 
 export interface LogRow {
+  quota_nano?: string;
+  unfunded_quota_nano?: string;
   id: number;
   user_id: number;
   token_id: number;
@@ -195,7 +204,7 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     status: log.status === 1 ? "success" : "failed",
     outcome:
       log.status === 3 ? "cancelled" : log.status === 1 ? "success" : "failed",
-    cost_nano: quotaToNanoUsd(log.quota),
+    cost_nano: quotaMoneyNano(log.quota_nano, log.quota),
     duration_ms: log.duration_ms,
     key_id: log.token_id ? String(log.token_id) : "",
     input_tokens: log.prompt_tokens,

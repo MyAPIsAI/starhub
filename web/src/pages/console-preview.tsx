@@ -1,3 +1,4 @@
+import { quotaMoneyNano } from "../lib/money";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import BillingCenter from "../features/billing-center";
@@ -104,7 +105,7 @@ import {
   readTokenSecret,
   readOwnedKeyReceipt,
 } from "../lib/api/tokens";
-import { useWallet } from "../lib/api/billing";
+import { useSpendableWallet } from "../lib/api/money-wallet";
 import {
   useExports,
   useCreateExport,
@@ -117,7 +118,6 @@ import {
   useUserUsage,
   useLogs,
   useBackendRequests,
-  quotaToNanoUsd,
   resolveVendor,
   type LogRow,
 } from "../lib/api/usage";
@@ -232,7 +232,7 @@ function ConsoleWorkspace() {
     plaintext: string;
   } | null>(null);
   // Unknown wallet state never falls back to a browser demo balance.
-  const walletQuery = useWallet();
+  const walletQuery = useSpendableWallet();
   const balanceKnown = Boolean(walletQuery.data && !walletQuery.error);
   const balance = balanceKnown ? walletQuery.data!.balance_nano : "0";
   const requests = useProductPreview((s) => s.requests);
@@ -433,7 +433,7 @@ function ConsoleWorkspace() {
         requests: item.requests,
         // The chart and tooltip expect USD (small numbers like 0.0042),
         // not nano-USD. Convert quota -> USD.
-        cost: Number(quotaToNanoUsd(item.quota)) / 1e9,
+        cost: Number(quotaMoneyNano(item.quota_nano, item.quota)) / 1e9,
         // The backend usage API has no latency; default to 0 so the
         // latency chart shows a flat line instead of crashing.
         latency: 0,
@@ -449,14 +449,17 @@ function ConsoleWorkspace() {
   const summary = useMemo(() => {
     if (usageItems.length) {
       const totalRequests = usageItems.reduce((sum, i) => sum + i.requests, 0);
-      const totalQuota = usageItems.reduce((sum, i) => sum + i.quota, 0);
+      const totalNano = usageItems.reduce(
+        (sum, i) => sum + BigInt(quotaMoneyNano(i.quota_nano, i.quota)),
+        0n,
+      );
       const totalSuccess = usageItems.reduce(
         (sum, i) => sum + (i.success_count ?? 0),
         0,
       );
       return {
         count: totalRequests,
-        cost: quotaToNanoUsd(totalQuota),
+        cost: totalNano.toString(),
         // Compute the real success rate from the backend's per-day
         // success_count. Falls back to 100% when success_count is 0
         // (old logs without the status field).
@@ -478,18 +481,18 @@ function ConsoleWorkspace() {
     if (byModel && byModel.length > 0) {
       const buckets = new Map<
         string,
-        { count: number; quota: number; tokens: number }
+        { count: number; quota: bigint; tokens: number }
       >();
       for (const row of byModel) {
         const existing = buckets.get(row.model);
         if (existing) {
           existing.count += row.requests;
-          existing.quota += row.quota;
+          existing.quota += BigInt(quotaMoneyNano(row.quota_nano, row.quota));
           existing.tokens += row.prompt_tokens + row.completion_tokens;
         } else {
           buckets.set(row.model, {
             count: row.requests,
-            quota: row.quota,
+            quota: BigInt(quotaMoneyNano(row.quota_nano, row.quota)),
             tokens: row.prompt_tokens + row.completion_tokens,
           });
         }
@@ -499,7 +502,7 @@ function ConsoleWorkspace() {
           model,
           vendor: resolveVendor(model),
           count: agg.count,
-          cost: quotaToNanoUsd(agg.quota),
+          cost: agg.quota.toString(),
           success: agg.count > 0 ? "100" : "—",
         }))
         .sort((a, b) => b.count - a.count);
@@ -1427,7 +1430,10 @@ function ConsoleWorkspace() {
                                 <ResultPill failed={false} />
                               </td>
                               <td className="xy-cost">
-                                {formatMoney(quotaToNanoUsd(log.quota), "call")}
+                                {formatMoney(
+                                  quotaMoneyNano(log.quota_nano, log.quota),
+                                  "call",
+                                )}
                               </td>
                               <td>
                                 <Link
@@ -1481,9 +1487,9 @@ function ConsoleWorkspace() {
                     </strong>
                     <p>
                       {c(
-                        "按量付费 · 随时充值",
-                        "Pay as you go. Top up anytime.",
-                        "ادفع حسب الاستخدام. اشحن في أي وقت.",
+                        "调用余额 · 模拟充值不会增加余额",
+                        "API funds. Simulated top-ups do not add funds.",
+                        "رصيد الواجهة. الشحن التجريبي لا يضيف أموالاً.",
                       )}
                     </p>
                     <div className="xy-wallet-art" aria-hidden="true">

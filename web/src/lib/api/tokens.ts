@@ -18,6 +18,12 @@ import {
 } from "../system-access";
 
 export interface Token {
+  remain_quota_nano?: string;
+  used_quota_nano?: string;
+  pending_quota_nano?: string;
+  period_quota_limit_nano?: string;
+  period_used_quota_nano?: string;
+  period_reserved_quota_nano?: string;
   quota_period?: "never" | "daily" | "monthly";
   period_quota_limit?: number;
   quota_region?: string;
@@ -48,6 +54,8 @@ export interface Token {
 }
 
 export interface TokenCreateInput {
+  remain_quota_nano?: string;
+  period_quota_limit_nano?: string;
   quota_period?: "never" | "daily" | "monthly";
   period_quota_limit?: number;
   quota_region?: string;
@@ -63,6 +71,8 @@ export interface TokenCreateInput {
 }
 
 export interface TokenUpdateInput {
+  remain_quota_nano?: string;
+  period_quota_limit_nano?: string;
   quota_period?: "never" | "daily" | "monthly";
   period_quota_limit?: number;
   quota_region?: string;

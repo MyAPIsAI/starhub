@@ -32,7 +32,8 @@ export function sumNano(values: string[]): NanoString {
 }
 
 export function usdToNano(usd: number | string): string {
-  const num = typeof usd === "string" ? parseFloat(usd) : usd;
+  if (typeof usd === "string") return decimalUsdToNano(usd);
+  const num = usd;
   if (isNaN(num)) return "0";
   const nano = BigInt(Math.round(num * 1_000_000_000));
   return nano.toString();
@@ -40,4 +41,30 @@ export function usdToNano(usd: number | string): string {
 
 export function nanoToUsdNumber(nano: string): number {
   return Number(BigInt(nano)) / 1_000_000_000;
+}
+
+export function exactNano(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length > 64 ||
+    !/^(0|-?[1-9][0-9]*)$/.test(value)
+  )
+    throw Error("Invalid exact nano-USD amount");
+  return value;
+}
+
+export function quotaMoneyNano(exact: unknown, legacy: number): string {
+  if (exact !== undefined) return exactNano(exact);
+  if (!Number.isSafeInteger(legacy)) throw Error("Unsafe legacy quota amount");
+  return (BigInt(legacy) * 2000n).toString();
+}
+
+export function decimalUsdToNano(value: string): string {
+  if (value.length > 64 || !/^-?[0-9]+(\.[0-9]{1,9})?$/.test(value))
+    throw Error("invalid_amount");
+  const negative = value.startsWith("-");
+  const [whole, fraction = ""] = (negative ? value.slice(1) : value).split(".");
+  const amount =
+    BigInt(whole) * 1_000_000_000n + BigInt(fraction.padEnd(9, "0"));
+  return (negative ? -amount : amount).toString();
 }

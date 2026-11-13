@@ -18,8 +18,8 @@ import type { PreviewKey } from "../lib/product-preview";
 import { isSmartModelId } from "../lib/smart-model";
 import {
   keySpendingLimitValue,
-  remainingQuotaForLifetimeLimit,
-  quotaForPeriodLimit,
+  remainingNanoForLifetimeLimit,
+  nanoForPeriodLimit,
 } from "../lib/key-spending-limit";
 import { copyText } from "./code-example";
 export function NativeKeyForm({
@@ -139,8 +139,8 @@ export function NativeKeyForm({
       );
       return;
     }
-    let remain: number | undefined;
-    let periodLimit: number | undefined;
+    let remain: string | undefined;
+    let periodLimit: string | undefined;
     if (
       quotaChanged &&
       period !== "never" &&
@@ -158,8 +158,8 @@ export function NativeKeyForm({
     if (quotaChanged && quota !== "") {
       try {
         if (period === "never")
-          remain = remainingQuotaForLifetimeLimit(quota, item);
-        else periodLimit = quotaForPeriodLimit(quota, item);
+          remain = remainingNanoForLifetimeLimit(quota, item);
+        else periodLimit = nanoForPeriodLimit(quota, item);
       } catch (e) {
         const reason = e instanceof Error ? e.message : "invalid_amount";
         setError(
@@ -176,9 +176,9 @@ export function NativeKeyForm({
                   "حد الإنفاق كبير جدًا.",
                 )
               : c(
-                  "请输入非负美元金额，最多六位小数。",
-                  "Enter a nonnegative USD amount with at most six decimals.",
-                  "أدخل مبلغًا غير سالب بست منازل عشرية كحد أقصى.",
+                  "请输入非负美元金额，最多九位小数。",
+                  "Enter a nonnegative USD amount with at most nine decimals.",
+                  "أدخل مبلغًا غير سالب بتسع منازل عشرية كحد أقصى.",
                 ),
         );
         return;
@@ -207,8 +207,8 @@ export function NativeKeyForm({
           : {}),
         ...(periodLimit === undefined
           ? {}
-          : { period_quota_limit: periodLimit }),
-        ...(remain === undefined ? {} : { remain_quota: remain }),
+          : { period_quota_limit_nano: periodLimit }),
+        ...(remain === undefined ? {} : { remain_quota_nano: remain }),
         choices_revision: initialRevision.current,
       };
       if (item) {

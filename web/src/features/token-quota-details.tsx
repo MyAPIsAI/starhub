@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { useOwnedTokenUsage } from "../lib/api/token-usage";
-import { quotaToNanoUsd } from "../lib/api/key-adapter";
+import { quotaMoneyNano } from "../lib/money";
 import { formatMoney } from "../lib/money";
 
 type Text = (zh: string, en: string, ar: string) => string;
-const money = (quota: number) =>
+const money = (quota: number, exact?: string | null) =>
   formatMoney(
-    quotaToNanoUsd(quota),
-    quota > 0 && quota < 50 ? "call" : "total",
+    quotaMoneyNano(exact === null ? undefined : exact, quota),
+    "detail",
   );
 
 function Pages({
@@ -91,7 +91,10 @@ export default function TokenQuotaDetails({
       timeStyle: "short",
       timeZone: current.timezone,
     }).format(new Date(stamp * 1000));
-  const max = Math.max(1, ...data.trend.map((day) => day.quota));
+  const max = data.trend.reduce((maximum, day) => {
+    const nano = BigInt(quotaMoneyNano(day.quota_nano, day.quota));
+    return nano > maximum ? nano : maximum;
+  }, 1n);
   const label =
     current.period === "daily"
       ? text("每日重置", "Resets daily", "إعادة يومية")
@@ -107,7 +110,9 @@ export default function TokenQuotaDetails({
             <dt>
               {text("当前周期已用", "Used this period", "المستخدم خلال الفترة")}
             </dt>
-            <dd dir="ltr">{money(current.used_quota)}</dd>
+            <dd dir="ltr">
+              {money(current.used_quota, current.used_quota_nano)}
+            </dd>
           </div>
           <div>
             <dt>{text("额度上限", "Limit", "الحد")}</dt>
@@ -115,7 +120,9 @@ export default function TokenQuotaDetails({
               {current.quota_limit === null ? (
                 text("不限额", "Unlimited", "بلا حد")
               ) : (
-                <bdi dir="ltr">{money(current.quota_limit)}</bdi>
+                <bdi dir="ltr">
+                  {money(current.quota_limit, current.quota_limit_nano)}
+                </bdi>
               )}
             </dd>
           </div>
@@ -123,17 +130,26 @@ export default function TokenQuotaDetails({
             <dt>
               {text("在途预扣", "Pending reservations", "الحجوزات المعلقة")}
             </dt>
-            <dd dir="ltr">{money(current.reserved_quota)}</dd>
+            <dd dir="ltr">
+              {money(current.reserved_quota, current.reserved_quota_nano)}
+            </dd>
           </div>
           {current.remaining_quota !== null && (
             <div>
               <dt>{text("可用额度", "Available", "المتاح")}</dt>
-              <dd dir="ltr">{money(current.remaining_quota)}</dd>
+              <dd dir="ltr">
+                {money(current.remaining_quota, current.remaining_quota_nano)}
+              </dd>
             </div>
           )}
           <div>
             <dt>{text("累计消费", "Lifetime spending", "إجمالي الإنفاق")}</dt>
-            <dd dir="ltr">{money(current.lifetime_used_quota)}</dd>
+            <dd dir="ltr">
+              {money(
+                current.lifetime_used_quota,
+                current.lifetime_used_quota_nano,
+              )}
+            </dd>
           </div>
           <div>
             <dt>{text("额度周期", "Quota period", "فترة الحصة")}</dt>
@@ -177,15 +193,19 @@ export default function TokenQuotaDetails({
             {data.trend.map((day) => (
               <div
                 key={day.date}
-                title={`${day.date}: ${money(day.quota)}`}
+                title={`${day.date}: ${money(day.quota, day.quota_nano)}`}
                 aria-hidden="true"
                 style={{
                   height:
-                    day.quota > 0
-                      ? `${Math.max(2, (day.quota / max) * 100)}%`
+                    BigInt(quotaMoneyNano(day.quota_nano, day.quota)) > 0n
+                      ? `${Math.max(2, Number((BigInt(quotaMoneyNano(day.quota_nano, day.quota)) * 10000n) / max) / 100)}%`
                       : "2px",
                 }}
-                className={day.quota === 0 ? "is-empty" : ""}
+                className={
+                  BigInt(quotaMoneyNano(day.quota_nano, day.quota)) === 0n
+                    ? "is-empty"
+                    : ""
+                }
               />
             ))}
           </div>
@@ -232,7 +252,7 @@ export default function TokenQuotaDetails({
                     </td>
                     <td>{day.requests}</td>
                     <td>
-                      <bdi>{money(day.quota)}</bdi>
+                      <bdi>{money(day.quota, day.quota_nano)}</bdi>
                     </td>
                     <td>{day.failed_count}</td>
                   </tr>
@@ -278,7 +298,7 @@ export default function TokenQuotaDetails({
                     </td>
                     <td>{row.requests}</td>
                     <td>
-                      <bdi>{money(row.quota)}</bdi>
+                      <bdi>{money(row.quota, row.quota_nano)}</bdi>
                     </td>
                     <td>
                       {(
@@ -354,18 +374,22 @@ export default function TokenQuotaDetails({
                             "Carried usage",
                             "الاستخدام المرحّل",
                           )}{" "}
-                          <bdi>{money(row.carry_quota)}</bdi>
+                          <bdi>
+                            {money(row.carry_quota, row.carry_quota_nano)}
+                          </bdi>
                         </small>
                       )}
                     </td>
                     <td>
-                      <bdi>{money(row.used_quota)}</bdi>
+                      <bdi>{money(row.used_quota, row.used_quota_nano)}</bdi>
                     </td>
                     <td>
-                      <bdi>{money(row.quota_limit)}</bdi>
+                      <bdi>{money(row.quota_limit, row.quota_limit_nano)}</bdi>
                     </td>
                     <td>
-                      <bdi>{money(row.reserved_quota)}</bdi>
+                      <bdi>
+                        {money(row.reserved_quota, row.reserved_quota_nano)}
+                      </bdi>
                     </td>
                   </tr>
                 ))}

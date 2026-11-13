@@ -211,7 +211,7 @@ try {
         .getByRole("button", { name: "Create key", exact: true })
         .click();
       await page.locator("#new-key-name").fill("Regional daily key");
-      await page.locator("#new-key-quota").fill("1");
+      await page.locator("#new-key-quota").fill("1.000000001");
       await page.locator("#native-key-period").selectOption("daily");
       await page.locator("#native-key-quota-region").selectOption("uae");
       await capture("create-daily-desktop");
@@ -234,7 +234,8 @@ try {
     created &&
       created.quota_period === "daily" &&
       created.quota_timezone === "Asia/Dubai" &&
-      created.period_quota_limit === 500000,
+      created.period_quota_limit === 500000 &&
+      created.period_quota_limit_nano === "1000000001",
   );
   await api("POST", `/api/token/${created.id}/unlock`, {
     expected_user_id: created.user_id,
@@ -328,6 +329,127 @@ try {
         await capture(`usage-mobile-${language}-${theme}`);
         if (language === "ar")
           assert.equal(await page.locator("html").getAttribute("dir"), "rtl");
+      }
+    },
+  );
+  await check(
+    "canonical wallet keeps one-nano grants and simulated payments separate",
+    async () => {
+      const before = await api("GET", "/api/wallet/v2");
+      const adjustment = {
+        schema: "money_adjustment_v2",
+        expected_actor_id: created.user_id,
+        user_id: created.user_id,
+        operation_id: "browser-one-nano",
+        amount_nano: "1",
+        expected_available_nano: before.balance_nano,
+        reason: "Browser precision verification",
+      };
+      const receipt = await api("POST", "/api/wallet/adjustments", adjustment);
+      const replay = await api("POST", "/api/wallet/adjustments", adjustment);
+      assert.equal(replay.entry.id, receipt.entry.id);
+      const credited = await api("GET", "/api/wallet/v2");
+      assert.equal(
+        BigInt(credited.balance_nano),
+        BigInt(before.balance_nano) + 1n,
+      );
+      const simulated = await api("POST", "/api/recharge", {
+        amount_usd: "10.00",
+        channel: "card",
+      });
+      await api("POST", `/api/recharge/${simulated.id}/resolve`, {
+        outcome: "success",
+      });
+      assert.equal(
+        (await api("GET", "/api/wallet/v2")).balance_nano,
+        credited.balance_nano,
+      );
+      await api("PUT", "/api/option", {
+        key: "model_price",
+        value: JSON.stringify({ "browser-period-model": 0.000000001 }),
+      });
+      const response = await context.request.post(
+        base + "/v1/chat/completions",
+        {
+          headers: { Authorization: `Bearer ${secret.key}` },
+          data: {
+            model: "browser-period-model",
+            messages: [{ role: "user", content: "one nano" }],
+            max_tokens: 10,
+          },
+        },
+      );
+      assert.ok(response.ok());
+      const charged = await api("GET", "/api/wallet/v2");
+      assert.equal(
+        BigInt(charged.balance_nano),
+        BigInt(credited.balance_nano) - 1n,
+      );
+      assert.equal(
+        BigInt(charged.spent_nano),
+        BigInt(credited.spent_nano) + 1n,
+      );
+      assert.equal(charged.reserved_nano, "0");
+      const ledger = await api("GET", "/api/ledger/v2?page=1&page_size=10");
+      assert.ok(
+        ledger.items.some(
+          (row) => row.type === "consumption" && row.spent_delta_nano === "1",
+        ),
+      );
+      assert.ok(
+        (
+          await api(
+            "GET",
+            `/api/wallet/reconciliation?user_id=${created.user_id}`,
+          )
+        ).verified,
+      );
+      await page.evaluate(() => {
+        localStorage.setItem("xy-language", "en");
+        localStorage.setItem("xy-theme", "light");
+      });
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.goto(base + "/console/billing");
+      await page.locator("[data-money-entry]").first().waitFor();
+      const journal = page.locator("[data-money-ledger]");
+      assert.ok((await journal.innerText()).includes("$0.000000001"));
+      assert.ok(
+        (await page.locator(".bc-wallet-card").innerText()).includes(
+          "Available API balance",
+        ),
+      );
+      await capture("canonical-wallet-desktop");
+      const a11y = await new AxeBuilder({ page })
+        .include("[data-money-ledger]")
+        .withTags(["wcag2a", "wcag2aa"])
+        .analyze();
+      assert.equal(
+        a11y.violations.length,
+        0,
+        a11y.violations.map((v) => v.id).join(","),
+      );
+      for (const [language, theme, width] of [
+        ["zh", "light", 390],
+        ["ar", "dark", 320],
+      ]) {
+        await page.evaluate(
+          ([language, theme]) => {
+            localStorage.setItem("xy-language", language);
+            localStorage.setItem("xy-theme", theme);
+          },
+          [language, theme],
+        );
+        await page.setViewportSize({ width, height: 844 });
+        await page.reload();
+        await page.locator("[data-money-entry]").first().waitFor();
+        await page.locator("[data-money-ledger]").scrollIntoViewIfNeeded();
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+          "money ledger overflow",
+        );
+        await capture(`canonical-wallet-${language}-${theme}-${width}`);
       }
     },
   );

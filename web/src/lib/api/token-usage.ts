@@ -1,9 +1,12 @@
+import { quotaMoneyNano } from "../money";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "./http";
 import { assertTokenSession } from "./tokens";
 import { useSessionQueryIdentity } from "../system-access";
 
 export interface TokenUsageAmounts {
+  quota_nano?: string;
+  unfunded_quota_nano?: string;
   requests: number;
   quota: number;
   unfunded_quota: number;
@@ -13,6 +16,10 @@ export interface TokenUsageAmounts {
   failed_count: number;
 }
 export interface TokenPeriodRecord {
+  quota_limit_nano?: string;
+  used_quota_nano?: string;
+  reserved_quota_nano?: string;
+  carry_quota_nano?: string;
   id: number;
   token_id: number;
   period: string;
@@ -31,6 +38,11 @@ export interface TokenUsageDetails {
   token_id: number;
   observed_at: number;
   current: {
+    used_quota_nano?: string;
+    reserved_quota_nano?: string;
+    quota_limit_nano?: string | null;
+    remaining_quota_nano?: string | null;
+    lifetime_used_quota_nano?: string;
     period: "never" | "daily" | "monthly";
     timezone: string;
     period_id: number;
@@ -55,6 +67,13 @@ export interface TokenUsageDetails {
 
 const safe = (n: unknown): n is number =>
   Number.isSafeInteger(n) && Number(n) >= 0;
+const validMoney = (exact: unknown, legacy: number) => {
+  try {
+    return BigInt(quotaMoneyNano(exact, legacy)) >= 0n;
+  } catch {
+    return false;
+  }
+};
 const validTimezone = (value: unknown): value is string => {
   if (typeof value !== "string" || !value) return false;
   try {
@@ -78,16 +97,20 @@ export function validateTokenUsage(
     !["never", "daily", "monthly"].includes(current.period) ||
     !validTimezone(current.timezone) ||
     !safe(value.observed_at) ||
-    ![
-      current.used_quota,
-      current.reserved_quota,
+    ![current.period_id, current.start, current.end].every(safe) ||
+    !validMoney(current.used_quota_nano, current.used_quota) ||
+    !validMoney(current.reserved_quota_nano, current.reserved_quota) ||
+    !validMoney(
+      current.lifetime_used_quota_nano,
       current.lifetime_used_quota,
-      current.period_id,
-      current.start,
-      current.end,
-    ].every(safe) ||
-    (current.quota_limit !== null && !safe(current.quota_limit)) ||
-    (current.remaining_quota !== null && !safe(current.remaining_quota)) ||
+    ) ||
+    (current.quota_limit !== null &&
+      !validMoney(current.quota_limit_nano, current.quota_limit)) ||
+    (current.remaining_quota !== null &&
+      !validMoney(current.remaining_quota_nano, current.remaining_quota)) ||
+    (current.quota_limit === null && current.quota_limit_nano != null) ||
+    (current.remaining_quota === null &&
+      current.remaining_quota_nano != null) ||
     value.days !== 30 ||
     !Array.isArray(value.trend) ||
     value.trend.length !== 30 ||
@@ -109,13 +132,13 @@ export function validateTokenUsage(
     if (
       ![
         row.requests,
-        row.quota,
-        row.unfunded_quota,
         row.prompt_tokens,
         row.completion_tokens,
         row.success_count,
         row.failed_count,
-      ].every(safe)
+      ].every(safe) ||
+      !validMoney(row.quota_nano, row.quota) ||
+      !validMoney(row.unfunded_quota_nano, row.unfunded_quota)
     )
       throw Error("Key usage amounts were not confirmed");
   }
@@ -127,16 +150,11 @@ export function validateTokenUsage(
         row.token_id !== tokenID ||
         !validTimezone(row.timezone) ||
         !["daily", "monthly"].includes(row.period) ||
-        ![
-          row.id,
-          row.start,
-          row.end,
-          row.quota_limit,
-          row.used_quota,
-          row.reserved_quota,
-          row.carry_quota,
-          row.closed_at,
-        ].every(safe),
+        ![row.id, row.start, row.end, row.closed_at].every(safe) ||
+        !validMoney(row.quota_limit_nano, row.quota_limit) ||
+        !validMoney(row.used_quota_nano, row.used_quota) ||
+        !validMoney(row.reserved_quota_nano, row.reserved_quota) ||
+        !validMoney(row.carry_quota_nano, row.carry_quota),
     )
   )
     throw Error("Key usage scope was not confirmed");

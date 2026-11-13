@@ -12,6 +12,7 @@
 //     by the caller and merged into the adapted PreviewKey via the
 //     plaintextKeys map. (B10)
 
+import { quotaMoneyNano } from "../money";
 import { useMemo } from "react";
 import type { Token } from "./tokens";
 import { useTokens } from "./tokens";
@@ -99,18 +100,22 @@ export function tokenToPreviewKey(
   token: Token,
   plaintextKey?: string,
 ): PreviewKey {
+  const used = quotaMoneyNano(token.used_quota_nano, token.used_quota);
+  const pending = quotaMoneyNano(
+    token.pending_quota_nano,
+    token.pending_quota ?? 0,
+  );
+  const remaining = quotaMoneyNano(token.remain_quota_nano, token.remain_quota);
   const lifetimeLimit = token.unlimited_quota
     ? null
-    : (
-        (BigInt(Math.trunc(token.remain_quota)) +
-          BigInt(Math.trunc(token.pending_quota ?? 0)) +
-          BigInt(Math.trunc(token.used_quota))) *
-        NANO_PER_QUOTA
-      ).toString();
+    : (BigInt(remaining) + BigInt(pending) + BigInt(used)).toString();
   const periodic =
     token.quota_period === "daily" || token.quota_period === "monthly";
   const limit = periodic
-    ? quotaToNanoUsd(token.period_quota_limit ?? 0)
+    ? quotaMoneyNano(
+        token.period_quota_limit_nano,
+        token.period_quota_limit ?? 0,
+      )
     : lifetimeLimit;
   return {
     id: String(token.id),
@@ -142,15 +147,19 @@ export function tokenToPreviewKey(
     quotaPeriodEndsAt: token.period_end
       ? new Date(token.period_end * 1000).toISOString()
       : undefined,
-    currentPeriodReserved_nano: quotaToNanoUsd(
-      periodic
-        ? (token.period_reserved_quota ?? 0)
-        : (token.pending_quota ?? 0),
-    ),
-    currentPeriodUsed_nano: quotaToNanoUsd(
-      periodic ? (token.period_used_quota ?? 0) : token.used_quota,
-    ),
-    totalUsed_nano: quotaToNanoUsd(token.used_quota),
+    currentPeriodReserved_nano: periodic
+      ? quotaMoneyNano(
+          token.period_reserved_quota_nano,
+          token.period_reserved_quota ?? 0,
+        )
+      : pending,
+    currentPeriodUsed_nano: periodic
+      ? quotaMoneyNano(
+          token.period_used_quota_nano,
+          token.period_used_quota ?? 0,
+        )
+      : used,
+    totalUsed_nano: used,
     validUntil:
       token.expired_time > 0
         ? new Date(token.expired_time * 1000).toISOString()

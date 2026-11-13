@@ -1,0 +1,57 @@
+.money-ledger {
+  margin-block: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  min-width: 0;
+}
+.money-ledger > header,
+.money-entry-heading,
+.money-ledger > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.money-ledger h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+.money-ledger p,
+.money-ledger dt,
+.money-entry-heading time {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.money-ledger article {
+  padding-block: 1rem;
+  border-top: 1px solid var(--border);
+}
+.money-ledger dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin-block: 0.75rem;
+}
+.money-ledger dd {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.money-ledger bdi {
+  font-variant-numeric: tabular-nums;
+}
+.money-ledger summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.money-ledger > footer {
+  padding-top: 1rem;
+}
+@media (max-width: 390px) {
+  .money-ledger dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

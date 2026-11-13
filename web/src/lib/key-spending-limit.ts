@@ -1,3 +1,4 @@
+import { decimalUsdToNano } from "./money";
 import { decimalUsdNano, type PreviewKey } from "./product-preview";
 
 export function keySpendingLimitValue(key?: PreviewKey): string {
@@ -39,4 +40,28 @@ export function quotaForPeriodLimit(value: string, key?: PreviewKey): number {
       : 0n;
   if (BigInt(limit) * 2000n < held + used) throw Error("below_used");
   return limit;
+}
+
+export function remainingNanoForLifetimeLimit(
+  value: string,
+  key?: PreviewKey,
+): string {
+  const total = BigInt(decimalUsdToNano(value));
+  if (total < 0n) throw Error("invalid_amount");
+  if (total / 2000n > 9_007_199_254_740_991n) throw Error("too_large");
+  const used = BigInt(key?.totalUsed_nano ?? "0");
+  const pending = BigInt(key?.currentPeriodReserved_nano ?? "0");
+  if (total < used + pending) throw Error("below_used");
+  return (total - used).toString();
+}
+
+export function nanoForPeriodLimit(value: string, key?: PreviewKey): string {
+  const total = BigInt(remainingNanoForLifetimeLimit(value));
+  const held = BigInt(key?.currentPeriodReserved_nano ?? "0");
+  const used =
+    key?.quotaPeriod !== "never"
+      ? BigInt(key?.currentPeriodUsed_nano ?? "0")
+      : 0n;
+  if (total < held + used) throw Error("below_used");
+  return total.toString();
 }
