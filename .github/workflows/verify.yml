@@ -69,8 +69,6 @@ jobs:
             web/playwright-report/
             web/test-results/
 
-  # Nightly job: shuffle tests to detect order-dependent failures.
-  # Only runs on schedule (not on every push/PR).
   browser-security-regions:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -96,15 +94,23 @@ jobs:
         working-directory: web
       - run: npx playwright install --with-deps ${{ matrix.browser }}
         working-directory: web
-      - run: node tests/staff-security-browser.mjs
+      - run: npm run test:browser:security
+        working-directory: web
+      - name: Verify key quotas and canonical money in Chromium
+        if: matrix.browser == 'chromium'
+        run: npm run test:browser:quota
         working-directory: web
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: security-regions-${{ matrix.browser }}
-          path: web/playwright-report/staff-security/${{ matrix.browser }}
+          path: |
+            web/playwright-report/staff-security/${{ matrix.browser }}
+            web/playwright-report/key-quota/
           retention-days: 7
 
+  # Nightly job: shuffle tests to detect order-dependent failures.
+  # Only runs on schedule (not on every push/PR).
   nightly-shuffle:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
