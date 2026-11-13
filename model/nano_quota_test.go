@@ -37,6 +37,34 @@ func TestNanoReservationsTargetsAreIdempotentAndSettleOneNano(t *testing.T) {
 	}
 }
 
+func TestNanoAndLegacyMovementsShareOneReconstructibleJournal(t *testing.T) {
+	newTestDB(t)
+	u, token := newBillingUser(t, 1000)
+	if err := ReserveQuota(u.ID, token.ID, false, 100, "n2:mixed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SettleQuota(u.ID, token.ID, false, -99, 1, &Log{QuotaReservationID: "n2:mixed", AmountUnit: common.MoneyUnitNano}); err != nil {
+		t.Fatal(err)
+	}
+	u, _ = GetUserByID(u.ID)
+	if _, err := AdjustUserQuota(u.ID, 10, u.Quota, 1, "Mixed-version credit"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ReserveQuota(u.ID, token.ID, false, 10, "legacy-mixed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SettleQuota(u.ID, token.ID, false, -9, 1, &Log{QuotaReservationID: "legacy-mixed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyMoneyLedger(u.ID); err != nil {
+		t.Fatal(err)
+	}
+	u, _ = GetUserByID(u.ID)
+	if common.QuotaMoney(u.Quota, u.QuotaRemainderNano).String() != "2017999" {
+		t.Fatal("legacy path discarded nano remainder")
+	}
+}
+
 func TestNanoPeriodicLateSettlementAndReleaseNeverRefillNewPeriod(t *testing.T) {
 	newTestDB(t)
 	u, token := periodicBillingToken(t, 1)

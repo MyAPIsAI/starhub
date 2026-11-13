@@ -25,18 +25,20 @@ type Wallet struct {
 // adjustment, refund). amount is signed nano-USD; balance_after is the
 // resulting wallet balance for audit reconstruction.
 type LedgerEntry struct {
-	ID            int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	Account       string `gorm:"size:24;not null;default:''" json:"account"`
-	AmountUnit    string `gorm:"size:24;not null;default:''" json:"amount_unit"`
-	UserID        int64  `gorm:"index;not null" json:"user_id"`
-	Type          string `gorm:"size:32;not null;default:''" json:"type"` // recharge | call_summary | adjustment | refund
-	Amount        int64  `gorm:"not null;default:0" json:"amount"`        // signed nano-USD
-	BalanceAfter  int64  `gorm:"not null;default:0" json:"balance_after"` // nano-USD
-	Description   string `gorm:"size:256;not null;default:''" json:"description"`
-	OrderID       string `gorm:"size:64;not null;default:''" json:"order_id"`
-	TraceID       string `gorm:"size:64;not null;default:''" json:"trace_id"`
-	FundingSource string `gorm:"size:32;not null;default:'legacy_unverified'" json:"funding_source"`
-	CreatedAt     int64  `gorm:"autoCreateTime;index" json:"created_at"`
+	AmountRemainderNano       int64  `gorm:"not null;default:0" json:"-"`
+	BalanceAfterRemainderNano int64  `gorm:"not null;default:0" json:"-"`
+	ID                        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	Account                   string `gorm:"size:24;not null;default:''" json:"account"`
+	AmountUnit                string `gorm:"size:24;not null;default:''" json:"amount_unit"`
+	UserID                    int64  `gorm:"index;not null" json:"user_id"`
+	Type                      string `gorm:"size:32;not null;default:''" json:"type"` // recharge | call_summary | adjustment | refund
+	Amount                    int64  `gorm:"not null;default:0" json:"amount"`        // signed nano-USD
+	BalanceAfter              int64  `gorm:"not null;default:0" json:"balance_after"` // nano-USD
+	Description               string `gorm:"size:256;not null;default:''" json:"description"`
+	OrderID                   string `gorm:"size:64;not null;default:''" json:"order_id"`
+	TraceID                   string `gorm:"size:64;not null;default:''" json:"trace_id"`
+	FundingSource             string `gorm:"size:32;not null;default:'legacy_unverified'" json:"funding_source"`
+	CreatedAt                 int64  `gorm:"autoCreateTime;index" json:"created_at"`
 }
 
 // RechargeOrder tracks a single top-up attempt. The state machine is:

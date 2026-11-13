@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"math/big"
 
 	"gorm.io/gorm"
 
@@ -79,6 +80,14 @@ func UpdateUserFields(id int64, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}
+	if _, changed := fields["quota"]; changed {
+		user, err := GetUserByID(id)
+		if err != nil {
+			return err
+		}
+		expected := user.Quota
+		return UpdateUserFieldsWithQuota(id, fields, &expected)
+	}
 	return DB.Model(&User{}).Where("id = ?", id).Updates(fields).Error
 }
 
@@ -86,25 +95,44 @@ func DecreaseUserQuota(id int64, amount int64) (bool, error) {
 	if amount <= 0 {
 		return true, nil
 	}
-	res := DB.Model(&User{}).Where("id = ? AND quota >= ?", id, amount).
-		Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount)})
-	return res.RowsAffected > 0, res.Error
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		_, err := applyUserMoneyDelta(tx, id, new(big.Int).Neg(common.QuotaMoney(amount, 0)), "legacy_debit", legacyMoneyOperation("legacy_debit", "", amount), "Legacy API quota debit", "system_quota", 0)
+		return err
+	})
+	if errors.Is(err, ErrUserQuotaShort) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func IncreaseUserQuota(id int64, amount int64) error {
 	if amount <= 0 {
 		return nil
 	}
-	return DB.Model(&User{}).Where("id = ?", id).
-		Updates(map[string]any{"quota": gorm.Expr("quota + ?", amount)}).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		_, err := applyUserMoneyDelta(tx, id, common.QuotaMoney(amount, 0), "system_credit", legacyMoneyOperation("system_credit", "", amount), "Authorized system quota credit", "system_quota", 0)
+		return err
+	})
 }
 
 func IncreaseUserUsedQuota(id int64, amount int64) error {
 	if amount <= 0 {
 		return nil
 	}
-	return DB.Model(&User{}).Where("id = ?", id).
-		Updates(map[string]any{"used_quota": gorm.Expr("used_quota + ?", amount)}).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		user, account, err := lockMoneyUser(tx, id)
+		if err != nil {
+			return err
+		}
+		delta := common.QuotaMoney(amount, 0)
+		used := common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano)
+		used.Add(used, delta)
+		if err := setMoneyPair(tx, &User{}, id, "used_quota", used); err != nil {
+			return err
+		}
+		_, err = recordMoneyMovement(tx, account, moneyMovement{Spent: delta, Kind: "counter_import", OperationID: legacyMoneyOperation("counter_import", "", amount), Reason: "Legacy usage counter import", FundingSource: "legacy_counter_import"})
+		return err
+	})
 }
 
 // GetUserByAffCode returns the user who owns the invite code, or

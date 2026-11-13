@@ -205,6 +205,10 @@ func New() http.Handler {
 	// Wallet & billing: balance, ledger, recharge orders. All require an
 	// authenticated user; admins see all records, users see their own.
 	mux.Handle("GET /api/wallet", middleware.UserAuth(http.HandlerFunc(controller.GetWallet)))
+	mux.Handle("GET /api/wallet/v2", middleware.UserAuth(http.HandlerFunc(controller.MoneyWallet)))
+	mux.Handle("GET /api/ledger/v2", middleware.UserAuth(http.HandlerFunc(controller.MoneyLedger)))
+	mux.Handle("POST /api/wallet/adjustments", middleware.UserAuth(http.HandlerFunc(controller.MoneyAdjust)))
+	mux.Handle("GET /api/wallet/reconciliation", middleware.UserAuth(http.HandlerFunc(controller.MoneyReconciliation)))
 	mux.Handle("GET /api/ledger", middleware.UserAuth(http.HandlerFunc(controller.ListLedger)))
 	mux.Handle("GET /api/ledger/", middleware.UserAuth(http.HandlerFunc(controller.ListLedger)))
 	mux.Handle("GET /api/recharge", middleware.UserAuth(http.HandlerFunc(controller.ListRechargeOrders)))

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"starhub/common"
 
 	"gorm.io/gorm"
 )
@@ -40,6 +41,10 @@ func AdjustUserQuota(userID int64, amount int64, expectedQuota int64, actorID in
 		if user.Quota != expectedQuota {
 			return ErrAdjustmentConflict
 		}
+		account, err := ensureMoneyAccount(tx, user)
+		if err != nil {
+			return err
+		}
 		// Apply the adjustment.
 		if user.Quota < 0 || (amount > 0 && user.Quota > math.MaxInt64-amount) || (amount < 0 && amount < -user.Quota) {
 			return errors.New("quota adjustment exceeds balance bounds")
@@ -57,16 +62,21 @@ func AdjustUserQuota(userID int64, amount int64, expectedQuota int64, actorID in
 		}
 		// Write ledger entry with actor attribution.
 		entry = LedgerEntry{
-			Account:       LedgerAccountQuota,
-			AmountUnit:    LedgerUnitLegacyQuota,
-			UserID:        userID,
-			Type:          "adjustment",
-			Amount:        amount,
-			BalanceAfter:  newQuota,
-			Description:   fmt.Sprintf("by admin %d: %s", actorID, reason),
-			FundingSource: FundingSourceLegacyUnverified,
+			Account:                   LedgerAccountQuota,
+			AmountUnit:                LedgerUnitLegacyQuota,
+			UserID:                    userID,
+			Type:                      "adjustment",
+			Amount:                    amount,
+			BalanceAfter:              newQuota,
+			BalanceAfterRemainderNano: user.QuotaRemainderNano,
+			Description:               fmt.Sprintf("by admin %d: %s", actorID, reason),
+			FundingSource:             FundingSourceLegacyUnverified,
 		}
-		return tx.Create(&entry).Error
+		if err := tx.Create(&entry).Error; err != nil {
+			return err
+		}
+		_, err = recordMoneyMovement(tx, account, moneyMovement{Available: common.QuotaMoney(amount, 0), Kind: "admin_adjustment", OperationID: fmt.Sprintf("legacy-adjustment:%d", entry.ID), ActorID: actorID, Reason: reason, FundingSource: "administrator"})
+		return err
 	})
 	if err != nil {
 		return nil, err

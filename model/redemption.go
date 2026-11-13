@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -83,6 +84,9 @@ func DeleteRedemption(id int64) error {
 func RedeemCode(code string, userID int64) (int64, error) {
 	var credited int64
 	err := DB.Transaction(func(tx *gorm.DB) error {
+		if _, _, err := lockMoneyUser(tx, userID); err != nil {
+			return err
+		}
 		var r Redemption
 		if err := tx.Where("code = ?", code).First(&r).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -90,7 +94,7 @@ func RedeemCode(code string, userID int64) (int64, error) {
 			}
 			return err
 		}
-		if r.Status != common.StatusEnabled {
+		if r.Status != common.StatusEnabled || r.Quota <= 0 {
 			return ErrRedemptionNotFound
 		}
 		if r.ExpiredAt > 0 && time.Now().Unix() > r.ExpiredAt {
@@ -112,8 +116,7 @@ func RedeemCode(code string, userID int64) (int64, error) {
 			return ErrRedemptionNotFound
 		}
 		// Credit the user.
-		if err := tx.Model(&User{}).Where("id = ?", userID).
-			Updates(map[string]any{"quota": gorm.Expr("quota + ?", r.Quota)}).Error; err != nil {
+		if _, err := applyUserMoneyDelta(tx, userID, common.QuotaMoney(r.Quota, 0), "redemption", fmt.Sprintf("redemption:%d", r.ID), "Redeem administrator-issued prepaid code", "redemption", 0); err != nil {
 			return err
 		}
 		credited = r.Quota

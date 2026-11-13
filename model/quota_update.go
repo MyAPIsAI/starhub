@@ -3,6 +3,8 @@ package model
 import (
 	"errors"
 	"gorm.io/gorm"
+	"math/big"
+	"starhub/common"
 	"time"
 )
 
@@ -29,7 +31,35 @@ func updateFieldsWithQuota(entity any, id int64, fields map[string]any, column s
 }
 
 func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {
-	return updateFieldsWithQuota(&User{}, id, fields, "quota", expected)
+	if _, changed := fields["quota"]; !changed {
+		return updateFieldsWithQuota(&User{}, id, fields, "quota", expected)
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		user, account, err := lockMoneyUser(tx, id)
+		if err != nil {
+			return err
+		}
+		if expected == nil || user.Quota != *expected {
+			return ErrQuotaConflict
+		}
+		next, ok := fields["quota"].(int64)
+		if value, isInt := fields["quota"].(int); isInt {
+			next, ok = int64(value), true
+			fields["quota"] = next
+		}
+		if !ok || next < 0 {
+			return ErrQuotaConflict
+		}
+		before := common.QuotaMoney(user.Quota, user.QuotaRemainderNano)
+		after := common.QuotaMoney(next, user.QuotaRemainderNano)
+		delta := new(big.Int).Sub(after, before)
+		fields["quota_remainder_nano"] = user.QuotaRemainderNano
+		if err := tx.Model(&User{}).Where("id = ? AND quota = ?", id, *expected).Updates(fields).Error; err != nil {
+			return err
+		}
+		_, err = recordMoneyMovement(tx, account, moneyMovement{Available: delta, Kind: "legacy_adjustment", OperationID: legacyMoneyOperation("legacy_adjustment", "", next), Reason: "Guarded legacy quota replacement", FundingSource: "system_quota"})
+		return err
+	})
 }
 
 func UpdateTokenFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {

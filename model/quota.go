@@ -2,7 +2,10 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"log"
+	"math"
+	"math/big"
 	"starhub/common"
 	"time"
 
@@ -38,6 +41,10 @@ func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amoun
 	if nanoAdmission(quotaAdmissionID(admissionID)) {
 		return reserveNanoQuota(tx, userID, tokenID, tokenUnlimited, amount, admissionID)
 	}
+	_, account, err := lockMoneyUser(tx, userID)
+	if err != nil {
+		return err
+	}
 	res := tx.Model(&User{}).
 		Where("id = ? AND quota >= ?", userID, amount).
 		Updates(map[string]any{"quota": gorm.Expr("quota - ?", amount)})
@@ -56,7 +63,7 @@ func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amoun
 			return err
 		}
 		if reservation.PeriodID > 0 {
-			return nil
+			return recordLegacyHold(tx, account, userID, tokenID, amount, id)
 		}
 	} else {
 		var token Token
@@ -78,7 +85,7 @@ func reserveQuota(tx *gorm.DB, userID, tokenID int64, tokenUnlimited bool, amoun
 			return ErrTokenQuotaShort
 		}
 	}
-	return nil
+	return recordLegacyHold(tx, account, userID, tokenID, amount, quotaAdmissionID(admissionID))
 }
 
 // ReleaseQuota returns a reservation (full refund when a relay attempt
@@ -88,11 +95,26 @@ func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64, admi
 		return nil
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
+		if nanoAdmission(quotaAdmissionID(admissionID)) {
+			return releaseNanoQuota(tx, userID, tokenID, amount, quotaAdmissionID(admissionID))
+		}
+		_, account, err := lockMoneyUser(tx, userID)
+		if err != nil {
+			return err
+		}
 		if id := quotaAdmissionID(admissionID); id != "" {
-			if nanoAdmission(id) {
-				return releaseNanoQuota(tx, userID, tokenID, amount, id)
+			var before QuotaReservation
+			if err := tx.First(&before, "id = ?", id).Error; err != nil {
+				return err
 			}
-			return releaseTokenAdmission(tx, userID, tokenID, amount, id, time.Now())
+			if err := releaseTokenAdmission(tx, userID, tokenID, amount, id, time.Now()); err != nil {
+				return err
+			}
+			if before.CompletedAt != 0 {
+				return nil
+			}
+			_, err := recordMoneyMovement(tx, account, moneyMovement{Available: common.QuotaMoney(amount, 0), Reserved: new(big.Int).Neg(common.QuotaMoney(amount, 0)), Kind: "release", OperationID: id + ":release", ReservationID: id, Reason: "Release legacy quota reservation", FundingSource: "spendable_quota"})
+			return err
 		}
 		var token Token
 		if err := tx.Select("id", "quota_period").Where("id = ?", tokenID).Find(&token).Error; err != nil {
@@ -107,8 +129,11 @@ func ReleaseQuota(userID, tokenID int64, tokenUnlimited bool, amount int64, admi
 				return err
 			}
 		}
-		return tx.Model(&User{}).Where("id = ?", userID).
-			Updates(map[string]any{"quota": gorm.Expr("quota + ?", amount)}).Error
+		if err := tx.Model(&User{}).Where("id = ?", userID).Updates(map[string]any{"quota": gorm.Expr("quota + ?", amount)}).Error; err != nil {
+			return err
+		}
+		_, err = recordMoneyMovement(tx, account, moneyMovement{Available: common.QuotaMoney(amount, 0), Reserved: new(big.Int).Neg(common.QuotaMoney(amount, 0)), Kind: "release", OperationID: legacyMoneyOperation("legacy_release", "", amount), Reason: "Release legacy untracked reservation", FundingSource: "spendable_quota"})
+		return err
 	})
 }
 
@@ -125,7 +150,7 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 	if entry != nil && (entry.AmountUnit == common.MoneyUnitNano || nanoAdmission(entry.QuotaReservationID)) {
 		return settleNanoQuota(userID, tokenID, delta, actual, entry, claim)
 	}
-	if actual < 0 || delta > actual {
+	if actual < 0 || delta > actual || delta < actual-math.MaxInt64 {
 		return errors.New("invalid quota settlement amounts")
 	}
 	var settled Log
@@ -135,6 +160,10 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 	settled.UserID, settled.TokenID = userID, tokenID
 	settled.Quota, settled.UnfundedQuota = actual, 0
 	err := DB.Transaction(func(tx *gorm.DB) error {
+		_, account, err := lockMoneyUser(tx, userID)
+		if err != nil {
+			return err
+		}
 		// Acquire SQLite's write lock before reading balances. A deferred
 		// read-then-write transaction can otherwise fail with SQLITE_BUSY.
 		res := tx.Model(&User{}).Where("id = ?", userID).UpdateColumn("quota", gorm.Expr("quota"))
@@ -246,9 +275,19 @@ func settleQuota(userID, tokenID int64, tokenUnlimited bool, delta, actual int64
 			if err := tx.Create(&settled).Error; err != nil {
 				return err
 			}
-			return queueAffiliateRebate(tx, &settled)
+			if err := queueAffiliateRebate(tx, &settled); err != nil {
+				return err
+			}
 		}
-		return nil
+		pre := actual - delta
+		operation := legacyMoneyOperation("legacy_settle", settled.QuotaReservationID, settled.ID)
+		if settled.QuotaReservationID != "" {
+			operation = settled.QuotaReservationID + ":settle"
+		} else if settled.ID > 0 {
+			operation = fmt.Sprintf("legacy-log:%d", settled.ID)
+		}
+		_, err = recordMoneyMovement(tx, account, moneyMovement{Available: common.QuotaMoney(pre-settled.Quota, 0), Reserved: new(big.Int).Neg(common.QuotaMoney(pre, 0)), Spent: common.QuotaMoney(settled.Quota, 0), Kind: "consumption", OperationID: operation, ReservationID: settled.QuotaReservationID, LogID: settled.ID, Reason: "Settle legacy captured usage", FundingSource: "spendable_quota"})
+		return err
 	})
 	if err != nil {
 		return err

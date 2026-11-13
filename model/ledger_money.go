@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"math/big"
+	"starhub/common"
 	"strings"
 )
 
@@ -27,12 +28,12 @@ func LedgerMoney(entry LedgerEntry) (account, unit, amountNano, balanceNano stri
 	if (account != LedgerAccountWallet && account != LedgerAccountQuota) || (unit != LedgerUnitNano && unit != LedgerUnitLegacyQuota) || (unit == LedgerUnitLegacyQuota && account != LedgerAccountQuota) {
 		return "", "", "", "", errors.New("unsupported ledger monetary identity")
 	}
-	convert := func(value int64) string {
+	convert := func(value, remainder int64) string {
 		amount := big.NewInt(value)
 		if unit == LedgerUnitLegacyQuota {
-			amount.Mul(amount, big.NewInt(2000))
+			return common.QuotaMoney(value, remainder).String()
 		}
 		return amount.String()
 	}
-	return account, unit, convert(entry.Amount), convert(entry.BalanceAfter), nil
+	return account, unit, convert(entry.Amount, entry.AmountRemainderNano), convert(entry.BalanceAfter, entry.BalanceAfterRemainderNano), nil
 }

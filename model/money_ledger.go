@@ -107,6 +107,12 @@ func ensureMoneyAccount(tx *gorm.DB, user User) (*MoneyAccount, error) {
 	var account MoneyAccount
 	err := tx.First(&account, "user_id = ?", user.ID).Error
 	if err == nil {
+		for _, raw := range []string{account.AvailableNano, account.ReservedNano, account.SpentNano} {
+			value, err := common.ParseNano(raw)
+			if err != nil || value.Sign() < 0 {
+				return nil, ErrMoneyConflict
+			}
+		}
 		if account.AvailableNano != available.String() || account.SpentNano != spent.String() {
 			return nil, ErrMoneyConflict
 		}
@@ -241,6 +247,9 @@ func VerifyMoneyLedger(userID int64) error {
 			}
 		}
 		if err := rows.Err(); err != nil {
+			return err
+		}
+		if err := rows.Close(); err != nil {
 			return err
 		}
 		if account.Sequence != sequence || account.AvailableNano != sums[0].String() || account.ReservedNano != sums[1].String() || account.SpentNano != sums[2].String() {
