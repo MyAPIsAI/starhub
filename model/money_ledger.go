@@ -214,54 +214,63 @@ func setMoneyPair(tx *gorm.DB, table any, id int64, field string, value *big.Int
 // VerifyMoneyLedger rebuilds every dimension from journal deltas in one read
 // snapshot and reports drift without repairing or promoting unverified funds.
 func VerifyMoneyLedger(userID int64) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
-		var account MoneyAccount
-		if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
+	return DB.Transaction(func(tx *gorm.DB) error { return verifyMoneyLedger(tx, userID) })
+}
+
+func verifyMoneyLedger(tx *gorm.DB, userID int64) error {
+	var account MoneyAccount
+	if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
+		return err
+	}
+	rows, err := tx.Model(&MoneyEntry{}).Where("user_id = ?", userID).Order("sequence").Rows()
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	sums := []*big.Int{new(big.Int), new(big.Int), new(big.Int)}
+	sequence := int64(0)
+	for rows.Next() {
+		var entry MoneyEntry
+		if err := tx.ScanRows(rows, &entry); err != nil {
 			return err
 		}
-		rows, err := tx.Model(&MoneyEntry{}).Where("user_id = ?", userID).Order("sequence").Rows()
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		sums := []*big.Int{new(big.Int), new(big.Int), new(big.Int)}
-		sequence := int64(0)
-		for rows.Next() {
-			var entry MoneyEntry
-			if err := tx.ScanRows(rows, &entry); err != nil {
-				return err
-			}
-			sequence++
-			if entry.Sequence != sequence {
-				return ErrMoneyConflict
-			}
-			for i, raw := range []string{entry.AvailableDeltaNano, entry.ReservedDeltaNano, entry.SpentDeltaNano} {
-				delta, err := common.ParseNano(raw)
-				if err != nil {
-					return err
-				}
-				sums[i].Add(sums[i], delta)
-			}
-			if sums[0].String() != entry.AvailableAfterNano || sums[1].String() != entry.ReservedAfterNano || sums[2].String() != entry.SpentAfterNano {
-				return ErrMoneyConflict
-			}
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		if err := rows.Close(); err != nil {
-			return err
-		}
-		if account.Sequence != sequence || account.AvailableNano != sums[0].String() || account.ReservedNano != sums[1].String() || account.SpentNano != sums[2].String() {
+		sequence++
+		if entry.Sequence != sequence {
 			return ErrMoneyConflict
 		}
-		var user User
-		if err := tx.First(&user, userID).Error; err != nil {
-			return err
+		for i, raw := range []string{entry.AvailableDeltaNano, entry.ReservedDeltaNano, entry.SpentDeltaNano} {
+			delta, err := common.ParseNano(raw)
+			if err != nil {
+				return err
+			}
+			sums[i].Add(sums[i], delta)
 		}
-		if common.QuotaMoney(user.Quota, user.QuotaRemainderNano).String() != account.AvailableNano || common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano).String() != account.SpentNano {
-			return fmt.Errorf("%w: user projection", ErrMoneyConflict)
+		if sums[0].String() != entry.AvailableAfterNano || sums[1].String() != entry.ReservedAfterNano || sums[2].String() != entry.SpentAfterNano {
+			return ErrMoneyConflict
 		}
-		return nil
-	})
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if account.Sequence != sequence || account.AvailableNano != sums[0].String() || account.ReservedNano != sums[1].String() || account.SpentNano != sums[2].String() {
+		return ErrMoneyConflict
+	}
+	var user User
+	if err := tx.First(&user, userID).Error; err != nil {
+		return err
+	}
+	if common.QuotaMoney(user.Quota, user.QuotaRemainderNano).String() != account.AvailableNano || common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano).String() != account.SpentNano {
+		return fmt.Errorf("%w: user projection", ErrMoneyConflict)
+	}
+	held, err := pendingUserMoney(tx, userID)
+	if err != nil {
+		return err
+	}
+	if held.String() != account.ReservedNano {
+		return fmt.Errorf("%w: pending reservation projection", ErrMoneyConflict)
+	}
+	return nil
 }

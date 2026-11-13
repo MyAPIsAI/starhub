@@ -172,3 +172,20 @@ func TestNanoOwnedLifetimeEditSubtractsExactPendingHolds(t *testing.T) {
 		t.Fatal("settlement changed the edited lifetime budget")
 	}
 }
+
+func TestMoneyAuditDetectsReservationDriftOfOneNano(t *testing.T) {
+	newTestDB(t)
+	user, token := newBillingUser(t, 1000)
+	if err := ReserveQuota(user.ID, token.ID, false, 1, "n2:audit-held"); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyMoneyLedger(user.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Model(&QuotaReservation{}).Where("id = ?", "n2:audit-held").Update("amount", 2).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyMoneyLedger(user.ID); err == nil {
+		t.Fatal("one nano of receipt drift was not detected")
+	}
+}

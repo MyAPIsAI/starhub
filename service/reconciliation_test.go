@@ -63,3 +63,29 @@ func TestRunDailyReconciliationOnceAlertsOnLargeDiff(t *testing.T) {
 		t.Fatal("should alert when diff exceeds threshold")
 	}
 }
+
+func TestDailyMoneyAuditDetectsOneNanoAndNeverRepairsBalances(t *testing.T) {
+	newTestDB(t)
+	user := &model.User{Username: "recon-nano", Status: 1, Quota: 1000, AffCode: "recon-nano"}
+	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := model.ReadMoneyAccount(user.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.DB.Model(&model.User{}).Where("id = ?", user.ID).Update("quota_remainder_nano", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := model.InsertLog(&model.Log{UserID: user.ID, QuotaRemainderNano: 1, Status: 1, CreatedAt: time.Now().Add(-24 * time.Hour).Unix()}); err != nil {
+		t.Fatal(err)
+	}
+	RunDailyReconciliationOnce(context.Background())
+	record, err := model.GetLatestReconciliationForUser(user.ID)
+	if err != nil || record.AccountingVersion != 2 || record.LogQuotaNanoSum != "1" || !record.Alerted || record.LedgerVerified || record.LedgerError == "" {
+		t.Fatalf("one-nano discrepancy disappeared: %+v %v", record, err)
+	}
+	after, _ := model.GetUserByID(user.ID)
+	if after.QuotaRemainderNano != 1 {
+		t.Fatal("audit silently repaired the balance")
+	}
+}

@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math"
+	"math/big"
+	"starhub/common"
 	"time"
 
 	"starhub/model"
@@ -38,47 +42,48 @@ func RunDailyReconciliationOnce(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		// Sum quota from logs for this user in the day window.
-		var logSum struct {
-			Total int64
-		}
-		err := model.DB.Model(&model.Log{}).
-			Select("COALESCE(SUM(quota), 0) AS total").
-			Where("user_id = ? AND created_at >= ? AND created_at < ?", user.ID, dayStart.Unix(), dayEnd.Unix()).
-			Scan(&logSum).Error
+
+		collected, err := model.SumChargedLogMoney(user.ID, dayStart.Unix(), dayEnd.Unix())
 		if err != nil {
-			log.Printf("daily reconciliation: sum logs for user %d failed: %v", user.ID, err)
+			log.Printf("daily reconciliation: exact log sum for user %d failed: %v", user.ID, err)
 			continue
 		}
-
-		// Compute the used_quota delta for the day by comparing current
-		// UsedQuota against the previous reconciliation record's snapshot.
-		// For the first run, the delta equals the full UsedQuota.
-		usedDelta := user.UsedQuota
-		if prev, err := model.GetLatestReconciliationForUser(user.ID); err == nil && prev != nil {
-			usedDelta = user.UsedQuota - prev.UsedQuotaDelta
+		account, verifyErr := model.AuditMoneyLedger(user.ID)
+		current := common.QuotaMoney(user.UsedQuota, user.UsedQuotaRemainderNano)
+		sequence := int64(0)
+		if account != nil {
+			sequence = account.Sequence
+			if value, ok := new(big.Int).SetString(account.SpentNano, 10); ok {
+				current = value
+			}
 		}
-
-		diff := logSum.Total - usedDelta
-		if diff < 0 {
-			diff = -diff
+		previous := new(big.Int)
+		if prev, err := model.ReconciliationBeforeDate(user.ID, dateStr); err == nil {
+			previous = common.QuotaMoney(prev.UsedQuotaDelta, 0)
+			if prev.AccountingVersion == 2 {
+				if value, ok := new(big.Int).SetString(prev.UsedQuotaNanoSnapshot, 10); ok {
+					previous = value
+				}
+			}
 		}
-
+		usedDelta := new(big.Int).Sub(current, previous)
+		difference := new(big.Int).Sub(collected, usedDelta)
+		difference.Abs(difference)
 		alerted := false
-		if diff > reconciliationDiffThreshold {
-			NotifyReconciliationDiff(diff, "user quota delta does not match log sum")
+		if difference.Cmp(common.QuotaMoney(reconciliationDiffThreshold, 0)) > 0 {
+			NotifyReconciliationDiff(reconciliationQuotaProjection(difference), "user usage snapshot delta does not match daily log sum")
 			alerted = true
 		}
-
-		// Persist the reconciliation record for audit and future delta computation.
-		record := &model.ReconciliationRecord{
-			UserID:         user.ID,
-			Date:           dateStr,
-			LogQuotaSum:    logSum.Total,
-			UsedQuotaDelta: user.UsedQuota,
-			Diff:           diff,
-			Alerted:        alerted,
+		if verifyErr != nil {
+			NotifyReconciliationDiff(0, fmt.Sprintf("canonical money ledger verification failed for user %d", user.ID))
+			alerted = true
 		}
+		failure := ""
+		if verifyErr != nil {
+			failure = "canonical_money_verification_failed"
+		}
+		record := &model.ReconciliationRecord{UserID: user.ID, Date: dateStr, LogQuotaSum: reconciliationQuotaProjection(collected), UsedQuotaDelta: reconciliationQuotaProjection(current), Diff: reconciliationQuotaProjection(difference), Alerted: alerted, AccountingVersion: 2, LogQuotaNanoSum: collected.String(), UsedQuotaNanoSnapshot: current.String(), DifferenceNano: difference.String(), LedgerVerified: verifyErr == nil, LedgerError: failure, MoneySequence: sequence}
+
 		if err := model.InsertReconciliationRecord(record); err != nil {
 			log.Printf("daily reconciliation: persist record for user %d failed: %v", user.ID, err)
 		}
@@ -102,4 +107,12 @@ func RunDailyReconciliationLoop(ctx context.Context) {
 		}
 		RunDailyReconciliationOnce(ctx)
 	}
+}
+
+func reconciliationQuotaProjection(amount *big.Int) int64 {
+	whole, _, err := common.NanoQuotaParts(amount)
+	if err != nil {
+		return math.MaxInt64
+	}
+	return whole
 }
