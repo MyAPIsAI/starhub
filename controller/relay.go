@@ -1146,6 +1146,11 @@ func disableBrokenKey(ch *model.Channel, keyIdx, statusCode int) {
 }
 
 func ListModels(w http.ResponseWriter, r *http.Request) {
+	region, err := model.ActiveRegionProfile()
+	if err != nil {
+		common.RelayError(w, 503, "server_error", "region_unavailable", "active deployment policy is unavailable")
+		return
+	}
 	group, _ := r.Context().Value(common.CtxUsingGroup).(string)
 	models, err := model.ListModelsByGroup(group)
 	if err != nil {
@@ -1155,6 +1160,14 @@ func ListModels(w http.ResponseWriter, r *http.Request) {
 	}
 	data := make([]map[string]any, 0, len(models))
 	for _, m := range models {
+		allowed, err := region.CheckModel(m)
+		if err != nil {
+			common.RelayError(w, 503, "server_error", "region_unavailable", "regional model policy could not be verified")
+			return
+		}
+		if !allowed {
+			continue
+		}
 		data = append(data, map[string]any{
 			"id":       m,
 			"object":   "model",

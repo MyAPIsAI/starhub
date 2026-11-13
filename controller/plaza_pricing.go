@@ -225,6 +225,10 @@ type plazaPricingJSON struct {
 // deliberate: the plaza must never advertise a model that cannot be served,
 // and must never hide one that can.
 func buildPlazaRows(ctx context.Context, group, userGroup string, userID int64) ([]plazaRow, error) {
+	region, err := model.ActiveRegionProfile()
+	if err != nil {
+		return nil, err
+	}
 	coverage, err := model.ListModelCoverage()
 	if err != nil {
 		return nil, err
@@ -255,6 +259,9 @@ func buildPlazaRows(ctx context.Context, group, userGroup string, userID int64) 
 	for _, name := range names {
 		cov := coverage[name]
 		m := meta[name]
+		if !region.ModelVisible(name, m) {
+			continue
+		}
 
 		row := plazaRow{
 			ID:              name,
