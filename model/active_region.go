@@ -73,3 +73,27 @@ func (profile *RegionProfile) PaymentEnabled(name string) bool {
 	}
 	return false
 }
+
+func (profile *RegionProfile) ModelVisible(name string, metadata *ModelMeta) bool {
+	if !profile.IsModelAllowed(name) {
+		return false
+	}
+	if profile.AllowedVendors == "" {
+		return true
+	}
+	return metadata != nil && metadata.Vendor != "" && profile.IsVendorAllowed(metadata.Vendor)
+}
+
+func (profile *RegionProfile) CheckModel(name string) (bool, error) {
+	if !profile.IsModelAllowed(name) {
+		return false, nil
+	}
+	if profile.AllowedVendors == "" {
+		return true, nil
+	}
+	metadata, _, err := GetModelMeta(name)
+	if err != nil {
+		return false, err
+	}
+	return profile.ModelVisible(name, metadata), nil
+}
