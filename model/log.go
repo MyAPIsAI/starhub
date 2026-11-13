@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"gorm.io/gorm"
+	"strconv"
+	"time"
+)
 
 // admissionDayColumn is a SQL expression that resolves to the effective
 // day for grouping. Logs written after T30 populate admission_day with
@@ -108,14 +112,16 @@ func InsertFailedLog(l *Log) error {
 }
 
 type DailyUsage struct {
-	Date             string `json:"date"`
-	Requests         int64  `json:"requests"`
-	Quota            int64  `json:"quota"`
-	UnfundedQuota    int64  `json:"unfunded_quota"`
-	PromptTokens     int64  `json:"prompt_tokens"`
-	CompletionTokens int64  `json:"completion_tokens"`
-	SuccessCount     int64  `json:"success_count"`
-	FailedCount      int64  `json:"failed_count"`
+	QuotaNano         string `gorm:"-" json:"quota_nano"`
+	UnfundedQuotaNano string `gorm:"-" json:"unfunded_quota_nano"`
+	Date              string `json:"date"`
+	Requests          int64  `json:"requests"`
+	Quota             int64  `json:"quota"`
+	UnfundedQuota     int64  `json:"unfunded_quota"`
+	PromptTokens      int64  `json:"prompt_tokens"`
+	CompletionTokens  int64  `json:"completion_tokens"`
+	SuccessCount      int64  `json:"success_count"`
+	FailedCount       int64  `json:"failed_count"`
 }
 
 func CountLogs(userID int64) (int64, error) {
@@ -129,56 +135,89 @@ func CountLogs(userID int64) (int64, error) {
 }
 
 func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
-	q := DB.Model(&Log{}).
-		Select("date("+admissionDayColumn+", 'unixepoch') AS date, COUNT(*) AS requests, "+
-			"SUM(quota) AS quota, SUM(unfunded_quota) AS unfunded_quota, SUM(prompt_tokens) AS prompt_tokens, "+
-			"SUM(completion_tokens) AS completion_tokens, "+
-			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, "+
-			"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed_count").
-		Where("created_at >= ?", since)
-	if userID > 0 {
-		q = q.Where("user_id = ?", userID)
-	}
-	rows := make([]DailyUsage, 0)
-	err := q.Group("date(" + admissionDayColumn + ", 'unixepoch')").Order("date ASC").Scan(&rows).Error
+	rows := []DailyUsage{}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		query := func() *gorm.DB {
+			q := tx.Model(&Log{}).Where("created_at >= ?", since)
+			if userID > 0 {
+				q = q.Where("user_id = ?", userID)
+			}
+			return q
+		}
+		date := "date(" + admissionDayColumn + ", 'unixepoch')"
+		if err := query().Select(date + " AS date, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, SUM(CASE WHEN status IN (2,3) THEN 1 ELSE 0 END) AS failed_count").Group(date).Order("date ASC").Scan(&rows).Error; err != nil {
+			return err
+		}
+		amounts, err := readGroupedLogMoney(query(), date)
+		if err != nil {
+			return err
+		}
+		for i := range rows {
+			m := usageMoneyAt(amounts, rows[i].Date)
+			rows[i].Quota = legacyUsageQuota(&m.Charged)
+			rows[i].UnfundedQuota = legacyUsageQuota(&m.Unfunded)
+			rows[i].QuotaNano = m.Charged.String()
+			rows[i].UnfundedQuotaNano = m.Unfunded.String()
+		}
+		return nil
+	})
 	return rows, err
 }
 
 // ModelDailyUsage is a per-day per-model usage summary.
 type ModelDailyUsage struct {
-	Date             string `json:"date"`
-	Model            string `json:"model"`
-	Requests         int64  `json:"requests"`
-	Quota            int64  `json:"quota"`
-	PromptTokens     int64  `json:"prompt_tokens"`
-	CompletionTokens int64  `json:"completion_tokens"`
+	QuotaNano         string `gorm:"-" json:"quota_nano"`
+	UnfundedQuotaNano string `gorm:"-" json:"unfunded_quota_nano"`
+	Date              string `json:"date"`
+	Model             string `json:"model"`
+	Requests          int64  `json:"requests"`
+	Quota             int64  `json:"quota"`
+	PromptTokens      int64  `json:"prompt_tokens"`
+	CompletionTokens  int64  `json:"completion_tokens"`
 }
 
 // SummarizeLogsByModel returns daily usage broken down by model.
 func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) {
-	q := DB.Model(&Log{}).
-		Select("date("+admissionDayColumn+", 'unixepoch') AS date, model AS model, "+
-			"COUNT(*) AS requests, SUM(quota) AS quota, "+
-			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
-		Where("created_at >= ?", since)
-	if userID > 0 {
-		q = q.Where("user_id = ?", userID)
-	}
-	var rows []ModelDailyUsage
-	err := q.Group("date(" + admissionDayColumn + ", 'unixepoch'), model").Order("date ASC, model ASC").Scan(&rows).Error
+	rows := []ModelDailyUsage{}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		query := func() *gorm.DB {
+			q := tx.Model(&Log{}).Where("created_at >= ?", since)
+			if userID > 0 {
+				q = q.Where("user_id = ?", userID)
+			}
+			return q
+		}
+		date := "date(" + admissionDayColumn + ", 'unixepoch')"
+		if err := query().Select(date + " AS date, model, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").Group(date + ", model").Order("date ASC, model ASC").Scan(&rows).Error; err != nil {
+			return err
+		}
+		amounts, err := readGroupedLogMoney(query(), date+" || char(0) || model")
+		if err != nil {
+			return err
+		}
+		for i := range rows {
+			m := usageMoneyAt(amounts, rows[i].Date+"\x00"+rows[i].Model)
+			rows[i].Quota = legacyUsageQuota(&m.Charged)
+			rows[i].QuotaNano = m.Charged.String()
+			rows[i].UnfundedQuotaNano = m.Unfunded.String()
+		}
+		return nil
+	})
 	return rows, err
 }
 
 // TokenDailyUsage is a per-day per-token usage summary for the
 // operational per-key consumption view.
 type TokenDailyUsage struct {
-	Date             string `json:"date"`
-	TokenID          int64  `json:"token_id"`
-	TokenName        string `json:"token_name"`
-	Requests         int64  `json:"requests"`
-	Quota            int64  `json:"quota"`
-	PromptTokens     int64  `json:"prompt_tokens"`
-	CompletionTokens int64  `json:"completion_tokens"`
+	QuotaNano         string `gorm:"-" json:"quota_nano"`
+	UnfundedQuotaNano string `gorm:"-" json:"unfunded_quota_nano"`
+	Date              string `json:"date"`
+	TokenID           int64  `json:"token_id"`
+	TokenName         string `json:"token_name"`
+	Requests          int64  `json:"requests"`
+	Quota             int64  `json:"quota"`
+	PromptTokens      int64  `json:"prompt_tokens"`
+	CompletionTokens  int64  `json:"completion_tokens"`
 }
 
 // SummarizeLogsByToken returns daily usage broken down by token (API key).
@@ -186,21 +225,34 @@ type TokenDailyUsage struct {
 // all tokens for the user are included. The result is ordered by date then
 // token id for stable display.
 func SummarizeLogsByToken(userID int64, tokenID int64, since int64) ([]TokenDailyUsage, error) {
-	q := DB.Model(&Log{}).
-		Select("date("+admissionDayColumn+", 'unixepoch') AS date, token_id AS token_id, "+
-			"MAX(token_name) AS token_name, "+
-			"COUNT(*) AS requests, SUM(quota) AS quota, "+
-			"SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").
-		Where("created_at >= ?", since)
-	if userID > 0 {
-		q = q.Where("user_id = ?", userID)
-	}
-	if tokenID > 0 {
-		q = q.Where("token_id = ?", tokenID)
-	}
-	var rows []TokenDailyUsage
-	err := q.Group("date(" + admissionDayColumn + ", 'unixepoch'), token_id").
-		Order("date ASC, token_id ASC").Scan(&rows).Error
+	rows := []TokenDailyUsage{}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		query := func() *gorm.DB {
+			q := tx.Model(&Log{}).Where("created_at >= ?", since)
+			if userID > 0 {
+				q = q.Where("user_id = ?", userID)
+			}
+			if tokenID > 0 {
+				q = q.Where("token_id = ?", tokenID)
+			}
+			return q
+		}
+		date := "date(" + admissionDayColumn + ", 'unixepoch')"
+		if err := query().Select(date + " AS date, token_id, MAX(token_name) AS token_name, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").Group(date + ", token_id").Order("date ASC, token_id ASC").Scan(&rows).Error; err != nil {
+			return err
+		}
+		amounts, err := readGroupedLogMoney(query(), date+" || char(0) || token_id")
+		if err != nil {
+			return err
+		}
+		for i := range rows {
+			m := usageMoneyAt(amounts, rows[i].Date+"\x00"+strconv.FormatInt(rows[i].TokenID, 10))
+			rows[i].Quota = legacyUsageQuota(&m.Charged)
+			rows[i].QuotaNano = m.Charged.String()
+			rows[i].UnfundedQuotaNano = m.Unfunded.String()
+		}
+		return nil
+	})
 	return rows, err
 }
 

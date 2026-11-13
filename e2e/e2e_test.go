@@ -481,6 +481,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 
 	// 21. daily usage aggregation (A4)
 	type usageItem struct {
+		QuotaNano        string `json:"quota_nano"`
 		Date             string `json:"date"`
 		Requests         int64  `json:"requests"`
 		Quota            int64  `json:"quota"`
@@ -508,7 +509,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 	}
 	aliceItems := parseUsage(res.Body)
 	if len(aliceItems) != 1 || aliceItems[0].Date != today ||
-		aliceItems[0].Requests != 1 || aliceItems[0].SuccessCount != 1 || aliceItems[0].FailedCount != 0 || aliceItems[0].Quota != 1*(expected/common.NanoPerLegacyQuota) {
+		aliceItems[0].Requests != 1 || aliceItems[0].SuccessCount != 1 || aliceItems[0].FailedCount != 0 || aliceItems[0].QuotaNano != fmt.Sprint(1*expected) {
 		t.Fatalf("alice usage wrong: %+v (want 1 request, quota %d)", aliceItems, expected)
 	}
 	res = doRequest(base, "GET", "/api/user/usage?days=7&user_id=0", aliceSession, nil)
@@ -520,7 +521,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("root usage failed: %d %s", res.Status, res.Body)
 	}
 	rootItems := parseUsage(res.Body)
-	if len(rootItems) != 1 || rootItems[0].Requests != 4 || rootItems[0].SuccessCount != 3 || rootItems[0].FailedCount != 1 || rootItems[0].Quota != 3*(expected/common.NanoPerLegacyQuota) {
+	if len(rootItems) != 1 || rootItems[0].Requests != 4 || rootItems[0].SuccessCount != 3 || rootItems[0].FailedCount != 1 || rootItems[0].QuotaNano != fmt.Sprint(3*expected) {
 		t.Fatalf("root usage wrong (want 3 successes, 1 failure, quota %d): %+v", 3*expected, rootItems)
 	}
 	res = doRequest(base, "GET", "/api/user/usage?days=7&user_id=0", session, nil)
@@ -528,7 +529,7 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("global usage failed: %d %s", res.Status, res.Body)
 	}
 	globalItems := parseUsage(res.Body)
-	if len(globalItems) != 1 || globalItems[0].Requests != 5 || globalItems[0].SuccessCount != 4 || globalItems[0].FailedCount != 1 || globalItems[0].Quota != 4*(expected/common.NanoPerLegacyQuota) {
+	if len(globalItems) != 1 || globalItems[0].Requests != 5 || globalItems[0].SuccessCount != 4 || globalItems[0].FailedCount != 1 || globalItems[0].QuotaNano != fmt.Sprint(4*expected) {
 		t.Fatalf("global usage wrong (want 4 successes, 1 failure, quota %d): %+v", 4*expected, globalItems)
 	}
 

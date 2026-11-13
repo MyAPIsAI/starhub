@@ -79,9 +79,9 @@ func ReadFinanceSummary(ctx context.Context, since, until int64) (*FinanceSummar
 		if err := tx.Model(&RechargeOrder{}).Where("status = ? AND paid_at <= 0", RechargePaid).Count(&result.PaidOrdersWithoutTimestamp).Error; err != nil {
 			return err
 		}
-		if err := readFinanceRows(tx.Model(&LedgerEntry{}).Select("amount, account, amount_unit, type, description").Where("created_at >= ? AND created_at < ?", since, until), func(rows *sql.Rows) error {
+		if err := readFinanceRows(tx.Model(&LedgerEntry{}).Select("amount, amount_remainder_nano, account, amount_unit, type, description").Where("created_at >= ? AND created_at < ?", since, until), func(rows *sql.Rows) error {
 			var entry LedgerEntry
-			if err := rows.Scan(&entry.Amount, &entry.Account, &entry.AmountUnit, &entry.Type, &entry.Description); err != nil {
+			if err := rows.Scan(&entry.Amount, &entry.AmountRemainderNano, &entry.Account, &entry.AmountUnit, &entry.Type, &entry.Description); err != nil {
 				return err
 			}
 			_, _, nano, _, err := LedgerMoney(entry)
@@ -98,15 +98,15 @@ func ReadFinanceSummary(ctx context.Context, since, until int64) (*FinanceSummar
 		}); err != nil {
 			return err
 		}
-		return readFinanceRows(tx.Model(&Log{}).Select("quota, unfunded_quota, status").Where("created_at >= ? AND created_at < ?", since, until), func(rows *sql.Rows) error {
-			var quota, shortfall int64
+		return readFinanceRows(tx.Model(&Log{}).Select("quota, quota_remainder_nano, unfunded_quota, unfunded_quota_remainder_nano, status").Where("created_at >= ? AND created_at < ?", since, until), func(rows *sql.Rows) error {
+			var quota, quotaRemainder, shortfall, shortfallRemainder int64
 			var status int
-			if err := rows.Scan(&quota, &shortfall, &status); err != nil {
+			if err := rows.Scan(&quota, &quotaRemainder, &shortfall, &shortfallRemainder, &status); err != nil {
 				return err
 			}
-			operand.SetInt64(quota)
+			operand.Set(common.QuotaMoney(quota, quotaRemainder))
 			collected.Add(&collected, &operand)
-			operand.SetInt64(shortfall)
+			operand.Set(common.QuotaMoney(shortfall, shortfallRemainder))
 			unfunded.Add(&unfunded, &operand)
 			result.APIRequestCount++
 			switch status {
@@ -127,15 +127,7 @@ func ReadFinanceSummary(ctx context.Context, since, until int64) (*FinanceSummar
 	result.PaidRechargeNano = paid.String()
 	result.LedgerCreditsNano = credits.String()
 	result.LedgerDebitsNano = debits.String()
-	// QuotaPerUSD is the authoritative API quota currency conversion. No
-	// cash wallet movement is inferred from API consumption.
-	toNano := func(quota *big.Int) string {
-		var nano big.Int
-		nano.Mul(quota, big.NewInt(1_000_000_000))
-		nano.Quo(&nano, big.NewInt(common.QuotaPerUSD))
-		return nano.String()
-	}
-	result.APICollectedNano = toNano(&collected)
-	result.APIUnfundedNano = toNano(&unfunded)
+	result.APICollectedNano = collected.String()
+	result.APIUnfundedNano = unfunded.String()
 	return result, nil
 }

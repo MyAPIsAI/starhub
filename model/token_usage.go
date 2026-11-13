@@ -2,7 +2,9 @@ package model
 
 import (
 	"errors"
-	"math"
+	"math/big"
+	"sort"
+	"starhub/common"
 	"strings"
 	"time"
 
@@ -12,26 +14,33 @@ import (
 const tokenUsageTime = "CASE WHEN admitted_at > 0 THEN admitted_at ELSE created_at END"
 
 type TokenPeriodSummary struct {
-	Period            string `json:"period"`
-	Timezone          string `json:"timezone"`
-	PeriodID          int64  `json:"period_id"`
-	Start             int64  `json:"start"`
-	End               int64  `json:"end"`
-	UsedQuota         int64  `json:"used_quota"`
-	ReservedQuota     int64  `json:"reserved_quota"`
-	QuotaLimit        *int64 `json:"quota_limit"`
-	RemainingQuota    *int64 `json:"remaining_quota"`
-	LifetimeUsedQuota int64  `json:"lifetime_used_quota"`
+	UsedQuotaNano         string  `json:"used_quota_nano"`
+	ReservedQuotaNano     string  `json:"reserved_quota_nano"`
+	QuotaLimitNano        *string `json:"quota_limit_nano"`
+	RemainingQuotaNano    *string `json:"remaining_quota_nano"`
+	LifetimeUsedQuotaNano string  `json:"lifetime_used_quota_nano"`
+	Period                string  `json:"period"`
+	Timezone              string  `json:"timezone"`
+	PeriodID              int64   `json:"period_id"`
+	Start                 int64   `json:"start"`
+	End                   int64   `json:"end"`
+	UsedQuota             int64   `json:"used_quota"`
+	ReservedQuota         int64   `json:"reserved_quota"`
+	QuotaLimit            *int64  `json:"quota_limit"`
+	RemainingQuota        *int64  `json:"remaining_quota"`
+	LifetimeUsedQuota     int64   `json:"lifetime_used_quota"`
 }
 
 type TokenUsageAmounts struct {
-	Requests         int64 `json:"requests"`
-	Quota            int64 `json:"quota"`
-	UnfundedQuota    int64 `json:"unfunded_quota"`
-	PromptTokens     int64 `json:"prompt_tokens"`
-	CompletionTokens int64 `json:"completion_tokens"`
-	SuccessCount     int64 `json:"success_count"`
-	FailedCount      int64 `json:"failed_count"`
+	QuotaNano         string `gorm:"-" json:"quota_nano"`
+	UnfundedQuotaNano string `gorm:"-" json:"unfunded_quota_nano"`
+	Requests          int64  `json:"requests"`
+	Quota             int64  `json:"quota"`
+	UnfundedQuota     int64  `json:"unfunded_quota"`
+	PromptTokens      int64  `json:"prompt_tokens"`
+	CompletionTokens  int64  `json:"completion_tokens"`
+	SuccessCount      int64  `json:"success_count"`
+	FailedCount       int64  `json:"failed_count"`
 }
 
 type TokenDayUsage struct {
@@ -61,7 +70,7 @@ type TokenUsageDetails struct {
 	PageSize    int                `json:"page_size"`
 }
 
-const tokenUsageSums = "COUNT(*) AS requests, COALESCE(SUM(quota),0) AS quota, COALESCE(SUM(unfunded_quota),0) AS unfunded_quota, COALESCE(SUM(prompt_tokens),0) AS prompt_tokens, COALESCE(SUM(completion_tokens),0) AS completion_tokens, COALESCE(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END),0) AS success_count, COALESCE(SUM(CASE WHEN status IN (2,3) THEN 1 ELSE 0 END),0) AS failed_count"
+const tokenUsageSums = "COUNT(*) AS requests, COALESCE(SUM(prompt_tokens),0) AS prompt_tokens, COALESCE(SUM(completion_tokens),0) AS completion_tokens, COALESCE(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END),0) AS success_count, COALESCE(SUM(CASE WHEN status IN (2,3) THEN 1 ELSE 0 END),0) AS failed_count"
 
 // ReadOwnedTokenUsage groups exact admission timestamps into regional calendar
 // days. Missing days are explicit zeros; legacy logs use completion timestamps.
@@ -96,23 +105,30 @@ func ReadOwnedTokenUsage(owner, tokenID int64, periodPage, modelPage int, now ti
 		if current.Period == "" {
 			current.Period = "never"
 		}
-		limit, remaining := token.PeriodQuotaLimit, token.RemainQuota
+
+		used := common.QuotaMoney(token.UsedQuota, token.UsedQuotaRemainderNano)
+		remainingMoney := common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano)
+		reservedMoney, err := TokenPendingMoney(tx, tokenID)
+		if err != nil {
+			return err
+		}
+		current.LifetimeUsedQuotaNano = used.String()
+		limitMoney := new(big.Int).Add(new(big.Int).Set(used), remainingMoney)
+		limitMoney.Add(limitMoney, reservedMoney)
 		if tokenPeriodic(&token) {
-			current.UsedQuota, current.ReservedQuota = token.PeriodUsedQuota, token.PeriodReservedQuota
-		} else {
-			current.UsedQuota = token.UsedQuota
-			current.ReservedQuota, err = TokenPendingQuota(tx, tokenID)
-			if err != nil {
-				return err
-			}
-			if token.UsedQuota > math.MaxInt64-token.RemainQuota || current.ReservedQuota > math.MaxInt64-token.UsedQuota-token.RemainQuota {
-				return ErrTokenPeriodPolicy
-			}
-			limit = token.UsedQuota + token.RemainQuota + current.ReservedQuota
+			used = common.QuotaMoney(token.PeriodUsedQuota, token.PeriodUsedQuotaRemainderNano)
+			reservedMoney = common.QuotaMoney(token.PeriodReservedQuota, token.PeriodReservedQuotaRemainderNano)
+			limitMoney = common.QuotaMoney(token.PeriodQuotaLimit, token.PeriodQuotaLimitRemainderNano)
 		}
+		current.UsedQuota, current.ReservedQuota = legacyUsageQuota(used), legacyUsageQuota(reservedMoney)
+		current.UsedQuotaNano, current.ReservedQuotaNano = used.String(), reservedMoney.String()
 		if !token.UnlimitedQuota {
+			limit, remaining := legacyUsageQuota(limitMoney), legacyUsageQuota(remainingMoney)
+			limitNano, remainingNano := limitMoney.String(), remainingMoney.String()
 			current.QuotaLimit, current.RemainingQuota = &limit, &remaining
+			current.QuotaLimitNano, current.RemainingQuotaNano = &limitNano, &remainingNano
 		}
+
 		view.Current = current
 		local := now.In(zone)
 		today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, zone)
@@ -130,9 +146,15 @@ func ReadOwnedTokenUsage(owner, tokenID int64, periodPage, modelPage int, now ti
 			args = append(args, day.Unix(), day.AddDate(0, 0, 1).Unix(), date)
 			view.Trend = append(view.Trend, TokenDayUsage{Date: date})
 		}
-		cases.WriteString(" END AS date, " + tokenUsageSums)
+		cases.WriteString(" END")
+		dayExpression := cases.String()
 		var daily []TokenDayUsage
-		if err := query().Select(cases.String(), args...).Group("date").Scan(&daily).Error; err != nil {
+		if err := query().Select(dayExpression+" AS date, "+tokenUsageSums, args...).Group("date").Scan(&daily).Error; err != nil {
+			return err
+		}
+
+		dayMoney, err := readGroupedLogMoney(query(), dayExpression, args...)
+		if err != nil {
 			return err
 		}
 		byDate := map[string]TokenUsageAmounts{}
@@ -140,14 +162,38 @@ func ReadOwnedTokenUsage(owner, tokenID int64, periodPage, modelPage int, now ti
 			byDate[day.Date] = day.TokenUsageAmounts
 		}
 		for i := range view.Trend {
-			view.Trend[i].TokenUsageAmounts = byDate[view.Trend[i].Date]
+			amount := byDate[view.Trend[i].Date]
+			m := usageMoneyAt(dayMoney, view.Trend[i].Date)
+			amount.Quota, amount.UnfundedQuota = legacyUsageQuota(&m.Charged), legacyUsageQuota(&m.Unfunded)
+			amount.QuotaNano, amount.UnfundedQuotaNano = m.Charged.String(), m.Unfunded.String()
+			view.Trend[i].TokenUsageAmounts = amount
 		}
-		if err := query().Distinct("model").Count(&view.ModelTotal).Error; err != nil {
+		var allModels []TokenModelUsage
+		if err := query().Select("model, " + tokenUsageSums).Group("model").Scan(&allModels).Error; err != nil {
 			return err
 		}
-		if err := query().Select("model, " + tokenUsageSums).Group("model").Order("quota DESC, model").Offset((modelPage - 1) * view.PageSize).Limit(view.PageSize).Scan(&view.Models).Error; err != nil {
+		modelMoney, err := readGroupedLogMoney(query(), "model")
+		if err != nil {
 			return err
 		}
+		for i := range allModels {
+			m := usageMoneyAt(modelMoney, allModels[i].Model)
+			allModels[i].Quota, allModels[i].UnfundedQuota = legacyUsageQuota(&m.Charged), legacyUsageQuota(&m.Unfunded)
+			allModels[i].QuotaNano, allModels[i].UnfundedQuotaNano = m.Charged.String(), m.Unfunded.String()
+		}
+		sort.Slice(allModels, func(i, j int) bool {
+			left, right := usageMoneyAt(modelMoney, allModels[i].Model), usageMoneyAt(modelMoney, allModels[j].Model)
+			if cmp := left.Charged.Cmp(&right.Charged); cmp != 0 {
+				return cmp > 0
+			}
+			return allModels[i].Model < allModels[j].Model
+		})
+		view.ModelTotal = int64(len(allModels))
+		offset := (modelPage - 1) * view.PageSize
+		if offset < len(allModels) {
+			view.Models = allModels[offset:min(offset+view.PageSize, len(allModels))]
+		}
+
 		periodQuery := func() *gorm.DB {
 			return tx.Model(&TokenQuotaPeriod{}).Where("token_id = ? AND user_id = ?", tokenID, owner)
 		}
