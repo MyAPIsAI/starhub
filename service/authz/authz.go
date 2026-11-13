@@ -149,7 +149,7 @@ func pathResource(path string) (Resource, bool) {
 		return ResourceChannel, true
 	case strings.HasPrefix(path, "/api/token"):
 		return ResourceToken, true
-	case strings.HasPrefix(path, "/api/option"):
+	case strings.HasPrefix(path, "/api/option"), path == "/api/resource-platform/credential":
 		return ResourceOption, true
 	case strings.HasPrefix(path, "/api/log"):
 		return ResourceLog, true

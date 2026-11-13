@@ -70,6 +70,10 @@ func InitDB(path string) error {
 	if err := db.Model(&RoutingChain{}).Where("expires_at = 0").UpdateColumn("expires_at", time.Now().Add(RoutingChainTTL).Unix()).Error; err != nil {
 		return fmt.Errorf("initialize routing chain expiry: %w", err)
 	}
+	if err := db.AutoMigrate(&RoutingSnapshotRecord{}, &ResourceCredential{}, &PlatformCatalogRecord{}); err != nil {
+		return fmt.Errorf("migrate resource platform state: %w", err)
+	}
+	ResetRoutingSnapshot()
 	DB = db
 	return nil
 }

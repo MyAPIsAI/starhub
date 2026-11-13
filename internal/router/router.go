@@ -27,6 +27,11 @@ import (
 // retries with failover).
 func New() http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("POST /api/metric/runtime/summary", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ReceiveRoutingSnapshot)))
+	for _, path := range []string{"/api/channel/models/details", "/api/channel/models/changes", "/api/channel/catalog/version"} {
+		mux.Handle("GET "+path, middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourcePlatformCatalog)))
+	}
+	mux.Handle("PUT /api/resource-platform/credential", middleware.AdminAuth(http.HandlerFunc(controller.RotateResourceCredential)))
 
 	mux.HandleFunc("POST /api/user/login", controller.Login)
 	mux.HandleFunc("POST /api/user/register", controller.Register)
@@ -271,5 +276,5 @@ func New() http.Handler {
 
 	mux.Handle("GET /v1/models", middleware.TokenAuth(http.HandlerFunc(controller.ListModels)))
 
-	return web.Handler(middleware.RequestID(middleware.ManagementSecurity(middleware.IPRateLimit(mux))))
+	return web.Handler(middleware.RequestID(middleware.ManagementSecurity(middleware.IPRateLimit(middleware.ResourceStartupGate(mux)))))
 }
