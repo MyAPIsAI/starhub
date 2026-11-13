@@ -272,10 +272,10 @@ func TestP3ClaudeInboundToOpenAIChannel(t *testing.T) {
 		!strings.Contains(body, `"input_tokens":100`) || !strings.Contains(body, `"output_tokens":50`) {
 		t.Fatalf("claude-in response wrong: %s", body)
 	}
-	expected := relay.ComputeQuota("gpt-4o-mini", "default", 100, 50)
+	expected := computeNanoQuota("gpt-4o-mini", "default", 100, 50)
 	token, _ := model.GetTokenByID(env.tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-expected {
-		t.Fatalf("claude-in billing = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-expected)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-expected {
+		t.Fatalf("claude-in billing = %d, want %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-expected)
 	}
 
 	// stream: openai SSE -> claude SSE event sequence
@@ -300,8 +300,8 @@ func TestP3ClaudeInboundToOpenAIChannel(t *testing.T) {
 		}
 	}
 	token, _ = model.GetTokenByID(env.tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-2*expected {
-		t.Fatalf("claude-in stream billing = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-2*expected)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected {
+		t.Fatalf("claude-in stream billing = %d, want %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-2*expected)
 	}
 
 	// unknown model: the claude error envelope shape
@@ -558,10 +558,10 @@ func TestP3EmbeddingsAndRerank(t *testing.T) {
 	if res.Status != 200 || !strings.Contains(res.Body, `"prompt_tokens":123`) {
 		t.Fatalf("embeddings relay failed: %d %s", res.Status, res.Body)
 	}
-	embeddingCost := relay.ComputeQuota("text-embedding-3-small", "default", 123, 0)
+	embeddingCost := computeNanoQuota("text-embedding-3-small", "default", 123, 0)
 	token, _ := model.GetTokenByID(env.tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-embeddingCost {
-		t.Fatalf("embeddings billing = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-embeddingCost)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-embeddingCost {
+		t.Fatalf("embeddings billing = %d, want %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-embeddingCost)
 	}
 
 	res = doRequest(env.base, "POST", "/v1/rerank", env.apiKey, map[string]any{
@@ -571,10 +571,10 @@ func TestP3EmbeddingsAndRerank(t *testing.T) {
 	if res.Status != 200 || !strings.Contains(res.Body, `"relevance_score":0.98`) {
 		t.Fatalf("rerank relay failed: %d %s", res.Status, res.Body)
 	}
-	rerankCost := relay.ComputeQuota("rerank-model", "default", 77, 0)
+	rerankCost := computeNanoQuota("rerank-model", "default", 77, 0)
 	token, _ = model.GetTokenByID(env.tokenID)
-	if token.RemainQuota != common.DefaultTokenQuota-embeddingCost-rerankCost {
-		t.Fatalf("rerank billing = %d, want %d", token.RemainQuota, common.DefaultTokenQuota-embeddingCost-rerankCost)
+	if common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64() != (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-embeddingCost-rerankCost {
+		t.Fatalf("rerank billing = %d, want %d", common.QuotaMoney(token.RemainQuota, token.RemainQuotaRemainderNano).Int64(), (common.DefaultTokenQuota*common.NanoPerLegacyQuota)-embeddingCost-rerankCost)
 	}
 
 	// validation gates

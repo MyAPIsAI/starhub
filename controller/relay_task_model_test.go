@@ -87,7 +87,7 @@ func TestTaskModelAttribution(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if task.RequestedModel != tc.requested || task.Model != "sora-2" || task.Quota != 80000 {
+			if task.RequestedModel != tc.requested || task.Model != "sora-2" || task.Quota != 160000000 {
 				t.Fatalf("persisted task lost model attribution or pre-charge: %+v", task)
 			}
 			select {

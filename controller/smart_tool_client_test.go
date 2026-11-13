@@ -96,13 +96,13 @@ func TestSmartToolClientsDoNotNeedCustomHeaders(t *testing.T) {
 					if entry.Model != "gpt-4o" || entry.RequestedModel != alias || entry.Status != 1 {
 						t.Fatalf("incorrect tool log: %+v", entry)
 					}
-					spent += entry.Quota
+					spent += common.QuotaMoney(entry.Quota, entry.QuotaRemainderNano).Int64()
 				}
 				after, err := model.GetUserByID(u.ID)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if total != 2 || calls.Load() != 2 || spent <= 0 || after.Quota != u.Quota-spent {
+				if total != 2 || calls.Load() != 2 || spent <= 0 || common.QuotaMoney(after.Quota, after.QuotaRemainderNano).Int64() != u.Quota*common.NanoPerLegacyQuota-spent {
 					t.Fatalf("incorrect tool chain settlement: total=%d calls=%d spent=%d quota=%d", total, calls.Load(), spent, after.Quota)
 				}
 			})

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"starhub/common"
 	"starhub/model"
 	"starhub/service"
 	"starhub/setting"
@@ -124,7 +125,7 @@ func TestBackgroundResponsePendingSettlementRecoversAfterRestartWithoutRepoll(t 
 		t.Fatal("recovery repolled instead of using durable terminal intent")
 	}
 	logs, total, err := model.ListLogs(u.ID, 1, 10, "")
-	if err != nil || total != 1 || logs[0].Quota != pending.PendingQuota {
+	if err != nil || total != 1 || common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != pending.PendingQuota {
 		t.Fatal("recovery repriced or double-billed")
 	}
 }

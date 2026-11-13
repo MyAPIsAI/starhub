@@ -52,9 +52,9 @@ func TestGeminiCompatibleRelayBillsFinalNativeUsage(t *testing.T) {
 				t.Fatalf("final Gemini usage lost or accumulated: %d %s %+v %v", rec.Code, rec.Body, logs, err)
 			}
 			usage, _ := dto.ParseGeminiUsage([]byte(body))
-			want := relay.ComputeUsageQuota(relay.NewPriceDataWithUserGroup("gemini-test", "default", "default"), usage)
+			want := relay.ComputeUsageNano(relay.NewPriceDataWithUserGroup("gemini-test", "default", "default"), usage)
 			after, _ := model.GetUserByID(user.ID)
-			if logs[0].Quota != want || after.Quota != user.Quota-want || after.UsedQuota != want {
+			if common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != want || common.QuotaMoney(after.Quota, after.QuotaRemainderNano).Int64() != user.Quota*common.NanoPerLegacyQuota-want || common.QuotaMoney(after.UsedQuota, after.UsedQuotaRemainderNano).Int64() != want {
 				t.Fatalf("Gemini final bill mismatch: log=%+v user=%+v want=%d", logs[0], after, want)
 			}
 		})

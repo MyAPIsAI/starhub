@@ -92,11 +92,11 @@ func TestSyncRelaySettlementRecoversWithoutCallingUpstream(t *testing.T) {
 			after, _ := model.GetUserByID(user.ID)
 			afterToken, _ := model.GetTokenByID(token.ID)
 			afterChannel, _ := model.GetChannelByID(ch.ID)
-			if after.Quota != user.Quota-actual || after.UsedQuota != actual || afterToken.RemainQuota != token.RemainQuota-actual || afterToken.UsedQuota != actual || afterChannel.UsedQuota != actual || calls.Load() != 1 {
+			if common.QuotaMoney(after.Quota, after.QuotaRemainderNano).Int64() != user.Quota*common.NanoPerLegacyQuota-actual || common.QuotaMoney(after.UsedQuota, after.UsedQuotaRemainderNano).Int64() != actual || common.QuotaMoney(afterToken.RemainQuota, afterToken.RemainQuotaRemainderNano).Int64() != token.RemainQuota*common.NanoPerLegacyQuota-actual || common.QuotaMoney(afterToken.UsedQuota, afterToken.UsedQuotaRemainderNano).Int64() != actual || common.QuotaMoney(afterChannel.UsedQuota, afterChannel.UsedQuotaRemainderNano).Int64() != actual || calls.Load() != 1 {
 				t.Fatalf("recovery balance/call mismatch: user=%+v token=%+v channel=%+v calls=%d", after, afterToken, afterChannel, calls.Load())
 			}
 			logs, total, err := model.ListLogs(user.ID, 1, 10, "")
-			if err != nil || total != 1 || logs[0].Quota != actual || logs[0].Status != 1 || logs[0].Model != "gpt-4o" || logs[0].RequestedModel != "gpt-4o" || logs[0].Protocol != protocol {
+			if err != nil || total != 1 || common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != actual || logs[0].Status != 1 || logs[0].Model != "gpt-4o" || logs[0].RequestedModel != "gpt-4o" || logs[0].Protocol != protocol {
 				t.Fatalf("recovery log mismatch: %+v %v", logs, err)
 			}
 		})

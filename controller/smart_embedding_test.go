@@ -123,7 +123,7 @@ func testSmartCapabilityAdmission(t *testing.T, path, capability, fields string,
 			if tc.requested == "unverified" {
 				wantModel = "unverified"
 			}
-			if calls.Load() != 1 || received.Load() != wantModel || total != 1 || len(logs) != 1 || logs[0].Model != wantModel || logs[0].RequestedModel != tc.requested || logs[0].Quota != relay.ComputeQuota(wantModel, "default", 12, 0) || logs[0].PromptTokens != 12 || logs[0].CompletionTokens != 0 || after.Quota != u.Quota-logs[0].Quota || keyAfter.RemainQuota != tk.RemainQuota-logs[0].Quota {
+			if calls.Load() != 1 || received.Load() != wantModel || total != 1 || len(logs) != 1 || logs[0].Model != wantModel || logs[0].RequestedModel != tc.requested || common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != relay.ComputeUsageNano(relay.NewPriceData(wantModel, "default"), &relay.Usage{PromptTokens: 12}) || logs[0].PromptTokens != 12 || logs[0].CompletionTokens != 0 || common.QuotaMoney(after.Quota, after.QuotaRemainderNano).Int64() != u.Quota*common.NanoPerLegacyQuota-common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() || common.QuotaMoney(keyAfter.RemainQuota, keyAfter.RemainQuotaRemainderNano).Int64() != tk.RemainQuota*common.NanoPerLegacyQuota-common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() {
 				t.Fatalf("incorrect admitted request: model=%v logs=%+v calls=%d", received.Load(), logs, calls.Load())
 			}
 		})
