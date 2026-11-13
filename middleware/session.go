@@ -11,16 +11,17 @@ import (
 )
 
 type sessionData struct {
-	factorSecret   string
-	factorPassword string
-	factorRole     int
-	userID         int64
-	expires        time.Time
-	created        time.Time
-	lastActive     time.Time
-	ip             string
-	deviceName     string
-	keyUnlocks     map[int64]keyUnlock
+	securityVersion int64
+	factorSecret    string
+	factorPassword  string
+	factorRole      int
+	userID          int64
+	expires         time.Time
+	created         time.Time
+	lastActive      time.Time
+	ip              string
+	deviceName      string
+	keyUnlocks      map[int64]keyUnlock
 }
 
 type keyUnlock struct {
@@ -110,7 +111,8 @@ func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration, ip, 
 	token := common.GenerateSessionKey()
 	now := time.Now()
 	s.data[token] = &sessionData{
-		factorSecret: factorSecret, factorPassword: fresh.Password, factorRole: fresh.Role,
+		securityVersion: fresh.DeactivationVersion,
+		factorSecret:    factorSecret, factorPassword: fresh.Password, factorRole: fresh.Role,
 		userID:     user.ID,
 		expires:    now.Add(ttl),
 		created:    now,
@@ -126,7 +128,7 @@ func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration, ip, 
 func (s *SessionStore) StaffVerified(token string, user *model.User) bool {
 	s.mu.RLock()
 	sd := s.data[token]
-	valid := activeSession(sd, time.Now()) && sd.userID == user.ID && sd.factorSecret != "" && sd.factorPassword == user.Password && sd.factorRole == user.Role
+	valid := activeSession(sd, time.Now()) && sd.userID == user.ID && sd.securityVersion == user.DeactivationVersion && sd.factorSecret != "" && sd.factorPassword == user.Password && sd.factorRole == user.Role
 	secret := ""
 	if valid {
 		secret = sd.factorSecret
@@ -137,6 +139,13 @@ func (s *SessionStore) StaffVerified(token string, user *model.User) bool {
 	}
 	factor, err := model.GetTwoFA(user.ID)
 	return err == nil && factor.IsEnabled && factor.Secret == secret
+}
+
+func (s *SessionStore) CurrentGeneration(token string, user *model.User) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sd := s.data[token]
+	return activeSession(sd, time.Now()) && sd.userID == user.ID && sd.securityVersion == user.DeactivationVersion
 }
 
 func (s *SessionStore) Create(userID int64, ttl time.Duration) string {

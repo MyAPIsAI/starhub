@@ -24,6 +24,11 @@ func UserAuth(next http.Handler) http.Handler {
 			common.ApiError(w, http.StatusUnauthorized, "user unavailable")
 			return
 		}
+		if !Sessions.CurrentGeneration(SessionToken(r), user) {
+			Sessions.Remove(SessionToken(r))
+			common.ApiError(w, http.StatusUnauthorized, "session security state changed; sign in again")
+			return
+		}
 		if !guardSessionOwner(w, r, user.ID) {
 			return
 		}

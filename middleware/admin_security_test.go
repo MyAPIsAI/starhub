@@ -49,3 +49,25 @@ func TestStaffGateRequiresPasswordEnrollmentAndSessionProof(t *testing.T) {
 		Sessions.Remove(verified)
 	}
 }
+
+func TestOperatorResetRevokesSecuritySetupSessions(t *testing.T) {
+	setupAutoRoutingDB(t)
+	user := &model.User{Username: "reset-session", Role: common.RoleAdmin, Status: common.StatusEnabled, AffCode: common.GenerateAffCode()}
+	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	session := Sessions.CreateConfirmed(user, time.Hour, "", "")
+	if !Sessions.CurrentGeneration(session, user) {
+		t.Fatal("fresh session rejected")
+	}
+	if err := model.OperateStaffAccount("reset-2fa", user.Username, "", "operator", "Lost factor"); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("GET", "/api/user/self", nil)
+	r.AddCookie(&http.Cookie{Name: "session", Value: session})
+	w := httptest.NewRecorder()
+	UserAuth(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { t.Fatal("revoked session reached setup") })).ServeHTTP(w, r)
+	if w.Code != 401 {
+		t.Fatalf("got %d: %s", w.Code, w.Body.String())
+	}
+}
