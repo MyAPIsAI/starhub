@@ -54,7 +54,7 @@ func sendPhoneVerification(w http.ResponseWriter, r *http.Request, purpose strin
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	phoneE164, err := model.NormalizePhone(req.Phone)
+	phoneE164, err := model.NormalizeActiveRegionPhone(req.Phone)
 	if err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
@@ -99,7 +99,7 @@ func PhoneLogin(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	phoneE164, err := model.NormalizePhone(req.Phone)
+	phoneE164, err := model.NormalizeActiveRegionPhone(req.Phone)
 	if err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
@@ -153,7 +153,7 @@ func ResetPasswordByPhone(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	phoneE164, err := model.NormalizePhone(req.Phone)
+	phoneE164, err := model.NormalizeActiveRegionPhone(req.Phone)
 	if err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
@@ -220,7 +220,7 @@ func ChangePhone(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusUnauthorized, "old phone verification failed")
 		return
 	}
-	newPhoneE164, err := model.NormalizePhone(req.NewPhone)
+	newPhoneE164, err := model.NormalizeActiveRegionPhone(req.NewPhone)
 	if err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nyaruka/phonenumbers/v2"
 	"gorm.io/gorm"
 )
 
@@ -70,6 +71,10 @@ func (r *RegionProfile) IsModelAllowed(model string) bool {
 // SaveRegionProfile creates or updates a region profile with optimistic
 // concurrency control via the Revision field.
 func SaveRegionProfile(profile *RegionProfile, expectedRevision int64) error {
+	profile.CountryCode = strings.ToUpper(strings.TrimSpace(profile.CountryCode))
+	if profile.CountryCode != "" && phonenumbers.GetCountryCodeForRegion(profile.CountryCode) == 0 {
+		return errors.New("unsupported region country code")
+	}
 	profile.ID = strings.TrimSpace(profile.ID)
 	if profile.ID == "" || len(profile.ID) > 64 {
 		return errors.New("region profile id must be 1-64 characters")
