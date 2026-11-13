@@ -15,6 +15,29 @@ func TestEmailDisabledByDefault(t *testing.T) {
 	}
 }
 
+func TestEmailProviderFailuresAreReturnedForVerificationAndNotifications(t *testing.T) {
+	failure := errors.New("fixture provider unavailable")
+	provider := &mockEmailProvider{err: failure}
+	SetEmailProvider(provider)
+	t.Cleanup(func() { SetEmailProvider(nil) })
+	if err := SendEmailVerification("recipient@example.test", "654321"); !errors.Is(err, failure) {
+		t.Fatal("verification failure hidden", err)
+	}
+	if err := SendEmailNotification("recipient@example.test", "Security event", "Fixture notification body"); !errors.Is(err, failure) {
+		t.Fatal("notification failure hidden", err)
+	}
+	if provider.lastTo != "recipient@example.test" || provider.lastBody != "Fixture notification body" {
+		t.Fatal("provider arguments changed")
+	}
+	SetEmailProvider(nil)
+	if err := SendEmailNotification("recipient@example.test", "Security event", "Fixture notification body"); !errors.Is(err, ErrEmailDisabled) {
+		t.Fatal("disabled notifications reported delivery", err)
+	}
+	if IsEmailEnabled() {
+		t.Fatal("disabled provider remains enabled")
+	}
+}
+
 type mockEmailProvider struct {
 	lastTo      string
 	lastCode    string
