@@ -2,6 +2,7 @@
 // server. Locale/theme preferences are the only client-side fixture settings.
 import { createServer as createViteServer } from "vite";
 import { chromium } from "playwright";
+import { authenticatorCode } from "./browser-totp.mjs";
 import AxeBuilder from "@axe-core/playwright";
 import { createServer } from "node:http";
 import { execFileSync, spawn } from "node:child_process";
@@ -19,7 +20,12 @@ const out = path.join(root, "playwright-report", "key-quota");
 await mkdir(out, { recursive: true });
 const password = "Browser-test-only-quota-942!";
 let backend, vite, browser, upstream;
-const report = { checks: [], screenshots: [], pageErrors: [] };
+const report = {
+  checks: [],
+  screenshots: [],
+  pageErrors: [],
+  failedRequests: [],
+};
 async function freePort() {
   return new Promise((resolve, reject) => {
     const s = net.createServer();
@@ -44,6 +50,12 @@ async function check(name, fn) {
   report.checks.push(name);
   console.log("PASS", name);
 }
+async function nextReadWindow() {
+  console.log("Waiting for the next real console rate-limit window");
+  await new Promise((resolve) =>
+    setTimeout(resolve, 60100 - (Date.now() % 60000)),
+  );
+}
 try {
   const binary = path.join(
     temp,
@@ -61,7 +73,9 @@ try {
     env: {
       ...process.env,
       STARHUB_PORT: String(port),
-      STARHUB_ROOT_PASSWORD: password,
+      STARHUB_ROOT_PASSWORD: "BrowserInitialQuota92",
+      STARHUB_BIND_ADDRESS: "127.0.0.1",
+      STARHUB_REGION_PROFILE: "",
       STARHUB_CRYPTO_SECRET: "test-only-key-quota-encryption-fixture",
       RESOURCE_CATALOG_NOTIFY_URL: "",
     },
@@ -95,15 +109,61 @@ try {
       localStorage.setItem("xy-language", "en");
   });
   const page = await context.newPage();
-  page.setDefaultTimeout(12000);
+  page.setDefaultTimeout(45000);
   page.on("pageerror", (e) => report.pageErrors.push(String(e)));
+  page.on("response", (response) => {
+    if (response.status() >= 400)
+      report.failedRequests.push({
+        path: new URL(response.url()).pathname,
+        status: response.status(),
+        retryAfter: response.headers()["retry-after"],
+      });
+  });
   async function api(method, url, data) {
     const r = await context.request.fetch(base + url, { method, data });
     const b = await r.json();
     assert.ok(r.ok() && b.success, b.message || `API rejected ${url}`);
     return b.data;
   }
-  await api("POST", "/api/user/login", { username: "root", password });
+  await check(
+    "staff fixture completes real password and factor initialization",
+    async () => {
+      await api("POST", "/api/user/login", {
+        username: "root",
+        password: "BrowserInitialQuota92",
+      });
+      assert.equal(
+        (await context.request.get(base + "/api/option/")).status(),
+        403,
+      );
+      await api("PUT", "/api/user/self", {
+        current_password: "BrowserInitialQuota92",
+        new_password: password,
+      });
+      const factor = await api("POST", "/api/user/2fa/setup", { password });
+      await api("POST", "/api/user/2fa/enable", {
+        code: authenticatorCode(factor.secret),
+      });
+      assert.equal(
+        (await context.request.get(base + "/api/option/")).status(),
+        403,
+      );
+      await api("POST", "/api/user/logout");
+      const proof = await api("POST", "/api/user/login", {
+        username: "root",
+        password,
+      });
+      assert.equal(proof["2fa_required"], true);
+      await api("POST", "/api/user/login/2fa", {
+        username: "root",
+        code: authenticatorCode(factor.secret),
+      });
+      assert.equal(
+        (await context.request.get(base + "/api/option/")).status(),
+        200,
+      );
+    },
+  );
   upstream = createServer((r, w) => {
     r.resume();
     w.writeHead(200, { "Content-Type": "application/json" });
@@ -167,6 +227,7 @@ try {
         quota_nano: "1",
         count: 1,
       });
+      await nextReadWindow();
       await page.goto(base + "/console/billing");
       await page.locator("#redeem-code-input").fill(codes.codes[0]);
       const response = page.waitForResponse(
@@ -435,6 +496,7 @@ try {
         localStorage.setItem("xy-theme", "light");
       });
       await page.setViewportSize({ width: 1440, height: 1000 });
+      await nextReadWindow();
       await page.goto(base + "/console/billing");
       await page.locator("[data-money-entry]").first().waitFor();
       const journal = page.locator("[data-money-ledger]");
@@ -466,6 +528,7 @@ try {
           [language, theme],
         );
         await page.setViewportSize({ width, height: 844 });
+        await nextReadWindow();
         await page.reload();
         await page.locator("[data-money-entry]").first().waitFor();
         await page.locator("[data-money-ledger]").scrollIntoViewIfNeeded();
@@ -480,7 +543,7 @@ try {
     },
   );
   // Let the real per-minute API limit replenish before testing more writes.
-  await new Promise((resolve) => setTimeout(resolve, 60_000));
+  await nextReadWindow();
   await check(
     "Root console grants one nano without legacy quota scaling",
     async () => {
@@ -521,28 +584,51 @@ try {
       );
     },
   );
-  await check("finance view separates spendable API funds from legacy payment balances",async()=>{
-    const wallet=await api("GET","/api/wallet/v2");
-    const summary=await api("GET","/api/finance/summary?days=30");
-    assert.equal(summary.api_available_nano,wallet.balance_nano);
-    assert.equal(summary.api_recorded_reserved_nano,"0");
-    assert.equal(summary.wallet_balance_nano,"10000000000");
-    assert.equal(summary.verified_payments_available,false);
-    await page.goto(base+"/admin?tab=finance");
-    await page.locator('[data-metric="api-available"]').waitFor();
-    await page.locator('[data-metric="api-available"] summary').click();
-    assert.equal(await page.locator('[data-metric="api-available"] code').innerText(),wallet.balance_nano);
-    await capture("finance-canonical-desktop");
-    for(const [language,theme,width] of [["zh","light",390],["ar","dark",320]]) {
-      await page.evaluate(([language,theme])=>{localStorage.setItem("xy-language",language);localStorage.setItem("xy-theme",theme);},[language,theme]);
-      await page.setViewportSize({width,height:844});
-      await page.reload();
+  await check(
+    "finance view separates spendable API funds from legacy payment balances",
+    async () => {
+      const wallet = await api("GET", "/api/wallet/v2");
+      const summary = await api("GET", "/api/finance/summary?days=30");
+      assert.equal(summary.api_available_nano, wallet.balance_nano);
+      assert.equal(summary.api_recorded_reserved_nano, "0");
+      assert.equal(summary.wallet_balance_nano, "10000000000");
+      assert.equal(summary.verified_payments_available, false);
+      await page.goto(base + "/admin?tab=finance");
       await page.locator('[data-metric="api-available"]').waitFor();
-      await page.locator('[data-metric="api-available"]').scrollIntoViewIfNeeded();
-      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),"finance viewport overflow");
-      await capture(`finance-canonical-${language}-${theme}-${width}`);
-    }
-  });
+      await page.locator('[data-metric="api-available"] summary').click();
+      assert.equal(
+        await page.locator('[data-metric="api-available"] code').innerText(),
+        wallet.balance_nano,
+      );
+      await capture("finance-canonical-desktop");
+      for (const [language, theme, width] of [
+        ["zh", "light", 390],
+        ["ar", "dark", 320],
+      ]) {
+        await page.evaluate(
+          ([language, theme]) => {
+            localStorage.setItem("xy-language", language);
+            localStorage.setItem("xy-theme", theme);
+          },
+          [language, theme],
+        );
+        await page.setViewportSize({ width, height: 844 });
+        await nextReadWindow();
+        await page.reload();
+        await page.locator('[data-metric="api-available"]').waitFor();
+        await page
+          .locator('[data-metric="api-available"]')
+          .scrollIntoViewIfNeeded();
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+          "finance viewport overflow",
+        );
+        await capture(`finance-canonical-${language}-${theme}-${width}`);
+      }
+    },
+  );
   await check("logout invalidates the server-side reveal grant", async () => {
     await api("POST", "/api/user/logout-current", {
       schema: "logout_current_v1",
@@ -563,7 +649,7 @@ try {
   await browser?.close();
   await vite?.close();
   if (upstream) await new Promise((resolve) => upstream.close(resolve));
-  if (backend && !backend.killed) {
+  if (backend && !backend.killed && backend.exitCode === null) {
     const exited = new Promise((resolve) => backend.once("exit", resolve));
     backend.kill();
     await exited;
