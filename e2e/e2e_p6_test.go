@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/config"
@@ -23,7 +22,7 @@ func p6User(t *testing.T, name string, role int) (*model.User, string) {
 	if err := model.CreateUser(u); err != nil {
 		t.Fatal(err)
 	}
-	return u, middleware.Sessions.Create(u.ID, time.Hour)
+	return u, fixtureSession(t, u)
 }
 
 func TestP6ManagementContract(t *testing.T) {
@@ -126,7 +125,8 @@ func TestP6CookieAndCrossOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = config.ApplyStartup(config.Startup{}) })
-	login, _ := http.NewRequest("POST", env.base+"/api/user/login", strings.NewReader(`{"username":"root","password":"123456"}`))
+	p6User(t, "cookie-member", common.RoleUser)
+	login, _ := http.NewRequest("POST", env.base+"/api/user/login", strings.NewReader(`{"username":"cookie-member","password":"p6-password"}`))
 	login.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(login)
 	if err != nil {

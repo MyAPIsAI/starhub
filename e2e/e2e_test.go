@@ -147,6 +147,11 @@ func TestP0EndToEndRelayFlow(t *testing.T) {
 		t.Fatalf("bad login response: %s", res.Body)
 	}
 	rootID, session := loginResp.Data.User.ID, loginResp.Data.Session
+	root, err := model.GetUserByID(rootID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session = fixtureSession(t, root)
 
 	res = doRequest(base, "POST", "/api/user/login", "", map[string]string{"username": "root", "password": "wrong"})
 	if res.Status != 401 {
@@ -650,6 +655,11 @@ func setupRelayApp(t *testing.T) p1Env {
 	if err := json.Unmarshal([]byte(res.Body), &loginResp); err != nil || loginResp.Data.Session == "" {
 		t.Fatalf("bad login response: %s", res.Body)
 	}
+	root, err := model.GetUserByID(loginResp.Data.User.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loginResp.Data.Session = fixtureSession(t, root)
 	res = doRequest(app.URL, "POST", "/api/token/", loginResp.Data.Session, map[string]any{"name": "p1-key"})
 	if res.Status != 200 {
 		t.Fatalf("create token failed: %d %s", res.Status, res.Body)
