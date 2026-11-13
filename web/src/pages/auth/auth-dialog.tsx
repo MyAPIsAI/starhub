@@ -18,6 +18,11 @@ import {
 import { ApiError } from "../../lib/api/http";
 import { useSessionRestore } from "../../lib/session-restore";
 import "./auth-dialog.css";
+import {
+  getPublicRegionPolicy,
+  type PublicRegionPolicy,
+} from "../../lib/locale-policy";
+import RegionalLegalDocument from "../../features/regional-legal-document";
 
 type AuthMode = "login" | "register" | "reset";
 type Policy = "terms" | "privacy";
@@ -62,6 +67,11 @@ export default function AuthDialog() {
   const [error, setError] = useState("");
   const [registered, setRegistered] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [regionPolicy, setRegionPolicy] = useState<PublicRegionPolicy | null>(
+    null,
+  );
+  const [regionAttempt, setRegionAttempt] = useState(0);
+  const [regionLoading, setRegionLoading] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -69,6 +79,31 @@ export default function AuthDialog() {
   const policyTrigger = useRef<Policy | null>(null);
   const formScroll = useRef(0);
   const operation = useRef(0);
+
+  useEffect(() => {
+    if (!mode) return;
+    const abort = new AbortController();
+    setRegionLoading(true);
+    getPublicRegionPolicy(abort.signal)
+      .then((value) => {
+        if (abort.signal.aborted) return;
+        setRegionPolicy(value);
+        setRegionLoading(false);
+        if (value.legal_version) setAgreed(false);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setRegionLoading(false);
+        if (!abort.signal.aborted && mode === "register")
+          setError(
+            c(
+              "无法加载注册规则，请重试。",
+              "Unable to load registration settings. Please retry.",
+              "تعذر تحميل إعدادات التسجيل. حاول مجددًا.",
+            ),
+          );
+      });
+    return () => abort.abort();
+  }, [mode, regionAttempt]);
 
   useEffect(() => {
     operation.current += 1;
@@ -217,7 +252,38 @@ export default function AuthDialog() {
     setBusy(true);
     try {
       if (mode === "register") {
-        const user = await registerUser(username, newPassword, "");
+        if (!regionPolicy || !regionPolicy.registration_enabled)
+          throw new Error(
+            c(
+              "当前暂不开放注册。",
+              "Registration is currently unavailable.",
+              "التسجيل غير متاح حاليًا.",
+            ),
+          );
+        const current = await getPublicRegionPolicy();
+        if (ticket !== operation.current) return;
+        if (
+          current.id !== regionPolicy.id ||
+          current.legal_version !== regionPolicy.legal_version ||
+          !current.registration_enabled
+        ) {
+          setRegionPolicy(current);
+          setAgreed(false);
+          throw new Error(
+            c(
+              "注册规则已更新，请重新阅读并确认。",
+              "Registration settings changed. Review and accept the current terms.",
+              "تغيّرت إعدادات التسجيل. راجع الشروط الحالية ووافق عليها.",
+            ),
+          );
+        }
+        const user = await registerUser(
+          username,
+          newPassword,
+          "",
+          regionPolicy.legal_version,
+          language,
+        );
         if (ticket !== operation.current) return;
         setAccount(user.username);
         setPassword("");
@@ -278,11 +344,17 @@ export default function AuthDialog() {
             ? c("重置密码", "Reset your password", "إعادة تعيين كلمة المرور")
             : c("欢迎回来", "Welcome back", "مرحبًا بعودتك");
   const description = policy
-    ? c(
-        "演示草案 · 仅展示阅读与勾选流程",
-        "Demo draft · for the reading and consent flow only",
-        "مسودة تجريبية · لعرض القراءة والموافقة فقط",
-      )
+    ? regionPolicy?.legal_version
+      ? c(
+          "已发布的当前法律文本",
+          "Current published legal document",
+          "الوثيقة القانونية الحالية المنشورة",
+        )
+      : c(
+          "演示草案 · 仅展示阅读与勾选流程",
+          "Demo draft · for the reading and consent flow only",
+          "مسودة تجريبية · لعرض القراءة والموافقة فقط",
+        )
     : mode === "register"
       ? c(
           "一把密钥，开始你的多模型之旅。",
@@ -469,7 +541,12 @@ export default function AuthDialog() {
             <Dialog.Description>{description}</Dialog.Description>
           </div>
           <div className="auth-dialog-body" ref={bodyRef}>
-            {policy ? (
+            {policy && regionPolicy?.legal_version ? (
+              <RegionalLegalDocument
+                policy={policy}
+                expectedVersion={regionPolicy.legal_version}
+              />
+            ) : policy ? (
               <article className="auth-policy">
                 <div className="auth-notice">
                   <Info size={16} />
@@ -809,6 +886,17 @@ export default function AuthDialog() {
                         </p>
                       </>
                     )}
+                    {mode === "register" &&
+                      regionPolicy &&
+                      !regionPolicy.registration_enabled && (
+                        <p role="status">
+                          {c(
+                            "当前暂不开放注册。",
+                            "Registration is currently unavailable.",
+                            "التسجيل غير متاح حاليًا.",
+                          )}
+                        </p>
+                      )}
                     {consent}
                     {mode === "register" && (
                       <p className="auth-registration-note">
@@ -824,12 +912,40 @@ export default function AuthDialog() {
                       type="submit"
                       className="auth-submit"
                       loading={busy}
+                      disabled={
+                        mode === "register" &&
+                        (regionLoading ||
+                          !regionPolicy ||
+                          !regionPolicy.registration_enabled)
+                      }
                     >
                       {mode === "register"
                         ? c("创建账户", "Create account", "إنشاء حساب")
                         : c("登录", "Log in", "تسجيل الدخول")}
                       <ArrowRight size={16} className="directional" />
                     </Button>
+                    {mode === "register" && regionLoading && (
+                      <p role="status">
+                        {c(
+                          "正在加载注册规则…",
+                          "Loading registration settings…",
+                          "جارٍ تحميل إعدادات التسجيل…",
+                        )}
+                      </p>
+                    )}
+                    {mode === "register" && !regionPolicy && !regionLoading && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setRegionAttempt((value) => value + 1)}
+                      >
+                        {c(
+                          "重试加载注册规则",
+                          "Retry registration settings",
+                          "إعادة تحميل إعدادات التسجيل",
+                        )}
+                      </Button>
+                    )}
                   </form>
                 )}
                 {mode !== "reset" && (
