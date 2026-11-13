@@ -1,6 +1,7 @@
 package model
 
 import (
+	"starhub/common"
 	"testing"
 	"time"
 )
@@ -49,7 +50,7 @@ func TestSettlementKeepsAdmissionCalendarAfterRegionChange(t *testing.T) {
 	if err := DB.Model(&profile).Updates(map[string]any{"timezone": "America/New_York", "revision": 8}).Error; err != nil {
 		t.Fatal(err)
 	}
-	entry := &Log{QuotaReservationID: receipt.ID, AmountUnit: "nano_usd"}
+	entry := &Log{QuotaReservationID: receipt.ID, AmountUnit: common.MoneyUnitNano}
 	if err := SettleQuota(u.ID, token.ID, false, -99, 1, entry); err != nil {
 		t.Fatal(err)
 	}
@@ -62,5 +63,30 @@ func TestSettlementKeepsAdmissionCalendarAfterRegionChange(t *testing.T) {
 	}
 	if saved.BusinessDaySnapshot != receipt.BusinessDaySnapshot {
 		t.Fatal("calendar was not durable")
+	}
+}
+
+func TestLegacyAdmissionKeepsUTCWhenDeploymentAdoptsRegionalCalendar(t *testing.T) {
+	newTestDB(t)
+	t.Setenv("STARHUB_REGION_PROFILE", "")
+	user, token := newBillingUser(t, 1000)
+	if err := ReserveQuota(user.ID, token.ID, false, 10, "legacy-calendar"); err != nil {
+		t.Fatal(err)
+	}
+	admitted := time.Date(2026, 11, 11, 23, 30, 0, 0, time.UTC).Unix()
+	if err := DB.Model(&QuotaReservation{}).Where("id = ?", "legacy-calendar").Updates(map[string]any{"business_calendar_version": 0, "business_date": "", "business_timezone": "", "business_region": "", "business_region_revision": 0, "business_start": 0, "business_end": 0, "admitted_at": admitted}).Error; err != nil {
+		t.Fatal(err)
+	}
+	profile := &RegionProfile{ID: "new-calendar", Name: "New calendar", Timezone: "Asia/Dubai", Enabled: true}
+	if err := SaveRegionProfile(profile, -1); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STARHUB_REGION_PROFILE", profile.ID)
+	entry := &Log{QuotaReservationID: "legacy-calendar", Status: 1}
+	if err := SettleQuota(user.ID, token.ID, false, -9, 1, entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry.BusinessTimezone != "UTC" || entry.BusinessCalendarVersion != 0 || entry.BusinessDate != "2026-11-11" || entry.AdmittedAt != admitted {
+		t.Fatalf("legacy calendar was reinterpreted: %+v", entry.BusinessDaySnapshot)
 	}
 }
