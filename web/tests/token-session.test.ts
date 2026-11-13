@@ -47,7 +47,11 @@ vi.mock("../src/lib/api/http", async (importOriginal) => ({
   apiPut: vi.fn(),
   apiDelete: vi.fn(),
 }));
-import { useTokens, verifyTokenPassword } from "../src/lib/api/tokens";
+import {
+  useTokens,
+  verifyTokenPassword,
+  readTokenSecret,
+} from "../src/lib/api/tokens";
 import { sessionQueryIdentity } from "../src/lib/system-access";
 import { ApiError } from "../src/lib/api/http";
 beforeEach(() => {
@@ -66,7 +70,7 @@ describe("session-bound password verification transport", () => {
     fake.post.mockResolvedValue({ verified: true, user_id: 7, token_id: 2 });
     await verifyTokenPassword(2, "verification-password", scope());
     expect(fake.post).toHaveBeenCalledExactlyOnceWith(
-      "/api/token/2/verify-password",
+      "/api/token/2/unlock",
       { expected_user_id: 7, password: "verification-password" },
       { handleUnauthorizedLocally: true },
     );
@@ -151,6 +155,72 @@ describe("session-bound password verification transport", () => {
     await expect(result).rejects.toThrow(/unchanged session/);
     expect(fake.signOut).not.toHaveBeenCalled();
     expect(fake.state.session.accountId).toBe(8);
+  });
+});
+
+describe("session-bound secret reads", () => {
+  it("reads an existing masked key only from a confirmed server grant", async () => {
+    const key = "sk-" + "a".repeat(48),
+      expires = Date.now() + 290_000;
+    fake.post.mockResolvedValue({
+      user_id: 7,
+      token_id: 2,
+      key,
+      expires_at: expires,
+    });
+    await expect(
+      readTokenSecret(2, sessionQueryIdentity(fake.state)),
+    ).resolves.toEqual({ key, expiresAt: expires });
+    expect(fake.post).toHaveBeenCalledWith(
+      "/api/token/2/reveal",
+      { expected_user_id: 7 },
+      { handleUnauthorizedLocally: true },
+    );
+  });
+  it("discards plaintext if the account changes while a read is pending", async () => {
+    let finish!: (value: unknown) => void;
+    fake.post.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = readTokenSecret(2, sessionQueryIdentity(fake.state));
+    fake.state.session.epoch++;
+    finish({
+      user_id: 7,
+      token_id: 2,
+      key: "sk-" + "a".repeat(48),
+      expires_at: Date.now() + 290_000,
+    });
+    await expect(pending).rejects.toThrow(/session/);
+  });
+  it("rejects expired, masked and incorrectly owned results", async () => {
+    for (const result of [
+      {
+        user_id: 7,
+        token_id: 2,
+        key: "sk-******",
+        expires_at: Date.now() + 10000,
+      },
+      {
+        user_id: 8,
+        token_id: 2,
+        key: "sk-" + "a".repeat(48),
+        expires_at: Date.now() + 10000,
+      },
+      {
+        user_id: 7,
+        token_id: 2,
+        key: "sk-" + "a".repeat(48),
+        expires_at: Date.now() - 1,
+      },
+    ]) {
+      fake.post.mockResolvedValue(result);
+      await expect(
+        readTokenSecret(2, sessionQueryIdentity(fake.state)),
+      ).rejects.toThrow(/not confirmed/);
+    }
   });
 });
 

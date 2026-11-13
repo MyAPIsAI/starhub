@@ -208,9 +208,9 @@ export function NativeKeyForm({
       const result = await readOwnedKeyReceipt(operation, scope);
       setReceipt(
         c(
-          `操作已确认，密钥 ID：${result.token_id}。请重新读取列表；明文不能恢复。`,
-          `Operation confirmed for key ${result.token_id}. Reload keys; plaintext cannot be recovered.`,
-          `تأكدت العملية للمفتاح ${result.token_id}. أعد تحميل المفاتيح؛ لا يمكن استعادة النص السري.`,
+          `操作已确认，密钥 ID：${result.token_id}。请重新读取列表，验证当前密码后查看完整密钥。`,
+          `Operation confirmed for key ${result.token_id}. Reload keys and verify your current password to view the full key.`,
+          `تأكدت العملية للمفتاح ${result.token_id}. أعد تحميل المفاتيح وتحقق بكلمة مرورك الحالية لعرض المفتاح الكامل.`,
         ),
       );
     } catch {
@@ -242,9 +242,9 @@ export function NativeKeyForm({
             : c("创建密钥", "Create key", "إنشاء مفتاح")
       }
       description={c(
-        "使用服务器分组和明确模型白名单。密钥只在创建或重置成功时展示一次明文。",
-        "Use server groups and an explicit model allowlist. Plaintext is shown once after creation or regeneration.",
-        "استخدم مجموعات الخادم وقائمة نماذج صريحة. يظهر النص السري مرة واحدة بعد الإنشاء أو التجديد.",
+        "使用服务器分组和明确模型白名单。以后可验证当前密码查看完整密钥。",
+        "Use server groups and an explicit model allowlist. Verify your current password to view the full key again later.",
+        "استخدم مجموعات الخادم وقائمة نماذج صريحة. يمكنك عرض المفتاح الكامل لاحقًا بعد التحقق بكلمة مرورك الحالية.",
       )}
       footer={
         <>
@@ -283,9 +283,9 @@ export function NativeKeyForm({
           </div>
           <p>
             {c(
-              "关闭后无法再次获取此明文，请妥善保存。",
-              "Save this secret now. It cannot be recovered after closing.",
-              "احفظ السر الآن؛ لا يمكن استعادته بعد الإغلاق.",
+              "请妥善保存。关闭后可在密钥列表验证当前密码，再次查看完整密钥。",
+              "Store this key securely. After closing, verify your current password in the key list to view it again.",
+              "احفظ المفتاح بأمان. بعد الإغلاق، تحقق بكلمة مرورك الحالية في قائمة المفاتيح لعرضه مجددًا.",
             )}
           </p>
         </div>

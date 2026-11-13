@@ -101,6 +101,7 @@ import {
   useRegenerateToken,
   useUpdateToken,
   verifyTokenPassword,
+  readTokenSecret,
   readOwnedKeyReceipt,
 } from "../lib/api/tokens";
 import { useWallet } from "../lib/api/billing";
@@ -192,9 +193,7 @@ function ConsoleWorkspace() {
   // Keys, balance, and overview metrics come from backend API endpoints.
   // The demo store still owns requests (for non-overview sections),
   // ledger, exports, and demo-mode UI state.
-  // Plaintext keys captured from create/regenerate — the only time the
-  // backend returns the unmasked key. Merged into the adapted PreviewKey
-  // so the reveal/copy actions work for keys created in this session.
+  // Plaintext stays in component memory only for the server's unlock window.
   const [plaintextKeys, setPlaintextKeys] = useState<Record<string, string>>(
     {},
   );
@@ -262,8 +261,7 @@ function ConsoleWorkspace() {
     onboardingDismissed ||
     keys.length > 0 ||
     (balanceKnown && BigInt(balance) > 0n);
-  // Unlock only the current owner's locally captured key material. Verification
-  // does not create a new login session or recover old masked credentials.
+  // Password verification and every subsequent read are bound to this session.
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, number>>(
     {},
   );
@@ -274,10 +272,12 @@ function ConsoleWorkspace() {
     if (tokensError || !keys.some((key) => key.id === keyId)) return false;
     try {
       await verifyTokenPassword(Number(keyId), password, sessionScope);
+      const secret = await readTokenSecret(Number(keyId), sessionScope);
       if (!isCurrentSession()) return false;
+      setPlaintextKeys((state) => ({ ...state, [keyId]: secret.key }));
       setRevealedKeyIds((state) => ({
         ...state,
-        [keyId]: Date.now() + 300000,
+        [keyId]: secret.expiresAt,
       }));
       return true;
     } catch {
@@ -285,6 +285,18 @@ function ConsoleWorkspace() {
     }
   };
   const keyDisplayNow = useKeyDisplayTime(revealedKeyIds);
+  useEffect(() => {
+    setPlaintextKeys((state) => {
+      const active = Object.fromEntries(
+        Object.entries(state).filter(
+          ([id]) => revealedKeyIds[id] > keyDisplayNow,
+        ),
+      );
+      return Object.keys(active).length === Object.keys(state).length
+        ? state
+        : active;
+    });
+  }, [keyDisplayNow, revealedKeyIds]);
   const quotaAt = new Date(keyDisplayNow).toISOString();
   const keysNearQuota = keys.filter(
     (key) => keyQuotaSummary(key, quotaAt).nearLimit,
@@ -498,17 +510,25 @@ function ConsoleWorkspace() {
   const isLowBalance = balanceKnown && BigInt(balance) < 5000000000n; // < $5.00
   const isZeroBalance = balanceKnown && BigInt(balance) <= 0n;
 
-  const requestKeySecret = (key: PreviewKey, intent: KeySecretAction) => {
+  const requestKeySecret = async (key: PreviewKey, intent: KeySecretAction) => {
     if (authPendingRef.current || !isCurrentSession()) return;
     if (revealedKeyIds[key.id] > Date.now()) {
-      // Use the plaintext key if captured in this session (create/
-      // regenerate); otherwise fall back to the masked value from the
-      // backend list endpoint.
-      const secret = plaintextKeys[key.id] ?? key.keySecret;
-      if (intent === "view")
-        setVisibleKeyIds((visible) => ({ ...visible, [key.id]: true }));
-      else void copyText(secret, t("keyCopied"), t("copyFailed"));
-      return;
+      try {
+        const secret = await readTokenSecret(Number(key.id), sessionScope);
+        if (!isCurrentSession()) return;
+        setPlaintextKeys((state) => ({ ...state, [key.id]: secret.key }));
+        if (intent === "view")
+          setVisibleKeyIds((visible) => ({ ...visible, [key.id]: true }));
+        else void copyText(secret.key, t("keyCopied"), t("copyFailed"));
+        return;
+      } catch {
+        setRevealedKeyIds((state) => ({ ...state, [key.id]: 0 }));
+        setPlaintextKeys((state) => {
+          const next = { ...state };
+          delete next[key.id];
+          return next;
+        });
+      }
     }
     // A new unlock must not revive a previous reveal when the intent is copy.
     setVisibleKeyIds((visible) => ({ ...visible, [key.id]: false }));
@@ -532,10 +552,18 @@ function ConsoleWorkspace() {
         authPassword,
         sessionScope,
       );
+      const secret = await readTokenSecret(
+        Number(authRevealKeyId),
+        sessionScope,
+      );
       if (!isCurrentSession()) return;
+      setPlaintextKeys((state) => ({
+        ...state,
+        [authRevealKeyId]: secret.key,
+      }));
       setRevealedKeyIds((s) => ({
         ...s,
-        [authRevealKeyId]: Date.now() + 300000,
+        [authRevealKeyId]: secret.expiresAt,
       }));
       if (authKeyIntent === "view")
         setVisibleKeyIds((visible) => ({
@@ -543,11 +571,7 @@ function ConsoleWorkspace() {
           [authRevealKeyId]: true,
         }));
       else {
-        const secret =
-          plaintextKeys[authRevealKeyId] ??
-          keys.find((k) => k.id === authRevealKeyId)?.keySecret ??
-          "";
-        void copyText(secret, t("keyCopied"), t("copyFailed"));
+        void copyText(secret.key, t("keyCopied"), t("copyFailed"));
       }
       setAuthRevealKeyId(null);
       setAuthPassword("");
@@ -2605,9 +2629,9 @@ function ConsoleWorkspace() {
         size="wide"
         title={c("密钥已重置", "Key regenerated", "تم تجديد المفتاح")}
         description={c(
-          "旧密钥已立即失效，请将新密钥更新到使用它的应用。此为新密钥的唯一一次明文展示。",
-          "The old key is invalid. Update your apps with the new key below — this is the only time it will be shown.",
-          "المفتاح القديم غير صالح. حدّث تطبيقاتك بالمفتاح الجديد؛ هذا العرض الوحيد له.",
+          "旧密钥已立即失效，请将新密钥更新到使用它的应用。以后可验证当前密码再次查看。",
+          "The old key is invalid. Update your apps with the new key. Verify your current password to view it again later.",
+          "المفتاح القديم غير صالح. حدّث تطبيقاتك بالمفتاح الجديد. يمكنك عرضه لاحقًا بعد التحقق بكلمة مرورك الحالية.",
         )}
         footer={
           <Button variant="primary" onClick={() => setRegeneratedKey(null)}>

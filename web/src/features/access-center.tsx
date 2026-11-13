@@ -642,7 +642,7 @@ export default function AccessCenter({
                     <Button
                       size="small"
                       variant="secondary"
-                      disabled={unlocking || !validDemoSecret(key.keySecret)}
+                      disabled={unlocking || !key.active}
                       onClick={async () => {
                         setUnlocking(true);
                         const ok = await unlock(key.id, password);

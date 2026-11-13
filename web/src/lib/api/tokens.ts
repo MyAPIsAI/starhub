@@ -2,10 +2,8 @@
 // /api/token endpoints.
 //
 // Key behavior:
-//   - Create and regenerate return the FULL token with plaintext key.
-//     This is the ONLY time the key is visible. Callers MUST capture
-//     it from the mutation result and show a one-time dialog; they
-//     cannot rely on list (which returns masked keys).  (B10)
+//   - List responses mask credentials. Create/regenerate return plaintext;
+//     later reads require a password-verified, session-bound unlock.
 //   - Update and delete return { success: true } with NO data field.
 //     Mutations invalidate the token list query instead of optimistic
 //     updates.  (B5)
@@ -98,7 +96,7 @@ export async function verifyTokenPassword(
   let result: unknown;
   try {
     result = await apiPost<unknown>(
-      `/api/token/${tokenID}/verify-password`,
+      `/api/token/${tokenID}/unlock`,
       {
         expected_user_id: identity[1],
         password,
@@ -121,6 +119,31 @@ export async function verifyTokenPassword(
     (result as Record<string, unknown>).token_id !== tokenID
   )
     throw Error("API key password verification was not confirmed");
+}
+
+export async function readTokenSecret(
+  tokenID: number,
+  identity: ReturnType<typeof sessionQueryIdentity>,
+): Promise<{ key: string; expiresAt: number }> {
+  assertTokenSession(identity);
+  const result = await apiPost<Record<string, unknown>>(
+    `/api/token/${tokenID}/reveal`,
+    { expected_user_id: identity[1] },
+    { handleUnauthorizedLocally: true },
+  );
+  assertTokenSession(identity);
+  if (
+    result.user_id !== identity[1] ||
+    result.token_id !== tokenID ||
+    typeof result.key !== "string" ||
+    !/^sk-[A-Za-z0-9]{48}$/.test(result.key) ||
+    !Number.isSafeInteger(result.expires_at) ||
+    Number(result.expires_at) <= Date.now() ||
+    Number(result.expires_at) > Date.now() + 300_000
+  ) {
+    throw Error("API key read was not confirmed");
+  }
+  return { key: result.key, expiresAt: Number(result.expires_at) };
 }
 
 export function useTokens() {

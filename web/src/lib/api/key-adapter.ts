@@ -8,7 +8,7 @@
 //
 // Key behavior:
 //   - The list endpoint returns MASKED keys (sk-xxx******yyyy). The
-//     plaintext key is only available from create/regenerate, captured
+//     plaintext key is available from create/regenerate or a verified read, captured
 //     by the caller and merged into the adapted PreviewKey via the
 //     plaintextKeys map. (B10)
 
@@ -91,7 +91,7 @@ export function joinList(arr: string[]): string {
  * Convert a backend Token to a frontend PreviewKey.
  *
  * @param token       The backend token (key is masked from list endpoint).
- * @param plaintextKey  Optional plaintext key — only from create/regenerate.
+ * @param plaintextKey  Optional plaintext key from creation or a verified read.
  *                      When provided, it becomes `keySecret` so the UI can
  *                      reveal/copy the real key.
  */

@@ -17,6 +17,48 @@ type sessionData struct {
 	lastActive time.Time
 	ip         string
 	deviceName string
+	keyUnlocks map[int64]keyUnlock
+}
+
+type keyUnlock struct {
+	password string
+	key      string
+	expires  time.Time
+}
+
+const TokenUnlockWindow = 5 * time.Minute
+
+func (s *SessionStore) UnlockToken(session string, userID, tokenID int64, password, key string, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sd := s.data[session]
+	if !activeSession(sd, now) || sd.userID != userID {
+		return false
+	}
+	if sd.keyUnlocks == nil {
+		sd.keyUnlocks = map[int64]keyUnlock{}
+	}
+	sd.keyUnlocks[tokenID] = keyUnlock{password: password, key: key, expires: now.Add(TokenUnlockWindow)}
+	return true
+}
+
+func (s *SessionStore) TokenUnlockExpiry(session string, userID, tokenID int64, password, key string, now time.Time) (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sd := s.data[session]
+	if !activeSession(sd, now) || sd.userID != userID {
+		return time.Time{}, false
+	}
+	grant, ok := sd.keyUnlocks[tokenID]
+	if !ok || !now.Before(grant.expires) || grant.password != password || grant.key != key {
+		delete(sd.keyUnlocks, tokenID)
+		return time.Time{}, false
+	}
+	return grant.expires, true
+}
+
+func activeSession(sd *sessionData, now time.Time) bool {
+	return sd != nil && now.Before(sd.expires) && now.Sub(sd.created) <= SessionMaxLifetime && now.Sub(sd.lastActive) <= SessionIdleExpiry
 }
 
 // SessionInfo is the public representation of a session (no token).
@@ -92,32 +134,19 @@ func (s *SessionStore) Get(token string) (int64, bool) {
 	if token == "" {
 		return 0, false
 	}
-	s.mu.RLock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	sd, ok := s.data[token]
-	s.mu.RUnlock()
 	if !ok {
 		return 0, false
 	}
 	now := time.Now()
 	// Check absolute expiry.
-	if now.After(sd.expires) {
-		s.Remove(token)
+	if !activeSession(sd, now) {
+		delete(s.data, token)
 		return 0, false
 	}
-	// Check 30-day max lifetime.
-	if now.Sub(sd.created) > SessionMaxLifetime {
-		s.Remove(token)
-		return 0, false
-	}
-	// Check 7-day idle expiry.
-	if now.Sub(sd.lastActive) > SessionIdleExpiry {
-		s.Remove(token)
-		return 0, false
-	}
-	// Update last-active time (write lock).
-	s.mu.Lock()
 	sd.lastActive = now
-	s.mu.Unlock()
 	return sd.userID, true
 }
 
