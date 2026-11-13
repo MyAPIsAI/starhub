@@ -254,13 +254,15 @@ func configureTokenPeriod(tx *gorm.DB, t *Token, fields map[string]any, now time
 		if pending > 0 {
 			return ErrTokenPeriodBusy
 		}
-		tasks, err := SumPendingTaskQuota(tx, t.ID)
-		if err != nil {
+
+		var tasks int64
+		if err := tx.Model(&Task{}).Where("token_id = ? AND status NOT IN ?", t.ID, []string{"succeeded", "failed", "cancelled"}).Count(&tasks).Error; err != nil {
 			return err
 		}
 		if tasks > 0 {
 			return ErrTokenPeriodBusy
 		}
+
 	}
 	fields["period_quota_limit_remainder_nano"] = next.PeriodQuotaLimitRemainderNano
 	fields["quota_period"], fields["period_quota_limit"], fields["quota_region"], fields["quota_timezone"] = next.QuotaPeriod, next.PeriodQuotaLimit, next.QuotaRegion, next.QuotaTimezone

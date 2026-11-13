@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"math/big"
 	"starhub/common"
 )
 
@@ -54,4 +55,20 @@ func (r Redemption) MarshalJSON() ([]byte, error) {
 		alias
 		QuotaNano string `json:"quota_nano"`
 	}{alias(r), common.QuotaMoney(r.Quota, r.QuotaRemainderNano).String()})
+}
+
+// Task admission IDs fence the stored unit. Public numeric quota fields retain
+// their legacy display meaning while exact canonical amounts travel as strings.
+func (t Task) MarshalJSON() ([]byte, error) {
+	type alias Task
+	amount := common.QuotaMoney(t.Quota, 0)
+	if common.IsNanoReservationID(t.QuotaReservationID) {
+		amount = big.NewInt(t.Quota)
+	}
+	return json.Marshal(struct {
+		alias
+		Quota      int64  `json:"quota"`
+		QuotaNano  string `json:"quota_nano"`
+		AmountUnit string `json:"amount_unit"`
+	}{alias(t), legacyUsageQuota(amount), amount.String(), common.MoneyUnitNano})
 }

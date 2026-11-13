@@ -55,3 +55,16 @@ func TestNanoTariffMultipliersSurviveValueSnapshotWithoutBinaryProductDrift(t *t
 		t.Fatal("nano expression fee lost")
 	}
 }
+
+func TestNanoMicroProjectionDoesNotRecomputeWithLegacyRates(t *testing.T) {
+	p := NewPriceData("projection", "default")
+	p.AmountUnit = common.MoneyUnitNano
+	p.HasModelPrice = true
+	p.ModelPriceUSD = 0.001
+	if ExactFeeMicroUSD(p, &Usage{}) != 1000 {
+		t.Fatal("micro projection changed the canonical price")
+	}
+	if QuotaToMicroUSD(9_000_000_000_000) != 18_000_000_000_000 {
+		t.Fatal("intermediate conversion overflowed")
+	}
+}

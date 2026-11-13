@@ -3,6 +3,8 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
+	"starhub/common"
 	"strings"
 	"time"
 
@@ -14,6 +16,7 @@ var ErrTaskNotFound = errors.New("task not found")
 // Task is one asynchronous platform job (video generation, music, ...)
 // following the submit-and-poll lifecycle of P3.3. Quota holds the
 // pre-charge reserved at submit; the terminal poll settles the difference.
+// n2 admission IDs store nano-USD; earlier IDs retain legacy quota ticks.
 type Task struct {
 	QuotaReservationID string `gorm:"size:64;not null;default:''" json:"-"`
 	ID                 int64  `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -232,18 +235,37 @@ func RecordTaskSubmissionFailure(id int64, reason string) (*Task, error) {
 // so the cumulative limit (remain + used) does not silently inflate when
 // pending tasks settle.
 func SumPendingTaskQuota(tx *gorm.DB, tokenID int64) (int64, error) {
-	if tx == nil {
-		tx = DB
-	}
-	var total int64
-	err := tx.Model(&Task{}).
-		Where("token_id = ? AND status NOT IN ?", tokenID,
-			[]string{"succeeded", "failed", "cancelled"}).
-		Select("COALESCE(SUM(quota), 0)").Scan(&total).Error
+	money, err := SumPendingTaskMoney(tx, tokenID)
 	if err != nil {
 		return 0, err
 	}
-	return total, nil
+	whole, _, err := common.NanoQuotaParts(money)
+	return whole, err
+}
+
+func SumPendingTaskMoney(tx *gorm.DB, tokenID int64) (*big.Int, error) {
+	if tx == nil {
+		tx = DB
+	}
+	rows, err := tx.Model(&Task{}).Select("quota, quota_reservation_id").Where("token_id = ? AND status NOT IN ?", tokenID, []string{"succeeded", "failed", "cancelled"}).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	total := new(big.Int)
+	for rows.Next() {
+		var amount int64
+		var reservation string
+		if err := rows.Scan(&amount, &reservation); err != nil {
+			return nil, err
+		}
+		value := common.QuotaMoney(amount, 0)
+		if common.IsNanoReservationID(reservation) {
+			value.SetInt64(amount)
+		}
+		total.Add(total, value)
+	}
+	return total, rows.Err()
 }
 
 // TaskOutputURLs extracts the output URLs of the stored result meta (best

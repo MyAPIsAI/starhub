@@ -2,6 +2,7 @@ package relay
 
 import (
 	"log"
+	"math"
 	"math/big"
 	"time"
 
@@ -296,6 +297,9 @@ func max64(a, b int64) int64 {
 // before rounding to integer quota. This mirrors ComputeUsageQuota but
 // preserves the pre-rounding value so logs support offline recomputation.
 func ExactFeeMicroUSD(p *PriceData, usage *Usage) int64 {
+	if p.AmountUnit == common.MoneyUnitNano {
+		return ComputeUsageNano(p, usage) / 1000
+	}
 	if usage == nil {
 		usage = &Usage{}
 	}
@@ -338,5 +342,12 @@ func ExactFeeMicroUSD(p *PriceData, usage *Usage) int64 {
 // platform's QuotaPerUSD constant. Used for unit-based billing paths where
 // the caller already computed the final quota.
 func QuotaToMicroUSD(quota int64) int64 {
-	return quota * 1e6 / common.QuotaPerUSD
+	micro := new(big.Int).Quo(common.QuotaMoney(quota, 0), big.NewInt(1000))
+	if !micro.IsInt64() {
+		if micro.Sign() < 0 {
+			return math.MinInt64
+		}
+		return math.MaxInt64
+	}
+	return micro.Int64()
 }

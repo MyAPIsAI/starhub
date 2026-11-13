@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -141,5 +142,51 @@ func TestTokenNanoBudgetHTTPAndExactBalanceFence(t *testing.T) {
 		if w.Code != 400 {
 			t.Fatalf("invalid monetary contract accepted: %d %s", w.Code, w.Body)
 		}
+	}
+}
+
+func TestOneNanoAccountAndKeyCanPayForExactlyOneHTTPCall(t *testing.T) {
+	newTestDB(t)
+	user := newUser(t, "last-nano", common.RoleUser, 0)
+	if err := model.InsertRedemption(&model.Redemption{Code: "RD-last-nano", Status: 1, QuotaRemainderNano: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := model.RedeemCodeMoney("RD-last-nano", user.ID); err != nil {
+		t.Fatal(err)
+	}
+	token := &model.Token{UserID: user.ID, Name: "last-nano", Status: 1, RemainQuotaRemainderNano: 1}
+	if err := model.InsertToken(token); err != nil {
+		t.Fatal(err)
+	}
+	if err := setting.UpdatePricing(setting.OptionKeyModelPrice, `{"last-nano-model":0.000000001}`); err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
+	}))
+	defer upstream.Close()
+	if err := model.InsertChannel(&model.Channel{Name: "last-nano", Models: "last-nano-model", Group: "default", Status: 1, Type: 1, BaseURL: upstream.URL, Key: "fixture"}); err != nil {
+		t.Fatal(err)
+	}
+	handler := middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayChat)))
+	for _, status := range []int{200, 403} {
+		r := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(`{"model":"last-nano-model","messages":[{"role":"user","content":"hi"}],"max_tokens":1}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != status {
+			t.Fatalf("one-nano admission: %d %s", w.Code, w.Body)
+		}
+	}
+	after, _ := model.GetUserByID(user.ID)
+	if calls.Load() != 1 || common.QuotaMoney(after.Quota, after.QuotaRemainderNano).Sign() != 0 || common.QuotaMoney(after.UsedQuota, after.UsedQuotaRemainderNano).String() != "1" {
+		t.Fatal("last nano could not be spent exactly once")
+	}
+	if err := model.VerifyMoneyLedger(user.ID); err != nil {
+		t.Fatal(err)
 	}
 }
