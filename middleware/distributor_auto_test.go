@@ -239,11 +239,11 @@ func TestDistributeAutoModelListFailure(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 				t.Fatal(err)
 			}
-			if rec.Code != http.StatusInternalServerError || response.Error.Type != "server_error" || response.Error.Message != "failed to evaluate smart routing candidates" {
+			if rec.Code != http.StatusServiceUnavailable || response.Error.Type != "server_error" || response.Error.Message != "active deployment policy is unavailable" {
 				t.Fatalf("unexpected error response: status %d, body %s", rec.Code, rec.Body)
 			}
-			if inbound == dto.InboundOpenAI && response.Error.Code != "internal_error" {
-				t.Fatalf("OpenAI error code = %q, want internal_error", response.Error.Code)
+			if inbound == dto.InboundOpenAI && response.Error.Code != "region_unavailable" {
+				t.Fatalf("OpenAI error code = %q, want region_unavailable", response.Error.Code)
 			}
 			if inbound == dto.InboundClaude && response.Type != "error" {
 				t.Fatalf("Claude envelope type = %q, want error", response.Type)

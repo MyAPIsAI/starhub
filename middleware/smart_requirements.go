@@ -151,6 +151,13 @@ func (req smartRequirements) compatible(name, group string, ch *model.Channel) (
 	if err != nil {
 		return false, err
 	}
+	region, err := deploymentRegion(req.ctx)
+	if err != nil {
+		return false, err
+	}
+	if !region.ModelVisible(name, meta) {
+		return false, nil
+	}
 	// An adaptor serving an endpoint does not establish a model's capability.
 	if tags := smartEndpointTags[req.path]; len(tags) > 0 {
 		if !found {

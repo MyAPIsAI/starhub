@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -88,6 +89,16 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			}
 
 			var modelName string
+			region, err := model.ActiveRegionProfile()
+			if err != nil {
+				dto.WriteRelayError(w, 503, inbound, "server_error", "region_unavailable", "active deployment policy is unavailable")
+				return
+			}
+			if !region.FeatureEnabled("relay") {
+				fail(403, "relay_disabled", "model calls are disabled in this region")
+				return
+			}
+			r = r.WithContext(context.WithValue(r.Context(), deploymentRegionKey{}, region))
 			var stream bool
 			var prefixHash string
 			if isMultipart(contentType) {
@@ -145,6 +156,10 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			}
 
 			requestedModel := modelName
+			if isAutoModel(requestedModel) && !region.FeatureEnabled("smart_routing") {
+				fail(403, "smart_routing_disabled", "smart routing is disabled in this region")
+				return
+			}
 			r, body, err = prepareResponseConversation(r, body)
 			if err != nil {
 				fail(http.StatusNotFound, "conversation_not_found", "conversation is unavailable for this API key or request state")
@@ -226,6 +241,15 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			if isAutoModel(modelName) {
 				dto.WriteRelayError(w, http.StatusServiceUnavailable, inbound, "server_error", "no_available_channel",
 					"no available candidate model for smart routing")
+				return
+			}
+			allowed, err := region.CheckModel(modelName)
+			if err != nil {
+				dto.WriteRelayError(w, 503, inbound, "server_error", "region_unavailable", "regional model policy could not be verified")
+				return
+			}
+			if !allowed {
+				fail(403, "model_not_sold_in_region", "this model is unavailable in the deployment region")
 				return
 			}
 
