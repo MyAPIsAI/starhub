@@ -88,6 +88,9 @@ func InitDB(path string) error {
 	}
 	ResetRoutingFailureStream()
 	DB = db
+	if _, err := MigrateCredentialStorage(false, "system", "Upgrade legacy credential storage"); err != nil {
+		return fmt.Errorf("migrate credential storage: %w", err)
+	}
 	return nil
 }
 
