@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math/big"
 	"time"
 )
 
@@ -10,15 +11,16 @@ import (
 // project's Metric15m / ModelMetric15m models, simplified to what the
 // StarHub Log table can provide.
 type ServiceQualityMetric struct {
-	Model         string  `json:"model"`
-	TotalRequests int64   `json:"total_requests"`
-	SuccessCount  int64   `json:"success_count"`
-	FailedCount   int64   `json:"failed_count"`
-	SuccessRate   float64 `json:"success_rate"` // 0.0–1.0
-	AvgDurationMs int64   `json:"avg_duration_ms"`
-	P95DurationMs int64   `json:"p95_duration_ms"`
-	TotalQuota    int64   `json:"total_quota"`
-	ErrorRate     float64 `json:"error_rate"` // 0.0–1.0
+	TotalQuotaNano string  `gorm:"-" json:"total_quota_nano"`
+	Model          string  `json:"model"`
+	TotalRequests  int64   `json:"total_requests"`
+	SuccessCount   int64   `json:"success_count"`
+	FailedCount    int64   `json:"failed_count"`
+	SuccessRate    float64 `json:"success_rate"` // 0.0–1.0
+	AvgDurationMs  int64   `json:"avg_duration_ms"`
+	P95DurationMs  int64   `json:"p95_duration_ms"`
+	TotalQuota     int64   `json:"total_quota"`
+	ErrorRate      float64 `json:"error_rate"` // 0.0–1.0
 }
 
 // ServiceQualityDailyMetric is one day's quality summary for a single
@@ -81,8 +83,7 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 		Select("model AS model, COUNT(*) AS total, "+
 			"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success, "+
 			"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed, "+
-			"COALESCE(AVG(duration_ms), 0) AS avg_duration, "+
-			"COALESCE(SUM(quota), 0) AS total_quota").
+			"COALESCE(AVG(duration_ms), 0) AS avg_duration").
 		Where(baseWhere, args...).
 		Group("model").
 		Order("total DESC").
@@ -95,8 +96,13 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 		return nil, err
 	}
 
+	amounts, err := readGroupedLogMoney(DB.Model(&Log{}).Where(baseWhere, args...), "model")
+	if err != nil {
+		return nil, err
+	}
+	overallMoney := new(big.Int)
 	byModel := make([]ServiceQualityMetric, 0, len(rows))
-	var overallTotal, overallSuccess, overallFailed, overallQuota int64
+	var overallTotal, overallSuccess, overallFailed int64
 	var overallDurationSum float64
 	for _, r := range rows {
 		successRate := 0.0
@@ -111,14 +117,14 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 			SuccessRate:   successRate,
 			AvgDurationMs: int64(r.AvgDuration),
 			P95DurationMs: percentiles.ByModel[r.Model],
-			TotalQuota:    r.TotalQuota,
-			ErrorRate:     1.0 - successRate,
+			TotalQuota:    legacyUsageQuota(&usageMoneyAt(amounts, r.Model).Charged), TotalQuotaNano: usageMoneyAt(amounts, r.Model).Charged.String(),
+			ErrorRate: 1.0 - successRate,
 		}
 		byModel = append(byModel, metric)
 		overallTotal += r.Total
 		overallSuccess += r.Success
 		overallFailed += r.Failed
-		overallQuota += r.TotalQuota
+		overallMoney.Add(overallMoney, &usageMoneyAt(amounts, r.Model).Charged)
 		overallDurationSum += r.AvgDuration * float64(r.Total)
 	}
 
@@ -126,7 +132,7 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 		TotalRequests: overallTotal,
 		SuccessCount:  overallSuccess,
 		FailedCount:   overallFailed,
-		TotalQuota:    overallQuota,
+		TotalQuota:    legacyUsageQuota(overallMoney), TotalQuotaNano: overallMoney.String(),
 		P95DurationMs: percentiles.Overall,
 	}
 	if overallTotal > 0 {

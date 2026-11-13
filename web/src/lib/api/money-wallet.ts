@@ -214,3 +214,54 @@ export function useMoneyAdjustment() {
     },
   });
 }
+
+export function useMoneyLedgerExport() {
+  const identity = useSessionQueryIdentity();
+  return useMutation({
+    retry: false,
+    mutationFn: async () => {
+      assertTokenSession(identity);
+      const record = await apiPost<{
+        id: number;
+        user_id: number;
+        type: string;
+        filename: string;
+        status: string;
+      }>("/api/export", { type: "money_ledger", range_days: 31 });
+      assertTokenSession(identity);
+      if (
+        record?.user_id !== identity[1] ||
+        record.type !== "money_ledger" ||
+        record.status !== "completed" ||
+        !Number.isSafeInteger(record.id) ||
+        record.id <= 0 ||
+        typeof record.filename !== "string"
+      )
+        throw Error("Money export was not confirmed");
+      const response = await fetch(`/api/export/${record.id}/download`, {
+        credentials: "same-origin",
+        headers: {
+          Accept: "text/csv",
+          "X-StarHub-Expected-User-ID": String(identity[1]),
+        },
+      });
+      if (
+        !response.ok ||
+        !response.headers.get("Content-Type")?.startsWith("text/csv") ||
+        response.headers.get("X-StarHub-Owner-Guard") !== "v1" ||
+        response.headers.get("X-StarHub-User-ID") !== String(identity[1])
+      )
+        throw Error("Money export download was not confirmed");
+      const blob = await response.blob();
+      assertTokenSession(identity);
+      const url = URL.createObjectURL(blob),
+        anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = record.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+  });
+}

@@ -55,3 +55,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.money-ledger-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

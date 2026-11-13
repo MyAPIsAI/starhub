@@ -42,6 +42,10 @@ func TestUsageMoneyAggregatesKeepFractionalCarriesAndLargeTotals(t *testing.T) {
 	if err != nil || daily[0].QuotaNano != expected.String() || daily[0].Quota != math.MaxInt64 {
 		t.Fatalf("exact total overflowed: %+v %v", daily, err)
 	}
+	quality, err := SummarizeServiceQuality(user.ID, 1)
+	if err != nil || quality.Overall.TotalQuotaNano != expected.String() {
+		t.Fatalf("quality money sum lost precision: %+v %v", quality, err)
+	}
 	finance, err := ReadFinanceSummary(context.Background(), now.Unix()-60, now.Unix()+60)
 	if err != nil || finance.APICollectedNano != expected.String() || finance.APIUnfundedNano != "2000" {
 		t.Fatalf("finance rounding or overflow: %+v %v", finance, err)

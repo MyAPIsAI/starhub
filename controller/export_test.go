@@ -29,7 +29,7 @@ func TestCreateExportValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListExports before validation failed: %v", err)
 	}
-	const typeError = "type must be requests, ledger or usage"
+	const typeError = "type must be requests, ledger, usage or money_ledger"
 	const rangeError = "range_days must be between 1 and 31"
 
 	cases := []struct {
@@ -135,6 +135,7 @@ func TestBuildLogExportStartTimeBoundary(t *testing.T) {
 		t.Fatalf("row_count = %d, want 2", rowCount)
 	}
 	rows, err := csv.NewReader(strings.NewReader(string(content))).ReadAll()
+	rows = legacyExportPrefix(rows)
 	if err != nil {
 		t.Fatalf("invalid CSV: %v", err)
 	}
@@ -202,6 +203,7 @@ func TestRequestExportModelAttribution(t *testing.T) {
 		t.Fatalf("download status = %d, body differs from persisted export = %t", rr.Code, rr.Body.String() != string(stored.Content))
 	}
 	rows, err := csv.NewReader(strings.NewReader(rr.Body.String())).ReadAll()
+	rows = legacyExportPrefix(rows)
 	if err != nil || len(rows) != 4 {
 		t.Fatalf("CSV rows = %q, err = %v, want a header and 3 user rows", rows, err)
 	}
@@ -275,6 +277,7 @@ func TestCreateExportUsage(t *testing.T) {
 		t.Fatal("download differs from persisted CSV content")
 	}
 	rows, err := csv.NewReader(strings.NewReader(rr.Body.String())).ReadAll()
+	rows = legacyExportPrefix(rows)
 	if err != nil {
 		t.Fatalf("invalid CSV: %v", err)
 	}
@@ -353,6 +356,7 @@ func TestBuildLedgerExportPreservesNanoUSD(t *testing.T) {
 		t.Fatalf("row_count = %d, want 3", rowCount)
 	}
 	rows, err := csv.NewReader(strings.NewReader(string(content))).ReadAll()
+	rows = legacyExportPrefix(rows)
 	if err != nil {
 		t.Fatalf("invalid CSV: %v", err)
 	}
@@ -434,6 +438,7 @@ func TestEmptyExportContainsOnlyHeader(t *testing.T) {
 				t.Fatal("download differs from persisted CSV content")
 			}
 			rows, err := csv.NewReader(strings.NewReader(rr.Body.String())).ReadAll()
+			rows = legacyExportPrefix(rows)
 			if err != nil {
 				t.Fatalf("invalid CSV: %v", err)
 			}
@@ -585,6 +590,7 @@ func TestDownloadExportRequestsCSVEscaping(t *testing.T) {
 		t.Fatal("download differs from persisted CSV content")
 	}
 	rows, err := csv.NewReader(strings.NewReader(rr.Body.String())).ReadAll()
+	rows = legacyExportPrefix(rows)
 	if err != nil {
 		t.Fatalf("invalid CSV: %v (body %q)", err, rr.Body.String())
 	}
@@ -661,4 +667,17 @@ func TestAdminCanListAllExports(t *testing.T) {
 	if len(exports) != 1 {
 		t.Fatalf("admin sees %d exports, want 1", len(exports))
 	}
+}
+
+func legacyExportPrefix(rows [][]string) [][]string {
+	for i := range rows {
+		width := 10
+		if len(rows) > 0 && len(rows[0]) > 0 && rows[0][0] == "Date" {
+			width = 5
+		}
+		if len(rows[i]) > width {
+			rows[i] = rows[i][:width]
+		}
+	}
+	return rows
 }

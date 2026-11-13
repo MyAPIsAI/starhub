@@ -11,7 +11,7 @@ import { apiGet, apiPost } from "./http";
 export interface ExportRecord {
   id: number;
   user_id: number;
-  type: "requests" | "ledger" | "usage";
+  type: "requests" | "ledger" | "usage" | "money_ledger";
   range_days: number;
   row_count: number;
   size_kb: number;

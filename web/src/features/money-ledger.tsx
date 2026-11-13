@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMoneyLedger } from "../lib/api/money-wallet";
+import { useMoneyLedger, useMoneyLedgerExport } from "../lib/api/money-wallet";
 import { formatMoney } from "../lib/money";
 import { Button } from "../components/ui/button";
 import "../components/money-ledger.css";
@@ -7,7 +7,8 @@ import "../components/money-ledger.css";
 type Text = (zh: string, en: string, ar: string) => string;
 export default function MoneyLedger({ text }: { text: Text }) {
   const [page, setPage] = useState(1),
-    query = useMoneyLedger(page);
+    query = useMoneyLedger(page),
+    exportLedger = useMoneyLedgerExport();
   const data = query.error ? undefined : query.data;
   const labels: Record<string, string> = {
     opening: text("期初余额", "Opening balance", "الرصيد الافتتاحي"),
@@ -39,14 +40,36 @@ export default function MoneyLedger({ text }: { text: Text }) {
             )}
           </p>
         </div>
-        <Button
-          size="small"
-          disabled={query.isFetching}
-          onClick={() => void query.refetch()}
-        >
-          {text("刷新账本", "Refresh ledger", "تحديث الدفتر")}
-        </Button>
+        <div className="money-ledger-actions">
+          <Button
+            size="small"
+            disabled={exportLedger.isPending}
+            onClick={() => exportLedger.mutate()}
+          >
+            {text(
+              "导出近 31 天账本",
+              "Export last 31 days",
+              "تصدير آخر 31 يومًا",
+            )}
+          </Button>
+          <Button
+            size="small"
+            disabled={query.isFetching}
+            onClick={() => void query.refetch()}
+          >
+            {text("刷新账本", "Refresh ledger", "تحديث الدفتر")}
+          </Button>
+        </div>
       </header>
+      {exportLedger.isError && (
+        <p role="alert">
+          {text(
+            "导出未确认，请重试。",
+            "Export was not confirmed. Retry.",
+            "لم يتم تأكيد التصدير. أعد المحاولة.",
+          )}
+        </p>
+      )}
       {query.isError && (
         <p role="alert">
           {text(

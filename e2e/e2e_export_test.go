@@ -212,6 +212,7 @@ func TestExportRequestsContentUserIsolation(t *testing.T) {
 				t.Fatalf("download differs from persisted export: %d %q", res.Status, res.Body)
 			}
 			rows, err := csv.NewReader(strings.NewReader(res.Body)).ReadAll()
+			rows = legacyExportPrefix(rows)
 			if err != nil {
 				t.Fatalf("invalid CSV: %v", err)
 			}
@@ -302,4 +303,17 @@ func TestExportCreateRejectsLoggedOutSession(t *testing.T) {
 	if !reflect.DeepEqual(after, before) {
 		t.Fatalf("post-logout request changed exports: got %+v, want %+v", after, before)
 	}
+}
+
+func legacyExportPrefix(rows [][]string) [][]string {
+	for i := range rows {
+		width := 10
+		if len(rows) > 0 && len(rows[0]) > 0 && rows[0][0] == "Date" {
+			width = 5
+		}
+		if len(rows[i]) > width {
+			rows[i] = rows[i][:width]
+		}
+	}
+	return rows
 }

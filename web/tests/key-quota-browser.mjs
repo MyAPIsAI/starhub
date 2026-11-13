@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 import { createServer } from "node:http";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import os from "node:os";
@@ -480,7 +480,7 @@ try {
     },
   );
   // Let the real per-minute API limit replenish before testing more writes.
-  await new Promise(resolve => setTimeout(resolve, 60_000));
+  await new Promise((resolve) => setTimeout(resolve, 60_000));
   await check(
     "Root console grants one nano without legacy quota scaling",
     async () => {
@@ -503,6 +503,21 @@ try {
       assert.equal(
         BigInt((await api("GET", "/api/wallet/v2")).balance_nano),
         BigInt(before.balance_nano) + 1n,
+      );
+      await page.goto(base + "/console/billing");
+      const download = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "Export last 31 days", exact: true })
+        .click();
+      const exported = await download;
+      const file = path.join(temp, "nano-ledger.csv");
+      await exported.saveAs(file);
+      const csv = await readFile(file, "utf8");
+      assert.ok(
+        csv.includes("Spent Delta (nano-USD)") &&
+          csv.includes("Browser nano grant") &&
+          csv.includes("n2:"),
+        "canonical CSV lost audit evidence",
       );
     },
   );

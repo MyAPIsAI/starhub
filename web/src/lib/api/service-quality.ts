@@ -17,6 +17,7 @@ export interface ServiceQualityMetric {
   avg_duration_ms: number;
   p95_duration_ms: number;
   total_quota: number;
+  total_quota_nano?: string;
   error_rate: number; // 0.0–1.0
 }
 

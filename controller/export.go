@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/csv"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,8 +42,8 @@ func CreateExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	typ := strings.TrimSpace(req.Type)
-	if typ != "requests" && typ != "ledger" && typ != "usage" {
-		common.ApiError(w, http.StatusBadRequest, "type must be requests, ledger or usage")
+	if typ != "requests" && typ != "ledger" && typ != "usage" && typ != "money_ledger" {
+		common.ApiError(w, http.StatusBadRequest, "type must be requests, ledger, usage or money_ledger")
 		return
 	}
 	if req.RangeDays < 1 || req.RangeDays > 31 {
@@ -55,7 +56,9 @@ func CreateExport(w http.ResponseWriter, r *http.Request) {
 	var content []byte
 	var rowCount int
 	var err error
-	if typ == "ledger" {
+	if typ == "money_ledger" {
+		content, rowCount, err = buildMoneyLedgerExport(userID, from)
+	} else if typ == "ledger" {
 		content, rowCount, err = buildLedgerExport(userID, from)
 	} else {
 		content, rowCount, err = buildLogExport(typ, userID, from)
@@ -127,13 +130,14 @@ func buildLogExport(typ string, userID int64, from time.Time) ([]byte, int, erro
 	var buf strings.Builder
 	writer := csv.NewWriter(&buf)
 	if typ == "usage" {
-		writer.Write([]string{"Date", "Requests", "Prompt Tokens", "Completion Tokens", "Quota"})
+		writer.Write([]string{"Date", "Requests", "Prompt Tokens", "Completion Tokens", "Quota", "Amount (nano-USD)", "Unfunded (nano-USD)"})
 		dayMap := map[string]*struct {
 			date            string
 			requests        int64
 			promptTokens    int64
 			completionToken int64
-			quota           int64
+			quota           big.Int
+			unfunded        big.Int
 		}{}
 		var order []string
 		for _, l := range logs {
@@ -145,7 +149,8 @@ func buildLogExport(typ string, userID int64, from time.Time) ([]byte, int, erro
 					requests        int64
 					promptTokens    int64
 					completionToken int64
-					quota           int64
+					quota           big.Int
+					unfunded        big.Int
 				}{date: day}
 				dayMap[day] = entry
 				order = append(order, day)
@@ -153,7 +158,8 @@ func buildLogExport(typ string, userID int64, from time.Time) ([]byte, int, erro
 			entry.requests++
 			entry.promptTokens += l.PromptTokens
 			entry.completionToken += l.CompletionTokens
-			entry.quota += l.Quota
+			entry.quota.Add(&entry.quota, common.QuotaMoney(l.Quota, l.QuotaRemainderNano))
+			entry.unfunded.Add(&entry.unfunded, common.QuotaMoney(l.UnfundedQuota, l.UnfundedQuotaRemainderNano))
 		}
 		for _, day := range order {
 			e := dayMap[day]
@@ -162,13 +168,13 @@ func buildLogExport(typ string, userID int64, from time.Time) ([]byte, int, erro
 				strconv.FormatInt(e.requests, 10),
 				strconv.FormatInt(e.promptTokens, 10),
 				strconv.FormatInt(e.completionToken, 10),
-				strconv.FormatInt(e.quota, 10),
+				new(big.Int).Quo(&e.quota, big.NewInt(common.NanoPerLegacyQuota)).String(), e.quota.String(), e.unfunded.String(),
 			})
 		}
 		writer.Flush()
 		return []byte(buf.String()), len(order), nil
 	}
-	writer.Write([]string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model"})
+	writer.Write([]string{"ID", "Time (UTC)", "User ID", "Token ID", "Token Name", "Model", "Prompt Tokens", "Completion Tokens", "Quota", "Requested Model", "Amount (nano-USD)", "Unfunded (nano-USD)"})
 	for _, l := range logs {
 		writer.Write([]string{
 			strconv.FormatInt(l.ID, 10),
@@ -180,7 +186,7 @@ func buildLogExport(typ string, userID int64, from time.Time) ([]byte, int, erro
 			strconv.FormatInt(l.PromptTokens, 10),
 			strconv.FormatInt(l.CompletionTokens, 10),
 			strconv.FormatInt(l.Quota, 10),
-			l.RequestedModel,
+			l.RequestedModel, common.QuotaMoney(l.Quota, l.QuotaRemainderNano).String(), common.QuotaMoney(l.UnfundedQuota, l.UnfundedQuotaRemainderNano).String(),
 		})
 	}
 	writer.Flush()
@@ -215,4 +221,22 @@ func buildLedgerExport(userID int64, from time.Time) ([]byte, int, error) {
 	}
 	writer.Flush()
 	return []byte(buf.String()), len(entries), nil
+}
+
+func buildMoneyLedgerExport(userID int64, from time.Time) ([]byte, int, error) {
+	entries := []model.MoneyEntry{}
+	if err := model.DB.Where("user_id = ? AND created_at >= ?", userID, from.Unix()).Order("sequence DESC").Find(&entries).Error; err != nil {
+		return nil, 0, err
+	}
+	var out strings.Builder
+	writer := csv.NewWriter(&out)
+	writer.Write([]string{"Ledger ID", "Time (UTC)", "Sequence", "Type", "Available Delta (nano-USD)", "Reserved Delta (nano-USD)", "Spent Delta (nano-USD)", "Available After (nano-USD)", "Reserved After (nano-USD)", "Spent After (nano-USD)", "Operation ID", "Reservation ID", "Usage Log ID", "Funding Source", "Actor ID", "Reason"})
+	for _, row := range entries {
+		writer.Write([]string{strconv.FormatInt(row.ID, 10), time.Unix(row.CreatedAt, 0).UTC().Format(time.RFC3339), strconv.FormatInt(row.Sequence, 10), row.Kind, row.AvailableDeltaNano, row.ReservedDeltaNano, row.SpentDeltaNano, row.AvailableAfterNano, row.ReservedAfterNano, row.SpentAfterNano, row.OperationID, row.ReservationID, strconv.FormatInt(row.LogID, 10), row.FundingSource, strconv.FormatInt(row.ActorID, 10), row.Reason})
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return nil, 0, err
+	}
+	return []byte(out.String()), len(entries), nil
 }
