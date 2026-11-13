@@ -5,8 +5,7 @@
 // client. credentials:"same-origin" in http.ts ensures the cookie is
 // sent with every request.
 //
-// Phone login, OTP, and password reset are NOT available on the
-// backend — only username+password login and register.
+// Password and second-factor steps share an HttpOnly login challenge cookie.
 
 import { apiGet, apiPost, type ApiRequestOptions } from "./http";
 
@@ -22,11 +21,19 @@ export interface AuthUser {
   aff_code: string;
   inviter_id: number;
   created_at: number;
+  admin_password_change_required?: boolean;
+  admin_security_required?: boolean;
 }
 
 interface LoginResponse {
   session: string;
   user: AuthUser;
+  "2fa_required"?: false;
+}
+
+interface FactorChallenge {
+  "2fa_required": true;
+  username: string;
 }
 
 /** Backend accounts have no phone field; omit it to keep saved profiles valid. */
@@ -37,8 +44,18 @@ export function authUserProfile(user: AuthUser) {
 export function loginUser(
   username: string,
   password: string,
+): Promise<LoginResponse | FactorChallenge> {
+  return apiPost<LoginResponse | FactorChallenge>("/api/user/login", {
+    username,
+    password,
+  });
+}
+
+export function verifyLoginFactor(
+  username: string,
+  code: string,
 ): Promise<LoginResponse> {
-  return apiPost<LoginResponse>("/api/user/login", { username, password });
+  return apiPost<LoginResponse>("/api/user/login/2fa", { username, code });
 }
 
 export function registerUser(

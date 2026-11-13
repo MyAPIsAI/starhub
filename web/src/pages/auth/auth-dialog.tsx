@@ -8,7 +8,13 @@ import { Input } from "../../components/ui/primitives";
 import { usePreferences } from "../../lib/preferences";
 import { useProductPreview } from "../../lib/product-preview";
 import { useSystemAccess } from "../../lib/system-access";
-import { authUserProfile, loginUser, registerUser } from "../../lib/api/auth";
+import {
+  authUserProfile,
+  getSelf,
+  loginUser,
+  registerUser,
+  verifyLoginFactor,
+} from "../../lib/api/auth";
 import { ApiError } from "../../lib/api/http";
 import { useSessionRestore } from "../../lib/session-restore";
 import "./auth-dialog.css";
@@ -43,6 +49,8 @@ export default function AuthDialog() {
       : "password";
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
+  const [factorRequired, setFactorRequired] = useState(false);
+  const [factorCode, setFactorCode] = useState("");
   const [username, setUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -67,6 +75,8 @@ export default function AuthDialog() {
     setBusy(false);
     setError("");
     setVisiblePasswords({});
+    setFactorRequired(false);
+    setFactorCode("");
   }, [mode, method]);
   useEffect(() => {
     const view = `${mode}/${policy}`;
@@ -218,8 +228,17 @@ export default function AuthDialog() {
         navigate("/login", { replace: true });
         return;
       } else {
-        // Login: password method only (phone not supported by backend).
-        const { user } = await loginUser(account, password);
+        const result = factorRequired
+          ? await verifyLoginFactor(account, factorCode)
+          : await loginUser(account, password);
+        if (ticket !== operation.current) return;
+        setPassword("");
+        if (result["2fa_required"]) {
+          setFactorRequired(true);
+          setFactorCode("");
+          return;
+        }
+        const user = await getSelf({ handleUnauthorizedLocally: true });
         if (ticket !== operation.current) return;
         useProductPreview
           .getState()
@@ -234,7 +253,13 @@ export default function AuthDialog() {
         replace: true,
       });
     } catch (caught) {
-      if (ticket === operation.current) setError(explain(caught));
+      if (ticket === operation.current) {
+        setError(explain(caught));
+        if (factorRequired) {
+          setFactorRequired(false);
+          setFactorCode("");
+        }
+      }
     } finally {
       if (ticket === operation.current) {
         setBusy(false);
@@ -621,63 +646,102 @@ export default function AuthDialog() {
                     )}
                     {mode === "login" && method === "password" && (
                       <>
-                        <div className="auth-field">
-                          <label htmlFor="auth-account">
-                            {c("账号", "Account", "الحساب")}
-                          </label>
-                          <Input
-                            id="auth-account"
-                            type="text"
-                            autoComplete="username"
-                            value={account}
-                            onChange={(e) => {
-                              setAccount(e.target.value);
-                              setError("");
-                            }}
-                            required
-                            maxLength={254}
-                            placeholder={c(
-                              "用户名",
-                              "Username",
-                              "اسم المستخدم",
+                        {factorRequired ? (
+                          <div className="auth-field">
+                            <label htmlFor="auth-factor">
+                              {c(
+                                "身份验证器动态码",
+                                "Authenticator code",
+                                "رمز تطبيق المصادقة",
+                              )}
+                            </label>
+                            <Input
+                              id="auth-factor"
+                              dir="ltr"
+                              inputMode="numeric"
+                              autoComplete="one-time-code"
+                              pattern="[0-9]{6}"
+                              maxLength={6}
+                              value={factorCode}
+                              onChange={(e) => setFactorCode(e.target.value)}
+                              required
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFactorRequired(false);
+                                setFactorCode("");
+                              }}
+                            >
+                              {c(
+                                "重新验证密码",
+                                "Restart password verification",
+                                "إعادة التحقق من كلمة المرور",
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="auth-field">
+                              <label htmlFor="auth-account">
+                                {c("账号", "Account", "الحساب")}
+                              </label>
+                              <Input
+                                id="auth-account"
+                                type="text"
+                                autoComplete="username"
+                                value={account}
+                                onChange={(e) => {
+                                  setAccount(e.target.value);
+                                  setError("");
+                                }}
+                                required
+                                maxLength={254}
+                                placeholder={c(
+                                  "用户名",
+                                  "Username",
+                                  "اسم المستخدم",
+                                )}
+                                dir="ltr"
+                              />
+                            </div>
+                            {passwordField(
+                              "auth-password",
+                              c("密码", "Password", "كلمة المرور"),
+                              password,
+                              setPassword,
                             )}
-                            dir="ltr"
-                          />
-                        </div>
-                        {passwordField(
-                          "auth-password",
-                          c("密码", "Password", "كلمة المرور"),
-                          password,
-                          setPassword,
+                            <div className="auth-helper-row">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAccount("root");
+                                  setPassword("123456");
+                                  setError("");
+                                }}
+                              >
+                                {c(
+                                  "填入管理员账号",
+                                  "Use admin account",
+                                  "استخدم حساب المسؤول",
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  changeMode("reset");
+                                }}
+                              >
+                                {c(
+                                  "忘记密码？",
+                                  "Forgot password?",
+                                  "نسيت كلمة المرور؟",
+                                )}
+                              </button>
+                            </div>
+                          </>
                         )}
-                        <div className="auth-helper-row">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAccount("root");
-                              setPassword("123456");
-                              setError("");
-                            }}
-                          >
-                            {c(
-                              "填入管理员账号",
-                              "Use admin account",
-                              "استخدم حساب المسؤول",
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              changeMode("reset");
-                            }}
-                          >
-                            {c(
-                              "忘记密码？",
-                              "Forgot password?",
-                              "نسيت كلمة المرور؟",
-                            )}
-                          </button>
-                        </div>
                       </>
                     )}
                     {mode === "register" && (
