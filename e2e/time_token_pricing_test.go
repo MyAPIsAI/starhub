@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"starhub/common"
 	"starhub/middleware"
@@ -40,7 +39,7 @@ func TestIndependentTimePricingHTTPGuardsAndTaskAdmission(t *testing.T) {
 		if err := model.CreateUser(user); err != nil {
 			t.Fatal(err)
 		}
-		session := middleware.Sessions.Create(user.ID, time.Hour)
+		session := fixtureSession(t, user)
 		t.Cleanup(func() { middleware.Sessions.Remove(session) })
 		want := 403
 		if role == common.RoleAdmin {
