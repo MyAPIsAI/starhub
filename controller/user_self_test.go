@@ -163,7 +163,7 @@ func TestUpdateSelfPasswordAndEmailTogether(t *testing.T) {
 
 func TestDeactivateSelf(t *testing.T) {
 	newTestDB(t)
-	u := newUser(t, "alice", common.RoleUser, 1000)
+	u := newUser(t, "alice", common.RoleUser, 0)
 	state, _ := model.ReadAccountDeactivationState(u.ID)
 
 	rr := call(DeactivateSelf, testRequest{
@@ -184,14 +184,14 @@ func TestDeactivateSelf(t *testing.T) {
 
 func TestDeactivateSelfPreservesData(t *testing.T) {
 	newTestDB(t)
-	u := newUser(t, "alice", common.RoleUser, 5000)
+	u := newUser(t, "alice", common.RoleUser, 0)
 
 	// Create a token and a wallet so we can verify they survive.
 	mustToken(t, u.ID, 1000)
 	model.GetOrCreateWallet(u.ID)
 	state, _ := model.ReadAccountDeactivationState(u.ID)
 
-	call(DeactivateSelf, testRequest{
+	rr := call(DeactivateSelf, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/deactivate",
 		body:   fmt.Sprintf(`{"schema":"deactivation_action_v1","expected_user_id":%d,"account_revision":"%s","operation_id":"%s"}`, u.ID, state.AccountRevision, "00000000000000000000000000000002"),
@@ -199,6 +199,7 @@ func TestDeactivateSelfPreservesData(t *testing.T) {
 		role:   common.RoleUser,
 	})
 
+	expectStatus(t, rr, http.StatusOK)
 	// Tokens should still exist.
 	tokens, _ := model.ListTokens(u.ID)
 	if len(tokens) != 1 {

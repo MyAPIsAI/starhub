@@ -151,23 +151,29 @@ export default function AccountDeactivation({
         )}
         {state?.blocked_reasons.map((reason) => (
           <p role="status" key={reason}>
-            {reason === "pending_recharges"
+            {reason === "api_funds_require_resolution"
               ? c(
-                  "仍有未完成的充值订单，请先处理订单。",
-                  "Resolve unfinished top-up orders first.",
-                  "عالج طلبات الشحن غير المكتملة أولاً.",
+                  "请先结清 API 可用余额及在途预扣；注销不会放弃这些资金。",
+                  "Resolve available API funds and pending reservations before closing. Closure does not forfeit these funds.",
+                  "عالج رصيد الواجهة المتاح والحجوزات المعلقة قبل الإغلاق. لا يتنازل الإغلاق عن هذه الأموال.",
                 )
-              : reason === "last_active_root"
+              : reason === "pending_recharges"
                 ? c(
-                    "不能注销最后一个有效超级管理员。",
-                    "The last active Root account cannot be closed.",
-                    "لا يمكن إغلاق آخر حساب مسؤول أعلى نشط.",
+                    "仍有未完成的充值订单，请先处理订单。",
+                    "Resolve unfinished top-up orders first.",
+                    "عالج طلبات الشحن غير المكتملة أولاً.",
                   )
-                : c(
-                    "余额尚不满足注销条件，请先处理余额。",
-                    "Resolve the wallet balance before closing the account.",
-                    "عالج رصيد المحفظة قبل إغلاق الحساب.",
-                  )}
+                : reason === "last_active_root"
+                  ? c(
+                      "不能注销最后一个有效超级管理员。",
+                      "The last active Root account cannot be closed.",
+                      "لا يمكن إغلاق آخر حساب مسؤول أعلى نشط.",
+                    )
+                  : c(
+                      "余额尚不满足注销条件，请先处理余额。",
+                      "Resolve the wallet balance before closing the account.",
+                      "عالج رصيد المحفظة قبل إغلاق الحساب.",
+                    )}
           </p>
         ))}
         {state?.requires_dust_acknowledgement && (

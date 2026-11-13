@@ -14,7 +14,7 @@ import (
 
 func TestDeactivationPreviewUsesExactBalancesAndDoesNotWrite(t *testing.T) {
 	newTestDB(t)
-	owner := &User{Username: "preview-owner", Password: "synthetic-hash", Email: "private@example.test", Status: 1, Role: 1, Group: "default", Quota: 123456}
+	owner := &User{Username: "preview-owner", Password: "synthetic-hash", Email: "private@example.test", Status: 1, Role: 1, Group: "default", UsedQuota: 123456}
 	if err := CreateUser(owner); err != nil {
 		t.Fatal(err)
 	}
@@ -161,5 +161,37 @@ func TestDeactivationPreviewUsesOneSQLiteReadSnapshot(t *testing.T) {
 	latest, err := ReadAccountDeactivationState(owner.ID)
 	if err != nil || latest.Balance != 2 || latest.AccountRevision == expected.AccountRevision {
 		t.Fatal("fresh preview did not see committed changes")
+	}
+}
+
+func TestDeactivationRejectsEvenOneNanoOfSpendableOrReservedFunds(t *testing.T) {
+	newTestDB(t)
+	user, token := newBillingUser(t, 0)
+	before, err := ReadAccountDeactivationState(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Model(&User{}).Where("id = ?", user.ID).Update("quota_remainder_nano", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	next, err := ReadAccountDeactivationState(user.ID)
+	if err != nil || next.APIAvailableNano != "1" || next.AccountRevision == before.AccountRevision || !reflect.DeepEqual(next.BlockedReasons, []string{"api_funds_require_resolution"}) {
+		t.Fatalf("spendable nano was not protected: %+v %v", next, err)
+	}
+	if _, err := DeactivateOwnedAccount(user.ID, before.AccountRevision, "stale-funds", "session", false); err != ErrDeactivationConflict {
+		t.Fatalf("stale preview discarded funds: %v", err)
+	}
+	if err := ReserveQuota(user.ID, token.ID, true, 1, "n2:closure-held"); err != nil {
+		t.Fatal(err)
+	}
+	held, err := ReadAccountDeactivationState(user.ID)
+	if err != nil || held.APIAvailableNano != "0" || held.APIReservedNano != "1" || len(held.BlockedReasons) != 1 {
+		t.Fatalf("held nano was not protected: %+v %v", held, err)
+	}
+	if _, err := DeactivateOwnedAccount(user.ID, held.AccountRevision, "held-funds", "session", true); err != ErrDeactivationConflict {
+		t.Fatalf("in-flight funds could be closed: %v", err)
+	}
+	if err := VerifyMoneyLedger(user.ID); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -30,6 +30,7 @@ func GetDeactivationState(w http.ResponseWriter, r *http.Request) {
 	}
 	common.ApiSuccess(w, map[string]any{
 		"schema": "deactivation_state_v1", "policy": "dust_below_cent_v1", "guarded_deactivation": true,
+		"api_available_nano": state.APIAvailableNano, "api_reserved_nano": state.APIReservedNano,
 		"user_id": state.UserID, "account_revision": state.AccountRevision,
 		"wallet_balance_nano": strconv.FormatInt(state.Balance, 10), "pending_recharges": state.PendingRecharges,
 		"last_active_root": state.LastActiveRoot, "requires_dust_acknowledgement": state.RequiresDustAcknowledgement,

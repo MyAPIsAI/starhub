@@ -29,6 +29,8 @@ type AccountDeactivationReceipt struct {
 }
 
 type AccountDeactivationState struct {
+	APIAvailableNano            string
+	APIReservedNano             string
 	UserID                      int64
 	AccountRevision             string
 	Balance                     int64
@@ -70,6 +72,16 @@ func readAccountDeactivationState(tx *gorm.DB, owner int64) (*AccountDeactivatio
 		return nil, err
 	}
 	state.Balance = wallet.Balance
+	state.APIAvailableNano = common.QuotaMoney(user.Quota, user.QuotaRemainderNano).String()
+	reserved, err := pendingUserMoney(tx, owner)
+	if err != nil {
+		return nil, err
+	}
+	state.APIReservedNano = reserved.String()
+	if state.APIAvailableNano != "0" || state.APIReservedNano != "0" {
+		state.BlockedReasons = append(state.BlockedReasons, "api_funds_require_resolution")
+	}
+
 	if err := tx.Model(&RechargeOrder{}).Where("user_id = ? AND status IN ?", owner, []string{RechargePending, RechargeProcessing}).Count(&state.PendingRecharges).Error; err != nil {
 		return nil, err
 	}
@@ -100,7 +112,8 @@ func readAccountDeactivationState(tx *gorm.DB, owner int64) (*AccountDeactivatio
 		Username, Email, Password, Group                                      string
 		Role, Status                                                          int
 		CreatedAt, Balance, PendingRecharges, OtherRoots, DeactivationVersion int64
-	}{user.ID, user.Username, user.Email, user.Password, user.Group, user.Role, user.Status, user.CreatedAt, state.Balance, state.PendingRecharges, otherRoots, user.DeactivationVersion})
+		APIAvailableNano, APIReservedNano                                     string
+	}{user.ID, user.Username, user.Email, user.Password, user.Group, user.Role, user.Status, user.CreatedAt, state.Balance, state.PendingRecharges, otherRoots, user.DeactivationVersion, state.APIAvailableNano, state.APIReservedNano})
 	if err != nil {
 		return nil, err
 	}

@@ -76,3 +76,9 @@ describe("guarded closure contract", () => {
     );
   });
 });
+
+it("requires a closure blocker for even one nano of API funds",()=>{
+ expect(()=>readDeactivationState({...state,api_available_nano:"1",api_reserved_nano:"0"},7)).toThrow();
+ expect(()=>readDeactivationState({...state,api_available_nano:"0",api_reserved_nano:"1"},7)).toThrow();
+ expect(readDeactivationState({...state,api_available_nano:"1",api_reserved_nano:"0",blocked_reasons:["api_funds_require_resolution"]},7).blocked_reasons).toContain("api_funds_require_resolution");
+});

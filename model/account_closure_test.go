@@ -12,7 +12,7 @@ func TestAccountClosureAtomicDustReceiptAndReplay(t *testing.T) {
 	for _, balance := range []int64{0, 1, 9999999} {
 		t.Run(fmt.Sprint(balance), func(t *testing.T) {
 			newTestDB(t)
-			u := &User{Username: "close", Status: 1, Quota: 123, AffCode: "close"}
+			u := &User{Username: "close", Status: 1, UsedQuota: 123, AffCode: "close"}
 			if err := CreateUser(u); err != nil {
 				t.Fatal(err)
 			}
@@ -39,7 +39,7 @@ func TestAccountClosureAtomicDustReceiptAndReplay(t *testing.T) {
 			if balance > 0 {
 				want = 1
 			}
-			if user.Status != 2 || user.Quota != 123 || user.DeactivationVersion != 1 || wallet.Balance != 0 || token.Status != 2 || entries != want {
+			if user.Status != 2 || user.Quota != 0 || user.UsedQuota != 123 || user.DeactivationVersion != 1 || wallet.Balance != 0 || token.Status != 2 || entries != want {
 				t.Fatal("closure did not commit exactly the intended fields")
 			}
 			if _, err := ReadDeactivationReceipt(u.ID, "operation", "foreign"); err == nil {

@@ -1,4 +1,5 @@
-﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+﻿import { exactNano } from "../money";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, ApiError } from "./http";
 import {
   sessionQueryIdentity,
@@ -6,6 +7,8 @@ import {
   useSystemAccess,
 } from "../system-access";
 export interface DeactivationState {
+  api_available_nano?: string;
+  api_reserved_nano?: string;
   schema: "deactivation_state_v1";
   policy: "dust_below_cent_v1";
   guarded_deactivation: boolean;
@@ -50,6 +53,7 @@ export function readDeactivationState(
     v.blocked_reasons.some(
       (x) =>
         ![
+          "api_funds_require_resolution",
           "outstanding_balance",
           "balance_requires_resolution",
           "pending_recharges",
@@ -58,6 +62,14 @@ export function readDeactivationState(
     )
   )
     throw Error("Account closure preview is unavailable");
+  for (const amount of [v.api_available_nano, v.api_reserved_nano]) {
+    if (
+      amount !== undefined &&
+      BigInt(exactNano(amount)) !== 0n &&
+      !v.blocked_reasons.includes("api_funds_require_resolution")
+    )
+      throw Error("API funds are not protected during account closure");
+  }
   const amount = BigInt(v.wallet_balance_nano);
   if (
     v.requires_dust_acknowledgement !== (amount > 0n && amount < 10000000n) ||
