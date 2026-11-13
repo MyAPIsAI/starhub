@@ -3,14 +3,50 @@ package relay
 import (
 	"encoding/json"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"starhub/common"
 	"starhub/model"
 	"starhub/pkg/taskplugin"
 	"starhub/relay/channel"
+	"starhub/relay/dto"
 	"starhub/setting"
 )
+
+func TestImageBillingEvidenceReplaysEverySettlementModeWithoutPrompt(t *testing.T) {
+	for _, mode := range []string{"per_call", "tokens", "expression"} {
+		t.Run(mode, func(t *testing.T) {
+			price := &PriceData{ModelName: "image-evidence", PriceVersion: 41, AmountUnit: common.MoneyUnitNano, ModelRatio: 1, CompletionRatio: 2, GroupRatio: 1, OtherRatio: 1}
+			want := int64(14000)
+			if mode == "per_call" {
+				price.ModelPriceUSD = 0.000000001
+				price.HasModelPrice = true
+				want = 2
+			}
+			if mode == "expression" {
+				price.PriceExpr = "count * 0.000000003"
+				want = 6
+			}
+			bill := &ImageBill{Model: price.ModelName, Group: "default", Size: "1024x1024", Quality: "standard", Prompt: "private prompt must not reach evidence", Count: 2, Pricing: price}
+			actual := bill.SettleQuota(2, &dto.ImageUsage{InputTokens: 10, OutputTokens: 2})
+			if actual != want || bill.BillingEvidenceError != nil {
+				t.Fatalf("image mode %s: %d %v", mode, actual, bill.BillingEvidenceError)
+			}
+			if strings.Contains(bill.BillingEvidence, bill.Prompt) {
+				t.Fatal("prompt leaked into billing evidence")
+			}
+			entry := &model.Log{Model: price.ModelName, AmountUnit: price.AmountUnit}
+			if err := ApplyBillingEvidence(entry, bill.BillingEvidence); err != nil {
+				t.Fatal(err)
+			}
+			if replay, err := RecomputeBilledNano(entry); err != nil || replay != strconv.FormatInt(want, 10) {
+				t.Fatalf("image replay: %s %v", replay, err)
+			}
+		})
+	}
+}
 
 func TestBillingEvidenceReplaysNativeAndPluginMeterFacts(t *testing.T) {
 	price := &PriceData{ModelName: "task-evidence", PriceVersion: 31, AmountUnit: common.MoneyUnitNano, ModelPriceUSD: 0.000000001, HasModelPrice: true, GroupRatio: 1, OtherRatio: 1}

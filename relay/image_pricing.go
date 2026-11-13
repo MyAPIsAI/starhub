@@ -1,9 +1,11 @@
 package relay
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
+	"starhub/relay/channel"
 	"starhub/relay/dto"
 )
 
@@ -76,12 +78,14 @@ func sizeRatio(model, size string) float64 {
 
 // ImageBill carries the billing inputs of one image request.
 type ImageBill struct {
-	Model, Group  string
-	UserGroup     string // user's own group (for the group x group matrix)
-	Size, Quality string
-	Prompt        string
-	Count         int        // requested n (already validated [1, MaxImageN])
-	Pricing       *PriceData // optional request-captured baseline for this serving group
+	BillingEvidence      string `json:"-"`
+	BillingEvidenceError error  `json:"-"`
+	Model, Group         string
+	UserGroup            string // user's own group (for the group x group matrix)
+	Size, Quality        string
+	Prompt               string
+	Count                int        // requested n (already validated [1, MaxImageN])
+	Pricing              *PriceData // optional request-captured baseline for this serving group
 }
 
 // priceData builds the PriceData with the user group so the group x group
@@ -135,7 +139,11 @@ func imageQualityValue(quality string) float64 {
 // NOT applied as OtherRatio on top. Returns (quota, true) on success and
 // (0, false) on failure (caller falls back to per-call / token billing).
 func (b *ImageBill) evalImageExpr(pd *PriceData, count int, promptTokens, completionTokens int64) (int64, bool) {
-	vars := map[string]float64{
+	return evalExpression(pd, b.imageExprVars(count, promptTokens, completionTokens))
+}
+
+func (b *ImageBill) imageExprVars(count int, promptTokens, completionTokens int64) map[string]float64 {
+	return map[string]float64{
 		"count":             float64(count),
 		"size":              imageSizeValue(b.Size),
 		"quality":           imageQualityValue(b.Quality),
@@ -143,7 +151,6 @@ func (b *ImageBill) evalImageExpr(pd *PriceData, count int, promptTokens, comple
 		"completion_tokens": float64(completionTokens),
 		"total_tokens":      float64(promptTokens + completionTokens),
 	}
-	return evalExpression(pd, vars)
 }
 
 // PreQuota prices the pre-charge of the request.
@@ -171,6 +178,8 @@ func (b *ImageBill) PreQuota() int64 {
 // a broken upstream payload cannot poison the books (the requested count
 // stays the bill of record, P3.1 guardrail).
 func (b *ImageBill) SettleQuota(actualCount int, usage *dto.ImageUsage) int64 {
+	b.BillingEvidence = ""
+	b.BillingEvidenceError = nil
 	pd := b.priceData()
 	count := actualCount
 	if count <= 0 || count > dto.MaxImageN {
@@ -187,6 +196,8 @@ func (b *ImageBill) SettleQuota(actualCount int, usage *dto.ImageUsage) int64 {
 			promptTok = dto.EstimateTokens(b.Prompt) + estimateReserveTokens
 		}
 		if q, ok := b.evalImageExpr(pd, count, promptTok, completionTok); ok {
+			raw, err := EncodeNativeBillingEvidence(pd, channel.TaskPricing{PromptTokens: promptTok, CompletionTokens: completionTok, ExprVars: b.imageExprVars(count, promptTok, completionTok)})
+			b.recordImageEvidence(raw, "image_expression", err)
 			return q
 		}
 		// expression failed: fall through to per-call / token fallback
@@ -198,14 +209,39 @@ func (b *ImageBill) SettleQuota(actualCount int, usage *dto.ImageUsage) int64 {
 	// prompt, output_tokens -> completion; the overwrite mapping is
 	// image-path-only and must not leak into chat / embedding settlement).
 	if usage != nil && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
-		return tokenUsageQuota(pd, &Usage{
+		return b.settleTokenEvidence(pd, &Usage{
 			PromptTokens:     usage.InputTokens,
 			CompletionTokens: usage.OutputTokens,
 		})
 	}
 	// No usage report: keep the prompt estimate (settled against the
 	// same estimate as the pre-charge).
-	return tokenUsageQuota(pd, &Usage{PromptTokens: dto.EstimateTokens(b.Prompt) + estimateReserveTokens})
+	return b.settleTokenEvidence(pd, &Usage{PromptTokens: dto.EstimateTokens(b.Prompt) + estimateReserveTokens})
+}
+
+func (b *ImageBill) settleTokenEvidence(pd *PriceData, usage *Usage) int64 {
+	raw, err := EncodeTokenBillingEvidence(pd, usage)
+	b.recordImageEvidence(raw, "image_tokens", err)
+	return tokenUsageQuota(pd, usage)
+}
+
+func (b *ImageBill) recordImageEvidence(raw, kind string, err error) {
+	if err != nil {
+		b.BillingEvidenceError = err
+		return
+	}
+	var evidence BillingEvidence
+	if err := json.Unmarshal([]byte(raw), &evidence); err != nil {
+		b.BillingEvidenceError = err
+		return
+	}
+	evidence.Kind = kind
+	encoded, err := json.Marshal(evidence)
+	if err != nil {
+		b.BillingEvidenceError = err
+		return
+	}
+	b.BillingEvidence = string(encoded)
 }
 
 func (b *ImageBill) quotaForCount(count int) int64 {
@@ -215,5 +251,7 @@ func (b *ImageBill) quotaForCount(count int) int64 {
 	pd.AddOtherRatio(sizeRatio(b.Model, b.Size))
 	pd.AddOtherRatio(imageQualityValue(b.Quality))
 	pd.AddOtherRatio(float64(count))
+	raw, err := EncodeTokenBillingEvidence(pd, &Usage{})
+	b.recordImageEvidence(raw, "image_per_call", err)
 	return ComputeUsageQuota(pd, &Usage{})
 }

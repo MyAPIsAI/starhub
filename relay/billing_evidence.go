@@ -121,11 +121,16 @@ func RecomputeBilledNano(entry *model.Log) (string, error) {
 	}
 	var quota int64
 	switch evidence.Kind {
-	case "tokens", "image_tokens":
+	case "tokens", "image_per_call":
 		if evidence.Usage == nil {
 			return "", errors.New("missing classified token facts")
 		}
 		quota = ComputeUsageQuota(&evidence.Price, evidence.Usage)
+	case "image_tokens":
+		if evidence.Usage == nil {
+			return "", errors.New("missing image token facts")
+		}
+		quota = tokenUsageQuota(&evidence.Price, evidence.Usage)
 	case "native", "image_expression":
 		if evidence.Native == nil {
 			return "", errors.New("missing task pricing facts")

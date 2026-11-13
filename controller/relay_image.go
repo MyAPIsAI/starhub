@@ -198,7 +198,7 @@ func imageJSONAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response, b
 	bill.Group = flow.settleGroup()
 	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(count, usage)
-	settleImageAttempt(flow, ch, actual)
+	settleImageAttempt(flow, ch, actual, bill)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
@@ -299,7 +299,7 @@ func imageStreamAttempt(flow *relayFlow, ch *model.Channel, resp *http.Response,
 	bill.Group = flow.settleGroup()
 	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(completed, streamUsage)
-	settleImageAttempt(flow, ch, actual)
+	settleImageAttempt(flow, ch, actual, bill)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
@@ -331,7 +331,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 		bill.Group = flow.settleGroup()
 		bill.Pricing = flow.req.priceFor(bill.Group)
 		actual := bill.SettleQuota(0, nil)
-		settleImageAttempt(flow, ch, actual)
+		settleImageAttempt(flow, ch, actual, bill)
 		return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 	}
 	count := max(urls, b64s)
@@ -365,7 +365,7 @@ func imageJSONasSSEAttempt(flow *relayFlow, ch *model.Channel, resp *http.Respon
 	bill.Group = flow.settleGroup()
 	bill.Pricing = flow.req.priceFor(bill.Group)
 	actual := bill.SettleQuota(count, usage)
-	settleImageAttempt(flow, ch, actual)
+	settleImageAttempt(flow, ch, actual, bill)
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK}
 }
 
@@ -405,8 +405,13 @@ var (
 
 // settleImageAttempt balances the image bill (unit-based: the amount was
 // computed by ImageBill with the count/usage guards).
-func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64) {
-	if err := relay.PostConsumeQuotaAmountWithMetadata(flow.req.userID, flow.req.tokenID, flow.req.tokenName,
+func settleImageAttempt(flow *relayFlow, ch *model.Channel, actual int64, bill *relay.ImageBill) {
+	if bill.BillingEvidenceError != nil {
+		service.NotifyBillingFailure(flow.req.userID, "image billing evidence could not be frozen")
+		flow.settled = true
+		return
+	}
+	if err := relay.PostConsumeQuotaAmountWithEvidence(bill.BillingEvidence, flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, actual, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), 1, flow.req.requestedModel, flow.req.protocol, middleware.CtxRequestIDValue(flow.ctx), flow.req.quotaReservationID); err != nil {
 		log.Printf("post consume image quota failed: %v", err)
 		service.NotifyBillingFailure(flow.req.userID, "image settlement failed: "+err.Error())

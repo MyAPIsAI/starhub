@@ -283,6 +283,19 @@ func PostConsumeQuotaAmountWithStatus(userID, tokenID int64, tokenName string, t
 // PostConsumeQuotaAmountWithMetadata records gateway-owned request metadata.
 func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string, tokenUnlimited bool,
 	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol, requestID string, admissionID ...string) error {
+	return postConsumeQuotaAmountEvidence("", userID, tokenID, tokenName, tokenUnlimited, channelID, modelName, actual, preQuota, usedChannels, durationMs, status, originalModel, protocol, requestID, admissionID...)
+}
+
+func PostConsumeQuotaAmountWithEvidence(evidence string, userID, tokenID int64, tokenName string, tokenUnlimited bool,
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol, requestID string, admissionID ...string) error {
+	if evidence == "" {
+		return errors.New("image billing evidence is required")
+	}
+	return postConsumeQuotaAmountEvidence(evidence, userID, tokenID, tokenName, tokenUnlimited, channelID, modelName, actual, preQuota, usedChannels, durationMs, status, originalModel, protocol, requestID, admissionID...)
+}
+
+func postConsumeQuotaAmountEvidence(evidence string, userID, tokenID int64, tokenName string, tokenUnlimited bool,
+	channelID int64, modelName string, actual, preQuota int64, usedChannels string, durationMs int64, status int, originalModel, protocol, requestID string, admissionID ...string) error {
 	if status < 1 || status > 3 {
 		return errors.New("unsupported settlement log status")
 	}
@@ -300,7 +313,6 @@ func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string,
 		UsedChannels:       usedChannels,
 		DurationMs:         durationMs,
 		Status:             status,
-		PriceVersion:       model.LoadedOptionVersion(),
 		ExactFeeMicroUSD:   QuotaToMicroUSD(actual),
 		ExactFeeNanoUSD:    common.QuotaMoney(actual, 0).String(),
 		RequestID:          requestID,
@@ -309,6 +321,11 @@ func PostConsumeQuotaAmountWithMetadata(userID, tokenID int64, tokenName string,
 		entry.AmountUnit = common.MoneyUnitNano
 		entry.ExactFeeMicroUSD = actual / 1000
 		entry.ExactFeeNanoUSD = strconv.FormatInt(actual, 10)
+	}
+	if evidence != "" {
+		if err := ApplyBillingEvidence(entry, evidence); err != nil {
+			return err
+		}
 	}
 	return settleDurableQuota(userID, tokenID, tokenUnlimited, delta, actual, entry)
 }
