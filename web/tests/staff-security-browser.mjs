@@ -26,6 +26,7 @@ const out = path.join(root, "playwright-report", "staff-security", engine);
 await mkdir(out, { recursive: true });
 const report = { engine, checks: [], screenshots: [], pageErrors: [] };
 let backend, vite, browser;
+let backendOutput = "";
 async function freePort() {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -66,7 +67,7 @@ try {
   backend = spawn(binary, [], {
     cwd: temp,
     windowsHide: true,
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...process.env,
       STARHUB_PORT: String(port),
@@ -74,10 +75,16 @@ try {
       STARHUB_ROOT_PASSWORD: "BrowserInitial92",
       ...cryptoEnv,
       RESOURCE_CATALOG_NOTIFY_URL: "",
+      STARHUB_REGION_PROFILE: "",
     },
   });
+  for (const stream of [backend.stdout, backend.stderr])
+    stream.on("data", (chunk) => {
+      backendOutput = (backendOutput + chunk.toString()).slice(-16384);
+    });
   let ready = false;
   for (let i = 0; i < 80; i++) {
+    if (backend.exitCode !== null || backend.signalCode !== null) break;
     try {
       if ((await fetch(`http://127.0.0.1:${port}/api/health`)).ok) {
         ready = true;
@@ -86,7 +93,7 @@ try {
     } catch {}
     await new Promise((r) => setTimeout(r, 250));
   }
-  assert.ok(ready, "backend did not start");
+  assert.ok(ready, "backend did not start: " + backendOutput);
   vite = await createViteServer({
     root,
     logLevel: "error",
@@ -114,7 +121,9 @@ try {
     localStorage.setItem("xy-language", "en");
   });
   const page = await context.newPage();
+  let factorSecret = "";
   page.setDefaultTimeout(15000);
+  page.setDefaultNavigationTimeout(45000);
   page.on("pageerror", (error) => report.pageErrors.push(String(error)));
   async function check(name, run) {
     await run();
@@ -133,7 +142,7 @@ try {
     report.screenshots.push(name + ".png");
   }
   async function login(password) {
-    await page.goto(base + "/login");
+    await page.goto(base + "/login", { waitUntil: "domcontentloaded" });
     await page.locator("#auth-account").fill("root");
     await page.locator("#auth-password").fill(password);
     await page.locator("#auth-consent").check();
@@ -179,6 +188,7 @@ try {
         .getByRole("button", { name: "Set up authenticator", exact: true })
         .click();
       const secret = await page.locator("textarea[data-private]").inputValue();
+      factorSecret = secret;
       await page
         .getByLabel("Six-digit authenticator code", { exact: true })
         .fill(authenticatorCode(secret));
@@ -293,6 +303,173 @@ try {
     },
   );
   await check(
+    "account language is saved through the console and restored on another device",
+    async () => {
+      await page
+        .locator(".product-preferences [role=combobox]")
+        .first()
+        .click();
+      await page.getByRole("option", { name: "العربية", exact: true }).click();
+      await page.waitForFunction(() => document.documentElement.lang === "ar");
+      const self = await (
+        await context.request.get(base + "/api/user/self")
+      ).json();
+      assert.equal(self.data.language, "ar");
+      const device = await browser.newContext({
+        viewport: { width: 390, height: 900 },
+        locale: "en-US",
+        reducedMotion: "reduce",
+      });
+      const first = await device.request.post(base + "/api/user/login", {
+        data: { username: "root", password: "BrowserChanged93" },
+      });
+      assert.equal((await first.json()).data["2fa_required"], true);
+      const second = await device.request.post(base + "/api/user/login/2fa", {
+        data: { username: "root", code: authenticatorCode(factorSecret) },
+      });
+      assert.equal(second.status(), 200);
+      const p = await device.newPage();
+      p.on("pageerror", (error) => report.pageErrors.push(String(error)));
+      await p.goto(base + "/console", {
+        waitUntil: "domcontentloaded",
+        timeout: 45000,
+      });
+      await p.waitForFunction(
+        () =>
+          document.documentElement.lang === "ar" &&
+          document.documentElement.dir === "rtl",
+      );
+      assert.equal(
+        await p.evaluate(() => localStorage.getItem("xy-language")),
+        null,
+      );
+      await p.screenshot({
+        path: path.join(out, "account-language-second-device-390.png"),
+        mask: [p.locator("input[type=password]")],
+      });
+      report.screenshots.push("account-language-second-device-390.png");
+      await device.close();
+    },
+  );
+  await check(
+    "regional legal changes require renewed consent and preserve registration input",
+    async () => {
+      const api = async (method, url, data) => {
+        const response = await context.request.fetch(base + url, {
+          method,
+          data,
+        });
+        const body = await response.json();
+        assert.ok(response.ok() && body.success, body.message);
+        return body.data;
+      };
+      const profile = {
+        id: "default",
+        name: "Browser region",
+        default_language: "ar",
+        supported_languages: "ar,en",
+        country_code: "AE",
+        timezone: "Asia/Dubai",
+        legal_version: "browser-v1",
+        allowed_models: "rotation-fixture",
+        feature_flags: JSON.stringify({ payments: false }),
+        enabled: true,
+      };
+      const saved = await api("PUT", "/api/region-profile", profile);
+      async function publish(version) {
+        for (const type of ["user_agreement", "privacy_policy"])
+          await api("PUT", "/api/legal", {
+            type,
+            version,
+            language: "en",
+            region_id: "default",
+            content: `Published regional fixture ${type} ${version}.`,
+          });
+      }
+      await publish("browser-v1");
+      assert.equal(
+        (
+          await context.request.post(base + "/api/recharge", {
+            data: { amount_usd: "10", channel: "card" },
+          })
+        ).status(),
+        403,
+      );
+      const guest = await browser.newContext({
+        viewport: { width: 390, height: 900 },
+        locale: "fr-FR",
+        reducedMotion: "reduce",
+      });
+      const p = await guest.newPage();
+      p.setDefaultTimeout(15000);
+      p.on("pageerror", (error) => report.pageErrors.push(String(error)));
+      await p.goto(base + "/legal/terms", {
+        waitUntil: "domcontentloaded",
+        timeout: 45000,
+      });
+      await p
+        .locator(".regional-legal-document")
+        .getByText("Published regional fixture user_agreement browser-v1.", {
+          exact: true,
+        })
+        .waitFor();
+      await p.waitForFunction(() => document.documentElement.lang === "ar");
+      await p.screenshot({ path: path.join(out, "regional-legal-ar-390.png") });
+      report.screenshots.push("regional-legal-ar-390.png");
+      await p.goto(base + "/register", {
+        waitUntil: "domcontentloaded",
+        timeout: 45000,
+      });
+      await p.locator("#auth-username").fill("regional-member");
+      await p.locator("#auth-new-password").fill("RegionalMember94");
+      await p.locator("#auth-confirm-password").fill("RegionalMember94");
+      await p.locator('[data-auth-policy="terms"]').click();
+      await p
+        .locator(".regional-legal-document")
+        .getByText("Published regional fixture user_agreement browser-v1.", {
+          exact: true,
+        })
+        .waitFor();
+      await p.locator(".auth-back").click();
+      await p.locator("#auth-consent").check();
+      await publish("browser-v2");
+      await api("PUT", "/api/region-profile", {
+        ...profile,
+        legal_version: "browser-v2",
+        expected_revision: saved.revision,
+      });
+      await p.locator(".auth-submit").click();
+      await p.locator(".auth-error").waitFor();
+      assert.equal(await p.locator("#auth-consent").isChecked(), false);
+      assert.equal(
+        await p.locator("#auth-username").inputValue(),
+        "regional-member",
+      );
+      assert.equal(
+        JSON.stringify(await api("GET", "/api/user")).includes(
+          "regional-member",
+        ),
+        false,
+      );
+      await p.locator('[data-auth-policy="terms"]').click();
+      await p
+        .locator(".regional-legal-document")
+        .getByText("Published regional fixture user_agreement browser-v2.", {
+          exact: true,
+        })
+        .waitFor();
+      await p.locator(".auth-back").click();
+      await p.locator("#auth-consent").check();
+      await p.locator(".auth-submit").click();
+      await p.waitForURL("**/login");
+      const login = await guest.request.post(base + "/api/user/login", {
+        data: { username: "regional-member", password: "RegionalMember94" },
+      });
+      assert.equal((await login.json()).data.user.language, "ar");
+      await guest.close();
+    },
+  );
+  await check(
     "mobile Arabic dark mode keeps security setup accessible",
     async () => {
       await context.request.post(base + "/api/user/logout");
@@ -330,7 +507,10 @@ try {
       await mobile.request.post(base + "/api/user/login", {
         data: { username: "root", password: "BrowserChanged93" },
       });
-      await p.goto(base + "/console");
+      await p.goto(base + "/console", {
+        waitUntil: "domcontentloaded",
+        timeout: 45000,
+      });
       await p.locator(".staff-security").waitFor();
       assert.ok(
         await p.evaluate(
@@ -358,10 +538,12 @@ try {
   );
   await browser?.close();
   await vite?.close();
-  if (backend) {
+  if (backend && backend.exitCode === null && backend.signalCode === null) {
     const exited = new Promise((resolve) => backend.once("exit", resolve));
     backend.kill();
     await exited;
   }
+  assert.equal(path.dirname(path.resolve(temp)), path.resolve(os.tmpdir()));
+  assert.ok(path.basename(temp).startsWith("starhub-staff-security-"));
   await rm(temp, { recursive: true, force: true });
 }

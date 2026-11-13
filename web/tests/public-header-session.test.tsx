@@ -15,6 +15,7 @@ vi.mock("../src/lib/preferences", () => ({
   usePreferences: (select?: (state: { language: string }) => unknown) => {
     const state = {
       language: "en",
+      supportedLanguages: ["en", "zh", "ar", "ko"],
       theme: "light",
       setTheme: () => {},
       setLanguage: () => {},
