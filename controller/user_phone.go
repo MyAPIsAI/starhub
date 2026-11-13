@@ -117,6 +117,9 @@ func PhoneLogin(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusUnauthorized, "authentication failed")
 		return
 	}
+	if beginTwoFactor(w, r, user) {
+		return
+	}
 	middleware.RecordLoginSuccess(user.Username)
 	const sessionTTL = 7 * 24 * time.Hour
 	token := middleware.Sessions.CreateConfirmed(user, sessionTTL, clientIP(r), r.UserAgent())

@@ -123,9 +123,20 @@ func Verify2FALogin(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	user, err := model.GetUserByUsername(req.Username)
-	if err != nil {
+	proof, ok := consumeLoginChallenge(w, r)
+	if !ok {
+		common.ApiError(w, http.StatusUnauthorized, "password verification required; restart sign-in")
+		return
+	}
+	user, err := model.GetUserByID(proof.UserID)
+	if err != nil || user.Username != req.Username || user.Password != proof.Password ||
+		user.Role != proof.Role || user.Status != common.StatusEnabled || user.DeactivationVersion != proof.DeactivationVersion {
 		common.ApiError(w, http.StatusUnauthorized, "authentication failed")
+		return
+	}
+	factor, err := model.GetTwoFA(user.ID)
+	if err != nil || !factor.IsEnabled || factor.Secret != proof.Secret {
+		common.ApiError(w, http.StatusUnauthorized, "authentication changed; restart sign-in")
 		return
 	}
 	if err := model.VerifyTwoFA(user.ID, req.Code); err != nil {

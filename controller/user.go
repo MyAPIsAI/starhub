@@ -186,12 +186,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusForbidden, "user is disabled")
 		return
 	}
-	// Check 2FA: if enabled, return 2fa_required instead of creating a session.
-	if twofa, err := model.GetTwoFA(user.ID); err == nil && twofa.IsEnabled {
-		common.ApiSuccess(w, map[string]any{
-			"2fa_required": true,
-			"username":     user.Username,
-		})
+	if beginTwoFactor(w, r, user) {
 		return
 	}
 	middleware.RecordLoginSuccess(req.Username)
