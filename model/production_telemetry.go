@@ -128,7 +128,11 @@ func PublishedProductionAttempts(db *gorm.DB) *gorm.DB {
 }
 
 func ReadProductionAttempts(start, end int64, page, size int) ([]ProductionAttemptRecord, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), ProductionDatabaseTimeout())
+	return ReadProductionAttemptsContext(context.Background(), start, end, page, size)
+}
+
+func ReadProductionAttemptsContext(ctx context.Context, start, end int64, page, size int) ([]ProductionAttemptRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, ProductionDatabaseTimeout())
 	defer cancel()
 	if page < 1 || page > 1000000 || size < 1 || size > 1000 || (page-1)*size > 100000 {
 		return nil, fmt.Errorf("invalid attempt page")

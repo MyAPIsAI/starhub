@@ -153,7 +153,7 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		if page == 1 {
 			rows, next, err = model.ReadProductionAttemptPageContext(r.Context(), lower, end/60*60, cursor, size)
 		} else {
-			rows, err = model.ReadProductionAttempts(lower, end/60*60, page, size)
+			rows, err = model.ReadProductionAttemptsContext(r.Context(), lower, end/60*60, page, size)
 		}
 		if err == model.ErrProductionCursor {
 			common.ApiError(w, 400, "invalid attempt cursor")
