@@ -5,8 +5,16 @@ server:
   port: 3008
 
 database:
-  # Relative paths are resolved against this configuration file.
+  # sqlite | mysql | postgres
+  driver: sqlite
+  # Relative paths are resolved against this configuration file (sqlite only).
   sqlite_path: starhub.db
+  # MySQL/PostgreSQL connection strings (set driver above and uncomment).
+  # dsn: "starhub:password@tcp(127.0.0.1:3306)/starhub?charset=utf8mb4&parseTime=True&loc=Local"
+  # dsn: "host=127.0.0.1 port=5432 user=starhub password=pass dbname=starhub sslmode=disable"
+  # max_open_conns: 25
+  # max_idle_conns: 5
+  # conn_max_lifetime: 1h
 
 security:
   # Keep this true when TLS terminates at a reverse proxy.

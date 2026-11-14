@@ -14,9 +14,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DatabaseConfig describes how to connect to the database. Driver is
+// "sqlite" (default), "mysql", or "postgres". DSN is the connection
+// string; for sqlite it is the file path. Pool settings only apply to
+// mysql and postgres.
+type DatabaseConfig struct {
+	Driver          string
+	DSN             string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime string
+}
+
 type Bootstrap struct {
 	BindAddress       string
-	DBPath            string
+	DBPath            string // backward-compatible sqlite path, also used for logging
+	Database          DatabaseConfig
 	Port              string
 	RootPassword      string
 	ForceSecureCookie bool
@@ -35,7 +48,12 @@ type fileConfig struct {
 		BindAddress *string `yaml:"bind_address"`
 	} `yaml:"server"`
 	Database struct {
-		SQLitePath *string `yaml:"sqlite_path"`
+		Driver          *string `yaml:"driver"`
+		DSN             *string `yaml:"dsn"`
+		SQLitePath      *string `yaml:"sqlite_path"`
+		MaxOpenConns    *int    `yaml:"max_open_conns"`
+		MaxIdleConns    *int    `yaml:"max_idle_conns"`
+		ConnMaxLifetime *string `yaml:"conn_max_lifetime"`
 	} `yaml:"database"`
 	Security struct {
 		ForceSecureCookie *bool `yaml:"force_secure_cookie"`
@@ -62,7 +80,11 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 		return Startup{}, err
 	}
 	result := Startup{
-		Bootstrap:      Bootstrap{DBPath: "starhub.db", Port: "3000", RootPassword: getenv("STARHUB_ROOT_PASSWORD")},
+		Bootstrap: Bootstrap{
+			DBPath:   "starhub.db",
+			Database: DatabaseConfig{Driver: "sqlite", DSN: "starhub.db"},
+			Port:     "3000", RootPassword: getenv("STARHUB_ROOT_PASSWORD"),
+		},
 		InitialOptions: make(map[string]string),
 	}
 	if path != "" {
@@ -102,6 +124,12 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 		if cfg.Server.Port != nil {
 			result.Bootstrap.Port = strconv.Itoa(*cfg.Server.Port)
 		}
+		if cfg.Database.Driver != nil {
+			result.Bootstrap.Database.Driver = strings.TrimSpace(*cfg.Database.Driver)
+		}
+		if cfg.Database.DSN != nil {
+			result.Bootstrap.Database.DSN = *cfg.Database.DSN
+		}
 		if cfg.Database.SQLitePath != nil {
 			if strings.TrimSpace(*cfg.Database.SQLitePath) == "" {
 				return Startup{}, fmt.Errorf("database.sqlite_path must not be empty")
@@ -110,6 +138,20 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 			if !filepath.IsAbs(result.Bootstrap.DBPath) {
 				result.Bootstrap.DBPath = filepath.Join(filepath.Dir(absolute), result.Bootstrap.DBPath)
 			}
+			// sqlite_path only drives the connection when the driver is sqlite.
+			if result.Bootstrap.Database.Driver == "" || result.Bootstrap.Database.Driver == "sqlite" {
+				result.Bootstrap.Database.Driver = "sqlite"
+				result.Bootstrap.Database.DSN = result.Bootstrap.DBPath
+			}
+		}
+		if cfg.Database.MaxOpenConns != nil {
+			result.Bootstrap.Database.MaxOpenConns = *cfg.Database.MaxOpenConns
+		}
+		if cfg.Database.MaxIdleConns != nil {
+			result.Bootstrap.Database.MaxIdleConns = *cfg.Database.MaxIdleConns
+		}
+		if cfg.Database.ConnMaxLifetime != nil {
+			result.Bootstrap.Database.ConnMaxLifetime = *cfg.Database.ConnMaxLifetime
 		}
 		if cfg.Security.ForceSecureCookie != nil {
 			result.Bootstrap.ForceSecureCookie = *cfg.Security.ForceSecureCookie
@@ -137,6 +179,17 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	}
 	if value := getenv("STARHUB_DB"); value != "" {
 		result.Bootstrap.DBPath = value
+		// STARHUB_DB implies sqlite unless an explicit driver was already set.
+		if result.Bootstrap.Database.Driver == "" || result.Bootstrap.Database.Driver == "sqlite" {
+			result.Bootstrap.Database.Driver = "sqlite"
+			result.Bootstrap.Database.DSN = value
+		}
+	}
+	if value := getenv("STARHUB_DB_DRIVER"); value != "" {
+		result.Bootstrap.Database.Driver = strings.TrimSpace(value)
+	}
+	if value := getenv("STARHUB_DB_DSN"); value != "" {
+		result.Bootstrap.Database.DSN = value
 	}
 	for env, key := range map[string]string{
 		"STARHUB_CHANNEL_TEST_INTERVAL": OptionChannelTestInterval,
@@ -163,6 +216,14 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	}
 	if strings.TrimSpace(result.Bootstrap.DBPath) == "" {
 		return Startup{}, fmt.Errorf("database path must not be empty")
+	}
+	switch result.Bootstrap.Database.Driver {
+	case "sqlite", "mysql", "postgres":
+	default:
+		return Startup{}, fmt.Errorf("unsupported database driver: %s", result.Bootstrap.Database.Driver)
+	}
+	if strings.TrimSpace(result.Bootstrap.Database.DSN) == "" {
+		return Startup{}, fmt.Errorf("database dsn must not be empty")
 	}
 	for key, value := range result.InitialOptions {
 		normalized, err := NormalizeOption(key, value)
