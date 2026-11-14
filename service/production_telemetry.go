@@ -68,6 +68,7 @@ func RunProductionTelemetry(ctx context.Context) {
 		case <-ticker.C:
 		case <-metric.ProductionWork:
 		}
+		checkProductionHealthAlerts(time.Now())
 		if !time.Now().Before(cleanupAt) {
 			started := time.Now()
 			_, err := model.PruneProductionTelemetry(started)
