@@ -60,7 +60,7 @@ func publishProductionMinute(row ProductionTelemetryMinute, now time.Time) error
 		return errors.New("invalid production minute")
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("UPDATE production_telemetry_minutes SET minute = minute WHERE minute = -1").Error; err != nil {
+		if err := lockProductionStorage(tx); err != nil {
 			return err
 		}
 		var gap ProductionRetentionGap
@@ -100,7 +100,16 @@ func publishProductionMinute(row ProductionTelemetryMinute, now time.Time) error
 		if count > row.AttemptCount || count+gap.Count < row.AttemptCount {
 			return errors.New("production staging is incomplete")
 		}
-		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
+			return err
+		}
+		if err := tx.First(&existing, row.Minute).Error; err != nil {
+			return err
+		}
+		if existing.BatchID != row.BatchID || existing.Payload != row.Payload || existing.Complete != row.Complete || existing.AttemptCount != row.AttemptCount {
+			return errors.New("production minute publication conflict")
+		}
+		return nil
 	})
 }
 

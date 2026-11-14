@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -110,6 +111,62 @@ func TestNetworkProductionStorage(t *testing.T) {
 			}
 			if err != nil || state.Rows != 5 || count != 5 || state.Bytes != 5 {
 				t.Fatal("concurrent admission exceeded budget or lost counters", state, count, err)
+			}
+		})
+	}
+}
+
+func TestNetworkProductionPublication(t *testing.T) {
+	for _, driver := range []string{"mysql", "postgres"} {
+		t.Run(driver, func(t *testing.T) {
+			db := networkProductionDB(t, driver)
+			now := time.Now().Truncate(time.Minute)
+			minute := now.Add(-time.Minute).Unix()
+			rows := []ProductionAttemptRecord{
+				{ID: "Case", BatchID: "batch", Minute: minute, Payload: `{}`},
+				{ID: "case", BatchID: "batch", Minute: minute, Payload: `{}`},
+				{ID: "third", BatchID: "batch", Minute: minute, Payload: `{}`},
+			}
+			if err := StageProductionAttempts(rows); err != nil {
+				t.Fatal(err)
+			}
+			if err := StageProductionAttempts(rows); err != nil {
+				t.Fatal("immutable retry", err)
+			}
+			visible, err := ReadProductionAttempts(minute, minute, 1, 10)
+			if err != nil || len(visible) != 0 {
+				t.Fatal("unpublished evidence leaked", visible, err)
+			}
+			if err := db.Model(&ProductionStorageState{}).Where("id=1").Update("max_rows", 2).Error; err != nil {
+				t.Fatal(err)
+			}
+			if n, err := pruneProductionChunk(now); err != nil || n != 2 {
+				t.Fatal("first bounded retention", n, err)
+			}
+			if err := db.Model(&ProductionStorageState{}).Where("id=1").Update("max_bytes", 0).Error; err != nil {
+				t.Fatal(err)
+			}
+			if n, err := pruneProductionChunk(now); err != nil || n != 1 {
+				t.Fatal("repeated gap audit", n, err)
+			}
+			manifest := ProductionTelemetryMinute{Minute: minute, BatchID: "batch", Complete: true, Payload: `{}`, AttemptCount: 3}
+			var wg sync.WaitGroup
+			for range 4 {
+				wg.Go(func() {
+					if err := publishProductionMinute(manifest, now); err != nil {
+						t.Error(err)
+					}
+				})
+			}
+			wg.Wait()
+			published, err := ReadProductionTelemetry(minute, minute)
+			if err != nil || len(published) != 1 || published[0].Complete {
+				t.Fatal("retention loss published as complete", published, err)
+			}
+			manifest.BatchID = "other"
+			manifest.AttemptCount = 0
+			if err := publishProductionMinute(manifest, now); err == nil {
+				t.Fatal("conflicting collector overwrote publication")
 			}
 		})
 	}

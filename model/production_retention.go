@@ -66,7 +66,7 @@ func pruneProductionChunk(now time.Time) (int, error) {
 	}
 	removed := 0
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&ProductionStorageState{}).Where("id=1").UpdateColumn("rows", gorm.Expr("rows")).Error; err != nil {
+		if err := lockProductionStorage(tx); err != nil {
 			return err
 		}
 		if err := tx.First(&state, 1).Error; err != nil {
@@ -122,7 +122,7 @@ func pruneProductionChunk(now time.Time) (int, error) {
 			if published > 0 {
 				continue
 			}
-			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "batch_id"}}, DoUpdates: clause.Assignments(map[string]any{"count": gorm.Expr("count + ?", gap.Count), "bytes": gorm.Expr("bytes + ?", gap.Bytes)})}).Create(&gap).Error; err != nil {
+			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "batch_id"}}, DoUpdates: clause.Assignments(map[string]any{"count": gorm.Expr("production_retention_gaps.count + ?", gap.Count), "bytes": gorm.Expr("production_retention_gaps.bytes + ?", gap.Bytes)})}).Create(&gap).Error; err != nil {
 				return err
 			}
 		}

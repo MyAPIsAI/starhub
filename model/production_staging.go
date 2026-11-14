@@ -28,6 +28,9 @@ func stageProductionAttempts(db *gorm.DB, attempts []ProductionAttemptRecord) er
 			expected[row.ID] = *row
 		}
 		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := lockProductionStorage(tx); err != nil {
+				return err
+			}
 			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&chunk).Error; err != nil {
 				return err
 			}
