@@ -15,8 +15,13 @@ import (
 // Triggers an online SQLite backup using VACUUM INTO, which produces
 // a consistent atomic snapshot without blocking writes. The backup
 // file is saved to the configured backup directory or the current
-// working directory.
+// working directory. MySQL and PostgreSQL do not support VACUUM INTO;
+// callers should use external tools (mysqldump / pg_dump) instead.
 func BackupDatabase(w http.ResponseWriter, r *http.Request) {
+	if model.CurrentDialect() != "sqlite" {
+		common.ApiError(w, http.StatusNotImplemented, "online backup is only available for SQLite; use mysqldump or pg_dump for "+model.CurrentDialect())
+		return
+	}
 	backupDir := os.Getenv("STARHUB_BACKUP_DIR")
 	if backupDir == "" {
 		backupDir = "."
