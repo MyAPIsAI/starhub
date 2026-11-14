@@ -43,9 +43,9 @@ func productionAlertReasons(h ProductionTelemetryStatus, now time.Time) []string
 		if h.Durable.Available && h.OldestPendingAgeSeconds > 300 {
 			reasons = append(reasons, "delivery_backlog")
 		}
-		if h.SnapshotStale {
-			reasons = append(reasons, "routing_snapshot_stale")
-		}
+	}
+	if (h.SnapshotRequired || h.DeliveryEnabled) && h.SnapshotStale {
+		reasons = append(reasons, "routing_snapshot_stale")
 	}
 	return reasons
 }

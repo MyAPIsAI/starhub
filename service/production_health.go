@@ -5,6 +5,7 @@ import (
 	"os"
 	"starhub/metric"
 	"starhub/model"
+	"starhub/setting"
 	"sync"
 	"time"
 
@@ -107,6 +108,9 @@ func durableProductionHealth(now time.Time) ProductionDurableHealth {
 }
 
 type ProductionTelemetryStatus struct {
+	ConfirmedAttempts       int64                              `json:"confirmed_attempts_since_start"`
+	RetriedAttempts         int64                              `json:"retried_attempts_since_start"`
+	SnapshotRequired        bool                               `json:"snapshot_required"`
 	Timings                 map[string]metric.DurationSnapshot `json:"timings_us"`
 	Collector               metric.ProductionCollectorHealth   `json:"collector"`
 	Durable                 ProductionDurableHealth            `json:"durable"`
@@ -133,6 +137,9 @@ func ProductionTelemetryHealth(now time.Time) ProductionTelemetryStatus {
 	h := ProductionTelemetryStatus{Collector: metric.ProductionCollectorSnapshot(), Durable: durableProductionHealth(now), Stage: productionStageHealth.snapshot(), Flush: productionFlushHealth.snapshot(), Delivery: productionDeliveryHealth.snapshot(), Cleanup: productionCleanupHealth.snapshot(), DeliveryEnabled: os.Getenv("RESOURCE_CATALOG_NOTIFY_URL") != "", CacheHits: productionCacheHits.Load(), CacheMisses: productionCacheMisses.Load()}
 	_, age, ready := model.RoutingSnapshotStatus()
 	h.SnapshotReady = ready
+	h.SnapshotRequired = setting.IsCommercialMode()
+	h.ConfirmedAttempts = productionDeliveryConfirmed.Load()
+	h.RetriedAttempts = productionDeliveryRetried.Load()
 	h.SnapshotAgeSeconds = max(0, int64(age.Seconds()))
 	h.SnapshotStale = !ready || age > 3*time.Minute
 	if h.Durable.OldestPending > 0 {

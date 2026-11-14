@@ -15,6 +15,7 @@ import (
 
 func TestProductionAttemptDeliveryRetriesStableIDsAndRequiresExactReceipt(t *testing.T) {
 	resourceTestDB(t)
+	confirmed, retried := productionDeliveryConfirmed.Load(), productionDeliveryRetried.Load()
 	id := uuid.NewString()
 	row := model.ProductionAttemptRecord{ID: id, Minute: time.Now().Unix() / 60 * 60, Payload: `{"attempt_id":"` + id + `"}`}
 	if err := model.DB.Create(&row).Error; err != nil {
@@ -51,6 +52,12 @@ func TestProductionAttemptDeliveryRetriesStableIDsAndRequiresExactReceipt(t *tes
 	if row.DeliveredAt != 0 || row.Attempts != 1 || row.NextAttemptAt <= time.Now().Unix() {
 		t.Fatal("failed delivery not retained for retry")
 	}
+	if err := DeliverProductionAttemptsOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !productionDeliveryHealth.snapshot().Failing || productionDeliveryConfirmed.Load() != confirmed || productionDeliveryRetried.Load() != retried+1 {
+		t.Fatal("idle retry backoff cleared failed delivery health")
+	}
 	model.DB.Model(&row).Update("next_attempt_at", 0)
 	if err := DeliverProductionAttemptsOnce(t.Context()); err != nil {
 		t.Fatal(err)
@@ -60,6 +67,9 @@ func TestProductionAttemptDeliveryRetriesStableIDsAndRequiresExactReceipt(t *tes
 	}
 	if calls != 2 {
 		t.Fatal("acknowledged attempt resent")
+	}
+	if productionDeliveryConfirmed.Load() != confirmed+1 || productionDeliveryHealth.snapshot().Failing {
+		t.Fatal("exact acknowledgement did not recover delivery health")
 	}
 }
 

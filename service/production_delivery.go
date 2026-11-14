@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"starhub/model"
@@ -16,6 +17,7 @@ import (
 // relay handling and minute sealing. Stable attempt IDs fence duplicate delivery.
 var productionDeliveryMu sync.Mutex
 var productionDeliveryWake = make(chan struct{}, 1)
+var productionDeliveryConfirmed, productionDeliveryRetried atomic.Int64
 
 func DeliverProductionAttemptsOnce(ctx context.Context) (err error) {
 	if !productionDeliveryMu.TryLock() {
@@ -23,11 +25,17 @@ func DeliverProductionAttemptsOnce(ctx context.Context) (err error) {
 	}
 	defer productionDeliveryMu.Unlock()
 	started := time.Now()
-	defer func() { productionDeliveryHealth.finish(started, err) }()
+	processed := 0
+	defer func() {
+		if err != nil || processed > 0 {
+			productionDeliveryHealth.finish(started, err)
+		}
+	}()
 	budget, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	for batches := 0; batches < 64 && budget.Err() == nil; batches++ {
 		count, err := deliverProductionAttemptBatch(budget)
+		processed += count
 		if err != nil {
 			return err
 		}
@@ -73,6 +81,11 @@ func deliverProductionAttemptBatch(ctx context.Context) (int, error) {
 	}
 	if e := model.CompleteProductionDelivery(rows, failure, time.Now()); e != nil {
 		return 0, e
+	}
+	if err == nil {
+		productionDeliveryConfirmed.Add(int64(len(rows)))
+	} else {
+		productionDeliveryRetried.Add(int64(len(rows)))
 	}
 	return len(rows), err
 }
