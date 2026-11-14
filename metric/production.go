@@ -75,12 +75,18 @@ type ProductionEntry struct {
 	Health         *ProductionHealth `json:"health,omitempty"`
 }
 type ProductionMinute struct {
-	Minute   int64               `json:"minute"`
-	BatchID  string              `json:"batch_id"`
-	Complete bool                `json:"complete"`
-	Error    string              `json:"error,omitempty"`
-	Entries  []ProductionEntry   `json:"entries"`
-	Attempts []ProductionAttempt `json:"attempts"`
+	entryIndex map[productionEntryKey]int
+	Minute     int64               `json:"minute"`
+	BatchID    string              `json:"batch_id"`
+	Complete   bool                `json:"complete"`
+	Error      string              `json:"error,omitempty"`
+	Entries    []ProductionEntry   `json:"entries"`
+	Attempts   []ProductionAttempt `json:"attempts"`
+}
+
+type productionEntryKey struct {
+	channel           int64
+	model, generation string
 }
 
 var production = struct {
@@ -108,7 +114,7 @@ func StartProduction(now time.Time) {
 func productionBucket(minute int64) *ProductionMinute {
 	b := production.buckets[minute]
 	if b == nil {
-		b = &ProductionMinute{Minute: minute, BatchID: uuid.NewString(), Complete: true, Entries: []ProductionEntry{}, Attempts: []ProductionAttempt{}}
+		b = &ProductionMinute{Minute: minute, BatchID: uuid.NewString(), Complete: true, Entries: []ProductionEntry{}, Attempts: []ProductionAttempt{}, entryIndex: map[productionEntryKey]int{}}
 		production.buckets[minute] = b
 	}
 	return b
@@ -142,7 +148,9 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 		b.Error = "missing_endpoint_identity"
 		return
 	}
-	if production.retained >= 100000 || len(b.Entries) >= 4096 {
+	key := productionEntryKey{a.channelID, meta.Model, a.route.Generation}
+	index, exists := b.entryIndex[key]
+	if production.retained >= 100000 || (!exists && len(b.Entries) >= 4096) {
 		b.Complete = false
 		b.Error = "collector_capacity_exceeded"
 		return
@@ -169,17 +177,10 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	if outcome == "uncertain" || outcome == "unsent" || (a.outcome == AttemptClientError && a.statusCode != 401 && a.statusCode != 403 && a.statusCode != 404 && a.statusCode != 429) {
 		return
 	}
-	index := -1
-	for i := range b.Entries {
-		e := &b.Entries[i]
-		if e.ChannelID == a.channelID && e.ModelName == meta.Model && e.Generation == a.route.Generation {
-			index = i
-			break
-		}
-	}
-	if index < 0 {
+	if !exists {
 		b.Entries = append(b.Entries, ProductionEntry{ChannelID: a.channelID, ModelName: meta.Model, Generation: a.route.Generation, Health: &ProductionHealth{Contract: "confirmed-production-health-v1", InputCap: 2000}})
 		index = len(b.Entries) - 1
+		b.entryIndex[key] = index
 	}
 	e := &b.Entries[index]
 	e.InputTokens += a.inputTokens

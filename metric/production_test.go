@@ -2,6 +2,7 @@ package metric
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +44,37 @@ func TestProductionSealsExactGenerationsAndJournalWithoutCustomerData(t *testing
 	AckProduction(batch)
 	if next := ClosedProductionMinutes(now.Add(time.Minute)); len(next) != 0 {
 		t.Fatal("acknowledged batch replayed")
+	}
+}
+
+func TestProductionUpdatesExistingResourcesAtCardinalityLimit(t *testing.T) {
+	Reset()
+	t.Cleanup(Reset)
+	now := time.Now().Truncate(time.Minute)
+	StartProduction(now.Add(-time.Minute))
+	record := func(id int64) {
+		s := BeginRequest(RequestMeta{Model: "model"})
+		a := s.BeginAttempt(id)
+		a.SetRouteMetadata(AttemptMetadata{Generation: fmt.Sprint(id)})
+		a.MarkSent()
+		s.EndAttempt(a, AttemptSuccess, 200)
+	}
+	for i := 1; i <= 4096; i++ {
+		record(int64(i))
+	}
+	record(4096)
+	production.Lock()
+	current := production.buckets[now.Unix()]
+	valid := current.Complete && len(current.Entries) == 4096 && len(current.Attempts) == 4097
+	production.Unlock()
+	if !valid {
+		t.Fatal("existing resource was rejected at the key limit")
+	}
+	record(4097)
+	batch := ClosedProductionMinutes(now.Add(time.Minute))
+	last := batch[len(batch)-1]
+	if last.Complete || last.Error != "collector_capacity_exceeded" || len(last.Entries) != 4096 || len(last.Attempts) != 4097 {
+		t.Fatal("new key limit was not enforced")
 	}
 }
 
