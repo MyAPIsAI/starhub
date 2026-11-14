@@ -9,6 +9,10 @@ import (
 // StageProductionAttempts never holds the SQLite writer for an entire minute.
 // Existing IDs are checked after insertion so retries cannot replace evidence.
 func StageProductionAttempts(attempts []ProductionAttemptRecord) error {
+	return stageProductionAttempts(DB, attempts)
+}
+
+func stageProductionAttempts(db *gorm.DB, attempts []ProductionAttemptRecord) error {
 	for start := 0; start < len(attempts); start += 128 {
 		chunk := append([]ProductionAttemptRecord(nil), attempts[start:min(start+128, len(attempts))]...)
 		ids := make([]string, 0, len(chunk))
@@ -23,7 +27,7 @@ func StageProductionAttempts(attempts []ProductionAttemptRecord) error {
 			ids = append(ids, row.ID)
 			expected[row.ID] = *row
 		}
-		if err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&chunk).Error; err != nil {
 				return err
 			}
