@@ -140,6 +140,9 @@ func ProductionTelemetryHealth(now time.Time) ProductionTelemetryStatus {
 	}
 	h.ActiveRequests, h.ActiveAttempts = metric.InflightCounts()
 	h.Timings = metric.ProductionTimings()
+	for name, value := range model.LocalRoutingTimings() {
+		h.Timings[name] = value
+	}
 	h.Timings["stage"] = productionStageHealth.durations.Snapshot()
 	h.Timings["flush"] = productionFlushHealth.durations.Snapshot()
 	h.Timings["delivery"] = productionDeliveryHealth.durations.Snapshot()

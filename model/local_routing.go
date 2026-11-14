@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,7 +54,6 @@ type ResourceEventOutbox struct {
 	StreamSequence  int64  `json:"stream_sequence,omitempty"`
 }
 
-var localRoutingMu sync.Mutex
 var routingBootID = uuid.NewString()
 
 type routingExecution struct {
@@ -140,18 +138,12 @@ func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttf
 		return nil
 	}
 	policy, threshold := localExecution(attempt.Item)
-	routingSnapshotState.RLock()
-	defer routingSnapshotState.RUnlock()
-	if !routingItemCurrentLocked(attempt.Item) {
-		return nil
-	}
-	localRoutingMu.Lock()
-	defer localRoutingMu.Unlock()
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return withLocalRoutingWrite(&attempt.Item, func(tx *gorm.DB) error {
 		state, err := readLocalRoutingState(tx, attempt.Item)
 		if err != nil {
 			return err
 		}
+		before := state
 		if success {
 			if state.FailureGeneration != attempt.FailureGeneration || state.OpenUntil > 0 {
 				return nil
@@ -183,6 +175,9 @@ func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttf
 		}
 		if err := publishLatencyTransition(tx, attempt.Item, &state, threshold, now); err != nil {
 			return err
+		}
+		if state == before {
+			return nil
 		}
 		return tx.Save(&state).Error
 	})
@@ -237,12 +232,38 @@ func ClaimLocalRoutingProbes(now time.Time) ([]RoutingProbe, error) {
 	routingSnapshotState.RLock()
 	items := append([]RouteItem(nil), routingSnapshotState.items...)
 	routingSnapshotState.RUnlock()
-	localRoutingMu.Lock()
-	defer localRoutingMu.Unlock()
 	result := []RoutingProbe{}
-	err := DB.Transaction(func(tx *gorm.DB) error {
+	// Healthy resources need no writer transaction. Read candidates in bounded
+	// key chunks, then revalidate leases and generations under the writer.
+	keys := make([]string, 0, len(items))
+	byKey := map[string]RouteItem{}
+	for _, item := range items {
+		key := RoutingResourceKey(item)
+		if _, exists := byKey[key]; !exists {
+			keys = append(keys, key)
+			byKey[key] = item
+		}
+	}
+	candidates := []RouteItem{}
+	for start := 0; start < len(keys) && len(candidates) < 16; start += 512 {
+		var states []LocalRoutingState
+		err := DB.Where("resource_key IN ? AND (open_until > 0 OR degraded = ?) AND open_until <= ? AND probe_lease_until <= ?", keys[start:min(start+512, len(keys))], true, now.Unix(), now.Unix()).Order("resource_key").Limit(16 - len(candidates)).Find(&states).Error
+		if err != nil {
+			return nil, err
+		}
+		for _, state := range states {
+			candidates = append(candidates, byKey[state.ResourceKey])
+		}
+	}
+	if len(candidates) == 0 {
+		return result, nil
+	}
+	err := withLocalRoutingWrite(nil, func(tx *gorm.DB) error {
 		seen := map[string]bool{}
-		for _, item := range items {
+		for _, item := range candidates {
+			if !routingItemCurrentLocked(item) {
+				continue
+			}
 			key := RoutingResourceKey(item)
 			if seen[key] {
 				continue
@@ -275,14 +296,7 @@ func ClaimLocalRoutingProbes(now time.Time) ([]RoutingProbe, error) {
 
 func CompleteLocalRoutingProbe(probe RoutingProbe, success bool, now time.Time, latency ...time.Duration) error {
 	policy, threshold := localExecution(probe.Item)
-	routingSnapshotState.RLock()
-	defer routingSnapshotState.RUnlock()
-	if !routingItemCurrentLocked(probe.Item) {
-		return nil
-	}
-	localRoutingMu.Lock()
-	defer localRoutingMu.Unlock()
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return withLocalRoutingWrite(&probe.Item, func(tx *gorm.DB) error {
 		state, err := readLocalRoutingState(tx, probe.Item)
 		if err != nil {
 			return err

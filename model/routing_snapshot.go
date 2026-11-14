@@ -226,9 +226,19 @@ func ApplyRoutingSnapshot(s RouteSnapshot, now time.Time) (applyErr error) {
 	if err != nil {
 		return err
 	}
-	routingSnapshotState.Lock()
-	defer routingSnapshotState.Unlock()
+	locked := false
+	defer func() {
+		if locked {
+			routingSnapshotState.Unlock()
+		}
+	}()
 	err = DB.Transaction(func(tx *gorm.DB) error {
+		// Use the same writer-before-snapshot order as local circuit updates.
+		if err := tx.Exec("UPDATE routing_snapshot_records SET id=id WHERE id=-1").Error; err != nil {
+			return err
+		}
+		routingSnapshotState.Lock()
+		locked = true
 		var old RoutingSnapshotRecord
 		err := tx.First(&old, "id = 1").Error
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
