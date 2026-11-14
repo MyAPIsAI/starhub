@@ -17,11 +17,13 @@ import (
 var productionDeliveryMu sync.Mutex
 var productionDeliveryWake = make(chan struct{}, 1)
 
-func DeliverProductionAttemptsOnce(ctx context.Context) error {
+func DeliverProductionAttemptsOnce(ctx context.Context) (err error) {
 	if !productionDeliveryMu.TryLock() {
 		return nil
 	}
 	defer productionDeliveryMu.Unlock()
+	started := time.Now()
+	defer func() { productionDeliveryHealth.finish(started, err) }()
 	budget, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	for batches := 0; batches < 64 && budget.Err() == nil; batches++ {

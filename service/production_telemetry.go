@@ -20,7 +20,9 @@ import (
 
 var productionFlushMu sync.Mutex
 
-func FlushProductionTelemetry(now time.Time) error {
+func FlushProductionTelemetry(now time.Time) (err error) {
+	started := time.Now()
+	defer func() { productionFlushHealth.finish(started, err) }()
 	productionFlushMu.Lock()
 	defer productionFlushMu.Unlock()
 	batch := metric.ClosedProductionMinutes(now)
@@ -67,7 +69,10 @@ func RunProductionTelemetry(ctx context.Context) {
 		case <-metric.ProductionWork:
 		}
 		if !time.Now().Before(cleanupAt) {
-			if _, err := model.PruneProductionTelemetry(time.Now()); err != nil {
+			started := time.Now()
+			_, err := model.PruneProductionTelemetry(started)
+			productionCleanupHealth.finish(started, err)
+			if err != nil {
 				log.Printf("production retention failed: %v", err)
 			}
 			cleanupAt = time.Now().Add(time.Second)
@@ -90,7 +95,9 @@ func RunProductionTelemetry(ctx context.Context) {
 	}
 }
 
-func StageProductionTelemetry() error {
+func StageProductionTelemetry() (err error) {
+	started := time.Now()
+	defer func() { productionStageHealth.finish(started, err) }()
 	productionFlushMu.Lock()
 	defer productionFlushMu.Unlock()
 	deadline := time.Now().Add(100 * time.Millisecond)
