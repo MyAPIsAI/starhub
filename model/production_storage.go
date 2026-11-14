@@ -30,7 +30,7 @@ func initProductionStorage(db *gorm.DB) error {
 		}
 		if n == 0 {
 			var totals struct{ Rows, Bytes int64 }
-			if err := tx.Raw("SELECT COUNT(*) AS rows, COALESCE(SUM(length(CAST(payload AS BLOB))),0) AS bytes FROM production_attempt_records").Scan(&totals).Error; err != nil {
+			if err := tx.Raw("SELECT COUNT(*) AS " + productionQuote(tx, "rows") + ", COALESCE(SUM(" + productionPayloadLength(tx, "payload") + "),0) AS bytes FROM production_attempt_records").Scan(&totals).Error; err != nil {
 				return err
 			}
 			if err := tx.Create(&ProductionStorageState{ID: 1, Rows: totals.Rows, Bytes: totals.Bytes, MaxRows: 100000, MaxBytes: 128 << 20}).Error; err != nil {

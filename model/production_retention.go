@@ -73,7 +73,8 @@ func pruneProductionChunk(now time.Time) (int, error) {
 			return err
 		}
 		expired := earliest.Minute < cutoff
-		query := tx.Select("id,minute,batch_id,delivered_at,length(CAST(payload AS BLOB)) AS payload_bytes").Order("minute,id").Limit(512)
+		columns := "id,minute,batch_id,delivered_at," + productionPayloadLength(tx, "payload") + " AS payload_bytes"
+		query := tx.Select(columns).Order("minute,id").Limit(512)
 		if expired {
 			query = query.Where("minute < ?", cutoff)
 		} else {
@@ -84,7 +85,7 @@ func pruneProductionChunk(now time.Time) (int, error) {
 			return err
 		}
 		if len(rows) == 0 && !expired {
-			if err := tx.Select("id,minute,batch_id,delivered_at,length(CAST(payload AS BLOB)) AS payload_bytes").Order("minute,id").Limit(512).Find(&rows).Error; err != nil {
+			if err := tx.Select(columns).Order("minute,id").Limit(512).Find(&rows).Error; err != nil {
 				return err
 			}
 		}
