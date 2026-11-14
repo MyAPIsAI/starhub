@@ -71,6 +71,10 @@ func AckProductionStage(stage *ProductionStage) {
 		}
 	}
 	n := len(stage.Attempts)
+	var released int64
+	for _, a := range shard.attempts[:n] {
+		released += a.memoryBytes
+	}
 	clear(shard.attempts[:n])
 	shard.attempts = shard.attempts[n:]
 	if len(shard.attempts) == 0 {
@@ -78,4 +82,6 @@ func AckProductionStage(stage *ProductionStage) {
 	}
 	b.count.Add(-int64(n))
 	production.retained.Add(-int64(n))
+	b.bytes.Add(-released)
+	production.bytes.Add(-released)
 }

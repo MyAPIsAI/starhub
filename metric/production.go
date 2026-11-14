@@ -23,6 +23,7 @@ type AttemptMetadata struct {
 // ProductionAttempt contains routing and metering metadata only, never input,
 // response content, credential material, customer identity or prompt hashes.
 type ProductionAttempt struct {
+	memoryBytes int64
 	AttemptMetadata
 	ID             string `json:"attempt_id"`
 	ChannelID      int64  `json:"channel_id"`
@@ -91,6 +92,7 @@ var production = struct {
 	sync.RWMutex
 	started, next, sealed int64
 	retained              atomic.Int64
+	bytes                 atomic.Int64
 	buckets               map[int64]*productionBuffer
 }{buckets: map[int64]*productionBuffer{}}
 
@@ -102,6 +104,7 @@ func StartProduction(now time.Time) {
 	production.next = production.started
 	production.sealed = production.started
 	production.retained.Store(0)
+	production.bytes.Store(0)
 	production.buckets = map[int64]*productionBuffer{}
 	productionBucket(production.started).markLoss("collector_started_mid_minute")
 }
@@ -155,7 +158,11 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 		return
 	}
 	defer production.RUnlock()
+	if a.outcome == AttemptUnsupported {
+		return
+	}
 	if a.route.Generation == "" {
+		productionRejected.Add(1)
 		b.markLoss("missing_endpoint_identity")
 		return
 	}
@@ -166,6 +173,7 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	index, exists := shard.index[key]
 	if !exists && b.entryCount.Add(1) > 4096 {
 		b.entryCount.Add(-1)
+		productionRejected.Add(1)
 		b.markLoss("collector_capacity_exceeded")
 		return
 	}
@@ -185,18 +193,29 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 			b.entryCount.Add(-1)
 		}
 		b.markLoss("collector_capacity_exceeded")
+		productionRejected.Add(1)
 		return
 	}
-	now := time.Now()
-	outcome := "failure"
-	if a.outcome == AttemptSuccess {
-		outcome = "success"
-	} else if a.outcome == AttemptUnsupported {
+	estimate := productionAttemptBytes(meta, a.route)
+	entryBytes := int64(0)
+	if !exists {
+		entryBytes = 1024 + 6*int64(len(meta.Model)+len(a.route.Generation))
+	}
+	if estimate > 128<<10 || !reserveProductionBytes(estimate+entryBytes) {
 		production.retained.Add(-1)
 		if !exists {
 			b.entryCount.Add(-1)
 		}
+		productionRejected.Add(1)
+		b.markLoss("collector_byte_capacity_exceeded")
 		return
+	}
+	b.bytes.Add(estimate + entryBytes)
+	productionCollected.Add(1)
+	now := time.Now()
+	outcome := "failure"
+	if a.outcome == AttemptSuccess {
+		outcome = "success"
 	} else if a.outcome == AttemptUncertain {
 		outcome = "uncertain"
 	}
@@ -204,6 +223,7 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 		outcome = "unsent"
 	}
 	event := ProductionAttempt{AttemptMetadata: a.route, ID: uuid.NewString(), ChannelID: a.channelID, Model: meta.Model, StartedAt: a.start.UnixMilli(), EndedAt: now.UnixMilli(), Outcome: outcome, Status: a.statusCode, InputTokens: a.inputTokens, OutputTokens: a.outputTokens, DurationMS: max(0, a.endedAt.Sub(a.start).Milliseconds()), Stream: meta.Stream, Retry: retry}
+	event.memoryBytes = estimate
 	if a.hasFirstToken {
 		event.FirstContentMS = max(1, a.ttft.Milliseconds())
 	}
@@ -219,6 +239,8 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	if outcome == "uncertain" || outcome == "unsent" || (a.outcome == AttemptClientError && a.statusCode != 401 && a.statusCode != 403 && a.statusCode != 404 && a.statusCode != 429) {
 		if !exists {
 			b.entryCount.Add(-1)
+			b.bytes.Add(-entryBytes)
+			production.bytes.Add(-entryBytes)
 		}
 		return
 	}
@@ -290,6 +312,9 @@ func ClosedProductionMinutes(now time.Time) []ProductionMinute {
 	for at, b := range production.buckets {
 		if at < end-86400 {
 			production.retained.Add(-b.count.Load())
+			production.bytes.Add(-b.bytes.Load())
+			productionExpired.Add(b.count.Load())
+			productionExpiredBytes.Add(b.bytes.Load())
 			delete(production.buckets, at)
 		}
 	}
@@ -312,6 +337,7 @@ func AckProduction(batch []ProductionMinute) {
 	for _, b := range batch {
 		if current := production.buckets[b.Minute]; current != nil && current.view.BatchID == b.BatchID {
 			production.retained.Add(-current.count.Load())
+			production.bytes.Add(-current.bytes.Load())
 			delete(production.buckets, b.Minute)
 			production.next = max(production.next, b.Minute+60)
 		}

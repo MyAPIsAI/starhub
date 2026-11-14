@@ -18,6 +18,7 @@ type productionBuffer struct {
 	view                     ProductionMinute
 	shards                   [16]productionShard
 	entryCount, count, total atomic.Int64
+	bytes                    atomic.Int64
 	loss                     atomic.Pointer[string]
 	seal                     sync.Once
 }

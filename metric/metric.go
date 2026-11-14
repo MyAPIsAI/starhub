@@ -449,5 +449,10 @@ func Reset() {
 	production.started = 0
 	production.buckets = map[int64]*productionBuffer{}
 	production.retained.Store(0)
+	production.bytes.Store(0)
+	productionCollected.Store(0)
+	productionRejected.Store(0)
+	productionExpired.Store(0)
+	productionExpiredBytes.Store(0)
 	production.Unlock()
 }
