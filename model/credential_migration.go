@@ -71,7 +71,7 @@ func MigrateCredentialStorage(rotate bool, actor, reason string) (int, error) {
 					if target.hash {
 						values["key_hash"] = hash
 					}
-					result := tx.Table(target.table).Where("id = ? AND key = ?", row.ID, row.Key).UpdateColumns(values)
+					result := tx.Table(target.table).Where(map[string]any{"id": row.ID, "key": row.Key}).UpdateColumns(values)
 					if result.Error != nil {
 						return result.Error
 					}

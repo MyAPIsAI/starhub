@@ -158,7 +158,7 @@ func GetTokenByKey(key string) (*Token, error) {
 		return nil, err
 	}
 	// Fallback: plaintext lookup (legacy keys not yet migrated).
-	err = DB.Where("key = ?", key).First(&t).Error
+	err = DB.Where(map[string]any{"key": key}).First(&t).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrTokenNotFound
 	}

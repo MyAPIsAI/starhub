@@ -73,7 +73,7 @@ func readOwnedTokenChoices(tx *gorm.DB, owner int64) (*OwnedTokenChoices, error)
 	}
 	ratios := map[string]float64{"default": 1}
 	var option Option
-	err := tx.First(&option, "key = ?", "group_ratio").Error
+	err := tx.Where(map[string]any{"key": "group_ratio"}).First(&option).Error
 	if err == nil {
 		if json.Unmarshal([]byte(option.Value), &ratios) != nil {
 			return nil, errors.New("invalid group ratio")
@@ -236,7 +236,7 @@ func MutateOwnedToken(owner int64, operation, action string, id int64, revision,
 			if err := tx.Model(&Token{}).Create(data).Error; err != nil {
 				return err
 			}
-			if err := tx.First(&result, "key = ?", result.Key).Error; err != nil {
+			if err := tx.Where(map[string]any{"key": result.Key}).First(&result).Error; err != nil {
 				return err
 			}
 			if err := configureTokenPeriod(tx, &result, fields, time.Now()); err != nil {

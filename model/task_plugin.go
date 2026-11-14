@@ -41,7 +41,7 @@ func SaveTaskPlugin(source string, meta taskplugin.Meta) (*TaskPlugin, error) {
 		return nil, err
 	}
 	p := &TaskPlugin{Key: meta.Key, Version: meta.Version, APIVersion: meta.APIVersion, Source: source, SourceHash: hex.EncodeToString(hash[:]), MetaJSON: string(metadata), Enabled: true}
-	if err := DB.Where("key = ? AND version = ?", p.Key, p.Version).FirstOrCreate(p).Error; err != nil {
+	if err := DB.Where(map[string]any{"key": p.Key, "version": p.Version}).FirstOrCreate(p).Error; err != nil {
 		return nil, err
 	}
 	if p.Source != source {
