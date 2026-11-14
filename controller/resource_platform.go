@@ -85,7 +85,7 @@ func ResourceRoutingStatus(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, 500, "event count unavailable")
 		return
 	}
-	common.ApiSuccess(w, map[string]any{"instance_id": os.Getenv("NODE_NAME"), "snapshot_version": version, "snapshot_age_seconds": max(0, int64(age.Seconds())), "ready": ready, "fallback": ready && age > 3*time.Minute, "local_states": states, "events": events, "pending_events": pending, "observations": observations, "storage": "sqlite", "scope": "single_instance"})
+	common.ApiSuccess(w, map[string]any{"instance_id": os.Getenv("NODE_NAME"), "snapshot_version": version, "snapshot_age_seconds": max(0, int64(age.Seconds())), "ready": ready, "fallback": ready && age > 3*time.Minute, "local_states": states, "events": events, "pending_events": pending, "observations": observations, "storage": model.CurrentDialect(), "scope": "single_instance"})
 }
 
 func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +203,7 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		size = min(size, 1000)
 		from := min(len(rows), (page-1)*size)
 		to := min(len(rows), from+size)
-		common.ApiSuccess(w, map[string]any{"page": page, "page_size": size, "total": len(rows), "items": rows[from:to], "coverage": coverage, "storage": "sqlite"})
+		common.ApiSuccess(w, map[string]any{"page": page, "page_size": size, "total": len(rows), "items": rows[from:to], "coverage": coverage, "storage": model.CurrentDialect()})
 		return
 	}
 	rows := metric.PlatformMetricRows(byModel, false, start, end)
