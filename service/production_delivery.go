@@ -38,7 +38,7 @@ func DeliverProductionAttemptsOnce(ctx context.Context) error {
 
 func deliverProductionAttemptBatch(ctx context.Context) (int, error) {
 	var rows []model.ProductionAttemptRecord
-	if err := model.DB.Where("delivered_at = 0 AND next_attempt_at <= ?", time.Now().Unix()).Order("minute,id").Limit(64).Find(&rows).Error; err != nil {
+	if err := model.PublishedProductionAttempts(model.DB).Where("delivered_at = 0 AND next_attempt_at <= ?", time.Now().Unix()).Order("minute,id").Limit(64).Find(&rows).Error; err != nil {
 		return 0, err
 	}
 	if len(rows) == 0 {

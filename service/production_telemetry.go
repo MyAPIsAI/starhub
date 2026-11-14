@@ -36,12 +36,13 @@ func FlushProductionTelemetry(now time.Time) error {
 			}
 			attempts = append(attempts, model.ProductionAttemptRecord{ID: a.ID, Minute: b.Minute, Payload: string(raw)})
 		}
+		count := int64(len(b.Attempts))
 		b.Attempts = nil
 		raw, err := json.Marshal(b)
 		if err != nil {
 			return err
 		}
-		rows = append(rows, model.ProductionTelemetryMinute{Minute: b.Minute, BatchID: b.BatchID, Complete: b.Complete, Payload: string(raw)})
+		rows = append(rows, model.ProductionTelemetryMinute{Minute: b.Minute, BatchID: b.BatchID, Complete: b.Complete, Payload: string(raw), AttemptCount: count})
 	}
 	if err := model.SaveProductionTelemetry(rows, now, attempts...); err != nil {
 		return err
