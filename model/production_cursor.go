@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -16,10 +17,16 @@ type productionCursor struct {
 // ReadProductionAttemptPage uses a stable minute/ID cursor without an offset.
 // Retention may remove rows between pages without duplicating remaining rows.
 func ReadProductionAttemptPage(start, end int64, cursor string, size int) ([]ProductionAttemptRecord, string, error) {
+	return ReadProductionAttemptPageContext(context.Background(), start, end, cursor, size)
+}
+
+func ReadProductionAttemptPageContext(ctx context.Context, start, end int64, cursor string, size int) ([]ProductionAttemptRecord, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, ProductionDatabaseTimeout())
+	defer cancel()
 	if size < 1 || size > 1000 {
 		return nil, "", ErrProductionCursor
 	}
-	query := PublishedProductionAttempts(DB).Where("minute >= ? AND minute <= ?", start, end)
+	query := PublishedProductionAttempts(DB.WithContext(ctx)).Where("minute >= ? AND minute <= ?", start, end)
 	if cursor != "" {
 		var after productionCursor
 		raw, err := base64.RawURLEncoding.DecodeString(cursor)

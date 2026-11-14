@@ -128,16 +128,24 @@ func PublishedProductionAttempts(db *gorm.DB) *gorm.DB {
 }
 
 func ReadProductionAttempts(start, end int64, page, size int) ([]ProductionAttemptRecord, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), ProductionDatabaseTimeout())
+	defer cancel()
 	if page < 1 || page > 1000000 || size < 1 || size > 1000 || (page-1)*size > 100000 {
 		return nil, fmt.Errorf("invalid attempt page")
 	}
 	rows := []ProductionAttemptRecord{}
-	err := PublishedProductionAttempts(DB).Where("minute >= ? AND minute <= ?", start, end).Order("minute, id").Offset((page - 1) * size).Limit(size).Find(&rows).Error
+	err := PublishedProductionAttempts(DB.WithContext(ctx)).Where("minute >= ? AND minute <= ?", start, end).Order("minute, id").Offset((page - 1) * size).Limit(size).Find(&rows).Error
 	return rows, err
 }
 
 func ReadProductionTelemetry(start, end int64) ([]ProductionTelemetryMinute, error) {
+	return ReadProductionTelemetryContext(context.Background(), start, end)
+}
+
+func ReadProductionTelemetryContext(ctx context.Context, start, end int64) ([]ProductionTelemetryMinute, error) {
+	ctx, cancel := context.WithTimeout(ctx, ProductionDatabaseTimeout())
+	defer cancel()
 	var rows []ProductionTelemetryMinute
-	err := DB.Where("minute >= ? AND minute <= ?", start, end).Order("minute").Find(&rows).Error
+	err := DB.WithContext(ctx).Where("minute >= ? AND minute <= ?", start, end).Order("minute").Find(&rows).Error
 	return rows, err
 }
