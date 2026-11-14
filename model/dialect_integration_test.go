@@ -78,6 +78,19 @@ func TestSQLDialectStatistics(t *testing.T) {
 			if err != nil || len(daily) != 1 || daily[0].Requests != 20 || daily[0].Date != midnight.Format("2006-01-02") {
 				t.Fatal("legacy UTC daily summary failed", daily, err)
 			}
+			var dates []string
+			day := DateFromUnix(admissionDayColumn)
+			if err := db.Model(&Log{}).Where("user_id = ? AND business_date = ''", 1).Distinct(day).Pluck(day, &dates).Error; err != nil || len(dates) != 1 || dates[0] != midnight.Format("2006-01-02") {
+				t.Fatal("legacy reconciliation date projection failed", dates, err)
+			}
+			models, err := SummarizeLogsByModel(1, midnight.Unix())
+			if err != nil || len(models) != 1 || models[0].Quota != 20 {
+				t.Fatal("daily model money aggregation failed", models, err)
+			}
+			tokens, err := SummarizeLogsByToken(1, 7, midnight.Unix())
+			if err != nil || len(tokens) != 1 || tokens[0].Quota != 20 {
+				t.Fatal("daily token money aggregation failed", tokens, err)
+			}
 		})
 	}
 }
