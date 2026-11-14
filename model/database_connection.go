@@ -25,6 +25,7 @@ func openConfiguredDatabase(cfg DatabaseConfig) (*gorm.DB, error) {
 		connection.ClientFoundRows = true
 		connection.ParseTime = true
 		connection.Loc = time.UTC
+		connection.MaxAllowedPacket = 0
 		if connection.Params == nil {
 			connection.Params = map[string]string{}
 		}
@@ -45,6 +46,13 @@ func openConfiguredDatabase(cfg DatabaseConfig) (*gorm.DB, error) {
 		return nil, err
 	}
 	if cfg.Driver == "mysql" {
+		var packet int64
+		if err := db.Raw("SELECT @@max_allowed_packet").Scan(&packet).Error; err != nil || packet < 65<<20 {
+			if pool, e := db.DB(); e == nil {
+				_ = pool.Close()
+			}
+			return nil, errors.New("MySQL max_allowed_packet must be at least 65 MiB for telemetry manifests")
+		}
 		db = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin").Session(&gorm.Session{})
 	}
 	return db, nil

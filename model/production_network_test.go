@@ -7,11 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"gorm.io/gorm/logger"
 )
 
 // These opt-in tests require disposable databases, never production databases.
@@ -25,11 +22,7 @@ func networkProductionDB(t *testing.T, driver string) *gorm.DB {
 	if dsn == "" {
 		t.Skip("disposable database DSN not supplied")
 	}
-	var dialect gorm.Dialector = mysql.Open(dsn)
-	if driver == "postgres" {
-		dialect = postgres.Open(dsn)
-	}
-	db, err := gorm.Open(dialect, &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := openConfiguredDatabase(DatabaseConfig{Driver: driver, DSN: dsn})
 	if err != nil {
 		t.Fatal(err)
 	}
