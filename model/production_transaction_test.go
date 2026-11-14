@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -38,5 +39,11 @@ func TestProductionTransactionRetriesWholeRollbackOnly(t *testing.T) {
 	cancel()
 	if err := productionTransaction(DB.WithContext(ctx), func(*gorm.DB) error { t.Fatal("canceled callback ran"); return nil }); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+	if _, err := PruneProductionTelemetryContext(ctx, time.Now()); !errors.Is(err, context.Canceled) {
+		t.Fatal("cleanup ignored cancellation", err)
+	}
+	if err := CompleteProductionDeliveryContext(ctx, nil, "", time.Now()); !errors.Is(err, context.Canceled) {
+		t.Fatal("receipt ignored cancellation", err)
 	}
 }

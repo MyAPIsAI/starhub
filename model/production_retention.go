@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"time"
@@ -17,10 +18,17 @@ type ProductionRetentionGap struct {
 // Cleanup has its own short transactions and never runs inside publication.
 // Hard admission limits remain enforced even if cleanup cannot keep up.
 func PruneProductionTelemetry(now time.Time) (int, error) {
+	return PruneProductionTelemetryContext(context.Background(), now)
+}
+
+func PruneProductionTelemetryContext(ctx context.Context, now time.Time) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, ProductionDatabaseTimeout())
+	defer cancel()
+	db := DB.WithContext(ctx)
 	total := 0
 	deadline := time.Now().Add(100 * time.Millisecond)
 	for i := 0; i < 16 && time.Now().Before(deadline); i++ {
-		n, err := pruneProductionChunk(now)
+		n, err := pruneProductionChunkDB(db, now)
 		total += n
 		if err != nil {
 			return total, err
@@ -31,20 +39,20 @@ func PruneProductionTelemetry(now time.Time) (int, error) {
 	}
 	cutoff := now.Add(-24*time.Hour).Unix() / 60 * 60
 	var minutes []int64
-	if err := DB.Model(&ProductionTelemetryMinute{}).Where("minute < ?", cutoff).Order("minute").Limit(64).Pluck("minute", &minutes).Error; err != nil {
+	if err := db.Model(&ProductionTelemetryMinute{}).Where("minute < ?", cutoff).Order("minute").Limit(64).Pluck("minute", &minutes).Error; err != nil {
 		return total, err
 	}
 	if len(minutes) > 0 {
-		if err := DB.Where("minute IN ?", minutes).Delete(&ProductionTelemetryMinute{}).Error; err != nil {
+		if err := db.Where("minute IN ?", minutes).Delete(&ProductionTelemetryMinute{}).Error; err != nil {
 			return total, err
 		}
 	}
 	var gaps []string
-	if err := DB.Model(&ProductionRetentionGap{}).Where("minute < ?", cutoff).Order("minute").Limit(512).Pluck("batch_id", &gaps).Error; err != nil {
+	if err := db.Model(&ProductionRetentionGap{}).Where("minute < ?", cutoff).Order("minute").Limit(512).Pluck("batch_id", &gaps).Error; err != nil {
 		return total, err
 	}
 	if len(gaps) > 0 {
-		if err := DB.Where("batch_id IN ?", gaps).Delete(&ProductionRetentionGap{}).Error; err != nil {
+		if err := db.Where("batch_id IN ?", gaps).Delete(&ProductionRetentionGap{}).Error; err != nil {
 			return total, err
 		}
 	}
@@ -52,20 +60,26 @@ func PruneProductionTelemetry(now time.Time) (int, error) {
 }
 
 func pruneProductionChunk(now time.Time) (int, error) {
-	state, err := ReadProductionStorage()
+	return pruneProductionChunkDB(DB, now)
+}
+
+func pruneProductionChunkDB(db *gorm.DB, now time.Time) (int, error) {
+	var state ProductionStorageState
+	err := db.First(&state, 1).Error
 	if err != nil || state.Rows == 0 {
 		return 0, err
 	}
 	cutoff := now.Add(-24*time.Hour).Unix() / 60 * 60
 	var earliest ProductionAttemptRecord
-	if err := DB.Select("minute").Order("minute").Limit(1).Find(&earliest).Error; err != nil {
+	if err := db.Select("minute").Order("minute").Limit(1).Find(&earliest).Error; err != nil {
 		return 0, err
 	}
 	if earliest.Minute >= cutoff && state.Rows <= max(1, state.MaxRows*9/10) && state.Bytes <= max(1, state.MaxBytes*9/10) {
 		return 0, nil
 	}
 	removed := 0
-	err = DB.Transaction(func(tx *gorm.DB) error {
+	err = productionTransaction(db, func(tx *gorm.DB) error {
+		removed = 0
 		if err := lockProductionStorage(tx); err != nil {
 			return err
 		}
