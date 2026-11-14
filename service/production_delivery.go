@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"starhub/model"
@@ -13,13 +14,35 @@ import (
 
 // DeliverProductionAttemptsOnce retries metadata-only batches independently of
 // relay handling and minute sealing. Stable attempt IDs fence duplicate delivery.
+var productionDeliveryMu sync.Mutex
+var productionDeliveryWake = make(chan struct{}, 1)
+
 func DeliverProductionAttemptsOnce(ctx context.Context) error {
+	if !productionDeliveryMu.TryLock() {
+		return nil
+	}
+	defer productionDeliveryMu.Unlock()
+	budget, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	for batches := 0; batches < 64 && budget.Err() == nil; batches++ {
+		count, err := deliverProductionAttemptBatch(budget)
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			break
+		}
+	}
+	return ctx.Err()
+}
+
+func deliverProductionAttemptBatch(ctx context.Context) (int, error) {
 	var rows []model.ProductionAttemptRecord
 	if err := model.DB.Where("delivered_at = 0 AND next_attempt_at <= ?", time.Now().Unix()).Order("minute,id").Limit(64).Find(&rows).Error; err != nil {
-		return err
+		return 0, err
 	}
 	if len(rows) == 0 {
-		return nil
+		return 0, nil
 	}
 	items := []json.RawMessage{}
 	for _, row := range rows {
@@ -42,18 +65,21 @@ func DeliverProductionAttemptsOnce(ctx context.Context) error {
 			}
 		}
 	}
-	for _, row := range rows {
-		updates := map[string]any{"attempts": row.Attempts + 1, "last_error": "", "delivered_at": time.Now().Unix()}
-		if err != nil {
-			updates["delivered_at"] = 0
-			updates["last_error"] = err.Error()
-			updates["next_attempt_at"] = time.Now().Add(model.ResourceEventRetryDelay(row.Attempts + 1)).Unix()
-		}
-		if e := model.DB.Model(&model.ProductionAttemptRecord{}).Where("id = ? AND delivered_at = 0", row.ID).Updates(updates).Error; e != nil {
-			return e
-		}
+	failure := ""
+	if err != nil {
+		failure = err.Error()
 	}
-	return err
+	if e := model.CompleteProductionDelivery(rows, failure, time.Now()); e != nil {
+		return 0, e
+	}
+	return len(rows), err
+}
+
+func wakeProductionDelivery() {
+	select {
+	case productionDeliveryWake <- struct{}{}:
+	default:
+	}
 }
 
 func resourceTelemetrySource() string {
@@ -71,10 +97,11 @@ func RunProductionAttemptDelivery(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if os.Getenv("RESOURCE_CATALOG_NOTIFY_URL") != "" {
-				if err := DeliverProductionAttemptsOnce(ctx); err != nil {
-					log.Printf("attempt metadata delivery failed: %v", err)
-				}
+		case <-productionDeliveryWake:
+		}
+		if os.Getenv("RESOURCE_CATALOG_NOTIFY_URL") != "" {
+			if err := DeliverProductionAttemptsOnce(ctx); err != nil {
+				log.Printf("attempt metadata delivery failed: %v", err)
 			}
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,5 +60,60 @@ func TestProductionAttemptDeliveryRetriesStableIDsAndRequiresExactReceipt(t *tes
 	}
 	if calls != 2 {
 		t.Fatal("acknowledged attempt resent")
+	}
+}
+
+func TestProductionDeliveryDrainsBacklogWithoutConcurrentDuplicateBatches(t *testing.T) {
+	resourceTestDB(t)
+	rows := make([]model.ProductionAttemptRecord, 256)
+	for i := range rows {
+		id := uuid.NewString()
+		rows[i] = model.ProductionAttemptRecord{ID: id, Minute: time.Now().Unix() / 60 * 60, Payload: `{"attempt_id":"` + id + `"}`}
+	}
+	if err := model.DB.CreateInBatches(&rows, 64).Error; err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var batch struct {
+			Attempts []struct {
+				ID string `json:"attempt_id"`
+			} `json:"attempts"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+			t.Error(err)
+		}
+		ids := []string{}
+		mu.Lock()
+		for _, a := range batch.Attempts {
+			if seen[a.ID] {
+				t.Error("duplicate concurrent delivery")
+			}
+			seen[a.ID] = true
+			ids = append(ids, a.ID)
+		}
+		mu.Unlock()
+		json.NewEncoder(w).Encode(map[string]any{"accepted_ids": ids})
+	}))
+	defer server.Close()
+	t.Setenv("RESOURCE_CATALOG_NOTIFY_URL", server.URL)
+	var wg sync.WaitGroup
+	failures := make(chan error, 4)
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); failures <- DeliverProductionAttemptsOnce(t.Context()) }()
+	}
+	wg.Wait()
+	close(failures)
+	for err := range failures {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var pending int64
+	model.DB.Model(&model.ProductionAttemptRecord{}).Where("delivered_at = 0").Count(&pending)
+	if pending != 0 || len(seen) != 256 {
+		t.Fatalf("remaining %d delivered %d", pending, len(seen))
 	}
 }

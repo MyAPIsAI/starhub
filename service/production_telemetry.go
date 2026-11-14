@@ -47,6 +47,7 @@ func FlushProductionTelemetry(now time.Time) error {
 		return err
 	}
 	metric.AckProduction(batch)
+	wakeProductionDelivery()
 	return nil
 }
 
