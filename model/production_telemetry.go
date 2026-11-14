@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +37,10 @@ type ProductionAttemptRecord struct {
 // SaveProductionTelemetry stages bounded chunks before publishing manifests.
 // A stage is invisible to readers and delivery until its manifest commits.
 func SaveProductionTelemetry(rows []ProductionTelemetryMinute, now time.Time, attempts ...ProductionAttemptRecord) error {
+	return SaveProductionTelemetryContext(context.Background(), rows, now, attempts...)
+}
+
+func SaveProductionTelemetryContext(ctx context.Context, rows []ProductionTelemetryMinute, now time.Time, attempts ...ProductionAttemptRecord) error {
 	for i := range attempts {
 		for _, row := range rows {
 			if row.Minute == attempts[i].Minute {
@@ -44,11 +49,12 @@ func SaveProductionTelemetry(rows []ProductionTelemetryMinute, now time.Time, at
 			}
 		}
 	}
-	if err := StageProductionAttempts(attempts); err != nil {
+	db := DB.WithContext(ctx)
+	if err := stageProductionAttempts(db, attempts); err != nil {
 		return err
 	}
 	for _, row := range rows {
-		if err := publishProductionMinute(row, now); err != nil {
+		if err := publishProductionMinuteDB(db, row, now); err != nil {
 			return err
 		}
 	}
@@ -56,10 +62,14 @@ func SaveProductionTelemetry(rows []ProductionTelemetryMinute, now time.Time, at
 }
 
 func publishProductionMinute(row ProductionTelemetryMinute, now time.Time) error {
+	return publishProductionMinuteDB(DB, row, now)
+}
+
+func publishProductionMinuteDB(db *gorm.DB, row ProductionTelemetryMinute, now time.Time) error {
 	if row.Minute <= 0 || row.Minute%60 != 0 || row.BatchID == "" || row.Minute >= now.Unix()/60*60 || len(row.Payload) > 64<<20 {
-		return errors.New("invalid production minute")
+		return errors.Join(ErrProductionEvidence, errors.New("invalid production minute"))
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return productionTransaction(db, func(tx *gorm.DB) error {
 		if err := lockProductionStorage(tx); err != nil {
 			return err
 		}
@@ -71,7 +81,7 @@ func publishProductionMinute(row ProductionTelemetryMinute, now time.Time) error
 		if gap.Count > 0 {
 			var payload map[string]any
 			if json.Unmarshal([]byte(row.Payload), &payload) != nil {
-				return errors.New("invalid minute manifest")
+				return errors.Join(ErrProductionEvidence, errors.New("invalid minute manifest"))
 			}
 			payload["complete"] = false
 			payload["error"] = "attempt_retention_gap"
@@ -86,7 +96,7 @@ func publishProductionMinute(row ProductionTelemetryMinute, now time.Time) error
 		err := tx.First(&existing, row.Minute).Error
 		if err == nil {
 			if existing.BatchID != row.BatchID || existing.Payload != row.Payload || existing.Complete != row.Complete || existing.AttemptCount != row.AttemptCount {
-				return errors.New("production minute already sealed by another collector")
+				return errors.Join(ErrProductionEvidence, errors.New("production minute already sealed by another collector"))
 			}
 			return nil
 		}

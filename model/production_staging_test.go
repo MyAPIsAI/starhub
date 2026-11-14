@@ -1,9 +1,13 @@
 package model
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 func TestProductionStagingIsBoundedInvisibleAndPublishedAtomically(t *testing.T) {
@@ -50,5 +54,46 @@ func TestProductionStagingIsBoundedInvisibleAndPublishedAtomically(t *testing.T)
 	rows[0].Payload = "changed payload"
 	if err := StageProductionAttempts(rows[:1]); err == nil {
 		t.Fatal("stage identity accepted different payload")
+	}
+}
+
+func TestProductionStageBoundsBytesAndRejectsConflictingDuplicate(t *testing.T) {
+	newTestDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	row := ProductionAttemptRecord{ID: "duplicate", BatchID: "batch", Minute: 60, Payload: `{}`}
+	if err := StageProductionAttemptsContext(ctx, []ProductionAttemptRecord{row}); !errors.Is(err, context.Canceled) {
+		t.Fatal("cancellation ignored", err)
+	}
+	other := row
+	other.Payload = `{"changed":true}`
+	if err := StageProductionAttempts([]ProductionAttemptRecord{row, other, row}); !errors.Is(err, ErrProductionEvidence) {
+		t.Fatal("conflicting duplicate was silently accepted", err)
+	}
+	var batchSizes []int
+	if err := DB.Callback().Create().Before("gorm:create").Register("test:production_batch_bytes", func(tx *gorm.DB) {
+		if rows, ok := tx.Statement.Dest.(*[]ProductionAttemptRecord); ok {
+			bytes := 0
+			for _, row := range *rows {
+				bytes += len(row.Payload) + 1024
+			}
+			if bytes > 1<<20 {
+				t.Errorf("stage exceeds byte budget: %d", bytes)
+			}
+			batchSizes = append(batchSizes, len(*rows))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = DB.Callback().Create().Remove("test:production_batch_bytes") })
+	rows := make([]ProductionAttemptRecord, 20)
+	for i := range rows {
+		rows[i] = ProductionAttemptRecord{ID: fmt.Sprint(i), BatchID: "batch", Minute: 60, Payload: string(make([]byte, 128<<10))}
+	}
+	if err := StageProductionAttempts(rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(batchSizes) < 3 {
+		t.Fatal("large payloads were not split", batchSizes)
 	}
 }
