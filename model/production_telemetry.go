@@ -22,14 +22,14 @@ type ProductionTelemetryMinute struct {
 }
 
 type ProductionAttemptRecord struct {
-	BatchID       string `gorm:"size:64;not null;default:'';index" json:"-"`
+	BatchID       string `gorm:"size:64;not null;default:''" json:"-"`
 	PayloadBytes  int64  `gorm:"not null;default:0" json:"-"`
 	Attempts      int    `json:"delivery_attempts"`
-	DeliveredAt   int64  `gorm:"index" json:"delivered_at"`
+	DeliveredAt   int64  `json:"delivered_at"`
 	NextAttemptAt int64  `json:"next_attempt_at"`
 	LastError     string `gorm:"size:160" json:"last_error"`
 	ID            string `gorm:"primaryKey;size:64" json:"attempt_id"`
-	Minute        int64  `gorm:"index" json:"minute"`
+	Minute        int64  `json:"minute"`
 	Payload       string `gorm:"type:text;not null" json:"-"`
 }
 

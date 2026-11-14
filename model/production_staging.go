@@ -19,6 +19,7 @@ func StageProductionAttempts(attempts []ProductionAttemptRecord) error {
 				return errors.New("invalid production stage")
 			}
 			row.PayloadBytes = int64(len(row.Payload))
+			row.NextAttemptAt = row.Minute + 60
 			ids = append(ids, row.ID)
 			expected[row.ID] = *row
 		}

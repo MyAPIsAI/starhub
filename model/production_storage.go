@@ -46,6 +46,9 @@ func initProductionStorage(db *gorm.DB) error {
 			`CREATE INDEX IF NOT EXISTS idx_production_pending ON production_attempt_records(next_attempt_at, minute, id) WHERE delivered_at = 0`,
 			`CREATE INDEX IF NOT EXISTS idx_production_minute_cursor ON production_attempt_records(minute,id)`,
 			`CREATE INDEX IF NOT EXISTS idx_production_publication ON production_attempt_records(batch_id,minute)`,
+			`DROP INDEX IF EXISTS idx_production_attempt_records_delivered_at`,
+			`DROP INDEX IF EXISTS idx_production_attempt_records_minute`,
+			`DROP INDEX IF EXISTS idx_production_attempt_records_batch_id`,
 		} {
 			if err := tx.Exec(sql).Error; err != nil {
 				return err
