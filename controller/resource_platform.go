@@ -166,8 +166,12 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		common.ApiSuccess(w, map[string]any{"buckets": buckets})
 		return
 	}
-	rows := metric.PlatformMetricRows(byModel, quarter, start, end)
 	if quarter {
+		rows, coverage, err := service.ProductionQuarterMetrics(byModel, start, end, now)
+		if err != nil {
+			common.ApiError(w, 500, "production history unavailable")
+			return
+		}
 		page, size := 1, 100
 		for key, target := range map[string]*int{"page": &page, "page_size": &size} {
 			if raw := r.URL.Query().Get(key); raw != "" {
@@ -182,9 +186,10 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		size = min(size, 1000)
 		from := min(len(rows), (page-1)*size)
 		to := min(len(rows), from+size)
-		common.ApiSuccess(w, map[string]any{"page": page, "page_size": size, "total": len(rows), "items": rows[from:to]})
+		common.ApiSuccess(w, map[string]any{"page": page, "page_size": size, "total": len(rows), "items": rows[from:to], "coverage": coverage, "storage": "sqlite"})
 		return
 	}
+	rows := metric.PlatformMetricRows(byModel, false, start, end)
 	if !byModel {
 		common.ApiSuccess(w, map[string]any{"buckets": rows, "pending_count": 0})
 		return
