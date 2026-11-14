@@ -2,11 +2,10 @@ package model
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -39,30 +38,27 @@ func InitDB(path string) error {
 	return InitDBWithConfig(DatabaseConfig{Driver: "sqlite", DSN: path})
 }
 
-// InitDBWithConfig opens the database using the supplied driver and DSN,
-// runs AutoMigrate, and configures connection pooling for networked
-// databases. SQLite uses the pragma-enriched DSN and inherits the
-// existing single-pool behavior.
+// InitDBWithConfig keeps unported backends out of migrations and business
+// transactions. SQLite retains its existing pragmas and pool behavior.
 func InitDBWithConfig(cfg DatabaseConfig) error {
-	var dialector gorm.Dialector
+	if cfg.Driver == "" {
+		cfg.Driver = "sqlite"
+	}
 	switch cfg.Driver {
 	case "sqlite":
-		dialector = sqlite.Open(dsn(cfg.DSN))
-	case "mysql":
-		dialector = mysql.Open(cfg.DSN)
-	case "postgres":
-		dialector = postgres.Open(cfg.DSN)
+	case "mysql", "postgres":
+		return fmt.Errorf("%s support is not ready: migrations, telemetry triggers and transaction locking still require dialect adaptation", cfg.Driver)
 	default:
 		return fmt.Errorf("unsupported driver: %s", cfg.Driver)
 	}
-	db, err := gorm.Open(dialector, &gorm.Config{
+	if strings.TrimSpace(cfg.DSN) == "" {
+		return fmt.Errorf("database DSN must not be empty")
+	}
+	db, err := gorm.Open(sqlite.Open(dsn(cfg.DSN)), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		return fmt.Errorf("open %s database: %w", cfg.Driver, err)
-	}
-	if err := configurePool(db, cfg); err != nil {
-		return err
 	}
 	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}, &UserPhoneIdentity{}, &PhoneVerificationChallenge{}, &UserAgreement{}, &EmailVerificationChallenge{}, &TwoFA{}, &TwoFABackupCode{}, &RegionProfile{}, &LegalDocument{}, &ServiceIncident{}, &ServiceIncidentUpdate{}, &AvailabilityRecord{}, &ReconciliationRecord{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
@@ -79,7 +75,7 @@ func InitDBWithConfig(cfg DatabaseConfig) error {
 	if err := db.AutoMigrate(&ReconciliationRevision{}); err != nil {
 		return err
 	}
-	if err := db.Exec(uniqueReportKeyIndex(cfg.Driver)).Error; err != nil {
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key) WHERE report_key <> ''").Error; err != nil {
 		return err
 	}
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
@@ -100,7 +96,7 @@ func InitDBWithConfig(cfg DatabaseConfig) error {
 	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
 	}
-	if err := db.Exec(uniqueSourceBindingIndex(cfg.Driver)).Error; err != nil {
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels(source_channel_id) WHERE source_channel_id <> ''").Error; err != nil {
 		return fmt.Errorf("migrate unique resource source bindings: %w", err)
 	}
 	if err := db.FirstOrCreate(&ChannelConfigurationState{}, ChannelConfigurationState{ID: 1}).Error; err != nil {
@@ -138,57 +134,6 @@ func InitDBWithConfig(cfg DatabaseConfig) error {
 		return fmt.Errorf("migrate credential storage: %w", err)
 	}
 	return nil
-}
-
-// configurePool tunes the connection pool for networked databases.
-// SQLite inherits the database/sql defaults (WAL + busy_timeout handle
-// write serialization), while mysql and postgres get a bounded pool.
-func configurePool(db *gorm.DB, cfg DatabaseConfig) error {
-	if cfg.Driver == "sqlite" {
-		return nil
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("get underlying sql.DB: %w", err)
-	}
-	maxOpen := cfg.MaxOpenConns
-	if maxOpen <= 0 {
-		maxOpen = 25
-	}
-	maxIdle := cfg.MaxIdleConns
-	if maxIdle <= 0 {
-		maxIdle = 5
-	}
-	sqlDB.SetMaxOpenConns(maxOpen)
-	sqlDB.SetMaxIdleConns(maxIdle)
-	if cfg.ConnMaxLifetime != "" {
-		if d, err := time.ParseDuration(cfg.ConnMaxLifetime); err == nil && d > 0 {
-			sqlDB.SetConnMaxLifetime(d)
-		}
-	}
-	return nil
-}
-
-// uniqueReportKeyIndex returns the DDL for the reconciliation report-key
-// unique index. SQLite and PostgreSQL support partial indexes (WHERE
-// clause) so empty report_key values are excluded. MySQL 8 does not
-// support partial indexes, so a plain unique index is created instead;
-// callers must ensure report_key is NULL (not ”) for un-keyed rows.
-func uniqueReportKeyIndex(driver string) string {
-	if driver == "mysql" {
-		return "CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key)"
-	}
-	return "CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key) WHERE report_key <> ''"
-}
-
-// uniqueSourceBindingIndex returns the DDL for the resource gateway
-// source-channel unique binding index. Same partial-index rationale as
-// uniqueReportKeyIndex.
-func uniqueSourceBindingIndex(driver string) string {
-	if driver == "mysql" {
-		return "CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels(source_channel_id)"
-	}
-	return "CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels(source_channel_id) WHERE source_channel_id <> ''"
 }
 
 func CloseDB() error {

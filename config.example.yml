@@ -5,11 +5,11 @@ server:
   port: 3008
 
 database:
-  # sqlite | mysql | postgres
+  # Only sqlite is enabled; network database migrations and locking are not ready.
   driver: sqlite
   # Relative paths are resolved against this configuration file (sqlite only).
   sqlite_path: starhub.db
-  # MySQL/PostgreSQL connection strings (set driver above and uncomment).
+  # Future MySQL/PostgreSQL connection string examples (not enabled yet).
   # dsn: "starhub:password@tcp(127.0.0.1:3306)/starhub?charset=utf8mb4&parseTime=True&loc=Local"
   # dsn: "host=127.0.0.1 port=5432 user=starhub password=pass dbname=starhub sslmode=disable"
   # max_open_conns: 25
