@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -13,6 +15,16 @@ import (
 
 var DB *gorm.DB
 
+// DatabaseConfig mirrors config.DatabaseConfig so InitDBWithConfig can
+// be called without importing the config package.
+type DatabaseConfig struct {
+	Driver          string
+	DSN             string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime string
+}
+
 // dsn applies the per-connection pragmas every pooled connection needs:
 // busy_timeout makes concurrent billing writers queue instead of failing
 // with SQLITE_BUSY, WAL keeps readers flowing while a writer commits.
@@ -20,12 +32,38 @@ func dsn(path string) string {
 	return path + "?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"
 }
 
+// InitDB opens a SQLite database at the given file path. It is kept for
+// backward compatibility with tests and command-line tools. New callers
+// should use InitDBWithConfig to select the driver.
 func InitDB(path string) error {
-	db, err := gorm.Open(sqlite.Open(dsn(path)), &gorm.Config{
+	return InitDBWithConfig(DatabaseConfig{Driver: "sqlite", DSN: path})
+}
+
+// InitDBWithConfig opens the database using the supplied driver and DSN,
+// runs AutoMigrate, and configures connection pooling for networked
+// databases. SQLite uses the pragma-enriched DSN and inherits the
+// existing single-pool behavior.
+func InitDBWithConfig(cfg DatabaseConfig) error {
+	SetDialect(cfg.Driver)
+	var dialector gorm.Dialector
+	switch cfg.Driver {
+	case "sqlite":
+		dialector = sqlite.Open(dsn(cfg.DSN))
+	case "mysql":
+		dialector = mysql.Open(cfg.DSN)
+	case "postgres":
+		dialector = postgres.Open(cfg.DSN)
+	default:
+		return fmt.Errorf("unsupported driver: %s", cfg.Driver)
+	}
+	db, err := gorm.Open(dialector, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
-		return fmt.Errorf("open sqlite database %s: %w", path, err)
+		return fmt.Errorf("open %s database: %w", cfg.Driver, err)
+	}
+	if err := configurePool(db, cfg); err != nil {
+		return err
 	}
 	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}, &UserPhoneIdentity{}, &PhoneVerificationChallenge{}, &UserAgreement{}, &EmailVerificationChallenge{}, &TwoFA{}, &TwoFABackupCode{}, &RegionProfile{}, &LegalDocument{}, &ServiceIncident{}, &ServiceIncidentUpdate{}, &AvailabilityRecord{}, &ReconciliationRecord{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
@@ -42,7 +80,7 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&ReconciliationRevision{}); err != nil {
 		return err
 	}
-	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key) WHERE report_key <> ''").Error; err != nil {
+	if err := db.Exec(uniqueReportKeyIndex()).Error; err != nil {
 		return err
 	}
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
@@ -63,7 +101,7 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
 	}
-	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels (source_channel_id) WHERE source_channel_id <> ''`).Error; err != nil {
+	if err := db.Exec(uniqueSourceBindingIndex()).Error; err != nil {
 		return fmt.Errorf("migrate unique resource source bindings: %w", err)
 	}
 	if err := db.FirstOrCreate(&ChannelConfigurationState{}, ChannelConfigurationState{ID: 1}).Error; err != nil {
@@ -101,6 +139,57 @@ func InitDB(path string) error {
 		return fmt.Errorf("migrate credential storage: %w", err)
 	}
 	return nil
+}
+
+// configurePool tunes the connection pool for networked databases.
+// SQLite inherits the database/sql defaults (WAL + busy_timeout handle
+// write serialization), while mysql and postgres get a bounded pool.
+func configurePool(db *gorm.DB, cfg DatabaseConfig) error {
+	if cfg.Driver == "sqlite" {
+		return nil
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("get underlying sql.DB: %w", err)
+	}
+	maxOpen := cfg.MaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = 25
+	}
+	maxIdle := cfg.MaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = 5
+	}
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetMaxIdleConns(maxIdle)
+	if cfg.ConnMaxLifetime != "" {
+		if d, err := time.ParseDuration(cfg.ConnMaxLifetime); err == nil && d > 0 {
+			sqlDB.SetConnMaxLifetime(d)
+		}
+	}
+	return nil
+}
+
+// uniqueReportKeyIndex returns the DDL for the reconciliation report-key
+// unique index. SQLite and PostgreSQL support partial indexes (WHERE
+// clause) so empty report_key values are excluded. MySQL 8 does not
+// support partial indexes, so a plain unique index is created instead;
+// callers must ensure report_key is NULL (not '') for un-keyed rows.
+func uniqueReportKeyIndex() string {
+	if CurrentDialect() == "mysql" {
+		return "CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key)"
+	}
+	return "CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key) WHERE report_key <> ''"
+}
+
+// uniqueSourceBindingIndex returns the DDL for the resource gateway
+// source-channel unique binding index. Same partial-index rationale as
+// uniqueReportKeyIndex.
+func uniqueSourceBindingIndex() string {
+	if CurrentDialect() == "mysql" {
+		return "CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels(source_channel_id)"
+	}
+	return "CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels(source_channel_id) WHERE source_channel_id <> ''"
 }
 
 func CloseDB() error {

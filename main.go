@@ -41,7 +41,13 @@ func main() {
 	if startup.ConfigPath != "" {
 		log.Printf("configuration: %s", startup.ConfigPath)
 	}
-	if err := model.InitDB(bootstrap.DBPath); err != nil {
+	if err := model.InitDBWithConfig(model.DatabaseConfig{
+		Driver:          bootstrap.Database.Driver,
+		DSN:             bootstrap.Database.DSN,
+		MaxOpenConns:    bootstrap.Database.MaxOpenConns,
+		MaxIdleConns:    bootstrap.Database.MaxIdleConns,
+		ConnMaxLifetime: bootstrap.Database.ConnMaxLifetime,
+	}); err != nil {
 		log.Fatalf("failed to init database: %v", err)
 	}
 	rootPassword := bootstrap.RootPassword
