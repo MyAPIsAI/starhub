@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -82,11 +83,12 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	result := Startup{
 		Bootstrap: Bootstrap{
 			DBPath:   "starhub.db",
-			Database: DatabaseConfig{Driver: "sqlite", DSN: "starhub.db"},
+			Database: DatabaseConfig{Driver: "sqlite"},
 			Port:     "3000", RootPassword: getenv("STARHUB_ROOT_PASSWORD"),
 		},
 		InitialOptions: make(map[string]string),
 	}
+	dsnDriver := "sqlite"
 	if path != "" {
 		absolute, err := filepath.Abs(path)
 		if err != nil {
@@ -128,7 +130,14 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 			result.Bootstrap.Database.Driver = strings.TrimSpace(*cfg.Database.Driver)
 		}
 		if cfg.Database.DSN != nil {
+			if strings.TrimSpace(*cfg.Database.DSN) == "" {
+				return Startup{}, fmt.Errorf("database.dsn must not be empty")
+			}
 			result.Bootstrap.Database.DSN = *cfg.Database.DSN
+			dsnDriver = result.Bootstrap.Database.Driver
+			if dsnDriver == "sqlite" && *cfg.Database.DSN != "" && *cfg.Database.DSN != ":memory:" && !strings.HasPrefix(*cfg.Database.DSN, "file:") && !filepath.IsAbs(*cfg.Database.DSN) {
+				result.Bootstrap.Database.DSN = filepath.Join(filepath.Dir(absolute), *cfg.Database.DSN)
+			}
 		}
 		if cfg.Database.SQLitePath != nil {
 			if strings.TrimSpace(*cfg.Database.SQLitePath) == "" {
@@ -137,11 +146,6 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 			result.Bootstrap.DBPath = *cfg.Database.SQLitePath
 			if !filepath.IsAbs(result.Bootstrap.DBPath) {
 				result.Bootstrap.DBPath = filepath.Join(filepath.Dir(absolute), result.Bootstrap.DBPath)
-			}
-			// sqlite_path only drives the connection when the driver is sqlite.
-			if result.Bootstrap.Database.Driver == "" || result.Bootstrap.Database.Driver == "sqlite" {
-				result.Bootstrap.Database.Driver = "sqlite"
-				result.Bootstrap.Database.DSN = result.Bootstrap.DBPath
 			}
 		}
 		if cfg.Database.MaxOpenConns != nil {
@@ -177,19 +181,27 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	if value := getenv("STARHUB_PORT"); value != "" {
 		result.Bootstrap.Port = value
 	}
-	if value := getenv("STARHUB_DB"); value != "" {
-		result.Bootstrap.DBPath = value
-		// STARHUB_DB implies sqlite unless an explicit driver was already set.
-		if result.Bootstrap.Database.Driver == "" || result.Bootstrap.Database.Driver == "sqlite" {
-			result.Bootstrap.Database.Driver = "sqlite"
-			result.Bootstrap.Database.DSN = value
-		}
-	}
 	if value := getenv("STARHUB_DB_DRIVER"); value != "" {
 		result.Bootstrap.Database.Driver = strings.TrimSpace(value)
 	}
+	// A file DSN belongs to its file driver, not an environment override.
+	if result.Bootstrap.Database.Driver != dsnDriver {
+		result.Bootstrap.Database.DSN = ""
+	}
+	if value := getenv("STARHUB_DB"); value != "" {
+		result.Bootstrap.DBPath = value
+		if result.Bootstrap.Database.Driver == "sqlite" {
+			result.Bootstrap.Database.DSN = value
+		}
+	}
 	if value := getenv("STARHUB_DB_DSN"); value != "" {
 		result.Bootstrap.Database.DSN = value
+	}
+	if result.Bootstrap.Database.Driver == "sqlite" {
+		if result.Bootstrap.Database.DSN == "" {
+			result.Bootstrap.Database.DSN = result.Bootstrap.DBPath
+		}
+		result.Bootstrap.DBPath = result.Bootstrap.Database.DSN
 	}
 	for env, key := range map[string]string{
 		"STARHUB_CHANNEL_TEST_INTERVAL": OptionChannelTestInterval,
@@ -224,6 +236,15 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	}
 	if strings.TrimSpace(result.Bootstrap.Database.DSN) == "" {
 		return Startup{}, fmt.Errorf("database dsn must not be empty")
+	}
+	if result.Bootstrap.Database.MaxOpenConns < 0 || result.Bootstrap.Database.MaxIdleConns < 0 {
+		return Startup{}, fmt.Errorf("database connection limits must not be negative")
+	}
+	if value := result.Bootstrap.Database.ConnMaxLifetime; value != "" {
+		duration, err := time.ParseDuration(value)
+		if err != nil || duration < 0 {
+			return Startup{}, fmt.Errorf("database.conn_max_lifetime must be a non-negative duration")
+		}
 	}
 	for key, value := range result.InitialOptions {
 		normalized, err := NormalizeOption(key, value)
