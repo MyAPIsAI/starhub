@@ -153,11 +153,16 @@ func (a *AttemptSpan) MarkSent() {
 }
 
 func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
+	started := time.Now()
+	defer func() { collectorDuration.Observe(time.Since(started)) }()
 	b := lockProductionBuffer()
+	locked := time.Now()
+	collectorLockWait.Observe(locked.Sub(started))
 	if b == nil {
 		return
 	}
 	defer production.RUnlock()
+	defer func() { collectorLockHold.Observe(time.Since(locked)) }()
 	if a.outcome == AttemptUnsupported {
 		return
 	}
@@ -168,8 +173,12 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	}
 	key := productionEntryKey{a.channelID, meta.Model, a.route.Generation}
 	shard := &b.shards[productionShardIndex(key)]
+	waiting := time.Now()
 	shard.Lock()
+	acquired := time.Now()
+	collectorShardWait.Observe(acquired.Sub(waiting))
 	defer shard.Unlock()
+	defer func() { collectorShardHold.Observe(time.Since(acquired)) }()
 	index, exists := shard.index[key]
 	if !exists && b.entryCount.Add(1) > 4096 {
 		b.entryCount.Add(-1)
@@ -303,6 +312,8 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 // ClosedProductionMinutes returns detached, immutable batches. A failed database
 // write is retried with the same IDs; AckProduction frees memory only on commit.
 func ClosedProductionMinutes(now time.Time) []ProductionMinute {
+	started := time.Now()
+	defer func() { collectorSealDuration.Observe(time.Since(started)) }()
 	production.Lock()
 	if production.started == 0 {
 		production.Unlock()

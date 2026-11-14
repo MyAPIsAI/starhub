@@ -23,13 +23,15 @@ type ProductionOperationStatus struct {
 
 type productionOperation struct {
 	sync.Mutex
-	status ProductionOperationStatus
+	status    ProductionOperationStatus
+	durations metric.DurationHistogram
 }
 
 func (o *productionOperation) finish(start time.Time, err error) {
 	o.Lock()
 	defer o.Unlock()
 	s := &o.status
+	o.durations.Observe(time.Since(start))
 	s.Calls++
 	s.LastDurationMS = float64(time.Since(start).Microseconds()) / 1000
 	s.MaxDurationMS = max(s.MaxDurationMS, s.LastDurationMS)
@@ -105,23 +107,24 @@ func durableProductionHealth(now time.Time) ProductionDurableHealth {
 }
 
 type ProductionTelemetryStatus struct {
-	Collector               metric.ProductionCollectorHealth `json:"collector"`
-	Durable                 ProductionDurableHealth          `json:"durable"`
-	Stage                   ProductionOperationStatus        `json:"stage"`
-	Flush                   ProductionOperationStatus        `json:"flush"`
-	Delivery                ProductionOperationStatus        `json:"delivery"`
-	Cleanup                 ProductionOperationStatus        `json:"cleanup"`
-	DeliveryEnabled         bool                             `json:"delivery_enabled"`
-	OldestPendingAgeSeconds int64                            `json:"oldest_pending_age_seconds"`
-	SnapshotReady           bool                             `json:"snapshot_ready"`
-	SnapshotAgeSeconds      int64                            `json:"snapshot_age_seconds"`
-	SnapshotStale           bool                             `json:"snapshot_stale"`
-	CacheEntries            int                              `json:"cache_entries"`
-	CacheBytes              int                              `json:"cache_bytes"`
-	CacheHits               int64                            `json:"cache_hits"`
-	CacheMisses             int64                            `json:"cache_misses"`
-	ActiveRequests          int64                            `json:"active_requests"`
-	ActiveAttempts          int64                            `json:"active_attempts"`
+	Timings                 map[string]metric.DurationSnapshot `json:"timings_us"`
+	Collector               metric.ProductionCollectorHealth   `json:"collector"`
+	Durable                 ProductionDurableHealth            `json:"durable"`
+	Stage                   ProductionOperationStatus          `json:"stage"`
+	Flush                   ProductionOperationStatus          `json:"flush"`
+	Delivery                ProductionOperationStatus          `json:"delivery"`
+	Cleanup                 ProductionOperationStatus          `json:"cleanup"`
+	DeliveryEnabled         bool                               `json:"delivery_enabled"`
+	OldestPendingAgeSeconds int64                              `json:"oldest_pending_age_seconds"`
+	SnapshotReady           bool                               `json:"snapshot_ready"`
+	SnapshotAgeSeconds      int64                              `json:"snapshot_age_seconds"`
+	SnapshotStale           bool                               `json:"snapshot_stale"`
+	CacheEntries            int                                `json:"cache_entries"`
+	CacheBytes              int                                `json:"cache_bytes"`
+	CacheHits               int64                              `json:"cache_hits"`
+	CacheMisses             int64                              `json:"cache_misses"`
+	ActiveRequests          int64                              `json:"active_requests"`
+	ActiveAttempts          int64                              `json:"active_attempts"`
 }
 
 // Monitoring is read-only. Durable counts are shared for five seconds to bound
@@ -136,6 +139,11 @@ func ProductionTelemetryHealth(now time.Time) ProductionTelemetryStatus {
 		h.OldestPendingAgeSeconds = max(0, now.Unix()-h.Durable.OldestPending)
 	}
 	h.ActiveRequests, h.ActiveAttempts = metric.InflightCounts()
+	h.Timings = metric.ProductionTimings()
+	h.Timings["stage"] = productionStageHealth.durations.Snapshot()
+	h.Timings["flush"] = productionFlushHealth.durations.Snapshot()
+	h.Timings["delivery"] = productionDeliveryHealth.durations.Snapshot()
+	h.Timings["cleanup"] = productionCleanupHealth.durations.Snapshot()
 	productionCache.Lock()
 	h.CacheEntries = productionCache.order.Len()
 	h.CacheBytes = productionCache.bytes
