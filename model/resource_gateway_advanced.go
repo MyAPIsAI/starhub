@@ -98,6 +98,19 @@ func (policy *ResourceGatewayPolicy) allowsAdvanced(path string, caps []string) 
 
 // The SQL prefilter must reject malformed advanced rows before candidate limits.
 func resourceAdvancedSQL(alias string) string {
+	column := alias + ".capabilities"
+	allowed := "'text','code','vision','reasoning','function_call','responses','image','video','audio','embedding','rerank'"
+	prefix := "(" + alias + ".upstream_model <> '' AND "
+	suffix := " AND " + alias + `.protocols IN ('["OpenAI"]','["Anthropic"]','["Gemini"]'))`
+	switch CurrentDialect() {
+	case "mysql":
+		safe := "(CASE WHEN JSON_VALID(" + column + ") THEN " + column + " ELSE '[]' END)"
+		return prefix + "JSON_TYPE(" + safe + ")='ARRAY' AND JSON_LENGTH(" + safe + ")>0 AND NOT EXISTS (SELECT 1 FROM JSON_TABLE(" + safe + ", '$[*]' COLUMNS (value varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin PATH '$' NULL ON ERROR)) AS c WHERE c.value IS NULL OR c.value NOT IN (" + allowed + "))" + suffix
+	case "postgres":
+		safe := "starhub_valid_jsonb(" + column + ")"
+		array := "(CASE WHEN jsonb_typeof(" + safe + ")='array' THEN " + safe + " ELSE '[]'::jsonb END)"
+		return prefix + "jsonb_array_length(" + array + ")>0 AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(" + array + ") AS c(value) WHERE jsonb_typeof(c.value)<>'string' OR c.value #>> '{}' NOT IN (" + allowed + "))" + suffix
+	}
 	return `(` + alias + `.upstream_model <> '' AND json_valid(` + alias + `.capabilities) AND json_type(` + alias + `.capabilities) = 'array'
 	AND json_array_length(` + alias + `.capabilities) > 0 AND NOT EXISTS (SELECT 1 FROM json_each(` + alias + `.capabilities) c WHERE c.type <> 'text' OR c.value NOT IN ('text','code','vision','reasoning','function_call','responses','image','video','audio','embedding','rerank'))
 	AND ` + alias + `.protocols IN ('["OpenAI"]','["Anthropic"]','["Gemini"]'))`
