@@ -57,6 +57,7 @@ func RunProductionTelemetry(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	retryAt := time.Time{}
+	cleanupAt := time.Time{}
 	backoff := time.Second
 	for {
 		select {
@@ -64,6 +65,12 @@ func RunProductionTelemetry(ctx context.Context) {
 			return
 		case <-ticker.C:
 		case <-metric.ProductionWork:
+		}
+		if !time.Now().Before(cleanupAt) {
+			if _, err := model.PruneProductionTelemetry(time.Now()); err != nil {
+				log.Printf("production retention failed: %v", err)
+			}
+			cleanupAt = time.Now().Add(time.Second)
 		}
 		if time.Now().Before(retryAt) {
 			continue

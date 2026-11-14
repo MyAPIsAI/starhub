@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -62,6 +63,25 @@ func publishProductionMinute(row ProductionTelemetryMinute, now time.Time) error
 		if err := tx.Exec("UPDATE production_telemetry_minutes SET minute = minute WHERE minute = -1").Error; err != nil {
 			return err
 		}
+		var gap ProductionRetentionGap
+		gapErr := tx.First(&gap, "batch_id = ?", row.BatchID).Error
+		if gapErr != nil && !errors.Is(gapErr, gorm.ErrRecordNotFound) {
+			return gapErr
+		}
+		if gap.Count > 0 {
+			var payload map[string]any
+			if json.Unmarshal([]byte(row.Payload), &payload) != nil {
+				return errors.New("invalid minute manifest")
+			}
+			payload["complete"] = false
+			payload["error"] = "attempt_retention_gap"
+			raw, err := json.Marshal(payload)
+			if err != nil {
+				return err
+			}
+			row.Complete = false
+			row.Payload = string(raw)
+		}
 		var existing ProductionTelemetryMinute
 		err := tx.First(&existing, row.Minute).Error
 		if err == nil {
@@ -77,7 +97,7 @@ func publishProductionMinute(row ProductionTelemetryMinute, now time.Time) error
 		if err := tx.Model(&ProductionAttemptRecord{}).Where("batch_id = ? AND minute = ?", row.BatchID, row.Minute).Count(&count).Error; err != nil {
 			return err
 		}
-		if count != row.AttemptCount {
+		if count > row.AttemptCount || count+gap.Count < row.AttemptCount {
 			return errors.New("production staging is incomplete")
 		}
 		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error

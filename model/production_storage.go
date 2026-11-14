@@ -20,7 +20,7 @@ type ProductionStorageState struct {
 }
 
 func initProductionStorage(db *gorm.DB) error {
-	if err := db.AutoMigrate(&ProductionStorageState{}); err != nil {
+	if err := db.AutoMigrate(&ProductionStorageState{}, &ProductionRetentionGap{}); err != nil {
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
