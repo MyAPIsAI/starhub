@@ -141,10 +141,6 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 				*target = v
 			}
 		}
-		if err := service.FlushProductionTelemetry(time.Now()); err != nil {
-			common.ApiError(w, 500, "attempt journal unavailable")
-			return
-		}
 		rows, err := model.ReadProductionAttempts(max(start/60*60, time.Now().Add(-24*time.Hour).Unix()/60*60), end/60*60, page, size)
 		if err != nil {
 			common.ApiError(w, 500, "attempt journal unavailable")
