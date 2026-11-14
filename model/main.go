@@ -92,6 +92,9 @@ func InitDB(path string) error {
 	if err := db.AutoMigrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}); err != nil {
 		return fmt.Errorf("migrate production telemetry: %w", err)
 	}
+	if err := initProductionStorage(db); err != nil {
+		return fmt.Errorf("initialize production storage budget: %w", err)
+	}
 	ResetRoutingFailureStream()
 	DB = db
 	if _, err := MigrateCredentialStorage(false, "system", "Upgrade legacy credential storage"); err != nil {
