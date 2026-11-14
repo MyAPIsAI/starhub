@@ -92,7 +92,7 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := db.AutoMigrate(&ReconciliationRevision{}); err != nil {
 		return err
 	}
-	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key) WHERE report_key <> ''").Error; err != nil {
+	if err := createNonemptyUniqueIndex(db, &ReconciliationRecord{}, "reconciliation_records", "idx_reconciliation_report_key", "report_key"); err != nil {
 		return err
 	}
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
@@ -113,7 +113,7 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
 	}
-	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels(source_channel_id) WHERE source_channel_id <> ''").Error; err != nil {
+	if err := createNonemptyUniqueIndex(db, &ResourceGatewayManagedChannel{}, "resource_gateway_managed_channels", "idx_resource_gateway_source_binding", "source_channel_id"); err != nil {
 		return fmt.Errorf("migrate unique resource source bindings: %w", err)
 	}
 	if err := db.FirstOrCreate(&ChannelConfigurationState{}, ChannelConfigurationState{ID: 1}).Error; err != nil {
