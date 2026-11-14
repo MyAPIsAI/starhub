@@ -20,6 +20,9 @@ type ProductionStorageState struct {
 }
 
 func initProductionStorage(db *gorm.DB) error {
+	if db.Dialector.Name() != "sqlite" {
+		return initNetworkProductionStorage(db)
+	}
 	if err := db.AutoMigrate(&ProductionStorageState{}, &ProductionRetentionGap{}); err != nil {
 		return err
 	}
