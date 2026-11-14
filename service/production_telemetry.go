@@ -187,9 +187,13 @@ func productionPart(minute int64, generation string) map[string]any {
 // ProductionMetricBuckets emits every requested minute, including explicit
 // missing and open markers. Only committed sealed data can assert completeness.
 func ProductionMetricBuckets(start, end int64, now time.Time) ([]map[string]any, error) {
+	return ProductionMetricBucketsContext(context.Background(), start, end, now)
+}
+
+func ProductionMetricBucketsContext(ctx context.Context, start, end int64, now time.Time) ([]map[string]any, error) {
 	start = max(start/60*60, now.Add(-24*time.Hour).Unix()/60*60)
 	end = min(end/60*60, now.Unix()/60*60)
-	stored, err := model.ReadProductionTelemetry(start, end)
+	stored, err := model.ReadProductionTelemetryContext(ctx, start, end)
 	if err != nil {
 		return nil, err
 	}

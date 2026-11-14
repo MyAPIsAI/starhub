@@ -151,7 +151,7 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		var next string
 		var err error
 		if page == 1 {
-			rows, next, err = model.ReadProductionAttemptPage(lower, end/60*60, cursor, size)
+			rows, next, err = model.ReadProductionAttemptPageContext(r.Context(), lower, end/60*60, cursor, size)
 		} else {
 			rows, err = model.ReadProductionAttempts(lower, end/60*60, page, size)
 		}
@@ -175,7 +175,7 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if byModel && !quarter {
-		buckets, err := service.ProductionMetricBuckets(start, end, time.Now())
+		buckets, err := service.ProductionMetricBucketsContext(r.Context(), start, end, time.Now())
 		if err != nil {
 			common.ApiError(w, 500, "production metrics unavailable")
 			return
@@ -184,7 +184,7 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if quarter {
-		rows, coverage, err := service.ProductionQuarterMetrics(byModel, start, end, now)
+		rows, coverage, err := service.ProductionQuarterMetricsContext(r.Context(), byModel, start, end, now)
 		if err != nil {
 			common.ApiError(w, 500, "production history unavailable")
 			return

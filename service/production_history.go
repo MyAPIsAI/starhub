@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"starhub/metric"
 	"time"
@@ -18,7 +19,11 @@ type ProductionWindowCoverage struct {
 }
 
 func ProductionQuarterMetrics(byModel bool, start, end int64, now time.Time) ([]metric.PlatformMetric, []ProductionWindowCoverage, error) {
-	buckets, err := ProductionMetricBuckets(start, end, now)
+	return ProductionQuarterMetricsContext(context.Background(), byModel, start, end, now)
+}
+
+func ProductionQuarterMetricsContext(ctx context.Context, byModel bool, start, end int64, now time.Time) ([]metric.PlatformMetric, []ProductionWindowCoverage, error) {
+	buckets, err := ProductionMetricBucketsContext(ctx, start, end, now)
 	if err != nil {
 		return nil, nil, err
 	}
