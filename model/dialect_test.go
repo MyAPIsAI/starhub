@@ -1,15 +1,26 @@
 package model
 
 import (
+	"github.com/glebarez/sqlite"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 	"strings"
 	"testing"
 )
 
 func TestDateFromUnixUsesUTCWithoutSessionTimezone(t *testing.T) {
-	previous := CurrentDialect()
-	t.Cleanup(func() { SetDialect(previous) })
+	previous := DB
+	t.Cleanup(func() { DB = previous })
 	for _, driver := range []string{"sqlite", "postgres", "mysql"} {
-		SetDialect(driver)
+		var dialector gorm.Dialector = sqlite.Open(":memory:")
+		if driver == "mysql" {
+			dialector = mysql.Open("")
+		}
+		if driver == "postgres" {
+			dialector = postgres.Open("")
+		}
+		DB = &gorm.DB{Config: &gorm.Config{Dialector: dialector}}
 		expression := DateFromUnix(admissionDayColumn)
 		if !strings.Contains(expression, admissionDayColumn) {
 			t.Fatal("admission fallback was lost", expression)

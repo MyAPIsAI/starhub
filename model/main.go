@@ -44,7 +44,6 @@ func InitDB(path string) error {
 // databases. SQLite uses the pragma-enriched DSN and inherits the
 // existing single-pool behavior.
 func InitDBWithConfig(cfg DatabaseConfig) error {
-	SetDialect(cfg.Driver)
 	var dialector gorm.Dialector
 	switch cfg.Driver {
 	case "sqlite":
@@ -80,7 +79,7 @@ func InitDBWithConfig(cfg DatabaseConfig) error {
 	if err := db.AutoMigrate(&ReconciliationRevision{}); err != nil {
 		return err
 	}
-	if err := db.Exec(uniqueReportKeyIndex()).Error; err != nil {
+	if err := db.Exec(uniqueReportKeyIndex(cfg.Driver)).Error; err != nil {
 		return err
 	}
 	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
@@ -101,7 +100,7 @@ func InitDBWithConfig(cfg DatabaseConfig) error {
 	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
 	}
-	if err := db.Exec(uniqueSourceBindingIndex()).Error; err != nil {
+	if err := db.Exec(uniqueSourceBindingIndex(cfg.Driver)).Error; err != nil {
 		return fmt.Errorf("migrate unique resource source bindings: %w", err)
 	}
 	if err := db.FirstOrCreate(&ChannelConfigurationState{}, ChannelConfigurationState{ID: 1}).Error; err != nil {
@@ -174,9 +173,9 @@ func configurePool(db *gorm.DB, cfg DatabaseConfig) error {
 // unique index. SQLite and PostgreSQL support partial indexes (WHERE
 // clause) so empty report_key values are excluded. MySQL 8 does not
 // support partial indexes, so a plain unique index is created instead;
-// callers must ensure report_key is NULL (not '') for un-keyed rows.
-func uniqueReportKeyIndex() string {
-	if CurrentDialect() == "mysql" {
+// callers must ensure report_key is NULL (not ”) for un-keyed rows.
+func uniqueReportKeyIndex(driver string) string {
+	if driver == "mysql" {
 		return "CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key)"
 	}
 	return "CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_report_key ON reconciliation_records(report_key) WHERE report_key <> ''"
@@ -185,8 +184,8 @@ func uniqueReportKeyIndex() string {
 // uniqueSourceBindingIndex returns the DDL for the resource gateway
 // source-channel unique binding index. Same partial-index rationale as
 // uniqueReportKeyIndex.
-func uniqueSourceBindingIndex() string {
-	if CurrentDialect() == "mysql" {
+func uniqueSourceBindingIndex(driver string) string {
+	if driver == "mysql" {
 		return "CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels(source_channel_id)"
 	}
 	return "CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_gateway_source_binding ON resource_gateway_managed_channels(source_channel_id) WHERE source_channel_id <> ''"

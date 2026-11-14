@@ -2,20 +2,12 @@ package model
 
 import "fmt"
 
-// currentDialect tracks the active database driver so SQL expressions
-// can branch on dialect. Defaults to "sqlite" to preserve existing
-// behavior until InitDB configures the real driver.
-var currentDialect = "sqlite"
-
-// SetDialect records the active database driver. Call this from InitDB
-// before running any queries that rely on dialect-aware expressions.
-func SetDialect(driver string) {
-	currentDialect = driver
-}
-
-// CurrentDialect returns the active database driver name.
+// CurrentDialect reflects the live connection, never a failed initialization.
 func CurrentDialect() string {
-	return currentDialect
+	if DB != nil && DB.Dialector != nil {
+		return DB.Dialector.Name()
+	}
+	return "sqlite"
 }
 
 // DateFromUnix returns a SQL expression that formats a Unix epoch integer
@@ -25,7 +17,7 @@ func CurrentDialect() string {
 // PostgreSQL:  TO_CHAR(TO_TIMESTAMP(expr) AT TIME ZONE 'UTC', 'YYYY-MM-DD')
 // MySQL:       DATE_FORMAT(TIMESTAMPADD(SECOND, expr, epoch), '%Y-%m-%d')
 func DateFromUnix(epochExpr string) string {
-	switch currentDialect {
+	switch CurrentDialect() {
 	case "postgres":
 		return fmt.Sprintf("TO_CHAR(TO_TIMESTAMP(%s) AT TIME ZONE 'UTC', 'YYYY-MM-DD')", epochExpr)
 	case "mysql":

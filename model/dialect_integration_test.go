@@ -38,10 +38,9 @@ func TestSQLDialectStatistics(t *testing.T) {
 			}
 			sqlDB.SetMaxOpenConns(1)
 			t.Cleanup(func() { _ = sqlDB.Close() })
-			previous, previousDialect := DB, CurrentDialect()
+			previous := DB
 			DB = db
-			SetDialect(driver)
-			t.Cleanup(func() { DB = previous; SetDialect(previousDialect) })
+			t.Cleanup(func() { DB = previous })
 			if err := db.Exec("CREATE TABLE logs (model VARCHAR(128), user_id BIGINT, token_id BIGINT, token_name VARCHAR(64), created_at BIGINT, admitted_at BIGINT, admission_day BIGINT, business_date VARCHAR(10), duration_ms BIGINT, status INTEGER, prompt_tokens BIGINT, completion_tokens BIGINT, quota BIGINT, quota_remainder_nano BIGINT, unfunded_quota BIGINT, unfunded_quota_remainder_nano BIGINT)").Error; err != nil {
 				t.Fatal(err)
 			}
