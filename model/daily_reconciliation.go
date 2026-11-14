@@ -38,7 +38,8 @@ func ReconciliationDays(userID int64, now time.Time) ([]BusinessDaySnapshot, err
 			days = append(days, receipt.BusinessDaySnapshot)
 		}
 		var dates []string
-		if err := tx.Model(&Log{}).Where("user_id = ? AND business_date = ''", userID).Distinct("date("+admissionDayColumn+", 'unixepoch')").Pluck("date("+admissionDayColumn+", 'unixepoch')", &dates).Error; err != nil {
+		dayExpr := DateFromUnix(admissionDayColumn)
+		if err := tx.Model(&Log{}).Where("user_id = ? AND business_date = ''", userID).Distinct(dayExpr).Pluck(dayExpr, &dates).Error; err != nil {
 			return err
 		}
 		for _, date := range dates {
