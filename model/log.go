@@ -12,7 +12,14 @@ import (
 // admission_day == 0 fall back to created_at (completion time).
 const admissionDayColumn = "CASE WHEN admission_day > 0 THEN admission_day ELSE created_at END"
 
-const businessDateColumn = "CASE WHEN business_date <> '' THEN business_date ELSE date(" + admissionDayColumn + ", 'unixepoch') END"
+// businessDateColumnExpr returns a SQL expression that resolves to the
+// effective business day for grouping. Logs written after T30 populate
+// business_date with the UTC midnight of the admission (pre-charge) time;
+// legacy logs with business_date == '' fall back to the admission day
+// formatted as a date string via the dialect-aware DateFromUnix helper.
+func businessDateColumnExpr() string {
+	return "CASE WHEN business_date <> '' THEN business_date ELSE " + DateFromUnix(admissionDayColumn) + " END"
+}
 const admissionTimeColumn = "CASE WHEN admitted_at > 0 THEN admitted_at ELSE created_at END"
 
 // utcMidnight returns the Unix timestamp of the current UTC midnight.
@@ -166,7 +173,7 @@ func SummarizeLogsByDay(userID int64, since int64) ([]DailyUsage, error) {
 			}
 			return q
 		}
-		date := businessDateColumn
+		date := businessDateColumnExpr()
 		if err := query().Select(date + " AS date, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success_count, SUM(CASE WHEN status IN (2,3) THEN 1 ELSE 0 END) AS failed_count").Group(date).Order("date ASC").Scan(&rows).Error; err != nil {
 			return err
 		}
@@ -209,7 +216,7 @@ func SummarizeLogsByModel(userID int64, since int64) ([]ModelDailyUsage, error) 
 			}
 			return q
 		}
-		date := businessDateColumn
+		date := businessDateColumnExpr()
 		if err := query().Select(date + " AS date, model, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").Group(date + ", model").Order("date ASC, model ASC").Scan(&rows).Error; err != nil {
 			return err
 		}
@@ -259,7 +266,7 @@ func SummarizeLogsByToken(userID int64, tokenID int64, since int64) ([]TokenDail
 			}
 			return q
 		}
-		date := businessDateColumn
+		date := businessDateColumnExpr()
 		if err := query().Select(date + " AS date, token_id, MAX(token_name) AS token_name, COUNT(*) AS requests, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens").Group(date + ", token_id").Order("date ASC, token_id ASC").Scan(&rows).Error; err != nil {
 			return err
 		}
