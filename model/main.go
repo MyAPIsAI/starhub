@@ -40,16 +40,9 @@ func InitDB(path string) error {
 	return InitDBWithConfig(DatabaseConfig{Driver: "sqlite", DSN: path})
 }
 
-// InitDBWithConfig keeps unported backends out of migrations and business
-// transactions. SQLite retains its existing pragmas and pool behavior.
+// InitDBWithConfig initializes a single-instance database and its durable guards.
+// SQLite retains its existing pragmas and pool behavior.
 func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
-	if cfg.Driver == "mysql" || cfg.Driver == "postgres" {
-		return fmt.Errorf("%s support is not ready: full startup verification is pending", cfg.Driver)
-	}
-	return initDBWithConfig(cfg)
-}
-
-func initDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if cfg.Driver == "" {
 		cfg.Driver = "sqlite"
 	}

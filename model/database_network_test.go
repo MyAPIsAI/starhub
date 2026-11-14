@@ -31,7 +31,7 @@ func TestNetworkApplicationInitialization(t *testing.T) {
 				env = "STARHUB_TEST_POSTGRES_DSN"
 			}
 			cfg := DatabaseConfig{Driver: driver, DSN: os.Getenv(env), MaxOpenConns: 8, MaxIdleConns: 2, ConnMaxLifetime: "1m"}
-			if err := initDBWithConfig(cfg); err != nil {
+			if err := InitDBWithConfig(cfg); err != nil {
 				t.Fatal("full migration", err)
 			}
 			if err := Seed("p37-local-test"); err != nil {
@@ -74,7 +74,7 @@ func TestNetworkApplicationInitialization(t *testing.T) {
 			if err := CloseDB(); err != nil {
 				t.Fatal(err)
 			}
-			if err := initDBWithConfig(cfg); err != nil {
+			if err := InitDBWithConfig(cfg); err != nil {
 				t.Fatal("repeated application migration", err)
 			}
 		})

@@ -2,7 +2,6 @@ package model
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -46,13 +45,13 @@ func TestFailedCredentialMigrationRestoresLiveDatabase(t *testing.T) {
 	}
 }
 
-func TestUnreadyDatabaseDriversFailBeforeMigration(t *testing.T) {
+func TestInvalidNetworkDSNKeepsActiveDatabase(t *testing.T) {
 	newTestDB(t)
 	previous := DB
 	for _, driver := range []string{"mysql", "postgres"} {
 		err := InitDBWithConfig(DatabaseConfig{Driver: driver, DSN: "not-a-connection-string"})
-		if err == nil || !strings.Contains(err.Error(), "not ready") {
-			t.Fatal("unported backend reached connection or migration", driver, err)
+		if err == nil {
+			t.Fatal("invalid network DSN accepted", driver)
 		}
 		if DB != previous || CurrentDialect() != "sqlite" {
 			t.Fatal("rejected backend changed the live database")
