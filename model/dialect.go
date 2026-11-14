@@ -19,17 +19,17 @@ func CurrentDialect() string {
 }
 
 // DateFromUnix returns a SQL expression that formats a Unix epoch integer
-// as 'YYYY-MM-DD' for the active database driver.
+// as a UTC 'YYYY-MM-DD', independent of the database session timezone.
 //
 // SQLite:      date(expr, 'unixepoch')
-// PostgreSQL:  TO_CHAR(TO_TIMESTAMP(expr), 'YYYY-MM-DD')
-// MySQL:       DATE_FORMAT(FROM_UNIXTIME(expr), '%Y-%m-%d')
+// PostgreSQL:  TO_CHAR(TO_TIMESTAMP(expr) AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+// MySQL:       DATE_FORMAT(TIMESTAMPADD(SECOND, expr, epoch), '%Y-%m-%d')
 func DateFromUnix(epochExpr string) string {
 	switch currentDialect {
 	case "postgres":
-		return fmt.Sprintf("TO_CHAR(TO_TIMESTAMP(%s), 'YYYY-MM-DD')", epochExpr)
+		return fmt.Sprintf("TO_CHAR(TO_TIMESTAMP(%s) AT TIME ZONE 'UTC', 'YYYY-MM-DD')", epochExpr)
 	case "mysql":
-		return fmt.Sprintf("DATE_FORMAT(FROM_UNIXTIME(%s), '%%Y-%%m-%%d')", epochExpr)
+		return fmt.Sprintf("DATE_FORMAT(TIMESTAMPADD(SECOND, %s, '1970-01-01 00:00:00'), '%%Y-%%m-%%d')", epochExpr)
 	default:
 		return fmt.Sprintf("date(%s, 'unixepoch')", epochExpr)
 	}
