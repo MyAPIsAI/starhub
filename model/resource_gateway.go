@@ -39,7 +39,7 @@ func resourceGatewayAbilityCondition(alias string) string {
 	) OR EXISTS (
 		SELECT 1 FROM resource_gateway_managed_channels rgm
 		JOIN resource_gateway_routes rgr ON rgr.channel_id = rgm.channel_id
-		WHERE rgm.channel_id = %[1]s.channel_id AND rgm.active = 1
+		WHERE rgm.channel_id = %[1]s.channel_id AND rgm.active = TRUE
 		AND ((rgm.profile = 'openai_text_exact_v1' AND rgr.upstream_model = '' AND rgr.capabilities IN ('["text"]', '["code"]', '["code","text"]')) OR (rgm.profile = 'exact_resource_policy_v2' AND `+resourceAdvancedSQL("rgr")+`))
 		AND rgr.context_length BETWEEN 0 AND 9007199254740991
 		AND EXISTS (SELECT 1 FROM channels rgc WHERE rgc.id = rgm.channel_id AND ((rgm.profile = 'openai_text_exact_v1' AND rgc.type = 1) OR (rgm.profile = 'exact_resource_policy_v2' AND ((rgc.type = 1 AND rgr.protocols = '["OpenAI"]') OR (rgc.type = 14 AND rgr.protocols = '["Anthropic"]') OR (rgc.type = 25 AND rgr.protocols = '["Gemini"]')))))
@@ -57,7 +57,7 @@ func resourceGatewayGroupCondition(alias string) string {
 		)) OR EXISTS (
 			SELECT 1 FROM service_group_configs rgs
 			WHERE rgs.group_id = %[1]s."group" AND rgs.id = %[1]s.group_definition_id
-			AND rgs.id > 0 AND rgs.enabled = 1 AND rgs.visibility IN ('common', 'custom')
+			AND rgs.id > 0 AND rgs.enabled = TRUE AND rgs.visibility IN ('common', 'custom')
 		)
 	))`, alias)
 }

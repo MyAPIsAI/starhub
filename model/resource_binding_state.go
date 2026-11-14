@@ -89,7 +89,7 @@ func ReadResourceBindingState(ctx context.Context, page, pageSize int) (*Resourc
 			}
 			if len(pricedGroups) > 0 {
 				counts = nil
-				if err := tx.Table("abilities AS a").Select("a.channel_id, COUNT(*) AS count").Joins("JOIN channels AS c ON c.id = a.channel_id").Where("a.channel_id IN ? AND a.enabled = 1 AND c.status = 1", ids).Where("a.\"group\" IN ?", pricedGroups).Where(resourceGatewayAbilityCondition("a")).Group("a.channel_id").Scan(&counts).Error; err != nil {
+				if err := tx.Table("abilities AS a").Select("a.channel_id, COUNT(*) AS count").Joins("JOIN channels AS c ON c.id = a.channel_id").Where("a.channel_id IN ? AND a.enabled = TRUE AND c.status = 1", ids).Where("a.\"group\" IN ?", pricedGroups).Where(resourceGatewayAbilityCondition("a")).Group("a.channel_id").Scan(&counts).Error; err != nil {
 					return err
 				}
 				for _, count := range counts {
