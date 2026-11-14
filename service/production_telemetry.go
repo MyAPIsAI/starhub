@@ -194,6 +194,9 @@ func buildProductionBucket(at int64, b metric.ProductionMinute, exists bool, now
 		reason := "uncollected_minute"
 		if exists {
 			reason = b.Error
+			if reason == "" || reason == "complete" {
+				reason = "incomplete_minute"
+			}
 		}
 		if at == now.Unix()/60*60 {
 			reason = "minute_open"

@@ -28,6 +28,13 @@ func TestProductionCacheIsDetachedBoundedAndRejectsChangedCorruptSource(t *testi
 	if err != nil || productionCacheHits.Load() != hits+1 || second[0]["models"].([]map[string]any)[0]["coverage_status"] != "complete" {
 		t.Fatal("cache was mutated or not reused", err)
 	}
+	if err := model.DB.Model(&model.ProductionTelemetryMinute{}).Where("minute = ?", minute).Update("complete", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ProductionMetricBuckets(minute, minute, now); err == nil {
+		t.Fatal("cached value hid inconsistent completion metadata")
+	}
+	model.DB.Model(&model.ProductionTelemetryMinute{}).Where("minute = ?", minute).Update("complete", true)
 	if err := model.DB.Model(&model.ProductionTelemetryMinute{}).Where("minute = ?", minute).Update("payload", "corrupt").Error; err != nil {
 		t.Fatal(err)
 	}

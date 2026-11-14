@@ -13,9 +13,10 @@ import (
 )
 
 type productionCacheKey struct {
-	Minute int64
-	Batch  string
-	Digest [32]byte
+	Minute   int64
+	Batch    string
+	Digest   [32]byte
+	Complete bool
 }
 type productionCacheEntry struct {
 	Key  productionCacheKey
@@ -31,7 +32,7 @@ var productionCache = struct {
 var productionCacheHits, productionCacheMisses atomic.Int64
 
 func cachedProductionBucket(at int64, row model.ProductionTelemetryMinute, exists bool, now time.Time) (map[string]any, error) {
-	key := productionCacheKey{at, row.BatchID, sha256.Sum256([]byte(row.Payload))}
+	key := productionCacheKey{at, row.BatchID, sha256.Sum256([]byte(row.Payload)), row.Complete}
 	cacheable := exists && at < now.Unix()/60*60
 	var raw []byte
 	if cacheable {
