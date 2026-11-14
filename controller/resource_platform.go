@@ -141,7 +141,24 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 				*target = v
 			}
 		}
-		rows, err := model.ReadProductionAttempts(max(start/60*60, time.Now().Add(-24*time.Hour).Unix()/60*60), end/60*60, page, size)
+		cursor := r.URL.Query().Get("cursor")
+		if cursor != "" && page != 1 || (page-1)*size > 100000 {
+			common.ApiError(w, 400, "use a cursor for deep attempt pages")
+			return
+		}
+		lower := max(start/60*60, now.Add(-24*time.Hour).Unix()/60*60)
+		var rows []model.ProductionAttemptRecord
+		var next string
+		var err error
+		if page == 1 {
+			rows, next, err = model.ReadProductionAttemptPage(lower, end/60*60, cursor, size)
+		} else {
+			rows, err = model.ReadProductionAttempts(lower, end/60*60, page, size)
+		}
+		if err == model.ErrProductionCursor {
+			common.ApiError(w, 400, "invalid attempt cursor")
+			return
+		}
 		if err != nil {
 			common.ApiError(w, 500, "attempt journal unavailable")
 			return
@@ -154,7 +171,7 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 			}
 			items = append(items, json.RawMessage(row.Payload))
 		}
-		common.ApiSuccess(w, map[string]any{"schema": "attempt-metadata-v1", "page": page, "page_size": size, "items": items, "retention_hours": 24, "max_retained_attempts": 100000, "sealed_minutes_only": true})
+		common.ApiSuccess(w, map[string]any{"schema": "attempt-metadata-v1", "page": page, "page_size": size, "items": items, "next_cursor": next, "retention_hours": 24, "max_retained_attempts": 100000, "sealed_minutes_only": true})
 		return
 	}
 	if byModel && !quarter {
