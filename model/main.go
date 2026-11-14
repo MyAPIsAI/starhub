@@ -138,6 +138,9 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := db.AutoMigrate(&ResourceFailureStream{}); err != nil {
 		return fmt.Errorf("migrate resource failure stream: %w", err)
 	}
+	if err := initRoutingWriter(db); err != nil {
+		return fmt.Errorf("initialize routing writer: %w", err)
+	}
 	if err := db.AutoMigrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}); err != nil {
 		return fmt.Errorf("migrate production telemetry: %w", err)
 	}

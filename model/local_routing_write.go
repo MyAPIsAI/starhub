@@ -9,15 +9,15 @@ import (
 
 var localRoutingWriterWait, localRoutingTransaction metric.DurationHistogram
 
-// SQLite is the serialization point for durable circuit transitions. Obtain
-// its writer before reading state, avoiding deferred read-to-write upgrades.
+// The database is the serialization point for durable circuit transitions.
+// Obtain its writer before reading state, avoiding read-to-write upgrades.
 // Snapshot replacement is fenced only after writer acquisition, so waiting on
 // another SQLite writer does not hold the snapshot's read lock.
 func withLocalRoutingWrite(item *RouteItem, fn func(*gorm.DB) error) error {
 	started := time.Now()
 	defer func() { localRoutingTransaction.Observe(time.Since(started)) }()
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("UPDATE local_routing_states SET resource_key=resource_key WHERE resource_key = ''").Error; err != nil {
+		if err := lockRoutingWriter(tx); err != nil {
 			return err
 		}
 		localRoutingWriterWait.Observe(time.Since(started))

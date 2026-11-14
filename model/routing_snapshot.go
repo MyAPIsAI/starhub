@@ -234,7 +234,7 @@ func ApplyRoutingSnapshot(s RouteSnapshot, now time.Time) (applyErr error) {
 	}()
 	err = DB.Transaction(func(tx *gorm.DB) error {
 		// Use the same writer-before-snapshot order as local circuit updates.
-		if err := tx.Exec("UPDATE routing_snapshot_records SET id=id WHERE id=-1").Error; err != nil {
+		if err := lockRoutingWriter(tx); err != nil {
 			return err
 		}
 		routingSnapshotState.Lock()
