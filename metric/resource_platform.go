@@ -51,8 +51,9 @@ type platformMetricKey struct {
 var platformMetrics = struct {
 	sync.Mutex
 	rows       map[platformMetricKey]*PlatformMetric
+	minutes    map[int64]map[platformMetricKey]*PlatformMetric
 	lastPruned int64
-}{rows: map[platformMetricKey]*PlatformMetric{}}
+}{rows: map[platformMetricKey]*PlatformMetric{}, minutes: map[int64]map[platformMetricKey]*PlatformMetric{}}
 
 func recordPlatformAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	if a.outcome == AttemptUnsupported || (a.outcome == AttemptClientError && a.statusCode != 429 && a.statusCode != 401 && a.statusCode != 403 && a.statusCode != 404) {
@@ -63,9 +64,12 @@ func recordPlatformAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	platformMetrics.Lock()
 	defer platformMetrics.Unlock()
 	if platformMetrics.lastPruned != minute {
-		for key := range platformMetrics.rows {
-			if key.minute < minute-86400 {
-				delete(platformMetrics.rows, key)
+		for at, bucket := range platformMetrics.minutes {
+			if at < minute-86400 {
+				for key := range bucket {
+					delete(platformMetrics.rows, key)
+				}
+				delete(platformMetrics.minutes, at)
 			}
 		}
 		platformMetrics.lastPruned = minute
@@ -79,6 +83,10 @@ func recordPlatformAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 		}
 		row = &PlatformMetric{ChannelID: a.channelID, ModelName: meta.Model, Minute: minute, TTFTHistogram: map[string]int64{}}
 		platformMetrics.rows[key] = row
+		if platformMetrics.minutes[minute] == nil {
+			platformMetrics.minutes[minute] = map[platformMetricKey]*PlatformMetric{}
+		}
+		platformMetrics.minutes[minute][key] = row
 	}
 	row.AttemptCount++
 	row.InputTokens += a.inputTokens
@@ -182,31 +190,45 @@ func finishPlatformMetric(row *PlatformMetric) {
 }
 
 func PlatformMetricRows(byModel, quarterHour bool, start, end int64) []PlatformMetric {
+	now := time.Now()
+	end = min(end, now.Unix()/60*60)
 	platformMetrics.Lock()
-	defer platformMetrics.Unlock()
-	keys := make([]platformMetricKey, 0, len(platformMetrics.rows))
-	for key := range platformMetrics.rows {
-		keys = append(keys, key)
+	rows := make([]PlatformMetric, 0)
+	for at := max(start/60*60, now.Add(-24*time.Hour).Unix()/60*60); at <= end; at += 60 {
+		for key, value := range platformMetrics.minutes[at] {
+			if key.minute < start || key.minute > end {
+				continue
+			}
+			row := *value
+			row.TTFTHistogram = make(map[string]int64, len(value.TTFTHistogram))
+			for k, v := range value.TTFTHistogram {
+				row.TTFTHistogram[k] = v
+			}
+			rows = append(rows, row)
+		}
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i].minute != keys[j].minute {
-			return keys[i].minute < keys[j].minute
+	platformMetrics.Unlock()
+	return AggregatePlatformMetrics(rows, byModel, quarterHour)
+}
+
+func AggregatePlatformMetrics(rows []PlatformMetric, byModel, quarterHour bool) []PlatformMetric {
+	sort.Slice(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		if a.Minute != b.Minute {
+			return a.Minute < b.Minute
 		}
-		if keys[i].channel != keys[j].channel {
-			return keys[i].channel < keys[j].channel
+		if a.ChannelID != b.ChannelID {
+			return a.ChannelID < b.ChannelID
 		}
-		return keys[i].model < keys[j].model
+		return a.ModelName < b.ModelName
 	})
 	aggregated := map[platformMetricKey]*PlatformMetric{}
 	width := int64(60)
 	if quarterHour {
 		width = 900
 	}
-	for _, sourceKey := range keys {
-		if sourceKey.minute < start || sourceKey.minute > end {
-			continue
-		}
-		key := sourceKey
+	for _, source := range rows {
+		key := platformMetricKey{channel: source.ChannelID, model: source.ModelName, minute: source.Minute}
 		key.minute = key.minute / width * width
 		if !byModel {
 			key.channel, key.model = 0, ""
@@ -216,7 +238,7 @@ func PlatformMetricRows(byModel, quarterHour bool, start, end int64) []PlatformM
 			row = &PlatformMetric{ChannelID: key.channel, ModelName: key.model, Minute: key.minute, Key: fmt.Sprintf("starhub:%d", key.minute), WindowStart: time.Unix(key.minute, 0).UTC(), WindowEnd: time.Unix(key.minute+width, 0).UTC(), TTFTHistogram: map[string]int64{}}
 			aggregated[key] = row
 		}
-		addPlatformMetric(row, *platformMetrics.rows[sourceKey])
+		addPlatformMetric(row, source)
 	}
 	result := make([]PlatformMetric, 0, len(aggregated))
 	for _, row := range aggregated {
@@ -239,5 +261,6 @@ func resetPlatformMetrics() {
 	platformMetrics.Lock()
 	defer platformMetrics.Unlock()
 	platformMetrics.rows = map[platformMetricKey]*PlatformMetric{}
+	platformMetrics.minutes = map[int64]map[platformMetricKey]*PlatformMetric{}
 	platformMetrics.lastPruned = 0
 }
