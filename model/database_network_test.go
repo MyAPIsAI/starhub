@@ -37,6 +37,15 @@ func TestNetworkApplicationInitialization(t *testing.T) {
 			if err := Seed("p37-local-test"); err != nil {
 				t.Fatal("application seed", err)
 			}
+			if _, err := SaveOption("group_ratio", `{"default":1}`, 1); err != nil {
+				t.Fatal("option update", err)
+			}
+			if _, err := ReadPricingOptions(t.Context()); err != nil {
+				t.Fatal("pricing read", err)
+			}
+			if _, err := ReadTimePricing(t.Context()); err != nil {
+				t.Fatal("time pricing read", err)
+			}
 			channel := &Channel{Type: 1, Name: "network", Key: "test-key", Models: "test-model", Group: "default", Status: 1}
 			if err := InsertChannel(channel); err != nil {
 				t.Fatal("channel creation", err)

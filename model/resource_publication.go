@@ -128,7 +128,7 @@ func readResourcePublicationState(tx *gorm.DB) (*resourcePublicationState, error
 		result.context.Channels = append(result.context.Channels, ResourceGatewayChannel{ID: strconv.FormatInt(row.ID, 10), Name: row.Name, Type: row.Type, Status: row.Status})
 	}
 	var ratio Option
-	if err := tx.Where("`key` = ?", setting.OptionKeyGroupRatio).First(&ratio).Error; err != nil {
+	if err := tx.Where(map[string]any{"key": setting.OptionKeyGroupRatio}).First(&ratio).Error; err != nil {
 		return nil, err
 	}
 	normalized, err := setting.NormalizeOption(setting.OptionKeyGroupRatio, ratio.Value)

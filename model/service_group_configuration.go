@@ -137,7 +137,7 @@ func mutateServiceGroupAndRatio(ctx context.Context, group *ServiceGroupConfig, 
 		// Change only the requested group, preserving legacy and independently edited ratios.
 		ratios := map[string]float64{"default": 1}
 		var option Option
-		err := tx.Where("`key` = ?", setting.OptionKeyGroupRatio).First(&option).Error
+		err := tx.Where(map[string]any{"key": setting.OptionKeyGroupRatio}).First(&option).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			return err
 		}

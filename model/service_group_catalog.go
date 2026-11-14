@@ -29,7 +29,7 @@ func ReadServiceGroupCatalog(ctx context.Context) (*ServiceGroupCatalog, error) 
 		}
 		result.OptionVersion = revision.Version
 		var option Option
-		if err := tx.Where("`key` = ?", setting.OptionKeyGroupRatio).First(&option).Error; err != nil {
+		if err := tx.Where(map[string]any{"key": setting.OptionKeyGroupRatio}).First(&option).Error; err != nil {
 			return err
 		}
 		normalized, err := setting.NormalizeOption(setting.OptionKeyGroupRatio, option.Value)

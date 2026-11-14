@@ -49,7 +49,7 @@ func ReadPricingOptions(ctx context.Context) (*PricingOptions, error) {
 			return fmt.Errorf("pricing option version is unavailable")
 		}
 		result.Version = revision.Version
-		if err := tx.Where("`key` IN ?", pricingOptionKeys).Order("`key`").Find(&result.Options).Error; err != nil {
+		if err := tx.Where(productionQuote(tx, "key")+" IN ?", pricingOptionKeys).Order(productionQuote(tx, "key")).Find(&result.Options).Error; err != nil {
 			return err
 		}
 		if len(result.Options) != len(pricingOptionKeys) {
