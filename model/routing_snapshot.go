@@ -76,7 +76,7 @@ type RouteItem struct {
 
 type RoutingSnapshotRecord struct {
 	ID          int    `gorm:"primaryKey"`
-	Payload     string `gorm:"type:text;not null"`
+	Payload     string `gorm:"not null"`
 	Version     string
 	Checksum    string
 	PublishedAt time.Time

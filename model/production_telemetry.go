@@ -17,7 +17,7 @@ type ProductionTelemetryMinute struct {
 	Minute       int64  `gorm:"primaryKey;autoIncrement:false" json:"minute"`
 	BatchID      string `gorm:"size:64;not null" json:"batch_id"`
 	Complete     bool   `gorm:"not null" json:"complete"`
-	Payload      string `gorm:"type:text;not null" json:"-"`
+	Payload      string `gorm:"not null" json:"-"`
 	CreatedAt    int64  `gorm:"autoCreateTime" json:"created_at"`
 }
 
@@ -30,7 +30,7 @@ type ProductionAttemptRecord struct {
 	LastError     string `gorm:"size:160" json:"last_error"`
 	ID            string `gorm:"primaryKey;size:64" json:"attempt_id"`
 	Minute        int64  `json:"minute"`
-	Payload       string `gorm:"type:text;not null" json:"-"`
+	Payload       string `gorm:"not null" json:"-"`
 }
 
 // SaveProductionTelemetry stages bounded chunks before publishing manifests.
