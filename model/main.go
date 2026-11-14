@@ -5,9 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"starhub/common"
 )
@@ -45,22 +43,36 @@ func InitDB(path string) error {
 // InitDBWithConfig keeps unported backends out of migrations and business
 // transactions. SQLite retains its existing pragmas and pool behavior.
 func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
+	if cfg.Driver == "mysql" || cfg.Driver == "postgres" {
+		return fmt.Errorf("%s support is not ready: full startup verification is pending", cfg.Driver)
+	}
+	return initDBWithConfig(cfg)
+}
+
+func initDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if cfg.Driver == "" {
 		cfg.Driver = "sqlite"
 	}
 	switch cfg.Driver {
-	case "sqlite":
-	case "mysql", "postgres":
-		return fmt.Errorf("%s support is not ready: migrations, telemetry triggers and transaction locking still require dialect adaptation", cfg.Driver)
+	case "sqlite", "mysql", "postgres":
 	default:
 		return fmt.Errorf("unsupported driver: %s", cfg.Driver)
 	}
 	if strings.TrimSpace(cfg.DSN) == "" {
 		return fmt.Errorf("database DSN must not be empty")
 	}
-	db, err := gorm.Open(sqlite.Open(dsn(cfg.DSN)), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	if cfg.MaxOpenConns < 0 || cfg.MaxIdleConns < 0 {
+		return fmt.Errorf("database pool limits must not be negative")
+	}
+	var lifetime time.Duration
+	if cfg.ConnMaxLifetime != "" {
+		var err error
+		lifetime, err = time.ParseDuration(cfg.ConnMaxLifetime)
+		if err != nil || lifetime < 0 {
+			return fmt.Errorf("invalid database connection lifetime")
+		}
+	}
+	db, err := openConfiguredDatabase(cfg)
 	if err != nil {
 		return fmt.Errorf("open %s database: %w", cfg.Driver, err)
 	}
@@ -68,6 +80,12 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err != nil {
 		return err
 	}
+	if cfg.Driver != "sqlite" {
+		sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+		sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+		sqlDB.SetConnMaxLifetime(lifetime)
+	}
+	migrate := func(values ...any) error { return migrateDatabaseSchema(db, values...) }
 	previous := DB
 	defer func() {
 		if initErr != nil {
@@ -77,40 +95,40 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 			_ = sqlDB.Close()
 		}
 	}()
-	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}, &UserPhoneIdentity{}, &PhoneVerificationChallenge{}, &UserAgreement{}, &EmailVerificationChallenge{}, &TwoFA{}, &TwoFABackupCode{}, &RegionProfile{}, &LegalDocument{}, &ServiceIncident{}, &ServiceIncidentUpdate{}, &AvailabilityRecord{}, &ReconciliationRecord{}); err != nil {
+	if err := migrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}, &UserPhoneIdentity{}, &PhoneVerificationChallenge{}, &UserAgreement{}, &EmailVerificationChallenge{}, &TwoFA{}, &TwoFABackupCode{}, &RegionProfile{}, &LegalDocument{}, &ServiceIncident{}, &ServiceIncidentUpdate{}, &AvailabilityRecord{}, &ReconciliationRecord{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
-	if err := db.AutoMigrate(&ChannelConfigurationState{}); err != nil {
+	if err := migrate(&ChannelConfigurationState{}); err != nil {
 		return fmt.Errorf("migrate channel configuration revision: %w", err)
 	}
-	if err := db.AutoMigrate(&TokenQuotaPeriod{}, &QuotaReservation{}); err != nil {
+	if err := migrate(&TokenQuotaPeriod{}, &QuotaReservation{}); err != nil {
 		return fmt.Errorf("migrate token quota periods: %w", err)
 	}
-	if err := db.AutoMigrate(&MoneyAccount{}, &MoneyEntry{}, &TokenUsageBaseline{}); err != nil {
+	if err := migrate(&MoneyAccount{}, &MoneyEntry{}, &TokenUsageBaseline{}); err != nil {
 		return fmt.Errorf("migrate exact monetary journal: %w", err)
 	}
-	if err := db.AutoMigrate(&ReconciliationRevision{}); err != nil {
+	if err := migrate(&ReconciliationRevision{}); err != nil {
 		return err
 	}
 	if err := createNonemptyUniqueIndex(db, &ReconciliationRecord{}, "reconciliation_records", "idx_reconciliation_report_key", "report_key"); err != nil {
 		return err
 	}
-	if err := db.AutoMigrate(&ResponseReference{}); err != nil {
+	if err := migrate(&ResponseReference{}); err != nil {
 		return fmt.Errorf("migrate response ownership index: %w", err)
 	}
-	if err := db.AutoMigrate(&ResponseConversation{}); err != nil {
+	if err := migrate(&ResponseConversation{}); err != nil {
 		return fmt.Errorf("migrate response conversations: %w", err)
 	}
-	if err := db.AutoMigrate(&UserSecurityEvent{}); err != nil {
+	if err := migrate(&UserSecurityEvent{}); err != nil {
 		return fmt.Errorf("migrate user security history: %w", err)
 	}
-	if err := db.AutoMigrate(&AccountDeactivationReceipt{}); err != nil {
+	if err := migrate(&AccountDeactivationReceipt{}); err != nil {
 		return fmt.Errorf("migrate account deactivation receipts: %w", err)
 	}
-	if err := db.AutoMigrate(&OwnedTokenReceipt{}); err != nil {
+	if err := migrate(&OwnedTokenReceipt{}); err != nil {
 		return fmt.Errorf("migrate owned token receipts: %w", err)
 	}
-	if err := db.AutoMigrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
+	if err := migrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
 	}
 	if err := createNonemptyUniqueIndex(db, &ResourceGatewayManagedChannel{}, "resource_gateway_managed_channels", "idx_resource_gateway_source_binding", "source_channel_id"); err != nil {
@@ -132,16 +150,16 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := db.Model(&RoutingChain{}).Where("expires_at = 0").UpdateColumn("expires_at", time.Now().Add(RoutingChainTTL).Unix()).Error; err != nil {
 		return fmt.Errorf("initialize routing chain expiry: %w", err)
 	}
-	if err := db.AutoMigrate(&RoutingSnapshotRecord{}, &ResourceCredential{}, &PlatformCatalogRecord{}, &RoutingGroupPolicy{}, &LocalRoutingState{}, &ResourceEventOutbox{}, &ResourceObservationWork{}); err != nil {
+	if err := migrate(&RoutingSnapshotRecord{}, &ResourceCredential{}, &PlatformCatalogRecord{}, &RoutingGroupPolicy{}, &LocalRoutingState{}, &ResourceEventOutbox{}, &ResourceObservationWork{}); err != nil {
 		return fmt.Errorf("migrate resource platform state: %w", err)
 	}
-	if err := db.AutoMigrate(&ResourceFailureStream{}); err != nil {
+	if err := migrate(&ResourceFailureStream{}); err != nil {
 		return fmt.Errorf("migrate resource failure stream: %w", err)
 	}
 	if err := initRoutingWriter(db); err != nil {
 		return fmt.Errorf("initialize routing writer: %w", err)
 	}
-	if err := db.AutoMigrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}); err != nil {
+	if err := migrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}); err != nil {
 		return fmt.Errorf("migrate production telemetry: %w", err)
 	}
 	if err := initProductionStorage(db); err != nil {
