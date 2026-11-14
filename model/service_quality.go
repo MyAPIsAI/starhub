@@ -150,6 +150,7 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 		AvgDur  float64
 	}
 	var dayRows []dayRow
+	dayExpr := DateFromUnix("created_at")
 	err = DB.Model(&Log{}).
 		Select(fmt.Sprintf(
 			"%s AS date_str, "+
@@ -157,9 +158,9 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 				"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success, "+
 				"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed, "+
 				"COALESCE(AVG(duration_ms), 0) AS avg_dur",
-			DateFromUnix("(created_at / 86400) * 86400"))).
+			dayExpr)).
 		Where(baseWhere, args...).
-		Group("created_at / 86400").
+		Group(dayExpr).
 		Order("date_str ASC").
 		Scan(&dayRows).Error
 	if err != nil {
@@ -202,7 +203,7 @@ func serviceQualityP95(where string, args ...any) (serviceQualityPercentiles, er
 	}
 	err := DB.Raw(`WITH samples AS (
 		SELECT model, duration_ms,
-			created_at / 86400 AS day
+			`+DateFromUnix("created_at")+` AS day
 		FROM logs WHERE `+where+` AND duration_ms > 0
 	), expanded AS (
 		SELECT 0 AS scope, model AS metric_key, duration_ms FROM samples
@@ -221,10 +222,9 @@ func serviceQualityP95(where string, args ...any) (serviceQualityPercentiles, er
 				ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS sample_count
 		FROM scopes
 	)
-	SELECT scope,
-		CASE WHEN scope = 2 THEN ` + DateFromUnix("metric_key * 86400") + ` ELSE metric_key END AS metric_key,
+	SELECT scope, metric_key,
 		MIN(duration_ms) AS duration_ms FROM ranked
-	WHERE sample_rank >= (sample_count * 95 + 99) / 100
+	WHERE sample_rank * 100 >= sample_count * 95
 	GROUP BY scope, metric_key`, args...).Scan(&ranks).Error
 	if err != nil {
 		return serviceQualityPercentiles{}, err
