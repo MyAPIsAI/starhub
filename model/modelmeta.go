@@ -160,8 +160,12 @@ func ListModelCoverage() (map[string]*ModelCoverage, error) {
 		ChannelCnt   int64
 	}
 	var rows []row
+	types := "GROUP_CONCAT(DISTINCT c.type)"
+	if CurrentDialect() == "postgres" {
+		types = "STRING_AGG(DISTINCT CAST(c.type AS text), ',')"
+	}
 	err := DB.Table("abilities AS a").
-		Select("a.model AS model, a.\"group\" AS \"group\", GROUP_CONCAT(DISTINCT c.type) AS channel_types, COUNT(DISTINCT a.channel_id) AS channel_cnt").
+		Select("a.model AS model, a.\"group\" AS \"group\", "+types+" AS channel_types, COUNT(DISTINCT a.channel_id) AS channel_cnt").
 		Joins("JOIN channels AS c ON c.id = a.channel_id").
 		Where("a.enabled = ? AND c.status = ?", true, common.ChannelStatusEnabled).
 		Where(resourceGatewayAbilityCondition("a")).
