@@ -447,7 +447,7 @@ func Reset() {
 	resetPlatformMetrics()
 	production.Lock()
 	production.started = 0
-	production.buckets = map[int64]*ProductionMinute{}
-	production.retained = 0
+	production.buckets = map[int64]*productionBuffer{}
+	production.retained.Store(0)
 	production.Unlock()
 }

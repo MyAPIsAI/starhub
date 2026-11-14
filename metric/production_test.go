@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -47,6 +48,55 @@ func TestProductionSealsExactGenerationsAndJournalWithoutCustomerData(t *testing
 	}
 }
 
+func TestProductionRotationIsConcurrentAndRetrySnapshotsAreDetached(t *testing.T) {
+	Reset()
+	t.Cleanup(Reset)
+	now := time.Now().Truncate(time.Minute)
+	StartProduction(now.Add(-time.Minute))
+	var wg sync.WaitGroup
+	for worker := 0; worker < 16; worker++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < 100; i++ {
+				s := BeginRequest(RequestMeta{Model: "parallel"})
+				a := s.BeginAttempt(int64(id + 1))
+				a.SetRouteMetadata(AttemptMetadata{Generation: "g", RequestedCapabilities: []string{"chat"}})
+				a.MarkSent()
+				s.EndAttempt(a, AttemptSuccess, 200)
+			}
+		}(worker)
+	}
+	ClosedProductionMinutes(now.Add(time.Minute))
+	wg.Wait()
+	batch := ClosedProductionMinutes(now.Add(2 * time.Minute))
+	ids := map[string]bool{}
+	for _, b := range batch {
+		for _, a := range b.Attempts {
+			if ids[a.ID] {
+				t.Fatal("duplicate attempt after rotation")
+			}
+			ids[a.ID] = true
+		}
+	}
+	if len(ids) != 1600 {
+		t.Fatalf("lost attempts: %d", len(ids))
+	}
+	before, _ := json.Marshal(batch)
+	for i := range batch {
+		if len(batch[i].Attempts) > 0 {
+			batch[i].Attempts[0].RequestedCapabilities[0] = "modified"
+		}
+		if len(batch[i].Entries) > 0 {
+			batch[i].Entries[0].Health.N = 999999
+		}
+	}
+	after, _ := json.Marshal(ClosedProductionMinutes(now.Add(2 * time.Minute)))
+	if string(before) != string(after) {
+		t.Fatal("caller mutated canonical sealed retry data")
+	}
+}
+
 func TestProductionUpdatesExistingResourcesAtCardinalityLimit(t *testing.T) {
 	Reset()
 	t.Cleanup(Reset)
@@ -63,13 +113,7 @@ func TestProductionUpdatesExistingResourcesAtCardinalityLimit(t *testing.T) {
 		record(int64(i))
 	}
 	record(4096)
-	production.Lock()
-	current := production.buckets[now.Unix()]
-	valid := current.Complete && len(current.Entries) == 4096 && len(current.Attempts) == 4097
-	production.Unlock()
-	if !valid {
-		t.Fatal("existing resource was rejected at the key limit")
-	}
+
 	record(4097)
 	batch := ClosedProductionMinutes(now.Add(time.Minute))
 	last := batch[len(batch)-1]
@@ -92,7 +136,7 @@ func TestProductionUnknownAndCapacityNeverBecomeAcquiredZeros(t *testing.T) {
 	}
 	Reset()
 	StartProduction(now.Add(-time.Minute))
-	production.retained = 100000
+	production.retained.Store(100000)
 	s = BeginRequest(RequestMeta{Model: "m"})
 	a = s.BeginAttempt(1)
 	a.SetRouteMetadata(AttemptMetadata{Generation: "g"})

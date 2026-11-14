@@ -1,12 +1,10 @@
 package metric
 
 import (
-	"encoding/json"
-	"sort"
-	"sync"
-	"time"
-
 	"github.com/google/uuid"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const ProductionContract = "confirmed-production-attempts-v2"
@@ -75,13 +73,12 @@ type ProductionEntry struct {
 	Health         *ProductionHealth `json:"health,omitempty"`
 }
 type ProductionMinute struct {
-	entryIndex map[productionEntryKey]int
-	Minute     int64               `json:"minute"`
-	BatchID    string              `json:"batch_id"`
-	Complete   bool                `json:"complete"`
-	Error      string              `json:"error,omitempty"`
-	Entries    []ProductionEntry   `json:"entries"`
-	Attempts   []ProductionAttempt `json:"attempts"`
+	Minute   int64               `json:"minute"`
+	BatchID  string              `json:"batch_id"`
+	Complete bool                `json:"complete"`
+	Error    string              `json:"error,omitempty"`
+	Entries  []ProductionEntry   `json:"entries"`
+	Attempts []ProductionAttempt `json:"attempts"`
 }
 
 type productionEntryKey struct {
@@ -90,34 +87,53 @@ type productionEntryKey struct {
 }
 
 var production = struct {
-	sync.Mutex
-	started  int64
-	next     int64
-	sealed   int64
-	retained int
-	buckets  map[int64]*ProductionMinute
-}{buckets: map[int64]*ProductionMinute{}}
+	sync.RWMutex
+	started, next, sealed int64
+	retained              atomic.Int64
+	buckets               map[int64]*productionBuffer
+}{buckets: map[int64]*productionBuffer{}}
 
-// StartProduction begins a new collection epoch. Its first partial minute is
-// explicitly incomplete; an unclean restart can never manufacture zero traffic.
+// StartProduction marks this process's first partial minute as incomplete.
 func StartProduction(now time.Time) {
 	production.Lock()
 	defer production.Unlock()
 	production.started = now.Unix() / 60 * 60
-	production.next, production.sealed = production.started, production.started
-	production.retained = 0
-	production.buckets = map[int64]*ProductionMinute{}
-	b := productionBucket(production.started)
-	b.Complete, b.Error = false, "collector_started_mid_minute"
+	production.next = production.started
+	production.sealed = production.started
+	production.retained.Store(0)
+	production.buckets = map[int64]*productionBuffer{}
+	productionBucket(production.started).markLoss("collector_started_mid_minute")
 }
 
-func productionBucket(minute int64) *ProductionMinute {
+func productionBucket(minute int64) *productionBuffer {
 	b := production.buckets[minute]
 	if b == nil {
-		b = &ProductionMinute{Minute: minute, BatchID: uuid.NewString(), Complete: true, Entries: []ProductionEntry{}, Attempts: []ProductionAttempt{}, entryIndex: map[productionEntryKey]int{}}
+		b = newProductionBuffer(minute)
 		production.buckets[minute] = b
 	}
 	return b
+}
+
+// A read lock fences a writer against minute rotation without serializing
+// unrelated resources. Only first access to a new minute needs the write lock.
+func lockProductionBuffer() *productionBuffer {
+	for {
+		production.RLock()
+		if production.started == 0 {
+			production.RUnlock()
+			return nil
+		}
+		minute := max(time.Now().Unix()/60*60, production.sealed)
+		if b := production.buckets[minute]; b != nil {
+			return b
+		}
+		production.RUnlock()
+		production.Lock()
+		if production.started != 0 {
+			productionBucket(max(time.Now().Unix()/60*60, production.sealed))
+		}
+		production.Unlock()
+	}
 }
 
 func (a *AttemptSpan) SetRouteMetadata(meta AttemptMetadata) {
@@ -133,32 +149,52 @@ func (a *AttemptSpan) MarkSent() {
 }
 
 func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
-	production.Lock()
-	defer production.Unlock()
-	if production.started == 0 {
+	b := lockProductionBuffer()
+	if b == nil {
 		return
 	}
-	// Assign completion to the collector's current minute while holding its
-	// lock; minute sealing and arrival cannot race to change an exported batch.
-	now := time.Now()
-	minute := max(now.Unix()/60*60, production.sealed)
-	b := productionBucket(minute)
+	defer production.RUnlock()
 	if a.route.Generation == "" {
-		b.Complete = false
-		b.Error = "missing_endpoint_identity"
+		b.markLoss("missing_endpoint_identity")
 		return
 	}
 	key := productionEntryKey{a.channelID, meta.Model, a.route.Generation}
-	index, exists := b.entryIndex[key]
-	if production.retained >= 100000 || (!exists && len(b.Entries) >= 4096) {
-		b.Complete = false
-		b.Error = "collector_capacity_exceeded"
+	shard := &b.shards[productionShardIndex(key)]
+	shard.Lock()
+	defer shard.Unlock()
+	index, exists := shard.index[key]
+	if !exists && b.entryCount.Add(1) > 4096 {
+		b.entryCount.Add(-1)
+		b.markLoss("collector_capacity_exceeded")
 		return
 	}
+	reserved := false
+	for {
+		n := production.retained.Load()
+		if n >= 100000 {
+			break
+		}
+		if production.retained.CompareAndSwap(n, n+1) {
+			reserved = true
+			break
+		}
+	}
+	if !reserved {
+		if !exists {
+			b.entryCount.Add(-1)
+		}
+		b.markLoss("collector_capacity_exceeded")
+		return
+	}
+	now := time.Now()
 	outcome := "failure"
 	if a.outcome == AttemptSuccess {
 		outcome = "success"
 	} else if a.outcome == AttemptUnsupported {
+		production.retained.Add(-1)
+		if !exists {
+			b.entryCount.Add(-1)
+		}
 		return
 	} else if a.outcome == AttemptUncertain {
 		outcome = "uncertain"
@@ -170,19 +206,23 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	if a.hasFirstToken {
 		event.FirstContentMS = max(1, a.ttft.Milliseconds())
 	}
-	b.Attempts = append(b.Attempts, event)
-	production.retained++
+	event.RequestedCapabilities = append([]string(nil), event.RequestedCapabilities...)
+	shard.attempts = append(shard.attempts, event)
+	b.count.Add(1)
 	// Customer validation errors and uncertain outcomes remain in the attempt
 	// journal but cannot become confirmed provider failures or successes.
 	if outcome == "uncertain" || outcome == "unsent" || (a.outcome == AttemptClientError && a.statusCode != 401 && a.statusCode != 403 && a.statusCode != 404 && a.statusCode != 429) {
+		if !exists {
+			b.entryCount.Add(-1)
+		}
 		return
 	}
 	if !exists {
-		b.Entries = append(b.Entries, ProductionEntry{ChannelID: a.channelID, ModelName: meta.Model, Generation: a.route.Generation, Health: &ProductionHealth{Contract: "confirmed-production-health-v1", InputCap: 2000}})
-		index = len(b.Entries) - 1
-		b.entryIndex[key] = index
+		shard.entries = append(shard.entries, ProductionEntry{ChannelID: a.channelID, ModelName: meta.Model, Generation: a.route.Generation, Health: &ProductionHealth{Contract: "confirmed-production-health-v1", InputCap: 2000}})
+		index = len(shard.entries) - 1
+		shard.index[key] = index
 	}
-	e := &b.Entries[index]
+	e := &shard.entries[index]
 	e.InputTokens += a.inputTokens
 	e.OutputTokens += a.outputTokens
 	e.DurationSumMS += event.DurationMS
@@ -237,37 +277,27 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 // write is retried with the same IDs; AckProduction frees memory only on commit.
 func ClosedProductionMinutes(now time.Time) []ProductionMinute {
 	production.Lock()
-	defer production.Unlock()
 	if production.started == 0 {
+		production.Unlock()
 		return nil
 	}
 	end := now.Unix() / 60 * 60
 	for at, b := range production.buckets {
 		if at < end-86400 {
-			production.retained -= len(b.Attempts)
+			production.retained.Add(-b.count.Load())
 			delete(production.buckets, at)
 		}
 	}
-	start := max(production.next, end-86400)
-	result := []ProductionMinute{}
-	for at := start; at < end; at += 60 {
-		b := productionBucket(at)
-		sort.Slice(b.Entries, func(i, j int) bool {
-			a, c := b.Entries[i], b.Entries[j]
-			if a.ChannelID != c.ChannelID {
-				return a.ChannelID < c.ChannelID
-			}
-			if a.ModelName != c.ModelName {
-				return a.ModelName < c.ModelName
-			}
-			return a.Generation < c.Generation
-		})
-		raw, _ := json.Marshal(b)
-		var copy ProductionMinute
-		_ = json.Unmarshal(raw, &copy)
-		result = append(result, copy)
+	buffers := []*productionBuffer{}
+	for at := max(production.next, end-86400); at < end; at += 60 {
+		buffers = append(buffers, productionBucket(at))
 	}
 	production.sealed = max(production.sealed, end)
+	production.Unlock()
+	result := make([]ProductionMinute, 0, len(buffers))
+	for _, b := range buffers {
+		result = append(result, b.snapshot())
+	}
 	return result
 }
 
@@ -275,8 +305,8 @@ func AckProduction(batch []ProductionMinute) {
 	production.Lock()
 	defer production.Unlock()
 	for _, b := range batch {
-		if current := production.buckets[b.Minute]; current != nil && current.BatchID == b.BatchID {
-			production.retained -= len(current.Attempts)
+		if current := production.buckets[b.Minute]; current != nil && current.view.BatchID == b.BatchID {
+			production.retained.Add(-current.count.Load())
 			delete(production.buckets, b.Minute)
 			production.next = max(production.next, b.Minute+60)
 		}
