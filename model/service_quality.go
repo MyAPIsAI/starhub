@@ -152,11 +152,12 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 	var dayRows []dayRow
 	err = DB.Model(&Log{}).
 		Select(fmt.Sprintf(
-			"strftime('%%Y-%%m-%%d', (created_at / 86400) * 86400, 'unixepoch') AS date_str, "+
+			"%s AS date_str, "+
 				"COUNT(*) AS total, "+
 				"SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS success, "+
 				"SUM(CASE WHEN status IN (2, 3) THEN 1 ELSE 0 END) AS failed, "+
-				"COALESCE(AVG(duration_ms), 0) AS avg_dur")).
+				"COALESCE(AVG(duration_ms), 0) AS avg_dur",
+			DateFromUnix("(created_at / 86400) * 86400"))).
 		Where(baseWhere, args...).
 		Group("created_at / 86400").
 		Order("date_str ASC").
@@ -221,7 +222,7 @@ func serviceQualityP95(where string, args ...any) (serviceQualityPercentiles, er
 		FROM scopes
 	)
 	SELECT scope,
-		CASE WHEN scope = 2 THEN strftime('%Y-%m-%d', metric_key * 86400, 'unixepoch') ELSE metric_key END AS metric_key,
+		CASE WHEN scope = 2 THEN ` + DateFromUnix("metric_key * 86400") + ` ELSE metric_key END AS metric_key,
 		MIN(duration_ms) AS duration_ms FROM ranked
 	WHERE sample_rank >= (sample_count * 95 + 99) / 100
 	GROUP BY scope, metric_key`, args...).Scan(&ranks).Error
