@@ -3,6 +3,8 @@ package controller
 import (
 	"encoding/json"
 	"github.com/glebarez/sqlite"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"net/http"
@@ -13,6 +15,22 @@ import (
 	"testing"
 	"time"
 )
+
+func TestManualBackupRejectsUnsupportedLiveDialectsWithoutWritingFiles(t *testing.T) {
+	previous := model.DB
+	t.Cleanup(func() { model.DB = previous })
+	directory := t.TempDir()
+	t.Setenv("STARHUB_BACKUP_DIR", directory)
+	for _, dialector := range []gorm.Dialector{mysql.Open(""), postgres.Open("")} {
+		model.DB = &gorm.DB{Config: &gorm.Config{Dialector: dialector}}
+		response := call(BackupDatabase, testRequest{method: "POST", target: "/api/backup"})
+		expectStatus(t, response, http.StatusNotImplemented)
+	}
+	files, err := os.ReadDir(directory)
+	if err != nil || len(files) != 0 {
+		t.Fatal("unsupported backup wrote a file", files, err)
+	}
+}
 
 func TestManualBackupContainsConsistentMoneySnapshot(t *testing.T) {
 	newTestDB(t)
