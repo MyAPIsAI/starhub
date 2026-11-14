@@ -1,6 +1,7 @@
 package model
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -17,6 +18,31 @@ func TestFailedInitializationKeepsActiveConnectionAndDialect(t *testing.T) {
 	var value int
 	if err := DB.Raw("SELECT 1").Scan(&value).Error; err != nil || value != 1 {
 		t.Fatal("active database is no longer usable", err)
+	}
+}
+
+func TestFailedCredentialMigrationRestoresLiveDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid-credentials.db")
+	if err := InitDB(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Table("channels").Create(map[string]any{"key": "enc:v2:missing:invalid:invalid", "name": "invalid"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := CloseDB(); err != nil {
+		t.Fatal(err)
+	}
+	newTestDB(t)
+	previous := DB
+	if err := InitDB(path); err == nil {
+		t.Fatal("corrupt credentials were accepted")
+	}
+	if DB != previous {
+		t.Fatal("failed migration replaced the active database")
+	}
+	var count int64
+	if err := DB.Model(&Channel{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatal("previous database is unusable", count, err)
 	}
 }
 

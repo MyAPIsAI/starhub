@@ -44,7 +44,7 @@ func InitDB(path string) error {
 
 // InitDBWithConfig keeps unported backends out of migrations and business
 // transactions. SQLite retains its existing pragmas and pool behavior.
-func InitDBWithConfig(cfg DatabaseConfig) error {
+func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if cfg.Driver == "" {
 		cfg.Driver = "sqlite"
 	}
@@ -64,6 +64,19 @@ func InitDBWithConfig(cfg DatabaseConfig) error {
 	if err != nil {
 		return fmt.Errorf("open %s database: %w", cfg.Driver, err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	previous := DB
+	defer func() {
+		if initErr != nil {
+			if DB == db {
+				DB = previous
+			}
+			_ = sqlDB.Close()
+		}
+	}()
 	if err := db.AutoMigrate(&User{}, &Token{}, &Channel{}, &Ability{}, &Log{}, &Option{}, &OptionRevision{}, &OptionChange{}, &OptionInstance{}, &Task{}, &TaskPlugin{}, &RoutingChain{}, &QuotaSettlement{}, &AffiliateRebate{}, &AuditLog{}, &Redemption{}, &ModelMeta{}, &ModelMetadataState{}, &Wallet{}, &LedgerEntry{}, &RechargeOrder{}, &ExportRecord{}, &ServiceGroupConfig{}, &ServiceGroupDeletion{}, &ServiceQualityMetric{}, &ResourceCatalogRecord{}, &ResourcePlacementRecord{}, &ResourceRegion{}, &UserPhoneIdentity{}, &PhoneVerificationChallenge{}, &UserAgreement{}, &EmailVerificationChallenge{}, &TwoFA{}, &TwoFABackupCode{}, &RegionProfile{}, &LegalDocument{}, &ServiceIncident{}, &ServiceIncidentUpdate{}, &AvailabilityRecord{}, &ReconciliationRecord{}); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
@@ -122,7 +135,6 @@ func InitDBWithConfig(cfg DatabaseConfig) error {
 	if err := db.AutoMigrate(&RoutingSnapshotRecord{}, &ResourceCredential{}, &PlatformCatalogRecord{}, &RoutingGroupPolicy{}, &LocalRoutingState{}, &ResourceEventOutbox{}, &ResourceObservationWork{}); err != nil {
 		return fmt.Errorf("migrate resource platform state: %w", err)
 	}
-	ResetRoutingSnapshot()
 	if err := db.AutoMigrate(&ResourceFailureStream{}); err != nil {
 		return fmt.Errorf("migrate resource failure stream: %w", err)
 	}
@@ -132,11 +144,12 @@ func InitDBWithConfig(cfg DatabaseConfig) error {
 	if err := initProductionStorage(db); err != nil {
 		return fmt.Errorf("initialize production storage budget: %w", err)
 	}
-	ResetRoutingFailureStream()
 	DB = db
 	if _, err := MigrateCredentialStorage(false, "system", "Upgrade legacy credential storage"); err != nil {
 		return fmt.Errorf("migrate credential storage: %w", err)
 	}
+	ResetRoutingSnapshot()
+	ResetRoutingFailureStream()
 	return nil
 }
 
