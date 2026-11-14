@@ -60,9 +60,19 @@ func TestNetworkProductionStorage(t *testing.T) {
 				t.Fatal(err)
 			}
 			row := ProductionAttemptRecord{ID: "Case", Payload: "中🙂"}
-			if err := db.Create(&row).Error; err != nil {
-				t.Fatal(err)
+			var duplicateWG sync.WaitGroup
+			start := make(chan struct{})
+			for range 8 {
+				duplicateWG.Go(func() {
+					<-start
+					copy := row
+					if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&copy).Error; err != nil {
+						t.Error("concurrent duplicate at capacity", err)
+					}
+				})
 			}
+			close(start)
+			duplicateWG.Wait()
 			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 				t.Fatal("duplicate at capacity", err)
 			}
