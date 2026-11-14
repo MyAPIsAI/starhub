@@ -73,12 +73,13 @@ type ProductionEntry struct {
 	Health         *ProductionHealth `json:"health,omitempty"`
 }
 type ProductionMinute struct {
-	Minute   int64               `json:"minute"`
-	BatchID  string              `json:"batch_id"`
-	Complete bool                `json:"complete"`
-	Error    string              `json:"error,omitempty"`
-	Entries  []ProductionEntry   `json:"entries"`
-	Attempts []ProductionAttempt `json:"attempts"`
+	TotalAttempts int64               `json:"attempt_count"`
+	Minute        int64               `json:"minute"`
+	BatchID       string              `json:"batch_id"`
+	Complete      bool                `json:"complete"`
+	Error         string              `json:"error,omitempty"`
+	Entries       []ProductionEntry   `json:"entries"`
+	Attempts      []ProductionAttempt `json:"attempts"`
 }
 
 type productionEntryKey struct {
@@ -209,6 +210,10 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	event.RequestedCapabilities = append([]string(nil), event.RequestedCapabilities...)
 	shard.attempts = append(shard.attempts, event)
 	b.count.Add(1)
+	b.total.Add(1)
+	if len(shard.attempts)%128 == 0 {
+		signalProductionWork()
+	}
 	// Customer validation errors and uncertain outcomes remain in the attempt
 	// journal but cannot become confirmed provider failures or successes.
 	if outcome == "uncertain" || outcome == "unsent" || (a.outcome == AttemptClientError && a.statusCode != 401 && a.statusCode != 403 && a.statusCode != 404 && a.statusCode != 429) {

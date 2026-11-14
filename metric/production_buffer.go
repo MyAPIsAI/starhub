@@ -15,11 +15,11 @@ type productionShard struct {
 }
 
 type productionBuffer struct {
-	view              ProductionMinute
-	shards            [16]productionShard
-	entryCount, count atomic.Int64
-	loss              atomic.Pointer[string]
-	seal              sync.Once
+	view                     ProductionMinute
+	shards                   [16]productionShard
+	entryCount, count, total atomic.Int64
+	loss                     atomic.Pointer[string]
+	seal                     sync.Once
 }
 
 func newProductionBuffer(minute int64) *productionBuffer {
@@ -46,6 +46,7 @@ func productionShardIndex(key productionEntryKey) uint64 {
 // hold the collector lock, and sync.Once preserves canonical retry payloads.
 func (b *productionBuffer) snapshot() ProductionMinute {
 	b.seal.Do(func() {
+		b.view.TotalAttempts = b.total.Load()
 		if loss := b.loss.Load(); loss != nil {
 			b.view.Complete = false
 			b.view.Error = *loss

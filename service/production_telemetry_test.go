@@ -80,3 +80,53 @@ func TestProductionTelemetryDurableRetryAndMissingIntervals(t *testing.T) {
 		t.Fatalf("restart lost sealed evidence: %v", err)
 	}
 }
+
+func TestOpenMinuteStagesIncrementallyButIsInvisibleUntilPublication(t *testing.T) {
+	resourceTestDB(t)
+	metric.Reset()
+	t.Cleanup(metric.Reset)
+	now := time.Now().Truncate(time.Minute)
+	metric.StartProduction(now.Add(-time.Minute))
+	s := metric.BeginRequest(metric.RequestMeta{Model: "incremental"})
+	a := s.BeginAttempt(1)
+	a.SetRouteMetadata(metric.AttemptMetadata{Generation: "g"})
+	a.MarkSent()
+	s.EndAttempt(a, metric.AttemptSuccess, 200)
+	if err := model.DB.Exec("CREATE TRIGGER reject_incremental_stage BEFORE INSERT ON production_attempt_records BEGIN SELECT RAISE(ABORT,'stage failure'); END").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := StageProductionTelemetry(); err == nil {
+		t.Fatal("failed stage was acknowledged")
+	}
+	stage := metric.NextProductionStage(128)
+	if stage == nil || len(stage.Attempts) != 1 {
+		t.Fatal("failed stage lost its memory retry")
+	}
+	id := stage.Attempts[0].ID
+	model.DB.Exec("DROP TRIGGER reject_incremental_stage")
+	if err := StageProductionTelemetry(); err != nil {
+		t.Fatal(err)
+	}
+	if stage := metric.NextProductionStage(128); stage != nil {
+		t.Fatal("committed stage retained in memory")
+	}
+	var stored model.ProductionAttemptRecord
+	if err := model.DB.First(&stored, "id = ?", id).Error; err != nil {
+		t.Fatal(err)
+	}
+	visible, err := model.ReadProductionAttempts(now.Unix(), now.Unix(), 1, 100)
+	if err != nil || len(visible) != 0 {
+		t.Fatal("unsealed staging leaked", err)
+	}
+	if err := FlushProductionTelemetry(now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	visible, err = model.ReadProductionAttempts(now.Unix(), now.Unix(), 1, 100)
+	if err != nil || len(visible) != 1 || visible[0].ID != id {
+		t.Fatal("published staging missing", err)
+	}
+	var row model.ProductionTelemetryMinute
+	if err := model.DB.First(&row, now.Unix()).Error; err != nil || row.AttemptCount != 1 {
+		t.Fatal("manifest count does not include staged rows", err)
+	}
+}

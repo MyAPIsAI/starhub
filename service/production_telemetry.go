@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"sort"
 	"sync"
 	"time"
@@ -36,7 +37,7 @@ func FlushProductionTelemetry(now time.Time) error {
 			}
 			attempts = append(attempts, model.ProductionAttemptRecord{ID: a.ID, Minute: b.Minute, Payload: string(raw)})
 		}
-		count := int64(len(b.Attempts))
+		count := b.TotalAttempts
 		b.Attempts = nil
 		raw, err := json.Marshal(b)
 		if err != nil {
@@ -55,16 +56,60 @@ func FlushProductionTelemetry(now time.Time) error {
 func RunProductionTelemetry(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	retryAt := time.Time{}
+	backoff := time.Second
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case now := <-ticker.C:
-			if err := FlushProductionTelemetry(now); err != nil {
-				log.Printf("production telemetry flush failed: %v", err)
-			}
+		case <-ticker.C:
+		case <-metric.ProductionWork:
+		}
+		if time.Now().Before(retryAt) {
+			continue
+		}
+		err := StageProductionTelemetry()
+		if err == nil {
+			err = FlushProductionTelemetry(time.Now())
+		}
+		if err != nil {
+			log.Printf("production telemetry persistence failed: %v", err)
+			retryAt = time.Now().Add(min(30*time.Second, backoff+time.Duration(rand.Int64N(int64(backoff/5)+1))))
+			backoff = min(30*time.Second, 2*backoff)
+		} else {
+			backoff = time.Second
+			retryAt = time.Time{}
 		}
 	}
+}
+
+func StageProductionTelemetry() error {
+	productionFlushMu.Lock()
+	defer productionFlushMu.Unlock()
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for i := 0; i < 8 && time.Now().Before(deadline); i++ {
+		stage := metric.NextProductionStage(128)
+		if stage == nil {
+			return nil
+		}
+		rows := make([]model.ProductionAttemptRecord, 0, len(stage.Attempts))
+		for _, a := range stage.Attempts {
+			raw, err := json.Marshal(a)
+			if err != nil {
+				return err
+			}
+			rows = append(rows, model.ProductionAttemptRecord{ID: a.ID, Minute: stage.Minute, BatchID: stage.BatchID, Payload: string(raw)})
+		}
+		if err := model.StageProductionAttempts(rows); err != nil {
+			return err
+		}
+		metric.AckProductionStage(stage)
+	}
+	select {
+	case metric.ProductionWork <- struct{}{}:
+	default:
+	}
+	return nil
 }
 
 func encodeProductionParts(parts []map[string]any) (string, error) {
