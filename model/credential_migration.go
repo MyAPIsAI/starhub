@@ -16,7 +16,11 @@ func MigrateCredentialStorage(rotate bool, actor, reason string) (int, error) {
 	}
 	changed := 0
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("UPDATE channels SET id = id WHERE id = -1").Error; err != nil {
+		if tx.Dialector.Name() == "sqlite" {
+			if err := tx.Exec("UPDATE channels SET id = id WHERE id = -1").Error; err != nil {
+				return err
+			}
+		} else if err := lockRoutingWriter(tx); err != nil {
 			return err
 		}
 		for _, target := range []struct {
@@ -30,9 +34,9 @@ func MigrateCredentialStorage(rotate bool, actor, reason string) (int, error) {
 					Key     string
 					KeyHash string
 				}
-				columns := "id, key"
+				columns := []string{"id", "key"}
 				if target.hash {
-					columns += ", key_hash"
+					columns = append(columns, "key_hash")
 				}
 				if err := tx.Table(target.table).Select(columns).Where("id > ?", cursor).Order("id").Limit(500).Find(&rows).Error; err != nil {
 					return err
