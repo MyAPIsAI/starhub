@@ -91,7 +91,30 @@ func ResourceRoutingStatus(w http.ResponseWriter, r *http.Request) {
 func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 	byModel := strings.Contains(r.URL.Path, "/model/")
 	quarter := strings.HasSuffix(r.URL.Path, "/mysql")
-	start, end := time.Now().Add(-24*time.Hour).Unix(), time.Now().Unix()
+	now := time.Now()
+	start, end := now.Add(-24*time.Hour).Unix(), now.Unix()
+	if !quarter && !strings.HasSuffix(r.URL.Path, "/attempts") {
+		_, explicitStart := r.URL.Query()["start_timestamp"]
+		_, explicitEnd := r.URL.Query()["end_timestamp"]
+		raw, hasMinutes := r.URL.Query()["minutes"]
+		if hasMinutes && (explicitStart || explicitEnd || len(raw) != 1) {
+			common.ApiError(w, 400, "minutes cannot be combined with an explicit time range")
+			return
+		}
+		if hasMinutes || (!explicitStart && !explicitEnd) {
+			minutes := 15
+			if hasMinutes {
+				var err error
+				minutes, err = strconv.Atoi(raw[0])
+				if err != nil || minutes < 1 || minutes > 126 {
+					common.ApiError(w, 400, "minutes must be between 1 and 126")
+					return
+				}
+			}
+			end = now.Unix() / 60 * 60
+			start = end - int64(minutes-1)*60
+		}
+	}
 	for key, target := range map[string]*int64{"start_timestamp": &start, "end_timestamp": &end} {
 		if raw := r.URL.Query().Get(key); raw != "" {
 			v, err := strconv.ParseInt(raw, 10, 64)
