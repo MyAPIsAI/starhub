@@ -33,3 +33,18 @@ func TestUnreadyDatabaseDriversFailBeforeMigration(t *testing.T) {
 		}
 	}
 }
+
+func TestInitDBPreservesSQLiteURIOptions(t *testing.T) {
+	if err := InitDBWithConfig(DatabaseConfig{DSN: "file:p36-review-options?mode=memory&cache=shared"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = CloseDB() })
+	var timeout int
+	if err := DB.Raw("PRAGMA busy_timeout").Scan(&timeout).Error; err != nil || timeout != 10000 {
+		t.Fatal("required pragma was lost", timeout, err)
+	}
+	var file string
+	if err := DB.Raw("SELECT file FROM pragma_database_list WHERE name='main'").Scan(&file).Error; err != nil || file != "" {
+		t.Fatal("URI memory mode was lost", file, err)
+	}
+}

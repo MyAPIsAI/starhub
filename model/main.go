@@ -28,7 +28,11 @@ type DatabaseConfig struct {
 // busy_timeout makes concurrent billing writers queue instead of failing
 // with SQLITE_BUSY, WAL keeps readers flowing while a writer commits.
 func dsn(path string) string {
-	return path + "?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"
+	separator := "?"
+	if strings.Contains(path, "?") {
+		separator = "&"
+	}
+	return path + separator + "_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"
 }
 
 // InitDB opens a SQLite database at the given file path. It is kept for
