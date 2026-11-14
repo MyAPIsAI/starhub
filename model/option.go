@@ -144,7 +144,7 @@ func saveOptionTx(tx *gorm.DB, key, value string, actorID, expectedVersion int64
 		return 0, err
 	}
 	value = normalized
-	if err := lockTokenPriceOptionTx(tx, key); err != nil {
+	if err := lockOptionRevisionTx(tx); err != nil {
 		return 0, err
 	}
 	if expectedVersion >= 0 {
@@ -160,7 +160,7 @@ func saveOptionTx(tx *gorm.DB, key, value string, actorID, expectedVersion int64
 		return 0, err
 	}
 	var old Option
-	err = tx.Where("`key` = ?", key).First(&old).Error
+	err = tx.Where(map[string]any{"key": key}).First(&old).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return 0, err
 	}
@@ -235,7 +235,7 @@ func UpsertOption(key, value string) error {
 
 func AllOptions() ([]Option, error) {
 	var opts []Option
-	err := DB.Order("`key` ASC").Find(&opts).Error
+	err := DB.Order(productionQuote(DB, "key") + " ASC").Find(&opts).Error
 	return opts, err
 }
 

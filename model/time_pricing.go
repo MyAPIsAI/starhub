@@ -29,7 +29,7 @@ func ReadTimePricing(ctx context.Context) (*TimePricingConfiguration, error) {
 			return fmt.Errorf("time-pricing version is unavailable")
 		}
 		var option Option
-		if err := tx.Where("`key` = ?", setting.OptionKeyModelTimePricing).First(&option).Error; err != nil {
+		if err := tx.Where(map[string]any{"key": setting.OptionKeyModelTimePricing}).First(&option).Error; err != nil {
 			return err
 		}
 		if _, err := pricingtime.Decode(option.Value); err != nil {

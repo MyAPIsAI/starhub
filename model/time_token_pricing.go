@@ -24,7 +24,7 @@ func ReadTokenTimePricing(ctx context.Context) (*TimePricingConfiguration, error
 			return fmt.Errorf("token-pricing version is unavailable")
 		}
 		var option Option
-		if err := tx.Where("`key` = ?", setting.OptionKeyModelTimeTokenPrices).First(&option).Error; err != nil {
+		if err := tx.Where(map[string]any{"key": setting.OptionKeyModelTimeTokenPrices}).First(&option).Error; err != nil {
 			return err
 		}
 		if _, err := pricingtime.DecodeTokenPrices(option.Value); err != nil {
@@ -62,12 +62,8 @@ func SaveTokenTimePricingIfVersion(ctx context.Context, raw string, actorID, exp
 	return version, nil
 }
 
-// Every writer (including history rollback and the generic option endpoint)
-// validates the coupled billing modes under the same SQLite writer lock.
-func lockTokenPriceOptionTx(tx *gorm.DB, key string) error {
-	if key != setting.OptionKeyModelTimeTokenPrices && key != setting.OptionKeyModelPrice && key != setting.OptionKeyModelPriceExpr {
-		return nil
-	}
+// Every option writer serializes version checks and coupled billing modes.
+func lockOptionRevisionTx(tx *gorm.DB) error {
 	locked := tx.Model(&OptionRevision{}).Where("id = 1").UpdateColumn("version", gorm.Expr("version"))
 	if locked.Error != nil {
 		return locked.Error
@@ -84,7 +80,7 @@ func validateTokenPriceOptionTx(tx *gorm.DB, key, value string) error {
 	}
 	keys := []string{setting.OptionKeyModelTimeTokenPrices, setting.OptionKeyModelPrice, setting.OptionKeyModelPriceExpr}
 	var options []Option
-	if err := tx.Where("`key` IN ?", keys).Find(&options).Error; err != nil {
+	if err := tx.Where(productionQuote(tx, "key")+" IN ?", keys).Find(&options).Error; err != nil {
 		return err
 	}
 	values := map[string]string{}
