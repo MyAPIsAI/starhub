@@ -78,6 +78,7 @@ type RequestMeta struct {
 // single-threaded per request); the global registry it reports to is
 // concurrency-safe.
 type RequestSpan struct {
+	ended      bool
 	meta       RequestMeta
 	start      time.Time
 	attempts   []*AttemptSpan
@@ -124,6 +125,7 @@ func (a *AttemptSpan) FirstContentLatency(stream bool) time.Duration {
 // BeginRequest opens a request-level span. Always pair with EndRequest
 // (typically via defer).
 func BeginRequest(meta RequestMeta) *RequestSpan {
+	activeRequests.Add(1)
 	return &RequestSpan{meta: meta, start: time.Now()}
 }
 
@@ -132,6 +134,7 @@ func (s *RequestSpan) SetModel(name string) { s.meta.Model = name }
 // BeginAttempt opens an attempt-level span for one channel. The returned
 // handle is ended by EndAttempt.
 func (s *RequestSpan) BeginAttempt(channelID int64) *AttemptSpan {
+	activeAttempts.Add(1)
 	a := &AttemptSpan{channelID: channelID, start: time.Now()}
 	s.attempts = append(s.attempts, a)
 	return a
@@ -171,6 +174,7 @@ func (s *RequestSpan) EndAttempt(a *AttemptSpan, outcome AttemptClass, statusCod
 		return
 	}
 	a.ended = true
+	activeAttempts.Add(-1)
 	a.endedAt = time.Now()
 	a.outcome = outcome
 	a.statusCode = statusCode
@@ -190,6 +194,11 @@ func (s *RequestSpan) EndAttempt(a *AttemptSpan, outcome AttemptClass, statusCod
 // EndRequest finalizes the request-level metric and folds it into the
 // global counters.
 func (s *RequestSpan) EndRequest(status int) {
+	if s.ended {
+		return
+	}
+	s.ended = true
+	activeRequests.Add(-1)
 	if s.streamGone && len(s.attempts) > 0 {
 		recordPlatformInterruption(s.meta, s.attempts[len(s.attempts)-1])
 	}
@@ -234,6 +243,7 @@ const httpStatusServiceUnavailable = 503
 const rollingWindowSize = 100
 
 var (
+	activeRequests, activeAttempts atomic.Int64
 	// Request-level counters, one slot per class. Atomic so the hot
 	// relay path never contends on a mutex.
 	requestCounts [numClasses]atomic.Int64
@@ -436,6 +446,8 @@ func sortDurations(a []time.Duration) {
 // Reset clears all collected metrics. Tests use it to start from a clean
 // slate; production never calls it.
 func Reset() {
+	activeRequests.Store(0)
+	activeAttempts.Store(0)
 	for i := range classOrder {
 		requestCounts[i].Store(0)
 	}

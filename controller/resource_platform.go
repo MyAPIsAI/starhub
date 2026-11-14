@@ -208,7 +208,8 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	rows := metric.PlatformMetricRows(byModel, false, start, end)
 	if !byModel {
-		common.ApiSuccess(w, map[string]any{"buckets": rows, "pending_count": 0})
+		requests, attempts := metric.InflightCounts()
+		common.ApiSuccess(w, map[string]any{"buckets": rows, "pending_count": attempts, "active_requests": requests, "pending_scope": "inflight_upstream_attempts"})
 		return
 	}
 	buckets := []map[string]any{}
