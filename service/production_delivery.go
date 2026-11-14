@@ -47,8 +47,8 @@ func DeliverProductionAttemptsOnce(ctx context.Context) (err error) {
 }
 
 func deliverProductionAttemptBatch(ctx context.Context) (int, error) {
-	var rows []model.ProductionAttemptRecord
-	if err := model.PublishedProductionAttempts(model.DB.WithContext(ctx)).Where("delivered_at = 0 AND next_attempt_at <= ?", time.Now().Unix()).Order("next_attempt_at,minute,id").Limit(64).Find(&rows).Error; err != nil {
+	rows, err := model.DueProductionAttempts(ctx, time.Now())
+	if err != nil {
 		return 0, err
 	}
 	if len(rows) == 0 {
@@ -62,7 +62,7 @@ func deliverProductionAttemptBatch(ctx context.Context) (int, error) {
 	var ack struct {
 		AcceptedIDs []string `json:"accepted_ids"`
 	}
-	err := postResource(ctx, "/internal/routing/attempt-metadata", payload, &ack)
+	err = postResource(ctx, "/internal/routing/attempt-metadata", payload, &ack)
 	if err == nil {
 		if len(ack.AcceptedIDs) != len(rows) {
 			err = errors.New("attempt acknowledgement mismatch")

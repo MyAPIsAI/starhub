@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -125,5 +126,44 @@ func TestProductionDeliveryDrainsBacklogWithoutConcurrentDuplicateBatches(t *tes
 	model.DB.Model(&model.ProductionAttemptRecord{}).Where("delivered_at = 0").Count(&pending)
 	if pending != 0 || len(seen) != 256 {
 		t.Fatalf("remaining %d delivered %d", pending, len(seen))
+	}
+}
+
+func TestProductionDeliveryBoundsLargePayloadBatches(t *testing.T) {
+	resourceTestDB(t)
+	for i := range 20 {
+		row := model.ProductionAttemptRecord{ID: fmt.Sprint(i), Minute: 60, Payload: fmt.Sprintf(`{"attempt_id":"%d","padding":"%s"}`, i, strings.Repeat("x", 120<<10))}
+		if err := model.DB.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls, accepted := 0, 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ContentLength > 1<<20 {
+			t.Error("delivery exceeded byte budget", r.ContentLength)
+		}
+		var batch struct {
+			Attempts []struct {
+				ID string `json:"attempt_id"`
+			} `json:"attempts"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+			t.Error(err)
+		}
+		ids := []string{}
+		for _, row := range batch.Attempts {
+			ids = append(ids, row.ID)
+		}
+		calls++
+		accepted += len(ids)
+		_ = json.NewEncoder(w).Encode(map[string]any{"accepted_ids": ids})
+	}))
+	defer server.Close()
+	t.Setenv("RESOURCE_CATALOG_NOTIFY_URL", server.URL)
+	if err := DeliverProductionAttemptsOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if calls < 3 || accepted != 20 {
+		t.Fatal("large backlog was not drained in bounded batches", calls, accepted)
 	}
 }
