@@ -7,6 +7,7 @@ import (
 	"starhub/model"
 	"starhub/setting"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gorm.io/gorm"
@@ -20,6 +21,7 @@ type ProductionOperationStatus struct {
 	LastDurationMS float64 `json:"last_duration_ms"`
 	MaxDurationMS  float64 `json:"max_duration_ms"`
 	Failing        bool    `json:"failing"`
+	LastErrorKind  string  `json:"last_error_kind"`
 }
 
 type productionOperation struct {
@@ -37,6 +39,7 @@ func (o *productionOperation) finish(start time.Time, err error) {
 	s.LastDurationMS = float64(time.Since(start).Microseconds()) / 1000
 	s.MaxDurationMS = max(s.MaxDurationMS, s.LastDurationMS)
 	s.Failing = err != nil
+	s.LastErrorKind = model.DatabaseErrorKind(err)
 	if err != nil {
 		s.Errors++
 		s.LastFailure = time.Now().Unix()
@@ -52,8 +55,22 @@ func (o *productionOperation) snapshot() ProductionOperationStatus {
 }
 
 var productionStageHealth, productionFlushHealth, productionDeliveryHealth, productionCleanupHealth productionOperation
+var productionPersistenceBlocked atomic.Bool
+
+type ProductionPoolHealth struct {
+	Open         int   `json:"open"`
+	InUse        int   `json:"in_use"`
+	Idle         int   `json:"idle"`
+	MaxOpen      int   `json:"max_open"`
+	WaitCount    int64 `json:"wait_count"`
+	WaitDuration int64 `json:"wait_duration_ms"`
+}
 
 type ProductionDurableHealth struct {
+	Backend             string                       `json:"backend"`
+	ErrorKind           string                       `json:"error_kind"`
+	QueryDurationMS     float64                      `json:"query_duration_ms"`
+	Pool                ProductionPoolHealth         `json:"pool"`
 	ObservedAt          int64                        `json:"observed_at"`
 	Available           bool                         `json:"available"`
 	Storage             model.ProductionStorageState `json:"storage"`
@@ -77,10 +94,18 @@ func durableProductionHealth(now time.Time) ProductionDurableHealth {
 	if productionHealthCache.db == model.DB && now.Before(productionHealthCache.expires) {
 		return productionHealthCache.value
 	}
-	h := ProductionDurableHealth{ObservedAt: now.Unix()}
+	h := ProductionDurableHealth{ObservedAt: now.Unix(), Backend: model.CurrentDialect()}
 	if model.DB != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		budget := 250 * time.Millisecond
+		if h.Backend != "sqlite" {
+			budget = 2 * time.Second
+		}
+		if value, err := time.ParseDuration(os.Getenv("STARHUB_TELEMETRY_HEALTH_TIMEOUT")); err == nil && value > 0 {
+			budget = value
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), budget)
 		defer cancel()
+		started := time.Now()
 		db := model.DB.WithContext(ctx)
 		err := db.First(&h.Storage, 1).Error
 		if err == nil {
@@ -100,6 +125,12 @@ func durableProductionHealth(now time.Time) ProductionDurableHealth {
 			}
 		}
 		h.Available = err == nil
+		h.ErrorKind = model.DatabaseErrorKind(err)
+		h.QueryDurationMS = float64(time.Since(started).Microseconds()) / 1000
+		if pool, e := model.DB.DB(); e == nil {
+			s := pool.Stats()
+			h.Pool = ProductionPoolHealth{Open: s.OpenConnections, InUse: s.InUse, Idle: s.Idle, MaxOpen: s.MaxOpenConnections, WaitCount: s.WaitCount, WaitDuration: s.WaitDuration.Milliseconds()}
+		}
 	}
 	productionHealthCache.db = model.DB
 	productionHealthCache.expires = now.Add(5 * time.Second)
@@ -108,6 +139,8 @@ func durableProductionHealth(now time.Time) ProductionDurableHealth {
 }
 
 type ProductionTelemetryStatus struct {
+	PersistenceBlocked      bool                               `json:"persistence_blocked"`
+	DatabaseRetries         int64                              `json:"database_retries_since_start"`
 	ConfirmedAttempts       int64                              `json:"confirmed_attempts_since_start"`
 	RetriedAttempts         int64                              `json:"retried_attempts_since_start"`
 	SnapshotRequired        bool                               `json:"snapshot_required"`
@@ -146,7 +179,10 @@ func ProductionTelemetryHealth(now time.Time) ProductionTelemetryStatus {
 		h.OldestPendingAgeSeconds = max(0, now.Unix()-h.Durable.OldestPending)
 	}
 	h.ActiveRequests, h.ActiveAttempts = metric.InflightCounts()
+	h.PersistenceBlocked = productionPersistenceBlocked.Load()
+	h.DatabaseRetries = model.ProductionDatabaseRetries()
 	h.Timings = metric.ProductionTimings()
+	h.Timings["database_transaction"] = model.ProductionDatabaseTimings()
 	for name, value := range model.LocalRoutingTimings() {
 		h.Timings[name] = value
 	}

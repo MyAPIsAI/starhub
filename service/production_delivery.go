@@ -79,7 +79,7 @@ func deliverProductionAttemptBatch(ctx context.Context) (int, error) {
 	if err != nil {
 		failure = err.Error()
 	}
-	if e := model.CompleteProductionDelivery(rows, failure, time.Now()); e != nil {
+	if e := model.CompleteProductionDeliveryContext(ctx, rows, failure, time.Now()); e != nil {
 		return 0, e
 	}
 	if err == nil {

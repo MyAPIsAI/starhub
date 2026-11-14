@@ -21,10 +21,19 @@ import (
 var productionFlushMu sync.Mutex
 
 func FlushProductionTelemetry(now time.Time) (err error) {
+	return FlushProductionTelemetryContext(context.Background(), now)
+}
+
+func FlushProductionTelemetryContext(ctx context.Context, now time.Time) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, model.ProductionDatabaseTimeout())
+	defer cancel()
 	started := time.Now()
 	defer func() { productionFlushHealth.finish(started, err) }()
 	productionFlushMu.Lock()
 	defer productionFlushMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	batch := metric.ClosedProductionMinutes(now)
 	if len(batch) == 0 {
 		return nil
@@ -47,7 +56,7 @@ func FlushProductionTelemetry(now time.Time) (err error) {
 		}
 		rows = append(rows, model.ProductionTelemetryMinute{Minute: b.Minute, BatchID: b.BatchID, Complete: b.Complete, Payload: string(raw), AttemptCount: count})
 	}
-	if err := model.SaveProductionTelemetry(rows, now, attempts...); err != nil {
+	if err := model.SaveProductionTelemetryContext(ctx, rows, now, attempts...); err != nil {
 		return err
 	}
 	metric.AckProduction(batch)
@@ -56,6 +65,7 @@ func FlushProductionTelemetry(now time.Time) (err error) {
 }
 
 func RunProductionTelemetry(ctx context.Context) {
+	productionPersistenceBlocked.Store(false)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	retryAt := time.Time{}
@@ -71,22 +81,27 @@ func RunProductionTelemetry(ctx context.Context) {
 		checkProductionHealthAlerts(time.Now())
 		if !time.Now().Before(cleanupAt) {
 			started := time.Now()
-			_, err := model.PruneProductionTelemetry(started)
+			_, err := model.PruneProductionTelemetryContext(ctx, started)
 			productionCleanupHealth.finish(started, err)
 			if err != nil {
 				log.Printf("production retention failed: %v", err)
 			}
 			cleanupAt = time.Now().Add(time.Second)
 		}
-		if time.Now().Before(retryAt) {
+		if productionPersistenceBlocked.Load() || time.Now().Before(retryAt) {
 			continue
 		}
-		err := StageProductionTelemetry()
+		err := StageProductionTelemetryContext(ctx)
 		if err == nil {
-			err = FlushProductionTelemetry(time.Now())
+			err = FlushProductionTelemetryContext(ctx, time.Now())
 		}
 		if err != nil {
 			log.Printf("production telemetry persistence failed: %v", err)
+			if model.DatabaseErrorKind(err) == "data" {
+				productionPersistenceBlocked.Store(true)
+				log.Printf("production telemetry persistence suspended after a permanent data error; inspect evidence and restart after repair")
+				continue
+			}
 			retryAt = time.Now().Add(min(30*time.Second, backoff+time.Duration(rand.Int64N(int64(backoff/5)+1))))
 			backoff = min(30*time.Second, 2*backoff)
 		} else {
@@ -97,10 +112,19 @@ func RunProductionTelemetry(ctx context.Context) {
 }
 
 func StageProductionTelemetry() (err error) {
+	return StageProductionTelemetryContext(context.Background())
+}
+
+func StageProductionTelemetryContext(ctx context.Context) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, model.ProductionDatabaseTimeout())
+	defer cancel()
 	started := time.Now()
 	defer func() { productionStageHealth.finish(started, err) }()
 	productionFlushMu.Lock()
 	defer productionFlushMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	deadline := time.Now().Add(100 * time.Millisecond)
 	for i := 0; i < 8 && time.Now().Before(deadline); i++ {
 		stage := metric.NextProductionStage(128)
@@ -115,7 +139,7 @@ func StageProductionTelemetry() (err error) {
 			}
 			rows = append(rows, model.ProductionAttemptRecord{ID: a.ID, Minute: stage.Minute, BatchID: stage.BatchID, Payload: string(raw)})
 		}
-		if err := model.StageProductionAttempts(rows); err != nil {
+		if err := model.StageProductionAttemptsContext(ctx, rows); err != nil {
 			return err
 		}
 		metric.AckProductionStage(stage)

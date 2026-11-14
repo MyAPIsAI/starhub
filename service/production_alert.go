@@ -18,7 +18,14 @@ func productionAlertReasons(h ProductionTelemetryStatus, now time.Time) []string
 		reasons = append(reasons, "collector_not_started")
 	}
 	if !h.Durable.Available {
-		reasons = append(reasons, "storage_unavailable")
+		if h.Durable.ErrorKind == "timeout" {
+			reasons = append(reasons, "storage_query_timeout")
+		} else {
+			reasons = append(reasons, "storage_unavailable")
+		}
+	}
+	if h.PersistenceBlocked {
+		reasons = append(reasons, "persistence_blocked")
 	}
 	if h.Stage.Failing || h.Flush.Failing {
 		reasons = append(reasons, "persistence_failed")

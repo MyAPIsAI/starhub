@@ -56,3 +56,29 @@ func TestProductionHealthReportsDurableBacklogAndPersistenceFailures(t *testing.
 		t.Fatal("closed storage claimed available")
 	}
 }
+
+func TestProductionHealthSeparatesPoolTimeoutFromStorageFailure(t *testing.T) {
+	resourceTestDB(t)
+	t.Setenv("STARHUB_TELEMETRY_HEALTH_TIMEOUT", "20ms")
+	pool, err := model.DB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.SetMaxOpenConns(1)
+	connection, err := pool.Conn(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	h := durableProductionHealth(now)
+	if h.Available || h.ErrorKind != "timeout" || h.Backend != "sqlite" || h.Pool.WaitCount == 0 || h.Pool.InUse != 1 {
+		t.Fatalf("pool timeout was not identified: %+v", h)
+	}
+	if err := connection.Close(); err != nil {
+		t.Fatal(err)
+	}
+	h = durableProductionHealth(now.Add(6 * time.Second))
+	if !h.Available || h.ErrorKind != "" {
+		t.Fatal("health did not recover after pool release", h)
+	}
+}
