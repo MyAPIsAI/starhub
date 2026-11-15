@@ -71,6 +71,9 @@ func main() {
 	if err := model.LoadOptionsToSettings(); err != nil {
 		log.Fatalf("failed to load options: %v", err)
 	}
+	if err := service.ConfigureMessageProviders(); err != nil {
+		log.Fatal(err)
+	}
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	var workers sync.WaitGroup
 	run := func(task func(context.Context)) {
