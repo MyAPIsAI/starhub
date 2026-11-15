@@ -358,7 +358,7 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Bind the email to the current user.
 	userID := requestUserID(r)
-	if err := model.UpdateUserFields(userID, map[string]any{"email": email}); err != nil {
+	if err := model.UpdateUserFields(userID, map[string]any{"email": email, "email_verified_at": time.Now().Unix()}); err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
