@@ -5,13 +5,15 @@ server:
   port: 3008
 
 database:
-  # Only sqlite is enabled; network database migrations and locking are not ready.
+  # Supported single-instance drivers: sqlite, mysql (8.x), postgres (tested on 15).
   driver: sqlite
   # Relative paths are resolved against this configuration file (sqlite only).
   sqlite_path: starhub.db
-  # Future MySQL/PostgreSQL connection string examples (not enabled yet).
-  # dsn: "starhub:password@tcp(127.0.0.1:3306)/starhub?charset=utf8mb4&parseTime=True&loc=Local"
+  # Network drivers require a DSN. Inject credentials through STARHUB_DB_DSN.
+  # MySQL requires max_allowed_packet >= 65 MiB; 128 MiB is recommended.
+  # dsn: "starhub:password@tcp(127.0.0.1:3306)/starhub?charset=utf8mb4"
   # dsn: "host=127.0.0.1 port=5432 user=starhub password=pass dbname=starhub sslmode=disable"
+  # These are the network pool defaults; SQLite ignores pool settings.
   # max_open_conns: 25
   # max_idle_conns: 5
   # conn_max_lifetime: 1h
@@ -30,3 +32,16 @@ initial_options:
   user_rate_limit: 120
   token_rate_limit: 60
   model_rate_limit: 200
+
+# Deployment environment:
+# STARHUB_CRYPTO_SECRET: stable secret for customer-key lookup and legacy decryption.
+# STARHUB_CREDENTIAL_KEYS / STARHUB_CREDENTIAL_ACTIVE_KEY: versioned wrapping keys.
+# STARHUB_ROOT_PASSWORD: initial root password; complete password change and 2FA.
+# STARHUB_BIND_ADDRESS: bind to a private or loopback IP behind a TLS proxy.
+# STARHUB_TRUSTED_PROXIES: trusted reverse proxy CIDRs, never client-controlled.
+# STARHUB_ADMIN_IP_WHITELIST: optional management access CIDRs.
+# STARHUB_DB_DRIVER / STARHUB_DB_DSN: override driver and connection string together.
+# STARHUB_REGION_PROFILE: deployment-selected regional policy.
+# STARHUB_BACKUP_DIR: existing directory for SQLite snapshots.
+# RESOURCE_CATALOG_NOTIFY_URL / NODE_NAME: resource integration and stable node ID.
+# See CREDENTIAL_STORAGE.md and SERVICE_MTLS.md before production deployment.
