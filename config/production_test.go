@@ -10,6 +10,8 @@ func TestProductionRejectsDisposableConfiguration(t *testing.T) {
 		{"", "", "", true},
 		{"production", "", "LongInitialPassword93", false},
 		{"production", "persistent-secret-with-32-characters", "123456", false},
+		{"production", "persistent-secret-with-32-characters", "123456789012", false},
+		{"production", "                                ", "LongInitialPassword93", false},
 		{"production", "persistent-secret-with-32-characters", "LongInitialPassword93", true},
 		{"prodution", "", "", false},
 	} {

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"strings"
+	"unicode"
 )
 
 // ValidateProduction rejects disposable secrets and bootstrap credentials when
@@ -15,11 +16,16 @@ func ValidateProduction(bootstrap Bootstrap, getenv func(string) string) error {
 	if mode != "production" {
 		return nil
 	}
-	if len(getenv("STARHUB_CRYPTO_SECRET")) < 32 {
+	if len(strings.TrimSpace(getenv("STARHUB_CRYPTO_SECRET"))) < 32 {
 		return errors.New("production requires a persistent STARHUB_CRYPTO_SECRET of at least 32 characters")
 	}
-	if len(bootstrap.RootPassword) < 12 {
-		return errors.New("production requires STARHUB_ROOT_PASSWORD of at least 12 characters")
+	letter, digit := false, false
+	for _, r := range bootstrap.RootPassword {
+		letter = letter || unicode.IsLetter(r)
+		digit = digit || unicode.IsDigit(r)
+	}
+	if len(bootstrap.RootPassword) < 12 || len(bootstrap.RootPassword) > 64 || strings.TrimSpace(bootstrap.RootPassword) != bootstrap.RootPassword || !letter || !digit {
+		return errors.New("production requires a 12-64 byte STARHUB_ROOT_PASSWORD containing letters and digits")
 	}
 	return nil
 }
