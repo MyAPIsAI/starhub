@@ -34,6 +34,7 @@ initial_options:
   model_rate_limit: 200
 
 # Deployment environment:
+# STARHUB_ENV: set production to reject disposable secrets and weak initial passwords.
 # STARHUB_CRYPTO_SECRET: stable secret for customer-key lookup and legacy decryption.
 # STARHUB_CREDENTIAL_KEYS / STARHUB_CREDENTIAL_ACTIVE_KEY: versioned wrapping keys.
 # STARHUB_ROOT_PASSWORD: initial root password; complete password change and 2FA.
@@ -43,5 +44,8 @@ initial_options:
 # STARHUB_DB_DRIVER / STARHUB_DB_DSN: override driver and connection string together.
 # STARHUB_REGION_PROFILE: deployment-selected regional policy.
 # STARHUB_BACKUP_DIR: existing directory for SQLite snapshots.
+# STARHUB_BACKUP_INTERVAL / STARHUB_BACKUP_KEEP: opt-in SQLite schedule and retention.
+# STARHUB_EMAIL_BRIDGE_URL / STARHUB_EMAIL_BRIDGE_TOKEN: authenticated mail adapter.
+# STARHUB_SMS_BRIDGE_URL / STARHUB_SMS_BRIDGE_TOKEN: authenticated SMS adapter.
 # RESOURCE_CATALOG_NOTIFY_URL / NODE_NAME: resource integration and stable node ID.
-# See CREDENTIAL_STORAGE.md and SERVICE_MTLS.md before production deployment.
+# See PRODUCTION.md, CREDENTIAL_STORAGE.md and SERVICE_MTLS.md before deployment.
