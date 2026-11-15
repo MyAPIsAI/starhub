@@ -74,6 +74,9 @@ func main() {
 	if err := service.ConfigureMessageProviders(); err != nil {
 		log.Fatal(err)
 	}
+	if _, err := service.DatabaseBackupInterval(); err != nil {
+		log.Fatal(err)
+	}
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	var workers sync.WaitGroup
 	run := func(task func(context.Context)) {
@@ -105,6 +108,7 @@ func main() {
 	run(service.RunResourceEventDelivery)
 	run(service.RunLocalRoutingProbes)
 	run(service.RunSecurityNotifications)
+	run(service.RunDatabaseBackups)
 	address := net.JoinHostPort(bootstrap.BindAddress, bootstrap.Port)
 	log.Printf("starhub %s listening on %s (db: %s)", common.Version, address, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
