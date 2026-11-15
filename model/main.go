@@ -106,6 +106,9 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := migrate(&ReconciliationRevision{}); err != nil {
 		return err
 	}
+	if err := migrate(&ReconciliationWork{}); err != nil {
+		return err
+	}
 	if err := createNonemptyUniqueIndex(db, &ReconciliationRecord{}, "reconciliation_records", "idx_reconciliation_report_key", "report_key"); err != nil {
 		return err
 	}
