@@ -37,6 +37,26 @@ func ReconciliationDays(userID int64, now time.Time) ([]BusinessDaySnapshot, err
 		for _, receipt := range receipts {
 			days = append(days, receipt.BusinessDaySnapshot)
 		}
+		for _, table := range []string{"money_entries", "funding_receipts"} {
+			var entries []BusinessDaySnapshot
+			if err := tx.Table(table).Select("DISTINCT business_calendar_version, business_date, business_timezone, business_region, business_region_revision, business_start, business_end").Where("user_id = ? AND business_date <> ''", userID).Find(&entries).Error; err != nil {
+				return err
+			}
+			days = append(days, entries...)
+			var legacyDates []string
+			expr := DateFromUnix("created_at")
+			if err := tx.Table(table).Where("user_id = ? AND business_date = ''", userID).Distinct(expr).Pluck(expr, &legacyDates).Error; err != nil {
+				return err
+			}
+			for _, date := range legacyDates {
+				day, err := BusinessDayForDate(date, "UTC", "", 0)
+				if err != nil {
+					return err
+				}
+				day.BusinessCalendarVersion = 0
+				days = append(days, day)
+			}
+		}
 		var dates []string
 		dayExpr := DateFromUnix(admissionDayColumn)
 		if err := tx.Model(&Log{}).Where("user_id = ? AND business_date = ''", userID).Distinct(dayExpr).Pluck(dayExpr, &dates).Error; err != nil {
@@ -221,6 +241,16 @@ func ReconcileBusinessDay(userID int64, day BusinessDaySnapshot, audit ...AuditL
 		if verifyErr != nil {
 			record.LedgerError = "canonical_or_token_verification_failed"
 		}
+		if err := reconcileFunding(tx, userID, day, &record); err != nil {
+			return err
+		}
+		if record.UnverifiableFunding > 0 && record.State == "matched" {
+			record.State = "incomplete"
+		}
+		if record.FundingDifferenceNano != "0" {
+			record.State = "difference"
+		}
+		record.Alerted = record.State != "matched"
 		record.LogQuotaSum, _, _ = common.NanoQuotaParts(charged)
 		record.Diff, _, _ = common.NanoQuotaParts(difference)
 		// Sequence and lifetime snapshots describe the read boundary; unrelated

@@ -10,6 +10,11 @@ import (
 // time. Each run at 02:00 UTC creates one row per active user.
 type ReconciliationRecord struct {
 	BusinessDaySnapshot
+	FundingCreditsNano    string `gorm:"size:64;not null;default:'0'" json:"funding_credits_nano"`
+	FundingDebitsNano     string `gorm:"size:64;not null;default:'0'" json:"funding_debits_nano"`
+	FundingDifferenceNano string `gorm:"size:64;not null;default:'0'" json:"funding_difference_nano"`
+	FundingBySource       string `gorm:"type:text;not null;default:'{}'" json:"funding_by_source"`
+	UnverifiableFunding   int64  `gorm:"not null;default:0" json:"unverifiable_funding"`
 	ReportKey             string `gorm:"size:64;not null;default:'';index" json:"report_key"`
 	Revision              int64  `gorm:"not null;default:0" json:"revision"`
 	SourceDigest          string `gorm:"size:64;not null;default:''" json:"source_digest"`
