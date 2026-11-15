@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -123,18 +124,31 @@ func reconciliationLogs(tx *gorm.DB, userID int64, day BusinessDaySnapshot) *gor
 // snapshot. Opening observations are never treated as a day's spending.
 // Unchanged reruns return the same persisted revision and do not alert again.
 func ReconcileBusinessDay(userID int64, day BusinessDaySnapshot, audit ...AuditLog) (*ReconciliationRecord, bool, error) {
+	return ReconcileBusinessDayContext(context.Background(), userID, day, audit...)
+}
+
+func ReconcileBusinessDayContext(ctx context.Context, userID int64, day BusinessDaySnapshot, audit ...AuditLog) (*ReconciliationRecord, bool, error) {
 	if len(audit) > 1 || (len(audit) == 1 && (audit[0].Username == "" || audit[0].Reason == "" || len(audit[0].Reason) > 512)) {
 		return nil, false, ErrMoneyConflict
 	}
 	if day.BusinessDate == "" || day.BusinessEnd <= day.BusinessStart {
 		return nil, false, ErrMoneyConflict
 	}
-	if _, err := ReadMoneyAccount(userID); err != nil && !errors.Is(err, ErrMoneyConflict) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		_, _, err := lockMoneyUser(tx, userID)
+		if errors.Is(err, ErrMoneyConflict) {
+			return nil
+		}
+		return err
+	}); err != nil {
 		return nil, false, err
 	}
 	var record ReconciliationRecord
 	changed := false
-	err := DB.Transaction(func(tx *gorm.DB) (txErr error) {
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) (txErr error) {
 		defer func() {
 			if txErr == nil && len(audit) == 1 {
 				entry := audit[0]

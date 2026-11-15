@@ -39,7 +39,9 @@ func RunDailyReconciliationOnce(ctx context.Context) {
 				if ctx.Err() != nil {
 					return
 				}
-				record, changed, err := model.ReconcileBusinessDay(user.ID, day)
+				budget, cancel := context.WithTimeout(ctx, 30*time.Second)
+				record, changed, err := model.ReconcileBusinessDayContext(budget, user.ID, day)
+				cancel()
 				if err != nil {
 					log.Printf("daily reconciliation: user %d day %s failed: %v", user.ID, day.BusinessDate, err)
 					continue
@@ -64,9 +66,12 @@ func RunChangedDayReconciliationOnce(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		record, changed, err := model.ReconcileBusinessDay(row.UserID, row.BusinessDaySnapshot)
+		budget, cancel := context.WithTimeout(ctx, 30*time.Second)
+		record, changed, err := model.ReconcileBusinessDayContext(budget, row.UserID, row.BusinessDaySnapshot)
+		cancel()
 		if err != nil {
 			log.Print("changed business day reconciliation failed")
+			_ = model.RetryReconciliationWork(ctx, row)
 			continue
 		}
 		if changed && record.Alerted {

@@ -56,3 +56,7 @@ func PendingReconciliationWork(ctx context.Context, now time.Time) ([]Reconcilia
 func AckReconciliationWork(ctx context.Context, row ReconciliationWork) error {
 	return DB.WithContext(ctx).Model(&ReconciliationWork{}).Where("id = ? AND revision = ?", row.ID, row.Revision).UpdateColumn("dirty", false).Error
 }
+
+func RetryReconciliationWork(ctx context.Context, row ReconciliationWork) error {
+	return DB.WithContext(ctx).Model(&ReconciliationWork{}).Where("id = ? AND revision = ?", row.ID, row.Revision).UpdateColumn("eligible_at", time.Now().Add(5*time.Minute).Unix()).Error
+}
