@@ -17,6 +17,12 @@ import (
 func TestTokenPasswordVerificationIsOwnerBoundReadOnlyAndCookieFree(t *testing.T) {
 	newTestDB(t)
 	owner := newUser(t, "password-owner", common.RoleUser, 0)
+	// Database fixtures reuse IDs while the global session store outlives them.
+	// Keep one known, long-lived session so unrelated expiry/map order cannot
+	// masquerade as a mutation performed by this read-only endpoint.
+	middleware.Sessions.RemoveAllExcept(owner.ID, "")
+	session := middleware.Sessions.Create(owner.ID, sessionTTLForTest)
+	t.Cleanup(func() { middleware.Sessions.Remove(session) })
 	token := mustToken(t, owner.ID, 0)
 	root := newUser(t, "password-root", common.RoleRoot, 0)
 	beforeUser, _ := model.GetUserByID(owner.ID)
@@ -52,7 +58,7 @@ func TestTokenPasswordVerificationIsOwnerBoundReadOnlyAndCookieFree(t *testing.T
 	}
 	afterUser, _ := model.GetUserByID(owner.ID)
 	afterToken, _ := model.GetTokenByID(token.ID)
-	if *afterUser != *beforeUser || *afterToken != *beforeToken || !reflect.DeepEqual(middleware.Sessions.ListByUser(owner.ID, ""), beforeSessions) {
+	if !reflect.DeepEqual(afterUser, beforeUser) || !reflect.DeepEqual(afterToken, beforeToken) || !reflect.DeepEqual(middleware.Sessions.ListByUser(owner.ID, ""), beforeSessions) {
 		t.Fatal("password verification mutated account, token, quota or sessions")
 	}
 }
