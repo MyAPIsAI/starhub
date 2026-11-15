@@ -90,7 +90,7 @@ func UpdateUserFields(id int64, fields map[string]any) error {
 		expected := user.Quota
 		return UpdateUserFieldsWithQuota(id, fields, &expected)
 	}
-	return DB.Model(&User{}).Where("id = ?", id).Updates(fields).Error
+	return updateUserSecurityFields(id, fields)
 }
 
 func DecreaseUserQuota(id int64, amount int64) (bool, error) {

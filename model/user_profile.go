@@ -17,9 +17,19 @@ func UpdateOwnedProfile(expected *User, field, value string) error {
 		return errors.New("invalid account profile update")
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&User{}).Where("id = ?", expected.ID).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+			return err
+		}
+		var before User
+		if err := tx.First(&before, "id = ?", expected.ID).Error; err != nil {
+			return err
+		}
 		fields := map[string]any{field: value}
 		if field == "password" && common.IsStaffRole(expected.Role) {
 			fields["admin_password_changed_at"] = time.Now().Unix()
+		}
+		if err := queueSecurityNotifications(tx, before, fields); err != nil {
+			return err
 		}
 		result := tx.Model(&User{}).Where("id = ? AND status = ? AND password = ? AND email = ? AND role = ? AND \"group\" = ?", expected.ID, expected.Status, expected.Password, expected.Email, expected.Role, expected.Group).Updates(fields)
 		if result.Error != nil {

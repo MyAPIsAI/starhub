@@ -32,7 +32,7 @@ func updateFieldsWithQuota(entity any, id int64, fields map[string]any, column s
 
 func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {
 	if _, changed := fields["quota"]; !changed {
-		return updateFieldsWithQuota(&User{}, id, fields, "quota", expected)
+		return updateUserSecurityFields(id, fields)
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		user, account, err := lockMoneyUser(tx, id)
@@ -54,6 +54,9 @@ func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64)
 		after := common.QuotaMoney(next, user.QuotaRemainderNano)
 		delta := new(big.Int).Sub(after, before)
 		fields["quota_remainder_nano"] = user.QuotaRemainderNano
+		if err := queueSecurityNotifications(tx, user, fields); err != nil {
+			return err
+		}
 		if err := tx.Model(&User{}).Where("id = ? AND quota = ?", id, *expected).Updates(fields).Error; err != nil {
 			return err
 		}
