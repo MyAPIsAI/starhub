@@ -21,7 +21,3 @@ func (entry *MoneyEntry) BeforeCreate(tx *gorm.DB) error {
 	entry.BusinessDaySnapshot = day
 	return nil
 }
-
-func (entry *MoneyEntry) AfterCreate(tx *gorm.DB) error {
-	return queueReconciliationDay(tx, entry.UserID, entry.BusinessDaySnapshot)
-}

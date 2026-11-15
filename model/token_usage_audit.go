@@ -29,6 +29,13 @@ func attachTokenAccounting(tx *gorm.DB, account *MoneyAccount, entry *MoneyEntry
 	}
 	entry.TokenID, entry.PeriodID = log.TokenID, log.QuotaPeriodID
 	entry.BusinessDaySnapshot = log.BusinessDaySnapshot
+	if entry.BusinessDate == "" {
+		at := log.AdmittedAt
+		if at == 0 {
+			at = log.CreatedAt
+		}
+		entry.BusinessDaySnapshot = legacyBusinessDay(at)
+	}
 	if entry.TokenID == 0 {
 		return nil
 	}

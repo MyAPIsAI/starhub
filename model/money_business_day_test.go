@@ -33,3 +33,20 @@ func TestMoneyBusinessDayFreezesRegionBeforeLaterPolicyChanges(t *testing.T) {
 		t.Fatal("funding did not schedule its original day", work, err)
 	}
 }
+
+func TestConsumptionJournalRetainsLegacyLogCalendar(t *testing.T) {
+	newTestDB(t)
+	u, token := newBillingUser(t, 1000)
+	at := time.Now().Add(-48 * time.Hour).Unix()
+	entry := &Log{AdmittedAt: at, CreatedAt: time.Now().Unix(), Status: 1}
+	if err := SettleQuota(u.ID, token.ID, false, 1, 1, entry); err != nil {
+		t.Fatal(err)
+	}
+	var movement MoneyEntry
+	if err := DB.Where("user_id = ? AND kind = ?", u.ID, "consumption").First(&movement).Error; err != nil {
+		t.Fatal(err)
+	}
+	if movement.BusinessDate != legacyBusinessDay(at).BusinessDate || movement.BusinessTimezone != "UTC" {
+		t.Fatal("legacy consumption moved to completion day", movement)
+	}
+}
