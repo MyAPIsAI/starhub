@@ -44,7 +44,11 @@ func reconcileFunding(tx *gorm.DB, userID int64, day BusinessDaySnapshot, record
 		source, exists := byOperation[entry.OperationID]
 		if !exists {
 			record.UnverifiableFunding++
-			difference.Add(difference, new(big.Int).Abs(value))
+			// Pre-migration rows have no frozen calendar or independent input.
+			// Missing evidence cannot establish a historical monetary difference.
+			if entry.BusinessDate != "" {
+				difference.Add(difference, new(big.Int).Abs(value))
+			}
 			continue
 		}
 		delete(byOperation, entry.OperationID)
