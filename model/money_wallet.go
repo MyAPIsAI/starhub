@@ -97,7 +97,11 @@ func AdjustMoneyBalance(input MoneyAdjustment) (*MoneyEntry, error) {
 		if amount.Sign() < 0 {
 			kind = "admin_debit"
 		}
-		result, err = recordMoneyMovement(tx, account, moneyMovement{Available: amount, Kind: kind, OperationID: operation, Digest: digest, Reason: input.Reason, FundingSource: "administrator_grant", ActorID: input.ActorID})
+		receipt, err := createFundingReceipt(tx, input.UserID, operation, "administrator_grant", amount, input.ActorID)
+		if err != nil {
+			return err
+		}
+		result, err = recordMoneyMovement(tx, account, moneyMovement{Day: receipt.BusinessDaySnapshot, Available: amount, Kind: kind, OperationID: operation, Digest: digest, Reason: input.Reason, FundingSource: "administrator_grant", ActorID: input.ActorID})
 		if err != nil {
 			return err
 		}

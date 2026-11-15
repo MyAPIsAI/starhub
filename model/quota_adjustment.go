@@ -75,7 +75,12 @@ func AdjustUserQuota(userID int64, amount int64, expectedQuota int64, actorID in
 		if err := tx.Create(&entry).Error; err != nil {
 			return err
 		}
-		_, err = recordMoneyMovement(tx, account, moneyMovement{Available: common.QuotaMoney(amount, 0), Kind: "admin_adjustment", OperationID: fmt.Sprintf("legacy-adjustment:%d", entry.ID), ActorID: actorID, Reason: reason, FundingSource: "administrator"})
+		operation := fmt.Sprintf("legacy-adjustment:%d", entry.ID)
+		receipt, err := createFundingReceipt(tx, userID, operation, "administrator", common.QuotaMoney(amount, 0), actorID)
+		if err != nil {
+			return err
+		}
+		_, err = recordMoneyMovement(tx, account, moneyMovement{Day: receipt.BusinessDaySnapshot, Available: common.QuotaMoney(amount, 0), Kind: "admin_adjustment", OperationID: operation, ActorID: actorID, Reason: reason, FundingSource: "administrator"})
 		return err
 	})
 	if err != nil {

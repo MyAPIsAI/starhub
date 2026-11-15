@@ -60,7 +60,12 @@ func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64)
 		if err := tx.Model(&User{}).Where("id = ? AND quota = ?", id, *expected).Updates(fields).Error; err != nil {
 			return err
 		}
-		_, err = recordMoneyMovement(tx, account, moneyMovement{Available: delta, Kind: "legacy_adjustment", OperationID: legacyMoneyOperation("legacy_adjustment", "", next), Reason: "Guarded legacy quota replacement", FundingSource: "system_quota"})
+		operation := legacyMoneyOperation("legacy_adjustment", "", next)
+		receipt, err := createFundingReceipt(tx, id, operation, "system_quota", delta, 0)
+		if err != nil {
+			return err
+		}
+		_, err = recordMoneyMovement(tx, account, moneyMovement{Day: receipt.BusinessDaySnapshot, Available: delta, Kind: "legacy_adjustment", OperationID: operation, Reason: "Guarded legacy quota replacement", FundingSource: "system_quota"})
 		return err
 	})
 }

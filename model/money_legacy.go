@@ -42,5 +42,9 @@ func applyUserMoneyDelta(tx *gorm.DB, userID int64, amount *big.Int, kind, opera
 	if err := setMoneyPair(tx, &User{}, userID, "quota", available); err != nil {
 		return nil, err
 	}
-	return recordMoneyMovement(tx, account, moneyMovement{Available: amount, Kind: kind, OperationID: operation, Reason: reason, FundingSource: source, ActorID: actorID})
+	receipt, err := createFundingReceipt(tx, userID, operation, source, amount, actorID)
+	if err != nil {
+		return nil, err
+	}
+	return recordMoneyMovement(tx, account, moneyMovement{Day: receipt.BusinessDaySnapshot, Available: amount, Kind: kind, OperationID: operation, Reason: reason, FundingSource: source, ActorID: actorID})
 }
