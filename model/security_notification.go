@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -84,13 +85,19 @@ func updateUserSecurityFields(id int64, fields map[string]any) error {
 
 // CompleteSecurityNotification only acknowledges the version selected by a worker.
 func CompleteSecurityNotification(row SecurityNotification, accepted bool) error {
+	return CompleteSecurityNotificationContext(context.Background(), row, accepted)
+}
+
+func CompleteSecurityNotificationContext(ctx context.Context, row SecurityNotification, accepted bool) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	status, message, attempts := "pending", "provider_unavailable", row.Attempts+1
 	if accepted {
 		status, message = "accepted", ""
 	} else if attempts >= 8 {
 		status = "failed"
 	}
-	result := DB.Model(&SecurityNotification{}).Where("id = ? AND status = ? AND attempts = ?", row.ID, "pending", row.Attempts).
+	result := DB.WithContext(ctx).Model(&SecurityNotification{}).Where("id = ? AND status = ? AND attempts = ?", row.ID, "pending", row.Attempts).
 		Updates(map[string]any{"status": status, "last_error": message, "attempts": attempts, "next_attempt": time.Now().Add(time.Duration(1<<min(attempts, 8)) * 30 * time.Second).Unix()})
 	if result.Error != nil {
 		return result.Error

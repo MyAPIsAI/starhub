@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,5 +36,10 @@ func TestMessageBridgeRequiresAcknowledgmentAndDoesNotFollowRedirects(t *testing
 	}
 	if _, err := newMessageBridge("http://provider.example/send", "secret"); err == nil {
 		t.Fatal("public plaintext provider allowed")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := p.sendContext(ctx, map[string]string{"kind": "security_notification"}); err == nil {
+		t.Fatal("cancelled provider request was sent")
 	}
 }

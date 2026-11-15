@@ -45,7 +45,10 @@ func DeliverSecurityNotificationsOnce(ctx context.Context) error {
 		return nil
 	}
 	var rows []model.SecurityNotification
-	if err := model.DB.WithContext(ctx).Where("status = ? AND next_attempt <= ?", "pending", time.Now().Unix()).Order("next_attempt, id").Limit(32).Find(&rows).Error; err != nil {
+	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	err := model.DB.WithContext(queryCtx).Where("status = ? AND next_attempt <= ?", "pending", time.Now().Unix()).Order("next_attempt, id").Limit(32).Find(&rows).Error
+	cancel()
+	if err != nil {
 		return err
 	}
 	for _, row := range rows {
@@ -58,12 +61,15 @@ func DeliverSecurityNotificationsOnce(ctx context.Context) error {
 		emailMu.RUnlock()
 		var err error
 		if bridge, ok := provider.(*messageBridge); ok {
-			err = bridge.send(map[string]string{"kind": "security_notification", "id": row.ID, "to": row.Email, "subject": subject, "body": body})
+			err = bridge.sendContext(ctx, map[string]string{"kind": "security_notification", "id": row.ID, "to": row.Email, "subject": subject, "body": body})
 		} else {
 			err = provider.SendNotification(row.Email, subject, body)
 		}
-		if completeErr := model.CompleteSecurityNotification(row, err == nil); completeErr != nil {
+		if completeErr := model.CompleteSecurityNotificationContext(ctx, row, err == nil); completeErr != nil {
 			return completeErr
+		}
+		if err != nil && row.Attempts == 7 {
+			deliverAlert(AlertEvent{Type: "security_notification_failed", Severity: "warning", Message: "Security notification exhausted delivery attempts; inspect provider acceptance history", Timestamp: time.Now().Unix()})
 		}
 	}
 	return nil

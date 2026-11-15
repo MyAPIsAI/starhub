@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -31,11 +32,15 @@ func newMessageBridge(endpoint, token string) (*messageBridge, error) {
 }
 
 func (p *messageBridge) send(payload any) error {
+	return p.sendContext(context.Background(), payload)
+}
+
+func (p *messageBridge) sendContext(ctx context.Context, payload any) error {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return errors.New("message encoding failed")
 	}
-	req, err := http.NewRequest(http.MethodPost, p.endpoint, bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(raw))
 	if err != nil {
 		return errors.New("message request failed")
 	}
