@@ -28,6 +28,7 @@ func attachTokenAccounting(tx *gorm.DB, account *MoneyAccount, entry *MoneyEntry
 		return ErrMoneyConflict
 	}
 	entry.TokenID, entry.PeriodID = log.TokenID, log.QuotaPeriodID
+	entry.BusinessDaySnapshot = log.BusinessDaySnapshot
 	if entry.TokenID == 0 {
 		return nil
 	}

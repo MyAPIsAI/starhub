@@ -26,6 +26,7 @@ type MoneyAccount struct {
 }
 
 type MoneyEntry struct {
+	BusinessDaySnapshot
 	TokenID            int64  `gorm:"index;not null;default:0" json:"token_id,omitempty"`
 	PeriodID           int64  `gorm:"index;not null;default:0" json:"period_id,omitempty"`
 	ID                 int64  `gorm:"primaryKey" json:"id"`
