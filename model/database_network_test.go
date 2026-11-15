@@ -1,7 +1,9 @@
 package model
 
 import (
+	"context"
 	"os"
+	"starhub/common"
 	"sync"
 	"testing"
 )
@@ -79,6 +81,27 @@ func TestNetworkApplicationInitialization(t *testing.T) {
 			}
 			if err := VerifyMoneyLedger(user.ID); err != nil {
 				t.Fatal("accounting journal", err)
+			}
+			var source FundingReceipt
+			if err := DB.Where("user_id = ?", user.ID).First(&source).Error; err != nil {
+				t.Fatal("funding input", err)
+			}
+			report, _, err := ReconcileBusinessDay(user.ID, source.BusinessDaySnapshot)
+			if err != nil || report.State != "matched" || report.FundingDebitsNano != common.QuotaMoney(80, 0).String() {
+				t.Fatal("network funding reconciliation", report, err)
+			}
+			if err := UpdateUserFields(user.ID, map[string]any{"email": "verified@example.test", "email_verified_at": int64(1), "language": "en"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := UpdateUserFields(user.ID, map[string]any{"password": "updated-test-hash"}); err != nil {
+				t.Fatal(err)
+			}
+			var notification SecurityNotification
+			if err := DB.Where("user_id = ?", user.ID).First(&notification).Error; err != nil {
+				t.Fatal("network security outbox", err)
+			}
+			if err := CompleteSecurityNotificationContext(context.Background(), notification, true); err != nil {
+				t.Fatal("network acceptance", err)
 			}
 			if err := CloseDB(); err != nil {
 				t.Fatal(err)
