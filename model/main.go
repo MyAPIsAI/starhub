@@ -118,6 +118,9 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := migrate(&UserSecurityEvent{}); err != nil {
 		return fmt.Errorf("migrate user security history: %w", err)
 	}
+	if err := migrate(&SecurityNotification{}); err != nil {
+		return fmt.Errorf("migrate security notifications: %w", err)
+	}
 	if err := migrate(&AccountDeactivationReceipt{}); err != nil {
 		return fmt.Errorf("migrate account deactivation receipts: %w", err)
 	}
