@@ -31,6 +31,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid startup configuration: %v", err)
 	}
+	if err := config.ValidateProduction(startup.Bootstrap, os.Getenv); err != nil {
+		log.Fatal(err)
+	}
+	if os.Getenv("STARHUB_CRYPTO_SECRET") == "" {
+		log.Print("WARNING: no persistent crypto secret; stored credentials will not survive a restart")
+	}
 	if err := config.ApplyStartup(startup); err != nil {
 		log.Fatalf("apply startup configuration: %v", err)
 	}
