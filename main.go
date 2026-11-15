@@ -104,6 +104,7 @@ func main() {
 	run(service.RunResourceObservations)
 	run(service.RunResourceEventDelivery)
 	run(service.RunLocalRoutingProbes)
+	run(service.RunSecurityNotifications)
 	address := net.JoinHostPort(bootstrap.BindAddress, bootstrap.Port)
 	log.Printf("starhub %s listening on %s (db: %s)", common.Version, address, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
