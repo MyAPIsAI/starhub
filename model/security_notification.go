@@ -67,7 +67,7 @@ func queueSecurityNotifications(tx *gorm.DB, before User, fields map[string]any)
 	return nil
 }
 
-func updateUserSecurityFields(id int64, fields map[string]any) error {
+func updateUserSecurityFields(id int64, fields map[string]any, expectedPassword ...string) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&User{}).Where("id = ?", id).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
 			return err
@@ -76,11 +76,19 @@ func updateUserSecurityFields(id int64, fields map[string]any) error {
 		if err := tx.First(&before, "id = ?", id).Error; err != nil {
 			return err
 		}
+		if len(expectedPassword) > 0 && (len(expectedPassword) != 1 || before.Password != expectedPassword[0]) {
+			return ErrUserProfileConflict
+		}
 		if err := queueSecurityNotifications(tx, before, fields); err != nil {
 			return err
 		}
 		return tx.Model(&User{}).Where("id = ?", id).Updates(fields).Error
 	})
+}
+
+// UpdateVerifiedEmail requires the password proof observed before code consumption.
+func UpdateVerifiedEmail(id int64, password, email string) error {
+	return updateUserSecurityFields(id, map[string]any{"email": email, "email_verified_at": time.Now().Unix()}, password)
 }
 
 // CompleteSecurityNotification only acknowledges the version selected by a worker.

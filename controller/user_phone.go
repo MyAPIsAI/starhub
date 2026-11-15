@@ -293,8 +293,9 @@ type sendEmailVerificationRequest struct {
 }
 
 type verifyEmailRequest struct {
-	Email string `json:"email"`
-	Code  string `json:"code"`
+	Email           string `json:"email"`
+	Code            string `json:"code"`
+	CurrentPassword string `json:"current_password"`
 }
 
 // SendEmailVerificationHandler handles POST /api/user/email-verification.
@@ -343,6 +344,11 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	owner, err := model.GetUserByID(requestUserID(r))
+	if err != nil || len(req.CurrentPassword) > 72 || !common.VerifyPassword(req.CurrentPassword, owner.Password) {
+		common.ApiError(w, 403, "current password verification required")
+		return
+	}
 	email := strings.TrimSpace(req.Email)
 	if !validEmail(email) {
 		common.ApiError(w, http.StatusBadRequest, "invalid email")
@@ -358,7 +364,7 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Bind the email to the current user.
 	userID := requestUserID(r)
-	if err := model.UpdateUserFields(userID, map[string]any{"email": email, "email_verified_at": time.Now().Unix()}); err != nil {
+	if err := model.UpdateVerifiedEmail(userID, owner.Password, email); err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
