@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 
+	"starhub/internal/operator"
 	"starhub/model"
 )
 
@@ -15,8 +16,8 @@ func main() {
 	username := flag.String("username", "", "Target staff username")
 	reason := flag.String("reason", "", "Required audit reason")
 	flag.Parse()
-	if *database == "" || *action == "" || *username == "" || *reason == "" {
-		fmt.Fprintln(os.Stderr, "db, action, username and reason are required")
+	if *action == "" || *username == "" || *reason == "" {
+		fmt.Fprintln(os.Stderr, "action, username and reason are required")
 		os.Exit(2)
 	}
 	identity, err := user.Current()
@@ -24,7 +25,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "operator identity unavailable")
 		os.Exit(1)
 	}
-	if err := model.InitDB(*database); err != nil {
+	if err := operator.OpenDatabase(*database); err != nil {
 		fmt.Fprintln(os.Stderr, "database initialization failed")
 		os.Exit(1)
 	}
