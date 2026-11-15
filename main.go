@@ -118,10 +118,12 @@ func main() {
 	defer stopSignals()
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.ListenAndServe() }()
+	serverFailed := false
 	select {
 	case <-signals.Done():
 	case err := <-serveErr:
 		if err != http.ErrServerClosed {
+			serverFailed = true
 			log.Printf("server stopped: %v", err)
 		}
 	}
@@ -150,6 +152,9 @@ func main() {
 		}
 	case <-time.After(10 * time.Second):
 		log.Print("background shutdown timed out; durable work will resume after restart")
+	}
+	if serverFailed {
+		os.Exit(1)
 	}
 }
 

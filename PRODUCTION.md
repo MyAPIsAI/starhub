@@ -15,6 +15,13 @@ Bind the server to a private interface or loopback behind a TLS reverse proxy.
 Configure trusted proxy CIDRs, secure cookies, and management access restrictions.
 Complete the initial password change and 2FA. Use one service replica.
 
+For Linux, [the systemd example](deploy/starhub.service) provides restart-on-failure,
+restricted filesystem access and a 55-second stop window. Create its service user,
+private configuration/secret files and writable data/backup directories before
+installation. Adjust paths for the actual deployment and validate the unit locally;
+the example is not installed automatically. Other supervisors must provide the
+same restart and shutdown boundaries.
+
 `/api/live` reports process liveness; `/api/ready` also requires database access,
 an initial commercial routing snapshot, and an accepting server. `/api/health`
 retains its database-connectivity meaning. Configure probes outside customer
