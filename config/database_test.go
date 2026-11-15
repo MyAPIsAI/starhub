@@ -65,3 +65,15 @@ func TestDatabaseConfigDoesNotExposeDSNInValidationErrors(t *testing.T) {
 		t.Fatal("invalid lifetime was accepted or exposed the DSN", err)
 	}
 }
+
+func TestDatabasePoolDefaultsAndExplicitZero(t *testing.T) {
+	startup, err := LoadStartup(nil, startupEnv(map[string]string{"STARHUB_DB_DRIVER": "postgres", "STARHUB_DB_DSN": "test"}))
+	if err != nil || startup.Bootstrap.Database.MaxOpenConns != 25 || startup.Bootstrap.Database.MaxIdleConns != 5 || startup.Bootstrap.Database.ConnMaxLifetime != "1h" {
+		t.Fatal("bounded pool defaults unavailable", startup, err)
+	}
+	file := writeStartupFile(t, "version: 1\ndatabase:\n  max_open_conns: 0\n  max_idle_conns: 0\n  conn_max_lifetime: 0s\n")
+	startup, err = LoadStartup([]string{"--config", file}, startupEnv(nil))
+	if err != nil || startup.Bootstrap.Database.MaxOpenConns != 0 || startup.Bootstrap.Database.MaxIdleConns != 0 || startup.Bootstrap.Database.ConnMaxLifetime != "0s" {
+		t.Fatal("explicit pool settings lost", startup, err)
+	}
+}

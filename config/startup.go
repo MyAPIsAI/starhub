@@ -83,7 +83,7 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 	result := Startup{
 		Bootstrap: Bootstrap{
 			DBPath:   "starhub.db",
-			Database: DatabaseConfig{Driver: "sqlite"},
+			Database: DatabaseConfig{Driver: "sqlite", MaxOpenConns: 25, MaxIdleConns: 5, ConnMaxLifetime: "1h"},
 			Port:     "3000", RootPassword: getenv("STARHUB_ROOT_PASSWORD"),
 		},
 		InitialOptions: make(map[string]string),
