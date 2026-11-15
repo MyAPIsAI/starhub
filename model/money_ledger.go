@@ -140,6 +140,7 @@ func ensureMoneyAccount(tx *gorm.DB, user User) (*MoneyAccount, error) {
 }
 
 type moneyMovement struct {
+	Day                                                             BusinessDaySnapshot
 	Available                                                       *big.Int
 	Reserved                                                        *big.Int
 	Spent                                                           *big.Int
@@ -179,6 +180,7 @@ func recordMoneyMovement(tx *gorm.DB, account *MoneyAccount, m moneyMovement) (*
 		return nil, ErrMoneyConflict
 	}
 	entry := &MoneyEntry{UserID: account.UserID, Sequence: account.Sequence + 1, OperationID: m.OperationID, RequestDigest: m.Digest, Kind: m.Kind, AvailableDeltaNano: changes[0], ReservedDeltaNano: changes[1], SpentDeltaNano: changes[2], AvailableAfterNano: after[0], ReservedAfterNano: after[1], SpentAfterNano: after[2], ReservationID: m.ReservationID, LogID: m.LogID, ActorID: m.ActorID, Reason: m.Reason, FundingSource: m.FundingSource}
+	entry.BusinessDaySnapshot = m.Day
 	if err := attachTokenAccounting(tx, account, entry); err != nil {
 		return nil, err
 	}

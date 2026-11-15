@@ -103,6 +103,9 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := migrate(&MoneyAccount{}, &MoneyEntry{}, &TokenUsageBaseline{}); err != nil {
 		return fmt.Errorf("migrate exact monetary journal: %w", err)
 	}
+	if err := migrate(&FundingReceipt{}); err != nil {
+		return err
+	}
 	if err := migrate(&ReconciliationRevision{}); err != nil {
 		return err
 	}
