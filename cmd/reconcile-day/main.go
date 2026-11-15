@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"starhub/internal/operator"
 	"starhub/model"
 )
 
@@ -18,11 +19,8 @@ func main() {
 	legacy := flag.Bool("legacy", false, "Reconcile pre-calendar UTC records")
 	reason := flag.String("reason", "", "Required audit reason")
 	flag.Parse()
-	if *database == "" || *owner <= 0 || *reason == "" || (*legacy && (*zone != "UTC" || *region != "")) {
-		fail("db, user, date, original calendar and reason are required")
-	}
-	if _, err := os.Stat(*database); err != nil {
-		fail("existing database required")
+	if *owner <= 0 || *reason == "" || (*legacy && (*zone != "UTC" || *region != "")) {
+		fail("user, date, original calendar and reason are required")
 	}
 	identity, err := user.Current()
 	if err != nil {
@@ -35,7 +33,7 @@ func main() {
 	if *legacy {
 		day.BusinessCalendarVersion = 0
 	}
-	if err := model.InitDB(*database); err != nil {
+	if err := operator.OpenDatabase(*database); err != nil {
 		fail("database verification failed")
 	}
 	defer model.CloseDB()
