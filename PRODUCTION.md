@@ -123,6 +123,11 @@ metadata without contacts. `accepted` means provider acceptance, not inbox deliv
 the adapter owns delivery retries, bounce handling and final delivery monitoring.
 Investigate terminal failures before any audited manual requeue.
 
+Email verification binding requires `current_password` along with `email` and
+the verification `code`. A password change racing with code verification rejects
+the stale binding. Legacy contacts without persisted verification provenance must
+be verified again before they can receive security notifications.
+
 ## Accounting and release acceptance
 
 Minute-level reconciliation handles up to 128 changed business days per pass;
