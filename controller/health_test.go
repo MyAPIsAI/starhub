@@ -10,6 +10,8 @@ import (
 
 func TestReadinessRequiresDatabaseAndAcceptingTraffic(t *testing.T) {
 	newTestDB(t)
+	previous := setting.ResourceProviderModeValue()
+	t.Cleanup(func() { _ = setting.UpdateResourceProviderMode(setting.OptionKeyResourceProviderMode, previous) })
 	SetDraining(true)
 	t.Cleanup(func() { SetDraining(false) })
 	if w := call(ReadinessCheck, testRequest{target: "/api/ready"}); w.Code != 503 {
