@@ -95,3 +95,35 @@ func reconciliationForDate(userID int64, date string) (*model.ReconciliationReco
 	err := model.DB.Where("user_id = ? AND date = ?", userID, date).First(&record).Error
 	return &record, err
 }
+
+func TestChangedDayReconciliationRevisitsLateWrites(t *testing.T) {
+	newTestDB(t)
+	u := &model.User{Username: "dirty-work", AffCode: "dirty-work"}
+	if err := model.CreateUser(u); err != nil {
+		t.Fatal(err)
+	}
+	day, _ := model.BusinessDayForDate(time.Now().Add(-72*time.Hour).UTC().Format("2006-01-02"), "UTC", "", 0)
+	insert := func() {
+		t.Helper()
+		if err := model.InsertLog(&model.Log{UserID: u.ID, BusinessDaySnapshot: day, Status: 1, QuotaRemainderNano: 1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	insert()
+	RunChangedDayReconciliationOnce(context.Background())
+	first, err := reconciliationForDate(u.ID, day.BusinessDate)
+	if err != nil || first.Revision != 1 {
+		t.Fatal(first, err)
+	}
+	insert()
+	RunChangedDayReconciliationOnce(context.Background())
+	second, err := reconciliationForDate(u.ID, day.BusinessDate)
+	if err != nil || second.Revision != 2 || second.LogQuotaNanoSum != "2" {
+		t.Fatal("late day not revisited", second, err)
+	}
+	RunChangedDayReconciliationOnce(context.Background())
+	third, err := reconciliationForDate(u.ID, day.BusinessDate)
+	if err != nil || third.Revision != 2 {
+		t.Fatal("clean report rebuilt", third, err)
+	}
+}
