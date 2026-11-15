@@ -41,3 +41,17 @@ func GetUserSecurityState(w http.ResponseWriter, r *http.Request) {
 	}
 	common.ApiSuccess(w, map[string]any{"schema": "security_state_v1", "history_scope": "guarded_profile_changes_v1", "user_id": owner, "events": events})
 }
+
+// GetUserNotificationState returns delivery acceptance metadata without contacts.
+func GetUserNotificationState(w http.ResponseWriter, r *http.Request) {
+	owner, ok := expectedAccountOwner(w, r)
+	if !ok {
+		return
+	}
+	rows := []model.SecurityNotification{}
+	if err := model.DB.WithContext(r.Context()).Where("user_id = ?", owner).Order("created_at DESC, id DESC").Limit(20).Find(&rows).Error; err != nil {
+		common.ApiError(w, 503, "notification history unavailable")
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"user_id": owner, "acceptance_only": true, "notifications": rows})
+}

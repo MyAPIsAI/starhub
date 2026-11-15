@@ -74,6 +74,7 @@ func New() http.Handler {
 	mux.HandleFunc("GET /api/health", controller.HealthCheck)
 	mux.HandleFunc("GET /api/live", controller.LivenessCheck)
 	mux.HandleFunc("GET /api/ready", controller.ReadinessCheck)
+	mux.Handle("GET /api/user/notifications", middleware.UserAuth(http.HandlerFunc(controller.GetUserNotificationState)))
 	mux.Handle("POST /api/backup", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.BackupDatabase))))
 	mux.Handle("POST /api/shadow-billing", middleware.AdminAuth(http.HandlerFunc(controller.ShadowBillingHandler)))
 	mux.HandleFunc("GET /api/setup", controller.GetSetupHandler)
