@@ -32,7 +32,12 @@ func updateFieldsWithQuota(entity any, id int64, fields map[string]any, column s
 
 func UpdateUserFieldsWithQuota(id int64, fields map[string]any, expected *int64) error {
 	if _, changed := fields["quota"]; !changed {
-		return updateUserSecurityFields(id, fields)
+		_, password := fields["password"]
+		_, email := fields["email"]
+		if password || email {
+			return updateUserSecurityFields(id, fields)
+		}
+		return updateFieldsWithQuota(&User{}, id, fields, "quota", expected)
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		user, account, err := lockMoneyUser(tx, id)
