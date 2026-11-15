@@ -6,10 +6,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"starhub/common"
 	"starhub/config"
+	"starhub/controller"
 	"starhub/internal/router"
 	"starhub/metric"
 	"starhub/middleware"
@@ -67,45 +71,88 @@ func main() {
 	if err := model.LoadOptionsToSettings(); err != nil {
 		log.Fatalf("failed to load options: %v", err)
 	}
-	go model.WatchOptions(context.Background(), time.Second)
+	workerCtx, stopWorkers := context.WithCancel(context.Background())
+	var workers sync.WaitGroup
+	run := func(task func(context.Context)) {
+		workers.Add(1)
+		go func() { defer workers.Done(); task(workerCtx) }()
+	}
+	run(func(ctx context.Context) { model.WatchOptions(ctx, time.Second) })
 	middleware.SetTrustedProxies(os.Getenv("STARHUB_TRUSTED_PROXIES"))
 	middleware.SetAdminIPWhitelist(os.Getenv("STARHUB_ADMIN_IP_WHITELIST"))
 	middleware.ConfigureConcurrency(50, 0)
-	startChannelTestTask()
-	startTaskPollTask()
-	go config.RunLoop(context.Background(), func(c config.Runtime) time.Duration {
-		if c.TaskPollInterval <= 0 {
-			return 30 * time.Second
-		}
-		return c.TaskPollInterval
-	}, service.RetryPendingQuotaSettlementsOnce)
-	go service.RunRoutingChainCleanup(context.Background(), 15*time.Minute)
-	go service.RunDailyReconciliationLoop(context.Background())
-	go service.RunTokenPeriodRollover(context.Background())
+	run(startChannelTestTask)
+	run(startTaskPollTask)
+	run(func(ctx context.Context) {
+		config.RunLoop(ctx, func(c config.Runtime) time.Duration {
+			if c.TaskPollInterval <= 0 {
+				return 30 * time.Second
+			}
+			return c.TaskPollInterval
+		}, service.RetryPendingQuotaSettlementsOnce)
+	})
+	run(func(ctx context.Context) { service.RunRoutingChainCleanup(ctx, 15*time.Minute) })
+	run(service.RunDailyReconciliationLoop)
+	run(service.RunTokenPeriodRollover)
 	metric.StartProduction(time.Now())
-	go service.RunProductionTelemetry(context.Background())
-	go service.RunProductionAttemptDelivery(context.Background())
-	go service.RunResourcePlatform(context.Background())
-	go service.RunResourceObservations(context.Background())
-	go service.RunResourceEventDelivery(context.Background())
-	go service.RunLocalRoutingProbes(context.Background())
+	run(service.RunProductionTelemetry)
+	run(service.RunProductionAttemptDelivery)
+	run(service.RunResourcePlatform)
+	run(service.RunResourceObservations)
+	run(service.RunResourceEventDelivery)
+	run(service.RunLocalRoutingProbes)
 	address := net.JoinHostPort(bootstrap.BindAddress, bootstrap.Port)
 	log.Printf("starhub %s listening on %s (db: %s)", common.Version, address, bootstrap.DBPath)
 	// router.New() already carries the embedded console, management
 	// security, and IP rate limiting around the route table.
-	if err := http.ListenAndServe(address, router.New()); err != nil {
-		log.Fatal(err)
+	server := &http.Server{Addr: address, Handler: router.New(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 90 * time.Second}
+	signals, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- server.ListenAndServe() }()
+	select {
+	case <-signals.Done():
+	case err := <-serveErr:
+		if err != http.ErrServerClosed {
+			log.Printf("server stopped: %v", err)
+		}
+	}
+	controller.SetDraining(true)
+	drainCtx, cancelDrain := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := server.Shutdown(drainCtx); err != nil {
+		log.Printf("request drain timed out: %v", err)
+		_ = server.Close()
+	}
+	cancelDrain()
+	stopWorkers()
+	stopped := make(chan struct{})
+	go func() { workers.Wait(); close(stopped) }()
+	select {
+	case <-stopped:
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := service.StageProductionTelemetryContext(flushCtx); err != nil {
+			log.Printf("final telemetry staging failed: %v", err)
+		}
+		if err := service.FlushProductionTelemetryContext(flushCtx, time.Now()); err != nil {
+			log.Printf("final telemetry flush failed: %v", err)
+		}
+		cancel()
+		if err := model.CloseDB(); err != nil {
+			log.Printf("database close failed: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		log.Print("background shutdown timed out; durable work will resume after restart")
 	}
 }
 
 // startTaskPollTask starts the reloadable background task reaper.
-func startTaskPollTask() {
-	go config.RunLoop(context.Background(), func(c config.Runtime) time.Duration { return c.TaskPollInterval }, service.PollPendingTasksOnce)
+func startTaskPollTask(ctx context.Context) {
 	log.Printf("task poller configured (interval %s)", config.Current().TaskPollInterval)
+	config.RunLoop(ctx, func(c config.Runtime) time.Duration { return c.TaskPollInterval }, service.PollPendingTasksOnce)
 }
 
 // startChannelTestTask starts the reloadable channel health checker.
-func startChannelTestTask() {
-	go config.RunLoop(context.Background(), func(c config.Runtime) time.Duration { return c.ChannelTestInterval }, service.RunChannelTestOnce)
+func startChannelTestTask(ctx context.Context) {
 	log.Printf("channel health checker configured (interval %s)", config.Current().ChannelTestInterval)
+	config.RunLoop(ctx, func(c config.Runtime) time.Duration { return c.ChannelTestInterval }, service.RunChannelTestOnce)
 }
