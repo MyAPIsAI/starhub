@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 
+	"starhub/internal/operator"
 	"starhub/model"
 )
 
@@ -14,20 +15,16 @@ func main() {
 	rotate := flag.Bool("rotate", false, "Rewrap credentials with the configured active key")
 	reason := flag.String("reason", "", "Required audit reason when rotating")
 	flag.Parse()
-	if *database == "" || (*rotate && *reason == "") {
-		fmt.Fprintln(os.Stderr, "db and an audit reason for rotation are required")
+	if *rotate && *reason == "" {
+		fmt.Fprintln(os.Stderr, "an audit reason for rotation is required")
 		os.Exit(2)
-	}
-	if _, err := os.Stat(*database); err != nil {
-		fmt.Fprintln(os.Stderr, "existing database required")
-		os.Exit(1)
 	}
 	identity, err := user.Current()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "operator identity unavailable")
 		os.Exit(1)
 	}
-	if err := model.InitDB(*database); err != nil {
+	if err := operator.OpenDatabase(*database); err != nil {
 		fmt.Fprintln(os.Stderr, "credential storage verification failed")
 		os.Exit(1)
 	}
