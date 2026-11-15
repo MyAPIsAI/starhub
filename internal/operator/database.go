@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"starhub/common"
 	"starhub/config"
 	"starhub/model"
 )
@@ -12,6 +13,9 @@ import (
 // OpenDatabase uses the server's configuration without creating a new SQLite
 // file by accident. Network credentials are read from the environment or YAML.
 func OpenDatabase(path string) error {
+	if err := common.ValidateCredentialConfiguration(); err != nil {
+		return err
+	}
 	startup, err := config.LoadStartup(nil, os.Getenv)
 	if err != nil {
 		return errors.New("invalid database configuration")

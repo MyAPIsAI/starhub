@@ -15,6 +15,13 @@ import (
 
 const CredentialEnvelopePrefix = "enc:v2:"
 
+// ValidateCredentialConfiguration fails before serving requests even when an
+// empty database has no encrypted values to validate during migration.
+func ValidateCredentialConfiguration() error {
+	_, _, err := credentialKeys()
+	return err
+}
+
 func credentialKeys() (map[string][]byte, string, error) {
 	raw, active := os.Getenv("STARHUB_CREDENTIAL_KEYS"), os.Getenv("STARHUB_CREDENTIAL_ACTIVE_KEY")
 	if raw == "" && active == "" {

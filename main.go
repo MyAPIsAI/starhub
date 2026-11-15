@@ -38,6 +38,9 @@ func main() {
 	if err := config.ValidateProduction(startup.Bootstrap, os.Getenv); err != nil {
 		log.Fatal(err)
 	}
+	if err := common.ValidateCredentialConfiguration(); err != nil {
+		log.Fatal(err)
+	}
 	if os.Getenv("STARHUB_CRYPTO_SECRET") == "" {
 		log.Print("WARNING: no persistent crypto secret; stored credentials will not survive a restart")
 	}

@@ -9,6 +9,7 @@ import (
 )
 
 func TestOperatorDatabaseRejectsMissingFilesAndDriverAmbiguity(t *testing.T) {
+	t.Setenv("STARHUB_CRYPTO_SECRET", "p27-disposable-operator-test-secret")
 	t.Setenv("STARHUB_CONFIG", "")
 	t.Setenv("STARHUB_DB_DRIVER", "sqlite")
 	t.Setenv("STARHUB_DB_DSN", "")
