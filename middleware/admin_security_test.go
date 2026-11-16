@@ -169,3 +169,80 @@ func TestDevelopmentTwoFASkipRequiresChangedPasswordAndActiveStaff(t *testing.T)
 		}
 	}
 }
+
+func TestPasswordChangeRefreshesOnlyTheInitiatingSessionProof(t *testing.T) {
+	t.Setenv("STARHUB_ENV", "development")
+	setupAutoRoutingDB(t)
+	user := &model.User{Username: "password-proof", Password: "old-hash", Role: common.RoleAdmin, Status: common.StatusEnabled, AdminPasswordChangedAt: 1, AffCode: common.GenerateAffCode()}
+	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	current := Sessions.CreateConfirmed(user, time.Hour, "", "")
+	other := Sessions.CreateConfirmed(user, time.Hour, "", "")
+	t.Cleanup(func() { Sessions.Remove(current); Sessions.Remove(other) })
+	if !Sessions.SkipStaffTwoFA(current, user) || !Sessions.SkipStaffTwoFA(other, user) {
+		t.Fatal("initial skips failed")
+	}
+	if err := model.UpdateOwnedProfile(user, "password", "new-hash"); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := model.GetUserByID(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !StaffSecurityRequired(current, fresh) || !StaffSecurityRequired(other, fresh) {
+		t.Fatal("password change did not invalidate skip authorization")
+	}
+	if Sessions.SkipStaffTwoFA(other, fresh) || Sessions.SkipStaffTwoFA(current, fresh) {
+		t.Fatal("an old password proof obtained a new skip")
+	}
+	if Sessions.RefreshPasswordProof(current, user, "uncommitted-hash") {
+		t.Fatal("uncommitted password proof was accepted")
+	}
+	if !Sessions.RefreshPasswordProof(current, user, "new-hash") {
+		t.Fatal("verified password change did not refresh the initiating session")
+	}
+	if !StaffSecurityRequired(current, fresh) {
+		t.Fatal("refresh silently preserved the previous skip")
+	}
+	if !Sessions.CurrentGeneration(other, fresh) || Sessions.SkipStaffTwoFA(other, fresh) {
+		t.Fatal("another active session inherited the new proof")
+	}
+	if !Sessions.SkipStaffTwoFA(current, fresh) || StaffSecurityRequired(current, fresh) || Sessions.StaffVerified(current, fresh) {
+		t.Fatal("fresh password proof did not allow an explicit skip without factor evidence")
+	}
+	Sessions.Remove(current)
+	if Sessions.RefreshPasswordProof(current, user, "new-hash") {
+		t.Fatal("removed session was refreshed")
+	}
+}
+
+func TestPasswordProofRefreshDoesNotRenewFactorEvidence(t *testing.T) {
+	t.Setenv("STARHUB_ENV", "development")
+	setupAutoRoutingDB(t)
+	user := &model.User{Username: "factor-password-proof", Password: "old-hash", Role: common.RoleAdmin, Status: common.StatusEnabled, AdminPasswordChangedAt: 1, AffCode: common.GenerateAffCode()}
+	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.DB.Create(&model.TwoFA{UserID: user.ID, Secret: "verified-factor", IsEnabled: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+	session := Sessions.CreateConfirmed(user, time.Hour, "", "", "verified-factor")
+	t.Cleanup(func() { Sessions.Remove(session) })
+	if !Sessions.StaffVerified(session, user) {
+		t.Fatal("factor session was not verified")
+	}
+	if err := model.UpdateOwnedProfile(user, "password", "new-hash"); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := model.GetUserByID(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !Sessions.RefreshPasswordProof(session, user, "new-hash") {
+		t.Fatal("password proof refresh failed")
+	}
+	if Sessions.StaffVerified(session, fresh) || !StaffSecurityRequired(session, fresh) || Sessions.SkipStaffTwoFA(session, fresh) {
+		t.Fatal("password proof refresh renewed factor authority")
+	}
+}

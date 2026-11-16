@@ -21,6 +21,8 @@ export default function StaffSecuritySetup() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [canSkip, setCanSkip] = useState(false);
+  const [statusUnavailable, setStatusUnavailable] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
   const [password, setPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -62,6 +64,8 @@ export default function StaffSecuritySetup() {
     setUser(null);
     setEnabled(false);
     setCanSkip(false);
+    setStatusUnavailable(false);
+    setPasswordChanged(false);
     setPassword("");
     setNextPassword("");
     setConfirmation("");
@@ -90,6 +94,32 @@ export default function StaffSecuritySetup() {
       });
     return () => abort.abort();
   }, [identity.accountId, identity.epoch]);
+
+  async function loadFactorStatus(ownerEpoch: number) {
+    try {
+      const factor = await apiGet<FactorStatus>("/api/user/2fa/status");
+      if (useSystemAccess.getState().session.epoch !== ownerEpoch) return;
+      setEnabled(factor.enabled);
+      setCanSkip(factor.can_skip === true);
+      setStatusUnavailable(false);
+    } catch {
+      if (useSystemAccess.getState().session.epoch !== ownerEpoch) return;
+      setCanSkip(false);
+      setStatusUnavailable(true);
+    }
+  }
+
+  async function retryFactorStatus() {
+    if (busy || !user) return;
+    const ownerEpoch = identity.epoch;
+    setBusy(true);
+    try {
+      await loadFactorStatus(ownerEpoch);
+    } finally {
+      if (useSystemAccess.getState().session.epoch === ownerEpoch)
+        setBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -157,13 +187,10 @@ export default function StaffSecuritySetup() {
           setPassword("");
           setNextPassword("");
           setConfirmation("");
+          setPasswordChanged(true);
         }
         if (!current()) return;
-        const factor = await apiGet<FactorStatus>("/api/user/2fa/status");
-        if (current()) {
-          setEnabled(factor.enabled);
-          setCanSkip(factor.can_skip === true);
-        }
+        await loadFactorStatus(ownerEpoch);
       } else if (!secret) {
         const result = await apiPost<{ secret: string }>(
           "/api/user/2fa/setup",
@@ -319,6 +346,32 @@ export default function StaffSecuritySetup() {
               "غيّر كلمة المرور الأولية وفعّل تطبيق المصادقة ثم سجّل الدخول مجددًا للوصول إلى أدوات الموظفين.",
             )}
       </p>
+      {passwordChanged && (
+        <p role="status">
+          {c(
+            "密码已更改，下次登录请使用新密码。",
+            "Password changed. Use the new password at your next sign-in.",
+            "تم تغيير كلمة المرور. استخدم كلمة المرور الجديدة عند تسجيل الدخول التالي.",
+          )}
+        </p>
+      )}
+      {statusUnavailable && (
+        <div role="alert" className="staff-security-error">
+          <CircleAlert size={18} aria-hidden="true" />
+          <div className="staff-security-status-retry">
+            <p>
+              {c(
+                "暂时无法读取双重验证状态，请重新加载状态后继续。",
+                "Unable to load two-factor status. Reload the status to continue.",
+                "تعذر تحميل حالة المصادقة الثنائية. أعد تحميل الحالة للمتابعة.",
+              )}
+            </p>
+            <Button onClick={retryFactorStatus} loading={busy}>
+              {c("重新加载状态", "Reload status", "إعادة تحميل الحالة")}
+            </Button>
+          </div>
+        </div>
+      )}
       {error && (
         <div
           role="alert"
@@ -331,7 +384,8 @@ export default function StaffSecuritySetup() {
       )}
       {!user ? (
         <p role="status">{c("正在加载…", "Loading…", "جارٍ التحميل…")}</p>
-      ) : user.admin_password_change_required || !enabled ? (
+      ) : statusUnavailable ? null : user.admin_password_change_required ||
+        !enabled ? (
         <form
           onSubmit={submit}
           noValidate={user.admin_password_change_required}

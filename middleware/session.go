@@ -12,6 +12,7 @@ import (
 
 type sessionData struct {
 	twoFASkipped    bool
+	passwordProof   string
 	securityVersion int64
 	factorSecret    string
 	factorPassword  string
@@ -112,6 +113,7 @@ func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration, ip, 
 	token := common.GenerateSessionKey()
 	now := time.Now()
 	s.data[token] = &sessionData{
+		passwordProof:   fresh.Password,
 		securityVersion: fresh.DeactivationVersion,
 		factorSecret:    factorSecret, factorPassword: fresh.Password, factorRole: fresh.Role,
 		userID:     user.ID,
@@ -122,6 +124,24 @@ func (s *SessionStore) CreateConfirmed(user *model.User, ttl time.Duration, ip, 
 		deviceName: deviceName,
 	}
 	return token
+}
+
+// RefreshPasswordProof records a verified self-service password change for its
+// initiating session. Factor evidence remains bound to the sign-in password.
+func (s *SessionStore) RefreshPasswordProof(token string, previous *model.User, passwordHash string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sd := s.data[token]
+	if previous == nil || passwordHash == "" || !activeSession(sd, time.Now()) || sd.userID != previous.ID || sd.securityVersion != previous.DeactivationVersion || sd.factorRole != previous.Role {
+		return false
+	}
+	fresh, err := model.GetUserByID(previous.ID)
+	if err != nil || fresh.Status != common.StatusEnabled || fresh.Password != passwordHash || fresh.Role != previous.Role || fresh.DeactivationVersion != previous.DeactivationVersion {
+		return false
+	}
+	sd.passwordProof = passwordHash
+	sd.twoFASkipped = false
+	return true
 }
 
 // StaffVerified requires current password and factor evidence, not enrollment

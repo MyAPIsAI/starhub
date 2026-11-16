@@ -49,7 +49,7 @@ func (s *SessionStore) SkipStaffTwoFA(token string, user *model.User) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sd := s.data[token]
-	if !activeSession(sd, time.Now()) || sd.userID != user.ID || sd.securityVersion != user.DeactivationVersion || sd.factorRole != user.Role || sd.factorSecret != "" {
+	if !activeSession(sd, time.Now()) || sd.userID != user.ID || sd.securityVersion != user.DeactivationVersion || sd.factorRole != user.Role || sd.passwordProof != user.Password || sd.factorSecret != "" {
 		return false
 	}
 	fresh, err := model.GetUserByID(user.ID)
@@ -57,15 +57,13 @@ func (s *SessionStore) SkipStaffTwoFA(token string, user *model.User) bool {
 		return false
 	}
 	sd.twoFASkipped = true
-	sd.factorPassword = fresh.Password
-	sd.factorRole = fresh.Role
 	return true
 }
 
 func (s *SessionStore) staffTwoFASkipped(token string, user *model.User) bool {
 	s.mu.RLock()
 	sd := s.data[token]
-	valid := activeSession(sd, time.Now()) && sd.userID == user.ID && sd.securityVersion == user.DeactivationVersion && sd.twoFASkipped && sd.factorPassword == user.Password && sd.factorRole == user.Role
+	valid := activeSession(sd, time.Now()) && sd.userID == user.ID && sd.securityVersion == user.DeactivationVersion && sd.twoFASkipped && sd.passwordProof == user.Password && sd.factorRole == user.Role
 	s.mu.RUnlock()
 	return valid && CanSkipStaffTwoFA(user)
 }

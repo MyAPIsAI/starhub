@@ -284,7 +284,7 @@ try {
     },
   );
   await check(
-    "change password, skip enrollment for one session, then enroll a real TOTP factor",
+    "change password, retry status, reject stale sessions, then enroll a real TOTP factor",
     async () => {
       await page
         .getByLabel("Current password", { exact: true })
@@ -295,12 +295,116 @@ try {
       await page
         .getByLabel("Confirm new password", { exact: true })
         .fill("BrowserChanged93");
+      let failStatus = true;
+      let passwordWrites = 0;
+      const countPasswordWrites = (request) => {
+        if (
+          request.method() === "PUT" &&
+          new URL(request.url()).pathname === "/api/user/self"
+        )
+          passwordWrites++;
+      };
+      page.on("request", countPasswordWrites);
+      await page.route("**/api/user/2fa/status", async (route) => {
+        if (failStatus)
+          await route.fulfill({
+            status: 503,
+            json: { success: false, message: "Temporary status failure" },
+          });
+        else await route.continue();
+      });
       await page
         .getByRole("button", { name: "Change password", exact: true })
         .click();
       await page
+        .getByRole("alert")
+        .filter({ hasText: "Unable to load two-factor status" })
+        .waitFor();
+      await page
+        .getByRole("status")
+        .filter({ hasText: "Password changed." })
+        .waitFor();
+      assert.equal(
+        (await (await context.request.get(base + "/api/user/self")).json()).data
+          .admin_password_change_required,
+        false,
+      );
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Skip for now", exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Change password", exact: true })
+          .count(),
+        0,
+      );
+      for (const [language, theme, label] of [
+        ["zh", "light", "重新加载状态"],
+        ["ar", "dark", "إعادة تحميل الحالة"],
+      ]) {
+        await page.evaluate(
+          async ({ language, theme }) => {
+            const { usePreferences } = await import("/src/lib/preferences.ts");
+            usePreferences.getState().setLanguage(language);
+            usePreferences.getState().setTheme(theme);
+          },
+          { language, theme },
+        );
+        await page.setViewportSize({ width: 320, height: 900 });
+        await page.getByRole("button", { name: label, exact: true }).click();
+        await page.waitForFunction(
+          () =>
+            !document.querySelector(".staff-security-status-retry button")
+              ?.disabled,
+        );
+        assert.equal(
+          await page.locator(".staff-security-status-retry").isVisible(),
+          true,
+        );
+        assert.equal(await page.locator(".staff-security-skip").count(), 0);
+        assert.equal(passwordWrites, 1);
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        );
+        const scan = await new AxeBuilder({ page })
+          .include(".staff-security")
+          .withTags(["wcag2a", "wcag2aa"])
+          .analyze();
+        assert.deepEqual(scan.violations, []);
+        await capture(`factor-status-retry-${language}-${theme}-320`);
+      }
+      await page.evaluate(async () => {
+        const { usePreferences } = await import("/src/lib/preferences.ts");
+        usePreferences.getState().setLanguage("en");
+        usePreferences.getState().setTheme("light");
+      });
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      failStatus = false;
+      await page
+        .getByRole("button", { name: "Reload status", exact: true })
+        .focus();
+      await page.keyboard.press("Enter");
+      await page
         .getByRole("button", { name: "Set up authenticator", exact: true })
         .waitFor();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Skip for now", exact: true })
+          .isVisible(),
+        true,
+      );
+      assert.equal(
+        await page.locator(".staff-security-status-retry").count(),
+        0,
+      );
+      assert.equal(passwordWrites, 1);
+      page.off("request", countPasswordWrites);
+      await page.unroute("**/api/user/2fa/status");
       await page
         .getByLabel("Current password", { exact: true })
         .fill("BrowserChanged93");
@@ -386,6 +490,63 @@ try {
         (await context.request.get(base + "/api/option/")).status(),
         200,
       );
+      const other = await browser.newContext();
+      try {
+        assert.equal(
+          (
+            await other.request.post(base + "/api/user/login", {
+              data: { username: "root", password: "BrowserChanged93" },
+            })
+          ).status(),
+          200,
+        );
+        assert.equal(
+          (await other.request.post(base + "/api/user/2fa/skip")).status(),
+          200,
+        );
+        const owner = (
+          await (await context.request.get(base + "/api/user/self")).json()
+        ).data;
+        const change = async (currentPassword, newPassword) => {
+          const response = await context.request.put(
+            base + "/api/user/profile-state",
+            {
+              data: {
+                expected_user_id: owner.id,
+                expected_email: owner.email,
+                current_password: currentPassword,
+                new_password: newPassword,
+              },
+            },
+          );
+          assert.equal(response.status(), 200);
+          assert.equal(
+            (await context.request.get(base + "/api/option/")).status(),
+            403,
+          );
+          assert.equal(
+            (await context.request.post(base + "/api/user/2fa/skip")).status(),
+            200,
+          );
+          assert.equal(
+            (await other.request.get(base + "/api/user/self")).status(),
+            200,
+          );
+          assert.equal(
+            (await other.request.get(base + "/api/option/")).status(),
+            403,
+          );
+          assert.equal(
+            (await other.request.post(base + "/api/user/2fa/skip")).status(),
+            409,
+          );
+        };
+        await change("BrowserChanged93", "BrowserUpdated94");
+        await change("BrowserUpdated94", "BrowserChanged93");
+      } finally {
+        await other.request.post(base + "/api/user/logout");
+        await other.close();
+      }
       assert.equal(
         (
           await (

@@ -42,6 +42,14 @@
   flex-shrink: 0;
   margin-block-start: 0.15rem;
 }
+.staff-security-status-retry {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.staff-security-status-retry p {
+  margin: 0;
+}
 .staff-security-help {
   color: var(--muted);
   font-size: 0.8125rem;

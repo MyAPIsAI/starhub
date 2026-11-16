@@ -553,9 +553,10 @@ func UpdateSelf(w http.ResponseWriter, r *http.Request) {
 	}
 	// When the password changes, revoke all other sessions so the user must
 	// re-authenticate on other devices. The current session stays active.
-	if _, ok := fields["password"]; ok {
+	if passwordHash, ok := fields["password"].(string); ok {
 		currentToken := middleware.SessionToken(r)
 		middleware.Sessions.RemoveAllExcept(user.ID, currentToken)
+		middleware.Sessions.RefreshPasswordProof(currentToken, user, passwordHash)
 	}
 	// Return the updated public user so the caller can refresh state.
 	updated, err := model.GetUserByID(user.ID)

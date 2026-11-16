@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"starhub/common"
+	"starhub/middleware"
 	"starhub/model"
 )
 
@@ -83,6 +84,9 @@ func UpdateProfileState(w http.ResponseWriter, r *http.Request) {
 		}
 		common.ApiError(w, http.StatusInternalServerError, "account profile update could not be confirmed")
 		return
+	}
+	if field == "password" {
+		middleware.Sessions.RefreshPasswordProof(middleware.SessionToken(r), owner, value)
 	}
 	common.ApiSuccess(w, map[string]any{"user_id": owner.ID, "updated_field": field})
 }
