@@ -88,7 +88,12 @@ try {
   const dialog = page.getByRole("dialog");
   const save = () => dialog.locator('button[form="sms-config-form"]');
   const open = async () => { await button.click(); await dialog.locator("#sms-access-id").waitFor(); };
-  const reload = async () => { await dialog.getByRole("button", { name: "Reload", exact: true }).click(); await dialog.locator("#sms-access-id").waitFor(); };
+  const reload = async (expectedSign) => {
+    const loaded = page.waitForResponse((response) => response.request().method() === "GET" && response.url().includes("/api/system/sms-config?"));
+    await dialog.getByRole("button", { name: "Reload", exact: true }).click();
+    await loaded;
+    await page.waitForFunction((sign) => document.querySelector("#sms-sign-name")?.value === sign, expectedSign);
+  };
   const state = () => api("GET", "/api/system/sms-config?expected_user_id=1");
   await open();
   await dialog.locator("#sms-access-id").fill("BrowserSMSAccess123");
@@ -141,7 +146,7 @@ try {
   await dialog.getByRole("alert").filter({ hasText: "Reload and check" }).waitFor();
   await successToast.waitFor({ state: "hidden" });
   assert.equal(await save().isDisabled(), true);
-  await reload();
+  await reload("Concurrent Fixture Sign");
   assert.equal(await dialog.locator("#sms-sign-name").inputValue(), "Concurrent Fixture Sign");
   report.checks.push("stale dialog cannot overwrite concurrent configuration; explicit reload recovers");
   report.checks.push("confirmed saves show a visible desktop/mobile success toast; password and version failures show no success toast");

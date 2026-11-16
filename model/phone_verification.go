@@ -64,6 +64,10 @@ func CreatePhoneVerificationChallenge(phoneE164, code, purpose, requestIP string
 // force counting can never be undone by the caller's transaction rollback.
 // Returns ErrVerificationInvalid, ErrVerificationLocked, or ErrVerificationUsed.
 func ConsumePhoneVerificationChallenge(phoneE164, code, purpose string) error {
+	return consumePhoneVerificationChallenge(phoneE164, code, purpose, nil)
+}
+
+func consumePhoneVerificationChallenge(phoneE164, code, purpose string, apply func(*gorm.DB) error) error {
 	codeHash := common.GenerateHMAC("phone-verification:" + phoneE164 + ":" + code)
 	now := time.Now().Unix()
 
@@ -99,17 +103,22 @@ func ConsumePhoneVerificationChallenge(phoneE164, code, purpose string) error {
 	}
 
 	// Compare-and-swap: mark as consumed.
-	res := DB.Model(&PhoneVerificationChallenge{}).
-		Where("id = ? AND consumed_at IS NULL AND expires_at > ? AND attempt_count < ?",
-			challenge.ID, now, verificationMaxAttempts).
-		Updates(map[string]any{"consumed_at": now})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return ErrVerificationUsed
-	}
-	return nil
+	return DB.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&PhoneVerificationChallenge{}).
+			Where("id = ? AND consumed_at IS NULL AND expires_at > ? AND attempt_count < ?",
+				challenge.ID, now, verificationMaxAttempts).
+			Updates(map[string]any{"consumed_at": now})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrVerificationUsed
+		}
+		if apply != nil {
+			return apply(tx)
+		}
+		return nil
+	})
 }
 
 // IsValidPhoneVerificationCode checks the format of a verification code

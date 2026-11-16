@@ -72,7 +72,7 @@ func TestSendPhoneVerificationForUnregisteredLogin(t *testing.T) {
 	_, cleanup := setupPhoneTest(t)
 	defer cleanup()
 
-	// Login verification for an unregistered phone returns success with sent=false.
+	// Unknown numbers receive the same acknowledgement as eligible numbers.
 	rr := call(SendPhoneVerification, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/phone-verification",
@@ -83,8 +83,8 @@ func TestSendPhoneVerificationForUnregisteredLogin(t *testing.T) {
 	}
 	var got map[string]any
 	decodeData(t, rr, &got)
-	if got["sent"] != false {
-		t.Fatal("should return sent=false for unregistered phone")
+	if got["requested"] != true || got["sent"] != nil {
+		t.Fatal("should return an indistinguishable acknowledgement")
 	}
 }
 

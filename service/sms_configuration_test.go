@@ -133,6 +133,9 @@ func TestSMSConfigurationAuthorizationPersistenceAndSending(t *testing.T) {
 	}
 
 	previousTransport := http.DefaultTransport
+	if !service.SMSAvailableForCountry("CN") || service.SMSAvailableForCountry("US") {
+		t.Fatal("direct SMS capabilities do not match supported countries")
+	}
 	t.Cleanup(func() { http.DefaultTransport = previousTransport })
 	hits := 0
 	responseCode := "OK"

@@ -1,0 +1,46 @@
+.phone-code-fields {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.phone-code-fields .auth-field {
+  min-width: 0;
+}
+.phone-code-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.phone-code-input input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+}
+.phone-code-input button {
+  flex: 0 0 auto;
+}
+.phone-code-notice,
+.phone-code-error {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.phone-code-notice {
+  color: var(--auth-muted, var(--muted));
+}
+.phone-code-error {
+  color: #b42318;
+}
+[data-theme="dark"] .phone-code-error {
+  color: #fda4af;
+}
+.phone-binding-form {
+  display: grid;
+  gap: 16px;
+}
+.phone-binding-form > label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}

@@ -7,6 +7,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/service"
 )
 
 type saveRegionProfileRequest struct {
@@ -30,6 +31,7 @@ type saveRegionProfileRequest struct {
 // ActiveRegionPublicHandler exposes locale and enabled entry points only.
 // Private model lists and operator configuration are not part of this response.
 func ActiveRegionPublicHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	profile, err := model.ActiveRegionProfile()
 	if err != nil {
 		common.ApiError(w, 503, "active deployment policy is unavailable")
@@ -40,7 +42,7 @@ func ActiveRegionPublicHandler(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, 503, "active deployment policy is unavailable")
 		return
 	}
-	common.ApiSuccess(w, map[string]any{"id": profile.ID, "revision": profile.Revision, "default_language": profile.DefaultLanguage, "supported_languages": profile.SupportedLanguageList(), "currency": profile.Currency, "accounting_currency": "USD", "timezone": profile.Timezone, "country_code": profile.CountryCode, "legal_version": profile.LegalVersion, "feature_flags": flags, "registration_enabled": profile.FeatureEnabled("registration")})
+	common.ApiSuccess(w, map[string]any{"id": profile.ID, "revision": profile.Revision, "default_language": profile.DefaultLanguage, "supported_languages": profile.SupportedLanguageList(), "currency": profile.Currency, "accounting_currency": "USD", "timezone": profile.Timezone, "country_code": profile.CountryCode, "legal_version": profile.LegalVersion, "feature_flags": flags, "registration_enabled": profile.FeatureEnabled("registration"), "phone_login_enabled": profile.FeatureEnabled("sms") && profile.AuthEnabled("sms") && service.SMSAvailableForCountry(profile.CountryCode)})
 }
 
 // ListRegionProfilesHandler handles GET /api/region-profile.

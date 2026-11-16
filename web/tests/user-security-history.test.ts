@@ -20,6 +20,7 @@ const state = {
   history_scope: "guarded_profile_changes_v1",
   user_id: 7,
   events: [
+    { id: 4, action: "phone_bound", created_at: 101 },
     { id: 3, action: "email_changed", created_at: 100 },
     { id: 2, action: "password_changed", created_at: 99 },
   ],

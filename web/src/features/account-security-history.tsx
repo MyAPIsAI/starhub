@@ -33,9 +33,9 @@ export function AccountSecurityHistory() {
           </h2>
           <p>
             {c(
-              "最近5条；仅覆盖本功能启用后通过此页面成功的密码、邮箱修改。更早历史、其他入口和设备操作不在此范围。",
-              "Latest 5 changes. Covers successful password and email changes made here after history was enabled. Earlier actions, other entry points and device operations are outside this history.",
-              "آخر 5 تغييرات ناجحة لكلمة المرور والبريد من هذه الصفحة بعد تفعيل السجل. لا يشمل الإجراءات الأقدم أو المداخل الأخرى أو عمليات الأجهزة.",
+              "最近5条；仅覆盖本功能启用后通过此页面成功的密码、邮箱修改与手机号绑定。更早历史、其他入口和设备操作不在此范围。",
+              "Latest 5 changes. Covers successful password and email changes and phone linking made here after history was enabled. Earlier actions, other entry points and device operations are outside this history.",
+              "آخر 5 تغييرات ناجحة لكلمة المرور والبريد وربط الهاتف من هذه الصفحة بعد تفعيل السجل. لا يشمل الإجراءات الأقدم أو المداخل الأخرى أو عمليات الأجهزة.",
             )}
           </p>
         </div>
@@ -49,11 +49,13 @@ export function AccountSecurityHistory() {
                 <strong>
                   {event.action === "password_changed"
                     ? c("修改登录密码", "Password changed", "تغيير كلمة المرور")
-                    : c(
-                        "更新资料邮箱",
-                        "Profile email changed",
-                        "تغيير بريد الحساب",
-                      )}
+                    : event.action === "phone_bound"
+                      ? c("绑定手机号", "Phone linked", "ربط الهاتف")
+                      : c(
+                          "更新资料邮箱",
+                          "Profile email changed",
+                          "تغيير بريد الحساب",
+                        )}
                 </strong>
                 <time
                   dateTime={new Date(event.created_at * 1000).toISOString()}

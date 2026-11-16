@@ -46,11 +46,7 @@ func SendPhoneRegistrationVerification(w http.ResponseWriter, r *http.Request) {
 }
 
 func sendPhoneVerification(w http.ResponseWriter, r *http.Request, purpose string, requireExistingUser bool) {
-	if _, ok := requireRegionFeature(w, "sms", "sms"); !ok {
-		return
-	}
-	if !service.IsSMSEnabled() {
-		common.ApiError(w, http.StatusBadRequest, "SMS service is not enabled")
+	if !requireSMS(w) {
 		return
 	}
 	var req phoneVerificationRequest
@@ -62,43 +58,38 @@ func sendPhoneVerification(w http.ResponseWriter, r *http.Request, purpose strin
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if !reserveSMSSend(w, r, phoneE164, 0) {
+		return
+	}
 	if requireExistingUser {
-		if _, err := model.GetUserByPhone(phoneE164); err != nil {
-			// Return success without revealing whether the phone is registered.
-			common.ApiSuccess(w, map[string]any{"sent": false})
+		user, err := model.GetUserByPhone(phoneE164)
+		if err != nil && !errors.Is(err, model.ErrUserNotFound) {
+			common.ApiError(w, 503, "phone authentication unavailable")
+			return
+		}
+		if errors.Is(err, model.ErrUserNotFound) || user.Status != common.StatusEnabled {
+			common.ApiSuccess(w, map[string]any{"requested": true, "retry_after": 60})
 			return
 		}
 	} else {
 		if _, err := model.GetUserByPhone(phoneE164); err == nil {
 			common.ApiError(w, http.StatusConflict, "phone number already registered")
 			return
+		} else if !errors.Is(err, model.ErrUserNotFound) {
+			common.ApiError(w, 503, "phone authentication unavailable")
+			return
 		}
 	}
-	code, err := service.GenerateNumericVerificationCode()
-	if err != nil {
-		common.ApiError(w, http.StatusInternalServerError, "failed to generate verification code")
+	if !storeAndSendPhoneCode(w, phoneE164, purpose, clientIP(r)) {
 		return
 	}
-	if err := service.SendSMSVerification(phoneE164, code); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, "failed to send SMS")
-		return
-	}
-	expiresAt := time.Now().Add(10 * time.Minute).Unix()
-	if err := model.CreatePhoneVerificationChallenge(phoneE164, code, purpose, clientIP(r), expiresAt); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, "failed to store verification challenge")
-		return
-	}
-	common.ApiSuccess(w, map[string]any{"sent": true})
+	common.ApiSuccess(w, map[string]any{"requested": true, "retry_after": 60})
 }
 
 // PhoneLogin handles POST /api/user/login/phone.
 // Passwordless login via SMS verification code.
 func PhoneLogin(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireRegionFeature(w, "sms", "sms"); !ok {
-		return
-	}
-	if !service.IsSMSEnabled() {
-		common.ApiError(w, http.StatusBadRequest, "SMS service is not enabled")
+	if !requireSMS(w) {
 		return
 	}
 	var req phoneLoginRequest
@@ -108,6 +99,11 @@ func PhoneLogin(w http.ResponseWriter, r *http.Request) {
 	phoneE164, err := model.NormalizeActiveRegionPhone(req.Phone)
 	if err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !reservePhoneRequest(w,
+		model.SMSRequestLimit{Scope: "phone:login-verify:" + phoneE164, Window: 10 * time.Minute, Max: 10},
+		model.SMSRequestLimit{Scope: "phone:verify-ip:" + clientIP(r), Window: 10 * time.Minute, Max: 60}) {
 		return
 	}
 	if !model.IsValidPhoneVerificationCode(req.Code) {
@@ -256,11 +252,7 @@ func ChangePhone(w http.ResponseWriter, r *http.Request) {
 // SendPhoneChangeVerification handles POST /api/user/phone-verification/change.
 // Sends an SMS code to the current phone for the change-phone flow.
 func SendPhoneChangeVerification(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireRegionFeature(w, "sms", "sms"); !ok {
-		return
-	}
-	if !service.IsSMSEnabled() {
-		common.ApiError(w, http.StatusBadRequest, "SMS service is not enabled")
+	if !requireSMS(w) {
 		return
 	}
 	userID := requestUserID(r)
@@ -269,22 +261,14 @@ func SendPhoneChangeVerification(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "no phone bound to this account")
 		return
 	}
-	code, err := service.GenerateNumericVerificationCode()
-	if err != nil {
-		common.ApiError(w, http.StatusInternalServerError, "failed to generate verification code")
+	if !reserveSMSSend(w, r, currentPhone.PhoneE164, userID) {
 		return
 	}
-	if err := service.SendSMSVerification(currentPhone.PhoneE164, code); err != nil {
-		common.ApiError(w, http.StatusInternalServerError, "failed to send SMS")
+	if !storeAndSendPhoneCode(w, currentPhone.PhoneE164, model.PhoneVerificationPurposeChange, clientIP(r)) {
 		return
 	}
-	expiresAt := time.Now().Add(10 * time.Minute).Unix()
-	_ = model.CreatePhoneVerificationChallenge(currentPhone.PhoneE164, code, model.PhoneVerificationPurposeChange, clientIP(r), expiresAt)
-	common.ApiSuccess(w, map[string]any{"sent": true})
+	common.ApiSuccess(w, map[string]any{"requested": true, "retry_after": 60})
 }
-
-// Ensure errors package is used.
-var _ = errors.Is
 
 // --- Email Verification ---
 

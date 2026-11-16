@@ -9,6 +9,7 @@ export interface PublicRegionPolicy {
   supported_languages: Language[];
   legal_version: string;
   registration_enabled: boolean;
+  phone_login_enabled: boolean;
   feature_flags: Record<string, boolean>;
   country_code: string;
   timezone: string;

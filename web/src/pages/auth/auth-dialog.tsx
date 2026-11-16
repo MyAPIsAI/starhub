@@ -12,6 +12,8 @@ import {
   authUserProfile,
   getSelf,
   loginUser,
+  loginByPhone,
+  requestPhoneLoginCode,
   registerUser,
   verifyLoginFactor,
 } from "../../lib/api/auth";
@@ -23,6 +25,10 @@ import {
   type PublicRegionPolicy,
 } from "../../lib/locale-policy";
 import RegionalLegalDocument from "../../features/regional-legal-document";
+import {
+  PhoneCodeFields,
+  usePhoneCode,
+} from "../../features/phone-code-fields";
 
 type AuthMode = "login" | "register" | "reset";
 type Policy = "terms" | "privacy";
@@ -52,6 +58,8 @@ export default function AuthDialog() {
     new URLSearchParams(location.search).get("method") === "phone"
       ? "phone"
       : "password";
+  const phone = usePhoneCode();
+  const [factorUsername, setFactorUsername] = useState("");
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [factorRequired, setFactorRequired] = useState(false);
@@ -84,6 +92,7 @@ export default function AuthDialog() {
     if (!mode) return;
     const abort = new AbortController();
     setRegionLoading(true);
+    setRegionPolicy(null);
     getPublicRegionPolicy(abort.signal)
       .then((value) => {
         if (abort.signal.aborted) return;
@@ -103,7 +112,7 @@ export default function AuthDialog() {
           );
       });
     return () => abort.abort();
-  }, [mode, regionAttempt]);
+  }, [mode, method, regionAttempt]);
 
   useEffect(() => {
     operation.current += 1;
@@ -112,6 +121,9 @@ export default function AuthDialog() {
     setVisiblePasswords({});
     setFactorRequired(false);
     setFactorCode("");
+    setFactorUsername("");
+    setPassword("");
+    phone.reset();
   }, [mode, method]);
   useEffect(() => {
     const view = `${mode}/${policy}`;
@@ -192,6 +204,31 @@ export default function AuthDialog() {
   }
   function explain(caught: unknown): string {
     if (caught instanceof ApiError) {
+      if (mode === "login" && method === "phone") {
+        if (caught.status === 429)
+          return c(
+            "尝试过于频繁，请稍后重试。",
+            "Too many attempts. Try again later.",
+            "محاولات كثيرة. حاول لاحقًا.",
+          );
+        if (factorRequired)
+          return c(
+            "二次验证未通过，请重新使用短信验证码登录。",
+            "Second-factor verification failed. Restart SMS sign-in.",
+            "فشل التحقق الثاني. أعد الدخول بالرسائل.",
+          );
+        if (caught.status === 400 || caught.status === 401)
+          return c(
+            "手机号或验证码无效，验证码可能已过期或使用。",
+            "The phone or code is invalid. The code may be expired or already used.",
+            "الهاتف أو الرمز غير صالح. قد يكون الرمز منتهيًا أو مستخدمًا.",
+          );
+        return c(
+          "短信登录暂不可用，请刷新状态或使用密码登录。",
+          "SMS sign-in is unavailable. Refresh or use password login.",
+          "الدخول بالرسائل غير متاح. حدّث أو استخدم كلمة المرور.",
+        );
+      }
       if (caught.status === 401)
         return c(
           "账号或密码不正确，请检查后重试。",
@@ -220,9 +257,13 @@ export default function AuthDialog() {
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy || phone.sending || (mode !== "register" && mode !== "login"))
+      return;
     if (
-      busy ||
-      (mode !== "register" && (mode !== "login" || method !== "password"))
+      mode === "login" &&
+      method === "phone" &&
+      !factorRequired &&
+      !regionPolicy?.phone_login_enabled
     )
       return;
     setError("");
@@ -295,13 +336,17 @@ export default function AuthDialog() {
         return;
       } else {
         const result = factorRequired
-          ? await verifyLoginFactor(account, factorCode)
-          : await loginUser(account, password);
+          ? await verifyLoginFactor(factorUsername, factorCode)
+          : method === "phone"
+            ? await loginByPhone(phone.phone, phone.code)
+            : await loginUser(account, password);
         if (ticket !== operation.current) return;
         setPassword("");
         if (result["2fa_required"]) {
           setFactorRequired(true);
+          setFactorUsername(result.username);
           setFactorCode("");
+          phone.setCode("");
           return;
         }
         const user = await getSelf({ handleUnauthorizedLocally: true });
@@ -565,9 +610,9 @@ export default function AuthDialog() {
                     </h3>
                     <p>
                       {c(
-                        "用户名注册与密码登录使用服务器接口。模型调用取决于部署中的上游渠道、权限和配额；当前充值收银台仍为模拟流程，短信及验证邮件尚未接入。",
-                        "Username registration and password login use server APIs. Model calls depend on configured upstream channels, permissions and quota. The current recharge checkout is simulated; SMS and verification email are unavailable.",
-                        "يستخدم التسجيل والدخول واجهات الخادم. تعتمد طلبات النماذج على القنوات والصلاحيات والحصة. الدفع الحالي محاكاة؛ الرسائل النصية ورسائل التحقق غير متاحة.",
+                        "用户名注册与登录使用服务器接口。模型调用取决于上游渠道、权限和配额；充值收银台仍为模拟流程。短信登录需启用服务并先绑定手机号，验证邮件尚未接入。",
+                        "Registration and login use server APIs. Model calls depend on upstream channels, permissions and quota; checkout remains simulated. SMS sign-in requires enabled SMS and a linked phone. Verification email is unavailable.",
+                        "يستخدم التسجيل والدخول واجهات الخادم. تعتمد الطلبات على القنوات والصلاحيات والحصة والدفع محاكاة. يتطلب الدخول بالرسائل تفعيلها وربط الهاتف. التحقق بالبريد غير متاح.",
                       )}
                     </p>
                     <h3>
@@ -620,9 +665,9 @@ export default function AuthDialog() {
                     </h3>
                     <p>
                       {c(
-                        "短信和验证邮件尚未接入，当前不提供手机号认证或验证码登录。阅读与勾选状态仍只在界面处理，服务器没有保存版本化的同意记录。",
-                        "SMS and verification email are unavailable; phone verification and code login are not supported. Reading and consent state are handled in the UI; the server does not retain a versioned consent record.",
-                        "الرسائل النصية ورسائل التحقق غير متاحة؛ لا يُدعم توثيق الهاتف أو الدخول برمز. تُعالج الموافقة في الواجهة ولا يحفظ الخادم سجل موافقة بإصدار محدد.",
+                        "启用短信服务后，可验证并绑定手机号，用于短信验证码登录。号码用于账号认证，验证码仅保存校验摘要。此处草案的阅读与勾选状态仅在界面处理。",
+                        "When SMS is enabled, verified linked phones support code sign-in. Phone numbers are used for authentication; only verification hashes of codes are stored. Reading and consent for this draft are handled in the UI.",
+                        "عند تفعيل الرسائل يمكن توثيق الهاتف وربطه للدخول برمز. تُستخدم الأرقام للمصادقة وتُحفظ تجزئات الرموز فقط. تعالج هذه المسودة الموافقة في الواجهة.",
                       )}
                     </p>
                     <h3>
@@ -681,7 +726,10 @@ export default function AuthDialog() {
                   </div>
                 )}
                 {mode === "reset" ||
-                (mode === "login" && method === "phone") ? (
+                (mode === "login" &&
+                  method === "phone" &&
+                  !factorRequired &&
+                  !regionPolicy?.phone_login_enabled) ? (
                   <div className="auth-unavailable" role="status">
                     <span>
                       <Info size={24} />
@@ -693,12 +741,33 @@ export default function AuthDialog() {
                             "Password recovery is unavailable. Contact the administrator for help. This page does not collect phone numbers, send codes or change passwords.",
                             "استعادة كلمة المرور غير متاحة. تواصل مع المسؤول للمساعدة. لا تجمع هذه الصفحة أرقام هواتف ولا ترسل رموزًا ولا تغيّر كلمات المرور.",
                           )
-                        : c(
-                            "手机号验证码登录尚未接入。请使用用户名和密码登录；当前页面不会发送或校验验证码。",
-                            "Phone-code login is unavailable. Use your username and password; this page does not send or verify codes.",
-                            "الدخول برمز الهاتف غير متاح. استخدم اسم المستخدم وكلمة المرور؛ لا ترسل هذه الصفحة رموزًا ولا تتحقق منها.",
-                          )}
+                        : regionLoading
+                          ? c(
+                              "正在读取短信登录状态…",
+                              "Loading SMS sign-in availability…",
+                              "جارٍ تحميل حالة الدخول بالرسائل…",
+                            )
+                          : !regionPolicy
+                            ? c(
+                                "无法读取短信登录状态，请刷新重试。",
+                                "SMS sign-in availability could not be loaded. Refresh to retry.",
+                                "تعذر تحميل حالة الدخول بالرسائل. حدّث للمحاولة.",
+                              )
+                            : c(
+                                "管理员尚未启用当前地区的短信登录，请使用账号密码登录。",
+                                "SMS sign-in is not enabled for this region. Use password login.",
+                                "الدخول بالرسائل غير مفعل لهذه المنطقة. استخدم كلمة المرور.",
+                              )}
                     </p>
+                    {mode === "login" && (
+                      <Button
+                        variant="secondary"
+                        disabled={regionLoading}
+                        onClick={() => setRegionAttempt((value) => value + 1)}
+                      >
+                        {c("刷新状态", "Refresh availability", "تحديث الحالة")}
+                      </Button>
+                    )}
                     <Button
                       variant="primary"
                       onClick={() => changeMode("login")}
@@ -722,7 +791,7 @@ export default function AuthDialog() {
                         {error}
                       </div>
                     )}
-                    {mode === "login" && method === "password" && (
+                    {mode === "login" && (
                       <>
                         {factorRequired ? (
                           <div className="auth-field">
@@ -753,12 +822,23 @@ export default function AuthDialog() {
                               }}
                             >
                               {c(
-                                "重新验证密码",
-                                "Restart password verification",
-                                "إعادة التحقق من كلمة المرور",
+                                "重新登录验证",
+                                "Restart sign-in",
+                                "إعادة التحقق من الدخول",
                               )}
                             </button>
                           </div>
+                        ) : method === "phone" ? (
+                          <PhoneCodeFields
+                            id="auth-phone"
+                            country={regionPolicy?.country_code ?? ""}
+                            state={phone}
+                            disabled={busy}
+                            onSend={() => {
+                              if (!busy && regionPolicy?.phone_login_enabled)
+                                void phone.send(requestPhoneLoginCode);
+                            }}
+                          />
                         ) : (
                           <>
                             <div className="auth-field">
@@ -879,9 +959,9 @@ export default function AuthDialog() {
                         )}
                         <p className="auth-field-hint">
                           {c(
-                            "当前仅支持用户名与密码注册，不收集或验证手机号。短信验证尚未接入。",
-                            "Registration currently uses a username and password. Phone numbers are neither collected nor verified; SMS verification is unavailable.",
-                            "التسجيل حاليًا باسم مستخدم وكلمة مرور. لا تُجمع أرقام الهواتف ولا تُتحقق؛ التحقق بالرسائل غير متاح.",
+                            "当前使用用户名与密码注册，登录后可在账号中心验证并绑定手机号。",
+                            "Register with a username and password, then verify and link your phone in account settings.",
+                            "سجّل باسم مستخدم وكلمة مرور، ثم وثّق واربط الهاتف في إعدادات الحساب.",
                           )}
                         </p>
                       </>
@@ -913,10 +993,11 @@ export default function AuthDialog() {
                       className="auth-submit"
                       loading={busy}
                       disabled={
-                        mode === "register" &&
-                        (regionLoading ||
-                          !regionPolicy ||
-                          !regionPolicy.registration_enabled)
+                        phone.sending ||
+                        (mode === "register" &&
+                          (regionLoading ||
+                            !regionPolicy ||
+                            !regionPolicy.registration_enabled))
                       }
                     >
                       {mode === "register"
@@ -985,9 +1066,9 @@ export default function AuthDialog() {
             <Info size={14} />
             <span>
               {c(
-                "账户由服务器保存，登录会话使用 Cookie。当前不发送短信或验证邮件。",
-                "Accounts are saved on the server; login sessions use cookies. SMS and verification email are unavailable.",
-                "تُحفظ الحسابات على الخادم وتستخدم الجلسات ملفات الارتباط. الرسائل النصية ورسائل التحقق غير متاحة.",
+                "账户由服务器保存，登录会话使用 Cookie。短信登录需启用服务并先绑定手机号。",
+                "Accounts are saved on the server; sessions use cookies. SMS sign-in requires enabled SMS and a linked phone.",
+                "تُحفظ الحسابات على الخادم وتستخدم الجلسات ملفات الارتباط. يتطلب الدخول بالرسائل تفعيلها وربط الهاتف.",
               )}
             </span>
           </div>

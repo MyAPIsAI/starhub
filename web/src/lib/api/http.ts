@@ -74,6 +74,8 @@ export async function apiRequest<T>(
     (pathname === "/api/user/self" &&
       (init.method ?? "GET").toUpperCase() === "GET") ||
     pathname === "/api/user/login" ||
+    pathname === "/api/user/login/phone" ||
+    pathname === "/api/user/login/2fa" ||
     pathname === "/api/user/register";
   const owner =
     pathname.startsWith("/api/") && !discoversIdentity

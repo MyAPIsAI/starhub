@@ -1,20 +1,12 @@
 import { useRef, useState, type FormEvent } from "react";
-import {
-  Eye,
-  EyeOff,
-  Info,
-  KeyRound,
-  Mail,
-  ShieldCheck,
-  Smartphone,
-} from "lucide-react";
+import { Eye, EyeOff, Info, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { Modal } from "../components/ui/overlay";
 import { useUpdateSelf, type useUserProfile } from "../lib/api/user";
 import { ApiError } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
-import { SMSConfigurationButton } from "./sms-configuration";
+import { AccountPhone } from "./account-phone";
 
 type Profile = ReturnType<typeof useUserProfile>["data"];
 
@@ -213,34 +205,7 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
             {c("修改密码", "Change password", "تغيير كلمة المرور")}
           </Button>
         </div>
-        <div className="ac-security-row">
-          <span className="ac-row-icon">
-            <Smartphone size={19} />
-          </span>
-          <div className="ac-row-content">
-            <h3>{c("手机号", "Phone", "الهاتف")}</h3>
-            <Input
-              className="ac-contact-value"
-              id="account-phone"
-              aria-label={c("绑定手机号", "Linked phone", "الهاتف المرتبط")}
-              value={c("尚未接入", "Unavailable", "غير متاح")}
-              readOnly
-            />
-            <p>
-              {c(
-                "手机绑定、验证码登录和找回密码尚未接入。",
-                "Phone linking, SMS sign-in and password recovery are unavailable.",
-                "ربط الهاتف والدخول بالرسائل واستعادة كلمة المرور غير متاحة.",
-              )}
-            </p>
-          </div>
-          <div className="ac-phone-actions">
-            <SMSConfigurationButton />
-            <Button data-account-action="phone" size="small" disabled>
-              {c("绑定", "Link", "ربط")}
-            </Button>
-          </div>
-        </div>
+        <AccountPhone />
         <div className="ac-security-row">
           <span className="ac-row-icon">
             <Mail size={19} />

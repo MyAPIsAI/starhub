@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
@@ -72,6 +73,7 @@ function SMSConfigurationDialog({
   const language = usePreferences((state) => state.language);
   const c = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
+  const queryClient = useQueryClient();
   const [data, setData] = useState<SMSConfiguration>();
   const [form, setForm] = useState(emptyForm);
   const [attempt, setAttempt] = useState(0);
@@ -144,6 +146,7 @@ function SMSConfigurationDialog({
         template_code: form.template_code.trim(),
       });
       if (!isCurrent()) return;
+      void queryClient.invalidateQueries({ queryKey: ["public-region-phone"] });
       const message = c(
         "短信配置已保存并应用；本次未发送短信。",
         "SMS configuration saved and applied. No SMS was sent.",

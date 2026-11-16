@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -51,6 +52,20 @@ func IsSMSEnabled() bool {
 	smsMu.RLock()
 	defer smsMu.RUnlock()
 	return smsEnabled
+}
+
+// SMSAvailableForCountry reflects the active transport's supported region.
+// Operator-managed bridges retain their existing region-policy contract.
+func SMSAvailableForCountry(country string) bool {
+	smsMu.RLock()
+	defer smsMu.RUnlock()
+	if !smsEnabled {
+		return false
+	}
+	if _, direct := smsProvider.(*aliyunSMSProvider); direct {
+		return country == "" || strings.EqualFold(country, "CN")
+	}
+	return true
 }
 
 // SendSMSVerification dispatches to the active provider.

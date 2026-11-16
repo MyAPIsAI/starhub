@@ -4,7 +4,7 @@ export interface UserSecurityState {
   user_id: number;
   events: {
     id: number;
-    action: "password_changed" | "email_changed";
+    action: "password_changed" | "email_changed" | "phone_bound";
     created_at: number;
   }[];
 }
@@ -35,7 +35,9 @@ export function readUserSecurityState(
       !Number.isSafeInteger(row.id) ||
       (row.id as number) <= 0 ||
       (row.id as number) >= previous ||
-      (row.action !== "password_changed" && row.action !== "email_changed") ||
+      (row.action !== "password_changed" &&
+        row.action !== "email_changed" &&
+        row.action !== "phone_bound") ||
       !Number.isSafeInteger(row.created_at) ||
       (row.created_at as number) <= 0 ||
       !Number.isFinite(new Date((row.created_at as number) * 1000).getTime())

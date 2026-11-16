@@ -52,6 +52,20 @@ export function loginUser(
   });
 }
 
+export function requestPhoneLoginCode(phone: string) {
+  return apiPost<{ requested: boolean; retry_after: number }>(
+    "/api/user/phone-verification",
+    { phone },
+  );
+}
+
+export function loginByPhone(phone: string, code: string) {
+  return apiPost<LoginResponse | FactorChallenge>("/api/user/login/phone", {
+    phone,
+    code,
+  });
+}
+
 export function verifyLoginFactor(
   username: string,
   code: string,

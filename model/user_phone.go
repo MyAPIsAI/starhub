@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"starhub/common"
 )
 
 var (
-	ErrPhoneAlreadyBound = errors.New("phone number is already bound to another user")
-	ErrUserPhoneNotFound = errors.New("no phone identity found for this user")
-	ErrPhoneFormat       = errors.New("invalid phone number format")
+	ErrPhoneAlreadyBound    = errors.New("phone number is already bound to another user")
+	ErrUserPhoneNotFound    = errors.New("no phone identity found for this user")
+	ErrPhoneFormat          = errors.New("invalid phone number format")
+	ErrPhoneBindingConflict = errors.New("phone binding or account changed")
 )
 
 // UserPhoneIdentity binds a user to a verified phone number in E.164 format.
@@ -114,4 +118,39 @@ func DeleteUserPhone(tx *gorm.DB, userID int64) error {
 		tx = DB
 	}
 	return tx.Where("user_id = ?", userID).Delete(&UserPhoneIdentity{}).Error
+}
+
+// BindVerifiedUserPhone consumes only this owner's challenge and inserts the
+// identity in one transaction. A conflict preserves both existing bindings.
+func BindVerifiedUserPhone(owner *User, phone, code, purpose string) error {
+	if owner == nil || owner.Status != common.StatusEnabled {
+		return ErrPhoneBindingConflict
+	}
+	return consumePhoneVerificationChallenge(phone, code, purpose, func(tx *gorm.DB) error {
+		if err := tx.Model(&User{}).Where("id = ?", owner.ID).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+			return err
+		}
+		var current User
+		if err := tx.First(&current, "id = ?", owner.ID).Error; err != nil {
+			return err
+		}
+		if current.Password != owner.Password || current.Role != owner.Role || current.Status != common.StatusEnabled || current.DeactivationVersion != owner.DeactivationVersion {
+			return ErrPhoneBindingConflict
+		}
+		var count int64
+		if err := tx.Model(&UserPhoneIdentity{}).Where("user_id = ? OR phone_e164 = ?", owner.ID, phone).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 0 {
+			return ErrPhoneBindingConflict
+		}
+		result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&UserPhoneIdentity{UserID: owner.ID, PhoneE164: phone, VerifiedAt: time.Now().Unix()})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrPhoneBindingConflict
+		}
+		return tx.Create(&UserSecurityEvent{UserID: owner.ID, Action: "phone_bound"}).Error
+	})
 }
