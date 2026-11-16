@@ -413,6 +413,10 @@ function ConsoleWorkspace() {
   );
   const [exportDays, setExportDays] = useState(7);
   const [exportError, setExportError] = useState("");
+  // Result dialog shown after an export attempt completes.
+  const [exportResult, setExportResult] = useState<ExportRecord | null>(null);
+  const [exportResultError, setExportResultError] = useState("");
+  const [exportResultOpen, setExportResultOpen] = useState(false);
 
   // Deactivate modal
   const [deactivateOpen, setDeactivateOpen] = useState(false);
@@ -610,12 +614,20 @@ function ConsoleWorkspace() {
     createExportMut.mutate(
       { type: exportType, range_days: exportDays },
       {
-        onSuccess: () => {
+        onSuccess: (rec) => {
           setExportModalOpen(false);
           setExportError("");
+          setExportResult(rec);
+          setExportResultError("");
+          setExportResultOpen(true);
         },
         onError: (err) => {
-          setExportError(err instanceof Error ? err.message : String(err));
+          setExportModalOpen(false);
+          setExportResult(null);
+          setExportResultError(
+            err instanceof Error ? err.message : String(err),
+          );
+          setExportResultOpen(true);
         },
       },
     );
@@ -2538,6 +2550,139 @@ function ConsoleWorkspace() {
             {c("生成 CSV（表格文件）", "Generate CSV export", "إنشاء ملف CSV")}
           </Button>
         </form>
+      </Modal>
+
+      {/* Export Result Dialog — shows success/failure and download link */}
+      <Modal
+        size="default"
+        open={exportResultOpen}
+        onOpenChange={setExportResultOpen}
+        title={t("exportResultTitle")}
+        description={
+          exportResult
+            ? t("exportSuccess")
+            : t("exportFailed")
+        }
+      >
+        {exportResult ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-3)",
+              }}
+            >
+              <CircleCheck
+                size={20}
+                style={{ color: "var(--success)", flexShrink: 0 }}
+              />
+              <span style={{ fontWeight: 600 }}>
+                {t("exportSuccess")}
+              </span>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto 1fr",
+                gap: "var(--space-2) var(--space-4)",
+                fontSize: "var(--text-sm)",
+                color: "var(--muted)",
+              }}
+            >
+              <span>{t("exportFilename")}</span>
+              <span className="mono" style={{ color: "var(--text)" }}>
+                {exportResult.filename}
+              </span>
+              <span>{t("exportRows")}</span>
+              <span className="mono" style={{ color: "var(--text)" }}>
+                {exportResult.row_count.toLocaleString()}
+              </span>
+              <span>{t("exportSize")}</span>
+              <span className="mono" style={{ color: "var(--text)" }}>
+                {exportResult.size_kb} KB
+              </span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: "var(--space-3)",
+                justifyContent: "flex-end",
+              }}
+            >
+              <Button
+                variant="secondary"
+                onClick={() => setExportResultOpen(false)}
+              >
+                {t("close")}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  void downloadBackendExport(
+                    exportResult.id,
+                    exportResult.filename,
+                  );
+                }}
+              >
+                <Download size={14} style={{ marginInlineEnd: 4 }} />
+                {t("downloadCsv")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-3)",
+              }}
+            >
+              <CircleAlert
+                size={20}
+                style={{ color: "var(--danger)", flexShrink: 0 }}
+              />
+              <span style={{ fontWeight: 600 }}>{t("exportFailed")}</span>
+            </div>
+            <div
+              style={{
+                padding: "var(--space-3)",
+                background: "var(--danger-soft)",
+                color: "var(--danger)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "var(--text-sm)",
+              }}
+            >
+              {exportResultError}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+              }}
+            >
+              <Button
+                variant="secondary"
+                onClick={() => setExportResultOpen(false)}
+              >
+                {t("close")}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {deactivateOpen && (
