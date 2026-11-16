@@ -55,11 +55,13 @@ func storeAndSendPhoneCode(w http.ResponseWriter, phone, purpose, ip string) boo
 		common.ApiError(w, 503, "could not generate verification code")
 		return false
 	}
-	// Store before dispatch: a delivered code must have a verifiable challenge.
-	if err := model.CreatePhoneVerificationChallenge(phone, code, purpose, ip, time.Now().Add(10*time.Minute).Unix()); err != nil {
+	// Persist a candidate before dispatch, preserving the current active code.
+	id, err := model.PreparePhoneVerificationChallenge(phone, code, purpose, ip, time.Now().Add(10*time.Minute).Unix())
+	if err != nil {
 		common.ApiError(w, 503, "could not store verification challenge")
 		return false
 	}
+	defer model.DiscardPendingPhoneVerificationChallenge(id)
 	if err := service.SendSMSVerification(phone, code); err != nil {
 		if errors.Is(err, service.ErrSMSRateLimited) {
 			w.Header().Set("Retry-After", "60")
@@ -67,6 +69,10 @@ func storeAndSendPhoneCode(w http.ResponseWriter, phone, purpose, ip string) boo
 		} else {
 			common.ApiError(w, 503, "SMS provider unavailable; try again later")
 		}
+		return false
+	}
+	if err := model.ActivatePhoneVerificationChallenge(id); err != nil {
+		common.ApiError(w, 503, "SMS code activation could not be confirmed; the previous code is unchanged")
 		return false
 	}
 	return true

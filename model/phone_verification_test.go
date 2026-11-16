@@ -155,3 +155,49 @@ func TestDeletePhoneVerificationChallenges(t *testing.T) {
 		t.Fatalf("expected ErrVerificationInvalid after delete, got %v", err)
 	}
 }
+
+func TestPendingPhoneChallengesCannotBeConsumedOrReactivateOlderCodes(t *testing.T) {
+	newTestDB(t)
+	phone, purpose := "+8613812345678", PhoneVerificationPurposeLogin
+	expires := time.Now().Add(time.Minute).Unix()
+	first, err := PreparePhoneVerificationChallenge(phone, "111111", purpose, "fixture", expires)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ConsumePhoneVerificationChallenge(phone, "111111", purpose); !errors.Is(err, ErrVerificationInvalid) {
+		t.Fatal("pending code was usable")
+	}
+	second, err := PreparePhoneVerificationChallenge(phone, "222222", purpose, "fixture", expires)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ActivatePhoneVerificationChallenge(second); err != nil {
+		t.Fatal(err)
+	}
+	if err := ActivatePhoneVerificationChallenge(first); !errors.Is(err, ErrVerificationInvalid) {
+		t.Fatal("late acknowledgement restored an older candidate")
+	}
+	if err := DiscardPendingPhoneVerificationChallenge(second); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConsumePhoneVerificationChallenge(phone, "222222", purpose); err != nil {
+		t.Fatal("cleanup deleted an activated code")
+	}
+}
+
+func TestPendingPhoneChallengeMigrationKeepsLegacyActiveCode(t *testing.T) {
+	newTestDB(t)
+	phone, purpose := "+8613812345678", PhoneVerificationPurposeLogin
+	if err := CreatePhoneVerificationChallenge(phone, "123456", purpose, "fixture", time.Now().Add(time.Minute).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Migrator().DropColumn(&PhoneVerificationChallenge{}, "Pending"); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.AutoMigrate(&PhoneVerificationChallenge{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConsumePhoneVerificationChallenge(phone, "123456", purpose); err != nil {
+		t.Fatal("migration made a legacy active code pending")
+	}
+}

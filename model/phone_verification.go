@@ -31,11 +31,56 @@ type PhoneVerificationChallenge struct {
 	PhoneE164    string `gorm:"size:16;not null;index" json:"phone_e164"`
 	Purpose      string `gorm:"size:32;not null;index" json:"purpose"`
 	CodeHash     string `gorm:"size:128;not null" json:"-"` // HMAC-SHA256, never serialized
+	Pending      bool   `gorm:"not null;default:false" json:"-"`
 	ExpiresAt    int64  `gorm:"not null;index" json:"expires_at"`
 	ConsumedAt   *int64 `json:"consumed_at,omitempty"` // nil = unused
 	AttemptCount int    `gorm:"not null;default:0" json:"attempt_count"`
 	RequestIP    string `gorm:"size:64" json:"request_ip"`
 	CreatedAt    int64  `gorm:"autoCreateTime;index" json:"created_at"`
+}
+
+// PreparePhoneVerificationChallenge persists a candidate without replacing the
+// active code. A pending candidate cannot be verified before provider acceptance.
+func PreparePhoneVerificationChallenge(phoneE164, code, purpose, requestIP string, expiresAt int64) (int64, error) {
+	value := &PhoneVerificationChallenge{
+		PhoneE164: phoneE164, Purpose: purpose, RequestIP: requestIP,
+		CodeHash:  common.GenerateHMAC("phone-verification:" + phoneE164 + ":" + code),
+		ExpiresAt: expiresAt, Pending: true,
+	}
+	if err := DB.Create(value).Error; err != nil {
+		return 0, err
+	}
+	return value.ID, nil
+}
+
+// ActivatePhoneVerificationChallenge replaces earlier codes only after sending
+// is acknowledged. An older acknowledgement cannot overwrite a newer activation.
+func ActivatePhoneVerificationChallenge(id int64) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		locked := tx.Model(&PhoneVerificationChallenge{}).Where("id = ? AND pending = ? AND consumed_at IS NULL", id, true).UpdateColumn("id", gorm.Expr("id"))
+		if locked.Error != nil {
+			return locked.Error
+		}
+		var value PhoneVerificationChallenge
+		if err := tx.Where("id = ? AND pending = ? AND consumed_at IS NULL", id, true).First(&value).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrVerificationInvalid
+			}
+			return err
+		}
+		if value.ExpiresAt <= time.Now().Unix() {
+			return ErrVerificationInvalid
+		}
+		if err := tx.Where("phone_e164 = ? AND purpose = ? AND id < ? AND consumed_at IS NULL", value.PhoneE164, value.Purpose, id).Delete(&PhoneVerificationChallenge{}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&PhoneVerificationChallenge{}).Where("id = ?", id).UpdateColumn("pending", false).Error
+	})
+}
+
+// DiscardPendingPhoneVerificationChallenge never changes an active code.
+func DiscardPendingPhoneVerificationChallenge(id int64) error {
+	return DB.Where("id = ? AND pending = ?", id, true).Delete(&PhoneVerificationChallenge{}).Error
 }
 
 // CreatePhoneVerificationChallenge creates a new challenge for the given
@@ -77,8 +122,8 @@ func consumePhoneVerificationChallenge(phoneE164, code, purpose string, apply fu
 
 	// Read the current challenge outside a write transaction.
 	var challenge PhoneVerificationChallenge
-	err := DB.Where("phone_e164 = ? AND purpose = ? AND consumed_at IS NULL AND expires_at > ?",
-		phoneE164, purpose, now).
+	err := DB.Where("phone_e164 = ? AND purpose = ? AND pending = ? AND consumed_at IS NULL AND expires_at > ?",
+		phoneE164, purpose, false, now).
 		Order("id DESC").First(&challenge).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrVerificationInvalid
@@ -105,8 +150,8 @@ func consumePhoneVerificationChallenge(phoneE164, code, purpose string, apply fu
 	// Compare-and-swap: mark as consumed.
 	return DB.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&PhoneVerificationChallenge{}).
-			Where("id = ? AND consumed_at IS NULL AND expires_at > ? AND attempt_count < ?",
-				challenge.ID, now, verificationMaxAttempts).
+			Where("id = ? AND pending = ? AND consumed_at IS NULL AND expires_at > ? AND attempt_count < ?",
+				challenge.ID, false, now, verificationMaxAttempts).
 			Updates(map[string]any{"consumed_at": now})
 		if res.Error != nil {
 			return res.Error
