@@ -9,6 +9,7 @@
   overflow-wrap: anywhere;
 }
 .staff-security form,
+.staff-security-password,
 .staff-security label {
   display: grid;
   gap: 0.65rem;
@@ -18,6 +19,32 @@
 }
 .staff-security p {
   margin-block: 1rem;
+}
+.staff-security-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-block: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--danger);
+  border-radius: 0.5rem;
+  background: var(--danger-soft);
+  color: #b91c1c;
+}
+[data-theme="dark"] .staff-security-error {
+  color: #fca5a5;
+}
+.staff-security-error svg {
+  flex-shrink: 0;
+  margin-block-start: 0.15rem;
+}
+.staff-security-help {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+.staff-security .input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 .staff-security textarea,
 .staff-security pre {

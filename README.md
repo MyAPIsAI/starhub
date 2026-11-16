@@ -45,6 +45,8 @@ Starting it on Windows PowerShell:
 
 ```powershell
 .\release\starhub.exe
+
+.\release\starhub.exe --config .\config.example.yml
 ```
 
 Starting it on Linux / macOS:
@@ -116,6 +118,8 @@ npm run dev
 ```
 
 Open the address Vite prints; `/api` is proxied to `http://127.0.0.1:3000`, and the target can be changed via `STARHUB_API_URL`. The proxy preserves the browser's Host, so it stays compatible with the same-origin write-request protection. During development, do not set `STARHUB_COOKIE_SECURE=true`.
+
+Copy `web/.env.example` to `web/.env.local` and set `STARHUB_API_URL` to the actual backend address, for example `http://127.0.0.1:3008` when using `config.example.yml`. Both `/api` and `/v1` use this target. Shell environment variables take precedence over `.env` files; restart Vite after changing the configuration. Keep `VITE_API_BASE_URL` empty for local proxy-based development. See [DEV.md](DEV.md) for PowerShell startup commands and configuration precedence.
 
 ```bash
 npm run lint

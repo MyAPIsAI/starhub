@@ -148,6 +148,131 @@ try {
     },
   );
   await check(
+    "password validation explains failures, preserves input and supports localized layouts",
+    async () => {
+      const current = page.getByLabel("Current password", { exact: true });
+      const next = page.getByLabel("New password", { exact: true });
+      const confirmation = page.getByLabel("Confirm new password", {
+        exact: true,
+      });
+      const submit = page.getByRole("button", {
+        name: "Change password",
+        exact: true,
+      });
+      let writes = 0;
+      const countWrites = (request) => {
+        if (
+          request.method() === "PUT" &&
+          new URL(request.url()).pathname === "/api/user/self"
+        )
+          writes++;
+      };
+      page.on("request", countWrites);
+      await current.fill("BrowserInitial92");
+      for (const value of [
+        "12345678",
+        "abcdefgh",
+        "Abc123",
+        "界".repeat(22) + "a1",
+        "BrowserInitial92",
+      ]) {
+        await next.fill(value);
+        await confirmation.fill(value);
+        await submit.click();
+        await page.locator(".staff-security-error").waitFor();
+        assert.equal(await next.getAttribute("aria-invalid"), "true");
+        assert.equal(
+          await next.evaluate((input) => input === document.activeElement),
+          true,
+        );
+        assert.equal(await next.inputValue(), value);
+        assert.equal(writes, 0);
+      }
+      await next.fill("BrowserChanged93");
+      await confirmation.fill("DifferentPassword94");
+      await submit.click();
+      assert.match(
+        await page.getByRole("alert").innerText(),
+        /Passwords do not match/,
+      );
+      assert.equal(await confirmation.getAttribute("aria-invalid"), "true");
+      assert.equal(writes, 0);
+
+      await next.fill("password1");
+      await confirmation.fill("password1");
+      await submit.click();
+      await page
+        .getByRole("alert")
+        .filter({ hasText: "security requirements" })
+        .waitFor();
+      assert.equal(writes, 1);
+      assert.equal(await next.inputValue(), "password1");
+      assert.equal(await confirmation.inputValue(), "password1");
+      assert.equal(await current.inputValue(), "BrowserInitial92");
+      await capture("password-policy-error-desktop");
+
+      await current.fill("IncorrectPassword94");
+      await next.fill("BrowserChanged93");
+      await confirmation.fill("BrowserChanged93");
+      await submit.click();
+      await page
+        .getByRole("alert")
+        .filter({ hasText: "Current password is incorrect" })
+        .waitFor();
+      assert.equal(await current.getAttribute("aria-invalid"), "true");
+      page.off("request", countWrites);
+
+      for (const [language, theme, text] of [
+        ["zh", "light", "英文字母"],
+        ["ar", "dark", "حرف إنجليزي"],
+      ]) {
+        await page.evaluate(
+          async ({ language, theme }) => {
+            const { usePreferences } = await import("/src/lib/preferences.ts");
+            usePreferences.getState().setLanguage(language);
+            usePreferences.getState().setTheme(theme);
+          },
+          { language, theme },
+        );
+        await page.setViewportSize({ width: 320, height: 900 });
+        await page
+          .locator('input[autocomplete="current-password"]')
+          .fill("BrowserInitial92");
+        await page
+          .locator('input[autocomplete="new-password"]')
+          .nth(0)
+          .fill("12345678");
+        await page
+          .locator('input[autocomplete="new-password"]')
+          .nth(1)
+          .fill("12345678");
+        await page.locator(".staff-security form button[type=submit]").click();
+        assert.ok((await page.getByRole("alert").innerText()).includes(text));
+        assert.equal(
+          await page.locator(".staff-security").getAttribute("dir"),
+          language === "ar" ? "rtl" : "ltr",
+        );
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        );
+        const scan = await new AxeBuilder({ page })
+          .include(".staff-security")
+          .withTags(["wcag2a", "wcag2aa"])
+          .analyze();
+        assert.deepEqual(scan.violations, []);
+        await capture(`password-policy-error-${language}-${theme}-320`);
+      }
+      await page.evaluate(async () => {
+        const { usePreferences } = await import("/src/lib/preferences.ts");
+        usePreferences.getState().setLanguage("en");
+        usePreferences.getState().setTheme("light");
+      });
+      await page.setViewportSize({ width: 1440, height: 1000 });
+    },
+  );
+  await check(
     "change password and enroll a real TOTP factor through the UI",
     async () => {
       await page

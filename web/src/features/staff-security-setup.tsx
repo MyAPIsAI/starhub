@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { CircleAlert } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { getSelf, logoutUser, type AuthUser } from "../lib/api/auth";
-import { apiGet, apiPost, apiPut } from "../lib/api/http";
+import { ApiError, apiGet, apiPost, apiPut } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
 import { useSystemAccess } from "../lib/system-access";
 import { useProductPreview } from "../lib/product-preview";
@@ -26,6 +27,32 @@ export default function StaffSecuritySetup() {
   const [savedCodes, setSavedCodes] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [errorField, setErrorField] = useState<
+    "current" | "new" | "confirmation" | null
+  >(null);
+  const currentInput = useRef<HTMLInputElement>(null);
+  const newInput = useRef<HTMLInputElement>(null);
+  const confirmationInput = useRef<HTMLInputElement>(null);
+  const passwordHelp = c(
+    "新密码须为 8–64 字节，至少包含一个英文字母和一个数字；不能使用常见弱密码或与当前密码相同。非英文字符会占用多个字节。",
+    "Use 8–64 bytes with at least one English letter and one digit. Avoid common weak passwords and your current password. Non-ASCII characters use multiple bytes.",
+    "استخدم من 8 إلى 64 بايت مع حرف إنجليزي واحد ورقم واحد على الأقل. تجنب كلمات المرور الشائعة الضعيفة وكلمة المرور الحالية. الأحرف غير اللاتينية تستهلك عدة بايتات.",
+  );
+
+  function passwordError(
+    message: string,
+    field: "current" | "new" | "confirmation",
+  ) {
+    setError(message);
+    setErrorField(field);
+    const input =
+      field === "current"
+        ? currentInput
+        : field === "new"
+          ? newInput
+          : confirmationInput;
+    input.current?.focus();
+  }
 
   useEffect(() => {
     const abort = new AbortController();
@@ -38,6 +65,7 @@ export default function StaffSecuritySetup() {
     setBackupCodes([]);
     setSavedCodes(false);
     setError("");
+    setErrorField(null);
     Promise.all([
       getSelf({}, abort.signal),
       apiGet<{ enabled: boolean }>("/api/user/2fa/status", abort.signal),
@@ -63,18 +91,57 @@ export default function StaffSecuritySetup() {
     const ownerEpoch = identity.epoch;
     const current = () =>
       useSystemAccess.getState().session.epoch === ownerEpoch;
-    setBusy(true);
     setError("");
+    setErrorField(null);
+    if (user.admin_password_change_required) {
+      if (!password) {
+        passwordError(
+          c(
+            "请输入当前密码。",
+            "Enter your current password.",
+            "أدخل كلمة المرور الحالية.",
+          ),
+          "current",
+        );
+        return;
+      }
+      const normalized = nextPassword.trim();
+      const length = new TextEncoder().encode(normalized).length;
+      if (
+        length < 8 ||
+        length > 64 ||
+        !/[A-Za-z]/.test(normalized) ||
+        !/[0-9]/.test(normalized)
+      ) {
+        passwordError(passwordHelp, "new");
+        return;
+      }
+      if (normalized === password) {
+        passwordError(
+          c(
+            "新密码不能与当前密码相同。",
+            "Choose a new password that differs from your current password.",
+            "اختر كلمة مرور جديدة تختلف عن كلمة المرور الحالية.",
+          ),
+          "new",
+        );
+        return;
+      }
+      if (nextPassword !== confirmation) {
+        passwordError(
+          c(
+            "两次密码不一致。",
+            "Passwords do not match.",
+            "كلمتا المرور غير متطابقتين.",
+          ),
+          "confirmation",
+        );
+        return;
+      }
+    }
+    setBusy(true);
     try {
       if (user.admin_password_change_required) {
-        if (nextPassword !== confirmation)
-          throw new Error(
-            c(
-              "两次密码不一致",
-              "Passwords do not match",
-              "كلمتا المرور غير متطابقتين",
-            ),
-          );
         const updated = await apiPut<AuthUser>("/api/user/self", {
           current_password: password,
           new_password: nextPassword,
@@ -107,7 +174,47 @@ export default function StaffSecuritySetup() {
         }
       }
     } catch (e) {
-      if (current())
+      if (!current()) return;
+      if (
+        e instanceof ApiError &&
+        e.status === 400 &&
+        e.message ===
+          "password must be 8-64 characters with at least one letter and one digit"
+      )
+        passwordError(
+          c(
+            "新密码不符合安全要求。" + passwordHelp,
+            "The new password does not meet the security requirements. " +
+              passwordHelp,
+            "كلمة المرور الجديدة لا تستوفي متطلبات الأمان. " + passwordHelp,
+          ),
+          "new",
+        );
+      else if (
+        e instanceof ApiError &&
+        e.message === "current password is incorrect"
+      )
+        passwordError(
+          c(
+            "当前密码不正确，请重新输入。",
+            "Current password is incorrect. Try again.",
+            "كلمة المرور الحالية غير صحيحة. حاول مجددًا.",
+          ),
+          "current",
+        );
+      else if (
+        e instanceof ApiError &&
+        e.message === "new password must differ from the current password"
+      )
+        passwordError(
+          c(
+            "新密码不能与当前密码相同。",
+            "Choose a new password that differs from your current password.",
+            "اختر كلمة مرور جديدة تختلف عن كلمة المرور الحالية.",
+          ),
+          "new",
+        );
+      else
         setError(
           e instanceof Error ? e.message : "Unable to update security settings",
         );
@@ -151,38 +258,70 @@ export default function StaffSecuritySetup() {
           "غيّر كلمة المرور الأولية وفعّل تطبيق المصادقة ثم سجّل الدخول مجددًا للوصول إلى أدوات الموظفين.",
         )}
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <div
+          role="alert"
+          id="staff-security-error"
+          className="staff-security-error"
+        >
+          <CircleAlert size={18} aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      )}
       {!user ? (
         <p role="status">{c("正在加载…", "Loading…", "جارٍ التحميل…")}</p>
       ) : user.admin_password_change_required || !enabled ? (
-        <form onSubmit={submit}>
+        <form
+          onSubmit={submit}
+          noValidate={user.admin_password_change_required}
+        >
           {user.admin_password_change_required || !secret ? (
             <label>
               {c("当前密码", "Current password", "كلمة المرور الحالية")}
               <Input
+                ref={currentInput}
                 type="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 maxLength={64}
+                aria-invalid={errorField === "current" || undefined}
+                aria-describedby={
+                  errorField === "current" ? "staff-security-error" : undefined
+                }
               />
             </label>
           ) : null}
           {user.admin_password_change_required ? (
             <>
-              <label>
-                {c("新密码", "New password", "كلمة المرور الجديدة")}
-                <Input
-                  type="password"
-                  autoComplete="new-password"
-                  value={nextPassword}
-                  onChange={(e) => setNextPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  maxLength={64}
-                />
-              </label>
+              <div className="staff-security-password">
+                <label>
+                  {c("新密码", "New password", "كلمة المرور الجديدة")}
+                  <Input
+                    ref={newInput}
+                    type="password"
+                    autoComplete="new-password"
+                    value={nextPassword}
+                    onChange={(e) => setNextPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    maxLength={64}
+                    aria-invalid={errorField === "new" || undefined}
+                    aria-describedby={
+                      errorField === "new"
+                        ? "staff-security-password-help staff-security-error"
+                        : "staff-security-password-help"
+                    }
+                  />
+                </label>
+                <small
+                  id="staff-security-password-help"
+                  className="staff-security-help"
+                >
+                  {passwordHelp}
+                </small>
+              </div>
               <label>
                 {c(
                   "确认新密码",
@@ -190,6 +329,7 @@ export default function StaffSecuritySetup() {
                   "تأكيد كلمة المرور الجديدة",
                 )}
                 <Input
+                  ref={confirmationInput}
                   type="password"
                   autoComplete="new-password"
                   value={confirmation}
@@ -197,6 +337,12 @@ export default function StaffSecuritySetup() {
                   required
                   minLength={8}
                   maxLength={64}
+                  aria-invalid={errorField === "confirmation" || undefined}
+                  aria-describedby={
+                    errorField === "confirmation"
+                      ? "staff-security-error"
+                      : undefined
+                  }
                 />
               </label>
             </>

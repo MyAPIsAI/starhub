@@ -45,12 +45,16 @@ Windows PowerShell 启动：
 
 ```powershell
 .\release\starhub.exe
+
+.\release\starhub.exe --config .\config.example.yml
 ```
 
 Linux / macOS 启动：
 
 ```bash
 ./release/starhub
+
+./release/starhub --config ./config.example.yml
 ```
 
 访问 `http://localhost:3000/`。如已有旧服务占用端口，先停止旧服务，再启动上面的发行文件；保持原工作目录可继续使用原有 `starhub.db`。
@@ -116,6 +120,8 @@ npm run dev
 ```
 
 访问 Vite 打印的地址；`/api` 代理到 `http://127.0.0.1:3000`，可通过 `STARHUB_API_URL` 更改目标。代理保留浏览器 Host，因此兼容同源写请求保护。开发时不设置 `STARHUB_COOKIE_SECURE=true`。
+
+将 `web/.env.example` 复制为 `web/.env.local`，把 `STARHUB_API_URL` 设置为后端实际地址；例如使用 `config.example.yml` 时设为 `http://127.0.0.1:3008`。`/api` 和 `/v1` 共用该代理目标。终端环境变量优先于 `.env` 文件，修改配置后重启 Vite。本地代理开发时保持 `VITE_API_BASE_URL` 为空。PowerShell 启动命令及配置优先级详见 [DEV.md](DEV.md)。
 
 ```bash
 npm run lint
