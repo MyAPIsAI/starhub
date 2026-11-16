@@ -34,6 +34,7 @@ import { ConfigurationSync } from "../../features/configuration-sync";
 import { ServerTokenPricing } from "../../features/server-token-pricing";
 import { ResourceRegions } from "../../features/resource-regions";
 import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
+import { ChannelModelDiscovery } from "../../features/channel-model-discovery";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
@@ -2720,32 +2721,19 @@ export default function AdminPortal() {
               required={!editingChannel}
             />
           </div>
-          <div>
-            <label
-              htmlFor="ch-models"
-              style={{
-                display: "block",
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              {text(
-                "模型（逗号分隔）",
-                "Models (comma-separated)",
-                "النماذج (مفصولة بفواصل)",
-              )}
-            </label>
-            <Input
-              id="ch-models"
-              value={channelForm.models}
-              onChange={(e) =>
-                setChannelForm((f) => ({ ...f, models: e.target.value }))
-              }
-              placeholder="gpt-4.1,claude-sonnet-4-20250514"
-              required
-            />
-          </div>
+          <ChannelModelDiscovery
+            connection={{
+              channel_id: editingChannel ?? undefined,
+              type: channelForm.type ?? 1,
+              base_url: channelForm.base_url ?? "",
+              key: channelForm.key || undefined,
+            }}
+            models={channelForm.models}
+            onChange={(models) =>
+              setChannelForm((form) => ({ ...form, models }))
+            }
+            disabled={createChannelMut.isPending || updateChannelMut.isPending}
+          />
           <div>
             <label
               htmlFor="ch-group"
@@ -2788,7 +2776,7 @@ export default function AdminPortal() {
               onChange={(e) =>
                 setChannelForm((f) => ({ ...f, base_url: e.target.value }))
               }
-              placeholder="https://api.openai.com/v1"
+              placeholder="https://api.openai.com"
             />
           </div>
         </form>

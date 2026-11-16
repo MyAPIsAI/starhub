@@ -90,10 +90,13 @@ node scripts/build-release.mjs --all
 node scripts/build-release.mjs --backend-only
 node scripts/build-release.mjs --all --skip-checks
 node scripts/build-release.mjs --output "./build output"
+node scripts/build-release.mjs --stop-dev-server
 node scripts/build-release.mjs --help
 ```
 
 `--backend-only` 跳过 npm 与前端构建，产物名增加 `-backend`，与带控制台的版本分开保存。`--skip-checks` 仅跳过检查和测试，仍安装并编译前端；默认建议保留检查。`--output` 的相对路径以当前终端目录为基准，默认输出目录则始终位于仓库下。
+
+Windows 下构建前需停止前端开发服务：Vite 会占用 Rollup 原生模块，导致 `npm ci` 替换依赖时出现 `EPERM`。脚本会在安装前检测本项目的依赖占用；加上 `--stop-dev-server` 可明确停止检测到的本项目 Vite/esbuild 进程，不影响其他项目的同名进程。构建结束后，在 `web` 目录重新执行 `npm run dev` 恢复开发服务。
 
 也支持已有 `GOOS`/`GOARCH` 环境变量，命令行参数优先；指定目标时文件名包含系统和架构。`--all` 忽略这两个环境变量，不能与 `--os`/`--arch` 混用。脚本只生成二进制，不进行 macOS Developer ID 签名或公证。
 

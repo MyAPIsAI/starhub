@@ -5,7 +5,26 @@
 // lib/api/admin.ts (useAdminChannels, useTestChannel).
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiPost, apiPut, apiDelete } from "./http";
+import { apiPost, apiPut, apiDelete, apiRequest } from "./http";
+
+export interface ChannelModelsInput {
+  channel_id?: number;
+  type: number;
+  base_url: string;
+  key?: string;
+}
+
+// Discovery credentials stay in this request, outside the query cache.
+export function fetchChannelModels(
+  input: ChannelModelsInput,
+  signal: AbortSignal,
+) {
+  return apiRequest<string[]>("/api/channel/fetch_models", {
+    method: "POST",
+    body: JSON.stringify(input),
+    signal,
+  });
+}
 
 export interface ChannelInput {
   name: string;

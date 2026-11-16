@@ -12,6 +12,24 @@
 
 ## 分别启动前后端
 
+### 启动前：保持凭证加密配置一致
+
+复用已有数据库时，必须使用创建凭证时相同的 `STARHUB_CRYPTO_SECRET`；如使用版本密钥环，还需恢复对应的 `STARHUB_CREDENTIAL_KEYS` 和 `STARHUB_CREDENTIAL_ACTIVE_KEY`。上游的 `sk-…` 接口密钥不是这个加密密钥。
+
+Go 服务不会自动读取前端的 `web/.env.local` 来设置这些变量。关闭原终端、换终端或切换为发布程序启动时，应从相同的安全配置来源加载原值，再启动服务。不要生成新值来尝试解密旧数据库，也不要把真实密钥写入版本库、命令历史或日志。
+
+如果已找回原来的 `STARHUB_CRYPTO_SECRET`，可在准备启动 Go 的 PowerShell 中通过隐藏输入加载，避免把原值写入命令历史：
+
+```powershell
+$credentialSecret = Read-Host "Original STARHUB_CRYPTO_SECRET" -AsSecureString
+$env:STARHUB_CRYPTO_SECRET = [System.Net.NetworkCredential]::new('', $credentialSecret).Password
+Remove-Variable credentialSecret
+```
+
+上面的赋值仅对当前 PowerShell 及随后启动的子进程生效，不会替你永久保存密钥。首次使用全新数据库前，应先在受保护的配置来源保存持久密钥，并确保之后每次启动都加载同一个值。加密配置及轮换说明见 [CREDENTIAL_STORAGE.md](CREDENTIAL_STORAGE.md)。
+
+如果日志出现 `no persistent crypto secret`，当前程序使用的是未保存的进程随机密钥；该进程退出后，新进程无法解密它写入的渠道凭证或客户令牌。`credential migration could not decrypt a stored value` 表示程序正在阻止使用无法解密的已有数据；不能通过删除密文或跳过检查来安全恢复。原密钥无法找回时，需要先保留备份，再明确决定如何重新配置受影响的凭证。
+
 ### 终端一：启动 Go 后端
 
 ```powershell
@@ -136,3 +154,5 @@ npm run build
 ```
 
 日常查看前端修改不需要反复运行发布构建；保持 Vite 开发服务运行即可。
+
+Windows 下发布构建会执行 `npm ci`，运行中的 Vite 可能占用 Rollup 原生模块，使依赖清理报 `EPERM`。先在前端终端按 `Ctrl+C`，再到项目根目录执行 `node scripts/build-release.mjs`；也可使用 `node scripts/build-release.mjs --stop-dev-server`，由脚本停止检测到的本项目 Vite/esbuild 进程。构建完成后重新运行 `npm run dev`。脚本默认只报告占用，不会终止其他项目的进程或先删除部分依赖。

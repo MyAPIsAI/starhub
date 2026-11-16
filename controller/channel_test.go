@@ -1,15 +1,188 @@
 package controller
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/service"
 )
+
+func TestFetchChannelModelsDraftAndSavedCredentials(t *testing.T) {
+	newTestDB(t)
+	var receivedKey string
+	requests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		receivedKey = r.Header.Get("Authorization")
+		if r.Method != "GET" || r.URL.Path != "/v1/models" {
+			t.Errorf("unexpected discovery request: %s %s", r.Method, r.URL.Path)
+		}
+		fmt.Fprint(w, `{"data":[{"id":" model-a "},{"id":"model-a"},{"id":"Model-B"},{"id":""}]}`)
+	}))
+	defer upstream.Close()
+	fetch := func(input any) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(input)
+		return call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: string(body), userID: 1, role: common.RoleAdmin})
+	}
+	response := fetch(map[string]any{"type": 1, "base_url": upstream.URL + "///", "key": "draft-key\nother-key"})
+	var ids []string
+	decodeData(t, response, &ids)
+	if !reflect.DeepEqual(ids, []string{"model-a", "Model-B"}) || receivedKey != "Bearer draft-key" {
+		t.Fatal("draft discovery failed to normalize models or select the explicit key")
+	}
+	saved := mustChannel(t, "discovery", "existing-model", "disabled-key\nstored-key", common.ChannelStatusManuallyDisabled)
+	saved.BaseURL = upstream.URL
+	saved.MultiKeyStatus = "2,1"
+	if err := model.UpdateChannel(saved); err != nil {
+		t.Fatal(err)
+	}
+	var revision model.ChannelConfigurationState
+	model.DB.First(&revision, 1)
+	var abilities []model.Ability
+	model.DB.Where("channel_id = ?", saved.ID).Find(&abilities)
+	before, err := model.GetChannelByID(saved.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = fetch(map[string]any{"channel_id": saved.ID, "type": 1, "base_url": upstream.URL + "/", "key": ""})
+	decodeData(t, response, &ids)
+	if receivedKey != "Bearer stored-key" {
+		t.Fatal("saved discovery did not select an enabled stored key")
+	}
+	response = fetch(map[string]any{"channel_id": saved.ID, "type": 1, "base_url": upstream.URL, "key": "replacement-key"})
+	decodeData(t, response, &ids)
+	if receivedKey != "Bearer replacement-key" {
+		t.Fatal("draft key did not override the stored key")
+	}
+	after, _ := model.GetChannelByID(saved.ID)
+	var afterRevision model.ChannelConfigurationState
+	model.DB.First(&afterRevision, 1)
+	var afterAbilities []model.Ability
+	model.DB.Where("channel_id = ?", saved.ID).Find(&afterAbilities)
+	if !reflect.DeepEqual(before, after) || revision != afterRevision || !reflect.DeepEqual(abilities, afterAbilities) {
+		t.Fatal("discovery changed channel configuration, revision or abilities")
+	}
+	beforeRequests := requests
+	for _, input := range []map[string]any{
+		{"channel_id": saved.ID, "type": 1, "base_url": upstream.URL + "/different"},
+		{"channel_id": saved.ID, "type": 1, "base_url": ""},
+	} {
+		expectError(t, fetch(input), 400, "models_changed_connection_requires_key")
+	}
+	saved.Type = 14
+	if err := model.UpdateChannel(saved); err != nil {
+		t.Fatal(err)
+	}
+	expectError(t, fetch(map[string]any{"channel_id": saved.ID, "type": 1, "base_url": upstream.URL}), 400, "models_changed_connection_requires_key")
+	if requests != beforeRequests {
+		t.Fatal("a rejected connection change sent a stored credential upstream")
+	}
+	for _, tc := range []struct {
+		input  map[string]any
+		status int
+		code   string
+	}{
+		{map[string]any{"type": 1, "base_url": upstream.URL}, 400, "models_key_required"},
+		{map[string]any{"type": 14, "base_url": upstream.URL, "key": "key"}, 400, "models_channel_type_unsupported"},
+		{map[string]any{"type": 1, "base_url": upstream.URL + "/v1", "key": "key"}, 400, "models_base_url_contains_v1"},
+		{map[string]any{"type": 1, "base_url": "http://user:password@localhost", "key": "key"}, 400, "invalid_models_base_url"},
+		{map[string]any{"type": 1, "base_url": "file:///etc/passwd", "key": "key"}, 400, "invalid_models_base_url"},
+		{map[string]any{"type": 1, "base_url": upstream.URL + "?key=hidden", "key": "key"}, 400, "invalid_models_base_url"},
+		{map[string]any{"channel_id": saved.ID + 100, "type": 1}, 404, "models_channel_unavailable"},
+		{map[string]any{"channel_id": -1, "type": 1}, 400, "invalid_models_channel_id"},
+	} {
+		expectError(t, fetch(tc.input), tc.status, tc.code)
+	}
+	saved.Type = 1
+	saved.MultiKeyStatus = "2,2"
+	if err := model.UpdateChannel(saved); err != nil {
+		t.Fatal(err)
+	}
+	expectError(t, fetch(map[string]any{"channel_id": saved.ID, "type": 1}), 400, "models_key_required")
+	if requests != beforeRequests {
+		t.Fatal("invalid discovery requests reached upstream")
+	}
+	defaultBase, err := service.NormalizeChannelModelsBaseURL("")
+	if err != nil || defaultBase != "https://api.openai.com" {
+		t.Fatal("default upstream root was not resolved")
+	}
+}
+
+func TestFetchChannelModelsUpstreamFailuresAndLimits(t *testing.T) {
+	redirected := false
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = true }))
+	defer destination.Close()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch strings.Split(r.URL.Path, "/")[1] {
+		case "auth":
+			w.WriteHeader(401)
+			fmt.Fprint(w, "sensitive-key")
+		case "forbidden":
+			w.WriteHeader(403)
+		case "missing":
+			w.WriteHeader(404)
+		case "limited":
+			w.WriteHeader(429)
+		case "redirect":
+			http.Redirect(w, r, destination.URL, 302)
+		case "large":
+			fmt.Fprint(w, strings.Repeat(" ", (2<<20)+1))
+		case "many":
+			fmt.Fprint(w, `{"data":[`+strings.TrimSuffix(strings.Repeat(`{"id":"a"},`, 5001), ",")+`]}`)
+		case "invalid":
+			fmt.Fprint(w, `{"unexpected":[]}`)
+		case "badid":
+			fmt.Fprint(w, `{"data":[{"id":"a,b"}]}`)
+		case "control":
+			fmt.Fprint(w, `{"data":[{"id":"a\nb"}]}`)
+		case "paged":
+			fmt.Fprint(w, `{"data":[{"id":"a"}],"has_more":true}`)
+		case "empty":
+			fmt.Fprint(w, `{"data":[]}`)
+		case "timeout":
+			<-r.Context().Done()
+		}
+	}))
+	defer upstream.Close()
+	for _, tc := range []struct{ path, code string }{
+		{"auth", "upstream_models_authentication_failed"}, {"forbidden", "upstream_models_authentication_failed"},
+		{"missing", "upstream_models_not_found"}, {"limited", "upstream_models_rate_limited"},
+		{"redirect", "upstream_models_redirect_refused"}, {"large", "upstream_models_too_large"},
+		{"many", "upstream_models_too_large"}, {"invalid", "upstream_models_invalid_response"},
+		{"badid", "upstream_models_invalid_id"}, {"control", "upstream_models_invalid_id"},
+		{"paged", "upstream_models_pagination_unsupported"},
+	} {
+		body, _ := json.Marshal(map[string]any{"type": 1, "base_url": upstream.URL + "/" + tc.path, "key": "sensitive-key"})
+		response := call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: string(body)})
+		expectError(t, response, 502, tc.code)
+		if strings.Contains(response.Body.String(), "sensitive-key") {
+			t.Fatal("upstream secret leaked in a discovery response")
+		}
+	}
+	if redirected {
+		t.Fatal("discovery followed a credential-bearing redirect")
+	}
+	ids, err := service.FetchChannelModels(context.Background(), upstream.URL+"/empty", "test-key")
+	if err != nil || ids == nil || len(ids) != 0 {
+		t.Fatal("valid empty catalog was not returned as an empty array")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	_, err = service.FetchChannelModels(ctx, upstream.URL+"/timeout", "test-key")
+	if err == nil || err.Error() != "upstream_models_timeout" {
+		t.Fatal("discovery deadline was not classified safely")
+	}
+}
 
 func mustChannel(t *testing.T, name, models, key string, status int) *model.Channel {
 	t.Helper()

@@ -88,10 +88,13 @@ Other options:
 node scripts/build-release.mjs --backend-only
 node scripts/build-release.mjs --all --skip-checks
 node scripts/build-release.mjs --output "./build output"
+node scripts/build-release.mjs --stop-dev-server
 node scripts/build-release.mjs --help
 ```
 
 `--backend-only` skips npm and the frontend build; the artifact name gains a `-backend` suffix so it is kept separate from the console build. `--skip-checks` skips only the checks and tests while still installing and building the frontend; keeping the checks is recommended by default. A relative `--output` path is resolved against the current terminal directory, whereas the default output directory always sits under the repository.
+
+On Windows, stop the frontend development server before building: Vite can lock Rollup's native module while `npm ci` replaces dependencies. The script detects project-local dependency users before installation. `--stop-dev-server` explicitly stops this project's detected Vite/esbuild processes; other projects' processes are left running. Restart development afterward with `cd web` and `npm run dev`.
 
 Pre-existing `GOOS`/`GOARCH` environment variables are also honored, with command-line arguments taking precedence; when targeting explicitly, the filename includes the OS and architecture. `--all` ignores those two environment variables and cannot be combined with `--os`/`--arch`. The script only produces binaries — it does not perform macOS Developer ID signing or notarization.
 

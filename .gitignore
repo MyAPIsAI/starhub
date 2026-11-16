@@ -13,7 +13,8 @@ starhub.exe
 release/
 doc/
 old-web/
-scripts/
+scripts/*
+!scripts/build-release.mjs
 .workbuddy/
 web/node_modules/
 web/dist/
