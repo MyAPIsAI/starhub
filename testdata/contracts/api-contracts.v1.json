@@ -90,7 +90,7 @@
     "GET /api/service-group": { "auth": "AdminAuth" },
     "PUT /api/service-group": { "auth": "AdminAuth+Audit" },
     "DELETE /api/service-group/{id}": { "auth": "AdminAuth+Audit" },
-    "GET /api/service-quality": { "auth": "UserAuth", "params": { "hours": "int (1-720)", "user_id": "optional positive int (admin/root only; other roles remain scoped to self)" }, "response_200": { "success": true, "data": { "window_hours": "int", "overall": "ServiceQualityMetric", "by_model": "ServiceQualityMetric[]", "by_day": "ServiceQualityDailyMetric[]" } } }
+    "GET /api/service-quality": { "auth": "UserAuth", "params": { "hours": "int (1-720; used when month is absent)", "month": "optional YYYY-MM (UTC calendar month, 1970-01 through current month; overrides hours)", "model": "optional exact model ID", "user_id": "optional positive int (admin/root only; other roles remain scoped to self)" }, "response_200": { "success": true, "data": { "window_hours": "int (calendar windows may exceed 720)", "window_start": "int (inclusive Unix timestamp)", "window_end": "int (exclusive Unix timestamp)", "overall": "ServiceQualityMetric", "by_model": "ServiceQualityMetric[]", "by_day": "ServiceQualityDailyMetric[]" } } }
   },
 
   "plaza": {

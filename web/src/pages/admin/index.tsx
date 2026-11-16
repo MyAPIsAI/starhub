@@ -12,6 +12,7 @@ import {
   History,
   Plus,
   CircleDollarSign,
+  Copy,
 } from "lucide-react";
 import {
   ProductBrand,
@@ -69,6 +70,7 @@ import {
   TASK_PLUGIN_CHANNEL_TYPE,
 } from "../../lib/api/task-plugin";
 import { ApiError } from "../../lib/api/http";
+import { copyText } from "../../features/code-example";
 
 export default function AdminPortal() {
   const { t, i18n } = useTranslation();
@@ -2152,7 +2154,31 @@ export default function AdminPortal() {
                         className="mono"
                         style={{ padding: "10px 14px", fontWeight: 600 }}
                       >
-                        {rd.code}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <span dir="ltr">{rd.code}</span>
+                          <Button
+                            size="small"
+                            variant="ghost"
+                            style={{ flexShrink: 0 }}
+                            aria-label={text(
+                              `复制兑换码 ${rd.code}`,
+                              `Copy redemption code ${rd.code}`,
+                              `نسخ رمز الاسترداد ${rd.code}`,
+                            )}
+                            onClick={() =>
+                              void copyText(rd.code, t("copied"), t("copyFailed"))
+                            }
+                          >
+                            <Copy size={14} aria-hidden="true" />
+                            {text("复制", "Copy", "نسخ")}
+                          </Button>
+                        </div>
                       </td>
                       <td
                         className="mono"

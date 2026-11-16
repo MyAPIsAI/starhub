@@ -484,6 +484,8 @@ describe("backend-only plaza catalog", () => {
       };
       const quality = {
         window_hours: 168,
+        window_start: 0,
+        window_end: 168 * 3600,
         overall: metric,
         by_model: [metric],
         by_day: [],

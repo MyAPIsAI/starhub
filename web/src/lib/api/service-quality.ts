@@ -33,6 +33,8 @@ export interface ServiceQualityDailyMetric {
 
 export interface ServiceQualitySummary {
   window_hours: number;
+  window_start: number;
+  window_end: number; // Exclusive Unix timestamp.
   overall: ServiceQualityMetric;
   by_model: ServiceQualityMetric[];
   by_day: ServiceQualityDailyMetric[];
@@ -42,21 +44,46 @@ export function useServiceQuality(
   hours: number = 24,
   model?: string,
   userId?: number,
+  options: { month?: string; enabled?: boolean } = {},
 ) {
   const identity = useSessionQueryIdentity();
   const authenticated = useSystemAccess(
     (state) => state.session.accountId !== null,
   );
-  const params = new URLSearchParams({ hours: String(hours) });
+  const params = new URLSearchParams(
+    options.month === undefined
+      ? { hours: String(hours) }
+      : { month: options.month },
+  );
   if (model) params.set("model", model);
   if (userId !== undefined) params.set("user_id", String(userId));
+  const period = options.month === undefined ? hours : { month: options.month };
   const baseKey = model
-    ? (["service-quality", identity, hours, model] as const)
-    : (["service-quality", identity, hours] as const);
+    ? (["service-quality", identity, period, model] as const)
+    : (["service-quality", identity, period] as const);
   return useQuery({
     queryKey: userId === undefined ? baseKey : [...baseKey, { userId }],
-    enabled: authenticated,
-    queryFn: ({ signal }) =>
-      apiGet<ServiceQualitySummary>(`/api/service-quality?${params}`, signal),
+    enabled: authenticated && options.enabled !== false,
+    queryFn: async ({ signal }) => {
+      const data = await apiGet<ServiceQualitySummary>(
+        `/api/service-quality?${params}`,
+        signal,
+      );
+      if (options.month !== undefined) {
+        const start = new Date(`${options.month}-01T00:00:00Z`);
+        const end = new Date(start);
+        end.setUTCMonth(end.getUTCMonth() + 1);
+        // Reject servers that ignore month and return a rolling-hour window.
+        if (
+          data.window_start !== start.getTime() / 1000 ||
+          !Number.isSafeInteger(data.window_end) ||
+          data.window_end <= data.window_start ||
+          data.window_end > end.getTime() / 1000
+        ) {
+          throw new Error("Invalid monthly service quality window");
+        }
+      }
+      return data;
+    },
   });
 }

@@ -11,6 +11,104 @@ import (
 	"starhub/model"
 )
 
+func TestGetServiceQualityCalendarMonth(t *testing.T) {
+	for _, monthName := range []string{"2024-01", "2024-02", "2023-02", "2023-12"} {
+		t.Run(monthName, func(t *testing.T) {
+			newTestDB(t)
+			owner := newUser(t, "month-owner", common.RoleUser, 1000)
+			other := newUser(t, "month-other", common.RoleUser, 1000)
+			start, err := time.Parse("2006-01", monthName)
+			if err != nil {
+				t.Fatal(err)
+			}
+			end := start.AddDate(0, 1, 0)
+			entries := []model.Log{
+				{UserID: owner.ID, Model: "model-a", Status: 1, Quota: 99, DurationMs: 90000, CreatedAt: start.Unix() - 1},
+				{UserID: owner.ID, Model: "model-a", Status: 1, Quota: 3, DurationMs: 100, CreatedAt: start.Unix()},
+				{UserID: owner.ID, Model: "model-a", Status: 2, DurationMs: 200, CreatedAt: start.Add(time.Hour).Unix()},
+				{UserID: owner.ID, Model: "model-a", Status: 1, Quota: 5, DurationMs: 300, CreatedAt: end.Unix() - 1},
+				{UserID: owner.ID, Model: "model-b", Status: 1, Quota: 7, DurationMs: 900, CreatedAt: start.Add(2 * time.Hour).Unix()},
+				{UserID: other.ID, Model: "model-a", Status: 1, Quota: 11, DurationMs: 5000, CreatedAt: start.Add(3 * time.Hour).Unix()},
+				{UserID: owner.ID, Model: "model-a", Status: 1, Quota: 99, DurationMs: 90000, CreatedAt: end.Unix()},
+			}
+			if err := model.DB.Create(&entries).Error; err != nil {
+				t.Fatal(err)
+			}
+			for _, tc := range []struct {
+				name, filter, user         string
+				role                       int
+				total, success, quota, p95 int64
+			}{
+				{"self", "", strconv.FormatInt(other.ID, 10), common.RoleUser, 4, 3, 15, 900},
+				{"self model", "model-a", strconv.FormatInt(other.ID, 10), common.RoleUser, 3, 2, 8, 300},
+				{"all accounts", "", "", common.RoleAdmin, 5, 4, 26, 5000},
+				{"selected account", "model-a", strconv.FormatInt(other.ID, 10), common.RoleAdmin, 1, 1, 11, 5000},
+				{"selected root account", "model-a", strconv.FormatInt(owner.ID, 10), common.RoleRoot, 3, 2, 8, 300},
+				{"unknown model", "missing", "", common.RoleUser, 0, 0, 0, 0},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					query := url.Values{"month": {monthName}, "hours": {"1"}, "model": {tc.filter}, "user_id": {tc.user}}
+					rr := call(GetServiceQuality, testRequest{method: http.MethodGet, target: "/api/service-quality?" + query.Encode(), userID: owner.ID, role: tc.role})
+					var got model.ServiceQualitySummary
+					decodeData(t, rr, &got)
+					if got.WindowStart != start.Unix() || got.WindowEnd != end.Unix() || got.WindowHours != int(end.Sub(start)/time.Hour) {
+						t.Fatalf("wrong calendar window: %+v", got)
+					}
+					if got.Overall.TotalRequests != tc.total || got.Overall.SuccessCount != tc.success || got.Overall.FailedCount != tc.total-tc.success || got.Overall.TotalQuota != tc.quota || got.Overall.P95DurationMs != tc.p95 {
+						t.Fatalf("wrong monthly metrics: %+v, want %+v", got, tc)
+					}
+					var dayTotal, daySuccess, modelTotal int64
+					for _, day := range got.ByDay {
+						if day.Date < start.Format("2006-01-02") || day.Date >= end.Format("2006-01-02") || day.P95DurationMs > tc.p95 {
+							t.Fatalf("out-of-scope daily metrics: %+v", got.ByDay)
+						}
+						dayTotal += day.TotalRequests
+						daySuccess += day.SuccessCount
+					}
+					for _, metric := range got.ByModel {
+						if tc.filter != "" && metric.Model != tc.filter {
+							t.Fatalf("other models included: %+v", got.ByModel)
+						}
+						modelTotal += metric.TotalRequests
+					}
+					if dayTotal != tc.total || daySuccess != tc.success || modelTotal != tc.total {
+						t.Fatalf("daily/model scope differs from overall: %+v", got)
+					}
+					if tc.total > 0 && (len(got.ByDay) != 2 && tc.total != 1) {
+						t.Fatalf("first/last month days were truncated: %+v", got.ByDay)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestGetServiceQualityCurrentAndInvalidMonth(t *testing.T) {
+	newTestDB(t)
+	owner := newUser(t, "current-month-owner", common.RoleUser, 1000)
+	now := time.Now().UTC()
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	entries := []model.Log{
+		{UserID: owner.ID, Model: "current", Status: 1, CreatedAt: now.Unix()},
+		{UserID: owner.ID, Model: "future", Status: 1, CreatedAt: now.Add(time.Hour).Unix()},
+	}
+	if err := model.DB.Create(&entries).Error; err != nil {
+		t.Fatal(err)
+	}
+	rr := call(GetServiceQuality, testRequest{method: http.MethodGet, target: "/api/service-quality?month=" + now.Format("2006-01"), userID: owner.ID, role: common.RoleUser})
+	var got model.ServiceQualitySummary
+	decodeData(t, rr, &got)
+	if got.WindowStart != start.Unix() || got.WindowEnd < now.Unix()+1 || got.WindowEnd > time.Now().UTC().Unix()+1 || got.Overall.TotalRequests != 1 || len(got.ByModel) != 1 || got.ByModel[0].Model != "current" {
+		t.Fatalf("current month must stop at query time: %+v", got)
+	}
+	for _, month := range []string{"", "2024-1", "2024-13", "2024-01-01", "1969-12", "0000-01", start.AddDate(0, 1, 0).Format("2006-01")} {
+		rr := call(GetServiceQuality, testRequest{method: http.MethodGet, target: "/api/service-quality?month=" + url.QueryEscape(month), userID: owner.ID, role: common.RoleUser})
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("invalid month %q: status=%d body=%s", month, rr.Code, rr.Body.String())
+		}
+	}
+}
+
 func TestGetServiceQualityDefault(t *testing.T) {
 	newTestDB(t)
 	u := newUser(t, "alice", common.RoleUser, 1000)

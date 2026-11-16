@@ -183,9 +183,7 @@ function TrendChart({
               onBlur={() => setHovered(null)}
               aria-label={`${row.date}: ${format(values[index])}`}
             >
-              <title>
-                {row.date}: {format(values[index])}
-              </title>
+              <title>{`${row.date}: ${format(values[index])}`}</title>
             </circle>
             {(index === 0 || index === rows.length - 1 || index % 3 === 0) && (
               <text x={x(index)} y="207" textAnchor="middle">
@@ -273,13 +271,15 @@ export default function ServiceQuality() {
   ]);
   const [guideOpen, setGuideOpen] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
-  useEffect(() => setExportMessage(""), [language]);
+  useEffect(() => setExportMessage(""), [language, month, customer]);
   const detailHeading = useRef<HTMLHeadingElement>(null);
   const previousUnit = useRef(selectedId);
   const returnPosition = useRef<{ scroll: number; unit: string } | null>(
     location.state?.qualityReturn ?? null,
   );
-  const qualityQuery = useServiceQuality(168, undefined, selectedUserId);
+  const qualityQuery = useServiceQuality(168, undefined, selectedUserId, {
+    month,
+  });
   // The backend owns account scoping; model aggregates have no per-user field.
   const adaptToUnits = (summary: ServiceQualitySummary): QualityUnit[] =>
     summary.by_model.map((m, i) => ({
@@ -366,6 +366,10 @@ export default function ServiceQuality() {
   const selected = params.has("month")
     ? units.find((unit) => unit.id === selectedId)
     : undefined;
+  const trendQuery = useServiceQuality(168, selected?.model, selectedUserId, {
+    month,
+    enabled: Boolean(selected),
+  });
   const currentPage = Math.max(
     1,
     Math.min(page, Math.ceil(units.length / pageSize)),
@@ -376,7 +380,7 @@ export default function ServiceQuality() {
   );
   const trend = useMemo(() => {
     // Use only the daily data returned for the current account scope.
-    const byDay = qualityQuery.data?.by_day;
+    const byDay = trendQuery.data?.by_day;
     if (byDay && byDay.length > 0) {
       return byDay.map((d: ServiceQualityDailyMetric) => ({
         date: d.date,
@@ -387,7 +391,7 @@ export default function ServiceQuality() {
       })) as QualityTrend[];
     }
     return [];
-  }, [qualityQuery.data]);
+  }, [trendQuery.data]);
   const chartMetric: QualityMetric = !selected?.stream ? "success" : metric;
   const target = selected?.successTarget
     ? chartMetric === "success"
@@ -463,13 +467,14 @@ export default function ServiceQuality() {
     id === null ? text("所有用户", "All users", "كل المستخدمين") : `#${id}`;
   const unitLabel = (unit: QualityUnit) =>
     `${userLabel(unit.userId)} · ${groupLabel(unit.group)} · ${unit.model} · ${requestLabel(unit)}`;
-  const periodEnd = !months.includes(month)
-    ? "—"
-    : month === months[0]
-      ? new Date().toISOString().slice(0, 10)
-      : new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0))
-          .toISOString()
-          .slice(0, 10);
+  const periodStart = qualityQuery.data
+    ? new Date(qualityQuery.data.window_start * 1000).toISOString().slice(0, 10)
+    : "—";
+  const periodEnd = qualityQuery.data
+    ? new Date((qualityQuery.data.window_end - 1) * 1000)
+        .toISOString()
+        .slice(0, 10)
+    : "—";
   const resetFilters = () => {
     setCustomerInput("");
     setParams({});
@@ -510,7 +515,7 @@ export default function ServiceQuality() {
     const reportUnits = selectedId ? (selected ? [selected] : []) : units;
     const rows = reportUnits.map((unit) => [
       month,
-      `${month}-01`,
+      periodStart,
       periodEnd,
       text(
         "调用统计 / 未最终核验",
@@ -528,9 +533,9 @@ export default function ServiceQuality() {
       ...[0, 1, 2].map((index) => unit.buckets[index]?.p95 ?? ""),
       text(...statusWords[unit.status]),
       text(
-        "最近 7 天的调用日志；合同及目标为示例",
-        "Request logs from the last 7 days; illustrative contracts and targets",
-        "سجلات آخر 7 أيام؛ العقود والأهداف توضيحية",
+        "所选自然月（UTC）的调用日志；合同及目标为示例",
+        "Request logs for the selected UTC calendar month; illustrative contracts and targets",
+        "سجلات الشهر المحدد بتوقيت UTC؛ العقود والأهداف توضيحية",
       ),
     ]);
     const csv = serializeQualityCsv([header, ...rows]);
@@ -672,7 +677,11 @@ export default function ServiceQuality() {
             variant="primary"
             size="small"
             onClick={exportReport}
-            disabled={selectedId ? !selected : !units.length}
+            disabled={
+              qualityQuery.isFetching ||
+              qualityQuery.isError ||
+              (selectedId ? !selected : !units.length)
+            }
           >
             <ArrowDownToLine size={15} />
             {selectedId
@@ -692,9 +701,9 @@ export default function ServiceQuality() {
             {text("调用统计", "Request metrics", "مقاييس الطلبات")}
           </strong>
           {text(
-            "展示最近 7 天的调用记录；合同及目标仍为示例，不代表最终结算。",
-            "Metrics use request logs from the last 7 days; contract targets remain illustrative, not final settlement.",
-            "المقاييس من سجلات آخر 7 أيام؛ الأهداف التعاقدية توضيحية وليست تسوية نهائية.",
+            "展示所选自然月（UTC）的调用记录，当前月份统计到查询时刻；合同及目标仍为示例，不代表最终结算。",
+            "Metrics use the selected UTC calendar month, up to query time for the current month; contract targets remain illustrative, not final settlement.",
+            "المقاييس للشهر المحدد بتوقيت UTC وحتى وقت الاستعلام للشهر الحالي؛ الأهداف توضيحية وليست تسوية نهائية.",
           )}
         </span>
       </div>
@@ -1456,12 +1465,41 @@ export default function ServiceQuality() {
                   ),
                 )}
               </div>
-              <TrendChart
-                rows={trend}
-                metric={chartMetric}
-                target={target}
-                text={text}
-              />
+              {trendQuery.isError ? (
+                <div className="sq-export-message" role="alert">
+                  {text(
+                    "模型趋势加载失败，请重试。",
+                    "Could not load this model's trend. Please retry.",
+                    "تعذر تحميل اتجاه النموذج. حاول مجددًا.",
+                  )}
+                  <Button size="small" onClick={() => trendQuery.refetch()}>
+                    {text("重试", "Retry", "إعادة المحاولة")}
+                  </Button>
+                </div>
+              ) : trendQuery.isPending ? (
+                <p role="status">
+                  {text(
+                    "正在加载模型趋势",
+                    "Loading model trend",
+                    "جارٍ تحميل اتجاه النموذج",
+                  )}
+                </p>
+              ) : !trend.length ? (
+                <p role="status">
+                  {text(
+                    "当前模型暂无趋势数据",
+                    "No trend data for this model",
+                    "لا توجد بيانات اتجاه لهذا النموذج",
+                  )}
+                </p>
+              ) : (
+                <TrendChart
+                  rows={trend}
+                  metric={chartMetric}
+                  target={target}
+                  text={text}
+                />
+              )}
             </section>
             <section className="sq-card sq-result-card">
               <div className="sq-card-heading">

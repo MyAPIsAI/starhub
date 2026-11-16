@@ -57,8 +57,12 @@ const metric = {
   total_quota: 1,
   error_rate: 0,
 };
+const currentMonth = new Date().toISOString().slice(0, 7);
+const monthStart = Date.parse(`${currentMonth}-01T00:00:00Z`) / 1000;
 const summary: ServiceQualitySummary = {
   window_hours: 168,
+  window_start: monthStart,
+  window_end: Math.floor(Date.now() / 1000) + 1,
   overall: metric,
   by_model: [metric],
   by_day: [],
@@ -69,6 +73,7 @@ function render(
   role: number,
   search = "",
   data: ServiceQualitySummary | null = summary,
+  trendData?: ServiceQualitySummary,
 ) {
   const access = useSystemAccess.getState();
   if (access.session.accountId !== 7 || access.role !== role) {
@@ -81,23 +86,34 @@ function render(
   });
   clients.push(client);
   const identity = sessionQueryIdentity(useSystemAccess.getState());
-  const customer = new URLSearchParams(search).get("customer");
-  const key: unknown[] = ["service-quality", identity, 168];
+  const params = new URLSearchParams(search);
+  const customer = params.get("customer");
+  const month = params.get("month") || currentMonth;
+  const key: unknown[] = ["service-quality", identity, { month }];
   if ((role === 10 || role === 100) && customer)
     key.push({ userId: Number(customer) });
   if (data) client.setQueryData(key, data);
-  const html = renderToStaticMarkup(
-    createElement(
-      QueryClientProvider,
-      { client },
+  if (trendData) {
+    const model = data?.by_model[Number(params.get("unit")?.slice(3))]?.model;
+    const trendKey: unknown[] = ["service-quality", identity, { month }, model];
+    if ((role === 10 || role === 100) && customer)
+      trendKey.push({ userId: Number(customer) });
+    client.setQueryData(trendKey, trendData);
+  }
+  const markup = () =>
+    renderToStaticMarkup(
       createElement(
-        MemoryRouter,
-        { initialEntries: [`/console/service-quality${search}`] },
-        createElement(ServiceQuality),
+        QueryClientProvider,
+        { client },
+        createElement(
+          MemoryRouter,
+          { initialEntries: [`/console/service-quality${search}`] },
+          createElement(ServiceQuality),
+        ),
       ),
-    ),
-  );
-  return { html, client, query: client.getQueryCache().getAll()[0] };
+    );
+  const html = markup();
+  return { html, client, query: client.getQueryCache().getAll()[0], markup };
 }
 
 beforeAll(() => {
@@ -132,7 +148,9 @@ describe("service quality account scope", () => {
       expect(html).not.toContain("Demo view");
       const get = vi.mocked(http.apiGet).mockResolvedValue(summary);
       await query.fetch();
-      expect(get.mock.calls.at(-1)?.[0]).toBe("/api/service-quality?hours=168");
+      expect(get.mock.calls.at(-1)?.[0]).toBe(
+        `/api/service-quality?month=${currentMonth}`,
+      );
     },
   );
 
@@ -151,10 +169,12 @@ describe("service quality account scope", () => {
       const get = vi.mocked(http.apiGet).mockResolvedValue(summary);
       await other.query.fetch();
       expect(get.mock.calls.at(-1)?.[0]).toBe(
-        "/api/service-quality?hours=168&user_id=99",
+        `/api/service-quality?month=${currentMonth}&user_id=99`,
       );
       await all.query.fetch();
-      expect(get.mock.calls.at(-1)?.[0]).toBe("/api/service-quality?hours=168");
+      expect(get.mock.calls.at(-1)?.[0]).toBe(
+        `/api/service-quality?month=${currentMonth}`,
+      );
     },
   );
 
@@ -180,5 +200,82 @@ describe("service quality account scope", () => {
     });
     expect(empty.html).toContain("No matching accounting units");
     expect(empty.html).not.toContain("sq-row-view");
+  });
+
+  it("queries separate calendar months and rejects rolling-window responses", async () => {
+    const january = render(10, "?month=2024-01&customer=99", null);
+    const february = render(10, "?month=2024-02&customer=99", null);
+    expect(january.query.queryHash).not.toBe(february.query.queryHash);
+    const januaryData = {
+      ...summary,
+      window_hours: 744,
+      window_start: Date.parse("2024-01-01T00:00:00Z") / 1000,
+      window_end: Date.parse("2024-02-01T00:00:00Z") / 1000,
+    };
+    const get = vi.mocked(http.apiGet).mockResolvedValue(januaryData);
+    await january.query.fetch();
+    expect(get.mock.calls.at(-1)?.[0]).toBe(
+      "/api/service-quality?month=2024-01&user_id=99",
+    );
+    expect(january.markup()).toContain("2024-01-31");
+    expect(january.markup()).not.toContain("last 7 days");
+    await expect(february.query.fetch()).rejects.toThrow(
+      "Invalid monthly service quality window",
+    );
+    expect(february.markup()).not.toContain('class="sq-row-view"');
+  });
+
+  it("fetches the selected model trend without falling back to account totals", async () => {
+    const allModels = {
+      ...summary,
+      by_model: [metric, { ...metric, model: "other-model", success_rate: 0 }],
+      by_day: [
+        {
+          date: `${currentMonth}-01`,
+          total_requests: 8,
+          success_count: 4,
+          failed_count: 4,
+          success_rate: 0.5,
+          avg_duration_ms: 8000,
+          p95_duration_ms: 12000,
+        },
+      ],
+    };
+    const view = render(
+      10,
+      `?month=${currentMonth}&customer=99&unit=sq_0`,
+      allModels,
+    );
+    expect(view.html).toContain("Loading model trend");
+    expect(view.html).not.toContain('class="sq-trend-current"');
+    const trendQuery = view.client
+      .getQueryCache()
+      .getAll()
+      .find((query) => query.queryKey[3] === metric.model)!;
+    const modelData = {
+      ...summary,
+      by_day: [
+        {
+          ...allModels.by_day[0],
+          success_rate: 1,
+          total_requests: 4,
+          failed_count: 0,
+        },
+      ],
+    };
+    const get = vi.mocked(http.apiGet).mockResolvedValue(modelData);
+    await trendQuery.fetch();
+    expect(get.mock.calls.at(-1)?.[0]).toBe(
+      `/api/service-quality?month=${currentMonth}&model=glm-5.2&user_id=99`,
+    );
+    expect(view.markup()).toMatch(/sq-trend-current[\s\S]*?100\.00%/);
+    expect(view.markup()).not.toContain("50.00%");
+    get.mockRejectedValue(new Error("trend unavailable"));
+    await expect(trendQuery.fetch()).rejects.toThrow("trend unavailable");
+    expect(view.markup()).toContain("Could not load this model&#x27;s trend");
+    expect(view.markup()).not.toContain('class="sq-trend-current"');
+    get.mockResolvedValue({ ...summary, by_day: [] });
+    await trendQuery.fetch();
+    expect(view.markup()).toContain("No trend data for this model");
   });
 });

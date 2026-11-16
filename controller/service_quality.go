@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
@@ -29,7 +30,18 @@ func GetServiceQuality(w http.ResponseWriter, r *http.Request) {
 	} else {
 		userID = requestUserID(r)
 	}
-	summary, err := model.SummarizeServiceQuality(userID, int(hours), q.Get("model"))
+	var summary *model.ServiceQualitySummary
+	var err error
+	if q.Has("month") {
+		month, parseErr := time.Parse("2006-01", q.Get("month"))
+		if parseErr != nil || month.Year() < 1970 || month.After(time.Now().UTC()) {
+			common.ApiError(w, http.StatusBadRequest, "month must be YYYY-MM between 1970-01 and the current UTC month")
+			return
+		}
+		summary, err = model.SummarizeServiceQualityForMonth(userID, month, q.Get("model"))
+	} else {
+		summary, err = model.SummarizeServiceQuality(userID, int(hours), q.Get("model"))
+	}
 	if err != nil {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return

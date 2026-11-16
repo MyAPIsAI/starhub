@@ -156,7 +156,7 @@ func TestContractEnvelopeShape(t *testing.T) {
 		if data == nil {
 			t.Fatal("data should be an object for service-quality")
 		}
-		for _, field := range []string{"window_hours", "overall", "by_model", "by_day"} {
+		for _, field := range []string{"window_hours", "window_start", "window_end", "overall", "by_model", "by_day"} {
 			if _, exists := data[field]; !exists {
 				t.Fatalf("ServiceQualitySummary missing required field %q", field)
 			}

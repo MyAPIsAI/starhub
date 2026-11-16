@@ -40,6 +40,8 @@ type ServiceQualityDailyMetric struct {
 // per-model breakdown and optional per-day trends.
 type ServiceQualitySummary struct {
 	WindowHours int                         `json:"window_hours"`
+	WindowStart int64                       `json:"window_start"`
+	WindowEnd   int64                       `json:"window_end"` // Exclusive Unix timestamp.
 	Overall     ServiceQualityMetric        `json:"overall"`
 	ByModel     []ServiceQualityMetric      `json:"by_model"`
 	ByDay       []ServiceQualityDailyMetric `json:"by_day"`
@@ -56,17 +58,35 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 	if windowHours > 720 {
 		windowHours = 720 // 30 days max
 	}
-	since := time.Now().UTC().Add(-time.Duration(windowHours) * time.Hour).Unix()
+	now := time.Now().UTC()
+	filter := ""
+	if len(modelFilter) > 0 {
+		filter = modelFilter[0]
+	}
+	return summarizeServiceQuality(userID, windowHours, now.Add(-time.Duration(windowHours)*time.Hour).Unix(), now.Unix()+1, filter)
+}
 
-	baseWhere := "created_at >= ?"
-	args := []any{since}
+// SummarizeServiceQualityForMonth uses a UTC calendar month, capped at the
+// current second for an incomplete month. Monthly windows may span 31 days.
+func SummarizeServiceQualityForMonth(userID int64, month time.Time, modelFilter string) (*ServiceQualitySummary, error) {
+	start := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.UTC).Unix()
+	end := time.Date(month.Year(), month.Month()+1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	if now := time.Now().UTC().Unix() + 1; end > now {
+		end = now
+	}
+	return summarizeServiceQuality(userID, int((end-start+3599)/3600), start, end, modelFilter)
+}
+
+func summarizeServiceQuality(userID int64, windowHours int, start, end int64, modelFilter string) (*ServiceQualitySummary, error) {
+	baseWhere := "created_at >= ? AND created_at < ?"
+	args := []any{start, end}
 	if userID > 0 {
 		baseWhere += " AND user_id = ?"
 		args = append(args, userID)
 	}
-	if len(modelFilter) > 0 && modelFilter[0] != "" {
+	if modelFilter != "" {
 		baseWhere += " AND model = ?"
-		args = append(args, modelFilter[0])
+		args = append(args, modelFilter)
 	}
 
 	// Aggregate per model.
@@ -185,6 +205,8 @@ func SummarizeServiceQuality(userID int64, windowHours int, modelFilter ...strin
 
 	return &ServiceQualitySummary{
 		WindowHours: windowHours,
+		WindowStart: start,
+		WindowEnd:   end,
 		Overall:     overall,
 		ByModel:     byModel,
 		ByDay:       byDay,
