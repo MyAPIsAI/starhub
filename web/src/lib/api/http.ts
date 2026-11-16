@@ -50,11 +50,24 @@ export interface ApiRequestOptions {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  retryAfter?: number;
+  constructor(status: number, message: string, retryAfter?: number) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.retryAfter = retryAfter;
   }
+}
+
+function readRetryAfter(value: string | null | undefined): number | undefined {
+  if (!value?.trim()) return undefined;
+  const input = value.trim();
+  const seconds = /^\d+$/.test(input)
+    ? Number(input)
+    : Math.ceil((Date.parse(input) - Date.now()) / 1000);
+  return Number.isSafeInteger(seconds) && seconds > 0 && seconds <= 86400
+    ? seconds
+    : undefined;
 }
 
 export type ApiResult<T> = T;
@@ -97,6 +110,10 @@ export async function apiRequest<T>(
     credentials: "same-origin",
     headers,
   });
+  const retryAfter =
+    res.status === 429
+      ? readRetryAfter(res.headers?.get("Retry-After"))
+      : undefined;
 
   if (res.status === 401) {
     // Avoid redirect loops: don't fire auth-loss when already on an
@@ -135,7 +152,11 @@ export async function apiRequest<T>(
   try {
     body = await res.json();
   } catch {
-    throw new ApiError(res.status, res.statusText || "invalid response");
+    throw new ApiError(
+      res.status,
+      res.statusText || "invalid response",
+      retryAfter,
+    );
   }
 
   if (body && typeof body === "object" && "success" in body) {
@@ -143,11 +164,19 @@ export async function apiRequest<T>(
     if (envelope.success) {
       return envelope.data as T;
     }
-    throw new ApiError(res.status, envelope.message ?? "request failed");
+    throw new ApiError(
+      res.status,
+      envelope.message ?? "request failed",
+      retryAfter,
+    );
   }
 
   // Non-envelope responses (e.g. relay errors) — surface the status.
-  throw new ApiError(res.status, `unexpected response (${res.status})`);
+  throw new ApiError(
+    res.status,
+    `unexpected response (${res.status})`,
+    retryAfter,
+  );
 }
 
 export const apiGet = <T>(

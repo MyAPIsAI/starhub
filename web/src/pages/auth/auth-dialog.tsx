@@ -58,7 +58,6 @@ export default function AuthDialog() {
     new URLSearchParams(location.search).get("method") === "phone"
       ? "phone"
       : "password";
-  const phone = usePhoneCode();
   const [factorUsername, setFactorUsername] = useState("");
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
@@ -78,6 +77,7 @@ export default function AuthDialog() {
   const [regionPolicy, setRegionPolicy] = useState<PublicRegionPolicy | null>(
     null,
   );
+  const phone = usePhoneCode(regionPolicy?.country_code);
   const [regionAttempt, setRegionAttempt] = useState(0);
   const [regionLoading, setRegionLoading] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);

@@ -109,6 +109,13 @@ try {
   await dialog.getByRole("button", { name: "Get code", exact: true }).click();
   await dialog.getByRole("status").filter({ hasText: "Request accepted" }).waitFor();
   assert.equal(await dialog.getByRole("button", { name: /Retry in/ }).isDisabled(), true);
+  await dialog.locator("#bind-phone-number").fill("13912345678");
+  assert.equal(await dialog.getByRole("button", { name: "Get code", exact: true }).isEnabled(), true);
+  await dialog.locator("#bind-phone-number").fill("+86 " + phone);
+  assert.equal(await dialog.getByRole("button", { name: /Retry in/ }).isDisabled(), true);
+  await dialog.locator("#bind-phone-number").fill("0086" + phone);
+  assert.equal(await dialog.getByRole("button", { name: /Retry in/ }).isDisabled(), true);
+  await dialog.locator("#bind-phone-number").fill(phone);
   const capture = async (name, target = page) => {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForFunction(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
@@ -209,6 +216,33 @@ try {
   assert.equal(await page.locator("#auth-phone-code").inputValue(), "");
   assert.equal(await page.locator(".phone-code-notice").count(), 0);
   report.checks.push("switching login method clears phone/code and ignores a delayed send response");
+  await page.route("**/api/user/phone-verification", (route) => route.fulfill({ status: 429,
+    headers: { "Content-Type": "application/json", "Retry-After": "3547" },
+    body: JSON.stringify({ success: false, message: "fixture hourly limit", retry_after: 3547 }),
+  }));
+  await page.locator("#auth-phone-number").fill(phone);
+  await page.getByRole("button", { name: "Get code", exact: true }).click();
+  const hourlyRetry = page.getByRole("button", { name: /Retry in 35\d\ds/ });
+  await hourlyRetry.waitFor();
+  assert.equal(await hourlyRetry.isDisabled(), true);
+  await page.locator("#auth-phone-number").fill("13712345678");
+  assert.equal(await page.getByRole("button", { name: "Get code", exact: true }).isEnabled(), true);
+  await page.locator("#auth-phone-number").fill("+86" + phone);
+  await hourlyRetry.waitFor();
+  assert.equal(await hourlyRetry.isDisabled(), true);
+  for (const [language, theme, width] of [["en", "light", 1440], ["zh", "light", 390], ["ar", "dark", 320]]) {
+    await page.evaluate(async ([language, theme]) => { const { usePreferences } = await import("/src/lib/preferences.ts"); usePreferences.getState().setLanguage(language); usePreferences.getState().setTheme(theme); }, [language, theme]);
+    await page.setViewportSize({ width, height: 1000 });
+    await capture(`hourly-retry-${language}-${width}.png`);
+  }
+  await page.evaluate(async () => { const { usePreferences } = await import("/src/lib/preferences.ts"); usePreferences.getState().setLanguage("en"); usePreferences.getState().setTheme("light"); });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.reload();
+  await page.locator("#auth-phone-number").fill(phone);
+  await page.getByRole("button", { name: "Get code", exact: true }).click();
+  await hourlyRetry.waitFor();
+  await page.unroute("**/api/user/phone-verification");
+  report.checks.push("hourly Retry-After reaches the countdown; another number has its own timer; China aliases restore the existing timer; reload recovers the server interval without local phone storage");
   await page.route("**/api/public/region", async (route) => {
     const response = await route.fetch(); const value = await response.json(); value.data.phone_login_enabled = false;
     await route.fulfill({ response, json: value });

@@ -175,3 +175,48 @@ describe("unauthorized responses", () => {
     }
   });
 });
+
+describe("rate-limit retry metadata", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("preserves the actual hourly retry interval", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            {
+              success: false,
+              message: "too many SMS attempts",
+              retry_after: 3547,
+            },
+            { status: 429, headers: { "Retry-After": "3547" } },
+          ),
+        ),
+    );
+    await expect(
+      apiPost("/api/user/phone-verification", { phone: "fixture" }),
+    ).rejects.toMatchObject({ status: 429, retryAfter: 3547 });
+  });
+
+  it.each(["invalid", "-5", "0", "1.5", "999999999999999999999"])(
+    "ignores an invalid Retry-After header: %s",
+    async (value) => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            Response.json(
+              { success: false, message: "limited" },
+              { status: 429, headers: { "Retry-After": value } },
+            ),
+          ),
+      );
+      await expect(
+        apiPost("/api/user/phone-verification", {}),
+      ).rejects.toMatchObject({ status: 429, retryAfter: undefined });
+    },
+  );
+});

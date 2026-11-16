@@ -179,7 +179,7 @@ function PhoneBindingDialog({
   const language = usePreferences((s) => s.language);
   const c = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
-  const phone = usePhoneCode();
+  const phone = usePhoneCode(country);
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [uncertain, setUncertain] = useState(false);

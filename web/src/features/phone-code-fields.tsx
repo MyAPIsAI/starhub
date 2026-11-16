@@ -3,22 +3,30 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/primitives";
 import { ApiError } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
+import { phoneCooldownKey, phoneRetrySeconds } from "../lib/phone-cooldown";
 import "./phone-code-fields.css";
 
-export function usePhoneCode() {
+export function usePhoneCode(country = "CN") {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [sending, setSending] = useState(false);
-  const [deadline, setDeadline] = useState(0);
+  const [deadlines, setDeadlines] = useState<Record<string, number>>({});
   const [now, setNow] = useState(Date.now());
   const [requested, setRequested] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const revision = useRef(0);
   const active = useRef(false);
+  const key = phoneCooldownKey(phone, country);
+  const deadline = deadlines[key] ?? 0;
   const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
   useEffect(() => {
-    if (!deadline) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    if (deadline <= Date.now()) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => {
+      const time = Date.now();
+      setNow(time);
+      if (time >= deadline) window.clearInterval(timer);
+    }, 500);
     return () => window.clearInterval(timer);
   }, [deadline]);
   useEffect(
@@ -49,14 +57,20 @@ export function usePhoneCode() {
       const result = await request(phone);
       if (ticket !== revision.current) return;
       setNow(Date.now());
-      setDeadline(Date.now() + Math.max(60, result.retry_after || 60) * 1000);
+      setDeadlines((values) => ({
+        ...values,
+        [key]: Date.now() + phoneRetrySeconds(result.retry_after) * 1000,
+      }));
       setRequested(true);
     } catch (caught) {
       if (ticket !== revision.current) return;
       setError(caught);
       if (caught instanceof ApiError && caught.status === 429) {
         setNow(Date.now());
-        setDeadline(Date.now() + 60000);
+        setDeadlines((values) => ({
+          ...values,
+          [key]: Date.now() + phoneRetrySeconds(caught.retryAfter) * 1000,
+        }));
       }
     } finally {
       if (ticket === revision.current) {
@@ -79,6 +93,7 @@ export function usePhoneCode() {
       revision.current++;
       active.current = false;
       setSending(false);
+      setNow(Date.now());
       setPhone(value);
       setCode("");
       setError(null);

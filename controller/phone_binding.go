@@ -39,14 +39,23 @@ func reserveSMSSend(w http.ResponseWriter, r *http.Request, phone string, owner 
 func reservePhoneRequest(w http.ResponseWriter, limits ...model.SMSRequestLimit) bool {
 	if err := model.ReserveSMSRequest(limits...); err != nil {
 		if errors.Is(err, model.ErrSMSRequestLimited) {
-			w.Header().Set("Retry-After", "60")
-			common.ApiError(w, 429, "too many SMS attempts; try again later")
+			retry := 60
+			var limited *model.SMSRequestLimitError
+			if errors.As(err, &limited) {
+				retry = limited.RetryAfterSeconds()
+			}
+			writePhoneRateLimit(w, retry, "too many SMS attempts; try again later")
 		} else {
 			common.ApiError(w, 503, "SMS request could not be reserved")
 		}
 		return false
 	}
 	return true
+}
+
+func writePhoneRateLimit(w http.ResponseWriter, seconds int, message string) {
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	common.WriteJSON(w, 429, map[string]any{"success": false, "message": message, "retry_after": seconds})
 }
 
 func storeAndSendPhoneCode(w http.ResponseWriter, phone, purpose, ip string) bool {
@@ -64,8 +73,7 @@ func storeAndSendPhoneCode(w http.ResponseWriter, phone, purpose, ip string) boo
 	defer model.DiscardPendingPhoneVerificationChallenge(id)
 	if err := service.SendSMSVerification(phone, code); err != nil {
 		if errors.Is(err, service.ErrSMSRateLimited) {
-			w.Header().Set("Retry-After", "60")
-			common.ApiError(w, 429, "SMS provider rate limited the request")
+			writePhoneRateLimit(w, 60, "SMS provider rate limited the request")
 		} else {
 			common.ApiError(w, 503, "SMS provider unavailable; try again later")
 		}

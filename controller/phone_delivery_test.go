@@ -2,8 +2,10 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -61,6 +63,29 @@ func TestPhoneResendFailurePreservesActiveCode(t *testing.T) {
 				t.Fatal("failed candidate became usable")
 			}
 		})
+	}
+}
+
+func TestPhoneRateLimitReturnsActualRetryAfter(t *testing.T) {
+	newTestDB(t)
+	limit := model.SMSRequestLimit{Scope: "fixture:hourly-api", Window: time.Hour, Max: 1}
+	if err := model.ReserveSMSRequest(limit); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	if reservePhoneRequest(w, limit) || w.Code != 429 {
+		t.Fatal("exhausted budget accepted")
+	}
+	seconds, err := strconv.Atoi(w.Header().Get("Retry-After"))
+	if err != nil || seconds < 3595 || seconds > 3600 {
+		t.Fatalf("incorrect retry header: %q", w.Header().Get("Retry-After"))
+	}
+	var body struct {
+		Success    bool `json:"success"`
+		RetryAfter int  `json:"retry_after"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body.Success || body.RetryAfter != seconds {
+		t.Fatal("retry metadata differs between header and body")
 	}
 }
 
