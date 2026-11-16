@@ -96,6 +96,7 @@ try {
   assert.ok(ready, "isolated backend failed to start: " + logs);
   vite = await createViteServer({
     root: web,
+    cacheDir: path.join(temp, "vite-cache"),
     logLevel: "error",
     server: {
       host: "127.0.0.1",
@@ -153,6 +154,14 @@ try {
     "discovery endpoint rejects anonymous and unverified staff sessions",
   );
   const page = await context.newPage();
+  let channelWrites = 0;
+  page.on("request", (request) => {
+    if (
+      ["POST", "PUT"].includes(request.method()) &&
+      new URL(request.url()).pathname === "/api/channel"
+    )
+      channelWrites++;
+  });
   page.setDefaultTimeout(15000);
   page.on("pageerror", (error) => report.pageErrors.push(String(error)));
   await page.goto(base + "/admin?tab=resources");
@@ -173,6 +182,32 @@ try {
     await dialog.locator("#ch-name").fill("Discovery channel");
     await dialog.locator("#ch-key").fill("fixture-key");
     await dialog.locator("#ch-base-url").fill(upstreamBase);
+  };
+  const searchWithoutSaving = async () => {
+    const writes = channelWrites;
+    const search = dialog.getByRole("searchbox", {
+      name: "Search upstream models",
+    });
+    await search.fill("model-a");
+    await search.press("Enter");
+    assert.equal(channelWrites, writes);
+    assert.equal(await dialog.isVisible(), true);
+    assert.equal(await dialog.getByRole("checkbox").count(), 1);
+    for (const init of [{ isComposing: true }, { keyCode: 229 }]) {
+      const prevented = await search.evaluate((node, init) => {
+        const event = new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+          ...init,
+        });
+        node.dispatchEvent(event);
+        return event.defaultPrevented;
+      }, init);
+      assert.equal(prevented, false, "IME confirmation must remain available");
+    }
+    assert.equal(channelWrites, writes);
+    await search.fill("");
   };
   await openNew();
   await discover().click();
@@ -229,6 +264,8 @@ try {
   await dialog
     .getByRole("button", { name: "Add selected models", exact: true })
     .click();
+  await searchWithoutSaving();
+  assert.equal((await api("GET", "/api/channel")).length, 0);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await dialog.waitFor({ state: "hidden" });
   const saved = (await api("GET", "/api/channel"))[0];
@@ -245,6 +282,13 @@ try {
     .waitFor();
   assert.equal(hits.at(-1).authorization, "Bearer fixture-key");
   await dialog.getByText("manual-model", { exact: false }).last().waitFor();
+  await dialog.locator("#ch-name").fill("Unsaved channel name");
+  await searchWithoutSaving();
+  assert.equal((await api("GET", "/api/channel"))[0].name, saved.name);
+  await dialog.locator("#ch-name").fill(saved.name);
+  report.checks.push(
+    "search Enter does not create or save channels, IME confirmation remains available, and explicit creation still works",
+  );
   report.checks.push(
     "outer create persists selected models; editing fetches with the saved key and retains unlisted models",
   );

@@ -110,6 +110,7 @@ try {
   assert.ok(ready, "isolated backend failed to start: " + backendLogs);
   vite = await createViteServer({
     root: web,
+    cacheDir: path.join(temp, "vite-cache"),
     logLevel: "error",
     server: {
       host: "127.0.0.1",
@@ -150,6 +151,9 @@ try {
     new_password: "PlaygroundChanged93",
   });
   await api("POST", "/api/user/2fa/skip");
+  // Repeated page loads test draft recovery, not management request throttling.
+  for (const key of ["ip_rate_limit", "user_rate_limit"])
+    await api("PUT", "/api/option", { key, value: "10000" });
   await api("POST", "/api/channel", {
     name: "Playground fixture",
     type: 1,
@@ -246,6 +250,102 @@ try {
   );
   report.checks.push(
     "refresh restores the request draft but locks the credential again",
+  );
+  const confirmSession = () =>
+    page.evaluate(async () => {
+      const { getSelf } = await import("/src/lib/api/auth.ts");
+      const { useSystemAccess } = await import("/src/lib/system-access.ts");
+      useSystemAccess.getState().setSession(await getSelf());
+    });
+  await confirmSession();
+  await expect(page.locator("#verify-prompt")).toHaveValue(
+    "Reply with the fixture response.",
+  );
+  const latestDraft = "Latest draft after reconfirming the same account.";
+  await page.locator("#verify-prompt").fill(latestDraft);
+  await page.reload();
+  await expect(page.locator("#verify-prompt")).toHaveValue(latestDraft);
+  await expect(send()).toBeDisabled();
+  report.checks.push(
+    "the latest account draft survives session epoch changes and refresh without restoring credential plaintext",
+  );
+
+  const region = await api("GET", "/api/public/region");
+  const otherOwner = await api("POST", "/api/user/register", {
+    username: "playground-other",
+    password: "PlaygroundOther94",
+    agreement_version: region.legal_version,
+  });
+  await api("POST", "/api/user/login", {
+    username: "playground-other",
+    password: "PlaygroundOther94",
+  });
+  const otherToken = await api("POST", "/api/token", {
+    name: "Other account key",
+    group: "default",
+    model_limits: "glm-5.2",
+    remain_quota: 1000000,
+  });
+  await confirmSession();
+  await expect(page.locator("#verify-key")).toHaveValue(String(otherToken.id));
+  await expect(page.locator("#verify-prompt")).not.toHaveValue(latestDraft);
+  await page.locator("#verify-prompt").fill("Other account private draft.");
+  await api("POST", "/api/user/login", {
+    username: "root",
+    password: "PlaygroundChanged93",
+  });
+  await api("POST", "/api/user/2fa/skip");
+  await confirmSession();
+  await expect(page.locator("#verify-key")).toHaveValue(String(token.id));
+  await expect(page.locator("#verify-prompt")).toHaveValue(latestDraft);
+  const drafts = await page.evaluate(
+    ({ owner, other }) => ({
+      owner: JSON.parse(
+        sessionStorage.getItem("veyra-request-draft-v4:" + owner),
+      ),
+      other: JSON.parse(
+        sessionStorage.getItem("veyra-request-draft-v4:" + other),
+      ),
+    }),
+    { owner: token.user_id, other: otherOwner.id },
+  );
+  assert.equal(drafts.owner.prompt, latestDraft);
+  assert.equal(drafts.other.prompt, "Other account private draft.");
+  report.checks.push(
+    "switching accounts in the same tab isolates drafts and restores the correct owner's key and latest input",
+  );
+
+  await page.locator("#verify-password").fill("PlaygroundChanged93");
+  await page.locator("#verify-password").press("Enter");
+  await expect(send()).toBeEnabled();
+  let releaseResponse;
+  const responseGate = new Promise((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/v1/chat/completions", async (route) => {
+    await responseGate;
+    await route
+      .fulfill({
+        json: {
+          choices: [{ message: { content: "Stale session output" } }],
+          model: "glm-5.2",
+        },
+      })
+      .catch(() => {});
+  });
+  const pendingRequest = page.waitForRequest("**/v1/chat/completions");
+  await send().click();
+  await pendingRequest;
+  await confirmSession();
+  releaseResponse();
+  await expect(page.locator("#verify-password")).toBeVisible();
+  await expect(page.locator("#verify-prompt")).toHaveValue(latestDraft);
+  await page.unroute("**/v1/chat/completions");
+  assert.equal(await page.locator(".verify-output").count(), 0);
+  assert.equal(upstreamCalls.length, 1);
+  assert.equal(await usage(), successQuota);
+  report.checks.push(
+    "a superseded session cannot publish a late relay result even though its account draft remains available",
   );
   for (const language of ["en", "zh", "ar"]) {
     for (const theme of ["light", "dark"]) {

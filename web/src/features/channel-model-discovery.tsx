@@ -315,6 +315,14 @@ export function ChannelModelDiscovery({
                 )}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    !event.nativeEvent.isComposing &&
+                    event.keyCode !== 229
+                  )
+                    event.preventDefault();
+                }}
               />
               <div className="channel-model-actions">
                 <Button

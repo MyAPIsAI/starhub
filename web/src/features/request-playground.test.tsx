@@ -3,6 +3,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Playground from "./request-playground";
+import { useSystemAccess } from "../lib/system-access";
+
+const initialAccess = useSystemAccess.getState();
+
+vi.mock("../lib/system-access", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/system-access")>();
+  return {
+    ...actual,
+    useSessionQueryIdentity: () =>
+      actual.sessionQueryIdentity(actual.useSystemAccess.getState()),
+  };
+});
 
 const fixture = vi.hoisted(() => ({
   smartAccess: true,
@@ -66,12 +78,68 @@ const routingHint = "Cost routing selects an authorized, compatible candidate";
 
 describe("playground smart entry matching", () => {
   beforeEach(() => {
+    useSystemAccess
+      .getState()
+      .setSession({ id: 7, group: "standard", role: 1 });
     fixture.smartAccess = true;
     fixture.modelAccess = "all";
     fixture.allowedModels = undefined;
     fixture.choicesError = false;
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useSystemAccess.setState(initialAccess, true);
+  });
+
+  it("restores the same account's draft after its session epoch changes", () => {
+    const getItem = vi.fn((key: string) =>
+      key === "veyra-request-draft-v4:7"
+        ? JSON.stringify({ model: "glm-5.2", prompt: "Latest account draft" })
+        : null,
+    );
+    vi.stubGlobal("sessionStorage", { getItem });
+    expect(render()).toContain("Latest account draft");
+    useSystemAccess
+      .getState()
+      .setSession({ id: 7, group: "standard", role: 1 });
+    expect(render()).toContain("Latest account draft");
+    expect(getItem.mock.calls).toEqual([
+      ["veyra-request-draft-v4:7"],
+      ["veyra-request-draft-v4:7"],
+    ]);
+  });
+
+  it("does not restore a different account's draft", () => {
+    vi.stubGlobal("sessionStorage", {
+      getItem: (key: string) =>
+        key === "veyra-request-draft-v4:7"
+          ? JSON.stringify({ prompt: "Private account seven draft" })
+          : null,
+    });
+    useSystemAccess
+      .getState()
+      .setSession({ id: 8, group: "standard", role: 1 });
+    expect(render()).not.toContain("Private account seven draft");
+  });
+
+  it("does not read drafts without a confirmed account", () => {
+    const getItem = vi.fn();
+    vi.stubGlobal("sessionStorage", { getItem });
+    useSystemAccess.getState().setSession(null);
+    render();
+    expect(getItem).not.toHaveBeenCalled();
+  });
+
+  it("ignores legacy drafts instead of guessing which epoch was latest", () => {
+    const getItem = vi.fn((key: string) =>
+      key.startsWith("veyra-request-draft-v3:")
+        ? JSON.stringify({ prompt: "Unordered legacy draft" })
+        : null,
+    );
+    vi.stubGlobal("sessionStorage", { getItem });
+    expect(render()).not.toContain("Unordered legacy draft");
+    expect(getItem).toHaveBeenCalledExactlyOnceWith("veyra-request-draft-v4:7");
+  });
 
   describe.each(["OpenAI", "Anthropic"])("%s links", (protocol) => {
     it.each(["myapis-auto", "veyra-auto"])(

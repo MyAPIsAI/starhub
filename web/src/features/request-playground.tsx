@@ -33,7 +33,8 @@ import {
 import { copyText } from "./code-example";
 import "../components/request-playground.css";
 
-function readDraft(draftKey: string) {
+function readDraft(draftKey: string | null) {
+  if (!draftKey) return {};
   try {
     return JSON.parse(sessionStorage.getItem(draftKey) || "{}");
   } catch {
@@ -58,8 +59,13 @@ export default function Playground({
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const scope = JSON.stringify(useSessionQueryIdentity());
-  const draftKey = "veyra-request-draft-v3:" + scope;
+  const identity = useSessionQueryIdentity();
+  const scope = JSON.stringify(identity);
+  const owner = identity[1];
+  const draftKey =
+    owner !== null && Number.isSafeInteger(owner) && owner > 0
+      ? "veyra-request-draft-v4:" + owner
+      : null;
   const [draft] = useState(() => readDraft(draftKey));
   const {
     keys,
@@ -152,6 +158,7 @@ export default function Playground({
     setCopied(false);
   }, [code]);
   useEffect(() => {
+    if (!draftKey || !isCurrentSession()) return;
     try {
       sessionStorage.setItem(
         draftKey,
