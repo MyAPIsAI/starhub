@@ -14,6 +14,7 @@ import { Modal } from "../components/ui/overlay";
 import { useUpdateSelf, type useUserProfile } from "../lib/api/user";
 import { ApiError } from "../lib/api/http";
 import { usePreferences } from "../lib/preferences";
+import { SMSConfigurationButton } from "./sms-configuration";
 
 type Profile = ReturnType<typeof useUserProfile>["data"];
 
@@ -233,9 +234,12 @@ export function AccountSecurity({ profile }: { profile: Profile }) {
               )}
             </p>
           </div>
-          <Button data-account-action="phone" size="small" disabled>
-            {c("绑定", "Link", "ربط")}
-          </Button>
+          <div className="ac-phone-actions">
+            <SMSConfigurationButton />
+            <Button data-account-action="phone" size="small" disabled>
+              {c("绑定", "Link", "ربط")}
+            </Button>
+          </div>
         </div>
         <div className="ac-security-row">
           <span className="ac-row-icon">

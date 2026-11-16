@@ -12,6 +12,13 @@ encrypt the key field. Reads fail closed on a missing wrapping key, corrupted
 value or incorrect purpose; ciphertext is never returned as usable plaintext.
 Raw database access is reserved for migration and operational tools.
 
+SMS provider secrets use a separate `sms` envelope purpose in the
+`sms_configurations` table. They are never part of the options list or option
+value history. The operator credential migration/rotation includes this table,
+and local secret initialization refuses replacement keys when it contains
+encrypted credentials. Preserve the matching server secret and wrapping keys
+when backing up or moving this configuration.
+
 ## Configuration
 
 The server and local operator commands load `.env` from the current working
@@ -23,7 +30,7 @@ contents. The frontend's `web/.env.local` is not a backend secret source.
 
 For development with a plain local SQLite file only, server startup can create
 a missing secret automatically. Before generation, it inspects an existing
-database read-only and refuses if any channel/token ciphertext or nonempty
+database read-only and refuses if any channel/token/SMS ciphertext or nonempty
 customer lookup hash requires an original secret. Corrupt or uninspectable
 databases also fail closed. A new secret is 32 cryptographically random bytes,
 hex encoded and saved into `.env` before it is activated. An initialization lock

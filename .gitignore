@@ -30,3 +30,4 @@ web/docs/
 web/dbg-tmp.ts
 web/HANDOFF.md
 *.png
+tmp/

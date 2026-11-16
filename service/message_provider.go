@@ -73,7 +73,7 @@ func (p *messageBridge) SendNotification(email, subject, body string) error {
 
 // ConfigureMessageProviders leaves unconfigured transports disabled.
 func ConfigureMessageProviders() error {
-	var email, sms *messageBridge
+	var email *messageBridge
 	var err error
 	if endpoint := os.Getenv("STARHUB_EMAIL_BRIDGE_URL"); endpoint != "" {
 		email, err = newMessageBridge(endpoint, os.Getenv("STARHUB_EMAIL_BRIDGE_TOKEN"))
@@ -81,21 +81,13 @@ func ConfigureMessageProviders() error {
 			return err
 		}
 	}
-	if endpoint := os.Getenv("STARHUB_SMS_BRIDGE_URL"); endpoint != "" {
-		sms, err = newMessageBridge(endpoint, os.Getenv("STARHUB_SMS_BRIDGE_TOKEN"))
-		if err != nil {
-			return err
-		}
+	if err := ReloadSMSConfiguration(); err != nil {
+		return err
 	}
 	if email != nil {
 		SetEmailProvider(email)
 	} else {
 		SetEmailProvider(nil)
-	}
-	if sms != nil {
-		SetSMSProvider(sms)
-	} else {
-		SetSMSProvider(nil)
 	}
 	return nil
 }

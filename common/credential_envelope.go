@@ -83,7 +83,7 @@ func EncryptCredential(plaintext, purpose string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
-	if purpose != "customer" && purpose != "upstream" {
+	if purpose != "customer" && purpose != "upstream" && purpose != "sms" {
 		return "", ErrEncryptionFailed
 	}
 	keys, active, err := credentialKeys()
@@ -111,7 +111,7 @@ func DecryptCredential(stored, purpose string) (string, error) {
 		return Decrypt(stored)
 	}
 	parts := strings.Split(strings.TrimPrefix(stored, CredentialEnvelopePrefix), ":")
-	if len(parts) != 3 || (purpose != "customer" && purpose != "upstream") {
+	if len(parts) != 3 || (purpose != "customer" && purpose != "upstream" && purpose != "sms") {
 		return "", ErrEncryptionFailed
 	}
 	keys, _, err := credentialKeys()

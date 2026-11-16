@@ -50,5 +50,7 @@ initial_options:
 # STARHUB_BACKUP_INTERVAL / STARHUB_BACKUP_KEEP: opt-in SQLite schedule and retention.
 # STARHUB_EMAIL_BRIDGE_URL / STARHUB_EMAIL_BRIDGE_TOKEN: authenticated mail adapter.
 # STARHUB_SMS_BRIDGE_URL / STARHUB_SMS_BRIDGE_TOKEN: authenticated SMS adapter.
+# Administrators can configure Alibaba Cloud SMS in Account center > Phone > SMS configuration.
+# An external STARHUB_SMS_BRIDGE_URL overrides the stored Alibaba Cloud configuration.
 # RESOURCE_CATALOG_NOTIFY_URL / NODE_NAME: resource integration and stable node ID.
 # See PRODUCTION.md, CREDENTIAL_STORAGE.md and SERVICE_MTLS.md before deployment.

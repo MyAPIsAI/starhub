@@ -26,7 +26,7 @@ func MigrateCredentialStorage(rotate bool, actor, reason string) (int, error) {
 		for _, target := range []struct {
 			table, purpose string
 			hash           bool
-		}{{"channels", "upstream", false}, {"tokens", "customer", true}} {
+		}{{"channels", "upstream", false}, {"tokens", "customer", true}, {"sms_configurations", "sms", false}} {
 			cursor := int64(0)
 			for {
 				var rows []struct {

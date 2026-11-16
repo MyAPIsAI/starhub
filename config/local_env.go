@@ -270,7 +270,7 @@ func checkSecretInitializationDatabase(database DatabaseConfig) error {
 	db.SetMaxOpenConns(1)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	for _, table := range []string{"channels", "tokens"} {
+	for _, table := range []string{"channels", "tokens", "sms_configurations"} {
 		var exists int
 		if err := db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&exists); err != nil {
 			return errors.New("could not inspect credential storage; restore the original STARHUB_CRYPTO_SECRET before starting")

@@ -269,6 +269,7 @@ func TestLocalEnvironmentProtectsExistingDatabaseAndRejectsUnsafeInitialization(
 	for _, schema := range []string{
 		`CREATE TABLE channels (id INTEGER PRIMARY KEY, "key" TEXT); INSERT INTO channels VALUES (1, 'enc:v2:legacy:fixture:fixture')`,
 		`CREATE TABLE tokens (id INTEGER PRIMARY KEY, "key" TEXT, key_hash TEXT); INSERT INTO tokens VALUES (1, '', 'existing-hash')`,
+		`CREATE TABLE sms_configurations (id INTEGER PRIMARY KEY, "key" TEXT); INSERT INTO sms_configurations VALUES (1, 'enc:v2:legacy:fixture:fixture')`,
 	} {
 		directory := t.TempDir()
 		file := filepath.Join(directory, "starhub.db")
