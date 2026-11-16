@@ -37,6 +37,11 @@ vi.mock("../lib/api/token-choices", () => ({
     isError: fixture.choicesError,
   }),
 }));
+vi.mock("../lib/api/playground", () => ({
+  usePlaygroundGrant: () => ({ data: { unlocked: false }, isError: false }),
+  unlockPlaygroundKey: vi.fn(),
+  sendPlaygroundRequest: vi.fn(),
+}));
 vi.mock("../lib/api/key-adapter", () => ({
   useBackendKeys: () => ({
     keys: [

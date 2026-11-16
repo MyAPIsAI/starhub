@@ -15,14 +15,18 @@ import (
 // VerifyTokenPassword checks the current owner's password without creating a
 // login session, rotating cookies or returning any API credential material.
 func VerifyTokenPassword(w http.ResponseWriter, r *http.Request) {
-	verifyTokenPassword(w, r, false)
+	verifyTokenPassword(w, r, "")
 }
 
 func UnlockToken(w http.ResponseWriter, r *http.Request) {
-	verifyTokenPassword(w, r, true)
+	verifyTokenPassword(w, r, "reveal")
 }
 
-func verifyTokenPassword(w http.ResponseWriter, r *http.Request, unlock bool) {
+func UnlockPlaygroundToken(w http.ResponseWriter, r *http.Request) {
+	verifyTokenPassword(w, r, "playground")
+}
+
+func verifyTokenPassword(w http.ResponseWriter, r *http.Request, purpose string) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	var input struct {
 		ExpectedUserID int64  `json:"expected_user_id"`
@@ -69,9 +73,19 @@ func verifyTokenPassword(w http.ResponseWriter, r *http.Request, unlock bool) {
 		common.ApiError(w, http.StatusConflict, "account or token changed; reopen the verification")
 		return
 	}
-	if unlock && (!tokenReadable(currentToken, time.Now()) || !middleware.Sessions.UnlockToken(middleware.SessionToken(r), userID, id, currentUser.Password, tokenSecretFingerprint(currentToken), time.Now())) {
-		common.ApiError(w, http.StatusForbidden, "active session and key required")
-		return
+	if purpose != "" {
+		granted := false
+		if tokenReadable(currentToken, time.Now()) {
+			if purpose == "playground" {
+				granted = middleware.Sessions.UnlockPlaygroundToken(middleware.SessionToken(r), currentUser, id, playgroundTokenFingerprint(currentToken), time.Now())
+			} else {
+				granted = middleware.Sessions.UnlockToken(middleware.SessionToken(r), userID, id, currentUser.Password, tokenSecretFingerprint(currentToken), time.Now())
+			}
+		}
+		if !granted {
+			common.ApiError(w, http.StatusForbidden, "active session and key required")
+			return
+		}
 	}
 	common.ApiSuccess(w, map[string]any{"verified": true, "user_id": userID, "token_id": id})
 }

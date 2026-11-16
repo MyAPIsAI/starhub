@@ -67,6 +67,22 @@ The CLI is an operational trust boundary, not a remotely exposed recovery API.
 Apply deployment access controls to the database and the command. No account
 passwords, factor secrets, codes or cookies are written to audit records.
 
+## Playground key authorization
+
+Each key is unlocked for playground use after password verification within the
+current login session. Refreshing the page or navigating away preserves this
+server-side grant. Other keys and other login sessions require their own unlock.
+Logout, session expiration or revocation, a password change, or a key management
+change invalidates the grant. Restarting the backend also clears these in-memory
+sessions and grants.
+
+The browser sends a key ID and the session cookie to `/api/playground/{id}`
+endpoints. It does not read or persist the credential plaintext for playground
+requests. Every call verifies ownership and the grant, then uses the existing
+relay authentication, model permissions, IP restrictions, rate limits and billing.
+Viewing or copying the full key still requires the separate five-minute reveal
+authorization; a playground grant cannot authorize a credential read.
+
 ## Verification
 
 Backend tests cover missing, reused, expired and changed login proofs, mandatory

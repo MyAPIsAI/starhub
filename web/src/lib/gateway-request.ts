@@ -6,12 +6,24 @@ import { validDemoSecret } from "./client-config";
 export function buildGatewayRequest(request: DemoRequest, secret: string) {
   if (!validDemoSecret(secret))
     throw new Error("A full credential is required");
+  const call = buildRelayRequest(request);
+  call.init.headers[
+    request.protocol === "Anthropic"
+      ? "x-api-key"
+      : request.protocol === "Gemini"
+        ? "x-goog-api-key"
+        : "Authorization"
+  ] = request.protocol === "OpenAI" ? `Bearer ${secret}` : secret;
+  return call;
+}
+
+/** Build the protocol payload without exposing or requiring a credential. */
+export function buildRelayRequest(request: DemoRequest) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
   let body: unknown = requestPayload(request);
   if (request.protocol === "Anthropic") {
-    headers["x-api-key"] = secret;
     headers["anthropic-version"] = "2023-06-01";
     body = {
       ...requestPayload(request),
@@ -26,9 +38,8 @@ export function buildGatewayRequest(request: DemoRequest, secret: string) {
         : {}),
     };
   } else if (request.protocol === "Gemini") {
-    headers["x-goog-api-key"] = secret;
     body = geminiRequestPayload(request);
-  } else headers.Authorization = `Bearer ${secret}`;
+  }
   if (request.capability) headers["X-MyAPIs-Capability"] = request.capability;
   if (request.chainId) headers["X-MyAPIs-Chain-Id"] = request.chainId;
   return {

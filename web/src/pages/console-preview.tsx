@@ -1850,8 +1850,6 @@ function ConsoleWorkspace() {
               </div>
 
               <Playground
-                plaintextKeys={plaintextKeys}
-                onReveal={verifyAndReveal}
                 onRelayComplete={() => {
                   void refreshRequests();
                   void walletQuery.refetch();

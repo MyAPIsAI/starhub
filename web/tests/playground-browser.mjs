@@ -170,6 +170,18 @@ try {
     remain_quota: 1000000,
   });
   const page = await context.newPage();
+  let unlockCalls = 0;
+  let secretReads = 0;
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (/^\/api\/playground\/\d+\/unlock$/.test(path)) unlockCalls++;
+    if (/^\/api\/token\/\d+\/reveal$/.test(path)) secretReads++;
+    if (/^\/api\/playground\//.test(path)) {
+      assert.ok(!request.headers().authorization);
+      assert.ok(!request.headers()["x-api-key"]);
+      assert.ok(!request.headers()["x-goog-api-key"]);
+    }
+  });
   page.setDefaultTimeout(15000);
   page.on("pageerror", (error) => report.pageErrors.push(String(error)));
   const send = () =>
@@ -224,10 +236,11 @@ try {
   assert.ok(!storage.includes(token.key));
   assert.ok(!storage.includes("PlaygroundChanged93"));
   report.checks.push(
-    "password unlock sends one real gateway request with correct credentials; the backend records usage and charges, with no secret persistence",
+    "session unlock sends one real gateway request without exposing the API key; the backend records usage and charges",
   );
   const successQuota = await usage();
-  await page.route("**/v1/chat/completions", (route) => route.abort("failed"));
+  const relayPath = `**/api/playground/${token.id}/chat/completions`;
+  await page.route(relayPath, (route) => route.abort("failed"));
   await send().click();
   await expect(page.locator(".verify-outcome")).toContainText(
     "Request outcome unknown",
@@ -238,18 +251,18 @@ try {
   assert.ok(
     !(await page.locator(".verify-result").innerText()).includes("SIMULATION"),
   );
-  await page.unroute("**/v1/chat/completions");
+  await page.unroute(relayPath);
   report.checks.push(
     "transport failures show an unknown outcome without simulation, automatic retries or local charges",
   );
   await page.reload();
-  await expect(page.locator("#verify-password")).toBeVisible();
-  await expect(send()).toBeDisabled();
+  await expect(send()).toBeEnabled();
+  await expect(page.locator("#verify-password")).toHaveCount(0);
   await expect(page.locator("#verify-prompt")).toHaveValue(
     "Reply with the fixture response.",
   );
   report.checks.push(
-    "refresh restores the request draft but locks the credential again",
+    "refresh restores both the request draft and the server's session unlock without a password or credential read",
   );
   const confirmSession = () =>
     page.evaluate(async () => {
@@ -265,7 +278,13 @@ try {
   await page.locator("#verify-prompt").fill(latestDraft);
   await page.reload();
   await expect(page.locator("#verify-prompt")).toHaveValue(latestDraft);
-  await expect(send()).toBeDisabled();
+  await expect(send()).toBeEnabled();
+  assert.equal(unlockCalls, 2);
+  assert.equal(secretReads, 0);
+  await page.goto(base + "/console/keys");
+  await page.goto(base + "/console/playground");
+  await expect(send()).toBeEnabled();
+  assert.equal(unlockCalls, 2);
   report.checks.push(
     "the latest account draft survives session epoch changes and refresh without restoring credential plaintext",
   );
@@ -315,6 +334,8 @@ try {
     "switching accounts in the same tab isolates drafts and restores the correct owner's key and latest input",
   );
 
+  await expect(send()).toBeDisabled();
+  await expect(page.locator("#verify-password")).toBeVisible();
   await page.locator("#verify-password").fill("PlaygroundChanged93");
   await page.locator("#verify-password").press("Enter");
   await expect(send()).toBeEnabled();
@@ -322,7 +343,7 @@ try {
   const responseGate = new Promise((resolve) => {
     releaseResponse = resolve;
   });
-  await page.route("**/v1/chat/completions", async (route) => {
+  await page.route(relayPath, async (route) => {
     await responseGate;
     await route
       .fulfill({
@@ -333,20 +354,28 @@ try {
       })
       .catch(() => {});
   });
-  const pendingRequest = page.waitForRequest("**/v1/chat/completions");
+  const pendingRequest = page.waitForRequest(relayPath);
   await send().click();
   await pendingRequest;
   await confirmSession();
   releaseResponse();
-  await expect(page.locator("#verify-password")).toBeVisible();
+  await expect(send()).toBeEnabled();
   await expect(page.locator("#verify-prompt")).toHaveValue(latestDraft);
-  await page.unroute("**/v1/chat/completions");
+  await page.unroute(relayPath);
   assert.equal(await page.locator(".verify-output").count(), 0);
   assert.equal(upstreamCalls.length, 1);
   assert.equal(await usage(), successQuota);
   report.checks.push(
     "a superseded session cannot publish a late relay result even though its account draft remains available",
   );
+  const lockedKey = await api("POST", "/api/token", {
+    name: "Separately locked key",
+    group: "default",
+    model_limits: "glm-5.2",
+    remain_quota: 1000000,
+  });
+  await page.reload();
+  await page.locator("#verify-key").selectOption(String(lockedKey.id));
   for (const language of ["en", "zh", "ar"]) {
     for (const theme of ["light", "dark"]) {
       await page.setViewportSize({ width: 320, height: 900 });
@@ -392,8 +421,7 @@ try {
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.reload();
-  await page.locator("#verify-password").fill("PlaygroundChanged93");
-  await page.locator("#verify-password").press("Enter");
+  await page.locator("#verify-key").selectOption(String(token.id));
   await expect(send()).toBeEnabled();
   upstreamFailure = true;
   await send().click();
@@ -406,6 +434,7 @@ try {
   report.checks.push(
     "upstream credential failures remain real API errors and do not fall back to simulated results",
   );
+  assert.equal(secretReads, 0);
   assert.deepEqual(report.pageErrors, []);
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {

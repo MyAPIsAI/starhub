@@ -24,6 +24,7 @@ type sessionData struct {
 	ip              string
 	deviceName      string
 	keyUnlocks      map[int64]keyUnlock
+	playgroundKeys  map[int64]keyUnlock
 }
 
 type keyUnlock struct {
@@ -33,6 +34,36 @@ type keyUnlock struct {
 }
 
 const TokenUnlockWindow = 5 * time.Minute
+
+// Playground grants authorize use only; they never authorize credential reads.
+func (s *SessionStore) UnlockPlaygroundToken(session string, user *model.User, tokenID int64, fingerprint string, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sd := s.data[session]
+	if user == nil || !activeSession(sd, now) || sd.userID != user.ID || sd.securityVersion != user.DeactivationVersion {
+		return false
+	}
+	if sd.playgroundKeys == nil {
+		sd.playgroundKeys = map[int64]keyUnlock{}
+	}
+	sd.playgroundKeys[tokenID] = keyUnlock{password: user.Password, key: fingerprint}
+	return true
+}
+
+func (s *SessionStore) PlaygroundTokenUnlocked(session string, user *model.User, tokenID int64, fingerprint string, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sd := s.data[session]
+	if user == nil || !activeSession(sd, now) || sd.userID != user.ID || sd.securityVersion != user.DeactivationVersion {
+		return false
+	}
+	grant, ok := sd.playgroundKeys[tokenID]
+	if !ok || grant.password != user.Password || grant.key != fingerprint {
+		delete(sd.playgroundKeys, tokenID)
+		return false
+	}
+	return true
+}
 
 func (s *SessionStore) UnlockToken(session string, userID, tokenID int64, password, key string, now time.Time) bool {
 	s.mu.Lock()

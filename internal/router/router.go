@@ -153,6 +153,8 @@ func New() http.Handler {
 	mux.Handle("GET /api/token/quota-regions", middleware.UserAuth(http.HandlerFunc(controller.TokenQuotaRegions)))
 	mux.Handle("GET /api/token/{id}/usage", middleware.UserAuth(http.HandlerFunc(controller.OwnedTokenUsage)))
 	mux.Handle("POST /api/token/{id}/reveal", middleware.UserAuth(http.HandlerFunc(controller.RevealToken)))
+	mux.Handle("GET /api/playground/{id}/status", middleware.UserAuth(http.HandlerFunc(controller.PlaygroundTokenStatus)))
+	mux.Handle("POST /api/playground/{id}/unlock", middleware.UserAuth(middleware.PasswordVerificationRateLimit(http.HandlerFunc(controller.UnlockPlaygroundToken))))
 
 	mux.Handle("GET /api/option", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
@@ -259,6 +261,9 @@ func New() http.Handler {
 							middleware.ModelRateLimitWithOverrides(
 								http.HandlerFunc(handler)))))))
 	}
+	mux.Handle("POST /api/playground/{id}/chat/completions", middleware.UserAuth(controller.PlaygroundRelay(relayChain(dto.InboundOpenAI, controller.RelayChat), "/v1/chat/completions")))
+	mux.Handle("POST /api/playground/{id}/messages", middleware.UserAuth(controller.PlaygroundRelay(relayChain(dto.InboundClaude, controller.RelayClaudeChat), "/v1/messages")))
+	mux.Handle("POST /api/playground/{id}/gemini/{method}", middleware.UserAuth(controller.PlaygroundRelay(relayChain(dto.InboundGemini, controller.RelayGemini), "/v1beta/models/")))
 	mux.Handle("POST /v1/chat/completions", relayChain(dto.InboundOpenAI, controller.RelayChat))
 	mux.Handle("POST /v1/responses", relayChain(dto.InboundOpenAI, controller.RelayResponses))
 	mux.Handle("POST /v1/responses/compact", relayChain(dto.InboundOpenAI, controller.RelayResponses))

@@ -22,8 +22,12 @@ import {
   useSystemAccess,
 } from "../lib/system-access";
 import { resolveVendor } from "../lib/api/usage";
-import { findClientModel, validDemoSecret } from "../lib/client-config";
-import { buildGatewayRequest } from "../lib/gateway-request";
+import { findClientModel } from "../lib/client-config";
+import {
+  usePlaygroundGrant,
+  unlockPlaygroundKey,
+  sendPlaygroundRequest,
+} from "../lib/api/playground";
 import { readGeminiGatewayResponse } from "../lib/gemini-response";
 import {
   buildCurlRequest,
@@ -44,14 +48,10 @@ function readDraft(draftKey: string | null) {
 export default function Playground({
   onCreate,
   initialModel,
-  plaintextKeys,
-  onReveal,
   onRelayComplete,
 }: {
   onCreate: () => void;
   initialModel?: string;
-  plaintextKeys?: Record<string, string>;
-  onReveal?: (keyId: string, password: string) => Promise<boolean>;
   onRelayComplete?: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -67,11 +67,7 @@ export default function Playground({
       ? "veyra-request-draft-v4:" + owner
       : null;
   const [draft] = useState(() => readDraft(draftKey));
-  const {
-    keys,
-    loading: keysLoading,
-    error: keysError,
-  } = useBackendKeys(plaintextKeys);
+  const { keys, loading: keysLoading, error: keysError } = useBackendKeys();
   const choicesQuery = useTokenChoices();
   const [keyId, setKeyId] = useState(params.get("key") || draft.keyId || "");
   const [model, setModel] = useState(
@@ -123,7 +119,12 @@ export default function Playground({
       options.push({ id: "myapis-auto", name: "MyAPIs Auto", kind: "smart" });
   }
   const selectedModel = findClientModel(options, model);
-  const unlocked = validDemoSecret(currentKey?.keySecret);
+  const grant = usePlaygroundGrant(
+    currentKey ? Number(currentKey.id) : undefined,
+    currentKey?.managementRevision,
+  );
+  const unlocked =
+    currentKey?.active && !grant.isError && grant.data?.unlocked === true;
   const isCurrentSession = () =>
     scope === JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()));
   useEffect(() => {
@@ -210,7 +211,8 @@ export default function Playground({
     setUnlocking(true);
     setUnlockError("");
     try {
-      const confirmed = await onReveal?.(currentKey.id, input);
+      await unlockPlaygroundKey(Number(currentKey.id), input, identity);
+      const confirmed = (await grant.refetch()).data?.unlocked === true;
       if (attempt !== operation.current || !isCurrentSession()) return;
       if (!confirmed)
         setUnlockError(
@@ -249,22 +251,31 @@ export default function Playground({
     setRelayResult(null);
     const snapshot = structuredClone(request);
     const credential = currentKey.id;
-    const secret = currentKey.keySecret;
     const attempt = ++operation.current;
     const started = performance.now();
     const trace = `relay_${Date.now()}`;
     controller.current = new AbortController();
     const active = () => attempt === operation.current && isCurrentSession();
     try {
-      const call = buildGatewayRequest(snapshot, secret);
-      const res = await fetch(call.endpoint, {
-        ...call.init,
-        signal: controller.current.signal,
-      });
+      const res = await sendPlaygroundRequest(
+        Number(credential),
+        snapshot,
+        identity,
+        controller.current.signal,
+      );
       const data = await res.json();
       if (!active()) return;
       if (!res.ok) {
-        const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
+        const errMsg =
+          data?.error?.message ??
+          (data?.message === "playground_unlock_required"
+            ? c(
+                "密钥需要重新解锁，请验证当前账号密码。",
+                "Unlock this key again with your current account password.",
+                "افتح المفتاح مجددًا بكلمة مرور حسابك الحالية.",
+              )
+            : data?.message) ??
+          `HTTP ${res.status}`;
         setRelayResult({
           source: "api",
           trace_id: trace,
@@ -354,6 +365,7 @@ export default function Playground({
       pending.current = false;
       if (active()) {
         setBusy(false);
+        void grant.refetch();
         onRelayComplete?.();
       }
     }
@@ -369,9 +381,9 @@ export default function Playground({
           </strong>
           <p>
             {c(
-              "使用已创建的密钥发送真实网关请求，按实际用量计费。密钥锁定时，请先验证当前账号密码。请求配置保留在当前标签页，密码和密钥明文不写入草稿。",
-              "Send real gateway requests with an existing key; usage charges apply. Unlock a locked key with your account password. Request settings stay in this tab; passwords and key secrets are excluded from drafts.",
-              "أرسل طلبات فعلية بالمفتاح الحالي وتُحتسب رسوم الاستخدام. افتح المفتاح بكلمة مرور حسابك. تُحفظ إعدادات الطلب في علامة التبويب دون كلمات المرور أو أسرار المفاتيح.",
+              "使用已创建的密钥发送真实网关请求，按实际用量计费。每把密钥验证一次账号密码，在当前登录会话内持续可用，刷新或切页无需重复验证；登出、会话过期、改密或密钥变更后需重新解锁。",
+              "Send real gateway requests; usage charges apply. Unlock each key once per login session, including after refresh or navigation. Sign-out, session expiry, password changes or key changes require a new unlock.",
+              "أرسل طلبات فعلية برسوم الاستخدام. افتح كل مفتاح مرة لكل جلسة دخول، حتى بعد التحديث والتنقل. يلزم فتحه مجددًا بعد الخروج أو انتهاء الجلسة أو تغيير كلمة المرور أو المفتاح.",
             )}
           </p>
         </div>
@@ -445,7 +457,16 @@ export default function Playground({
                   ))}
                 </select>
               </Field>
-              {currentKey && !unlocked && (
+              {currentKey && grant.isPending && (
+                <p role="status" className="verify-hint">
+                  {c(
+                    "正在确认解锁状态…",
+                    "Checking key unlock…",
+                    "جارٍ التحقق من فتح المفتاح…",
+                  )}
+                </p>
+              )}
+              {currentKey && !unlocked && !grant.isPending && (
                 <form className="verify-unlock" onSubmit={unlock}>
                   <Field
                     id="verify-password"
@@ -732,9 +753,9 @@ export default function Playground({
                         "افتح المفتاح قبل الإرسال",
                       )
                     : c(
-                        "将通过真实接口调用",
-                        "Sends a real API request",
-                        "يرسل طلبًا حقيقيًا",
+                        "当前登录会话已解锁 · 实际调用会计费",
+                        "Unlocked for this session · usage charges apply",
+                        "مفتوح لهذه الجلسة · تُطبق رسوم الاستخدام",
                       )}
                 </span>
                 <Button
