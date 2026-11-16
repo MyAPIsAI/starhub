@@ -324,7 +324,7 @@
   "pDisable": "停用",
   "pEnable": "启用",
   "pDisabled": "已停用",
-  "pPlaygroundHint": "可选验证工具；具体模型在客户端选择，结果与费用均为模拟。",
+  "pPlaygroundHint": "使用已有密钥发送真实请求，按实际用量计费；密钥锁定时需验证当前账号密码。",
   "pChooseKey": "选择密钥",
   "pPrompt": "消息",
   "pPromptDefault": "用一句话解释什么是智能路由。",

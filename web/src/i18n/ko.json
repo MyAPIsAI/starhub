@@ -324,7 +324,7 @@
   "pDisable": "Disable",
   "pEnable": "Enable",
   "pDisabled": "Disabled",
-  "pPlaygroundHint": "Optional verification; choose models in your client. Results and charges are simulated.",
+  "pPlaygroundHint": "기존 키로 실제 요청을 보내면 사용량에 따라 요금이 부과됩니다. 잠긴 키는 계정 비밀번호로 잠금을 해제하세요.",
   "pChooseKey": "Select key",
   "pPrompt": "Message",
   "pPromptDefault": "Explain intelligent routing in one sentence.",

@@ -8,6 +8,22 @@ const fixture = vi.hoisted(() => ({
   smartAccess: true,
   modelAccess: "all" as "all" | "custom",
   allowedModels: undefined as string[] | undefined,
+  choicesError: false,
+}));
+vi.mock("../lib/api/token-choices", () => ({
+  useTokenChoices: () => ({
+    data: {
+      choices: [
+        {
+          group: "standard",
+          model: "gpt-4.1",
+          protocols: ["OpenAI", "Anthropic"],
+        },
+        { group: "standard", model: "glm-5.2", protocols: ["OpenAI"] },
+      ],
+    },
+    isError: fixture.choicesError,
+  }),
 }));
 vi.mock("../lib/api/key-adapter", () => ({
   useBackendKeys: () => ({
@@ -36,7 +52,6 @@ function render(model?: string, protocol = "OpenAI") {
     createElement(MemoryRouter, {
       initialEntries: [`/console/playground?${query}`],
       children: createElement(Playground, {
-        onRecord: () => {},
         onCreate: () => {},
       }),
     }),
@@ -54,6 +69,7 @@ describe("playground smart entry matching", () => {
     fixture.smartAccess = true;
     fixture.modelAccess = "all";
     fixture.allowedModels = undefined;
+    fixture.choicesError = false;
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -117,6 +133,26 @@ describe("playground smart entry matching", () => {
     expect(modelOptions(html)).toContain('value="gpt-4.1" selected=""');
     expect(html).not.toContain(routingHint);
     expect(html).toContain("&quot;model&quot;: &quot;gpt-4.1&quot;");
+  });
+  it("lists backend models that are absent from the demo catalog", () => {
+    const html = render("glm-5.2");
+    expect(modelOptions(html)).toContain('value="glm-5.2" selected=""');
+    expect(modelOptions(html)).not.toContain("Unavailable");
+  });
+  it("requires unlocking a masked key instead of simulating a request", () => {
+    const html = render("glm-5.2");
+    expect(html).toContain('id="verify-password"');
+    expect(html).toContain("Unlock the key before sending");
+    expect(html).not.toContain("SIMULATION");
+    expect(html).not.toContain("will simulate");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Send request/);
+  });
+  it("does not use demo model choices when the backend catalog is unavailable", () => {
+    fixture.choicesError = true;
+    const html = render("glm-5.2");
+    expect(modelOptions(html)).toContain("Unavailable");
+    expect(modelOptions(html)).not.toContain('value="gpt-4.1"');
+    expect(html).toContain("Available models could not be loaded");
   });
   it.each(["myapis-auto-preview", "veyra-auto-preview", "missing-model"])(
     "does not substitute %s with a smart model",

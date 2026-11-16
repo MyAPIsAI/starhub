@@ -10,7 +10,7 @@
   border: 1px solid var(--border);
   background: var(--brand-soft);
   border-radius: 12px;
-  color: var(--brand);
+  color: var(--text);
   align-items: flex-start;
 }
 .verify-notice > svg {
@@ -20,7 +20,7 @@
 .verify-notice p {
   font-size: 12px;
   line-height: 1.7;
-  color: var(--muted);
+  color: var(--text);
   margin: 5px 0 0;
 }
 .verify-notice > a {
@@ -30,6 +30,7 @@
   margin-inline-start: auto;
   white-space: nowrap;
   font-size: 12px;
+  color: var(--text);
 }
 .verify-columns {
   display: grid;
@@ -85,7 +86,7 @@
   background: var(--subtle);
   padding: 6px 10px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text);
   cursor: pointer;
 }
 .verify-hint {
@@ -93,6 +94,26 @@
   line-height: 1.7;
   color: var(--muted);
   margin: 0;
+}
+.verify-unlock {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.verify-unlock .button {
+  justify-self: start;
+}
+.verify-unlock-error {
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+}
+[data-theme="dark"] .verify-unlock-error {
+  color: #fca5a5;
 }
 .verify-advanced {
   border-top: 1px solid var(--border);
@@ -123,8 +144,8 @@
 .verify-demo-label {
   font-size: 10px;
   letter-spacing: 0.08em;
-  background: var(--warning-soft);
-  color: var(--warning);
+  background: var(--subtle);
+  color: var(--text);
   padding: 4px 8px;
   border-radius: 5px;
 }

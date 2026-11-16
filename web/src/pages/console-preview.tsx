@@ -1851,13 +1851,13 @@ function ConsoleWorkspace() {
 
               <Playground
                 plaintextKeys={plaintextKeys}
+                onReveal={verifyAndReveal}
                 onRelayComplete={() => {
                   void refreshRequests();
                   void walletQuery.refetch();
                 }}
                 key={location.key}
                 initialModel={initialCreateModel}
-                onRecord={setSelected}
                 onCreate={() => setCreateOpen(true)}
               />
             </div>

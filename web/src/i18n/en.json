@@ -324,7 +324,7 @@
   "pDisable": "Disable",
   "pEnable": "Enable",
   "pDisabled": "Disabled",
-  "pPlaygroundHint": "Optional verification; choose models in your client. Results and charges are simulated.",
+  "pPlaygroundHint": "Send real requests with an existing key; usage charges apply. Unlock locked keys with your account password.",
   "pChooseKey": "Select key",
   "pPrompt": "Message",
   "pPromptDefault": "Explain intelligent routing in one sentence.",

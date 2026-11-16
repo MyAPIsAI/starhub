@@ -13,25 +13,27 @@ import {
 import { Button } from "../components/ui/button";
 import { Field, Input } from "../components/ui/primitives";
 import { TierBadge } from "../components/tier-badge";
-import { useProductPreview, type PreviewRequest } from "../lib/product-preview";
+import type { PreviewRequest } from "../lib/product-preview";
 import { useBackendKeys } from "../lib/api/key-adapter";
+import { useTokenChoices } from "../lib/api/token-choices";
+import {
+  sessionQueryIdentity,
+  useSessionQueryIdentity,
+  useSystemAccess,
+} from "../lib/system-access";
 import { resolveVendor } from "../lib/api/usage";
-import { getKeyModelOptions } from "../lib/key-model-policy";
 import { findClientModel, validDemoSecret } from "../lib/client-config";
 import { buildGatewayRequest } from "../lib/gateway-request";
 import { readGeminiGatewayResponse } from "../lib/gemini-response";
-import { useModelPricing } from "../lib/model-pricing";
 import {
   buildCurlRequest,
   type DemoRequest,
   type DemoProtocol,
 } from "../lib/request-contract";
-import { formatMoney } from "../lib/money";
 import { copyText } from "./code-example";
 import "../components/request-playground.css";
 
-const draftKey = "veyra-request-draft-v2";
-function readDraft() {
+function readDraft(draftKey: string) {
   try {
     return JSON.parse(sessionStorage.getItem(draftKey) || "{}");
   } catch {
@@ -39,15 +41,16 @@ function readDraft() {
   }
 }
 export default function Playground({
-  onRecord,
   onCreate,
+  initialModel,
   plaintextKeys,
+  onReveal,
   onRelayComplete,
 }: {
-  onRecord: (r: PreviewRequest) => void;
   onCreate: () => void;
   initialModel?: string;
   plaintextKeys?: Record<string, string>;
+  onReveal?: (keyId: string, password: string) => Promise<boolean>;
   onRelayComplete?: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -55,19 +58,18 @@ export default function Playground({
     i18n.language === "zh" ? zh : i18n.language === "ar" ? ar : en;
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const [draft] = useState(readDraft);
-  const { keys } = useBackendKeys(plaintextKeys);
-  const selected = useProductPreview((s) => s.selectedKey);
-  const choose = useProductPreview((s) => s.chooseKey);
-  const recordCall = useProductPreview((s) => s.recordCall);
-  const outage = useProductPreview((s) => s.demoMode.upstreamOutage);
-  const setOutage = useProductPreview((s) => s.demoSetUpstreamOutage);
-  useModelPricing((s) => s.config);
-  const [keyId, setKeyId] = useState(
-    params.get("key") || draft.keyId || selected,
-  );
+  const scope = JSON.stringify(useSessionQueryIdentity());
+  const draftKey = "veyra-request-draft-v3:" + scope;
+  const [draft] = useState(() => readDraft(draftKey));
+  const {
+    keys,
+    loading: keysLoading,
+    error: keysError,
+  } = useBackendKeys(plaintextKeys);
+  const choicesQuery = useTokenChoices();
+  const [keyId, setKeyId] = useState(params.get("key") || draft.keyId || "");
   const [model, setModel] = useState(
-    params.get("model") || draft.model || "gpt-4.1",
+    params.get("model") || draft.model || initialModel || "",
   );
   const [protocol, setProtocol] = useState<DemoProtocol>(
     (params.get("protocol") || draft.protocol || "OpenAI") as DemoProtocol,
@@ -85,16 +87,50 @@ export default function Playground({
   >(draft.capability || "text");
   const [chainId, setChainId] = useState<string>(draft.chainId || "");
   const [busy, setBusy] = useState(false);
-  const [lastId, setLastId] = useState<string | null>(draft.lastId || null);
-  const requests = useProductPreview((s) => s.requests);
-  // Real relay result (when the key has a plaintext secret and the call
-  // reaches the server). Falls back to demo-store requests when null.
+  const [password, setPassword] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
   const [relayResult, setRelayResult] = useState<PreviewRequest | null>(null);
-  const last = relayResult ?? requests.find((r) => r.trace_id === lastId);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const last = relayResult;
+  const operation = useRef(0);
+  const pending = useRef(false);
+  const controller = useRef<AbortController>();
   const currentKey = keys.find((k) => k.id === keyId);
-  const options = currentKey ? getKeyModelOptions(currentKey, protocol) : [];
+  const options: { id: string; name: string; kind: "specified" | "smart" }[] =
+    [];
+  if (currentKey && !choicesQuery.isError) {
+    for (const choice of choicesQuery.data?.choices ?? []) {
+      if (
+        choice.group === currentKey.tier &&
+        choice.protocols.includes(protocol) &&
+        (currentKey.modelAccess === "all" ||
+          currentKey.allowedModels?.includes(choice.model)) &&
+        !options.some((option) => option.id === choice.model)
+      )
+        options.push({
+          id: choice.model,
+          name: choice.model,
+          kind: "specified",
+        });
+    }
+    if (currentKey.smartAccess && options.length)
+      options.push({ id: "myapis-auto", name: "MyAPIs Auto", kind: "smart" });
+  }
   const selectedModel = findClientModel(options, model);
+  const unlocked = validDemoSecret(currentKey?.keySecret);
+  const isCurrentSession = () =>
+    scope === JSON.stringify(sessionQueryIdentity(useSystemAccess.getState()));
+  useEffect(() => {
+    if (!keyId && keys.length)
+      setKeyId((keys.find((key) => key.active) ?? keys[0]).id);
+    if (!model && options.length) setModel(options[0].id);
+  }, [keyId, model, keys, options]);
+  useEffect(() => {
+    operation.current++;
+    setPassword("");
+    setUnlockError("");
+    setUnlocking(false);
+  }, [keyId]);
   const request: DemoRequest = {
     model,
     messages: [
@@ -129,7 +165,6 @@ export default function Playground({
           maxTokens,
           capability,
           chainId,
-          lastId,
         }),
       );
     } catch {}
@@ -143,59 +178,103 @@ export default function Playground({
     maxTokens,
     capability,
     chainId,
-    lastId,
+    draftKey,
   ]);
   useEffect(
     () => () => {
-      if (timer.current) clearTimeout(timer.current);
+      operation.current++;
+      controller.current?.abort();
     },
     [],
   );
+  const unlock = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (
+      !currentKey?.active ||
+      !password ||
+      unlocking ||
+      pending.current ||
+      !isCurrentSession()
+    )
+      return;
+    const attempt = ++operation.current;
+    const input = password;
+    setPassword("");
+    setUnlocking(true);
+    setUnlockError("");
+    try {
+      const confirmed = await onReveal?.(currentKey.id, input);
+      if (attempt !== operation.current || !isCurrentSession()) return;
+      if (!confirmed)
+        setUnlockError(
+          c(
+            "验证失败，请检查当前账号密码、登录状态及密钥状态后重试。",
+            "Verification failed. Check your account password, session and key status, then retry.",
+            "فشل التحقق. تحقق من كلمة مرور الحساب والجلسة وحالة المفتاح ثم أعد المحاولة.",
+          ),
+        );
+    } catch {
+      if (attempt === operation.current && isCurrentSession())
+        setUnlockError(
+          c(
+            "暂时无法解锁密钥，请重试。",
+            "The key could not be unlocked. Please retry.",
+            "تعذر فتح المفتاح. أعد المحاولة.",
+          ),
+        );
+    } finally {
+      if (attempt === operation.current && isCurrentSession())
+        setUnlocking(false);
+    }
+  };
   const send = async () => {
-    if (!currentKey || !prompt.trim() || busy) return;
+    if (
+      !currentKey?.active ||
+      !prompt.trim() ||
+      !model ||
+      !unlocked ||
+      pending.current ||
+      !isCurrentSession()
+    )
+      return;
+    pending.current = true;
     setBusy(true);
     setRelayResult(null);
-    setLastId(null);
     const snapshot = structuredClone(request);
     const credential = currentKey.id;
-    // If the key has a plaintext secret (not masked), try a real relay
-    // call. Otherwise, fall back to the demo simulation.
     const secret = currentKey.keySecret;
-    const isMasked = !validDemoSecret(secret);
-    if (isMasked) {
-      // No plaintext key available — simulate as before.
-      timer.current = setTimeout(() => {
-        const row = recordCall(credential, outage, snapshot.model, snapshot);
-        if (row) setLastId(row.trace_id);
-        setBusy(false);
-      }, 420);
-      return;
-    }
+    const attempt = ++operation.current;
+    const started = performance.now();
+    const trace = `relay_${Date.now()}`;
+    controller.current = new AbortController();
+    const active = () => attempt === operation.current && isCurrentSession();
     try {
       const call = buildGatewayRequest(snapshot, secret);
-      const res = await fetch(call.endpoint, call.init);
+      const res = await fetch(call.endpoint, {
+        ...call.init,
+        signal: controller.current.signal,
+      });
       const data = await res.json();
+      if (!active()) return;
       if (!res.ok) {
         const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
         setRelayResult({
           source: "api",
-          trace_id: `relay_${Date.now()}`,
+          trace_id: trace,
           time: new Date().toISOString(),
           model: snapshot.model,
           vendor: resolveVendor(snapshot.model),
           status: "failed",
           cost_nano: "0",
-          duration_ms: 0,
+          duration_ms: Math.round(performance.now() - started),
           key_id: credential,
           input_tokens: 0,
           output_tokens: 0,
-          error_code: `http_${res.status}`,
+          error_code: data?.error?.code ?? `http_${res.status}`,
           error_message: errMsg,
           requested_model: snapshot.model,
           response_text: "",
-        } as any);
-        setLastId(`relay_${Date.now()}`);
-        setBusy(false);
+        } as PreviewRequest);
         return;
       }
       const gemini =
@@ -222,13 +301,13 @@ export default function Playground({
         0;
       setRelayResult({
         source: "api",
-        trace_id: `relay_${Date.now()}`,
+        trace_id: trace,
         time: new Date().toISOString(),
         model: snapshot.model,
         vendor: resolveVendor(snapshot.model),
         status: gemini?.status ?? "success",
         cost_nano: "0",
-        duration_ms: 0,
+        duration_ms: Math.round(performance.now() - started),
         key_id: credential,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
@@ -240,13 +319,13 @@ export default function Playground({
           : (data?.model ?? snapshot.model),
         protocol: snapshot.protocol,
         response_text: content,
-      } as any);
-      setLastId(`relay_${Date.now()}`);
+      } as PreviewRequest);
     } catch {
+      if (!active()) return;
       // A real request may have executed; never retry it as a simulation.
       setRelayResult({
         source: "api",
-        trace_id: `relay_${Date.now()}`,
+        trace_id: trace,
         time: new Date().toISOString(),
         model: snapshot.model,
         requested_model: snapshot.model,
@@ -254,7 +333,7 @@ export default function Playground({
         cost_nano: "0",
         key_id: credential,
         vendor: resolveVendor(snapshot.model),
-        duration_ms: 0,
+        duration_ms: Math.round(performance.now() - started),
         input_tokens: 0,
         output_tokens: 0,
         error_code: "network_error",
@@ -265,9 +344,12 @@ export default function Playground({
         ),
       } as PreviewRequest);
     } finally {
-      onRelayComplete?.();
+      pending.current = false;
+      if (active()) {
+        setBusy(false);
+        onRelayComplete?.();
+      }
     }
-    setBusy(false);
   };
   const error = last?.status === "failed";
   return (
@@ -276,17 +358,13 @@ export default function Playground({
         <Terminal size={19} />
         <div>
           <strong>
-            {c(
-              "本地验证 · 可选步骤",
-              "Local verification · Optional",
-              "تحقق محلي · اختياري",
-            )}
+            {c("真实接口调试", "API playground", "اختبار الواجهة")}
           </strong>
           <p>
             {c(
-              "完整密钥会发起实际网关请求并按用量计费；缺少密钥明文时仅模拟。结果不能代替目标客户端的连通性测试。输入会保留在当前标签页草稿中。",
-              "A full key sends a real gateway request with usage charges; without it, only simulation runs. Results do not prove connectivity from your target client. Drafts stay in this tab.",
-              "المفتاح الكامل يرسل طلبًا فعليًا مدفوعًا حسب الاستخدام؛ بدونه تُستخدم المحاكاة فقط. النتيجة لا تثبت اتصال عميلك.",
+              "使用已创建的密钥发送真实网关请求，按实际用量计费。密钥锁定时，请先验证当前账号密码。请求配置保留在当前标签页，密码和密钥明文不写入草稿。",
+              "Send real gateway requests with an existing key; usage charges apply. Unlock a locked key with your account password. Request settings stay in this tab; passwords and key secrets are excluded from drafts.",
+              "أرسل طلبات فعلية بالمفتاح الحالي وتُحتسب رسوم الاستخدام. افتح المفتاح بكلمة مرور حسابك. تُحفظ إعدادات الطلب في علامة التبويب دون كلمات المرور أو أسرار المفاتيح.",
             )}
           </p>
         </div>
@@ -303,7 +381,19 @@ export default function Playground({
             <h2>{c("请求配置", "Request configuration", "إعداد الطلب")}</h2>
             {currentKey && <TierBadge id={currentKey.tier} />}
           </div>
-          {!keys.length ? (
+          {keysLoading || keysError ? (
+            <div className="verify-empty" role="status">
+              <p>
+                {keysError
+                  ? c(
+                      "无法读取密钥，请刷新页面重试。",
+                      "Keys could not be loaded. Refresh to retry.",
+                      "تعذر تحميل المفاتيح. حدّث الصفحة وأعد المحاولة.",
+                    )
+                  : c("正在读取密钥…", "Loading keys…", "جارٍ تحميل المفاتيح…")}
+              </p>
+            </div>
+          ) : !keys.length ? (
             <div className="verify-empty">
               <h3>
                 {c(
@@ -330,9 +420,9 @@ export default function Playground({
                   id="verify-key"
                   className="select-trigger"
                   value={keyId}
+                  disabled={busy}
                   onChange={(e) => {
                     setKeyId(e.target.value);
-                    choose(e.target.value);
                   }}
                 >
                   {!currentKey && (
@@ -348,6 +438,61 @@ export default function Playground({
                   ))}
                 </select>
               </Field>
+              {currentKey && !unlocked && (
+                <form className="verify-unlock" onSubmit={unlock}>
+                  <Field
+                    id="verify-password"
+                    label={c(
+                      "当前账号密码",
+                      "Current account password",
+                      "كلمة مرور الحساب الحالية",
+                    )}
+                  >
+                    <Input
+                      id="verify-password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      disabled={busy || unlocking || !currentKey.active}
+                      aria-invalid={Boolean(unlockError)}
+                      aria-describedby={
+                        unlockError ? "verify-unlock-error" : undefined
+                      }
+                      required
+                    />
+                  </Field>
+                  <Button
+                    type="submit"
+                    disabled={
+                      busy || unlocking || !password || !currentKey.active
+                    }
+                    aria-busy={unlocking}
+                  >
+                    {unlocking
+                      ? c("正在验证…", "Verifying…", "جارٍ التحقق…")
+                      : c("解锁密钥", "Unlock key", "فتح المفتاح")}
+                  </Button>
+                  {unlockError && (
+                    <p
+                      id="verify-unlock-error"
+                      className="verify-unlock-error"
+                      role="alert"
+                    >
+                      {unlockError}
+                    </p>
+                  )}
+                </form>
+              )}
+              {choicesQuery.isError && (
+                <p role="alert" className="verify-hint">
+                  {c(
+                    "无法读取可用模型，请刷新页面重试。",
+                    "Available models could not be loaded. Refresh to retry.",
+                    "تعذر تحميل النماذج المتاحة. حدّث الصفحة وأعد المحاولة.",
+                  )}
+                </p>
+              )}
               <div className="verify-field-row">
                 <Field
                   id="verify-protocol"
@@ -361,8 +506,20 @@ export default function Playground({
                       setProtocol(e.target.value as DemoProtocol)
                     }
                   >
-                    <option value="OpenAI">OpenAI（对话协议）</option>
-                    <option value="Anthropic">Anthropic（消息协议）</option>
+                    <option value="OpenAI">
+                      {c(
+                        "OpenAI（对话协议）",
+                        "OpenAI (chat)",
+                        "OpenAI (المحادثة)",
+                      )}
+                    </option>
+                    <option value="Anthropic">
+                      {c(
+                        "Anthropic（消息协议）",
+                        "Anthropic (messages)",
+                        "Anthropic (الرسائل)",
+                      )}
+                    </option>
                     <option value="Gemini">
                       {c(
                         "Gemini（内容生成）",
@@ -561,11 +718,11 @@ export default function Playground({
               </details>
               <div className="verify-send">
                 <span>
-                  {!validDemoSecret(currentKey?.keySecret)
+                  {!unlocked
                     ? c(
-                        "密钥明文不可用 · 将模拟请求",
-                        "Key secret unavailable · will simulate",
-                        "سر المفتاح غير متاح · محاكاة",
+                        "请先解锁密钥，再发送请求",
+                        "Unlock the key before sending",
+                        "افتح المفتاح قبل الإرسال",
                       )
                     : c(
                         "将通过真实接口调用",
@@ -576,7 +733,11 @@ export default function Playground({
                 <Button
                   variant="primary"
                   disabled={
-                    busy || !currentKey || !currentKey.active || !prompt.trim()
+                    busy ||
+                    !currentKey?.active ||
+                    !prompt.trim() ||
+                    !model ||
+                    !unlocked
                   }
                   onClick={send}
                 >
@@ -593,9 +754,7 @@ export default function Playground({
           <div className="verify-card-heading">
             <h2>{c("验证结果", "Verification result", "نتيجة التحقق")}</h2>
             <span className="verify-demo-label">
-              {relayResult
-                ? c("接口调用", "API CALL", "استدعاء")
-                : c("模拟", "SIMULATION", "محاكاة")}
+              {c("接口调用", "API CALL", "استدعاء")}
             </span>
           </div>
           {last ? (
@@ -607,52 +766,26 @@ export default function Playground({
                 {error ? <CircleAlert size={21} /> : <CheckCircle2 size={21} />}
                 <div>
                   <strong>
-                    {relayResult
-                      ? error
-                        ? c(
-                            "接口调用未成功",
-                            "API call did not succeed",
-                            "لم ينجح استدعاء الواجهة",
-                          )
-                        : c(
-                            "接口调用成功 · 费用以调用日志为准",
-                            "API call succeeded · see logs for charges",
-                            "نجح الاستدعاء · راجع الرسوم في السجلات",
-                          )
-                      : error
-                        ? c(
-                            "请求被拒绝 · 未计费",
-                            "Request rejected · Not charged",
-                            "تم رفض الطلب · بلا رسوم",
-                          )
-                        : c(
-                            "模拟验证通过 · 已计费",
-                            "Simulation verified · Charged",
-                            "نجحت المحاكاة · احتسبت الرسوم",
-                          )}
+                    {error
+                      ? c(
+                          "接口调用未成功",
+                          "API call did not succeed",
+                          "لم ينجح استدعاء الواجهة",
+                        )
+                      : c(
+                          "接口调用成功 · 费用以调用日志为准",
+                          "API call succeeded · see logs for charges",
+                          "نجح الاستدعاء · راجع الرسوم في السجلات",
+                        )}
                   </strong>
                   <p>
-                    {relayResult
-                      ? error
-                        ? last.error_message
-                        : c(
-                            "此处仅显示接口响应。实际结算状态和费用请查看调用日志。",
-                            "This shows the API response only. Check request logs for settlement and charges.",
-                            "تظهر هنا استجابة الواجهة فقط. راجع السجلات للتسوية والرسوم.",
-                          )
-                      : error
-                        ? last.error_message
-                        : last.cost_nano === "0"
-                          ? c(
-                              "已结算零费用，未扣减余额。",
-                              "Settled at zero cost; balance unchanged.",
-                              "تمت التسوية دون تكلفة أو خصم.",
-                            )
-                          : c(
-                              "已生成一笔调用记录和一笔扣费流水。",
-                              "One request and one charge were recorded.",
-                              "سُجل طلب واحد وقيد مالي واحد.",
-                            )}
+                    {error
+                      ? last.error_message
+                      : c(
+                          "此处仅显示接口响应。实际结算状态和费用请查看调用日志。",
+                          "This shows the API response only. Check request logs for settlement and charges.",
+                          "تظهر هنا استجابة الواجهة فقط. راجع السجلات للتسوية والرسوم.",
+                        )}
                   </p>
                   {error && <p>{last.recovery_action}</p>}
                 </div>
@@ -681,17 +814,13 @@ export default function Playground({
                 <div>
                   <dt>{c("本次费用", "Charge", "الرسوم")}</dt>
                   <dd>
-                    {relayResult ? (
-                      <Link to="/console/requests">
-                        {c(
-                          "查看调用日志",
-                          "View request logs",
-                          "عرض سجلات الطلبات",
-                        )}
-                      </Link>
-                    ) : (
-                      formatMoney(last.cost_nano, "call")
-                    )}
+                    <Link to="/console/requests">
+                      {c(
+                        "查看调用日志",
+                        "View request logs",
+                        "عرض سجلات الطلبات",
+                      )}
+                    </Link>
                   </dd>
                 </div>
               </dl>
@@ -701,34 +830,27 @@ export default function Playground({
               {!error && !last.response_text && (
                 <p className="verify-hint">
                   {c(
-                    "刷新后仅保留调用元数据；请求内容与模拟输出不写入账务记录。",
-                    "Only metadata survives refresh. Messages and outputs are excluded from billing storage.",
-                    "بعد التحديث تبقى البيانات الوصفية فقط.",
+                    "接口未返回文本内容，请查看调用日志确认状态与用量。",
+                    "The API returned no text. Check request logs for status and usage.",
+                    "لم تُرجع الواجهة نصًا. راجع السجلات للحالة والاستخدام.",
                   )}
                 </p>
               )}
               <div className="verify-result-actions">
-                {relayResult ? (
-                  <Button asChild>
-                    <Link to="/console/requests">
-                      {c(
-                        "查看调用日志",
-                        "View request logs",
-                        "عرض سجلات الطلبات",
-                      )}
-                      <ArrowRight size={14} />
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button onClick={() => onRecord(last)}>
-                    {c("查看本次明细", "View request details", "تفاصيل الطلب")}
+                <Button asChild>
+                  <Link to="/console/requests">
+                    {c(
+                      "查看调用日志",
+                      "View request logs",
+                      "عرض سجلات الطلبات",
+                    )}
                     <ArrowRight size={14} />
-                  </Button>
-                )}
+                  </Link>
+                </Button>
                 {error && (
                   <>
                     <Link to="/console/billing/recharge">
-                      {c("补充演示余额", "Add demo balance", "إضافة رصيد")}
+                      {c("充值余额", "Add balance", "إضافة رصيد")}
                     </Link>
                     <Link to="/console/keys">
                       {c(
@@ -737,15 +859,6 @@ export default function Playground({
                         "فحص المفتاح والحصة",
                       )}
                     </Link>
-                    {outage && (
-                      <Button onClick={() => setOutage(false)}>
-                        {c(
-                          "恢复模拟上游",
-                          "Restore simulated upstream",
-                          "استعادة الخدمة التجريبية",
-                        )}
-                      </Button>
-                    )}
                   </>
                 )}
               </div>
