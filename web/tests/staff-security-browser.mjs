@@ -57,6 +57,7 @@ try {
       STARHUB_PORT: String(port),
       STARHUB_BIND_ADDRESS: "127.0.0.1",
       STARHUB_ROOT_PASSWORD: "BrowserInitial92",
+      STARHUB_ENV: "development",
       ...cryptoEnv,
       RESOURCE_CATALOG_NOTIFY_URL: "",
       STARHUB_REGION_PROFILE: "",
@@ -139,6 +140,16 @@ try {
       await page.locator(".staff-security").waitFor();
       const denied = await context.request.get(base + "/api/option/");
       assert.equal(denied.status(), 403);
+      assert.equal(
+        (await context.request.post(base + "/api/user/2fa/skip")).status(),
+        403,
+      );
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Skip for now", exact: true })
+          .count(),
+        0,
+      );
       const scan = await new AxeBuilder({ page })
         .include(".staff-security")
         .withTags(["wcag2a", "wcag2aa"])
@@ -273,7 +284,7 @@ try {
     },
   );
   await check(
-    "change password and enroll a real TOTP factor through the UI",
+    "change password, skip enrollment for one session, then enroll a real TOTP factor",
     async () => {
       await page
         .getByLabel("Current password", { exact: true })
@@ -296,7 +307,124 @@ try {
       await page
         .getByRole("button", { name: "Set up authenticator", exact: true })
         .click();
-      const secret = await page.locator("textarea[data-private]").inputValue();
+      let secret = await page.locator("textarea[data-private]").inputValue();
+      await page
+        .getByRole("button", { name: "Skip for now", exact: true })
+        .waitFor();
+      await capture("authenticator-skip-desktop");
+      for (const [language, theme, label] of [
+        ["zh", "light", "暂时跳过"],
+        ["ar", "dark", "تخطي الآن"],
+      ]) {
+        await page.evaluate(
+          async ({ language, theme }) => {
+            const { usePreferences } = await import("/src/lib/preferences.ts");
+            usePreferences.getState().setLanguage(language);
+            usePreferences.getState().setTheme(theme);
+          },
+          { language, theme },
+        );
+        await page.setViewportSize({ width: 320, height: 900 });
+        assert.equal(
+          await page
+            .getByRole("button", { name: label, exact: true })
+            .isVisible(),
+          true,
+        );
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        );
+        const scan = await new AxeBuilder({ page })
+          .include(".staff-security")
+          .withTags(["wcag2a", "wcag2aa"])
+          .analyze();
+        assert.deepEqual(scan.violations, []);
+        await capture(`authenticator-skip-${language}-${theme}-320`);
+      }
+      await page.evaluate(async () => {
+        const { usePreferences } = await import("/src/lib/preferences.ts");
+        usePreferences.getState().setLanguage("en");
+        usePreferences.getState().setTheme("light");
+      });
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.route("**/api/user/2fa/skip", (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: false,
+            message: "Fixture unavailable",
+          }),
+        }),
+      );
+      try {
+        await page
+          .getByRole("button", { name: "Skip for now", exact: true })
+          .click();
+        await page
+          .getByRole("alert")
+          .filter({ hasText: "Unable to skip" })
+          .waitFor();
+        assert.equal(
+          await page.locator("textarea[data-private]").inputValue(),
+          secret,
+        );
+        assert.equal(
+          (await context.request.get(base + "/api/option/")).status(),
+          403,
+        );
+      } finally {
+        await page.unroute("**/api/user/2fa/skip");
+      }
+      await page
+        .getByRole("button", { name: "Skip for now", exact: true })
+        .click();
+      await page.locator(".staff-security").waitFor({ state: "detached" });
+      assert.equal(
+        (await context.request.get(base + "/api/option/")).status(),
+        200,
+      );
+      assert.equal(
+        (
+          await (
+            await context.request.get(base + "/api/user/2fa/status")
+          ).json()
+        ).data.enabled,
+        false,
+      );
+      assert.equal(
+        (await (await context.request.get(base + "/api/user/self")).json()).data
+          .admin_security_required,
+        false,
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForFunction(async () => {
+        const { useSystemAccess } = await import("/src/lib/system-access.ts");
+        return useSystemAccess.getState().session.accountId !== null;
+      });
+      assert.equal(await page.locator(".staff-security").count(), 0);
+      assert.equal(
+        (await context.request.get(base + "/api/option/")).status(),
+        200,
+      );
+      await context.request.post(base + "/api/user/logout");
+      await login("BrowserChanged93");
+      await page
+        .getByRole("button", { name: "Skip for now", exact: true })
+        .waitFor();
+      assert.equal(
+        (await context.request.get(base + "/api/option/")).status(),
+        403,
+      );
+      await page
+        .getByLabel("Current password", { exact: true })
+        .fill("BrowserChanged93");
+      await page
+        .getByRole("button", { name: "Set up authenticator", exact: true })
+        .click();
+      secret = await page.locator("textarea[data-private]").inputValue();
       factorSecret = secret;
       await page
         .getByLabel("Six-digit authenticator code", { exact: true })
@@ -308,6 +436,16 @@ try {
         })
         .click();
       await page.locator("pre[data-private]").waitFor();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Skip for now", exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(
+        (await context.request.post(base + "/api/user/2fa/skip")).status(),
+        403,
+      );
       assert.equal(
         (await page.locator("pre[data-private]").innerText()).trim().split("\n")
           .length,

@@ -48,6 +48,7 @@ func New() http.Handler {
 	mux.HandleFunc("POST /api/user/login/2fa", controller.Verify2FALogin)
 	mux.Handle("POST /api/user/2fa/setup", middleware.UserAuth(http.HandlerFunc(controller.Setup2FA)))
 	mux.Handle("POST /api/user/2fa/enable", middleware.UserAuth(http.HandlerFunc(controller.Enable2FA)))
+	mux.Handle("POST /api/user/2fa/skip", middleware.UserAuth(http.HandlerFunc(controller.Skip2FASetup)))
 	mux.Handle("POST /api/user/2fa/disable", middleware.UserAuth(http.HandlerFunc(controller.Disable2FA)))
 	mux.Handle("GET /api/user/2fa/status", middleware.UserAuth(http.HandlerFunc(controller.Get2FAStatus)))
 	mux.Handle("POST /api/user/2fa/backup-codes", middleware.UserAuth(http.HandlerFunc(controller.RegenerateBackupCodes)))

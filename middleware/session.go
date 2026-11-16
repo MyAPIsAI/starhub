@@ -11,6 +11,7 @@ import (
 )
 
 type sessionData struct {
+	twoFASkipped    bool
 	securityVersion int64
 	factorSecret    string
 	factorPassword  string

@@ -17,6 +17,10 @@
 .staff-security form {
   gap: 1rem;
 }
+.staff-security-skip {
+  width: 100%;
+  margin-block-start: 0.75rem;
+}
 .staff-security p {
   margin-block: 1rem;
 }

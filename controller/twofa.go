@@ -93,12 +93,31 @@ func Disable2FA(w http.ResponseWriter, r *http.Request) {
 // Get2FAStatus handles GET /api/user/2fa/status.
 func Get2FAStatus(w http.ResponseWriter, r *http.Request) {
 	userID := requestUserID(r)
-	twofa, err := model.GetTwoFA(userID)
+	user, err := model.GetUserByID(userID)
 	if err != nil {
-		common.ApiSuccess(w, map[string]any{"enabled": false})
+		common.ApiError(w, http.StatusServiceUnavailable, "security settings unavailable")
 		return
 	}
-	common.ApiSuccess(w, map[string]any{"enabled": twofa.IsEnabled})
+	twofa, err := model.GetTwoFA(userID)
+	if err != nil && err != model.Err2FANotEnabled {
+		common.ApiError(w, http.StatusServiceUnavailable, "security settings unavailable")
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"enabled": err == nil && twofa.IsEnabled, "can_skip": middleware.CanSkipStaffTwoFA(user)})
+}
+
+// Skip2FASetup defers development enrollment for the current session only.
+func Skip2FASetup(w http.ResponseWriter, r *http.Request) {
+	user, err := model.GetUserByID(requestUserID(r))
+	if err != nil || !middleware.CanSkipStaffTwoFA(user) {
+		common.ApiError(w, http.StatusForbidden, "two-factor setup cannot be skipped for this account or environment")
+		return
+	}
+	if !middleware.Sessions.SkipStaffTwoFA(middleware.SessionToken(r), user) {
+		common.ApiError(w, http.StatusConflict, "session security state changed; reload before trying again")
+		return
+	}
+	GetSelf(w, r)
 }
 
 // RegenerateBackupCodes handles POST /api/user/2fa/backup-codes.

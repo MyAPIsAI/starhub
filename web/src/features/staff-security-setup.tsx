@@ -10,6 +10,8 @@ import { useSystemAccess } from "../lib/system-access";
 import { useProductPreview } from "../lib/product-preview";
 import "./staff-security-setup.css";
 
+type FactorStatus = { enabled: boolean; can_skip?: boolean };
+
 export default function StaffSecuritySetup() {
   const language = usePreferences((s) => s.language);
   const identity = useSystemAccess((s) => s.session);
@@ -18,6 +20,7 @@ export default function StaffSecuritySetup() {
     language === "zh" ? zh : language === "ar" ? ar : en;
   const [user, setUser] = useState<AuthUser | null>(null);
   const [enabled, setEnabled] = useState(false);
+  const [canSkip, setCanSkip] = useState(false);
   const [password, setPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -57,6 +60,8 @@ export default function StaffSecuritySetup() {
   useEffect(() => {
     const abort = new AbortController();
     setUser(null);
+    setEnabled(false);
+    setCanSkip(false);
     setPassword("");
     setNextPassword("");
     setConfirmation("");
@@ -68,12 +73,13 @@ export default function StaffSecuritySetup() {
     setErrorField(null);
     Promise.all([
       getSelf({}, abort.signal),
-      apiGet<{ enabled: boolean }>("/api/user/2fa/status", abort.signal),
+      apiGet<FactorStatus>("/api/user/2fa/status", abort.signal),
     ])
       .then(([profile, factor]) => {
         if (!abort.signal.aborted && profile.id === identity.accountId) {
           setUser(profile);
           setEnabled(factor.enabled);
+          setCanSkip(factor.can_skip === true);
         }
       })
       .catch((e: unknown) => {
@@ -152,6 +158,12 @@ export default function StaffSecuritySetup() {
           setNextPassword("");
           setConfirmation("");
         }
+        if (!current()) return;
+        const factor = await apiGet<FactorStatus>("/api/user/2fa/status");
+        if (current()) {
+          setEnabled(factor.enabled);
+          setCanSkip(factor.can_skip === true);
+        }
       } else if (!secret) {
         const result = await apiPost<{ secret: string }>(
           "/api/user/2fa/setup",
@@ -171,6 +183,7 @@ export default function StaffSecuritySetup() {
           setSecret("");
           setCode("");
           setEnabled(true);
+          setCanSkip(false);
         }
       }
     } catch (e) {
@@ -223,6 +236,48 @@ export default function StaffSecuritySetup() {
     }
   }
 
+  async function skip() {
+    if (
+      busy ||
+      !user ||
+      user.admin_password_change_required ||
+      enabled ||
+      !canSkip
+    )
+      return;
+    const ownerEpoch = identity.epoch;
+    setBusy(true);
+    setError("");
+    setErrorField(null);
+    try {
+      const profile = await apiPost<AuthUser>("/api/user/2fa/skip");
+      if (useSystemAccess.getState().session.epoch !== ownerEpoch) return;
+      if (
+        profile.id !== identity.accountId ||
+        profile.admin_security_required !== false ||
+        profile.admin_password_change_required !== false
+      )
+        throw new Error("Security settings could not be confirmed.");
+      setSecret("");
+      setCode("");
+      setPassword("");
+      useSystemAccess.getState().setSession(profile);
+      navigate("/console", { replace: true });
+    } catch {
+      if (useSystemAccess.getState().session.epoch === ownerEpoch)
+        setError(
+          c(
+            "暂时无法跳过双重验证设置，请刷新页面后重试或继续绑定身份验证器。",
+            "Unable to skip two-factor setup. Reload and try again, or continue setting up your authenticator.",
+            "تعذر تخطي إعداد المصادقة الثنائية. أعد تحميل الصفحة وحاول مجددًا أو تابع إعداد تطبيق المصادقة.",
+          ),
+        );
+    } finally {
+      if (useSystemAccess.getState().session.epoch === ownerEpoch)
+        setBusy(false);
+    }
+  }
+
   async function signOut() {
     if (busy) return;
     const ownerEpoch = identity.epoch;
@@ -252,11 +307,17 @@ export default function StaffSecuritySetup() {
         )}
       </h1>
       <p>
-        {c(
-          "首次使用后台需更换密码、绑定身份验证器，然后重新登录。",
-          "Change your initial password, enable an authenticator, and sign in again to access staff tools.",
-          "غيّر كلمة المرور الأولية وفعّل تطبيق المصادقة ثم سجّل الدخول مجددًا للوصول إلى أدوات الموظفين.",
-        )}
+        {canSkip
+          ? c(
+              "可现在绑定身份验证器，也可暂时跳过并进入后台。跳过仅对本次登录有效，下次登录时会再次提示。",
+              "Set up an authenticator now, or skip for now to enter the console. Skipping applies only to this session; you will be prompted again next time you sign in.",
+              "أعدّ تطبيق المصادقة الآن أو تخطّه مؤقتًا للدخول إلى لوحة التحكم. ينطبق التخطي على هذه الجلسة فقط؛ سيُطلب منك الإعداد عند تسجيل الدخول مجددًا.",
+            )
+          : c(
+              "首次使用后台需更换密码、绑定身份验证器，然后重新登录。",
+              "Change your initial password, enable an authenticator, and sign in again to access staff tools.",
+              "غيّر كلمة المرور الأولية وفعّل تطبيق المصادقة ثم سجّل الدخول مجددًا للوصول إلى أدوات الموظفين.",
+            )}
       </p>
       {error && (
         <div
@@ -433,6 +494,11 @@ export default function StaffSecuritySetup() {
             {c("重新登录", "Sign in again", "تسجيل الدخول مجددًا")}
           </Button>
         </>
+      )}
+      {user && !user.admin_password_change_required && !enabled && canSkip && (
+        <Button className="staff-security-skip" disabled={busy} onClick={skip}>
+          {c("暂时跳过", "Skip for now", "تخطي الآن")}
+        </Button>
       )}
       <Button variant="ghost" disabled={busy} onClick={signOut}>
         {c("退出登录", "Sign out", "تسجيل الخروج")}

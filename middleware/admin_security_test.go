@@ -71,3 +71,101 @@ func TestOperatorResetRevokesSecuritySetupSessions(t *testing.T) {
 		t.Fatalf("got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestDevelopmentTwoFASkipIsBoundToOneSession(t *testing.T) {
+	t.Setenv("STARHUB_ENV", "development")
+	setupAutoRoutingDB(t)
+	for _, role := range []int{common.RoleRoot, common.RoleAdmin, common.RoleFinance, common.RoleTech} {
+		user := &model.User{Username: "skip-" + common.GenerateSessionKey(), Password: "changed", Role: role, Status: common.StatusEnabled, AdminPasswordChangedAt: 1, AffCode: common.GenerateAffCode()}
+		if err := model.CreateUser(user); err != nil {
+			t.Fatal(err)
+		}
+		session := Sessions.CreateConfirmed(user, time.Hour, "", "")
+		other := Sessions.CreateConfirmed(user, time.Hour, "", "")
+		t.Cleanup(func() { Sessions.Remove(session); Sessions.Remove(other) })
+		if !StaffSecurityRequired(session, user) || !Sessions.SkipStaffTwoFA(session, user) {
+			t.Fatal("explicit skip was not required and accepted")
+		}
+		if StaffSecurityRequired(session, user) || !StaffSecurityRequired(other, user) || Sessions.StaffVerified(session, user) {
+			t.Fatal("skip leaked to another session or became factor evidence")
+		}
+		r := httptest.NewRequest("GET", "/api/option/", nil)
+		r.AddCookie(&http.Cookie{Name: "session", Value: session})
+		w := httptest.NewRecorder()
+		UserAuth(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })).ServeHTTP(w, r)
+		if w.Code != 204 {
+			t.Fatalf("skipped development session was rejected: %s", w.Body.String())
+		}
+		for _, change := range []func(*model.User){
+			func(u *model.User) { u.Password = "new-password" },
+			func(u *model.User) {
+				u.Role = common.RoleAdmin
+				if role == common.RoleAdmin {
+					u.Role = common.RoleRoot
+				}
+			},
+			func(u *model.User) { u.DeactivationVersion++ },
+			func(u *model.User) { u.AdminPasswordChangedAt = 0 },
+		} {
+			changed := *user
+			change(&changed)
+			if !StaffSecurityRequired(session, &changed) {
+				t.Fatal("skip survived an account security change")
+			}
+		}
+		t.Setenv("STARHUB_ENV", "production")
+		if !StaffSecurityRequired(session, user) || Sessions.SkipStaffTwoFA(session, user) {
+			t.Fatal("production accepted a development skip")
+		}
+		t.Setenv("STARHUB_ENV", "development")
+		if err := model.DB.Create(&model.TwoFA{UserID: user.ID, Secret: "factor", IsEnabled: true}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if !StaffSecurityRequired(session, user) || Sessions.SkipStaffTwoFA(session, user) {
+			t.Fatal("skip bypassed an enabled authenticator")
+		}
+	}
+}
+
+func TestDevelopmentTwoFASkipRequiresChangedPasswordAndActiveStaff(t *testing.T) {
+	t.Setenv("STARHUB_ENV", "development")
+	setupAutoRoutingDB(t)
+	user := &model.User{Username: "skip-preconditions", Password: "initial", Role: common.RoleAdmin, Status: common.StatusEnabled, AffCode: common.GenerateAffCode()}
+	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	session := Sessions.CreateConfirmed(user, time.Hour, "", "")
+	t.Cleanup(func() { Sessions.Remove(session) })
+	if CanSkipStaffTwoFA(user) || Sessions.SkipStaffTwoFA(session, user) {
+		t.Fatal("initial password requirement was skipped")
+	}
+	if err := model.UpdateUserFields(user.ID, map[string]any{"admin_password_changed_at": 1}); err != nil {
+		t.Fatal(err)
+	}
+	user.AdminPasswordChangedAt = 1
+	if err := model.CreateTwoFASetup(user.ID, "pending-factor"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STARHUB_ENV", "")
+	if !CanSkipStaffTwoFA(user) || !Sessions.SkipStaffTwoFA(session, user) {
+		t.Fatal("default development mode rejected a pending enrollment skip")
+	}
+	for _, mode := range []string{"production", "invalid"} {
+		t.Setenv("STARHUB_ENV", mode)
+		if CanSkipStaffTwoFA(user) {
+			t.Fatalf("skip allowed in %s", mode)
+		}
+	}
+	t.Setenv("STARHUB_ENV", "development")
+	if Sessions.SkipStaffTwoFA("missing-session", user) {
+		t.Fatal("skip accepted without an active session")
+	}
+	for _, changed := range []model.User{
+		{ID: user.ID, Role: common.RoleUser, Status: common.StatusEnabled, AdminPasswordChangedAt: 1},
+		{ID: user.ID, Role: common.RoleAdmin, Status: common.StatusDisabled, AdminPasswordChangedAt: 1},
+	} {
+		if CanSkipStaffTwoFA(&changed) {
+			t.Fatal("skip allowed for a disabled or non-staff account")
+		}
+	}
+}
