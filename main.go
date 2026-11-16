@@ -31,18 +31,31 @@ func main() {
 	} else {
 		log.Print("web console: not embedded; this is an API-only build and / returns 404. Build with node scripts/build-release.mjs and run the binary from release/")
 	}
+	if err := config.LoadLocalEnvironment(); err != nil {
+		log.Fatalf("invalid local environment: %v", err)
+	}
 	startup, err := config.LoadStartup(os.Args[1:], os.Getenv)
 	if err != nil {
 		log.Fatalf("invalid startup configuration: %v", err)
+	}
+	// An explicit ring can be checked without initializing the legacy key.
+	if os.Getenv("STARHUB_CREDENTIAL_KEYS") != "" || os.Getenv("STARHUB_CREDENTIAL_ACTIVE_KEY") != "" {
+		if err := common.ValidateCredentialConfiguration(); err != nil {
+			log.Fatal(err)
+		}
+	}
+	generated, err := config.EnsurePersistentCryptoSecret(startup.Bootstrap.Database, true)
+	if err != nil {
+		log.Fatalf("crypto secret initialization failed: %v", err)
+	}
+	if generated {
+		log.Print("crypto secret: generated and saved to .env; keep this file with your database backups")
 	}
 	if err := config.ValidateProduction(startup.Bootstrap, os.Getenv); err != nil {
 		log.Fatal(err)
 	}
 	if err := common.ValidateCredentialConfiguration(); err != nil {
 		log.Fatal(err)
-	}
-	if os.Getenv("STARHUB_CRYPTO_SECRET") == "" {
-		log.Print("WARNING: no persistent crypto secret; stored credentials will not survive a restart")
 	}
 	if err := config.ApplyStartup(startup); err != nil {
 		log.Fatalf("apply startup configuration: %v", err)

@@ -3,6 +3,9 @@
 *.db-wal
 *.db-shm
 config.yml
+/.env
+/.env.lock
+/.env-init-*
 web/node_modules/
 web/dist/
 web/test-results/

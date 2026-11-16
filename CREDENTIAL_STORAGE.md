@@ -14,6 +14,30 @@ Raw database access is reserved for migration and operational tools.
 
 ## Configuration
 
+The server and local operator commands load `.env` from the current working
+directory before reading startup configuration. Nonempty process variables
+take precedence. Values are not expanded or evaluated as shell expressions;
+quoted values, comments and `export` assignments are supported. Invalid or
+duplicate assignments and blank crypto secrets fail without displaying file
+contents. The frontend's `web/.env.local` is not a backend secret source.
+
+For development with a plain local SQLite file only, server startup can create
+a missing secret automatically. Before generation, it inspects an existing
+database read-only and refuses if any channel/token ciphertext or nonempty
+customer lookup hash requires an original secret. Corrupt or uninspectable
+databases also fail closed. A new secret is 32 cryptographically random bytes,
+hex encoded and saved into `.env` before it is activated. An initialization lock
+and a private temporary file prevent concurrent startups from generating
+different secrets or overwriting other assignments. New files are owner-only
+on Unix; Windows grants access to the current user and SYSTEM with inheritance
+disabled. Failed persistence prevents startup. Back up this ignored file with
+the matching database using protected storage.
+
+Production, network/URI databases and operator commands never generate a
+missing secret. Supplied environment secrets are never copied to disk. A stale
+`.env.lock` requires checking that no initialization is running before removal.
+Lost secrets cannot be recreated by this initialization workflow.
+
 Keep `STARHUB_CRYPTO_SECRET` stable and secret across restarts. It remains the
 customer-key lookup HMAC secret and the reader for pre-envelope encrypted data.
 Changing the wrapping keys does not change customer API keys, lookup hashes,
@@ -36,8 +60,9 @@ existing `STARHUB_CRYPTO_SECRET` derivation for compatibility. Before switching
 an existing installation to an explicit keyring, retain that version as an
 entry named `legacy`: use the decoded bytes of a 64-character hexadecimal
 `STARHUB_CRYPTO_SECRET`, or SHA-256 of its UTF-8 value otherwise. Add a new active
-version alongside it. Without a persistent secret, encrypted credentials will
-not survive a process restart; the random fallback is for disposable development.
+version alongside it. The crypto library retains a random fallback for
+disposable isolated callers/tests; server and operator startup establish a
+persistent secret before the library is initialized.
 
 ## Legacy migration
 

@@ -13,7 +13,7 @@ import (
 // OpenDatabase uses the server's configuration without creating a new SQLite
 // file by accident. Network credentials are read from the environment or YAML.
 func OpenDatabase(path string) error {
-	if err := common.ValidateCredentialConfiguration(); err != nil {
+	if err := config.LoadLocalEnvironment(); err != nil {
 		return err
 	}
 	startup, err := config.LoadStartup(nil, os.Getenv)
@@ -34,6 +34,12 @@ func OpenDatabase(path string) error {
 		}
 	} else if path != "" {
 		return errors.New("db path is only supported for SQLite; use database configuration for network drivers")
+	}
+	if _, err := config.EnsurePersistentCryptoSecret(startup.Bootstrap.Database, false); err != nil {
+		return err
+	}
+	if err := common.ValidateCredentialConfiguration(); err != nil {
+		return err
 	}
 	if err := model.InitDBWithConfig(model.DatabaseConfig{
 		Driver: cfg.Driver, DSN: cfg.DSN, MaxOpenConns: cfg.MaxOpenConns,

@@ -4,12 +4,14 @@ go 1.26.0
 
 require (
 	github.com/dop251/goja v0.0.0-20261028213108-85be1416108e
+	github.com/glebarez/go-sqlite v1.21.2
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/nyaruka/phonenumbers/v2 v2.0.17
 	github.com/pquerna/otp v1.5.0
+	golang.org/x/sys v0.38.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.3
@@ -21,7 +23,6 @@ require (
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/dlclark/regexp2/v2 v2.11.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -36,7 +37,6 @@ require (
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	modernc.org/libc v1.66.10 // indirect

@@ -34,6 +34,9 @@ initial_options:
   model_rate_limit: 200
 
 # Deployment environment:
+# The server loads .env from its working directory; nonempty process variables win.
+# Development can initialize a persistent secret for credential-free local SQLite.
+# Existing encrypted data requires its original secret; production never generates one.
 # STARHUB_ENV: set production to reject disposable secrets and weak initial passwords.
 # STARHUB_CRYPTO_SECRET: stable secret for customer-key lookup and legacy decryption.
 # STARHUB_CREDENTIAL_KEYS / STARHUB_CREDENTIAL_ACTIVE_KEY: versioned wrapping keys.

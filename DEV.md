@@ -16,7 +16,13 @@
 
 复用已有数据库时，必须使用创建凭证时相同的 `STARHUB_CRYPTO_SECRET`；如使用版本密钥环，还需恢复对应的 `STARHUB_CREDENTIAL_KEYS` 和 `STARHUB_CREDENTIAL_ACTIVE_KEY`。上游的 `sk-…` 接口密钥不是这个加密密钥。
 
-Go 服务不会自动读取前端的 `web/.env.local` 来设置这些变量。关闭原终端、换终端或切换为发布程序启动时，应从相同的安全配置来源加载原值，再启动服务。不要生成新值来尝试解密旧数据库，也不要把真实密钥写入版本库、命令历史或日志。
+Go 服务现在会先读取**当前工作目录的 `.env`**，再解析启动配置；已有非空环境变量优先。`go run .` 从项目根目录执行时使用根目录 `.env`，不读取前端的 `web/.env.local`，也不读取临时可执行文件所在目录。
+
+开发环境首次启动本地 SQLite 数据库时，如果环境及 `.env` 都没有 `STARHUB_CRYPTO_SECRET`，程序会先只读检查渠道密文及客户令牌查询摘要。确认没有依赖原密钥的数据后，自动生成并安全保存密钥到 `.env`，之后每次启动复用该值。文件中的其他配置与注释会保留；写入失败不会继续启动。生成文件限制为当前用户读取（Windows 同时允许 SYSTEM），且已加入 Git 忽略。
+
+已有密文或令牌查询摘要时，程序会要求恢复原密钥，不生成替代值。生产环境、网络数据库和 SQLite URI 地址不执行自动初始化，应明确配置持久密钥。运维命令读取同一工作目录的 `.env`，但不会生成密钥。更换工作目录或迁移数据库时，必须同时保留与它匹配的 `.env` 或外部秘密配置。
+
+程序支持 `.env` 中的普通赋值、单/双引号、注释及 `export`，不会执行 shell 命令或展开变量。重复赋值、空的加密密钥、异常文件和无法解析的内容会导致启动失败，不会覆盖原文件。不要把真实密钥写入版本库、命令历史或日志。
 
 如果已找回原来的 `STARHUB_CRYPTO_SECRET`，可在准备启动 Go 的 PowerShell 中通过隐藏输入加载，避免把原值写入命令历史：
 
@@ -26,9 +32,11 @@ $env:STARHUB_CRYPTO_SECRET = [System.Net.NetworkCredential]::new('', $credential
 Remove-Variable credentialSecret
 ```
 
-上面的赋值仅对当前 PowerShell 及随后启动的子进程生效，不会替你永久保存密钥。首次使用全新数据库前，应先在受保护的配置来源保存持久密钥，并确保之后每次启动都加载同一个值。加密配置及轮换说明见 [CREDENTIAL_STORAGE.md](CREDENTIAL_STORAGE.md)。
+上面的赋值仅对当前 PowerShell 及随后启动的子进程生效，程序不会把外部环境变量的原值复制到 `.env`。如选择通过环境变量恢复旧配置，后续启动仍应加载同一原值。加密配置及轮换说明见 [CREDENTIAL_STORAGE.md](CREDENTIAL_STORAGE.md)。
 
-如果日志出现 `no persistent crypto secret`，当前程序使用的是未保存的进程随机密钥；该进程退出后，新进程无法解密它写入的渠道凭证或客户令牌。`credential migration could not decrypt a stored value` 表示程序正在阻止使用无法解密的已有数据；不能通过删除密文或跳过检查来安全恢复。原密钥无法找回时，需要先保留备份，再明确决定如何重新配置受影响的凭证。
+旧版本日志中的 `no persistent crypto secret` 表示使用了未保存的进程随机密钥；进程退出后，自动生成新值也不能恢复它写入的旧凭证。`credential migration could not decrypt a stored value` 表示程序正在阻止使用无法解密的已有数据；不能通过删除密文或跳过检查来安全恢复。原密钥无法找回时，需要先保留备份，再明确决定如何重新配置受影响的凭证。
+
+首次初始化使用 `.env.lock` 协调多个启动进程。若提示锁超时，应确认其他启动进程已结束后再处理残留锁文件，不要删除 `.env` 或重新生成密钥。
 
 ### 终端一：启动 Go 后端
 

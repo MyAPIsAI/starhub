@@ -28,8 +28,9 @@ var ErrEncryptionFailed = errors.New("encryption operation failed")
 // getEncryptionKey returns the process-wide AES-256 key used for
 // credential encryption at rest. The key is sourced from the
 // STARHUB_CRYPTO_SECRET environment variable (32 bytes hex-encoded or raw).
-// When unset, a random key is generated — encrypted data will not survive
-// a restart, but the system still functions for development.
+// Server startup loads or persists this secret before the first call. The
+// random fallback is only suitable for disposable callers such as unit tests;
+// persistent database entry points must initialize configuration first.
 func getEncryptionKey() []byte {
 	encryptionKeyOnce.Do(func() {
 		if secret := os.Getenv("STARHUB_CRYPTO_SECRET"); secret != "" {
