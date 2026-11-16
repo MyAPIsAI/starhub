@@ -188,6 +188,16 @@
   font-size: 12px;
   border-radius: 9px;
 }
+.auth-dialog .phone-code-error {
+  padding: 10px 12px;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: 9px;
+}
+.auth-dialog .phone-code-error:focus {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
 .auth-phone-input {
   display: flex;
   align-items: center;

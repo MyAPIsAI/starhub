@@ -67,8 +67,12 @@ func sendPhoneVerification(w http.ResponseWriter, r *http.Request, purpose strin
 			common.ApiError(w, 503, "phone authentication unavailable")
 			return
 		}
-		if errors.Is(err, model.ErrUserNotFound) || user.Status != common.StatusEnabled {
-			common.ApiSuccess(w, map[string]any{"requested": true, "retry_after": 60})
+		if errors.Is(err, model.ErrUserNotFound) {
+			common.ApiError(w, http.StatusConflict, "phone_not_linked")
+			return
+		}
+		if user.Status != common.StatusEnabled {
+			common.ApiError(w, http.StatusForbidden, "phone_login_unavailable")
 			return
 		}
 	} else {

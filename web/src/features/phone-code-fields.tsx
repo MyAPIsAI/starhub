@@ -121,24 +121,52 @@ export function PhoneCodeFields({
   const c = (zh: string, en: string, ar: string) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
   const error = state.error;
-  const message =
-    error instanceof ApiError && error.status === 429
-      ? c(
-          "发送过于频繁，请稍后再试。",
-          "Too many attempts. Try again later.",
-          "محاولات كثيرة. حاول لاحقًا.",
-        )
-      : error instanceof ApiError && error.status === 403
-        ? c(
-            "请核对当前密码及短信功能权限。",
-            "Check your current password and SMS availability.",
-            "تحقق من كلمة المرور وتوفر الرسائل.",
-          )
-        : c(
-            "无法发送验证码，请核对号码、短信配置后重试。",
-            "Could not request a code. Check the number and SMS configuration, then retry.",
-            "تعذر طلب الرمز. تحقق من الرقم وإعداد الرسائل وحاول مجددًا.",
-          );
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  let message = c(
+    "无法发送验证码，请核对号码、短信配置后重试。",
+    "Could not request a code. Check the number and SMS configuration, then retry.",
+    "تعذر طلب الرمز. تحقق من الرقم وإعداد الرسائل وحاول مجددًا.",
+  );
+  if (error instanceof ApiError) {
+    if (
+      purpose === "login" &&
+      error.status === 409 &&
+      error.message === "phone_not_linked"
+    ) {
+      message = c(
+        "该手机号尚未关联账号，请先注册，或使用账号密码登录后在账号中心绑定手机号。本次未发送验证码。",
+        "This phone number is not linked to an account. Register first, or sign in with your password and link it in Account center. No code was sent.",
+        "رقم الهاتف غير مرتبط بحساب. سجّل أولًا أو ادخل بكلمة المرور واربطه في مركز الحساب. لم يُرسل رمز.",
+      );
+    } else if (error.status === 429) {
+      message = c(
+        "发送过于频繁，请稍后再试。",
+        "Too many attempts. Try again later.",
+        "محاولات كثيرة. حاول لاحقًا.",
+      );
+    } else if (purpose === "login" && error.status === 403) {
+      message = c(
+        "该手机号暂不能用于短信登录，请使用账号密码登录或联系管理员。",
+        "SMS sign-in is unavailable for this phone. Use password login or contact the administrator.",
+        "الدخول بالرسائل غير متاح لهذا الرقم. استخدم كلمة المرور أو تواصل مع المسؤول.",
+      );
+    } else if (error.status === 403) {
+      message = c(
+        "请核对当前密码及短信功能权限。",
+        "Check your current password and SMS availability.",
+        "تحقق من كلمة المرور وتوفر الرسائل.",
+      );
+    } else if (purpose === "login" && error.status === 503) {
+      message = c(
+        "验证码发送服务暂不可用，请稍后重试或使用账号密码登录。",
+        "The SMS service is temporarily unavailable. Retry later or use password login.",
+        "خدمة الرسائل غير متاحة مؤقتًا. حاول لاحقًا أو ادخل بكلمة المرور.",
+      );
+    }
+  }
+  useEffect(() => {
+    if (purpose === "login" && error != null) errorRef.current?.focus();
+  }, [error, purpose]);
   return (
     <div className="phone-code-fields">
       {purpose === "login" && (
@@ -238,7 +266,12 @@ export function PhoneCodeFields({
         </p>
       )}
       {error != null && (
-        <p className="phone-code-error" role="alert">
+        <p
+          className="phone-code-error"
+          role="alert"
+          ref={errorRef}
+          tabIndex={-1}
+        >
           {message}
         </p>
       )}

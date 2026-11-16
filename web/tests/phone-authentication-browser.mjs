@@ -174,14 +174,18 @@ try {
   const unknownAcknowledgement = page.waitForResponse((response) => response.url().endsWith("/api/user/phone-verification"));
   releaseUnknown();
   const unknownResponse = await unknownAcknowledgement;
-  assert.equal(unknownResponse.status(), 200, await unknownResponse.text());
-  await expect(page.locator(".phone-code-notice")).toContainText("does not confirm SMS was sent");
+  assert.equal(unknownResponse.status(), 409, await unknownResponse.text());
+  await expect(page.locator(".phone-code-error")).toContainText("not linked to an account");
+  await expect(page.locator(".phone-code-error")).toContainText("No code was sent");
+  await expect(page.locator(".phone-code-error")).toBeFocused();
+  await expect(page.locator(".phone-code-notice")).toHaveCount(0);
   await page.unroute("**/api/user/phone-verification");
   assert.equal(codes.has("+86" + unknownPhone), false);
   assert.equal(codes.size, dispatchedBeforeUnknown);
-  await expect(page.getByRole("button", { name: /Retry in/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Get code", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /Retry in/ })).toHaveCount(0);
   await assertLoginCodeAlignment();
-  report.checks.push("unlinked login numbers show registration/linking guidance and an accurate acknowledgement without dispatching SMS; idle, requesting and cooldown controls stay aligned at 44px");
+  report.checks.push("unlinked login numbers receive HTTP 409 and a focused registration/linking error; no SMS, acceptance notice or resend countdown is produced; controls stay aligned at 44px");
   for (const [language, theme, width] of [["en", "light", 1440], ["zh", "light", 390], ["ar", "dark", 320]]) {
     await page.evaluate(async ([language, theme]) => { const { usePreferences } = await import("/src/lib/preferences.ts"); usePreferences.getState().setLanguage(language); usePreferences.getState().setTheme(theme); }, [language, theme]);
     await page.setViewportSize({ width, height: 1000 });
@@ -246,13 +250,31 @@ try {
   release();
   await page.locator("#auth-account").waitFor();
   assert.equal(await page.locator(".phone-code-notice").count(), 0);
+  await expect(page.locator(".phone-code-error")).toHaveCount(0);
   await page.unroute("**/api/user/phone-verification");
   await page.locator(".auth-methods").getByRole("button", { name: "Phone code", exact: true }).click();
   await page.locator("#auth-phone-number").waitFor();
   assert.equal(await page.locator("#auth-phone-number").inputValue(), "");
   assert.equal(await page.locator("#auth-phone-code").inputValue(), "");
   assert.equal(await page.locator(".phone-code-notice").count(), 0);
+  await expect(page.locator(".phone-code-error")).toHaveCount(0);
   report.checks.push("switching login method clears phone/code and ignores a delayed send response");
+  for (const [status, message, expected] of [
+    [403, "phone_login_unavailable", "SMS sign-in is unavailable for this phone"],
+    [503, "SMS provider unavailable; try again later", "The SMS service is temporarily unavailable"],
+  ]) {
+    await page.route("**/api/user/phone-verification", (route) => route.fulfill({
+      status, contentType: "application/json", body: JSON.stringify({ success: false, message }),
+    }));
+    await page.locator("#auth-phone-number").fill("13612345678");
+    await page.getByRole("button", { name: "Get code", exact: true }).click();
+    await expect(page.locator(".phone-code-error")).toContainText(expected);
+    await expect(page.locator(".phone-code-error")).toBeFocused();
+    await expect(page.locator(".phone-code-notice")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Get code", exact: true })).toBeEnabled();
+    await page.unroute("**/api/user/phone-verification");
+  }
+  report.checks.push("unavailable accounts and provider failures show distinct focused errors without a success notice or resend countdown");
   await page.route("**/api/user/phone-verification", (route) => route.fulfill({ status: 429,
     headers: { "Content-Type": "application/json", "Retry-After": "3547" },
     body: JSON.stringify({ success: false, message: "fixture hourly limit", retry_after: 3547 }),

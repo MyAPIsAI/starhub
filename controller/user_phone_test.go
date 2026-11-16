@@ -69,22 +69,42 @@ func TestSendPhoneVerificationForLogin(t *testing.T) {
 }
 
 func TestSendPhoneVerificationForUnregisteredLogin(t *testing.T) {
-	_, cleanup := setupPhoneTest(t)
+	mock, cleanup := setupPhoneTest(t)
 	defer cleanup()
 
-	// Unknown numbers receive the same acknowledgement as eligible numbers.
 	rr := call(SendPhoneVerification, testRequest{
 		method: http.MethodPost,
 		target: "/api/user/phone-verification",
 		body:   `{"phone":"13912345678"}`,
 	})
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
+	expectError(t, rr, http.StatusConflict, "phone_not_linked")
+	if len(mock.codes) != 0 {
+		t.Fatal("unlinked number received an SMS")
 	}
-	var got map[string]any
-	decodeData(t, rr, &got)
-	if got["requested"] != true || got["sent"] != nil {
-		t.Fatal("should return an indistinguishable acknowledgement")
+	var count int64
+	if err := model.DB.Model(&model.PhoneVerificationChallenge{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("unlinked number created a verification challenge: count=%d err=%v", count, err)
+	}
+}
+
+func TestSendPhoneVerificationForDisabledLogin(t *testing.T) {
+	mock, cleanup := setupPhoneTest(t)
+	defer cleanup()
+	user := &model.User{Username: "disabledphone", Password: "x", Role: common.RoleUser, Status: common.StatusDisabled, Group: "default", AffCode: common.GenerateAffCode()}
+	if err := model.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.CreateUserPhoneIdentity(nil, user.ID, "+8613812345678", 1700000000); err != nil {
+		t.Fatal(err)
+	}
+	rr := call(SendPhoneVerification, testRequest{
+		method: http.MethodPost,
+		target: "/api/user/phone-verification",
+		body:   `{"phone":"13812345678"}`,
+	})
+	expectError(t, rr, http.StatusForbidden, "phone_login_unavailable")
+	if len(mock.codes) != 0 {
+		t.Fatal("disabled account received an SMS")
 	}
 }
 

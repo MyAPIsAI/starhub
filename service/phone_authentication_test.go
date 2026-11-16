@@ -129,9 +129,12 @@ func TestPhoneBindingAndLoginThroughProtectedRoutes(t *testing.T) {
 	}
 	resetBuckets()
 	known := call("POST", "/api/user/phone-verification", "", map[string]any{"phone": "13812345678"}, 200)
-	unknown := call("POST", "/api/user/phone-verification", "", map[string]any{"phone": "13912345678"}, 200)
-	if known.Body.String() != unknown.Body.String() {
-		t.Fatal("phone existence exposed in acknowledgement")
+	unknown := call("POST", "/api/user/phone-verification", "", map[string]any{"phone": "13912345678"}, 409)
+	if !strings.Contains(known.Body.String(), `"requested":true`) || !strings.Contains(unknown.Body.String(), `"message":"phone_not_linked"`) || strings.Contains(unknown.Body.String(), "retry_after") {
+		t.Fatal("unlinked phone did not receive an explicit rejection without a resend timer")
+	}
+	if _, sent := provider.codes["+8613912345678"]; sent {
+		t.Fatal("unlinked phone request reached the provider")
 	}
 	loginCode := provider.codes["+8613812345678"]
 	wrong := "000000"
