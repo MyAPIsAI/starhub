@@ -110,6 +110,69 @@ func TestGetServiceQualityEmpty(t *testing.T) {
 	}
 }
 
+func TestGetServiceQualityAccountScope(t *testing.T) {
+	newTestDB(t)
+	owner := newUser(t, "quality-owner", common.RoleUser, 1000)
+	other := newUser(t, "quality-other", common.RoleUser, 1000)
+	for _, entry := range []model.Log{
+		{UserID: owner.ID, Model: "owned-model", Status: 1, DurationMs: 100},
+		{UserID: other.ID, Model: "other-model", Status: 2, DurationMs: 900},
+		{UserID: other.ID, Model: "other-model", Status: 1, DurationMs: 300},
+	} {
+		if err := model.InsertLog(&entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, role := range []int{common.RoleUser, common.RoleFinance, common.RoleTech, 11, 101, common.RoleAdmin, common.RoleRoot} {
+		for _, filter := range []string{"", strconv.FormatInt(other.ID, 10), "0", "-1", "invalid", "9223372036854775808"} {
+			t.Run(strconv.Itoa(role)+"/user_id="+filter, func(t *testing.T) {
+				admin := common.IsAdminRole(role)
+				rr := call(GetServiceQuality, testRequest{
+					method: http.MethodGet,
+					target: "/api/service-quality?hours=168&user_id=" + url.QueryEscape(filter),
+					userID: owner.ID,
+					role:   role,
+				})
+				if admin && filter != "" && filter != strconv.FormatInt(other.ID, 10) {
+					if rr.Code != http.StatusBadRequest {
+						t.Fatalf("invalid administrator filter: status=%d body=%s", rr.Code, rr.Body.String())
+					}
+					return
+				}
+				var got model.ServiceQualitySummary
+				decodeData(t, rr, &got)
+				wantTotal, wantModels, wantP95 := int64(1), 1, int64(100)
+				if admin {
+					wantTotal, wantModels, wantP95 = 3, 2, 900
+					if filter != "" {
+						wantTotal, wantModels = 2, 1
+					}
+				}
+				if got.Overall.TotalRequests != wantTotal || len(got.ByModel) != wantModels || got.Overall.P95DurationMs != wantP95 {
+					t.Fatalf("wrong account totals: %+v", got)
+				}
+				if len(got.ByDay) != 1 || got.ByDay[0].TotalRequests != wantTotal || got.ByDay[0].P95DurationMs != wantP95 {
+					t.Fatalf("daily account scope differs from totals: %+v", got.ByDay)
+				}
+				if !admin && got.ByModel[0].Model != "owned-model" {
+					t.Fatalf("non-administrator saw another account: %+v", got.ByModel)
+				}
+				if admin && filter != "" && got.ByModel[0].Model != "other-model" {
+					t.Fatalf("administrator filter was ignored: %+v", got.ByModel)
+				}
+			})
+		}
+	}
+	rr := call(GetServiceQuality, testRequest{
+		method: http.MethodGet, target: "/api/service-quality?user_id=999999", userID: owner.ID, role: common.RoleAdmin,
+	})
+	var empty model.ServiceQualitySummary
+	decodeData(t, rr, &empty)
+	if empty.Overall.TotalRequests != 0 || len(empty.ByModel) != 0 || len(empty.ByDay) != 0 {
+		t.Fatalf("unknown user must not fall back to all users: %+v", empty)
+	}
+}
+
 func TestGetServiceQualityModelFilter(t *testing.T) {
 	newTestDB(t)
 	alice := newUser(t, "quality-alice", common.RoleUser, 1000)
@@ -154,7 +217,9 @@ func TestGetServiceQualityModelFilter(t *testing.T) {
 				query.Set("model", tc.model)
 			}
 			// A user-controlled scope parameter must not widen normal-user access.
-			query.Set("user_id", "0")
+			if !common.IsAdminRole(tc.role) {
+				query.Set("user_id", "0")
+			}
 			rr := call(GetServiceQuality, testRequest{
 				method: http.MethodGet, target: "/api/service-quality?" + query.Encode(),
 				userID: alice.ID, role: tc.role,
@@ -316,7 +381,10 @@ func TestGetServiceQualityDailyP95(t *testing.T) {
 		{"empty result", "missing", 168, common.RoleUser, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			query := url.Values{"hours": {strconv.Itoa(tc.hours)}, "model": {tc.model}, "user_id": {"0"}}
+			query := url.Values{"hours": {strconv.Itoa(tc.hours)}, "model": {tc.model}}
+			if !common.IsAdminRole(tc.role) {
+				query.Set("user_id", "0")
+			}
 			rr := call(GetServiceQuality, testRequest{method: http.MethodGet, target: "/api/service-quality?" + query.Encode(), userID: alice.ID, role: tc.role})
 			var got map[string]any
 			decodeData(t, rr, &got)

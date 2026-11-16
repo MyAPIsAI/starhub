@@ -14,7 +14,7 @@ export type QualityBucket = {
 };
 export type QualityUnit = {
   id: string;
-  userId: number;
+  userId: number | null;
   group: TierId;
   tier: "Ultra" | "Pro" | "Standard" | "Lite";
   model: string;

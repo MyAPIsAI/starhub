@@ -38,17 +38,23 @@ export interface ServiceQualitySummary {
   by_day: ServiceQualityDailyMetric[];
 }
 
-export function useServiceQuality(hours: number = 24, model?: string) {
+export function useServiceQuality(
+  hours: number = 24,
+  model?: string,
+  userId?: number,
+) {
   const identity = useSessionQueryIdentity();
   const authenticated = useSystemAccess(
     (state) => state.session.accountId !== null,
   );
   const params = new URLSearchParams({ hours: String(hours) });
   if (model) params.set("model", model);
+  if (userId !== undefined) params.set("user_id", String(userId));
+  const baseKey = model
+    ? (["service-quality", identity, hours, model] as const)
+    : (["service-quality", identity, hours] as const);
   return useQuery({
-    queryKey: model
-      ? (["service-quality", identity, hours, model] as const)
-      : (["service-quality", identity, hours] as const),
+    queryKey: userId === undefined ? baseKey : [...baseKey, { userId }],
     enabled: authenticated,
     queryFn: ({ signal }) =>
       apiGet<ServiceQualitySummary>(`/api/service-quality?${params}`, signal),

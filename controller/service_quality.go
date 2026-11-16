@@ -9,7 +9,7 @@ import (
 )
 
 // GetServiceQuality returns per-model quality metrics aggregated from
-// the Log table. Users see their own; admins see all.
+// the Log table. Users see their own; admins may select an account or see all.
 func GetServiceQuality(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	hours, _ := strconv.ParseInt(q.Get("hours"), 10, 64)
@@ -17,7 +17,16 @@ func GetServiceQuality(w http.ResponseWriter, r *http.Request) {
 		hours = 24
 	}
 	userID := int64(0)
-	if !common.IsAdminRole(requestRole(r)) {
+	if common.IsAdminRole(requestRole(r)) {
+		if value := q.Get("user_id"); value != "" {
+			var err error
+			userID, err = strconv.ParseInt(value, 10, 64)
+			if err != nil || userID <= 0 {
+				common.ApiError(w, http.StatusBadRequest, "user_id must be a positive integer")
+				return
+			}
+		}
+	} else {
 		userID = requestUserID(r)
 	}
 	summary, err := model.SummarizeServiceQuality(userID, int(hours), q.Get("model"))

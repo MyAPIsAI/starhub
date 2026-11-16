@@ -22,9 +22,8 @@ import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { usePreferences } from "../lib/preferences";
 import { writtenLanguage } from "../lib/localize";
+import { isAdmin, useSystemAccess } from "../lib/system-access";
 import {
-  createQualityTrend,
-  createQualityUnits,
   getQualityMonths,
   filterQualityUnits,
   serializeQualityCsv,
@@ -219,13 +218,9 @@ function TrendChart({
   );
 }
 
-export default function ServiceQuality({
-  isAdmin = false,
-  userId = 1001,
-}: {
-  isAdmin?: boolean;
-  userId?: number;
-}) {
+export default function ServiceQuality() {
+  const userId = useSystemAccess((state) => state.session.accountId);
+  const administrator = useSystemAccess((state) => isAdmin(state.role));
   const language = usePreferences((state) => state.language);
   const text: Copy = (zh, en, ar) =>
     language === "zh" ? zh : language === "ar" ? ar : en;
@@ -237,15 +232,10 @@ export default function ServiceQuality({
   const group = params.get("group") || "all";
   const model = params.get("model") || "all";
   const requestType = params.get("type") || "all";
-  const view =
-    params.get("view") === "admin"
-      ? "admin"
-      : params.get("view") === "enterprise"
-        ? "enterprise"
-        : isAdmin
-          ? "admin"
-          : "enterprise";
-  const customer = params.get("customer") || "";
+  const customer = administrator ? params.get("customer") || "" : "";
+  const [customerInput, setCustomerInput] = useState(customer);
+  const selectedUserId = customer ? Number(customer) : undefined;
+  const scopeUserId = administrator ? (selectedUserId ?? null) : userId;
   const selectedId = params.get("unit") || "";
   const metric = (
     ["success", "g0", "g1", "g2"].includes(params.get("metric") || "")
@@ -262,6 +252,25 @@ export default function ServiceQuality({
     }
     setParams(next, { replace, state: location.state });
   };
+  useEffect(() => setCustomerInput(customer), [customer]);
+  useEffect(() => {
+    if (!administrator || customerInput === customer) return;
+    const timer = setTimeout(() => {
+      const next = new URLSearchParams(params);
+      if (customerInput) next.set("customer", customerInput);
+      else next.delete("customer");
+      for (const key of ["page", "unit", "metric"]) next.delete(key);
+      setParams(next, { replace: true, state: location.state });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [
+    administrator,
+    customerInput,
+    customer,
+    params,
+    setParams,
+    location.state,
+  ]);
   const [guideOpen, setGuideOpen] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   useEffect(() => setExportMessage(""), [language]);
@@ -270,13 +279,12 @@ export default function ServiceQuality({
   const returnPosition = useRef<{ scroll: number; unit: string } | null>(
     location.state?.qualityReturn ?? null,
   );
-  const qualityQuery = useServiceQuality(168); // last 7 days
-  // When backend data is available, adapt it to QualityUnit[].
-  // Otherwise fall back to the demo seeds.
+  const qualityQuery = useServiceQuality(168, undefined, selectedUserId);
+  // The backend owns account scoping; model aggregates have no per-user field.
   const adaptToUnits = (summary: ServiceQualitySummary): QualityUnit[] =>
     summary.by_model.map((m, i) => ({
       id: `sq_${i}`,
-      userId: 0,
+      userId: scopeUserId,
       group: "default" as TierId,
       tier: "Pro" as const,
       model: m.model,
@@ -322,13 +330,8 @@ export default function ServiceQuality({
             : "below") as QualityStatus,
     }));
   const allUnits = useMemo(
-    () =>
-      qualityQuery.data
-        ? adaptToUnits(qualityQuery.data)
-        : months.includes(month)
-          ? createQualityUnits(month)
-          : [],
-    [qualityQuery.data, month, months],
+    () => (qualityQuery.data ? adaptToUnits(qualityQuery.data) : []),
+    [qualityQuery.data, scopeUserId],
   );
   // Cache per-model SQ metrics so the model detail page can show a quick
   // success/P95 summary without a separate fetch. Keyed by model id only,
@@ -353,25 +356,15 @@ export default function ServiceQuality({
   const units = useMemo(
     () =>
       filterQualityUnits(allUnits, {
-        userId:
-          view === "enterprise"
-            ? userId
-            : customer
-              ? Number(customer)
-              : undefined,
         group: group === "all" ? undefined : group,
         model: model === "all" ? undefined : model,
         stream: requestType === "all" ? undefined : requestType === "streaming",
       }),
-    [allUnits, view, userId, customer, group, model, requestType],
+    [allUnits, group, model, requestType],
   );
   const summary = summarizeQualityUnits(units);
   const selected = params.has("month")
-    ? allUnits.find(
-        (unit) =>
-          unit.id === selectedId &&
-          (view === "admin" || unit.userId === userId),
-      )
+    ? units.find((unit) => unit.id === selectedId)
     : undefined;
   const currentPage = Math.max(
     1,
@@ -382,7 +375,7 @@ export default function ServiceQuality({
     currentPage * pageSize,
   );
   const trend = useMemo(() => {
-    // Use real backend by_day data when available; fall back to demo.
+    // Use only the daily data returned for the current account scope.
     const byDay = qualityQuery.data?.by_day;
     if (byDay && byDay.length > 0) {
       return byDay.map((d: ServiceQualityDailyMetric) => ({
@@ -393,8 +386,8 @@ export default function ServiceQuality({
         g2: 0,
       })) as QualityTrend[];
     }
-    return selected ? createQualityTrend(selected, month) : [];
-  }, [qualityQuery.data, selected, month]);
+    return [];
+  }, [qualityQuery.data]);
   const chartMetric: QualityMetric = !selected?.stream ? "success" : metric;
   const target = selected?.successTarget
     ? chartMetric === "success"
@@ -466,8 +459,10 @@ export default function ServiceQuality({
   };
   const modelLabel = (value: string) =>
     catalogModels.find((item) => item.id === value)?.name ?? value;
+  const userLabel = (id: number | null) =>
+    id === null ? text("所有用户", "All users", "كل المستخدمين") : `#${id}`;
   const unitLabel = (unit: QualityUnit) =>
-    `#${unit.userId} · ${groupLabel(unit.group)} · ${unit.model} · ${requestLabel(unit)}`;
+    `${userLabel(unit.userId)} · ${groupLabel(unit.group)} · ${unit.model} · ${requestLabel(unit)}`;
   const periodEnd = !months.includes(month)
     ? "—"
     : month === months[0]
@@ -476,6 +471,7 @@ export default function ServiceQuality({
           .toISOString()
           .slice(0, 10);
   const resetFilters = () => {
+    setCustomerInput("");
     setParams({});
     setExportMessage("");
   };
@@ -517,11 +513,11 @@ export default function ServiceQuality({
       `${month}-01`,
       periodEnd,
       text(
-        "演示数据 / 未最终核验",
-        "Demo data / not finally reconciled",
-        "بيانات تجريبية / لم تتم المطابقة النهائية",
+        "调用统计 / 未最终核验",
+        "Request metrics / not finally reconciled",
+        "مقاييس الطلبات / لم تتم المطابقة النهائية",
       ),
-      unit.userId,
+      unit.userId ?? text("所有用户", "All users", "كل المستخدمين"),
       groupLabel(unit.group),
       unit.model,
       requestLabel(unit),
@@ -532,9 +528,9 @@ export default function ServiceQuality({
       ...[0, 1, 2].map((index) => unit.buckets[index]?.p95 ?? ""),
       text(...statusWords[unit.status]),
       text(
-        "前端演示数据，非真实交付记录",
-        "Frontend demo, not production delivery records",
-        "بيانات تجريبية وليست سجلات إنتاج",
+        "最近 7 天的调用日志；合同及目标为示例",
+        "Request logs from the last 7 days; illustrative contracts and targets",
+        "سجلات آخر 7 أيام؛ العقود والأهداف توضيحية",
       ),
     ]);
     const csv = serializeQualityCsv([header, ...rows]);
@@ -692,31 +688,29 @@ export default function ServiceQuality({
       <div className="sq-demo-banner">
         <span>
           <Info size={14} />
-          <strong>{text("前端演示", "Frontend demo", "عرض تجريبي")}</strong>
+          <strong>
+            {text("调用统计", "Request metrics", "مقاييس الطلبات")}
+          </strong>
           {text(
-            "指标、合同及目标均为示例，不代表真实服务表现或最终结算。",
-            "Metrics, contracts, and targets are illustrative, not production results or final settlement.",
-            "المقاييس والعقود والأهداف أمثلة وليست نتائج فعلية أو تسوية نهائية.",
+            "展示最近 7 天的调用记录；合同及目标仍为示例，不代表最终结算。",
+            "Metrics use request logs from the last 7 days; contract targets remain illustrative, not final settlement.",
+            "المقاييس من سجلات آخر 7 أيام؛ الأهداف التعاقدية توضيحية وليست تسوية نهائية.",
           )}
         </span>
-        {!selectedId && (
-          <label>
-            {text("演示视角", "Demo view", "وضع العرض")}
-            <select
-              aria-label={text("演示视角", "Demo view", "وضع العرض")}
-              value={view}
-              onChange={changeFilter("view")}
-            >
-              <option value="enterprise">
-                {text("我的账号", "My account", "حسابي")}
-              </option>
-              <option value="admin">
-                {text("平台视角", "Platform view", "عرض المنصة")}
-              </option>
-            </select>
-          </label>
-        )}
       </div>
+      {qualityQuery.isError && (
+        <div className="sq-export-message" role="alert">
+          <TriangleAlert size={14} />
+          {text(
+            "服务质量数据加载失败，请重试。",
+            "Could not load service quality. Please retry.",
+            "تعذر تحميل جودة الخدمة. حاول مجددًا.",
+          )}
+          <Button size="small" onClick={() => qualityQuery.refetch()}>
+            {text("重试", "Retry", "إعادة المحاولة")}
+          </Button>
+        </div>
+      )}
       {exportMessage && (
         <div className="sq-export-message" role="status">
           <CheckCircle2 size={14} />
@@ -753,18 +747,14 @@ export default function ServiceQuality({
               </div>
               <div className="sq-as-of">
                 <span>
-                  {text(
-                    "演示数据截至",
-                    "Demo data as of",
-                    "البيانات التجريبية حتى",
-                  )}{" "}
+                  {text("数据截至", "Data as of", "البيانات حتى")}{" "}
                   <b>{periodEnd}</b>
                 </span>
                 <small>
                   {text(
-                    "演示结果尚未最终核验",
-                    "Demo results have not been finally reconciled",
-                    "لم تُطابق النتائج التجريبية نهائيًا",
+                    "统计结果尚未最终核验",
+                    "Metrics have not been finally reconciled",
+                    "لم تُطابق المقاييس نهائيًا",
                   )}
                 </small>
               </div>
@@ -776,19 +766,13 @@ export default function ServiceQuality({
                   type="text"
                   inputMode="numeric"
                   aria-label={text("用户编号", "User ID", "معرّف المستخدم")}
-                  value={view === "enterprise" ? userId : customer}
-                  disabled={view === "enterprise"}
-                  placeholder={text(
-                    "所有演示客户",
-                    "All demo customers",
-                    "كل العملاء التجريبيين",
-                  )}
+                  value={administrator ? customerInput : (userId ?? "")}
+                  disabled={!administrator}
+                  placeholder={text("所有用户", "All users", "كل المستخدمين")}
                   onChange={(event) => {
                     if (/^\d*$/.test(event.target.value)) {
-                      change(
-                        { customer: event.target.value, page: null },
-                        true,
-                      );
+                      setCustomerInput(event.target.value);
+                      setExportMessage("");
                     }
                   }}
                 />
@@ -936,11 +920,17 @@ export default function ServiceQuality({
               <div className="sq-empty">
                 <Layers3 size={34} />
                 <h3>
-                  {text(
-                    "当前筛选下没有核算单元",
-                    "No matching accounting units",
-                    "لا توجد وحدات مطابقة",
-                  )}
+                  {qualityQuery.isPending
+                    ? text(
+                        "正在加载调用统计",
+                        "Loading request metrics",
+                        "جارٍ تحميل مقاييس الطلبات",
+                      )
+                    : text(
+                        "当前筛选下没有核算单元",
+                        "No matching accounting units",
+                        "لا توجد وحدات مطابقة",
+                      )}
                 </h3>
                 <p>
                   {text(
@@ -996,7 +986,7 @@ export default function ServiceQuality({
                           <td>
                             <strong>{groupLabel(unit.group)}</strong>
                             <small>
-                              #{unit.userId} · {unit.version}
+                              {userLabel(unit.userId)} · {unit.version}
                             </small>
                           </td>
                           <td>
@@ -1081,7 +1071,7 @@ export default function ServiceQuality({
                         {groupLabel(unit.group)} · {requestLabel(unit)}
                       </p>
                       <small>
-                        #{unit.userId} · {unit.version}
+                        {userLabel(unit.userId)} · {unit.version}
                       </small>
                       <dl>
                         <div>
@@ -1210,7 +1200,10 @@ export default function ServiceQuality({
             </div>
             <dl>
               {[
-                [text("客户", "Customer", "العميل"), `#${selected.userId}`],
+                [
+                  text("客户", "Customer", "العميل"),
+                  userLabel(selected.userId),
+                ],
                 [
                   text("服务分组", "Service group", "مجموعة الخدمة"),
                   groupLabel(selected.group),
@@ -1233,9 +1226,9 @@ export default function ServiceQuality({
             </dl>
             <p>
               {text(
-                "本单元演示数据截至",
-                "This unit's demo data as of",
-                "بيانات الوحدة التجريبية حتى",
+                "本单元数据截至",
+                "This unit's data as of",
+                "بيانات الوحدة حتى",
               )}{" "}
               <b>{periodEnd}</b> ·{" "}
               {text(
