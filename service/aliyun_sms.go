@@ -110,13 +110,13 @@ func (p *aliyunSMSProvider) Send(phoneE164, code string) error {
 		return ErrSMSRateLimited
 	}
 	var result struct{ Code string }
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 || json.NewDecoder(io.LimitReader(resp.Body, 16<<10)).Decode(&result) != nil {
+	if json.NewDecoder(io.LimitReader(resp.Body, 16<<10)).Decode(&result) != nil {
 		return ErrSMSSendFailed
 	}
 	if result.Code == "isv.BUSINESS_LIMIT_CONTROL" || result.Code == "Throttling" || result.Code == "Throttling.User" {
 		return ErrSMSRateLimited
 	}
-	if result.Code != "OK" {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 || result.Code != "OK" {
 		return ErrSMSSendFailed
 	}
 	return nil

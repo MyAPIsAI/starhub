@@ -1,6 +1,6 @@
 // Uses an isolated database and fixture credentials; no real SMS is sent.
 import { createServer as createViteServer } from "vite";
-import { chromium } from "playwright";
+import { chromium, expect } from "playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { spawn, execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
@@ -92,7 +92,7 @@ try {
     const loaded = page.waitForResponse((response) => response.request().method() === "GET" && response.url().includes("/api/system/sms-config?"));
     await dialog.getByRole("button", { name: "Reload", exact: true }).click();
     await loaded;
-    await page.waitForFunction((sign) => document.querySelector("#sms-sign-name")?.value === sign, expectedSign);
+    await expect(dialog.locator("#sms-sign-name")).toHaveValue(expectedSign);
   };
   const state = () => api("GET", "/api/system/sms-config?expected_user_id=1");
   await open();
@@ -147,7 +147,6 @@ try {
   await successToast.waitFor({ state: "hidden" });
   assert.equal(await save().isDisabled(), true);
   await reload("Concurrent Fixture Sign");
-  assert.equal(await dialog.locator("#sms-sign-name").inputValue(), "Concurrent Fixture Sign");
   report.checks.push("stale dialog cannot overwrite concurrent configuration; explicit reload recovers");
   report.checks.push("confirmed saves show a visible desktop/mobile success toast; password and version failures show no success toast");
 
