@@ -831,6 +831,7 @@ export default function AuthDialog() {
                         ) : method === "phone" ? (
                           <PhoneCodeFields
                             id="auth-phone"
+                            purpose="login"
                             country={regionPolicy?.country_code ?? ""}
                             state={phone}
                             disabled={busy}

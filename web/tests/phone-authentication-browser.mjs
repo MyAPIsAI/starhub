@@ -1,6 +1,6 @@
 // Uses an isolated database and a loopback SMS bridge. No real SMS is sent.
 import { createServer as createViteServer } from "vite";
-import { chromium } from "playwright";
+import { chromium, expect } from "playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { spawn, execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
@@ -146,9 +146,46 @@ try {
   await api("POST", "/api/user/logout");
   await page.goto(base + "/login?method=phone");
   await page.locator("#auth-phone-number").waitFor();
+  const assertLoginCodeAlignment = async () => {
+    await expect.poll(() => page.locator(".auth-dialog .phone-code-input").evaluate((row) => {
+      const input = row.querySelector("input").getBoundingClientRect();
+      const button = row.querySelector("button").getBoundingClientRect();
+      return {
+        inputHeight: Math.round(input.height),
+        buttonHeight: Math.round(button.height),
+        aligned: Math.abs(input.y - button.y) < 1,
+      };
+    })).toEqual({ inputHeight: 44, buttonHeight: 44, aligned: true });
+  };
+  await expect(page.locator(".phone-code-guidance")).toContainText("New users should register first");
+  await assertLoginCodeAlignment();
+  const unknownPhone = "13712345678";
+  const dispatchedBeforeUnknown = codes.size;
+  let releaseUnknown;
+  const unknownGate = new Promise((resolve) => { releaseUnknown = resolve; });
+  await page.route("**/api/user/phone-verification", async (route) => {
+    await unknownGate;
+    await route.continue();
+  });
+  await page.locator("#auth-phone-number").fill(unknownPhone);
+  await page.getByRole("button", { name: "Get code", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Requesting…", exact: true })).toBeDisabled();
+  await assertLoginCodeAlignment();
+  const unknownAcknowledgement = page.waitForResponse((response) => response.url().endsWith("/api/user/phone-verification"));
+  releaseUnknown();
+  const unknownResponse = await unknownAcknowledgement;
+  assert.equal(unknownResponse.status(), 200, await unknownResponse.text());
+  await expect(page.locator(".phone-code-notice")).toContainText("does not confirm SMS was sent");
+  await page.unroute("**/api/user/phone-verification");
+  assert.equal(codes.has("+86" + unknownPhone), false);
+  assert.equal(codes.size, dispatchedBeforeUnknown);
+  await expect(page.getByRole("button", { name: /Retry in/ })).toBeDisabled();
+  await assertLoginCodeAlignment();
+  report.checks.push("unlinked login numbers show registration/linking guidance and an accurate acknowledgement without dispatching SMS; idle, requesting and cooldown controls stay aligned at 44px");
   for (const [language, theme, width] of [["en", "light", 1440], ["zh", "light", 390], ["ar", "dark", 320]]) {
     await page.evaluate(async ([language, theme]) => { const { usePreferences } = await import("/src/lib/preferences.ts"); usePreferences.getState().setLanguage(language); usePreferences.getState().setTheme(theme); }, [language, theme]);
     await page.setViewportSize({ width, height: 1000 });
+    await assertLoginCodeAlignment();
     await capture(`login-${language}-${width}.png`);
   }
   const loginScan = await new AxeBuilder({ page }).include(".auth-dialog").withTags(["wcag2a", "wcag2aa"]).analyze();
@@ -233,6 +270,7 @@ try {
   for (const [language, theme, width] of [["en", "light", 1440], ["zh", "light", 390], ["ar", "dark", 320]]) {
     await page.evaluate(async ([language, theme]) => { const { usePreferences } = await import("/src/lib/preferences.ts"); usePreferences.getState().setLanguage(language); usePreferences.getState().setTheme(theme); }, [language, theme]);
     await page.setViewportSize({ width, height: 1000 });
+    await assertLoginCodeAlignment();
     await capture(`hourly-retry-${language}-${width}.png`);
   }
   await page.evaluate(async () => { const { usePreferences } = await import("/src/lib/preferences.ts"); usePreferences.getState().setLanguage("en"); usePreferences.getState().setTheme("light"); });

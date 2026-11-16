@@ -181,6 +181,13 @@
   font-size: 12px;
   border-radius: 9px;
 }
+.auth-dialog .phone-code-input > .button {
+  height: 44px;
+  min-block-size: 44px;
+  padding-inline: 12px;
+  font-size: 12px;
+  border-radius: 9px;
+}
 .auth-phone-input {
   display: flex;
   align-items: center;

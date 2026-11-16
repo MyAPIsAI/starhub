@@ -19,6 +19,7 @@
 .phone-code-input button {
   flex: 0 0 auto;
 }
+.phone-code-guidance,
 .phone-code-notice,
 .phone-code-error {
   font-size: 12px;
@@ -26,6 +27,7 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+.phone-code-guidance,
 .phone-code-notice {
   color: var(--auth-muted, var(--muted));
 }

@@ -108,12 +108,14 @@ export function PhoneCodeFields({
   disabled = false,
   id = "phone",
   country = "",
+  purpose = "verification",
 }: {
   state: ReturnType<typeof usePhoneCode>;
   onSend: () => void;
   disabled?: boolean;
   id?: string;
   country?: string;
+  purpose?: "login" | "verification";
 }) {
   const language = usePreferences((s) => s.language);
   const c = (zh: string, en: string, ar: string) =>
@@ -139,6 +141,15 @@ export function PhoneCodeFields({
           );
   return (
     <div className="phone-code-fields">
+      {purpose === "login" && (
+        <p className="phone-code-guidance" id={`${id}-guidance`}>
+          {c(
+            "短信登录仅支持已绑定的手机号。新用户请先注册；已有账号请使用密码登录后，在账号中心绑定手机号。",
+            "SMS sign-in requires a linked phone number. New users should register first. Existing users can sign in with a password and link a phone in Account center.",
+            "يتطلب الدخول بالرسائل رقم هاتف مرتبطًا. على المستخدم الجديد التسجيل أولًا. يمكن للمستخدم الحالي الدخول بكلمة المرور وربط هاتف في مركز الحساب.",
+          )}
+        </p>
+      )}
       <div className="auth-field">
         <label htmlFor={`${id}-number`}>
           {c("手机号", "Phone number", "رقم الهاتف")}
@@ -148,6 +159,7 @@ export function PhoneCodeFields({
           type="tel"
           dir="ltr"
           autoComplete="tel"
+          aria-describedby={purpose === "login" ? `${id}-guidance` : undefined}
           required
           maxLength={32}
           disabled={disabled || state.sending}
@@ -212,11 +224,17 @@ export function PhoneCodeFields({
       </div>
       {state.requested && (
         <p className="phone-code-notice" role="status">
-          {c(
-            "请求已受理；若号码可用于当前操作，将收到验证码，10分钟内有效。",
-            "Request accepted. If the number is eligible, a code will arrive and expire in 10 minutes.",
-            "قُبل الطلب. سيصل رمز صالح لعشر دقائق إذا كان الرقم مؤهلًا.",
-          )}
+          {purpose === "login"
+            ? c(
+                "请求已受理，不代表短信已发送。仅向已绑定且账号可用的手机号发送验证码，10分钟内有效。未收到时，请核对绑定情况或使用密码登录。",
+                "Request accepted; this does not confirm SMS was sent. Codes are sent only to numbers linked to active accounts and expire in 10 minutes. If none arrives, check the phone link or use password login.",
+                "قُبل الطلب، ولا يعني ذلك إرسال رسالة. تُرسل الرموز إلى الأرقام المرتبطة بحسابات نشطة وتصلح لعشر دقائق. إذا لم يصل رمز، تحقق من ربط الهاتف أو ادخل بكلمة المرور.",
+              )
+            : c(
+                "请求已受理；若号码可用于当前操作，将收到验证码，10分钟内有效。",
+                "Request accepted. If the number is eligible, a code will arrive and expire in 10 minutes.",
+                "قُبل الطلب. سيصل رمز صالح لعشر دقائق إذا كان الرقم مؤهلًا.",
+              )}
         </p>
       )}
       {error != null && (
