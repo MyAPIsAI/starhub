@@ -808,6 +808,32 @@ export default function AdminPortal() {
             >
               {t("adminAnalytics")}
             </h1>
+            <p
+              style={{ color: "var(--muted)", marginBottom: "var(--space-4)" }}
+            >
+              {text(
+                "总请求数与成功率按所有用户保留的调用记录累计统计，包含失败和取消的调用。",
+                "Total requests and success rate cover all retained call records across all users, including failed and cancelled calls.",
+                "يشمل إجمالي الطلبات ومعدل النجاح جميع سجلات الاستدعاء المحفوظة لكل المستخدمين، بما فيها الاستدعاءات الفاشلة والملغاة.",
+              )}
+            </p>
+            {metricsQuery.isError && (
+              <div role="alert" style={{ marginBottom: "var(--space-4)" }}>
+                {text(
+                  "请求统计加载失败，请重试。",
+                  "Request statistics could not be loaded. Please retry.",
+                  "تعذر تحميل إحصاءات الطلبات. يرجى إعادة المحاولة.",
+                )}
+                <Button
+                  size="small"
+                  variant="secondary"
+                  disabled={metricsQuery.isFetching}
+                  onClick={() => void metricsQuery.refetch()}
+                >
+                  {text("重试", "Retry", "إعادة المحاولة")}
+                </Button>
+              </div>
+            )}
             <div
               style={{
                 display: "grid",
@@ -841,12 +867,12 @@ export default function AdminPortal() {
                     color: "var(--brand)",
                   }}
                 >
-                  {(
-                    metricsQuery.data?.requests?.reduce(
-                      (sum, r) => sum + r.count,
-                      0,
-                    ) ?? 0
-                  ).toLocaleString()}
+                  {metricsQuery.isPending
+                    ? text("加载中…", "Loading…", "جارٍ التحميل…")
+                    : metricsQuery.isError
+                      ? "—"
+                      : (metricsQuery.data?.usage?.total_requests?.toLocaleString() ??
+                        "—")}
                 </div>
               </div>
               <div
@@ -936,10 +962,12 @@ export default function AdminPortal() {
                   }}
                 >
                   {(() => {
-                    const reqs = metricsQuery.data?.requests ?? [];
-                    const total = reqs.reduce((s, r) => s + r.count, 0);
+                    if (metricsQuery.isPending)
+                      return text("加载中…", "Loading…", "جارٍ التحميل…");
+                    if (metricsQuery.isError) return "—";
+                    const total = metricsQuery.data?.usage?.total_requests ?? 0;
                     const success =
-                      reqs.find((r) => r.class === "success")?.count ?? 0;
+                      metricsQuery.data?.usage?.success_count ?? 0;
                     return total > 0
                       ? ((success / total) * 100).toFixed(2) + "%"
                       : "—";
@@ -974,9 +1002,9 @@ export default function AdminPortal() {
                       }}
                     >
                       {text(
-                        "请求分类统计",
-                        "Request breakdown by class",
-                        "تصنيف الطلبات حسب الفئة",
+                        "请求分类统计（当前实例启动以来）",
+                        "Request breakdown (since this instance started)",
+                        "تصنيف الطلبات (منذ بدء تشغيل هذا المثيل)",
                       )}
                     </h3>
                   </div>

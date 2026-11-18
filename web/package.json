@@ -29,6 +29,7 @@
     "test:browser:plugins": "node tests/task-plugins-browser.mjs",
     "test:browser:requests": "node tests/request-history-browser.mjs",
     "test:browser:quality": "node tests/service-quality-browser.mjs",
+    "test:browser:analytics": "node tests/admin-analytics-browser.mjs",
     "test:browser:auth": "node tests/auth-browser.mjs",
     "test:browser:public-auth": "node tests/public-auth-browser.mjs",
     "test:browser:account-scope": "node tests/account-scope-browser.mjs",

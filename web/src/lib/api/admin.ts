@@ -74,6 +74,11 @@ export interface ChannelStat {
 }
 
 export interface MetricsSnapshot {
+  usage: {
+    total_requests: number;
+    success_count: number;
+    failed_count: number;
+  };
   requests: RequestCounter[] | null;
   channel_stats: ChannelStat[] | null;
   window: number;
