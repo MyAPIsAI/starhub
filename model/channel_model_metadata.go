@@ -39,6 +39,7 @@ func ensureChannelModelMetadata(tx *gorm.DB, names []string) (int64, error) {
 	rows := make([]ModelMeta, len(names))
 	for i, name := range names {
 		rows[i].Model = name
+		rows[i].AutoRegistered = true
 	}
 	inserted := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "model"}}, DoNothing: true}).
 		CreateInBatches(&rows, 100)

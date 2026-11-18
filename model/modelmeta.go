@@ -28,6 +28,8 @@ import (
 // metadata row must never hide a model that can actually be served.
 type ModelMeta struct {
 	Model string `gorm:"primaryKey;size:128" json:"model"`
+	// Automatic placeholders do not independently publish unavailable models to the plaza.
+	AutoRegistered bool `gorm:"not null;default:false" json:"-"`
 
 	Vendor        string `gorm:"size:64;not null;default:''" json:"vendor"`
 	VendorDisplay string `gorm:"size:128;not null;default:''" json:"vendor_display"`
@@ -200,10 +202,10 @@ func ListModelCoverage() (map[string]*ModelCoverage, error) {
 	return out, nil
 }
 
-// AllPlazaModels returns the union of every served model name and every
-// metadata row name, sorted. Models with metadata but no channel still appear
-// (and are flagged unavailable) so an operator can see that a catalog entry
-// has gone dark.
+// AllPlazaModels returns served model names and manually published metadata,
+// sorted. Automatic placeholders stay in the management catalog but only appear
+// in the plaza while covered by a live route. Manually published models without
+// a channel still appear and are flagged unavailable.
 func AllPlazaModels() ([]string, error) {
 	type row struct{ Name string }
 	var rows []row
@@ -214,8 +216,8 @@ func AllPlazaModels() ([]string, error) {
 			JOIN channels c ON c.id = a.channel_id
 			WHERE a.enabled = ? AND c.status = ? AND `+resourceGatewayAbilityCondition("a")+`
 			UNION
-			SELECT model AS model FROM model_metas
-		) ORDER BY name ASC`, true, common.ChannelStatusEnabled).Scan(&rows).Error
+			SELECT model AS model FROM model_metas WHERE auto_registered = ?
+		) ORDER BY name ASC`, true, common.ChannelStatusEnabled, false).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}

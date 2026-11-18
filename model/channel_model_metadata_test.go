@@ -37,7 +37,7 @@ func TestChannelRegistersMissingModelsWithoutReplacingMetadataOrPrices(t *testin
 		if err != nil || !found || meta.CreatedAt <= 0 {
 			t.Fatalf("missing model %q: %+v %v", name, meta, err)
 		}
-		want := &ModelMeta{Model: name, CreatedAt: meta.CreatedAt}
+		want := &ModelMeta{Model: name, AutoRegistered: true, CreatedAt: meta.CreatedAt}
 		if !reflect.DeepEqual(meta, want) {
 			t.Fatalf("invented model properties or prices: %+v", meta)
 		}
@@ -129,5 +129,31 @@ func TestChannelsConcurrentlyRegisterSharedModelOnce(t *testing.T) {
 	catalog, err := ReadModelMetadataCatalog(context.Background())
 	if err != nil || len(catalog.Models) != 1 || catalog.Revision != 1 || channelRevision(t) != 8 {
 		t.Fatalf("concurrent registration: %+v %v", catalog, err)
+	}
+}
+
+func TestAutomaticModelRegistrationDoesNotPublishUnavailableModels(t *testing.T) {
+	newTestDB(t)
+	ch := &Channel{Models: "automatic", Group: "default", Status: 1}
+	if err := InsertChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	if names, err := AllPlazaModels(); err != nil || !reflect.DeepEqual(names, []string{"automatic"}) {
+		t.Fatalf("live automatic model disappeared: %v %v", names, err)
+	}
+	if err := DeleteChannel(ch.ID); err != nil {
+		t.Fatal(err)
+	}
+	if names, err := AllPlazaModels(); err != nil || len(names) != 0 {
+		t.Fatalf("automatic placeholder published without a route: %v %v", names, err)
+	}
+	if _, found, err := GetModelMeta("automatic"); err != nil || !found {
+		t.Fatal("automatic metadata disappeared from the management catalog")
+	}
+	if err := UpsertModelMeta(&ModelMeta{Model: "automatic", Description: "Published by an administrator"}); err != nil {
+		t.Fatal(err)
+	}
+	if names, err := AllPlazaModels(); err != nil || !reflect.DeepEqual(names, []string{"automatic"}) {
+		t.Fatalf("manual catalog publication changed: %v %v", names, err)
 	}
 }
