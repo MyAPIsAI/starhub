@@ -113,7 +113,7 @@ export interface ChannelTestResult {
   };
   image_url?: string;
   code?: string;
-  scope?: "catalog" | "image" | "local" | "";
+  scope?: "catalog" | "video_api" | "image" | "local" | "";
   ok: boolean;
   model: string;
   elapsed_ms: number;

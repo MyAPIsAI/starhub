@@ -362,7 +362,7 @@ func TestArkVideoConnectivityNeverGenerates(t *testing.T) {
 	denied := false
 	var reads, writes atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/api/v3/models" {
+		if r.Method != "GET" || r.URL.Path != "/api/v3/contents/generations/tasks" || r.URL.Query().Get("page_size") != "1" {
 			writes.Add(1)
 			w.WriteHeader(500)
 			return
@@ -374,7 +374,7 @@ func TestArkVideoConnectivityNeverGenerates(t *testing.T) {
 			fmt.Fprint(w, `{"error":{"code":"AuthenticationError"}}`)
 			return
 		}
-		fmt.Fprint(w, `{"data":[{"id":"`+modelID+`","domain":"VideoGeneration"}]}`)
+		fmt.Fprint(w, `{"items":[],"total":0}`)
 	}))
 	defer upstream.Close()
 	ch := &model.Channel{Type: channel.ChannelTypeArk, BaseURL: upstream.URL, Key: "video-key", Models: modelID, Group: "default", Status: common.ChannelStatusAutoDisabled, ModelCapabilities: map[string]string{modelID: "VideoGeneration"}}
@@ -384,7 +384,7 @@ func TestArkVideoConnectivityNeverGenerates(t *testing.T) {
 	request := testRequest{method: "POST", target: fmt.Sprintf("/api/channel/test/%d", ch.ID), path: map[string]string{"id": fmt.Sprint(ch.ID)}}
 	var result channelTestResult
 	decodeData(t, call(TestChannel, request), &result)
-	if !result.OK || result.Code != "ark_video_catalog_only" || result.Scope != "catalog" || result.Status != common.ChannelStatusAutoDisabled {
+	if !result.OK || result.Code != "ark_video_api_accessible" || result.Scope != "video_api" || result.Status != common.ChannelStatusAutoDisabled {
 		t.Fatalf("video connectivity was misrepresented: %+v", result)
 	}
 	for _, capabilities := range []map[string]string{nil, {modelID: "VideoGeneration"}} {
@@ -404,7 +404,7 @@ func TestArkVideoConnectivityNeverGenerates(t *testing.T) {
 	if result.OK || result.Diagnostic == nil || result.Diagnostic.UpstreamStatus != 401 || result.Diagnostic.RequestID != "video-catalog-request" {
 		t.Fatalf("probe lost diagnostic: %+v", result)
 	}
-	if result.Scope != "catalog" || !strings.Contains(result.Message, "inference was not tested") || result.Status != common.ChannelStatusAutoDisabled {
+	if result.Scope != "video_api" || result.Code != "upstream_video_authentication_failed" || result.Status != common.ChannelStatusAutoDisabled {
 		t.Fatal("catalog failure was mistaken for an inference result")
 	}
 	after, err := model.GetChannelByID(ch.ID)

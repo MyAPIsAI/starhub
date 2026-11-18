@@ -105,6 +105,9 @@ func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) Prob
 		if upstreamKey == "" {
 			return ProbeResult{Scope: "catalog", KeyIdx: keyIdx, Message: "models_key_required"}
 		}
+		if ch.ModelCapabilities[modelName] == "VideoGeneration" || strings.HasPrefix(modelName, "doubao-seedance-") {
+			return probeArkVideoAPI(ctx, ch, upstreamKey, keyIdx)
+		}
 		catalog, domain := probeArkCatalog(ctx, ch, modelName, upstreamKey, keyIdx)
 		if !catalog.OK || (domain != "LLM" && domain != "VLM") {
 			return catalog
@@ -163,7 +166,7 @@ func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) Prob
 // channel goes down when the last key dies. It returns the channel status
 // after the probe.
 func ApplyProbeResult(ch *model.Channel, res ProbeResult) int {
-	if res.Scope == "catalog" {
+	if res.Scope == "catalog" || res.Scope == "video_api" {
 		return ch.Status
 	}
 	if res.HTTPStatus > 0 {

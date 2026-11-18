@@ -165,58 +165,7 @@ func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) (
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		code := "upstream_models_failed"
-		switch response.StatusCode {
-		case http.StatusUnauthorized:
-			code = "upstream_models_authentication_failed"
-		case http.StatusForbidden:
-			code = "upstream_models_permission_denied"
-		case http.StatusNotFound:
-			code = "upstream_models_not_found"
-		case http.StatusTooManyRequests:
-			code = "upstream_models_rate_limited"
-		default:
-			if response.StatusCode >= 300 && response.StatusCode < 400 {
-				code = "upstream_models_redirect_refused"
-			}
-		}
-		diagnostic := &ChannelModelsDiagnostic{UpstreamStatus: response.StatusCode}
-		if !strings.Contains(request.URL.Host, key) {
-			diagnostic.UpstreamHost = request.URL.Host
-		}
-		// Only standard paths are safe to echo; custom prefixes may contain secrets.
-		if request.URL.Path == "/api/v3/models" || request.URL.Path == "/v1/models" {
-			diagnostic.CatalogPath = request.URL.Path
-		}
-		if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-			body, _ := io.ReadAll(io.LimitReader(response.Body, 8192))
-			var details struct {
-				RequestID string `json:"request_id"`
-				Error     struct {
-					Code string `json:"code"`
-				} `json:"error"`
-			}
-			if json.Unmarshal(body, &details) == nil {
-				providerCode, _, _ := strings.Cut(details.Error.Code, ".")
-				switch providerCode {
-				case "AuthenticationError", "InvalidApiKey", "InvalidAPIKey", "InvalidAccessKey", "AccessDenied", "PermissionDenied", "AccountNotAuthorized":
-					diagnostic.ProviderCode = providerCode
-				}
-			}
-			requestID := response.Header.Get("X-Request-Id")
-			if requestID == "" {
-				requestID = response.Header.Get("X-Tt-Logid")
-			}
-			if requestID == "" {
-				requestID = details.RequestID
-			}
-			if len(requestID) >= 8 && len(requestID) <= 128 && !strings.Contains(requestID, key) && !strings.ContainsFunc(requestID, func(c rune) bool {
-				return !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')
-			}) {
-				diagnostic.RequestID = requestID
-			}
-		}
-		return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: code, Diagnostic: diagnostic}
+		return nil, channelUpstreamError(response, request, key)
 	}
 	const maxBytes = 2 << 20
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxBytes+1))
@@ -263,4 +212,60 @@ func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) (
 		}
 	}
 	return models, nil
+}
+
+// channelUpstreamError exposes controlled upstream diagnostics without raw bodies.
+func channelUpstreamError(response *http.Response, request *http.Request, key string) *ChannelModelsError {
+	code := "upstream_models_failed"
+	switch response.StatusCode {
+	case http.StatusUnauthorized:
+		code = "upstream_models_authentication_failed"
+	case http.StatusForbidden:
+		code = "upstream_models_permission_denied"
+	case http.StatusNotFound:
+		code = "upstream_models_not_found"
+	case http.StatusTooManyRequests:
+		code = "upstream_models_rate_limited"
+	default:
+		if response.StatusCode >= 300 && response.StatusCode < 400 {
+			code = "upstream_models_redirect_refused"
+		}
+	}
+	diagnostic := &ChannelModelsDiagnostic{UpstreamStatus: response.StatusCode}
+	if !strings.Contains(request.URL.Host, key) {
+		diagnostic.UpstreamHost = request.URL.Host
+	}
+	// Only standard paths are safe to echo; custom prefixes may contain secrets.
+	if request.URL.Path == "/api/v3/models" || request.URL.Path == "/v1/models" {
+		diagnostic.CatalogPath = request.URL.Path
+	}
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 8192))
+		var details struct {
+			RequestID string `json:"request_id"`
+			Error     struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(body, &details) == nil {
+			providerCode, _, _ := strings.Cut(details.Error.Code, ".")
+			switch providerCode {
+			case "AuthenticationError", "InvalidApiKey", "InvalidAPIKey", "InvalidAccessKey", "AccessDenied", "PermissionDenied", "AccountNotAuthorized":
+				diagnostic.ProviderCode = providerCode
+			}
+		}
+		requestID := response.Header.Get("X-Request-Id")
+		if requestID == "" {
+			requestID = response.Header.Get("X-Tt-Logid")
+		}
+		if requestID == "" {
+			requestID = details.RequestID
+		}
+		if len(requestID) >= 8 && len(requestID) <= 128 && !strings.Contains(requestID, key) && !strings.ContainsFunc(requestID, func(c rune) bool {
+			return !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')
+		}) {
+			diagnostic.RequestID = requestID
+		}
+	}
+	return &ChannelModelsError{Status: http.StatusBadGateway, Code: code, Diagnostic: diagnostic}
 }

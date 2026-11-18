@@ -4,6 +4,31 @@ import { useSettingsText } from "./settings-text";
 import "./channel-probe-result.css";
 
 const errors: Record<string, [string, string, string]> = {
+  upstream_video_authentication_failed: [
+    "上游返回 401：视频接口认证失败，请更新有效的方舟 API Key。",
+    "Upstream returned 401: video API authentication failed. Update the Ark API key.",
+    "أعاد المزود 401: فشلت مصادقة واجهة الفيديو. حدّث مفتاح Ark.",
+  ],
+  upstream_video_permission_denied: [
+    "上游返回 403：无权访问视频任务接口，请检查账号权限。",
+    "Upstream returned 403: video task access denied. Check account permissions.",
+    "أعاد المزود 403: الوصول لمهام الفيديو مرفوض. تحقق من صلاحيات الحساب.",
+  ],
+  upstream_video_not_found: [
+    "上游未提供方舟视频任务接口，请检查地址和渠道类型。",
+    "The upstream does not provide the Ark video task API. Check the URL and channel type.",
+    "لا يوفر المزود واجهة مهام Ark. تحقق من العنوان ونوع القناة.",
+  ],
+  upstream_video_network_error: [
+    "无法连接视频任务接口，请检查地址和网络。",
+    "Cannot connect to the video task API. Check the URL and network.",
+    "تعذر الاتصال بواجهة الفيديو. تحقق من العنوان والشبكة.",
+  ],
+  upstream_video_invalid_response: [
+    "上游视频任务列表格式不正确，尚未验证生成。",
+    "Invalid video task list; generation remains untested.",
+    "قائمة مهام الفيديو غير صالحة؛ لم يُختبر التوليد.",
+  ],
   image_probe_model_not_supported: [
     "所选模型不是图片模型，请使用对应的任务 API。",
     "The selected model is not an image model. Use the appropriate task API.",
@@ -90,6 +115,18 @@ export function ChannelProbeResult({
     label = result.ok
       ? text("图片生成成功", "Image generated", "تم توليد الصورة")
       : text("图片生成失败", "Image generation failed", "فشل توليد الصورة");
+  if (result.scope === "video_api")
+    label = result.ok
+      ? text(
+          "视频接口连通（生成未验证）",
+          "Video API accessible (generation not tested)",
+          "واجهة الفيديو متاحة (لم يُختبر التوليد)",
+        )
+      : text(
+          "视频接口连接失败",
+          "Video API connection failed",
+          "فشل الاتصال بواجهة الفيديو",
+        );
   if (result.scope === "local" && result.ok)
     label = text(
       "插件本地校验通过",
