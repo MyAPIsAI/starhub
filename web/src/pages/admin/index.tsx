@@ -178,6 +178,11 @@ export default function AdminPortal() {
     weight: 1,
   });
 
+  const pluginUnavailable =
+    channelForm.type === TASK_PLUGIN_CHANNEL_TYPE &&
+    (channelForm.status ?? 1) === 1 &&
+    !pluginsQuery.data?.some((plugin) => plugin.id === channelForm.task_plugin_id && plugin.enabled);
+
   // Redemption create modal state.
   const [redeemModalOpen, setRedeemModalOpen] = useState(false);
   const [redeemQuota, setRedeemQuota] = useState("10");
@@ -2597,8 +2602,7 @@ export default function AdminPortal() {
                 createChannelMut.isPending ||
                 updateChannelMut.isPending ||
                 pluginBusy ||
-                (channelForm.type === TASK_PLUGIN_CHANNEL_TYPE &&
-                  !channelForm.task_plugin_id)
+                pluginUnavailable
               }
             >
               {editingChannel
@@ -2612,7 +2616,7 @@ export default function AdminPortal() {
           id="admin-channel-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (pluginBusy) return;
+            if (pluginBusy || pluginUnavailable) return;
             if (editingChannel) {
               updateChannelMut.mutate(
                 { ...channelForm, id: editingChannel },

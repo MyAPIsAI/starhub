@@ -35,6 +35,14 @@ export function TaskPluginChannel({
     try {
       const plugin = await upload.mutateAsync(await loadSource());
       await versions.refetch();
+      if (!plugin.enabled)
+        throw new Error(
+          text(
+            "该插件版本已禁用，请先在插件管理中启用，或选择其他版本。",
+            "This plugin version is disabled. Enable it in plugin management or select another version.",
+            "إصدار الإضافة معطّل. فعّله من إدارة الإضافات أو اختر إصدارًا آخر.",
+          ),
+        );
       if (mounted.current) onChange(plugin.id);
     } catch (failure) {
       if (mounted.current)
@@ -71,7 +79,7 @@ export function TaskPluginChannel({
             : text("选择版本", "Select a version", "اختر إصداراً")}
         </option>
         {versions.data?.map((plugin) => (
-          <option key={plugin.id} value={plugin.id}>
+          <option key={plugin.id} value={plugin.id} disabled={!plugin.enabled}>
             {plugin.key} {plugin.version}
             {plugin.enabled ? "" : text("（已禁用）", " (disabled)", " (معطل)")}
           </option>

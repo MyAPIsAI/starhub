@@ -248,6 +248,36 @@ try {
   );
   assert.equal(await dialog.locator("#ch-plugin").inputValue(), pluginId);
   assert.equal((await api("GET", "/api/task-plugin")).length, 1);
+  await api("PUT", `/api/task-plugin/${pluginId}`, { enabled: false });
+  await dialog
+    .getByRole("button", { name: "Add OpenAI video plugin", exact: true })
+    .click();
+  await dialog
+    .getByRole("alert")
+    .filter({ hasText: "This plugin version is disabled" })
+    .waitFor();
+  assert.equal(
+    await dialog
+      .getByRole("button", { name: "Create", exact: true })
+      .isDisabled(),
+    true,
+  );
+  assert.equal(
+    await dialog.locator(`#ch-plugin option[value="${pluginId}"]`).isDisabled(),
+    true,
+  );
+  assert.equal((await api("GET", "/api/task-plugin"))[0].enabled, false);
+  await api("PUT", `/api/task-plugin/${pluginId}`, { enabled: true });
+  await dialog
+    .getByRole("button", { name: "Add OpenAI video plugin", exact: true })
+    .click();
+  await page.waitForFunction(
+    () => !document.querySelector("#ch-plugin")?.disabled,
+  );
+  assert.equal(await dialog.getByRole("alert").count(), 0);
+  report.checks.push(
+    "disabled plugin registration preserves disablement and cannot create an enabled channel",
+  );
   await dialog
     .getByRole("button", { name: "Use plugin models", exact: true })
     .click();

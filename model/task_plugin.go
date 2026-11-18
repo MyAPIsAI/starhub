@@ -92,6 +92,9 @@ func validateTaskPluginChannel(tx *gorm.DB, c *Channel) error {
 	if err := tx.First(&p, "id = ?", c.TaskPluginID).Error; err != nil {
 		return errors.New("plugin version not found")
 	}
+	if c.Status == common.ChannelStatusEnabled && !p.Enabled {
+		return errors.New("task plugin version is disabled; enable it before enabling the channel")
+	}
 	var meta taskplugin.Meta
 	if err := json.Unmarshal([]byte(p.MetaJSON), &meta); err != nil {
 		return errors.New("invalid stored plugin metadata")

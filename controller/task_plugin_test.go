@@ -332,6 +332,42 @@ func TestPluginVersionImmutableAndMigration(t *testing.T) {
 	}
 }
 
+func TestDisabledTaskPluginChannelConfiguration(t *testing.T) {
+	newTestDB(t)
+	plugin := saveExamplePlugin(t, "")
+	ch := &model.Channel{Name: "disabled plugin", Type: channel.ChannelTypeTaskPlugin, TaskPluginID: plugin.ID, Key: "fixture-key", BaseURL: "https://example.test", Models: "sora-2", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1}
+	if err := model.InsertChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.SetTaskPluginEnabled(plugin.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	response := call(UploadTaskPlugin, testRequest{method: "POST", target: "/api/task-plugin", body: fmt.Sprintf(`{"source":%q}`, plugin.Source)})
+	var repeated model.TaskPlugin
+	decodeData(t, response, &repeated)
+	if repeated.Enabled {
+		t.Fatal("repeated upload re-enabled a disabled plugin")
+	}
+	response = call(CreateChannel, testRequest{method: "POST", target: "/api/channel", body: fmt.Sprintf(`{"type":61,"task_plugin_id":%d,"name":"blocked","key":"fixture-key","base_url":"https://example.test","models":"sora-2"}`, plugin.ID)})
+	expectStatus(t, response, http.StatusBadRequest)
+	if err := model.UpdateChannelStatus(ch.ID, common.ChannelStatusManuallyDisabled); err != nil {
+		t.Fatal(err)
+	}
+	response = call(UpdateChannel, testRequest{method: "PUT", target: "/api/channel", body: fmt.Sprintf(`{"id":%d,"name":"maintenance"}`, ch.ID)})
+	expectStatus(t, response, http.StatusOK)
+	response = call(UpdateChannel, testRequest{method: "PUT", target: "/api/channel", body: fmt.Sprintf(`{"id":%d,"status":1}`, ch.ID)})
+	expectStatus(t, response, http.StatusBadRequest)
+	if err := model.UpdateChannelStatus(ch.ID, common.ChannelStatusEnabled); !errors.Is(err, model.ErrTaskPluginConfiguration) {
+		t.Fatalf("disabled plugin status update was accepted: %v", err)
+	}
+	if err := model.SetTaskPluginEnabled(plugin.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.UpdateChannelStatus(ch.ID, common.ChannelStatusEnabled); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPluginSubmissionProtectsOnlyItsChannel(t *testing.T) {
 	newTestDB(t)
 	if err := setting.UpdatePricing(setting.OptionKeyModelPrice, `{"sora-2":0.01}`); err != nil {

@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"starhub/common"
+	"starhub/relay/channel"
 )
 
 var ErrChannelNotFound = errors.New("channel not found")
@@ -133,6 +134,24 @@ func ListChannels() ([]Channel, error) {
 
 func UpdateChannelStatus(id int64, status int) error {
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
+		if status == common.ChannelStatusEnabled {
+			var ch Channel
+			if err := tx.Select("id", "type", "task_plugin_id").First(&ch, "id = ?", id).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrChannelNotFound
+				}
+				return err
+			}
+			if ch.Type == channel.ChannelTypeTaskPlugin {
+				var enabled int64
+				if err := tx.Model(&TaskPlugin{}).Where("id = ? AND enabled = ?", ch.TaskPluginID, true).Count(&enabled).Error; err != nil {
+					return err
+				}
+				if enabled == 0 {
+					return fmt.Errorf("%w: task plugin version is disabled or unavailable", ErrTaskPluginConfiguration)
+				}
+			}
+		}
 		res := tx.Model(&Channel{}).Where("id = ?", id).Updates(map[string]any{"status": status})
 		if res.Error != nil {
 			return res.Error
