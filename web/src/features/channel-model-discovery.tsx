@@ -127,6 +127,16 @@ const domains: Record<string, [string, string, string]> = {
   Embedding: ["向量化", "Embeddings", "التضمينات"],
 };
 
+// Reference IDs from the Ark video tutorial, checked on 2026-11-18.
+// https://docs.volcengine.com/docs/ark/video-generation-tutorial?lang=en
+const arkVideoModels = [
+  "doubao-seedance-2-0-260128",
+  "doubao-seedance-2-0-fast-260128",
+  "doubao-seedance-2-0-mini-260615",
+  "doubao-seedance-2-5-260628",
+  "doubao-seedance-1-0-pro-250528",
+];
+
 export function ChannelModelDiscovery({
   connection,
   models,
@@ -187,6 +197,7 @@ export function ChannelModelDiscovery({
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState("");
+  const [builtin, setBuiltin] = useState(false);
 
   useEffect(() => {
     sequence.current++;
@@ -197,6 +208,7 @@ export function ChannelModelDiscovery({
     setSelected([]);
     setSearch("");
     setNotice("");
+    setBuiltin(false);
     return () => {
       sequence.current++;
       active.current?.abort();
@@ -228,7 +240,11 @@ export function ChannelModelDiscovery({
   }
   const coherent = state.signature === signature;
   const loading = coherent && state.status === "loading";
-  const success = coherent && state.status === "success";
+  const success = builtin || (coherent && state.status === "success");
+  const shownModels = builtin ? arkVideoModels : state.models;
+  const shownCapabilities = builtin
+    ? Object.fromEntries(arkVideoModels.map((id) => [id, "VideoGeneration"]))
+    : state.capabilities;
   const current = [
     ...new Set(
       models
@@ -237,9 +253,9 @@ export function ChannelModelDiscovery({
         .filter(Boolean),
     ),
   ];
-  const fetched = new Set(state.models);
+  const fetched = new Set(shownModels);
   const unlisted = current.filter((model) => !fetched.has(model));
-  const filtered = state.models.filter((model) =>
+  const filtered = shownModels.filter((model) =>
     model.toLowerCase().includes(search.trim().toLowerCase()),
   );
 
@@ -252,6 +268,7 @@ export function ChannelModelDiscovery({
     setState({ status: "loading", signature, models: [] });
     setSelected([]);
     setNotice("");
+    setBuiltin(false);
     try {
       const catalog = await fetchChannelModels(
         { ...connection, key_index: keyIndex >= 0 ? keyIndex : undefined },
@@ -337,7 +354,7 @@ export function ChannelModelDiscovery({
   const failure = state.error && errors[state.error];
   const applySelection = (replace = false) => {
     const ids = [...new Set([...(replace ? [] : current), ...selected])];
-    const hints = { ...capabilities, ...state.capabilities };
+    const hints = { ...capabilities, ...shownCapabilities };
     onChange(
       ids.join(","),
       Object.fromEntries(
@@ -378,6 +395,33 @@ export function ChannelModelDiscovery({
                   "Fetch upstream models",
                   "جلب نماذج المزود",
                 )}
+          </Button>
+        )}
+        {connection.type === 32 && (
+          <Button
+            size="small"
+            type="button"
+            variant="secondary"
+            disabled={disabled}
+            onClick={() => {
+              sequence.current++;
+              active.current?.abort();
+              setState((previous) =>
+                previous.status === "loading"
+                  ? { status: "idle", models: [] }
+                  : previous,
+              );
+              setBuiltin(true);
+              setSelected(current.filter((id) => arkVideoModels.includes(id)));
+              setSearch("");
+              setNotice("");
+            }}
+          >
+            {text(
+              "选择内置视频模型",
+              "Choose built-in video models",
+              "اختيار نماذج الفيديو المضمنة",
+            )}
           </Button>
         )}
       </div>
@@ -611,27 +655,47 @@ export function ChannelModelDiscovery({
       {success && (
         <section
           className="channel-model-results"
-          aria-label={text(
-            "上游模型选择",
-            "Upstream model selection",
-            "اختيار نماذج المزود",
-          )}
+          aria-label={
+            builtin
+              ? text(
+                  "内置视频模型选择",
+                  "Built-in video model selection",
+                  "اختيار نماذج الفيديو المضمنة",
+                )
+              : text(
+                  "上游模型选择",
+                  "Upstream model selection",
+                  "اختيار نماذج المزود",
+                )
+          }
         >
           <p>
-            {text(
-              `获取到 ${state.models.length} 个模型，已选 ${selected.length} 个。`,
-              `Fetched ${state.models.length} models; ${selected.length} selected.`,
-              `تم جلب ${state.models.length} نموذجًا؛ المحدد ${selected.length}.`,
-            )}
+            {builtin
+              ? text(
+                  `内置 ${shownModels.length} 个参考模型，已选 ${selected.length} 个。`,
+                  `Built-in references: ${shownModels.length}; ${selected.length} selected.`,
+                  `نماذج مرجعية مضمنة: ${shownModels.length}؛ المحدد ${selected.length}.`,
+                )
+              : text(
+                  `获取到 ${shownModels.length} 个模型，已选 ${selected.length} 个。`,
+                  `Fetched ${shownModels.length} models; ${selected.length} selected.`,
+                  `تم جلب ${shownModels.length} نموذجًا؛ المحدد ${selected.length}.`,
+                )}
           </p>
           <p className="channel-model-hint">
-            {text(
-              "目录不代表实测可用。只填入表单，保存后生效；已有模型会保留。",
-              "Catalog entries are not tested. Fill the form, then save to apply. Existing models are retained.",
-              "عناصر الدليل غير مختبرة. املأ النموذج ثم احفظ للتطبيق. تُحفظ النماذج الحالية.",
-            )}
+            {builtin
+              ? text(
+                  "软件内置参考列表；账号权限与视频生成尚未验证。请确认账号已开通所选版本；列表可能不完整，其他版本或 Endpoint ID 可手动填写。",
+                  "Software-provided reference list; account access and video generation are unverified. Confirm access to the selected version. Other versions or Endpoint IDs can be entered manually.",
+                  "قائمة مرجعية مضمنة؛ لم تُختبر صلاحيات الحساب أو توليد الفيديو. تحقق من إتاحة الإصدار لحسابك. يمكن إدخال إصدارات أخرى أو معرّفات نقاط النهاية يدويًا.",
+                )
+              : text(
+                  "目录不代表实测可用。只填入表单，保存后生效；已有模型会保留。",
+                  "Catalog entries are not tested. Fill the form, then save to apply. Existing models are retained.",
+                  "عناصر الدليل غير مختبرة. املأ النموذج ثم احفظ للتطبيق. تُحفظ النماذج الحالية.",
+                )}
           </p>
-          {state.models.length === 0 ? (
+          {shownModels.length === 0 ? (
             <p>
               {text(
                 "上游未返回模型，可重试或手动填写。",
@@ -712,8 +776,8 @@ export function ChannelModelDiscovery({
                     />
                     <span dir="auto">
                       {model}
-                      {domains[state.capabilities?.[model] ?? ""]
-                        ? ` · ${text(...domains[state.capabilities![model]])}`
+                      {domains[shownCapabilities?.[model] ?? ""]
+                        ? ` · ${text(...domains[shownCapabilities![model]])}`
                         : ""}
                     </span>
                   </label>
@@ -748,9 +812,9 @@ export function ChannelModelDiscovery({
           {unlisted.length > 0 && (
             <p className="channel-model-hint">
               {text(
-                "现有但未在目录中返回的模型仍保留：",
-                "Existing models absent from this catalog are retained:",
-                "تُحفظ النماذج الحالية غير الواردة في الدليل:",
+                "现有但未在此列表中的模型仍保留：",
+                "Existing models absent from this list are retained:",
+                "تُحفظ النماذج الحالية غير الواردة في هذه القائمة:",
               )}{" "}
               <span dir="auto">{unlisted.join(", ")}</span>
             </p>

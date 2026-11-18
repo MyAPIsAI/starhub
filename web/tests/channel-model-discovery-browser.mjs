@@ -1244,6 +1244,78 @@ try {
   assert.deepEqual(afterDiscovery, credentialChannel);
   assert.equal(/rejected-key|accepted-key|third-key|draft-selection-key/.test(await dialog.innerText()), false);
   report.checks.push("explicit key selection, draft precedence, reset and pending-request cancellation preserve saved credentials and channel state");
+  await page.evaluate(async () => {
+    const {usePreferences} = await import("/src/lib/preferences.ts");
+    usePreferences.getState().setLanguage("en");
+  });
+  await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
+  await page.setViewportSize({width:1440,height:1000});
+  await openNew();
+  await dialog.locator("#ch-type").selectOption("32");
+  await dialog.locator("#ch-name").fill("Offline video channel");
+  await dialog.locator("#ch-base-url").fill(upstreamBase + "/auth");
+  await dialog.locator("#ch-models").fill("ep-manual");
+  await dialog.locator("#ch-key").fill("");
+  const builtinButton = () => dialog.getByRole("button", {name:"Choose built-in video models",exact:true});
+  const localHits = hits.length;
+  const localWrites = channelWrites;
+  await builtinButton().click();
+  const builtinRegion = dialog.getByRole("region", {name:"Built-in video model selection",exact:true});
+  await builtinRegion.waitFor();
+  assert.equal(await builtinRegion.getByRole("checkbox").count(),5);
+  assert.equal(hits.length,localHits);
+  assert.equal(channelWrites,localWrites);
+  await builtinRegion.getByText(/account access and video generation are unverified/).waitFor();
+  await builtinRegion.getByRole("checkbox",{name:/doubao-seedance-2-0-260128/}).check();
+  await builtinRegion.getByRole("button",{name:"Add selected models",exact:true}).click();
+  assert.equal(await dialog.locator("#ch-models").inputValue(),"ep-manual,doubao-seedance-2-0-260128");
+  await dialog.locator("#ch-key").fill("rejected-key");
+  assert.equal(await builtinRegion.count(),0);
+  await discover().click();
+  await dialog.getByRole("alert").filter({hasText:"Upstream returned 401"}).waitFor();
+  const afterFailedCatalog = hits.length;
+  await builtinButton().click();
+  await builtinRegion.waitFor();
+  assert.equal(hits.length,afterFailedCatalog);
+  await dialog.getByRole("alert").filter({hasText:"Upstream returned 401"}).waitFor();
+  assert.equal(await dialog.getByText(/Fetched \d+ models/).count(),0);
+  for (const language of ["zh","en","ar"]) {
+    for (const theme of ["light","dark"]) {
+      await page.evaluate(async ({language,theme}) => {
+        const {usePreferences} = await import("/src/lib/preferences.ts");
+        usePreferences.getState().setLanguage(language);
+        usePreferences.getState().setTheme(theme);
+      },{language,theme});
+      await page.setViewportSize({width:320,height:844});
+      await dialog.locator(".channel-model-results").scrollIntoViewIfNeeded();
+      assert.equal(await dialog.locator(".channel-model-discovery").evaluate(node=>node.scrollWidth>node.clientWidth+1),false);
+      await capture(`builtin-video-${language}-${theme}-320`);
+    }
+  }
+  assert.deepEqual((await new AxeBuilder({page}).include(".channel-model-discovery").withTags(["wcag2a","wcag2aa"]).analyze()).violations,[]);
+  await page.evaluate(async () => {
+    const {usePreferences} = await import("/src/lib/preferences.ts");
+    usePreferences.getState().setLanguage("en");
+  });
+  await page.setViewportSize({width:1440,height:1000});
+  await builtinRegion.getByRole("button",{name:"Use selected models only",exact:true}).click();
+  await dialog.getByRole("button",{name:"Create",exact:true}).click();
+  await dialog.waitFor({state:"hidden"});
+  const offlineChannel=(await api("GET","/api/channel")).find(ch=>ch.name==="Offline video channel");
+  assert.equal(offlineChannel.models,"doubao-seedance-2-0-260128");
+  assert.deepEqual(offlineChannel.model_capabilities,{"doubao-seedance-2-0-260128":"VideoGeneration"});
+  assert.equal(hits.length,afterFailedCatalog);
+  await page.getByRole("row").filter({hasText:"Offline video channel"}).getByRole("button",{name:"Edit",exact:true}).click();
+  await dialog.locator("#ch-key").fill("fixture-key");
+  await dialog.locator("#ch-base-url").fill(upstreamBase + "/slow");
+  await discover().click();
+  await dialog.getByRole("button",{name:"Fetching…",exact:true}).waitFor();
+  await builtinButton().click();
+  await page.waitForTimeout(700);
+  assert.equal(await builtinRegion.getByRole("checkbox").count(),5);
+  assert.equal(await dialog.getByRole("region",{name:"Upstream model selection",exact:true}).count(),0);
+  await dialog.getByRole("button",{name:"Cancel",exact:true}).click();
+  report.checks.push("built-in Ark video references work without credentials or HTTP, retain online authentication errors, save only explicit selections and discard in-flight catalogs");
   assert.deepEqual(report.pageErrors, []);
   assert.equal(logs.includes("replacement-fixture-key"), false);
   console.log(JSON.stringify(report, null, 2));
