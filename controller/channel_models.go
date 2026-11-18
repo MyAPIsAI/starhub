@@ -53,8 +53,12 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 		baseURL = *input.BaseURL
 	}
 	auth := "bearer"
+	normalizeBase := service.NormalizeChannelModelsBaseURL
+	fetchModels := service.FetchChannelModelsWithAuth
 	var pluginModels []string
 	if input.Type == channel.ChannelTypeTaskPlugin {
+		normalizeBase = service.NormalizeTaskPluginModelsBaseURL
+		fetchModels = service.FetchTaskPluginChannelModels
 		if input.TaskPluginID == 0 && saved != nil && saved.Type == input.Type {
 			input.TaskPluginID = saved.TaskPluginID
 		}
@@ -69,14 +73,14 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 		}
 		auth, pluginModels = plugin.Meta.Auth, plugin.Meta.Models
 	}
-	base, err := service.NormalizeChannelModelsBaseURL(baseURL)
+	base, err := normalizeBase(baseURL)
 	if err != nil {
 		common.ApiError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	key := strings.TrimSpace(input.Key)
 	if key == "" && saved != nil {
-		savedBase, err := service.NormalizeChannelModelsBaseURL(saved.BaseURL)
+		savedBase, err := normalizeBase(saved.BaseURL)
 		if err != nil || savedBase != base || saved.Type != input.Type ||
 			(input.Type == channel.ChannelTypeTaskPlugin && saved.TaskPluginID != input.TaskPluginID) {
 			common.ApiError(w, http.StatusBadRequest, "models_changed_connection_requires_key")
@@ -97,7 +101,7 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "models_key_required")
 		return
 	}
-	models, err := service.FetchChannelModelsWithAuth(r.Context(), base, key, auth)
+	models, err := fetchModels(r.Context(), base, key, auth)
 	if err != nil {
 		var failure *service.ChannelModelsError
 		if errors.As(err, &failure) {

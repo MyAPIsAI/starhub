@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"starhub/pkg/taskplugin"
 )
 
 // ChannelModelsError contains only controlled, credential-free API messages.
@@ -50,7 +52,39 @@ func FetchChannelModelsWithAuth(ctx context.Context, baseURL, key, auth string) 
 	if err != nil {
 		return nil, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/models", nil)
+	return fetchChannelModels(ctx, base+"/v1/models", key, auth)
+}
+
+// NormalizeTaskPluginModelsBaseURL preserves the adapter's configured path prefix.
+func NormalizeTaskPluginModelsBaseURL(raw string) (string, error) {
+	base := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if _, err := (taskplugin.Request{Method: http.MethodGet, Path: "/"}).URL(base, http.MethodGet); err != nil {
+		return "", &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
+	}
+	u, _ := url.Parse(base)
+	u.Host = strings.ToLower(u.Host)
+	return u.String(), nil
+}
+
+// FetchTaskPluginChannelModels keeps an existing API version prefix intact.
+func FetchTaskPluginChannelModels(ctx context.Context, baseURL, key, auth string) ([]string, error) {
+	base, err := NormalizeTaskPluginModelsBaseURL(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	path := "/v1/models"
+	if strings.HasSuffix(base, "/v1") {
+		path = "/models"
+	}
+	endpoint, err := (taskplugin.Request{Method: http.MethodGet, Path: path}).URL(base, http.MethodGet)
+	if err != nil {
+		return nil, &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
+	}
+	return fetchChannelModels(ctx, endpoint, key, auth)
+}
+
+func fetchChannelModels(ctx context.Context, endpoint, key, auth string) ([]string, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
 	}

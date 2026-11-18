@@ -194,6 +194,15 @@ func TestFetchTaskPluginChannelModels(t *testing.T) {
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("plugin discovery changed saved channel configuration")
 	}
+	saved.BaseURL = upstream.URL + "/v1"
+	if err := model.UpdateChannel(saved); err != nil {
+		t.Fatal(err)
+	}
+	decodeData(t, fetch(map[string]any{"channel_id": saved.ID}), &ids)
+	if authorization != "Bearer saved-key" || !reflect.DeepEqual(ids, []string{"sora-2-pro", "sora-2"}) {
+		t.Fatal("version-prefixed plugin discovery did not preserve its endpoint or credential")
+	}
+	expectError(t, fetch(map[string]any{"channel_id": saved.ID, "base_url": upstream.URL}), 400, "models_changed_connection_requires_key")
 }
 
 func TestFetchChannelModelsUpstreamFailuresAndLimits(t *testing.T) {
