@@ -2292,6 +2292,7 @@ export default function AdminPortal() {
             <Input
               id="ch-key"
               type="password"
+              autoComplete="new-password"
               value={channelForm.key}
               onChange={(e) =>
                 setChannelForm((f) => ({ ...f, key: e.target.value }))

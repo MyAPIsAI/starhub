@@ -208,6 +208,7 @@ try {
       .click();
     await dialog.locator("#ch-name").fill("Discovery channel");
     await dialog.locator("#ch-key").fill("fixture-key");
+    await dialog.getByText("Discovery uses the key entered in this form instead of the saved key.", { exact: true }).waitFor();
     await dialog.locator("#ch-base-url").fill(upstreamBase);
   };
   const searchWithoutSaving = async () => {
@@ -971,6 +972,8 @@ try {
     .getByRole("button", { name: "Edit", exact: true })
     .click();
   assert.equal(await dialog.locator("#ch-key").inputValue(), "");
+  assert.equal(await dialog.locator("#ch-key").getAttribute("autocomplete"), "new-password");
+  await dialog.getByText("Discovery uses the first enabled saved key.", { exact: false }).waitFor();
   await discover().click();
   await dialog
     .getByRole("checkbox", { name: "model-a", exact: true })

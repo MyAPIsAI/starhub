@@ -349,6 +349,27 @@ export function ChannelModelDiscovery({
         }
         placeholder="gpt-4.1,claude-sonnet-4-20250514"
       />
+      {supported && (
+        <p className="channel-model-hint">
+          {connection.key?.trim()
+            ? text(
+                "本次获取使用表单新填的密钥，优先于已保存密钥。",
+                "Discovery uses the key entered in this form instead of the saved key.",
+                "يستخدم الجلب المفتاح المُدخل في النموذج بدلًا من المفتاح المحفوظ.",
+              )
+            : connection.channel_id
+              ? text(
+                  "本次获取使用已保存的首个启用密钥；填写新密钥可替换本次查询凭据。",
+                  "Discovery uses the first enabled saved key. Enter a new key to override it for this query.",
+                  "يستخدم الجلب أول مفتاح محفوظ مُفعّل. أدخل مفتاحًا جديدًا لاستبداله لهذا الاستعلام.",
+                )
+              : text(
+                  "请先填写当前上游的 API Key，再获取模型。",
+                  "Enter this upstream's API key before fetching models.",
+                  "أدخل مفتاح هذا المزود قبل جلب النماذج.",
+                )}
+        </p>
+      )}
       {invalidArkName && (
         <p role="alert" className="channel-model-error">
           {text(
@@ -446,6 +467,17 @@ export function ChannelModelDiscovery({
             )}
           </p>
         )}
+        {coherent &&
+          connection.type === 32 &&
+          state.error === "upstream_models_authentication_failed" && (
+            <p className="channel-model-hint">
+              {text(
+                "请核对上方密钥来源。方舟官方地址需使用方舟 API Key；若编辑时想用原密钥，请清空新填密钥后重试。可在方舟控制台核对密钥有效性，并通过请求 ID 排查认证失败。",
+                "Check the key source above. Official Ark URLs require an Ark API key. To use the saved key while editing, clear the entered key and retry. Check key validity in the Ark console and use the request ID to investigate authentication failures.",
+                "تحقق من مصدر المفتاح أعلاه. تتطلب عناوين Ark الرسمية مفتاح Ark. لاستخدام المفتاح المحفوظ أثناء التعديل، امسح المفتاح المُدخل وأعد المحاولة. تحقق من صلاحيته في لوحة Ark واستخدم معرّف الطلب لتتبع فشل المصادقة.",
+              )}
+            </p>
+          )}
         {(state.status === "stale" ||
           (!coherent && state.status !== "idle")) && (
           <p role="status">
