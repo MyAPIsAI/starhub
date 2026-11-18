@@ -496,7 +496,7 @@ try {
     }),
   );
   await arkRow
-    .getByRole("button", { name: "Check catalog", exact: true })
+    .getByRole("button", { name: "Test", exact: true })
     .click();
   const diagnosis = arkRow.getByRole("alert");
   await diagnosis.getByText(/not in the upstream catalog/).waitFor();
@@ -528,7 +528,7 @@ try {
     "catalog failures show localized reasons, the tested model and elapsed time without hovering in three narrow-screen languages",
   );
   await arkRow
-    .getByRole("button", { name: "Check catalog", exact: true })
+    .getByRole("button", { name: "Test", exact: true })
     .click();
   await arkRow.getByText(/Catalog accessible/).waitFor();
   assert.equal(
@@ -537,7 +537,7 @@ try {
   );
   const actions = arkRow.locator(".channel-probe-actions");
   const catalogBox = await actions
-    .getByRole("button", { name: "Check catalog", exact: true })
+    .getByRole("button", { name: "Test", exact: true })
     .boundingBox();
   const generateBox = await actions
     .getByRole("button", {
@@ -649,7 +649,7 @@ try {
     .getByRole("button", { name: "Close", exact: true })
     .click();
   await arkRow
-    .getByRole("button", { name: "Check catalog", exact: true })
+    .getByRole("button", { name: "Test", exact: true })
     .click();
   await arkRow.getByText(/Catalog accessible/).waitFor();
   await page.route("**/probe.svg", (route) =>
@@ -702,7 +702,7 @@ try {
     "generated images can be previewed, copied and opened; catalog checks and preview reloads preserve the image without new generation requests",
   );
   report.checks.push(
-    "image models use labeled catalog checks; only explicit image tests generate an image",
+    "image models keep catalog-only connectivity checks; only explicit image tests generate an image",
   );
   await api("PUT", "/api/channel", {
     id: arkChannel.id,

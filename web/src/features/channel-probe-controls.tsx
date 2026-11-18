@@ -32,10 +32,6 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
   const [result, setResult] = useState<ChannelTestResult>();
   const [image, setImage] = useState<ChannelTestResult>();
   const imagePending = test.isPending && test.variables?.mode === "image";
-  const firstDomain =
-    channel.model_capabilities?.[channel.models.split(",")[0]?.trim()];
-  const catalogOnly =
-    channel.type === 32 && firstDomain && !["LLM", "VLM"].includes(firstDomain);
   const run = (model?: string, mode?: "image") => {
     if (test.isPending) return;
     setResult(undefined);
@@ -74,9 +70,7 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
           <Activity size={14} aria-hidden="true" />
           {test.isPending && !imagePending
             ? text("测试中…", "Testing…", "اختبار…")
-            : catalogOnly
-              ? text("目录检查", "Check catalog", "فحص الدليل")
-              : text("测试连通", "Test", "اختبار")}
+            : text("测试连通", "Test", "اختبار")}
         </Button>
         <ArkImageProbe
           channel={channel}
