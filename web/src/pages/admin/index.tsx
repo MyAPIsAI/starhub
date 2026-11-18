@@ -1363,102 +1363,36 @@ export default function AdminPortal() {
             </section>
 
             {/* Upstream usage reconciliation modal */}
-            {upstreamError && (
-              <div
-                style={{
-                  position: "fixed",
-                  inset: 0,
-                  background: "rgba(0,0,0,0.4)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  zIndex: 1000,
-                }}
-                onClick={() => setUpstreamError(null)}
-              >
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    background: "var(--bg)",
-                    borderRadius: 12,
-                    padding: 24,
-                    maxWidth: 480,
-                    width: "90%",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
-                  }}
-                >
-                  <p style={{ color: "var(--danger)", margin: "0 0 16px 0" }}>
-                    {upstreamError}
-                  </p>
-                  <Button
-                    size="small"
-                    variant="secondary"
-                    onClick={() => setUpstreamError(null)}
-                  >
-                    {text("关闭", "Close", "إغلاق")}
-                  </Button>
-                </div>
-              </div>
-            )}
-            {upstreamModal && (
-              <div
-                style={{
-                  position: "fixed",
-                  inset: 0,
-                  background: "rgba(0,0,0,0.4)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  zIndex: 1000,
-                }}
-                onClick={() => setUpstreamModal(null)}
-              >
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    background: "var(--bg)",
-                    borderRadius: 12,
-                    padding: 24,
-                    maxWidth: 680,
-                    width: "90%",
-                    maxHeight: "80vh",
-                    overflow: "auto",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 16,
-                    }}
-                  >
-                    <h3 style={{ margin: 0, fontSize: "var(--text-lg)" }}>
-                      {text(
-                        "上游对账",
-                        "Upstream Reconciliation",
-                        "مطابقة المنبع",
-                      )}
-                    </h3>
-                    <Button
-                      size="small"
-                      variant="secondary"
-                      onClick={() => setUpstreamModal(null)}
-                    >
-                      {text("关闭", "Close", "إغلاق")}
-                    </Button>
-                  </div>
-                  <p
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "var(--text-sm)",
-                      margin: "0 0 16px 0",
-                    }}
-                  >
-                    {upstreamModal.channel_name} (ID: {upstreamModal.channel_id}
-                    )
-                  </p>
+            <Modal
+              open={!!upstreamError}
+              onOpenChange={(open) => {
+                if (!open) setUpstreamError(null);
+              }}
+              title={text("查询失败", "Query failed", "فشل الاستعلام")}
+              description={text(
+                "上游用量查询失败，请稍后重试。",
+                "The upstream usage query failed. Retry later.",
+                "فشل استعلام استخدام المزود. أعد المحاولة لاحقًا.",
+              )}
+              size="compact"
+            >
+              <p role="alert">{upstreamError}</p>
+            </Modal>
+            <Modal
+              open={!!upstreamModal}
+              onOpenChange={(open) => {
+                if (!open) setUpstreamModal(null);
+              }}
+              title={text("上游对账", "Upstream Reconciliation", "مطابقة المنبع")}
+              description={
+                upstreamModal
+                  ? `${upstreamModal.channel_name} (ID: ${upstreamModal.channel_id})`
+                  : ""
+              }
+              size="wide"
+            >
+              {upstreamModal && (
+                <>
                   {!upstreamModal.supported ? (
                     <p style={{ color: "var(--muted)" }}>
                       {text(
@@ -1664,9 +1598,9 @@ export default function AdminPortal() {
                       </p>
                     </>
                   )}
-                </div>
-              </div>
-            )}
+                </>
+              )}
+            </Modal>
           </div>
         )}
 
