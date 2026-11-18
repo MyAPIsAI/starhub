@@ -7,27 +7,44 @@ export function TaskPluginChannel({
   value,
   onChange,
   disabled,
+  onBusyChange,
 }: {
   value: number;
   onChange: (id: number) => void;
   disabled: boolean;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const { text } = useSettingsText();
   const versions = useTaskPlugins();
   const upload = useUploadTaskPlugin();
   const [error, setError] = useState("");
+  const [working, setWorking] = useState(false);
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      onBusyChange(false);
     };
-  }, []);
-  const busy = disabled || upload.isPending;
-  const save = async (source: string) => {
-    const plugin = await upload.mutateAsync(source);
-    await versions.refetch();
-    if (mounted.current) onChange(plugin.id);
+  }, [onBusyChange]);
+  const busy = disabled || working;
+  const save = async (loadSource: () => Promise<string>) => {
+    setError("");
+    setWorking(true);
+    onBusyChange(true);
+    try {
+      const plugin = await upload.mutateAsync(await loadSource());
+      await versions.refetch();
+      if (mounted.current) onChange(plugin.id);
+    } catch (failure) {
+      if (mounted.current)
+        setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      if (mounted.current) {
+        setWorking(false);
+        onBusyChange(false);
+      }
+    }
   };
 
   return (
@@ -77,19 +94,14 @@ export function TaskPluginChannel({
         <Button
           size="small"
           disabled={busy}
-          loading={upload.isPending}
-          onClick={async () => {
-            setError("");
-            try {
-              const source =
-                await import("../../../plugins/tasks/openai-video.js?raw");
-              await save(source.default);
-            } catch (failure) {
-              setError(
-                failure instanceof Error ? failure.message : String(failure),
-              );
-            }
-          }}
+          loading={working}
+          onClick={() =>
+            void save(
+              async () =>
+                (await import("../../../plugins/tasks/openai-video.js?raw"))
+                  .default,
+            )
+          }
         >
           {text(
             "添加 OpenAI 视频插件",
@@ -121,8 +133,7 @@ export function TaskPluginChannel({
           const input = event.currentTarget;
           const file = input.files?.[0];
           if (!file) return;
-          setError("");
-          try {
+          await save(async () => {
             if (file.size > 262144)
               throw new Error(
                 text(
@@ -131,14 +142,9 @@ export function TaskPluginChannel({
                   "الملف كبير جداً",
                 ),
               );
-            await save(await file.text());
-          } catch (failure) {
-            setError(
-              failure instanceof Error ? failure.message : String(failure),
-            );
-          } finally {
-            input.value = "";
-          }
+            return file.text();
+          });
+          input.value = "";
         }}
       />
       {(error || versions.isError) && (

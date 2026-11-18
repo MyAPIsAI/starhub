@@ -163,6 +163,7 @@ export default function AdminPortal() {
 
   // Channel create/edit modal state.
   const [channelModalOpen, setChannelModalOpen] = useState(false);
+  const [pluginBusy, setPluginBusy] = useState(false);
   const [editingChannel, setEditingChannel] = useState<number | null>(null);
   const [channelForm, setChannelForm] = useState<ChannelInput>({
     name: "",
@@ -2595,6 +2596,7 @@ export default function AdminPortal() {
               disabled={
                 createChannelMut.isPending ||
                 updateChannelMut.isPending ||
+                pluginBusy ||
                 (channelForm.type === TASK_PLUGIN_CHANNEL_TYPE &&
                   !channelForm.task_plugin_id)
               }
@@ -2610,6 +2612,7 @@ export default function AdminPortal() {
           id="admin-channel-form"
           onSubmit={(e) => {
             e.preventDefault();
+            if (pluginBusy) return;
             if (editingChannel) {
               updateChannelMut.mutate(
                 { ...channelForm, id: editingChannel },
@@ -2660,6 +2663,7 @@ export default function AdminPortal() {
           </div>
           {channelForm.type === TASK_PLUGIN_CHANNEL_TYPE && (
             <TaskPluginChannel
+              onBusyChange={setPluginBusy}
               value={channelForm.task_plugin_id ?? 0}
               onChange={(id) =>
                 setChannelForm((form) => ({ ...form, task_plugin_id: id }))

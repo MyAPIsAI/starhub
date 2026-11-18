@@ -275,15 +275,55 @@ try {
     path.join(repo, "plugins/tasks/openai-video.js"),
     "utf8",
   );
+  let releaseUpload, uploadStarted;
+  const uploadGate = new Promise((resolve) => {
+    releaseUpload = resolve;
+  });
+  const started = new Promise((resolve) => {
+    uploadStarted = resolve;
+  });
+  await page.route("**/api/task-plugin", async (route) => {
+    if (route.request().method() === "POST") {
+      uploadStarted();
+      await uploadGate;
+    }
+    await route.continue();
+  });
   await dialog.locator("#ch-plugin-file").setInputFiles({
     name: "video-v2.js",
     mimeType: "text/javascript",
     buffer: Buffer.from(source.replace('version: "1.1.0"', 'version: "1.2.0"')),
   });
+  await started;
+  assert.equal(
+    await dialog
+      .getByRole("button", { name: "Create", exact: true })
+      .isDisabled(),
+    true,
+  );
+  const writesBeforeUpload = channelWrites;
+  await dialog
+    .locator("#admin-channel-form")
+    .evaluate((form) => form.requestSubmit());
+  assert.equal(channelWrites, writesBeforeUpload);
+  releaseUpload();
   await page.waitForFunction((previous) => {
     const select = document.querySelector("#ch-plugin");
     return select?.value && select.value !== previous;
   }, pluginId);
+  await page.waitForFunction(
+    () => !document.querySelector("#ch-plugin")?.disabled,
+  );
+  await page.unroute("**/api/task-plugin");
+  assert.equal(
+    await dialog
+      .getByRole("button", { name: "Create", exact: true })
+      .isEnabled(),
+    true,
+  );
+  report.checks.push(
+    "pending plugin upload blocks both button and programmatic channel submission",
+  );
   await dialog
     .getByRole("button", { name: "Refresh versions", exact: true })
     .click();
