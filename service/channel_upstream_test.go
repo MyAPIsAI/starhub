@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"starhub/common"
@@ -183,9 +184,10 @@ func TestMaskKey(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"sk-abc1234567def", "sk-abc1*****7def"},
-		{"short", "*****"},
-		{"sk-1234567890ab", "sk-1234****90ab"},
+		{"sk-abc1234567def", "sk-abc1********7def"},
+		{"short", "********"},
+		{"sk-1234567890ab", "sk-1234********90ab"},
+		{strings.Repeat("x", 200), "xxxxxxx********xxxx"},
 	}
 	for _, tc := range tests {
 		got := maskKey(tc.input)

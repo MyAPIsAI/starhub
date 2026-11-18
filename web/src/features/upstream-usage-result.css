@@ -1,0 +1,118 @@
+.upstream-usage {
+  min-width: 0;
+  font-size: 13px;
+}
+.usage-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.usage-summary > div {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--subtle);
+}
+.usage-summary span {
+  display: block;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.usage-summary strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.usage-exact {
+  margin-block: 16px 24px;
+}
+.usage-exact summary {
+  cursor: pointer;
+  color: var(--text);
+}
+.usage-exact dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 6px;
+}
+.usage-exact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.usage-keys {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.usage-keys caption {
+  text-align: start;
+  font-weight: 600;
+  margin-block-end: 10px;
+}
+.usage-keys th,
+.usage-keys td {
+  text-align: start;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.usage-keys th:first-child,
+.usage-keys td:first-child {
+  width: 32%;
+}
+.usage-keys td {
+  font-size: 12px;
+}
+.usage-keys td p {
+  margin-block: 6px 0;
+  font-family: var(--font-sans);
+}
+.usage-note {
+  margin-block: 20px 0;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.75;
+}
+@media (max-width: 640px) {
+  .usage-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .usage-keys,
+  .usage-keys tbody {
+    display: block;
+  }
+  .usage-keys caption {
+    display: block;
+  }
+  .usage-keys thead {
+    display: none;
+  }
+  .usage-keys tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-block-end: 12px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .usage-keys td {
+    display: block;
+    border: 0;
+  }
+  .usage-keys td:first-child {
+    width: auto;
+    grid-column: 1 / -1;
+  }
+  .usage-keys td::before {
+    content: attr(data-label);
+    display: block;
+    margin-block-end: 6px;
+    color: var(--secondary);
+    font-family: var(--font-sans);
+  }
+}

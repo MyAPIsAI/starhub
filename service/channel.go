@@ -365,12 +365,12 @@ func fetchOneUpstreamKey(ctx context.Context, base, key string, idx int) Upstrea
 }
 
 // maskKey returns a masked representation of a key for display: first 7 and
-// last 4 characters visible, middle replaced with asterisks.
+// last 4 characters visible, with a fixed-length masked middle.
 func maskKey(key string) string {
 	if len(key) <= 11 {
-		return strings.Repeat("*", len(key))
+		return "********"
 	}
-	return key[:7] + strings.Repeat("*", len(key)-11) + key[len(key)-4:]
+	return key[:7] + "********" + key[len(key)-4:]
 }
 
 func boundedUsageInteger(value *big.Int) int64 {

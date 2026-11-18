@@ -36,10 +36,18 @@ try {
       res.writeHead(404);
       res.end("{}");
     } else {
-      res.end(JSON.stringify({success: true, data: {
-        total_used: 1595625560, total_available: 500000,
-        total_granted: 1596125560, unlimited_quota: false, expires_at: 0
-      }}));
+      res.end(
+        JSON.stringify({
+          success: true,
+          data: {
+            total_used: 1595625560,
+            total_available: 500000,
+            total_granted: 1596125560,
+            unlimited_quota: false,
+            expires_at: 0,
+          },
+        }),
+      );
     }
   });
   await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
@@ -159,60 +167,114 @@ try {
   page.on("pageerror", (error) => report.pageErrors.push(String(error)));
   await page.goto(base + "/admin?tab=resources");
   await api("POST", "/api/channel", {
-    name: "Usage fixture", type: 1, key: "sk-fixture" + "x".repeat(160),
-    base_url: upstreamBase, models: "fixture-model", group: "default",
+    name: "Usage fixture",
+    type: 1,
+    key: "sk-fixture" + "x".repeat(160),
+    base_url: upstreamBase,
+    models: "fixture-model",
+    group: "default",
   });
   await page.reload();
   const row = page.getByRole("row").filter({ hasText: "Usage fixture" });
   const dialog = page.getByRole("dialog");
   await row.getByRole("button", { name: "Reconcile", exact: true }).click();
   await dialog.waitFor();
-  assert.match(await dialog.innerText(), /3,191\.251120000/);
+  assert.match(await dialog.innerText(), /\$3,191\.2511/);
+  await dialog.getByText("View exact amounts", {exact: true}).click();
+  assert.match(await dialog.innerText(), /\$3,191\.251120000/);
+  await dialog.getByText("View exact amounts", {exact: true}).click();
+  assert.ok((await dialog.locator(".usage-keys tbody td").first().innerText()).length < 30);
   for (const language of ["en", "zh", "ar"]) {
     for (const theme of ["light", "dark"]) {
-      await page.evaluate(async ({ language, theme }) => {
-        const { usePreferences } = await import("/src/lib/preferences.ts");
-        usePreferences.getState().setLanguage(language);
-        usePreferences.getState().setTheme(theme);
-      }, { language, theme });
+      await page.evaluate(
+        async ({ language, theme }) => {
+          const { usePreferences } = await import("/src/lib/preferences.ts");
+          usePreferences.getState().setLanguage(language);
+          usePreferences.getState().setTheme(theme);
+        },
+        { language, theme },
+      );
       for (const width of [1440, 320]) {
         await page.setViewportSize({ width, height: 900 });
         await page.waitForFunction(() => {
-          const box = document.querySelector('[role="dialog"]').getBoundingClientRect();
+          const box = document
+            .querySelector('[role="dialog"]')
+            .getBoundingClientRect();
           return box.x >= -1 && box.right <= innerWidth + 1;
         });
         const box = await dialog.boundingBox();
-        assert.ok(box.x >= -1 && box.x + box.width <= width + 1, JSON.stringify({language,theme,width,box}));
-        assert.notEqual(await dialog.evaluate(node => getComputedStyle(node).backgroundColor), "rgba(0, 0, 0, 0)");
-        await page.screenshot({ path: path.join(out, `usage-${language}-${theme}-${width}.png`) });
+        assert.ok(
+          box.x >= -1 && box.x + box.width <= width + 1,
+          JSON.stringify({ language, theme, width, box }),
+        );
+        assert.notEqual(
+          await dialog.evaluate(
+            (node) => getComputedStyle(node).backgroundColor,
+          ),
+          "rgba(0, 0, 0, 0)",
+        );
+        assert.equal(await dialog.locator(".task-dialog-body").evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
+        await dialog.locator(".usage-note").scrollIntoViewIfNeeded();
+        assert.ok(await dialog.getByRole("button").first().isVisible());
+        await page.screenshot({
+          path: path.join(out, `usage-${language}-${theme}-${width}.png`),
+        });
       }
     }
   }
+  const scan = await new AxeBuilder({page}).include(".upstream-usage").withTags(["wcag2a", "wcag2aa"]).analyze();
+  assert.deepEqual(scan.violations, []);
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "hidden" });
   assert.ok(await row.getByRole("button").first().count());
-  report.checks.push("usage dialog has an opaque background in three languages, two themes and desktop/narrow layouts; Escape closes it");
+  report.checks.push(
+    "usage dialog has an opaque background in three languages, two themes and desktop/narrow layouts; Escape closes it",
+  );
   await page.evaluate(async () => {
     const { usePreferences } = await import("/src/lib/preferences.ts");
     usePreferences.getState().setLanguage("en");
   });
-  await page.route("**/upstream-usage", route => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ success: false, message: "Fixture query failure" }) }));
+  await page.route("**/upstream-usage", (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: false,
+        message: "Fixture query failure",
+      }),
+    }),
+  );
   await row.getByRole("button", { name: "Reconcile", exact: true }).click();
   await dialog.getByRole("alert").waitFor();
-  assert.notEqual(await dialog.evaluate(node => getComputedStyle(node).backgroundColor), "rgba(0, 0, 0, 0)");
+  assert.notEqual(
+    await dialog.evaluate((node) => getComputedStyle(node).backgroundColor),
+    "rgba(0, 0, 0, 0)",
+  );
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "hidden" });
-  assert.equal(await row.getByRole("button", { name: "Reconcile", exact: true }).evaluate(node => node === document.activeElement), true);
-  report.checks.push("query error uses the shared modal and restores focus to the triggering button");
+  assert.equal(
+    await row
+      .getByRole("button", { name: "Reconcile", exact: true })
+      .evaluate((node) => node === document.activeElement),
+    true,
+  );
+  report.checks.push(
+    "query error uses the shared modal and restores focus to the triggering button",
+  );
   assert.deepEqual(report.pageErrors, []);
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   report.failure = String(error.stack || error);
   throw error;
 } finally {
-  await writeFile(path.join(out, "report.json"), JSON.stringify(report, null, 2));
+  await writeFile(
+    path.join(out, "report.json"),
+    JSON.stringify(report, null, 2),
+  );
   await browser?.close();
   await vite?.close();
   backend?.kill();
-  await new Promise(resolve => upstream ? upstream.close(resolve) : resolve());
+  await new Promise((resolve) =>
+    upstream ? upstream.close(resolve) : resolve(),
+  );
 }
