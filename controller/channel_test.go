@@ -14,6 +14,8 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/pkg/taskplugin"
+	"starhub/relay/channel"
 	"starhub/service"
 )
 
@@ -115,6 +117,82 @@ func TestFetchChannelModelsDraftAndSavedCredentials(t *testing.T) {
 	defaultBase, err := service.NormalizeChannelModelsBaseURL("")
 	if err != nil || defaultBase != "https://api.openai.com" {
 		t.Fatal("default upstream root was not resolved")
+	}
+}
+
+func TestFetchTaskPluginChannelModels(t *testing.T) {
+	newTestDB(t)
+	stored := saveExamplePlugin(t, "")
+	requests := 0
+	var authorization, apiKey string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		authorization, apiKey = r.Header.Get("Authorization"), r.Header.Get("x-api-key")
+		if r.Method != "GET" || r.URL.Path != "/v1/models" {
+			t.Errorf("unexpected discovery request: %s %s", r.Method, r.URL.Path)
+		}
+		fmt.Fprint(w, `{"data":[{"id":"chat-model"},{"id":"sora-2-pro"},{"id":"sora-2"}]}`)
+	}))
+	defer upstream.Close()
+	fetch := func(input map[string]any) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(input)
+		return call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: string(body), userID: 1, role: common.RoleAdmin})
+	}
+	input := map[string]any{"type": channel.ChannelTypeTaskPlugin, "task_plugin_id": stored.ID, "base_url": upstream.URL, "key": "draft-key"}
+	var ids []string
+	decodeData(t, fetch(input), &ids)
+	if !reflect.DeepEqual(ids, []string{"sora-2-pro", "sora-2"}) || authorization != "Bearer draft-key" || apiKey != "" {
+		t.Fatal("plugin discovery did not filter models or use bearer authentication")
+	}
+	var count int64
+	model.DB.Model(&model.Channel{}).Count(&count)
+	if count != 0 {
+		t.Fatal("draft discovery created a channel")
+	}
+	otherSource := strings.ReplaceAll(stored.Source, `version: "1.1.0"`, `version: "1.2.0"`)
+	otherSource = strings.ReplaceAll(otherSource, `auth: "bearer"`, `auth: "x-api-key"`)
+	compiled, err := taskplugin.Compile(context.Background(), otherSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := model.SaveTaskPlugin(otherSource, compiled.Meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input["task_plugin_id"] = other.ID
+	decodeData(t, fetch(input), &ids)
+	if apiKey != "draft-key" || authorization != "" {
+		t.Fatal("plugin discovery ignored x-api-key authentication")
+	}
+	saved := &model.Channel{Name: "plugin discovery", Type: channel.ChannelTypeTaskPlugin, TaskPluginID: stored.ID, BaseURL: upstream.URL, Key: "saved-key", Models: "sora-2", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1}
+	if err := model.InsertChannel(saved); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := model.GetChannelByID(saved.ID)
+	decodeData(t, fetch(map[string]any{"channel_id": saved.ID}), &ids)
+	if authorization != "Bearer saved-key" {
+		t.Fatal("saved plugin discovery did not use the stored key")
+	}
+	beforeRequests := requests
+	delete(input, "key")
+	input["channel_id"] = saved.ID
+	expectError(t, fetch(input), 400, "models_changed_connection_requires_key")
+	input["key"] = "replacement-key"
+	decodeData(t, fetch(input), &ids)
+	if apiKey != "replacement-key" {
+		t.Fatal("explicit key was not used for the changed plugin")
+	}
+	input["task_plugin_id"] = stored.ID + other.ID + 999
+	expectError(t, fetch(input), 400, "models_plugin_unavailable")
+	input["task_plugin_id"] = stored.ID
+	input["base_url"] = ""
+	expectError(t, fetch(input), 400, "invalid_models_base_url")
+	if requests != beforeRequests+1 {
+		t.Fatal("rejected plugin configuration reached upstream")
+	}
+	after, _ := model.GetChannelByID(saved.ID)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("plugin discovery changed saved channel configuration")
 	}
 }
 

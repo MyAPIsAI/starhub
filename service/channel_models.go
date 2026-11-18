@@ -41,6 +41,11 @@ func NormalizeChannelModelsBaseURL(raw string) (string, error) {
 
 // FetchChannelModels reads a catalog without probing or changing channel state.
 func FetchChannelModels(ctx context.Context, baseURL, key string) ([]string, error) {
+	return FetchChannelModelsWithAuth(ctx, baseURL, key, "bearer")
+}
+
+// FetchChannelModelsWithAuth uses the authentication scheme declared by the adapter.
+func FetchChannelModelsWithAuth(ctx context.Context, baseURL, key, auth string) ([]string, error) {
 	base, err := NormalizeChannelModelsBaseURL(baseURL)
 	if err != nil {
 		return nil, err
@@ -50,7 +55,14 @@ func FetchChannelModels(ctx context.Context, baseURL, key string) ([]string, err
 		return nil, &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
 	}
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "Bearer "+key)
+	switch auth {
+	case "bearer":
+		request.Header.Set("Authorization", "Bearer "+key)
+	case "x-api-key":
+		request.Header.Set("x-api-key", key)
+	default:
+		return nil, &ChannelModelsError{http.StatusBadRequest, "models_plugin_unavailable"}
+	}
 	client := &http.Client{
 		Timeout:       10 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },

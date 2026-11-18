@@ -9,6 +9,7 @@ import { apiPost, apiPut, apiDelete, apiRequest } from "./http";
 
 export interface ChannelModelsInput {
   channel_id?: number;
+  task_plugin_id?: number;
   type: number;
   base_url: string;
   key?: string;

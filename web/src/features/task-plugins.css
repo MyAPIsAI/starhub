@@ -84,6 +84,18 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
+.task-plugin-channel-field input[type="file"] {
+  max-width: 100%;
+  min-width: 0;
+}
+.task-plugin-channel-field .task-plugin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.task-plugin-channel-field [role="alert"] {
+  color: var(--danger, #b42318);
+}
 .task-plugin-channel-field span {
   color: var(--secondary);
   line-height: 1.5;

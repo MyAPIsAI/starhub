@@ -65,6 +65,7 @@ import {
   type Redemption,
 } from "../../lib/api/redemption";
 import { TaskPlugins } from "../../features/task-plugins";
+import { TaskPluginChannel } from "../../features/task-plugin-channel";
 import {
   useTaskPlugins,
   TASK_PLUGIN_CHANNEL_TYPE,
@@ -2592,7 +2593,10 @@ export default function AdminPortal() {
               type="submit"
               form="admin-channel-form"
               disabled={
-                createChannelMut.isPending || updateChannelMut.isPending
+                createChannelMut.isPending ||
+                updateChannelMut.isPending ||
+                (channelForm.type === TASK_PLUGIN_CHANNEL_TYPE &&
+                  !channelForm.task_plugin_id)
               }
             >
               {editingChannel
@@ -2655,44 +2659,15 @@ export default function AdminPortal() {
             </select>
           </div>
           {channelForm.type === TASK_PLUGIN_CHANNEL_TYPE && (
-            <div className="task-plugin-channel-field">
-              <label htmlFor="ch-plugin">
-                {text("插件版本", "Plugin version", "إصدار الإضافة")}
-              </label>
-              <select
-                id="ch-plugin"
-                required
-                value={channelForm.task_plugin_id || ""}
-                onChange={(e) =>
-                  setChannelForm((f) => ({
-                    ...f,
-                    task_plugin_id: Number(e.target.value),
-                  }))
-                }
-              >
-                <option value="">
-                  {text("选择版本", "Select a version", "اختر إصداراً")}
-                </option>
-                {pluginsQuery.data?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.key} {p.version}
-                    {p.enabled
-                      ? ""
-                      : text("（已禁用）", " (disabled)", " (معطل)")}
-                  </option>
-                ))}
-              </select>
-              {pluginsQuery.isError && (
-                <span role="alert">{pluginsQuery.error.message}</span>
-              )}
-              <span>
-                {text(
-                  "使用单个上游密钥；有未完成任务时不可更换密钥或地址。",
-                  "Use one upstream key. Credentials and base URL are locked while tasks are pending.",
-                  "استخدم مفتاحاً واحداً. لا يمكن تغيير المفتاح أو العنوان أثناء وجود مهام معلقة.",
-                )}
-              </span>
-            </div>
+            <TaskPluginChannel
+              value={channelForm.task_plugin_id ?? 0}
+              onChange={(id) =>
+                setChannelForm((form) => ({ ...form, task_plugin_id: id }))
+              }
+              disabled={
+                createChannelMut.isPending || updateChannelMut.isPending
+              }
+            />
           )}
 
           <div>
@@ -2750,10 +2725,14 @@ export default function AdminPortal() {
           <ChannelModelDiscovery
             connection={{
               channel_id: editingChannel ?? undefined,
+              task_plugin_id: channelForm.task_plugin_id,
               type: channelForm.type ?? 1,
               base_url: channelForm.base_url ?? "",
               key: channelForm.key || undefined,
             }}
+            plugin={pluginsQuery.data?.find(
+              (plugin) => plugin.id === channelForm.task_plugin_id,
+            )}
             models={channelForm.models}
             onChange={(models) =>
               setChannelForm((form) => ({ ...form, models }))

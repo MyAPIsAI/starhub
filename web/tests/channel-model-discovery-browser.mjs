@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 import { spawn, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import os from "node:os";
@@ -36,7 +36,11 @@ try {
     if (req.url.startsWith("/auth/")) {
       res.writeHead(401);
       res.end(JSON.stringify({ error: "fixture authentication failed" }));
-    } else if (req.url.startsWith("/empty/")) res.end('{"data":[]}');
+    } else if (req.url.startsWith("/video/"))
+      res.end(
+        '{"data":[{"id":"sora-2"},{"id":"sora-2-pro"},{"id":"chat-model"}]}',
+      );
+    else if (req.url.startsWith("/empty/")) res.end('{"data":[]}');
     else
       res.end(
         JSON.stringify({
@@ -209,6 +213,133 @@ try {
     assert.equal(channelWrites, writes);
     await search.fill("");
   };
+  await openNew();
+  await dialog.locator("#ch-type").selectOption("61");
+  await dialog.getByText(/No plugin versions yet/).waitFor();
+  assert.equal(await dialog.locator("#ch-plugin").isDisabled(), true);
+  assert.equal(
+    await dialog
+      .getByRole("button", { name: "Create", exact: true })
+      .isDisabled(),
+    true,
+  );
+  assert.equal(await discover().isDisabled(), true);
+  await dialog
+    .getByRole("button", { name: "Add OpenAI video plugin", exact: true })
+    .click();
+  await page.waitForFunction(
+    () =>
+      Boolean(document.querySelector("#ch-plugin")?.value) ||
+      document.querySelector('[role="dialog"] [role="alert"]'),
+  );
+  assert.deepEqual(await dialog.getByRole("alert").allTextContents(), []);
+  const pluginId = await dialog.locator("#ch-plugin").inputValue();
+  assert.equal(
+    await dialog.locator("#ch-name").inputValue(),
+    "Discovery channel",
+  );
+  assert.equal(await dialog.locator("#ch-key").inputValue(), "fixture-key");
+  await capture("plugin-installed-desktop");
+  await dialog
+    .getByRole("button", { name: "Add OpenAI video plugin", exact: true })
+    .click();
+  await page.waitForFunction(
+    () => !document.querySelector("#ch-plugin")?.disabled,
+  );
+  assert.equal(await dialog.locator("#ch-plugin").inputValue(), pluginId);
+  assert.equal((await api("GET", "/api/task-plugin")).length, 1);
+  await dialog
+    .getByRole("button", { name: "Use plugin models", exact: true })
+    .click();
+  assert.equal(
+    await dialog.locator("#ch-models").inputValue(),
+    "sora-2,sora-2-pro",
+  );
+  await dialog.locator("#ch-models").fill("");
+  await dialog.locator("#ch-base-url").fill(upstreamBase + "/video");
+  await discover().click();
+  await dialog.getByRole("checkbox", { name: "sora-2", exact: true }).waitFor();
+  assert.equal(await dialog.getByRole("checkbox").count(), 2);
+  assert.equal(hits.at(-1).authorization, "Bearer fixture-key");
+  await dialog
+    .getByRole("button", { name: "Select search results", exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Add selected models", exact: true })
+    .click();
+  assert.equal(
+    await dialog.locator("#ch-models").inputValue(),
+    "sora-2,sora-2-pro",
+  );
+  const source = await readFile(
+    path.join(repo, "plugins/tasks/openai-video.js"),
+    "utf8",
+  );
+  await dialog.locator("#ch-plugin-file").setInputFiles({
+    name: "video-v2.js",
+    mimeType: "text/javascript",
+    buffer: Buffer.from(source.replace('version: "1.1.0"', 'version: "1.2.0"')),
+  });
+  await page.waitForFunction((previous) => {
+    const select = document.querySelector("#ch-plugin");
+    return select?.value && select.value !== previous;
+  }, pluginId);
+  await dialog
+    .getByRole("button", { name: "Refresh versions", exact: true })
+    .click();
+  assert.equal((await api("GET", "/api/task-plugin")).length, 2);
+  for (const [language, theme] of [
+    ["zh", "light"],
+    ["en", "dark"],
+    ["ar", "light"],
+  ]) {
+    await page.evaluate(
+      async ({ language, theme }) => {
+        const { usePreferences } = await import("/src/lib/preferences.ts");
+        usePreferences.getState().setLanguage(language);
+        usePreferences.getState().setTheme(theme);
+      },
+      { language, theme },
+    );
+    await page.setViewportSize({ width: 320, height: 844 });
+    await dialog.locator("#ch-plugin").scrollIntoViewIfNeeded();
+    assert.equal(
+      await dialog
+        .locator(".task-plugin-channel-field")
+        .last()
+        .evaluate((node) => node.scrollWidth > node.clientWidth + 1),
+      false,
+    );
+    await capture(`plugin-${language}-${theme}-320`);
+  }
+  await page.evaluate(async () => {
+    const { usePreferences } = await import("/src/lib/preferences.ts");
+    usePreferences.getState().setLanguage("en");
+    usePreferences.getState().setTheme("light");
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  assert.equal(channelWrites, 0);
+  report.checks.push(
+    "empty plugin list, built-in installation, idempotent registration, inline upload, plugin model fallback, filtered upstream discovery and narrow layouts pass without saving a channel",
+  );
+  await openNew();
+  await dialog.locator("#ch-name").fill("Plugin discovery channel");
+  await dialog.locator("#ch-type").selectOption("61");
+  await dialog.locator("#ch-plugin").selectOption(pluginId);
+  await dialog
+    .getByRole("button", { name: "Use plugin models", exact: true })
+    .click();
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  const pluginChannel = (await api("GET", "/api/channel"))[0];
+  assert.equal(pluginChannel.task_plugin_id, Number(pluginId));
+  assert.equal(pluginChannel.models, "sora-2,sora-2-pro");
+  await api("DELETE", `/api/channel/${pluginChannel.id}`);
+  report.checks.push(
+    "plugin channel creation persists the selected version and its supported models",
+  );
   await openNew();
   await discover().click();
   await dialog

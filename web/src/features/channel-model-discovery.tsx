@@ -6,6 +6,10 @@ import {
   type ChannelModelsInput,
 } from "../lib/api/channel";
 import { ApiError } from "../lib/api/http";
+import {
+  TASK_PLUGIN_CHANNEL_TYPE,
+  type TaskPluginVersion,
+} from "../lib/api/task-plugin";
 import { useSessionQueryIdentity } from "../lib/system-access";
 import { useSettingsText } from "./settings-text";
 import "./channel-model-discovery.css";
@@ -37,9 +41,14 @@ const errors: Record<string, [string, string, string]> = {
     "القناة أو بيانات اعتمادها غير متاحة. حدّث وأعد المحاولة.",
   ],
   models_channel_type_unsupported: [
-    "当前仅支持 OpenAI 兼容渠道获取模型，请手动填写。",
-    "Discovery currently supports OpenAI-compatible channels. Enter models manually.",
-    "الجلب متاح حاليًا لقنوات OpenAI المتوافقة. أدخل النماذج يدويًا.",
+    "当前支持 OpenAI 兼容渠道和视频任务插件获取模型，其他类型请手动填写。",
+    "Discovery supports OpenAI-compatible and video task plugin channels. Enter models manually for other types.",
+    "الجلب متاح لقنوات OpenAI وإضافات الفيديو. أدخل النماذج يدويًا للأنواع الأخرى.",
+  ],
+  models_plugin_unavailable: [
+    "请选择可用的插件版本后重试。",
+    "Select an available plugin version and retry.",
+    "اختر إصدار إضافة متاحًا وأعد المحاولة.",
   ],
   upstream_models_authentication_failed: [
     "上游拒绝认证，请检查密钥及其模型列表权限。",
@@ -98,11 +107,13 @@ export function ChannelModelDiscovery({
   models,
   onChange,
   disabled,
+  plugin,
 }: {
   connection: ChannelModelsInput;
   models: string;
   onChange: (models: string) => void;
   disabled: boolean;
+  plugin?: TaskPluginVersion;
 }) {
   const { text } = useSettingsText();
   const identity = JSON.stringify(useSessionQueryIdentity());
@@ -136,7 +147,20 @@ export function ChannelModelDiscovery({
     };
   }, [signature]);
 
-  const supported = connection.type === 1;
+  const isPlugin = connection.type === TASK_PLUGIN_CHANNEL_TYPE;
+  const supported = connection.type === 1 || isPlugin;
+  let declaredModels: string[] = [];
+  if (isPlugin && plugin) {
+    try {
+      const metadata = JSON.parse(plugin.meta_json);
+      if (Array.isArray(metadata.models))
+        declaredModels = metadata.models.filter(
+          (value: unknown): value is string => typeof value === "string",
+        );
+    } catch {
+      // Invalid stored metadata must not populate the channel form.
+    }
+  }
   const coherent = state.signature === signature;
   const loading = coherent && state.status === "loading";
   const success = coherent && state.status === "success";
@@ -206,7 +230,7 @@ export function ChannelModelDiscovery({
             size="small"
             type="button"
             loading={loading}
-            disabled={disabled}
+            disabled={disabled || (isPlugin && !connection.task_plugin_id)}
             onClick={() => void fetchModels()}
           >
             {loading
@@ -226,12 +250,34 @@ export function ChannelModelDiscovery({
         required
         placeholder="gpt-4.1,claude-sonnet-4-20250514"
       />
+      {isPlugin && (
+        <>
+          <p className="channel-model-hint">
+            {text(
+              "选择插件版本并填写上游地址和密钥后，可通过 /v1/models 获取模型；仅显示插件支持的模型。上游不提供目录时，可使用插件声明模型或手动填写。",
+              "Select a plugin and enter the upstream URL and key to fetch /v1/models. Only models supported by the plugin are listed. If the upstream has no catalog, use declared models or enter them manually.",
+              "اختر إضافة وأدخل عنوان المزود والمفتاح لجلب /v1/models. تظهر النماذج المدعومة فقط. إن لم يتوفر دليل، استخدم نماذج الإضافة أو أدخلها يدويًا.",
+            )}
+          </p>
+          <Button
+            size="small"
+            disabled={disabled || !declaredModels.length}
+            onClick={() => onChange(declaredModels.join(","))}
+          >
+            {text(
+              "使用插件声明模型",
+              "Use plugin models",
+              "استخدام نماذج الإضافة",
+            )}
+          </Button>
+        </>
+      )}
       {!supported && (
         <p className="channel-model-hint">
           {text(
-            "当前类型请手动填写模型；获取功能仅支持 OpenAI 兼容渠道。",
-            "Enter models manually for this type. Discovery supports OpenAI-compatible channels.",
-            "أدخل النماذج يدويًا لهذا النوع. الجلب متاح لقنوات OpenAI المتوافقة.",
+            "当前类型请手动填写模型；获取功能支持 OpenAI 兼容渠道和视频任务插件。",
+            "Enter models manually for this type. Discovery supports OpenAI-compatible and video task plugin channels.",
+            "أدخل النماذج يدويًا لهذا النوع. الجلب متاح لقنوات OpenAI وإضافات الفيديو.",
           )}
         </p>
       )}
