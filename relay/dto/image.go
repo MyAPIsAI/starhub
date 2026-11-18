@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -54,8 +55,8 @@ func (r *ImageRequest) ValidateN() error {
 
 // imageModelSizes is the per-model size whitelist of the legacy DALL-E
 // models: dall-e-2 (and the bare "dall-e" alias) only generates squares,
-// dall-e-3 adds the tall/wide variants. Other models (gpt-image-1, provider
-// specifics) accept any <width>x<height> shape and "auto".
+// dall-e-3 adds the tall/wide variants. Seedream 4.5 has its own bounds;
+// other models accept any <width>x<height> shape and "auto".
 var imageModelSizes = map[string][]string{
 	"dall-e-2": {"256x256", "512x512", "1024x1024"},
 	"dall-e":   {"256x256", "512x512", "1024x1024"},
@@ -79,6 +80,21 @@ func (r *ImageRequest) ValidateSize() error {
 			}
 		}
 		return fmt.Errorf("size must be one of %s for %s", strings.Join(allowed, ", "), r.Model)
+	}
+	if strings.HasPrefix(r.Model, "doubao-seedream-4-5-") {
+		if r.Size == "" || r.Size == "2K" || r.Size == "4K" {
+			return nil
+		}
+		if sizePattern.MatchString(r.Size) {
+			parts := strings.Split(r.Size, "x")
+			w, errW := strconv.ParseUint(parts[0], 10, 32)
+			h, errH := strconv.ParseUint(parts[1], 10, 32)
+			if errW == nil && errH == nil && w > 0 && h > 0 &&
+				w*h >= 3686400 && w*h <= 16777216 && w <= 16*h && h <= 16*w {
+				return nil
+			}
+		}
+		return errors.New("Seedream 4.5 size must be 2K, 4K, or <width>x<height> with 3686400-16777216 pixels and aspect ratio between 1:16 and 16:1")
 	}
 	if r.Size == "" || r.Size == "auto" {
 		return nil

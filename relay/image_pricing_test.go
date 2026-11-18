@@ -137,6 +137,8 @@ func TestImageSizeValue(t *testing.T) {
 		{"1024x1536", 1536},
 		{"256x256", 256},
 		{"512x512", 512},
+		{"2K", 2048},
+		{"4K", 4096},
 		{"auto", 1024},
 		{"", 1024},
 		{"bogus", 1024},
@@ -165,6 +167,27 @@ func TestImageQualityValue(t *testing.T) {
 	for _, c := range cases {
 		if got := imageQualityValue(c.quality); got != c.want {
 			t.Fatalf("imageQualityValue(%q) = %v, want %v", c.quality, got, c.want)
+		}
+	}
+}
+
+func TestSeedream45ResolutionBilling(t *testing.T) {
+	resetPricingForTests()
+	defer resetPricingForTests()
+	setOptionTest(t, "model_price_expr", `{"doubao-seedream-4-5-251128":"count * size / 2048"}`)
+	for _, tc := range []struct {
+		size string
+		unit int64
+	}{
+		{"", 500000}, {"2K", 500000}, {"2048x2048", 500000},
+		{"4K", 1000000}, {"4096x4096", 1000000},
+	} {
+		bill := &ImageBill{Model: "doubao-seedream-4-5-251128", Group: "default", Size: tc.size, Count: 2}
+		if pre, settled := bill.PreQuota(), bill.SettleQuota(1, nil); pre != 2*tc.unit || settled != tc.unit {
+			t.Fatalf("size %q: pre %d, settle %d, want %d and %d", tc.size, pre, settled, 2*tc.unit, tc.unit)
+		}
+		if bill.BillingEvidenceError != nil || bill.BillingEvidence == "" {
+			t.Fatal("resolution billing evidence was not recorded")
 		}
 	}
 }

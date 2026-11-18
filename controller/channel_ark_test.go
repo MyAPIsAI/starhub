@@ -85,13 +85,19 @@ func TestArkChannelCapabilitiesPersist(t *testing.T) {
 func TestArkImageRelay(t *testing.T) {
 	newTestDB(t)
 	const modelID = "doubao-seedream-4-5-251128"
+	wantSize := ""
+	hits := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
 		if r.URL.Path != "/api/v3/images/generations" || r.Header.Get("Authorization") != "Bearer fixture-key" {
 			t.Errorf("wrong Ark image path or credential: %s", r.URL.Path)
 		}
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["model"] != modelID {
 			t.Error("image model was changed")
+		}
+		if body["size"] != wantSize || body["watermark"] != false {
+			t.Error("Ark image parameters were changed")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"data":[{"url":"https://example.test/image.png"}]}`)
@@ -106,13 +112,21 @@ func TestArkImageRelay(t *testing.T) {
 	}
 	u := newUser(t, "ark-image", common.RoleUser, 1000000000)
 	token := mustToken(t, u.ID, 1000000000)
-	r := httptest.NewRequest("POST", "/v1/images/generations", strings.NewReader(`{"model":"`+modelID+`","prompt":"a cat","size":"2048x2048"}`))
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
-	w := httptest.NewRecorder()
-	middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayImageGenerations))).ServeHTTP(w, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "image.png") {
-		t.Fatalf("Ark image relay failed: %d %s", w.Code, w.Body.String())
+	for _, size := range []string{"2048x2048", "2K", "4K", "1024x1024"} {
+		wantSize = size
+		before := hits
+		r := httptest.NewRequest("POST", "/v1/images/generations", strings.NewReader(fmt.Sprintf(`{"model":%q,"prompt":"a cat","size":%q,"watermark":false}`, modelID, size)))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
+		w := httptest.NewRecorder()
+		middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayImageGenerations))).ServeHTTP(w, r)
+		if size == "1024x1024" {
+			if w.Code != 400 || hits != before {
+				t.Fatal("invalid Seedream size reached upstream")
+			}
+		} else if w.Code != 200 || !strings.Contains(w.Body.String(), "image.png") || hits != before+1 {
+			t.Fatalf("Ark image relay size %q failed: %d %s", size, w.Code, w.Body.String())
+		}
 	}
 }
 

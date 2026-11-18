@@ -19,7 +19,7 @@ import (
 // quality and count are deliberately two independent multipliers.
 //
 // When model_price_expr is configured, the expression receives count, size
-// (long-edge pixels), quality (numeric ratio), and token variables; its
+// (long-edge pixels or nominal 2K/4K tier), quality (numeric ratio), and token variables; its
 // result is the complete USD price — size/quality/count are NOT applied as
 // OtherRatio on top. This lets operators express tiered / volume-discounted
 // pricing that the fixed-multiplier per-call path cannot.
@@ -101,12 +101,16 @@ func (b *ImageBill) priceData() *PriceData {
 	return NewPriceData(b.Model, b.Group)
 }
 
-// imageSizeValue extracts the long-edge pixel count from a "<w>x<h>" size
-// string (e.g. "1024x1792" -> 1792). "auto" and unparseable sizes map to
-// 1024 (the base resolution) so expression authors get a stable default.
-// The long edge is used (not the short edge) because it distinguishes every
-// preset tier: 1024x1024=1024, 1024x1792=1792, 1536x1024=1536, etc.
+// imageSizeValue returns the long edge for explicit dimensions, or the
+// nominal resolution tier for 2K/4K presets (the actual aspect ratio varies).
+// Other omitted or unparseable sizes retain the legacy 1024 default.
 func imageSizeValue(size string) float64 {
+	switch size {
+	case "2K":
+		return 2048
+	case "4K":
+		return 4096
+	}
 	parts := strings.SplitN(size, "x", 2)
 	if len(parts) != 2 {
 		return 1024
@@ -143,9 +147,13 @@ func (b *ImageBill) evalImageExpr(pd *PriceData, count int, promptTokens, comple
 }
 
 func (b *ImageBill) imageExprVars(count int, promptTokens, completionTokens int64) map[string]float64 {
+	size := b.Size
+	if size == "" && strings.HasPrefix(b.Model, "doubao-seedream-4-5-") {
+		size = "2048x2048"
+	}
 	return map[string]float64{
 		"count":             float64(count),
-		"size":              imageSizeValue(b.Size),
+		"size":              imageSizeValue(size),
 		"quality":           imageQualityValue(b.Quality),
 		"prompt_tokens":     float64(promptTokens),
 		"completion_tokens": float64(completionTokens),
