@@ -92,7 +92,7 @@ export interface AdminChannel {
   key: string; // masked
   key_mode: string;
   key_count: number;
-  multi_key_status: Record<string, number> | null;
+  multi_key_status: number[] | null;
   base_url: string;
   models: string;
   group: string;

@@ -13,6 +13,7 @@ export interface ChannelModelsInput {
   type: number;
   base_url: string;
   key?: string;
+  key_index?: number;
 }
 
 export interface ChannelModelInfo {

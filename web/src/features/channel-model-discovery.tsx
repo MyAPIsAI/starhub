@@ -35,6 +35,11 @@ const errors: Record<string, [string, string, string]> = {
     "Enter a key. Saved channels need at least one enabled key.",
     "أدخل مفتاحًا. تحتاج القناة المحفوظة إلى مفتاح مُفعّل واحد على الأقل.",
   ],
+  models_key_selection_invalid: [
+    "所选密钥不存在或已停用，请刷新渠道并重新选择。",
+    "The selected key is unavailable or disabled. Refresh the channel and select again.",
+    "المفتاح المحدد غير متاح أو معطّل. حدّث القناة واختر مجددًا.",
+  ],
   models_channel_unavailable: [
     "渠道已不存在或凭证无法读取，请刷新后重试。",
     "The channel or its credential is unavailable. Refresh and retry.",
@@ -129,6 +134,7 @@ export function ChannelModelDiscovery({
   disabled,
   plugin,
   capabilities = {},
+  savedKeyStatuses = [],
 }: {
   connection: ChannelModelsInput;
   models: string;
@@ -136,10 +142,28 @@ export function ChannelModelDiscovery({
   disabled: boolean;
   plugin?: TaskPluginVersion;
   capabilities?: Record<string, string>;
+  savedKeyStatuses?: number[];
 }) {
   const { text } = useSettingsText();
   const identity = JSON.stringify(useSessionQueryIdentity());
-  const signature = JSON.stringify([identity, connection, disabled]);
+  const draftKeys = (connection.key ?? "")
+    .split(/\r?\n/)
+    .map((key) => key.trim())
+    .filter(Boolean);
+  const keyStatuses = draftKeys.length
+    ? draftKeys.map(() => 1)
+    : savedKeyStatuses;
+  const keyScope = JSON.stringify([identity, connection, keyStatuses]);
+  const [keyChoice, setKeyChoice] = useState<{
+    scope: string;
+    index: number;
+  }>();
+  const chosenIndex =
+    keyChoice?.scope === keyScope ? keyChoice.index : undefined;
+  const keyIndex =
+    chosenIndex ?? keyStatuses.findIndex((status) => status === 1);
+  useEffect(() => setKeyChoice(undefined), [keyScope]);
+  const signature = JSON.stringify([keyScope, keyIndex, disabled]);
   const latest = useRef(signature);
   latest.current = signature;
   const active = useRef<AbortController>();
@@ -225,7 +249,10 @@ export function ChannelModelDiscovery({
     setSelected([]);
     setNotice("");
     try {
-      const catalog = await fetchChannelModels(connection, controller.signal);
+      const catalog = await fetchChannelModels(
+        { ...connection, key_index: keyIndex >= 0 ? keyIndex : undefined },
+        controller.signal,
+      );
       const found = catalog.map((entry) => entry.id);
       if (
         request !== sequence.current ||
@@ -358,17 +385,64 @@ export function ChannelModelDiscovery({
                 "يستخدم الجلب المفتاح المُدخل في النموذج بدلًا من المفتاح المحفوظ.",
               )
             : connection.channel_id
-              ? text(
-                  "本次获取使用已保存的首个启用密钥；填写新密钥可替换本次查询凭据。",
-                  "Discovery uses the first enabled saved key. Enter a new key to override it for this query.",
-                  "يستخدم الجلب أول مفتاح محفوظ مُفعّل. أدخل مفتاحًا جديدًا لاستبداله لهذا الاستعلام.",
-                )
+              ? chosenIndex !== undefined
+                ? text(
+                    `本次获取使用已保存的第 ${keyIndex + 1} 个密钥；不会自动尝试其他密钥。`,
+                    `Discovery uses saved key ${keyIndex + 1}; other keys are not tried automatically.`,
+                    `يستخدم الجلب المفتاح المحفوظ ${keyIndex + 1}؛ لن تُجرّب المفاتيح الأخرى تلقائيًا.`,
+                  )
+                : text(
+                    "本次获取使用已保存的首个启用密钥；填写新密钥可替换本次查询凭据。",
+                    "Discovery uses the first enabled saved key. Enter a new key to override it for this query.",
+                    "يستخدم الجلب أول مفتاح محفوظ مُفعّل. أدخل مفتاحًا جديدًا لاستبداله لهذا الاستعلام.",
+                  )
               : text(
                   "请先填写当前上游的 API Key，再获取模型。",
                   "Enter this upstream's API key before fetching models.",
                   "أدخل مفتاح هذا المزود قبل جلب النماذج.",
                 )}
         </p>
+      )}
+      {supported && keyStatuses.length > 1 && (
+        <div className="channel-model-key">
+          <label htmlFor="ch-model-key">
+            {text("查询使用的密钥", "Key for discovery", "مفتاح الجلب")}
+          </label>
+          <select
+            id="ch-model-key"
+            className="input"
+            value={keyIndex}
+            disabled={disabled}
+            onChange={(event) =>
+              setKeyChoice({
+                scope: keyScope,
+                index: Number(event.target.value),
+              })
+            }
+          >
+            {keyIndex < 0 && (
+              <option value={-1} disabled>
+                {text(
+                  "无启用密钥",
+                  "No enabled keys",
+                  "لا توجد مفاتيح مُفعّلة",
+                )}
+              </option>
+            )}
+            {keyStatuses.map((status, index) => (
+              <option key={index} value={index} disabled={status !== 1}>
+                {text(
+                  `密钥 ${index + 1}`,
+                  `Key ${index + 1}`,
+                  `المفتاح ${index + 1}`,
+                )}
+                {status !== 1
+                  ? text("（已停用）", " (disabled)", " (معطّل)")
+                  : ""}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
       {invalidArkName && (
         <p role="alert" className="channel-model-error">

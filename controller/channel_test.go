@@ -120,6 +120,74 @@ func TestFetchChannelModelsDraftAndSavedCredentials(t *testing.T) {
 	}
 }
 
+func TestFetchChannelModelsExplicitKeySelection(t *testing.T) {
+	newTestDB(t)
+	var receivedKey string
+	requests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		receivedKey = r.Header.Get("Authorization")
+		if receivedKey == "Bearer rejected-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, `{"error":{"code":"AuthenticationError"}}`)
+			return
+		}
+		fmt.Fprint(w, `{"data":[{"id":"selected-model"}]}`)
+	}))
+	defer upstream.Close()
+	fetch := func(input map[string]any) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(input)
+		return call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: string(body)})
+	}
+	for _, channelType := range []int{channel.ChannelTypeOpenAI, channel.ChannelTypeArk} {
+		saved := mustChannel(t, fmt.Sprintf("selected-key-%d", channelType), "existing-model", "disabled-key\nrejected-key\naccepted-key", common.ChannelStatusManuallyDisabled)
+		saved.Type, saved.BaseURL, saved.MultiKeyStatus = channelType, upstream.URL, "2,1,1"
+		if err := model.UpdateChannel(saved); err != nil {
+			t.Fatal(err)
+		}
+		before, _ := model.GetChannelByID(saved.ID)
+		input := map[string]any{"channel_id": saved.ID, "type": channelType}
+		count := requests
+		expectError(t, fetch(input), 502, "upstream_models_authentication_failed")
+		if requests != count+1 || receivedKey != "Bearer rejected-key" {
+			t.Fatal("catalog authentication failure must not retry other keys")
+		}
+		input["key_index"] = 2
+		var ids []string
+		decodeData(t, fetch(input), &ids)
+		if receivedKey != "Bearer accepted-key" || !reflect.DeepEqual(ids, []string{"selected-model"}) {
+			t.Fatal("explicit saved key selection was ignored")
+		}
+		count = requests
+		for _, index := range []int{-1, 0, 3} {
+			input["key_index"] = index
+			expectError(t, fetch(input), 400, "models_key_selection_invalid")
+		}
+		input["key_index"], input["base_url"] = 2, upstream.URL+"/changed"
+		expectError(t, fetch(input), 400, "models_changed_connection_requires_key")
+		if requests != count {
+			t.Fatal("invalid selections or connection changes sent saved credentials upstream")
+		}
+		input["key"], input["key_index"] = "\n rejected-key\r\n\n draft-accepted-key \n", 1
+		decodeData(t, fetch(input), &ids)
+		if receivedKey != "Bearer draft-accepted-key" {
+			t.Fatal("explicit draft key selection did not override saved credentials")
+		}
+		count = requests
+		input["key_index"] = 2
+		expectError(t, fetch(input), 400, "models_key_selection_invalid")
+		input["key"], input["key_index"] = "single-draft-key", 1
+		expectError(t, fetch(input), 400, "models_key_selection_invalid")
+		if requests != count {
+			t.Fatal("out-of-range draft selections reached upstream")
+		}
+		after, _ := model.GetChannelByID(saved.ID)
+		if !reflect.DeepEqual(before, after) {
+			t.Fatal("key discovery changed saved channel configuration or key status")
+		}
+	}
+}
+
 func TestFetchTaskPluginChannelModels(t *testing.T) {
 	newTestDB(t)
 	stored := saveExamplePlugin(t, "")

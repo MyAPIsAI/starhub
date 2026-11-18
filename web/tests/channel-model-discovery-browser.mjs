@@ -34,9 +34,9 @@ try {
     if (req.url.startsWith("/slow/"))
       await new Promise((resolve) => setTimeout(resolve, 500));
     res.setHeader("Content-Type", "application/json");
-    if (req.url.startsWith("/auth/") || req.url.startsWith("/forbidden/")) {
+    if (req.url.startsWith("/auth/") || req.url.startsWith("/forbidden/") || req.headers.authorization === "Bearer rejected-key") {
       res.setHeader("X-Request-Id", "fixture-request-401");
-      res.writeHead(req.url.startsWith("/auth/") ? 401 : 403);
+      res.writeHead(req.url.startsWith("/forbidden/") ? 403 : 401);
       res.end(JSON.stringify({ error: {code: "AuthenticationError.InvalidApiKey", message: "fixture authentication failed"} }));
     } else if (req.url === "/probe.svg") {
       res.setHeader("Content-Type", "image/svg+xml");
@@ -1177,6 +1177,69 @@ try {
   report.checks.push(
     "three languages, two themes, 320px layout, accessibility and keyboard navigation pass",
   );
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await api("POST", "/api/channel", {
+    name: "Credential selection", type: 32, key: "rejected-key\naccepted-key\nthird-key",
+    models: "doubao-seedance-2-0-260128", base_url: upstreamBase + "/slow", group: "default",
+  });
+  const credentialChannel = (await api("GET", "/api/channel")).find((ch) => ch.name === "Credential selection");
+  await page.reload();
+  await page.getByRole("row").filter({ hasText: "Credential selection" }).getByRole("button", { name: "Edit", exact: true }).click();
+  const keySelect = dialog.getByLabel("Key for discovery", { exact: true });
+  assert.equal(await keySelect.inputValue(), "0");
+  assert.equal(await keySelect.locator("option").count(), 3);
+  const beforeAuth = hits.length;
+  await discover().click();
+  await dialog.getByRole("alert").filter({ hasText: "Upstream returned 401" }).waitFor();
+  assert.equal(hits.length, beforeAuth + 1);
+  await dialog.getByText("Check the key source above.", { exact: false }).waitFor();
+  await keySelect.selectOption("1");
+  assert.equal(await dialog.getByRole("alert").count(), 0);
+  await dialog.getByText("Discovery uses saved key 2;", { exact: false }).waitFor();
+  const selectedRequest = page.waitForRequest((req) => req.url().endsWith("/api/channel/fetch_models"));
+  await discover().click();
+  assert.equal((await selectedRequest).postDataJSON().key_index, 1);
+  await dialog.getByRole("checkbox").first().waitFor();
+  assert.equal(hits.at(-1).authorization, "Bearer accepted-key");
+  await keySelect.selectOption("2");
+  assert.equal(await dialog.getByRole("checkbox").count(), 0);
+  const pending = page.waitForRequest((req) => req.url().endsWith("/api/channel/fetch_models"));
+  await discover().click();
+  await pending;
+  await keySelect.selectOption("1");
+  await page.waitForTimeout(700);
+  assert.equal(await dialog.getByRole("checkbox").count(), 0);
+  await dialog.locator("#ch-key").fill("draft-selection-key");
+  assert.equal(await keySelect.count(), 0);
+  await discover().click();
+  await dialog.getByRole("checkbox").first().waitFor();
+  assert.equal(hits.at(-1).authorization, "Bearer draft-selection-key");
+  await dialog.locator("#ch-key").fill("");
+  assert.equal(await keySelect.inputValue(), "0");
+  assert.equal(await dialog.getByRole("checkbox").count(), 0);
+  await keySelect.selectOption("1");
+  await discover().click();
+  await dialog.getByRole("checkbox").first().waitFor();
+  for (const language of ["zh", "en", "ar"]) {
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate(async ({language, theme}) => {
+        const {usePreferences} = await import("/src/lib/preferences.ts");
+        usePreferences.getState().setLanguage(language);
+        usePreferences.getState().setTheme(theme);
+      }, {language, theme});
+      for (const width of [1440, 320]) {
+        await page.setViewportSize({width, height: width === 320 ? 844 : 1000});
+        await dialog.locator("#ch-model-key").scrollIntoViewIfNeeded();
+        assert.equal(await dialog.locator(".channel-model-discovery").evaluate((node) => node.scrollWidth > node.clientWidth + 1), false);
+        await capture(`credential-selection-${language}-${theme}-${width}`);
+      }
+    }
+  }
+  assert.deepEqual((await new AxeBuilder({ page }).include(".channel-model-discovery").withTags(["wcag2a", "wcag2aa"]).analyze()).violations, []);
+  const afterDiscovery = (await api("GET", "/api/channel")).find((ch) => ch.id === credentialChannel.id);
+  assert.deepEqual(afterDiscovery, credentialChannel);
+  assert.equal(/rejected-key|accepted-key|third-key|draft-selection-key/.test(await dialog.innerText()), false);
+  report.checks.push("explicit key selection, draft precedence, reset and pending-request cancellation preserve saved credentials and channel state");
   assert.deepEqual(report.pageErrors, []);
   assert.equal(logs.includes("replacement-fixture-key"), false);
   console.log(JSON.stringify(report, null, 2));

@@ -22,6 +22,7 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 		Type            int     `json:"type"`
 		BaseURL         *string `json:"base_url"`
 		Key             string  `json:"key"`
+		KeyIndex        *int    `json:"key_index"`
 		IncludeMetadata bool    `json:"include_metadata"`
 	}
 	if !decodeJSONBody(w, r, &input) {
@@ -29,6 +30,10 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.ChannelID < 0 {
 		common.ApiError(w, http.StatusBadRequest, "invalid_models_channel_id")
+		return
+	}
+	if input.KeyIndex != nil && *input.KeyIndex < 0 {
+		common.ApiError(w, http.StatusBadRequest, "models_key_selection_invalid")
 		return
 	}
 	var saved *model.Channel
@@ -94,16 +99,34 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 			common.ApiError(w, http.StatusBadRequest, "models_changed_connection_requires_key")
 			return
 		}
-		statuses := saved.KeyStatuses()
-		for i, candidate := range saved.Keys() {
-			if statuses[i] == common.StatusEnabled {
-				key = candidate
-				break
+		if input.KeyIndex != nil {
+			var ok bool
+			key, ok = saved.KeyAt(*input.KeyIndex)
+			if !ok {
+				common.ApiError(w, http.StatusBadRequest, "models_key_selection_invalid")
+				return
+			}
+		} else {
+			statuses := saved.KeyStatuses()
+			for i, candidate := range saved.Keys() {
+				if statuses[i] == common.StatusEnabled {
+					key = candidate
+					break
+				}
 			}
 		}
 	} else if key != "" {
 		// Draft multi-key input uses one explicit credential, not a permission union.
-		key = strings.TrimSpace(strings.SplitN(key, "\n", 2)[0])
+		keys := (&model.Channel{Key: key}).Keys()
+		index := 0
+		if input.KeyIndex != nil {
+			index = *input.KeyIndex
+		}
+		if index >= len(keys) {
+			common.ApiError(w, http.StatusBadRequest, "models_key_selection_invalid")
+			return
+		}
+		key = keys[index]
 	}
 	if key == "" {
 		common.ApiError(w, http.StatusBadRequest, "models_key_required")

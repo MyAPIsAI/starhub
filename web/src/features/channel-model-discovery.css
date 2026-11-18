@@ -26,6 +26,16 @@
 .channel-model-error {
   color: var(--danger);
 }
+.channel-model-key {
+  display: grid;
+  gap: 6px;
+  margin-block: 8px;
+  font-size: var(--text-xs);
+}
+.channel-model-key select {
+  width: 100%;
+  min-width: 0;
+}
 .channel-model-results {
   margin-top: 10px;
   padding: 12px;

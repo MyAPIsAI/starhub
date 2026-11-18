@@ -2310,6 +2310,10 @@ export default function AdminPortal() {
             />
           </div>
           <ChannelModelDiscovery
+            savedKeyStatuses={
+              channelsQuery.data?.find((ch) => ch.id === editingChannel)
+                ?.multi_key_status ?? []
+            }
             connection={{
               channel_id: editingChannel ?? undefined,
               task_plugin_id: channelForm.task_plugin_id,
