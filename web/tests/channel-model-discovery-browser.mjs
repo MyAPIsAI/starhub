@@ -36,7 +36,11 @@ try {
     if (req.url.startsWith("/auth/")) {
       res.writeHead(401);
       res.end(JSON.stringify({ error: "fixture authentication failed" }));
-    } else if (req.url.startsWith("/video/"))
+    } else if (req.url.endsWith("/api/v3/models"))
+      res.end(
+        '{"data":[{"id":"doubao-seedream-4-5-251128","domain":"ImageGeneration"},{"id":"doubao-chat-model","domain":"LLM"}]}',
+      );
+    else if (req.url.startsWith("/video/"))
       res.end(
         '{"data":[{"id":"sora-2"},{"id":"sora-2-pro"},{"id":"chat-model"}]}',
       );
@@ -418,6 +422,27 @@ try {
   await api("DELETE", `/api/channel/${pluginChannel.id}`);
   report.checks.push(
     "plugin channel creation persists the selected version and its supported models",
+  );
+  await openNew();
+  await dialog.locator("#ch-type").selectOption("32");
+  await dialog.locator("#ch-base-url").fill(upstreamBase + "/ark/api/v3");
+  await discover().click();
+  await dialog
+    .getByRole("checkbox", { name: "doubao-seedream-4-5-251128", exact: true })
+    .check();
+  assert.equal(hits.at(-1).path, "/ark/api/v3/models");
+  await dialog
+    .getByRole("button", { name: "Add selected models", exact: true })
+    .click();
+  await capture("ark-model-discovery");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  const arkChannel = (await api("GET", "/api/channel"))[0];
+  assert.equal(arkChannel.type, 32);
+  assert.equal(arkChannel.models, "doubao-seedream-4-5-251128");
+  await api("DELETE", `/api/channel/${arkChannel.id}`);
+  report.checks.push(
+    "Ark channel discovery and creation preserve its API prefix and exact model ID",
   );
   await openNew();
   await discover().click();

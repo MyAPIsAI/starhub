@@ -42,7 +42,7 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 			input.Type = saved.Type
 		}
 	}
-	if input.Type != channel.ChannelTypeOpenAI && input.Type != channel.ChannelTypeTaskPlugin {
+	if input.Type != channel.ChannelTypeOpenAI && input.Type != channel.ChannelTypeTaskPlugin && input.Type != channel.ChannelTypeArk {
 		common.ApiError(w, http.StatusBadRequest, "models_channel_type_unsupported")
 		return
 	}
@@ -56,6 +56,10 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 	auth := "bearer"
 	normalizeBase := service.NormalizeChannelModelsBaseURL
 	fetchModels := service.FetchChannelModelsWithAuth
+	if input.Type == channel.ChannelTypeArk {
+		normalizeBase = service.NormalizeArkModelsBaseURL
+		fetchModels = service.FetchArkChannelModels
+	}
 	var pluginModels []string
 	if input.Type == channel.ChannelTypeTaskPlugin {
 		normalizeBase = service.NormalizeTaskPluginModelsBaseURL

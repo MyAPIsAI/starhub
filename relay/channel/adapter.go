@@ -19,6 +19,7 @@ const (
 	ChannelTypeClaude     = 14
 	ChannelTypeAWS        = 15
 	ChannelTypeGemini     = 25
+	ChannelTypeArk        = 32
 	ChannelTypeTaskPlugin = 61
 )
 

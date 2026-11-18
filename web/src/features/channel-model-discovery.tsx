@@ -56,9 +56,9 @@ const errors: Record<string, [string, string, string]> = {
     "رفض المزود المصادقة. تحقق من المفتاح وصلاحية قائمة النماذج.",
   ],
   upstream_models_not_found: [
-    "上游未提供 /v1/models，请检查地址或手动填写模型。",
-    "Upstream /v1/models was not found. Check the URL or enter models manually.",
-    "لم يُعثر على /v1/models. تحقق من العنوان أو أدخل النماذج يدويًا.",
+    "上游模型目录不存在，请检查渠道类型和地址，或手动填写模型。",
+    "The upstream model catalog was not found. Check the channel type and URL, or enter models manually.",
+    "لم يُعثر على دليل النماذج. تحقق من نوع القناة والعنوان أو أدخل النماذج يدويًا.",
   ],
   upstream_models_rate_limited: [
     "上游请求过于频繁，请稍后重试。",
@@ -148,7 +148,7 @@ export function ChannelModelDiscovery({
   }, [signature]);
 
   const isPlugin = connection.type === TASK_PLUGIN_CHANNEL_TYPE;
-  const supported = connection.type === 1 || isPlugin;
+  const supported = connection.type === 1 || connection.type === 32 || isPlugin;
   let declaredModels: string[] = [];
   if (isPlugin && plugin) {
     try {

@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"starhub/pkg/taskplugin"
+	"starhub/relay/channel/ark"
 )
 
 // ChannelModelsError contains only controlled, credential-free API messages.
@@ -53,6 +54,19 @@ func FetchChannelModelsWithAuth(ctx context.Context, baseURL, key, auth string) 
 		return nil, err
 	}
 	return fetchChannelModels(ctx, base+"/v1/models", key, auth)
+}
+
+// NormalizeArkModelsBaseURL uses the same API prefix as inference requests.
+func NormalizeArkModelsBaseURL(raw string) (string, error) {
+	return NormalizeTaskPluginModelsBaseURL(ark.APIBaseURL(raw))
+}
+
+func FetchArkChannelModels(ctx context.Context, baseURL, key, auth string) ([]string, error) {
+	base, err := NormalizeArkModelsBaseURL(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	return fetchChannelModels(ctx, base+"/models", key, auth)
 }
 
 // NormalizeTaskPluginModelsBaseURL preserves the adapter's configured path prefix.

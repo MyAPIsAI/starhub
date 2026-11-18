@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"starhub/relay/channel"
+	"starhub/relay/channel/ark"
 	"starhub/relay/channel/aws"
 	"starhub/relay/channel/claude"
 	"starhub/relay/channel/gemini"
@@ -17,6 +18,8 @@ func GetChatAdaptor(channelType int) (channel.ChatAdaptor, error) {
 	switch channelType {
 	case channel.ChannelTypeOpenAI:
 		return openai.New(), nil
+	case channel.ChannelTypeArk:
+		return ark.Adaptor{}, nil
 	case channel.ChannelTypeClaude:
 		return claude.New(), nil
 	case channel.ChannelTypeGemini:
@@ -43,6 +46,8 @@ func ChannelTypeName(channelType int) string {
 	switch channelType {
 	case channel.ChannelTypeOpenAI:
 		return "openai"
+	case channel.ChannelTypeArk:
+		return "ark"
 	case channel.ChannelTypeClaude:
 		return "claude"
 	case channel.ChannelTypeGemini:
@@ -60,6 +65,7 @@ func ChannelTypeName(channelType int) string {
 // for channel API validation and documentation surfaces.
 func SupportedChannelTypes() map[int]string {
 	return map[int]string{
+		channel.ChannelTypeArk:        ChannelTypeName(channel.ChannelTypeArk),
 		channel.ChannelTypeTaskPlugin: ChannelTypeName(channel.ChannelTypeTaskPlugin),
 		channel.ChannelTypeOpenAI:     ChannelTypeName(channel.ChannelTypeOpenAI),
 		channel.ChannelTypeClaude:     ChannelTypeName(channel.ChannelTypeClaude),

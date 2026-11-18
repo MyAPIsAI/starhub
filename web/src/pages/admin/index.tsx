@@ -2653,6 +2653,9 @@ export default function AdminPortal() {
               }
             >
               <option value={1}>OpenAI</option>
+              <option value={32}>
+                {text("火山方舟（豆包）", "Volcengine Ark (Doubao)", "Volcengine Ark (Doubao)")}
+              </option>
               <option value={14}>Claude</option>
               <option value={15}>AWS Bedrock</option>
               <option value={25}>Gemini</option>
