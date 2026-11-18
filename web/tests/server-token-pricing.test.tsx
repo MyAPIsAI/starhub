@@ -35,6 +35,7 @@ function render(
   error = false,
   guest = false,
   catalogError = false,
+  emptyCatalog = false,
 ) {
   useSystemAccess
     .getState()
@@ -55,7 +56,10 @@ function render(
       loaded_version: 2,
       atomic_batch: true,
       options: [
-        { key: "model_ratio", value: '{"actual-only":2.5,"zero":0}' },
+        {
+          key: "model_ratio",
+          value: '{"actual-only":2.5,"zero":0,"claude-3-5-sonnet-20241022":3}',
+        },
         { key: "completion_ratio", value: '{"actual-only":4,"zero":0}' },
         { key: "model_price", value: "{}" },
         { key: "model_price_expr", value: "{}" },
@@ -71,10 +75,12 @@ function render(
   client.setQueryData(catalogKey, {
     revision: 1,
     revision_guards: true,
-    models: ["awaiting-price", "actual-only"].map((model) => ({
-      ...emptyModelMetadata(),
-      model,
-    })),
+    models: (emptyCatalog ? [] : ["awaiting-price", "actual-only", "zero"]).map(
+      (model) => ({
+        ...emptyModelMetadata(),
+        model,
+      }),
+    ),
   });
   if (catalogError)
     client
@@ -105,12 +111,15 @@ function render(
   return html;
 }
 describe("actual server token pricing", () => {
-  it("joins server catalog models with configured prices and preserves explicit zero", () => {
+  it("shows registered models and explicit zero without listing unregistered default prices", () => {
     const html = render();
     expect(html).toContain('data-server-priced-model="actual-only"');
     expect(html).toContain('data-server-priced-model="zero"');
     expect(html).toContain("2.5");
     expect(html).not.toContain('data-server-priced-model="gpt-4.1"');
+    expect(html).not.toContain(
+      'data-server-priced-model="claude-3-5-sonnet-20241022"',
+    );
     expect(html.match(/data-server-priced-model="actual-only"/g)).toHaveLength(
       1,
     );
@@ -125,16 +134,21 @@ describe("actual server token pricing", () => {
     )?.[1];
     expect(zero).not.toContain("待定价");
   });
-  it("hides stale catalog rows on a catalog error while retaining verified prices", () => {
+  it("does not fall back to default prices when the model catalog is unavailable", () => {
     const html = render(100, false, false, true);
     expect(html).not.toContain('data-server-priced-model="awaiting-price"');
-    expect(html).toContain('data-server-priced-model="actual-only"');
+    expect(html).not.toContain("data-server-priced-model");
     expect(html).toContain("模型目录读取失败");
   });
   it("hides cached server prices when the authoritative read fails", () => {
     const html = render(100, true);
     expect(html).not.toContain("data-server-priced-model");
     expect(html).toContain('role="alert"');
+  });
+  it("keeps an empty model catalog empty despite seeded pricing options", () => {
+    const html = render(100, false, false, false, true);
+    expect(html).not.toContain("data-server-priced-model");
+    expect(html).toContain("暂无匹配的已登记模型");
   });
   it.each([1, 5, 99, 101])(
     "requires actual administrator authority for role %s",

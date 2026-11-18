@@ -51,27 +51,24 @@ export function ServerTokenPricing() {
     [notice, setNotice] = useState("");
   if (!allowed) return null;
   const data = query.isError ? undefined : query.data;
+  const models = catalog.isError ? [] : (catalog.data?.models ?? []);
   const ids = data
-    ? [
-        ...new Set([
-          ...(catalog.isError
-            ? []
-            : (catalog.data?.models.map((m) => m.model) ?? [])),
-          ...Object.keys(data.input),
-          ...Object.keys(data.completion),
-          ...Object.keys(data.perRequest),
-          ...Object.keys(data.expressions),
-        ]),
-      ]
+    ? models
+        .map((model) => model.model)
         .sort()
         .filter((id) => id.toLowerCase().includes(search.trim().toLowerCase()))
     : [];
   const pages = Math.max(1, Math.ceil(ids.length / 20)),
     currentPage = Math.min(page, pages - 1);
-  const writable = !!data && data.version <= Number.MAX_SAFE_INTEGER - 4;
+  const writable =
+    !!data &&
+    !catalog.isError &&
+    !!catalog.data &&
+    data.version <= Number.MAX_SAFE_INTEGER - 4;
   const conflict = !!draft && (!data || data.version !== draft.base.version);
   const valid =
     !!draft &&
+    models.some((model) => model.model === draft.id) &&
     draft.id === draft.id.trim() &&
     draft.id.length > 0 &&
     draft.id.length <= 128 &&
@@ -201,7 +198,10 @@ export function ServerTokenPricing() {
           >
             {text("刷新定价", "Refresh pricing", "تحديث التسعير")}
           </Button>
-          <Button disabled={!writable} onClick={() => begin()}>
+          <Button
+            disabled={!writable || !models.length}
+            onClick={() => begin()}
+          >
             {text(
               "登记模型定价",
               "Configure model pricing",
@@ -217,7 +217,7 @@ export function ServerTokenPricing() {
           "اضبط أو عدّل أو بدّل التسعير لكل رمز أو طلب أو بالتعبير. أدر معاملات الوقت الأسبوعية منفصلة أدناه. يُحفظ نمط النموذج وأسعاره ذريًا دون إنشاء قنوات أو نشر موارد أو منح صلاحيات للمفاتيح.",
         )}
       </p>
-      {query.isLoading && (
+      {(query.isLoading || catalog.isLoading) && (
         <p role="status">
           {text(
             "正在读取服务器定价…",
@@ -239,17 +239,17 @@ export function ServerTokenPricing() {
       {catalog.isError && (
         <p role="alert">
           {text(
-            "模型目录读取失败，暂时只展示已有定价；刷新后重试。",
-            "Model catalog unavailable; showing configured prices only. Refresh to retry.",
-            "تعذر تحميل فهرس النماذج؛ تُعرض الأسعار المضبوطة فقط. حدّث للمحاولة مجددًا.",
+            "模型目录读取失败，已暂停模型定价展示与编辑；请刷新重试。",
+            "Model catalog unavailable; model pricing display and editing are paused. Refresh to retry.",
+            "تعذر تحميل فهرس النماذج؛ أُوقف عرض أسعار النماذج وتحريرها. حدّث للمحاولة مجددًا.",
           )}
         </p>
       )}
       <p>
         {text(
-          "目录中的未定价模型可稍后设置价格；待定价不代表免费，实际调用仍按现有计费规则执行。",
-          "Catalog models can be priced later. Awaiting pricing does not mean free; existing billing rules still apply to calls.",
-          "يمكن تسعير نماذج الفهرس لاحقًا. انتظار التسعير لا يعني المجانية؛ تظل قواعد الفوترة الحالية مطبقة على الطلبات.",
+          "仅展示平台已登记的模型，可稍后设置价格；待定价不代表免费，实际调用仍按现有计费规则执行。",
+          "Only registered platform models appear here and can be priced later. Awaiting pricing does not mean free; existing billing rules still apply to calls.",
+          "تُعرض نماذج المنصة المسجلة فقط ويمكن تسعيرها لاحقًا. انتظار التسعير لا يعني المجانية؛ تظل قواعد الفوترة الحالية مطبقة على الطلبات.",
         )}
       </p>
       <ServerDetailPricing data={data} />
@@ -318,6 +318,24 @@ export function ServerTokenPricing() {
                 </tr>
               </thead>
               <tbody>
+                {catalog.isSuccess && !ids.length && (
+                  <tr>
+                    <td colSpan={6}>
+                      {text(
+                        "暂无匹配的已登记模型。新增渠道时会自动登记对应模型，也可前往标准模型目录登记。",
+                        "No matching registered models. Creating a channel registers its models, or register a model in the standard model catalog.",
+                        "لا توجد نماذج مسجلة مطابقة. يسجل إنشاء قناة نماذجها، أو سجّل نموذجًا في فهرس النماذج القياسية.",
+                      )}{" "}
+                      <Link to="/console/model-pricing">
+                        {text(
+                          "标准模型",
+                          "Standard models",
+                          "النماذج القياسية",
+                        )}
+                      </Link>
+                    </td>
+                  </tr>
+                )}
                 {ids
                   .slice(currentPage * 20, (currentPage + 1) * 20)
                   .map((id) => (
@@ -586,11 +604,23 @@ export function ServerTokenPricing() {
                   <input
                     dir="ltr"
                     readOnly={draft.locked}
+                    aria-describedby={
+                      draft.locked ? undefined : "registered-model-help"
+                    }
                     maxLength={128}
                     value={draft.id}
                     onChange={(e) => setDraft({ ...draft, id: e.target.value })}
                   />
                 </label>
+                {!draft.locked && (
+                  <small id="registered-model-help">
+                    {text(
+                      "请输入平台已登记的模型标识；新模型请先通过新增渠道或标准模型目录登记。",
+                      "Enter a registered platform model ID. Register new models through channel creation or the standard model catalog first.",
+                      "أدخل معرّف نموذج مسجل. سجّل النماذج الجديدة بإنشاء قناة أو عبر فهرس النماذج القياسية أولًا.",
+                    )}
+                  </small>
+                )}
                 <label>
                   {text("计价方式", "Pricing mode", "نمط التسعير")}
                   <select

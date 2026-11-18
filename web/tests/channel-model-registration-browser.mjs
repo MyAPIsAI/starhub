@@ -72,6 +72,11 @@ try {
   page.on("request", (request) => { if (new URL(request.url()).pathname === "/api/plaza/meta/configuration") catalogReads++; });
   await page.goto(base + "/admin?tab=resources");
   const pricing = page.locator(".server-token-pricing");
+  await pricing.getByText("No matching registered models.", { exact: false }).waitFor();
+  assert.equal(await pricing.locator("[data-server-priced-model]").count(), 0);
+  assert.ok(Object.keys(JSON.parse(initialPricing.options.find((option) => option.key === "model_ratio").value)).length > 0);
+  assert.equal(await pricing.getByRole("button", { name: "Configure model pricing", exact: true }).isDisabled(), true);
+  report.checks.push("seeded pricing defaults do not create display rows when no platform models are registered");
   await pricing.getByLabel("Search models", { exact: true }).fill("catalog-case");
   const readsBefore = catalogReads;
   await page.getByRole("button", { name: "New channel", exact: true }).click();
@@ -98,6 +103,14 @@ try {
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await dialog.waitFor({ state: "hidden" });
   await row("catalog-case-added").getByRole("button", { name: "Set pricing", exact: true }).waitFor();
+  await pricing.getByLabel("Search models", { exact: true }).fill("");
+  assert.equal(await pricing.locator("[data-server-priced-model]").count(), 3);
+  await pricing.getByRole("button", { name: "Configure model pricing", exact: true }).click();
+  await dialog.getByLabel("Server model ID", { exact: true }).fill("unregistered-model");
+  await dialog.getByLabel("Input base USD/million tokens", { exact: true }).fill("1");
+  await dialog.getByLabel("Output/input ratio", { exact: true }).fill("4");
+  assert.equal(await dialog.getByRole("button", { name: "Review server changes", exact: true }).isDisabled(), true);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   report.checks.push("editing a channel registers additional models and refreshes the active catalog");
   await row("catalog-case").getByRole("button", { name: "Set pricing", exact: true }).click();
   assert.equal(await dialog.getByLabel("Server model ID", { exact: true }).inputValue(), "catalog-case");
@@ -122,11 +135,11 @@ try {
   await pricing.getByRole("button", { name: "Refresh pricing", exact: true }).click();
   await pricing.getByRole("alert").filter({ hasText: "Model catalog unavailable" }).waitFor();
   assert.equal(await row("catalog-case-video").count(), 0);
-  assert.equal(await row("catalog-case").count(), 1);
+  assert.equal(await row("catalog-case").count(), 0);
   await page.unroute("**/api/plaza/meta/configuration");
   await pricing.getByRole("button", { name: "Refresh pricing", exact: true }).click();
   await row("catalog-case-video").waitFor();
-  report.checks.push("failed catalog reads hide stale unpriced models, retain confirmed prices and support recovery");
+  report.checks.push("failed catalog reads hide stale rows without falling back to defaults, and recover on refresh");
   for (const language of ["zh", "en", "ar"]) {
     for (const theme of ["light", "dark"]) {
       await page.evaluate(async ({ language, theme }) => {
