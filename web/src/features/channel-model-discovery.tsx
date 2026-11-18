@@ -178,6 +178,10 @@ export function ChannelModelDiscovery({
       upstream_status?: number;
       provider_code?: string;
       request_id?: string;
+      upstream_host?: string;
+      catalog_path?: string;
+      key_source?: "saved" | "draft";
+      key_index?: number;
     };
   }>({ status: "idle", models: [] });
   const [selected, setSelected] = useState<string[]>([]);
@@ -306,6 +310,26 @@ export function ChannelModelDiscovery({
               ? details.provider_code
               : undefined,
           request_id: safeID(details?.request_id),
+          upstream_host:
+            typeof details?.upstream_host === "string" &&
+            /^[a-zA-Z0-9.:[\]-]{1,300}$/.test(details.upstream_host)
+              ? details.upstream_host
+              : undefined,
+          catalog_path:
+            details?.catalog_path === "/api/v3/models" ||
+            details?.catalog_path === "/v1/models"
+              ? details.catalog_path
+              : undefined,
+          key_source:
+            details?.key_source === "saved" || details?.key_source === "draft"
+              ? details.key_source
+              : undefined,
+          key_index:
+            typeof details?.key_index === "number" &&
+            Number.isSafeInteger(details.key_index) &&
+            details.key_index >= 0
+              ? details.key_index
+              : undefined,
         },
       });
     }
@@ -537,6 +561,26 @@ export function ChannelModelDiscovery({
                     <bdi>{state.diagnostic.request_id}</bdi>
                   </>
                 )}
+              </small>
+            )}
+            {state.diagnostic?.upstream_host && (
+              <small style={{ display: "block", overflowWrap: "anywhere" }}>
+                {text("实际查询：", "Actual request: ", "الطلب الفعلي: ")}
+                <bdi>
+                  GET {state.diagnostic.upstream_host}
+                  {state.diagnostic.catalog_path ?? " /…/models"}
+                </bdi>
+                {state.diagnostic.key_source &&
+                  state.diagnostic.key_index !== undefined && (
+                    <>
+                      {" "}
+                      ·{" "}
+                      {state.diagnostic.key_source === "saved"
+                        ? text("已保存密钥", "Saved key", "المفتاح المحفوظ")
+                        : text("表单密钥", "Form key", "مفتاح النموذج")}{" "}
+                      {state.diagnostic.key_index + 1}
+                    </>
+                  )}
               </small>
             )}
           </p>

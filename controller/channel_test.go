@@ -148,7 +148,14 @@ func TestFetchChannelModelsExplicitKeySelection(t *testing.T) {
 		before, _ := model.GetChannelByID(saved.ID)
 		input := map[string]any{"channel_id": saved.ID, "type": channelType}
 		count := requests
-		expectError(t, fetch(input), 502, "upstream_models_authentication_failed")
+		response := fetch(input)
+		expectError(t, response, 502, "upstream_models_authentication_failed")
+		var diagnostic struct {
+			Data service.ChannelModelsDiagnostic `json:"data"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &diagnostic); err != nil || diagnostic.Data.KeySource != "saved" || diagnostic.Data.KeyIndex == nil || *diagnostic.Data.KeyIndex != 1 {
+			t.Fatal("diagnostics must identify the effective enabled saved key")
+		}
 		if requests != count+1 || receivedKey != "Bearer rejected-key" {
 			t.Fatal("catalog authentication failure must not retry other keys")
 		}

@@ -92,7 +92,9 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := strings.TrimSpace(input.Key)
+	keySource, keyIndex := "draft", 0
 	if key == "" && saved != nil {
+		keySource = "saved"
 		savedBase, err := normalizeBase(saved.BaseURL)
 		if err != nil || savedBase != base || saved.Type != input.Type ||
 			(input.Type == channel.ChannelTypeTaskPlugin && saved.TaskPluginID != input.TaskPluginID) {
@@ -100,6 +102,7 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if input.KeyIndex != nil {
+			keyIndex = *input.KeyIndex
 			var ok bool
 			key, ok = saved.KeyAt(*input.KeyIndex)
 			if !ok {
@@ -111,6 +114,7 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 			for i, candidate := range saved.Keys() {
 				if statuses[i] == common.StatusEnabled {
 					key = candidate
+					keyIndex = i
 					break
 				}
 			}
@@ -127,6 +131,7 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		key = keys[index]
+		keyIndex = index
 	}
 	if key == "" {
 		common.ApiError(w, http.StatusBadRequest, "models_key_required")
@@ -142,6 +147,10 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var failure *service.ChannelModelsError
 		if errors.As(err, &failure) {
+			if failure.Diagnostic != nil {
+				failure.Diagnostic.KeySource = keySource
+				failure.Diagnostic.KeyIndex = &keyIndex
+			}
 			common.WriteJSON(w, failure.Status, common.APIResponse{Success: false, Message: failure.Code, Data: failure.Diagnostic})
 		} else {
 			common.ApiError(w, http.StatusBadGateway, "upstream_models_failed")

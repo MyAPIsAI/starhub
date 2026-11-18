@@ -1017,6 +1017,9 @@ try {
     .waitFor();
   assert.equal(new URL(page.url()).pathname, "/admin");
   await dialog.getByText(/fixture-request-401/).waitFor();
+  await dialog.getByText("Actual request:", { exact: false }).waitFor();
+  assert.ok((await dialog.getByRole("alert").innerText()).includes(new URL(upstreamBase).host));
+  assert.ok((await dialog.getByRole("alert").innerText()).includes("Form key 1"));
   await dialog.locator("#ch-base-url").fill(upstreamBase + "/forbidden");
   await discover().click();
   await dialog.getByRole("alert").filter({hasText: "Upstream returned 403"}).waitFor();
@@ -1192,6 +1195,7 @@ try {
   await discover().click();
   await dialog.getByRole("alert").filter({ hasText: "Upstream returned 401" }).waitFor();
   assert.equal(hits.length, beforeAuth + 1);
+  assert.ok((await dialog.getByRole("alert").innerText()).includes("Saved key 1"));
   await dialog.getByText("Check the key source above.", { exact: false }).waitFor();
   await keySelect.selectOption("1");
   assert.equal(await dialog.getByRole("alert").count(), 0);

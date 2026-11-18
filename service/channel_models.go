@@ -27,6 +27,10 @@ type ChannelModelsDiagnostic struct {
 	UpstreamStatus int    `json:"upstream_status"`
 	ProviderCode   string `json:"provider_code,omitempty"`
 	RequestID      string `json:"request_id,omitempty"`
+	UpstreamHost   string `json:"upstream_host,omitempty"`
+	CatalogPath    string `json:"catalog_path,omitempty"`
+	KeySource      string `json:"key_source,omitempty"`
+	KeyIndex       *int   `json:"key_index,omitempty"`
 }
 
 type ChannelModelInfo struct {
@@ -177,6 +181,13 @@ func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) (
 			}
 		}
 		diagnostic := &ChannelModelsDiagnostic{UpstreamStatus: response.StatusCode}
+		if !strings.Contains(request.URL.Host, key) {
+			diagnostic.UpstreamHost = request.URL.Host
+		}
+		// Only standard paths are safe to echo; custom prefixes may contain secrets.
+		if request.URL.Path == "/api/v3/models" || request.URL.Path == "/v1/models" {
+			diagnostic.CatalogPath = request.URL.Path
+		}
 		if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 			body, _ := io.ReadAll(io.LimitReader(response.Body, 8192))
 			var details struct {

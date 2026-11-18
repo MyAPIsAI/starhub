@@ -90,6 +90,9 @@ func TestArkDiscoveryAuthenticationDiagnostics(t *testing.T) {
 		if envelope.Data.UpstreamStatus != status || envelope.Data.ProviderCode != "AuthenticationError" || envelope.Data.RequestID != "fixture-request-id" || strings.Contains(response.Body.String(), "fixture-key") {
 			t.Fatalf("unsafe or incomplete diagnostic: %s", response.Body.String())
 		}
+		if envelope.Data.UpstreamHost != strings.TrimPrefix(upstream.URL, "http://") || envelope.Data.CatalogPath != "/api/v3/models" || envelope.Data.KeySource != "draft" || envelope.Data.KeyIndex == nil || *envelope.Data.KeyIndex != 0 {
+			t.Fatal("missing effective discovery request context")
+		}
 		upstream.Close()
 	}
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +104,10 @@ func TestArkDiscoveryAuthenticationDiagnostics(t *testing.T) {
 	response := call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: fmt.Sprintf(`{"type":32,"base_url":%q,"key":"fixture-key"}`, upstream.URL)})
 	if strings.Contains(response.Body.String(), "fixture-key") {
 		t.Fatal("upstream diagnostic echoed a credential")
+	}
+	response = call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: fmt.Sprintf(`{"type":32,"base_url":%q,"key":"fixture-key"}`, upstream.URL+"/fixture-key")})
+	if strings.Contains(response.Body.String(), "fixture-key") || strings.Contains(response.Body.String(), `"catalog_path"`) {
+		t.Fatal("custom URL prefixes must not be echoed in diagnostics")
 	}
 	for _, key := range []string{"Bearer fixture-key", "fixture key"} {
 		response := call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: fmt.Sprintf(`{"type":32,"base_url":%q,"key":%q}`, upstream.URL, key)})
