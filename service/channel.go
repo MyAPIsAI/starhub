@@ -17,6 +17,7 @@ import (
 	"starhub/common"
 	"starhub/model"
 	"starhub/relay"
+	"starhub/relay/channel"
 	"starhub/relay/dto"
 )
 
@@ -84,6 +85,7 @@ func enableChannel(channelID int64, reason string) error {
 
 // ProbeResult is the outcome of one health probe against a channel.
 type ProbeResult struct {
+	Scope      string // catalog checks do not establish inference health
 	OK         bool   // true when the upstream answered with a success status
 	ElapsedMs  int64  // round-trip latency in milliseconds
 	Message    string // human-readable outcome, includes the upstream error snippet
@@ -91,10 +93,19 @@ type ProbeResult struct {
 	KeyIdx     int    // index of the upstream key used, -1 on single-key channels
 }
 
-// ProbeChannel sends a minimal chat request through the channel and reports
-// the outcome. It performs no database writes; pair it with ApplyProbeResult
-// to persist status transitions.
+// ProbeChannel checks Ark capabilities before selecting a catalog-only or chat probe.
+// It performs no database writes; pair it with ApplyProbeResult for inference health updates.
 func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) ProbeResult {
+	upstreamKey, keyIdx := ch.SelectKey()
+	if ch.Type == channel.ChannelTypeArk {
+		if upstreamKey == "" {
+			return ProbeResult{Scope: "catalog", KeyIdx: keyIdx, Message: "models_key_required"}
+		}
+		catalog, domain := probeArkCatalog(ctx, ch, modelName, upstreamKey, keyIdx)
+		if !catalog.OK || (domain != "LLM" && domain != "VLM") {
+			return catalog
+		}
+	}
 	probe := &dto.ChatRequest{
 		Model:     modelName,
 		Messages:  []dto.ChatMessage{{Role: "user", Text: "ping"}},
@@ -108,7 +119,6 @@ func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) Prob
 	if err != nil {
 		return ProbeResult{Message: "build probe failed: " + err.Error()}
 	}
-	upstreamKey, keyIdx := ch.SelectKey()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		adaptor.ChatURL(ch.BaseURL, upstreamKey, modelName, false), bytes.NewReader(body))
 	if err != nil {
@@ -149,6 +159,9 @@ func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) Prob
 // channel goes down when the last key dies. It returns the channel status
 // after the probe.
 func ApplyProbeResult(ch *model.Channel, res ProbeResult) int {
+	if res.Scope == "catalog" {
+		return ch.Status
+	}
 	if res.HTTPStatus > 0 {
 		if err := model.UpdateChannelResponseTime(ch.ID, res.ElapsedMs); err != nil {
 			log.Printf("update channel %d response time failed: %v", ch.ID, err)

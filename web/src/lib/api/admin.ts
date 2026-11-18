@@ -106,6 +106,7 @@ export interface AdminChannel {
 
 /** Backend channelTestResult (controller/channel.go:232). */
 export interface ChannelTestResult {
+  scope?: "catalog" | "image" | "local" | "";
   ok: boolean;
   model: string;
   elapsed_ms: number;
@@ -210,9 +211,17 @@ export function useAdminChannels() {
 export function useTestChannel() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, model }: { id: number; model?: string }) =>
+    mutationFn: ({
+      id,
+      model,
+      mode,
+    }: {
+      id: number;
+      model?: string;
+      mode?: "image";
+    }) =>
       apiPost<ChannelTestResult>(
-        `/api/channel/test/${id}${model ? `?model=${encodeURIComponent(model)}` : ""}`,
+        `/api/channel/test/${id}?${new URLSearchParams({ ...(model ? { model } : {}), ...(mode ? { mode } : {}) })}`,
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_CHANNELS_KEY });

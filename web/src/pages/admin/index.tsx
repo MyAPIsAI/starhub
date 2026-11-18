@@ -154,6 +154,21 @@ export default function AdminPortal() {
     Record<number, ChannelTestResult | string>
   >({});
 
+  const runChannelTest = (id: number, model?: string, mode?: "image") => {
+    setTestResults((previous) => { const next = { ...previous }; delete next[id]; return next; });
+    testChannelMut.mutate({ id, model, mode }, {
+      onSuccess: (result) => setTestResults((previous) => ({ ...previous, [id]: result })),
+      onError: (error) => setTestResults((previous) => ({ ...previous, [id]: error instanceof Error ? error.message : text("测试失败", "Test failed", "فشل الاختبار") })),
+    });
+  };
+  const testResultLabel = (result: ChannelTestResult) => {
+    if (!result.ok) return text("失败", "Failed", "فشل");
+    if (result.scope === "catalog") return text("目录检查通过（未验证生成）", "Catalog accessible (generation not tested)", "الدليل متاح (لم يُختبر التوليد)");
+    if (result.scope === "image") return text("图片生成成功", "Image generated", "تم توليد الصورة");
+    if (result.scope === "local") return text("插件本地校验通过", "Plugin validated locally", "تم التحقق من الإضافة محليًا");
+    return text("成功", "OK", "نجح");
+  };
+
   // Upstream usage reconciliation modal state.
   const upstreamMut = useUpstreamUsage();
   const [upstreamModal, setUpstreamModal] =
@@ -1281,41 +1296,19 @@ export default function AdminPortal() {
                                 testChannelMut.isPending &&
                                 testChannelMut.variables?.id === ch.id
                               }
-                              onClick={() => {
-                                setTestResults((s) => {
-                                  const next = { ...s };
-                                  delete next[ch.id];
-                                  return next;
-                                });
-                                testChannelMut.mutate(
-                                  { id: ch.id },
-                                  {
-                                    onSuccess: (res) =>
-                                      setTestResults((s) => ({
-                                        ...s,
-                                        [ch.id]: res,
-                                      })),
-                                    onError: (err) =>
-                                      setTestResults((s) => ({
-                                        ...s,
-                                        [ch.id]:
-                                          err instanceof ApiError
-                                            ? err.message
-                                            : text(
-                                                "测试失败",
-                                                "Test failed",
-                                                "فشل الاختبار",
-                                              ),
-                                      })),
-                                  },
-                                );
-                              }}
+                              onClick={() => runChannelTest(ch.id)}
                             >
                               {testChannelMut.isPending &&
                               testChannelMut.variables?.id === ch.id
                                 ? text("测试中…", "Testing…", "اختبار…")
                                 : text("测试连通", "Test", "اختبار")}
                             </Button>
+                            {ch.type === 32 && Object.values(ch.model_capabilities ?? {}).includes("ImageGeneration") && (
+                              <Button size="small" disabled={testChannelMut.isPending && testChannelMut.variables?.id === ch.id}
+                                onClick={() => runChannelTest(ch.id, Object.entries(ch.model_capabilities ?? {}).find(([, domain]) => domain === "ImageGeneration")?.[0], "image")}>
+                                {text("图片生成测试（上游计费）", "Test image generation (upstream charges)", "اختبار توليد الصور (رسوم المزود)")}
+                              </Button>
+                            )}
                             {testResults[ch.id] &&
                               (typeof testResults[ch.id] === "string" ? (
                                 <span
@@ -1328,6 +1321,7 @@ export default function AdminPortal() {
                                 </span>
                               ) : (
                                 <span
+                                  title={(testResults[ch.id] as ChannelTestResult).message}
                                   style={{
                                     fontSize: 11,
                                     color: (
@@ -1337,9 +1331,8 @@ export default function AdminPortal() {
                                       : "var(--danger)",
                                   }}
                                 >
-                                  {(testResults[ch.id] as ChannelTestResult).ok
-                                    ? `${text("成功", "OK", "نجح")} · ${(testResults[ch.id] as ChannelTestResult).elapsed_ms}ms`
-                                    : text("失败", "Failed", "فشل")}
+                                  {testResultLabel(testResults[ch.id] as ChannelTestResult)}
+                                  {` ? ${(testResults[ch.id] as ChannelTestResult).elapsed_ms}ms`}
                                 </span>
                               ))}
                           </div>

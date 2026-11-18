@@ -17,6 +17,7 @@ import (
 	"starhub/common"
 	"starhub/model"
 	"starhub/relay"
+	"starhub/relay/channel"
 	"starhub/relay/dto"
 	"starhub/setting"
 )
@@ -185,6 +186,14 @@ func executeResourceObservation(ctx context.Context, work model.ResourceObservat
 		result.Cause = "unsupported_protocol"
 		return
 	}
+	key, _ := ch.SelectKey()
+	if ch.Type == channel.ChannelTypeArk {
+		catalog, domain := probeArkCatalog(ctx, ch, work.ModelName, key, -1)
+		if !catalog.OK || (domain != "LLM" && domain != "VLM") {
+			result.Cause = "unsupported_modality"
+			return
+		}
+	}
 	probe := &dto.ChatRequest{Model: work.ModelName, Stream: true, Messages: []dto.ChatMessage{{Role: "user", Text: "ping"}}, MaxTokens: 1}
 	body, err := adaptor.ConvertChatRequest(probe)
 	if err != nil {
@@ -192,7 +201,6 @@ func executeResourceObservation(ctx context.Context, work model.ResourceObservat
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	key, _ := ch.SelectKey()
 	req, err := http.NewRequestWithContext(probeCtx, http.MethodPost, adaptor.ChatURL(ch.BaseURL, key, work.ModelName, true), bytes.NewReader(body))
 	if err != nil {
 		return

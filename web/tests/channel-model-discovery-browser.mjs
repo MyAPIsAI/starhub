@@ -36,7 +36,9 @@ try {
     if (req.url.startsWith("/auth/")) {
       res.writeHead(401);
       res.end(JSON.stringify({ error: "fixture authentication failed" }));
-    } else if (req.url.endsWith("/api/v3/models"))
+    } else if (req.url.endsWith("/api/v3/images/generations"))
+      res.end('{"data":[{"url":"https://example.test/probe.png"}]}');
+    else if (req.url.endsWith("/api/v3/models"))
       res.end(
         '{"data":[{"id":"doubao-seedream-4-5-251128","domain":"ImageGeneration"},{"id":"doubao-chat-model","domain":"LLM"}]}',
       );
@@ -444,6 +446,35 @@ try {
   assert.deepEqual(arkChannel.model_capabilities, {
     "doubao-seedream-4-5-251128": "ImageGeneration",
   });
+  const arkRow = page
+    .getByRole("row")
+    .filter({ hasText: "doubao-seedream-4-5-251128" });
+  const beforeImageTests = hits.filter((hit) =>
+    hit.path.endsWith("/images/generations"),
+  ).length;
+  await arkRow.getByRole("button", { name: "Test", exact: true }).click();
+  await arkRow
+    .getByText(/Catalog accessible \(generation not tested\)/)
+    .waitFor();
+  assert.equal(
+    hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
+    beforeImageTests,
+  );
+  await arkRow
+    .getByRole("button", {
+      name: "Test image generation (upstream charges)",
+      exact: true,
+    })
+    .click();
+  await arkRow.getByText(/Image generated/).waitFor();
+  assert.equal(
+    hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
+    beforeImageTests + 1,
+  );
+  await capture("ark-image-probe");
+  report.checks.push(
+    "image models use labeled catalog checks; only explicit image tests generate an image",
+  );
   await api("DELETE", `/api/channel/${arkChannel.id}`);
   report.checks.push(
     "Ark channel discovery and creation preserve its API prefix and exact model ID",

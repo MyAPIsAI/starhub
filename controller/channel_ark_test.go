@@ -14,6 +14,7 @@ import (
 	"starhub/model"
 	"starhub/relay/channel"
 	"starhub/relay/dto"
+	"starhub/service"
 )
 
 func TestArkModelDiscovery(t *testing.T) {
@@ -113,4 +114,61 @@ func TestArkImageRelay(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "image.png") {
 		t.Fatalf("Ark image relay failed: %d %s", w.Code, w.Body.String())
 	}
+}
+
+func TestArkCapabilityProbes(t *testing.T) {
+	newTestDB(t)
+	const modelID = "doubao-seedream-4-5-251128"
+	images, chats, catalogs := 0, 0, 0
+	domain := "ImageGeneration"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v3/models":
+			catalogs++
+			fmt.Fprintf(w, `{"data":[{"id":%q,"domain":%q}]}`, modelID, domain)
+		case "/api/v3/images/generations":
+			images++
+			if r.Header.Get("Authorization") != "Bearer fixture-key" {
+				t.Error("wrong image test credential")
+			}
+			fmt.Fprint(w, `{"data":[{"url":"https://example.test/probe.png"}]}`)
+		case "/api/v3/chat/completions":
+			chats++
+			fmt.Fprint(w, `{"choices":[{"message":{"content":"pong"}}]}`)
+		default:
+			t.Errorf("unexpected probe path %s", r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+	ch := &model.Channel{Name: "Ark probes", Type: channel.ChannelTypeArk, Key: "fixture-key", BaseURL: upstream.URL, Models: modelID, Group: "default", Status: 1, Weight: 1}
+	if err := model.InsertChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	request := testRequest{method: "POST", target: fmt.Sprintf("/api/channel/test/%d", ch.ID), path: map[string]string{"id": fmt.Sprint(ch.ID)}}
+	var result channelTestResult
+	decodeData(t, call(TestChannel, request), &result)
+	if !result.OK || result.Scope != "catalog" || images != 0 || chats != 0 {
+		t.Fatal("default image probe submitted inference")
+	}
+	if err := model.UpdateChannelStatus(ch.ID, common.ChannelStatusAutoDisabled); err != nil {
+		t.Fatal(err)
+	}
+	service.RunChannelTestOnce(t.Context())
+	after, _ := model.GetChannelByID(ch.ID)
+	if after.Status != common.ChannelStatusAutoDisabled || images != 0 || chats != 0 {
+		t.Fatal("catalog-only automatic probe changed inference health or submitted inference")
+	}
+	request.target += "?mode=image"
+	decodeData(t, call(TestChannel, request), &result)
+	if !result.OK || result.Scope != "image" || images != 1 || chats != 0 {
+		t.Fatal("explicit image probe did not perform exactly one generation")
+	}
+	domain = "LLM"
+	request.target = fmt.Sprintf("/api/channel/test/%d", ch.ID)
+	decodeData(t, call(TestChannel, request), &result)
+	if !result.OK || chats != 1 || catalogs < 3 {
+		t.Fatal("text capability did not use the chat probe")
+	}
+	request.target += "?mode=unsupported"
+	expectStatus(t, call(TestChannel, request), http.StatusBadRequest)
 }

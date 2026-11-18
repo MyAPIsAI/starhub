@@ -271,6 +271,7 @@ func DeleteChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 type channelTestResult struct {
+	Scope     string `json:"scope"`
 	OK        bool   `json:"ok"`
 	Model     string `json:"model"`
 	ElapsedMs int64  `json:"elapsed_ms"`
@@ -289,12 +290,16 @@ func TestChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ch.Type == channel.ChannelTypeTaskPlugin {
+		if r.URL.Query().Get("mode") != "" {
+			common.ApiError(w, http.StatusBadRequest, "unsupported channel probe mode")
+			return
+		}
 		_, err := relay.LoadTaskPlugin(r.Context(), ch.TaskPluginID, false)
 		if err != nil {
 			common.ApiError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		common.ApiSuccess(w, channelTestResult{OK: true, Status: ch.Status, Message: "Plugin validated locally; no upstream task was submitted"})
+		common.ApiSuccess(w, channelTestResult{OK: true, Scope: "local", Status: ch.Status, Message: "Plugin validated locally; no upstream task was submitted"})
 		return
 	}
 	if _, err := relay.GetChatAdaptor(ch.Type); err != nil {
@@ -313,9 +318,23 @@ func TestChannel(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "model does not belong to this channel")
 		return
 	}
-	res := service.ProbeChannel(r.Context(), ch, modelName)
+	var res service.ProbeResult
+	switch mode := r.URL.Query().Get("mode"); mode {
+	case "":
+		res = service.ProbeChannel(r.Context(), ch, modelName)
+	case "image":
+		if ch.Type != channel.ChannelTypeArk {
+			common.ApiError(w, http.StatusBadRequest, "image probe requires an Ark channel")
+			return
+		}
+		res = service.ProbeChannelImage(r.Context(), ch, modelName)
+	default:
+		common.ApiError(w, http.StatusBadRequest, "unsupported channel probe mode")
+		return
+	}
 	status := service.ApplyProbeResult(ch, res)
 	common.ApiSuccess(w, channelTestResult{
+		Scope:     res.Scope,
 		OK:        res.OK,
 		Model:     modelName,
 		ElapsedMs: res.ElapsedMs,
