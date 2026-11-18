@@ -30,12 +30,12 @@ type channelPayload struct {
 	Weight            *int64             `json:"weight"`
 }
 
-var arkImageShortName = regexp.MustCompile(`^doubao-seedream-[0-9]+\.[0-9]+$`)
+var arkModelShortName = regexp.MustCompile(`^doubao-(seedream|seedance)-[0-9]+\.[0-9]+(-(pro|lite|fast|mini))?$`)
 
 func validateArkModelNames(w http.ResponseWriter, channelType int, names []string) bool {
 	if channelType == channel.ChannelTypeArk {
 		for _, name := range names {
-			if arkImageShortName.MatchString(name) {
+			if arkModelShortName.MatchString(name) {
 				common.ApiError(w, http.StatusBadRequest, "ark_model_version_required")
 				return false
 			}

@@ -180,7 +180,7 @@ export function ChannelModelDiscovery({
     connection.type === 32 &&
     models
       .split(",")
-      .some((id) => /^doubao-seedream-[0-9]+\.[0-9]+$/.test(id.trim()));
+      .some((id) => /^doubao-(seedream|seedance)-[0-9]+\.[0-9]+(-(pro|lite|fast|mini))?$/.test(id.trim()));
   const supported = connection.type === 1 || connection.type === 32 || isPlugin;
   let declaredModels: string[] = [];
   if (isPlugin && plugin) {

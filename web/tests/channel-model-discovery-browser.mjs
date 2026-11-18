@@ -446,6 +446,11 @@ try {
   await dialog.locator("#ch-type").selectOption("32");
   await dialog.locator("#ch-base-url").fill(upstreamBase + "/ark/api/v3");
   await dialog.locator("#ch-models").fill("doubao-seedream-4.5");
+  for (const shortName of ["doubao-seedance-2.0", "doubao-seedance-2.0-fast"]) {
+    await dialog.locator("#ch-models").fill(shortName);
+    assert.equal(await dialog.locator("#ch-models").evaluate(node => node.checkValidity()), false);
+  }
+  await dialog.locator("#ch-models").fill("doubao-seedream-4.5");
   const beforeInvalidArkSave = channelWrites;
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   assert.equal(channelWrites, beforeInvalidArkSave);
