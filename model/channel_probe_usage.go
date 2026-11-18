@@ -3,19 +3,28 @@ package model
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
+
+	"starhub/common"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // ChannelImageProbe records usage facts without touching customer billing.
 // An unfinished attempt stays uncertain after a crash or network failure.
 type ChannelImageProbe struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement"`
-	ChannelID int64  `gorm:"not null;index"`
-	Model     string `gorm:"size:128;not null;default:''"`
-	State     string `gorm:"size:16;not null;default:'uncertain'"`
-	Images    int64  `gorm:"not null;default:0"`
-	CreatedAt int64  `gorm:"autoCreateTime"`
-	UpdatedAt int64  `gorm:"autoUpdateTime"`
+	ID             int64  `gorm:"primaryKey;autoIncrement"`
+	ChannelID      int64  `gorm:"not null;index"`
+	Model          string `gorm:"size:128;not null;default:''"`
+	State          string `gorm:"size:16;not null;default:'uncertain'"`
+	Images         int64  `gorm:"not null;default:0"`
+	PreviewURL     string `gorm:"type:text;not null;default:''" json:"-"`
+	ElapsedMs      int64  `gorm:"not null;default:0"`
+	ConnectionHash string `gorm:"size:64;not null;default:''" json:"-"`
+	CreatedAt      int64  `gorm:"autoCreateTime"`
+	UpdatedAt      int64  `gorm:"autoUpdateTime"`
 }
 
 type ChannelProbeUsage struct {
@@ -31,13 +40,29 @@ type ChannelProbeUsage struct {
 	PendingVideos     int64  `json:"pending_videos"`
 }
 
-func StartChannelImageProbe(channelID int64, name string) (*ChannelImageProbe, error) {
-	entry := &ChannelImageProbe{ChannelID: channelID, Model: name, State: "uncertain"}
+func imageProbeConnection(ch *Channel) string {
+	raw, _ := json.Marshal([]any{ch.Type, ch.BaseURL, ch.Key})
+	return common.HashKey("channel-image-probe:" + string(raw))
+}
+
+func StartChannelImageProbe(ch *Channel, name string) (*ChannelImageProbe, error) {
+	entry := &ChannelImageProbe{ChannelID: ch.ID, Model: name, State: "uncertain", ConnectionHash: imageProbeConnection(ch)}
 	return entry, DB.Create(entry).Error
 }
 
-func CompleteChannelImageProbe(id int64, state string, images int64) error {
-	return DB.Model(&ChannelImageProbe{}).Where("id = ? AND state = ?", id, "uncertain").Updates(map[string]any{"state": state, "images": images}).Error
+func CompleteChannelImageProbe(id int64, state string, images int64, previewURL string, elapsedMs int64) error {
+	// Signed preview URLs must never appear in SQL error logs.
+	return DB.Session(&gorm.Session{Logger: DB.Logger.LogMode(logger.Silent)}).Model(&ChannelImageProbe{}).Where("id = ? AND state = ?", id, "uncertain").Updates(map[string]any{"state": state, "images": images, "preview_url": previewURL, "elapsed_ms": elapsedMs}).Error
+}
+
+// Results belong to the saved connection and configured model, not channel health.
+func LatestChannelImageProbe(ch *Channel) (*ChannelImageProbe, error) {
+	var entry ChannelImageProbe
+	err := DB.Where("channel_id = ? AND connection_hash = ? AND model IN ?", ch.ID, imageProbeConnection(ch), SplitList(ch.Models)).Order("id DESC").First(&entry).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &entry, err
 }
 
 // Read persisted tasks directly so historical videos need no monetary backfill.

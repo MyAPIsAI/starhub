@@ -29,9 +29,9 @@ export function ImageProbePreview({ url }: { url?: string }) {
     return (
       <p className="image-probe-note" role="status">
         {text(
-          "图片已生成，但当前响应没有可用的预览地址。旧版后端需更新并重启后才能返回地址。",
-          "The image was generated, but no usable preview URL was returned. Older backends need an update and restart to return preview links.",
-          "تم توليد الصورة لكن الاستجابة لا تحتوي على رابط معاينة صالح. تحتاج الإصدارات القديمة من الخادم إلى التحديث وإعادة التشغيل.",
+          "图片已生成，但此记录未保存可用的预览地址，可能是旧记录或仅返回图片数据的响应。",
+          "The image was generated, but no usable preview URL was saved. Older records or responses containing only image data cannot be previewed here.",
+          "تم توليد الصورة لكن لم يُحفظ رابط معاينة صالح. لا يمكن معاينة السجلات القديمة أو الاستجابات التي تتضمن بيانات الصورة فقط هنا.",
         )}
       </p>
     );

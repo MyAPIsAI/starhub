@@ -4,6 +4,16 @@ import { useSettingsText } from "./settings-text";
 import "./channel-probe-result.css";
 
 const errors: Record<string, [string, string, string]> = {
+  image_probe_upstream_failed: [
+    "上次图片测试失败，请检查上游配置。",
+    "The last image test failed. Check the upstream configuration.",
+    "فشل اختبار الصورة السابق. تحقق من إعدادات المزود.",
+  ],
+  image_probe_result_uncertain: [
+    "上次图片测试结果尚未确认，请先核对上游执行情况，避免重复生成。",
+    "The last image test outcome is unconfirmed. Check upstream execution before generating again.",
+    "نتيجة اختبار الصورة السابق غير مؤكدة. تحقق من تنفيذ المزود قبل التوليد مجددًا.",
+  ],
   image_probe_usage_unavailable: [
     "本地图片测试用量记录失败，请检查数据库；请先核对上游执行情况再重试。",
     "The local image test usage could not be recorded. Check the database and upstream execution before retrying.",

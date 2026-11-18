@@ -37,7 +37,7 @@ func TestImageProbePreviewURL(t *testing.T) {
 				fmt.Fprint(w, tc.body)
 			}))
 			defer server.Close()
-			ch := &model.Channel{Type: channel.ChannelTypeArk, BaseURL: server.URL, Key: "fixture"}
+			ch := &model.Channel{Type: channel.ChannelTypeArk, BaseURL: server.URL, Key: "preview-secret-key"}
 			got := ProbeChannelImage(t.Context(), ch, "fixture-image")
 			if got.OK != tc.ok || got.ImageURL != tc.want || hits != 1 {
 				t.Fatalf("ok=%v, preview=%q, requests=%d", got.OK, got.ImageURL, hits)

@@ -32,7 +32,8 @@
 }
 .channel-probe-actions .channel-probe-view {
   color: var(--brand);
-  padding-inline: 4px;
+  padding-inline: 2px;
+  gap: 4px;
 }
 @media (max-width: 640px) {
   .channel-probe-controls {

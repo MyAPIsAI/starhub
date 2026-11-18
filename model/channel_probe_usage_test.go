@@ -8,18 +8,18 @@ import (
 
 func TestChannelProbeUsageSeparatesTestsFromCustomerBilling(t *testing.T) {
 	newTestDB(t)
-	image, err := StartChannelImageProbe(7, "image-model")
+	image, err := StartChannelImageProbe(&Channel{ID: 7}, "image-model")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CompleteChannelImageProbe(image.ID, "succeeded", 1); err != nil {
+	if err := CompleteChannelImageProbe(image.ID, "succeeded", 1, "", 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := CompleteChannelImageProbe(image.ID, "succeeded", 9); err != nil {
+	if err := CompleteChannelImageProbe(image.ID, "succeeded", 9, "", 0); err != nil {
 		t.Fatal(err)
 	}
-	_, _ = StartChannelImageProbe(7, "image-model")
-	_, _ = StartChannelImageProbe(8, "other-channel")
+	_, _ = StartChannelImageProbe(&Channel{ID: 7}, "image-model")
+	_, _ = StartChannelImageProbe(&Channel{ID: 8}, "other-channel")
 	for _, task := range []*Task{
 		{ChannelID: 7, Platform: ArkVideoProbePlatform, Status: "succeeded", ResultMeta: `{"seconds":4,"usage":{"completion_tokens":40594}}`},
 		{ChannelID: 7, Platform: ArkVideoProbePlatform, Status: "succeeded", ResultMeta: `{"seconds":4}`},

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"starhub/model"
@@ -83,7 +84,7 @@ func ProbeChannelImage(ctx context.Context, ch *model.Channel, name string) (res
 	_ = (ark.Adaptor{}).PrepareRequest(req, key, body)
 	var images int64
 	if ch.ID > 0 {
-		entry, err := model.StartChannelImageProbe(ch.ID, name)
+		entry, err := model.StartChannelImageProbe(ch, name)
 		if err != nil {
 			result.Code, result.Message = "image_probe_usage_unavailable", "Local usage could not be recorded; no image test was sent"
 			return
@@ -95,7 +96,7 @@ func ProbeChannelImage(ctx context.Context, ch *model.Channel, name string) (res
 			} else if result.HTTPStatus >= 400 && result.HTTPStatus < 500 {
 				state = "failed"
 			}
-			if err := model.CompleteChannelImageProbe(entry.ID, state, images); err != nil {
+			if err := model.CompleteChannelImageProbe(entry.ID, state, images, result.ImageURL, result.ElapsedMs); err != nil {
 				result.Code, result.Message = "image_probe_usage_unavailable", "Image test finished; local usage confirmation failed"
 			}
 		}()
@@ -123,8 +124,8 @@ func ProbeChannelImage(ctx context.Context, ch *model.Channel, name string) (res
 	urls, b64s, _, err := dto.WalkImageResponse(data, func(entry dto.ImageEntryRaw) error {
 		if result.ImageURL == "" {
 			var raw string
-			if json.Unmarshal(entry.URL, &raw) == nil {
-				result.ImageURL = imageProbeURL(raw)
+			if json.Unmarshal(entry.URL, &raw) == nil && !strings.Contains(raw, key) {
+				result.ImageURL = ImageProbeURL(raw)
 			}
 		}
 		return nil
@@ -143,7 +144,8 @@ func ProbeChannelImage(ctx context.Context, ch *model.Channel, name string) (res
 	return
 }
 
-func imageProbeURL(raw string) string {
+// ImageProbeURL limits stored and returned previews to ordinary web URLs.
+func ImageProbeURL(raw string) string {
 	if len(raw) > 8192 {
 		return ""
 	}

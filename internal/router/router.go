@@ -117,6 +117,7 @@ func New() http.Handler {
 	mux.Handle("POST /api/channel", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))
 	mux.Handle("POST /api/channel/video-test/{id}/task", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.SubmitChannelVideoTest))))
 	mux.Handle("GET /api/channel/video-test/{id}/task", middleware.AdminAuth(http.HandlerFunc(controller.GetChannelVideoTest)))
+	mux.Handle("GET /api/channel/image-test/{id}/result", middleware.AdminAuth(http.HandlerFunc(controller.GetChannelImageTest)))
 	mux.Handle("POST /api/channel/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.CreateChannel))))
 	mux.Handle("POST /api/channel/fetch_models", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.FetchChannelModels))))
 	mux.Handle("POST /api/channel/test/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.TestChannel))))

@@ -186,6 +186,7 @@ try {
   for(const method of ["GET","POST"]){
     assert.equal((await context.request.fetch(base+"/api/channel/video-test/1/task",{method})).status(),403);
   }
+  assert.equal((await context.request.get(base+"/api/channel/image-test/1/result")).status(),403);
   assert.equal(
     (
       await context.request.post(base + "/api/channel/fetch_models", {
@@ -509,6 +510,10 @@ try {
   const beforeImageTests = hits.filter((hit) =>
     hit.path.endsWith("/images/generations"),
   ).length;
+  await arkRow.getByRole("button", {name:"View image result",exact:true}).click();
+  await dialog.getByText(/No saved image test result/).waitFor();
+  assert.equal(hits.filter(hit=>hit.path.endsWith("/images/generations")).length,beforeImageTests);
+  await dialog.locator(".task-dialog-footer").getByRole("button", {name:"Close",exact:true}).click();
   await page.route("**/api/channel/test/*", (route) =>
     route.fulfill({
       json: {
@@ -678,6 +683,19 @@ try {
     .locator(".task-dialog-footer")
     .getByRole("button", { name: "Close", exact: true })
     .click();
+  await page.reload();
+  await arkRow.getByRole("button",{name:"View image result",exact:true}).waitFor();
+  await page.evaluate(async()=>{const{usePreferences}=await import("/src/lib/preferences.ts");usePreferences.getState().setLanguage("zh");usePreferences.getState().setTheme("light")});
+  await page.setViewportSize({width:1440,height:1000});
+  await arkRow.locator(".channel-probe-actions").scrollIntoViewIfNeeded();
+  await capture("ark-image-result-actions-zh-light");
+  await page.evaluate(async()=>{const{usePreferences}=await import("/src/lib/preferences.ts");usePreferences.getState().setLanguage("en")});
+  await arkRow.getByRole("button", {name:"View image result",exact:true}).click();
+  await preview.evaluate(node=>node.decode());
+  assert.ok(await preview.evaluate(node=>node.naturalWidth>0));
+  assert.equal(hits.filter(hit=>hit.path.endsWith("/images/generations")).length,beforeImageTests+1);
+  await capture("ark-image-result-restored");
+  await dialog.locator(".task-dialog-footer").getByRole("button",{name:"Close",exact:true}).click();
   await arkRow
     .getByRole("button", { name: "Test", exact: true })
     .click();
@@ -685,7 +703,7 @@ try {
   await page.route("**/probe.svg", (route) =>
     route.fulfill({ status: 410, body: "expired fixture" }),
   );
-  await arkRow.getByRole("button", { name: "View image", exact: true }).click();
+  await arkRow.getByRole("button", { name: "View image result", exact: true }).click();
   await dialog.getByText(/preview could not load/).waitFor();
   await page.unroute("**/probe.svg");
   await dialog
@@ -800,13 +818,13 @@ try {
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await dialog.waitFor({ state: "hidden" });
   await arkRow
-    .getByRole("button", { name: "View image", exact: true })
-    .waitFor({ state: "hidden" });
+    .getByRole("button", { name: "View image result", exact: true })
+    .waitFor();
   assert.equal(
     await arkRow
-      .getByRole("button", { name: "View image", exact: true })
+      .getByRole("button", { name: "View image result", exact: true })
       .count(),
-    0,
+    1,
   );
   for (const imageURL of [undefined, "javascript:alert(1)"]) {
     await page.route("**/api/channel/test/*", (route) =>
@@ -867,13 +885,13 @@ try {
     });
   });
   await arkRow
-    .getByRole("button", { name: "View result", exact: true })
-    .waitFor({ state: "hidden" });
+    .getByRole("button", { name: "View image result", exact: true })
+    .waitFor();
   assert.equal(
     await arkRow
-      .getByRole("button", { name: "View result", exact: true })
+      .getByRole("button", { name: "View image result", exact: true })
       .count(),
-    0,
+    1,
   );
   assert.equal(
     hits.filter((hit) => hit.path.endsWith("/images/generations")).length,

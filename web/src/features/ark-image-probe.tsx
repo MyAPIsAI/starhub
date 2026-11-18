@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Eye } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import type { AdminChannel, ChannelTestResult } from "../lib/api/admin";
 import { ChannelProbeResult } from "./channel-probe-result";
-import { ImageProbePreview, imagePreviewURL } from "./image-probe-preview";
+import { ImageProbePreview } from "./image-probe-preview";
+import { apiRequest } from "../lib/api/http";
 import { useSettingsText } from "./settings-text";
 import { isArkVideoModel } from "./ark-video-models";
 
@@ -25,6 +26,53 @@ export function ArkImageProbe({
   const [open, setOpen] = useState(false);
   const [viewOnly, setViewOnly] = useState(false);
   const [selected, setSelected] = useState("");
+  const [saved, setSaved] = useState<ChannelTestResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const request = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      request.current?.abort();
+      request.current = null;
+    },
+    [],
+  );
+  const currentResult = result ?? saved;
+  const changeOpen = (next: boolean) => {
+    if (!next) {
+      request.current?.abort();
+      request.current = null;
+      setLoading(false);
+    }
+    setOpen(next);
+  };
+  const viewResult = async () => {
+    setViewOnly(true);
+    setLoadError(false);
+    setOpen(true);
+    if (result || pending) return;
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    setLoading(true);
+    setSaved(null);
+    try {
+      const response = await apiRequest<ChannelTestResult | null>(
+        `/api/channel/image-test/${channel.id}/result`,
+        { signal: controller.signal },
+      );
+      if (request.current === controller && !controller.signal.aborted)
+        setSaved(response ?? null);
+    } catch {
+      if (request.current === controller && !controller.signal.aborted)
+        setLoadError(true);
+    } finally {
+      if (request.current === controller) {
+        request.current = null;
+        setLoading(false);
+      }
+    }
+  };
   const candidates = [
     ...new Set(
       channel.models
@@ -51,6 +99,10 @@ export function ArkImageProbe({
         aria-label={label}
         disabled={disabled}
         onClick={() => {
+          request.current?.abort();
+          request.current = null;
+          setLoading(false);
+          setLoadError(false);
           setSelected(candidates.length === 1 ? candidates[0] : "");
           setViewOnly(false);
           setOpen(true);
@@ -64,25 +116,18 @@ export function ArkImageProbe({
           {text("计费", "Paid", "مدفوع")}
         </span>
       </Button>
-      {result && (
-        <Button
-          size="small"
-          variant="ghost"
-          className="channel-probe-view"
-          onClick={() => {
-            setViewOnly(true);
-            setOpen(true);
-          }}
-        >
-          <Eye size={14} aria-hidden="true" />
-          {result.ok && imagePreviewURL(result.image_url)
-            ? text("查看图片", "View image", "عرض الصورة")
-            : text("查看结果", "View result", "عرض النتيجة")}
-        </Button>
-      )}
+      <Button
+        size="small"
+        variant="ghost"
+        className="channel-probe-view"
+        onClick={() => void viewResult()}
+      >
+        <Eye size={14} aria-hidden="true" />
+        {text("查看图片结果", "View image result", "عرض نتيجة الصورة")}
+      </Button>
       <Modal
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={changeOpen}
         title={
           viewOnly
             ? text("图片测试结果", "Image test result", "نتيجة اختبار الصورة")
@@ -104,7 +149,7 @@ export function ArkImageProbe({
         footer={
           <>
             <Button
-              onClick={() => setOpen(false)}
+              onClick={() => changeOpen(false)}
               style={{ flexShrink: 0, whiteSpace: "nowrap" }}
             >
               {viewOnly
@@ -118,6 +163,7 @@ export function ArkImageProbe({
                 onClick={() => {
                   if (disabled || !candidates.includes(selected)) return;
                   setViewOnly(true);
+                  setSaved(null);
                   onProbe(selected);
                 }}
               >
@@ -142,13 +188,40 @@ export function ArkImageProbe({
                 )}
               </p>
             )}
-            {!pending && result && (
+            {loading && (
+              <p role="status">
+                {text(
+                  "正在读取图片结果…",
+                  "Loading image result…",
+                  "جارٍ تحميل نتيجة الصورة…",
+                )}
+              </p>
+            )}
+            {loadError && (
+              <p role="alert">
+                {text(
+                  "读取图片结果失败，请稍后重试。",
+                  "Could not load the image result. Retry later.",
+                  "تعذر تحميل نتيجة الصورة. أعد المحاولة لاحقًا.",
+                )}
+              </p>
+            )}
+            {!pending && !loading && !loadError && !currentResult && (
+              <p role="status">
+                {text(
+                  "暂无已保存的图片测试结果。请先手动生成测试图片；旧记录中未保存的图片无法恢复。",
+                  "No saved image test result. Generate a test image manually first; unsaved images from older tests cannot be recovered.",
+                  "لا توجد نتيجة صورة محفوظة. أنشئ صورة اختبار يدويًا أولًا؛ لا يمكن استعادة الصور القديمة غير المحفوظة.",
+                )}
+              </p>
+            )}
+            {!pending && !loading && !loadError && currentResult && (
               <>
-                <ChannelProbeResult result={result} />
-                {result.ok && (
+                <ChannelProbeResult result={currentResult} />
+                {currentResult.ok && (
                   <ImageProbePreview
-                    key={result.image_url}
-                    url={result.image_url}
+                    key={currentResult.image_url}
+                    url={currentResult.image_url}
                   />
                 )}
               </>
