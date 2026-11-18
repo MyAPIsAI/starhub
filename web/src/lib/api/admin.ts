@@ -235,11 +235,8 @@ export function useTestChannel() {
   });
 }
 
-export function useUpstreamUsage() {
-  return useMutation({
-    mutationFn: (id: number) =>
-      apiGet<UpstreamUsageResult>(`/api/channel/${id}/upstream-usage`),
-  });
+export function fetchUpstreamUsage(id: number, signal: AbortSignal) {
+  return apiGet<UpstreamUsageResult>(`/api/channel/${id}/upstream-usage`, signal);
 }
 
 // --- Helpers ---

@@ -36,7 +36,7 @@ import { ServerTokenPricing } from "../../features/server-token-pricing";
 import { ResourceRegions } from "../../features/resource-regions";
 import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
 import { ChannelModelDiscovery } from "../../features/channel-model-discovery";
-import { UpstreamUsageResultView } from "../../features/upstream-usage-result";
+import { UpstreamUsageControl } from "../../features/upstream-usage-control";
 import { ChannelProbeControls } from "../../features/channel-probe-controls";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
@@ -45,12 +45,10 @@ import {
   useAdminAudit,
   useAdminMetrics,
   useAdminChannels,
-  useUpstreamUsage,
   userIsActive,
   userStatusText,
   quotaToUsd,
   type AdminUser,
-  type UpstreamUsageResult,
 } from "../../lib/api/admin";
 import {
   useCreateChannel,
@@ -147,13 +145,6 @@ export default function AdminPortal() {
   const redemptionsQuery = useRedemptions();
   const createRedemptionMut = useCreateRedemption();
   const deleteRedemptionMut = useDeleteRedemption();
-
-  // Upstream usage reconciliation modal state.
-  const upstreamMut = useUpstreamUsage();
-  const [upstreamModal, setUpstreamModal] =
-    useState<UpstreamUsageResult | null>(null);
-  const [upstreamLoading, setUpstreamLoading] = useState(false);
-  const [upstreamError, setUpstreamError] = useState<string | null>(null);
 
   // Channel create/edit modal state.
   const [channelModalOpen, setChannelModalOpen] = useState(false);
@@ -1271,42 +1262,10 @@ export default function AdminPortal() {
                               justifyContent: "flex-end",
                             }}
                           >
-                            <Button
-                              size="small"
-                              variant="secondary"
-                              disabled={
-                                upstreamLoading &&
-                                upstreamModal?.channel_id === ch.id
-                              }
-                              onClick={() => {
-                                setUpstreamModal(null);
-                                setUpstreamError(null);
-                                setUpstreamLoading(true);
-                                upstreamMut.mutate(ch.id, {
-                                  onSuccess: (res) => {
-                                    setUpstreamModal(res);
-                                    setUpstreamLoading(false);
-                                  },
-                                  onError: (err) => {
-                                    setUpstreamError(
-                                      err instanceof ApiError
-                                        ? err.message
-                                        : text(
-                                            "查询失败",
-                                            "Query failed",
-                                            "فشل الاستعلام",
-                                          ),
-                                    );
-                                    setUpstreamLoading(false);
-                                  },
-                                });
-                              }}
-                            >
-                              {upstreamLoading &&
-                              upstreamMut.variables === ch.id
-                                ? text("查询中…", "Querying…", "استعلام…")
-                                : text("上游对账", "Reconcile", "مطابقة")}
-                            </Button>
+                            <UpstreamUsageControl
+                              channel={ch}
+                              version={channelsQuery.dataUpdatedAt}
+                            />
                             <Button
                               size="small"
                               variant="secondary"
@@ -1363,37 +1322,6 @@ export default function AdminPortal() {
               </table>
             </section>
 
-            {/* Upstream usage reconciliation modal */}
-            <Modal
-              open={!!upstreamError}
-              onOpenChange={(open) => {
-                if (!open) setUpstreamError(null);
-              }}
-              title={text("查询失败", "Query failed", "فشل الاستعلام")}
-              description={text(
-                "上游用量查询失败，请稍后重试。",
-                "The upstream usage query failed. Retry later.",
-                "فشل استعلام استخدام المزود. أعد المحاولة لاحقًا.",
-              )}
-              size="compact"
-            >
-              <p role="alert">{upstreamError}</p>
-            </Modal>
-            <Modal
-              open={!!upstreamModal}
-              onOpenChange={(open) => {
-                if (!open) setUpstreamModal(null);
-              }}
-              title={text("上游对账", "Upstream Reconciliation", "مطابقة المنبع")}
-              description={
-                upstreamModal
-                  ? `${upstreamModal.channel_name} (ID: ${upstreamModal.channel_id})`
-                  : ""
-              }
-              size="wide"
-            >
-              {upstreamModal && <UpstreamUsageResultView result={upstreamModal} />}
-            </Modal>
           </div>
         )}
 

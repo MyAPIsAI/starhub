@@ -35,7 +35,11 @@ try {
     if (req.url.startsWith("/unsupported/")) {
       res.writeHead(404);
       res.end("{}");
-    } else if (req.url.startsWith("/auth/") || (req.url.startsWith("/partial/") && req.headers.authorization.endsWith("failed"))) {
+    } else if (
+      req.url.startsWith("/auth/") ||
+      (req.url.startsWith("/partial/") &&
+        req.headers.authorization.endsWith("failed"))
+    ) {
       res.writeHead(403);
       res.end("{}");
     } else if (req.url.startsWith("/invalid/")) {
@@ -48,7 +52,7 @@ try {
             total_used: 1595625560,
             total_available: 500000,
             total_granted: 1596125560,
-          unlimited_quota: req.url.startsWith("/unlimited/"),
+            unlimited_quota: req.url.startsWith("/unlimited/"),
             expires_at: 0,
           },
         }),
@@ -133,9 +137,7 @@ try {
   };
   assert.equal(
     (
-      await context.request.post(base + "/api/channel/fetch_models", {
-        data: { type: 1, base_url: upstreamBase, key: "fixture-key" },
-      })
+      await context.request.get(base + "/api/channel/1/upstream-usage")
     ).status(),
     401,
   );
@@ -145,9 +147,7 @@ try {
   });
   assert.equal(
     (
-      await context.request.post(base + "/api/channel/fetch_models", {
-        data: { type: 1, base_url: upstreamBase, key: "fixture-key" },
-      })
+      await context.request.get(base + "/api/channel/1/upstream-usage")
     ).status(),
     403,
   );
@@ -157,7 +157,7 @@ try {
   });
   await api("POST", "/api/user/2fa/skip");
   report.checks.push(
-    "discovery endpoint rejects anonymous and unverified staff sessions",
+    "usage endpoint rejects anonymous and unverified staff sessions",
   );
   const page = await context.newPage();
   let channelWrites = 0;
@@ -180,15 +180,30 @@ try {
     group: "default",
   });
   await page.reload();
-  const row = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "Usage fixture", exact: true }) });
+  const row = page
+    .getByRole("row", { includeHidden: true })
+    .filter({
+      has: page.getByRole("cell", {
+        name: "Usage fixture",
+        exact: true,
+        includeHidden: true,
+      }),
+    });
   const dialog = page.getByRole("dialog");
   await row.getByRole("button", { name: "Reconcile", exact: true }).click();
   await dialog.waitFor();
+  await dialog
+    .getByText(/\$3,191\.2511/)
+    .first()
+    .waitFor();
   assert.match(await dialog.innerText(), /\$3,191\.2511/);
-  await dialog.getByText("View exact amounts", {exact: true}).click();
+  await dialog.getByText("View exact amounts", { exact: true }).click();
   assert.match(await dialog.innerText(), /\$3,191\.251120000/);
-  await dialog.getByText("View exact amounts", {exact: true}).click();
-  assert.ok((await dialog.locator(".usage-keys tbody td").first().innerText()).length < 30);
+  await dialog.getByText("View exact amounts", { exact: true }).click();
+  assert.ok(
+    (await dialog.locator(".usage-keys tbody td").first().innerText()).length <
+      30,
+  );
   for (const language of ["en", "zh", "ar"]) {
     for (const theme of ["light", "dark"]) {
       await page.evaluate(
@@ -218,7 +233,12 @@ try {
           ),
           "rgba(0, 0, 0, 0)",
         );
-        assert.equal(await dialog.locator(".task-dialog-body").evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
+        assert.equal(
+          await dialog
+            .locator(".task-dialog-body")
+            .evaluate((node) => node.scrollWidth > node.clientWidth + 1),
+          false,
+        );
         await dialog.locator(".usage-note").scrollIntoViewIfNeeded();
         assert.ok(await dialog.getByRole("button").first().isVisible());
         await page.screenshot({
@@ -227,7 +247,10 @@ try {
       }
     }
   }
-  const scan = await new AxeBuilder({page}).include(".upstream-usage").withTags(["wcag2a", "wcag2aa"]).analyze();
+  const scan = await new AxeBuilder({ page })
+    .include(".upstream-usage")
+    .withTags(["wcag2a", "wcag2aa"])
+    .analyze();
   assert.deepEqual(scan.violations, []);
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "hidden" });
@@ -240,31 +263,48 @@ try {
     usePreferences.getState().setLanguage("en");
   });
   await api("POST", "/api/channel", {
-    name: "Ark usage fixture", type: 32, key: "fixture-ark-key",
-    base_url: upstreamBase, models: "doubao-seedream-4-5-251128", group: "default",
+    name: "Ark usage fixture",
+    type: 32,
+    key: "fixture-ark-key",
+    base_url: upstreamBase,
+    models: "doubao-seedream-4-5-251128",
+    group: "default",
   });
   await page.reload();
   const usageHits = hits.length;
-  await page.getByRole("row").filter({hasText: "Ark usage fixture"}).getByRole("button", {name: "Reconcile", exact: true}).click();
+  await page
+    .getByRole("row")
+    .filter({ hasText: "Ark usage fixture" })
+    .getByRole("button", { name: "Reconcile", exact: true })
+    .click();
   await dialog.getByText(/Ark usage queries are not integrated/).waitFor();
   assert.equal(hits.length, usageHits);
   assert.equal(await dialog.locator(".usage-summary strong").count(), 1);
   assert.equal(await dialog.locator(".usage-keys").count(), 0);
   for (const language of ["en", "zh", "ar"]) {
-    await page.evaluate(async language => {
-      const {usePreferences} = await import("/src/lib/preferences.ts");
+    await page.evaluate(async (language) => {
+      const { usePreferences } = await import("/src/lib/preferences.ts");
       usePreferences.getState().setLanguage(language);
     }, language);
-    assert.equal(await dialog.locator(".task-dialog-body").evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
-    await page.screenshot({path: path.join(out, `usage-ark-${language}-320.png`)});
+    assert.equal(
+      await dialog
+        .locator(".task-dialog-body")
+        .evaluate((node) => node.scrollWidth > node.clientWidth + 1),
+      false,
+    );
+    await page.screenshot({
+      path: path.join(out, `usage-ark-${language}-320.png`),
+    });
   }
   await page.keyboard.press("Escape");
-  await dialog.waitFor({state: "hidden"});
+  await dialog.waitFor({ state: "hidden" });
   await page.evaluate(async () => {
-    const {usePreferences} = await import("/src/lib/preferences.ts");
+    const { usePreferences } = await import("/src/lib/preferences.ts");
     usePreferences.getState().setLanguage("en");
   });
-  report.checks.push("Ark usage explains the capability boundary in three languages, preserves local usage and sends no upstream request");
+  report.checks.push(
+    "Ark usage explains the capability boundary in three languages, preserves local usage and sends no upstream request",
+  );
   for (const [name, prefix, key] of [
     ["Unsupported fixture", "unsupported", "fixture-key"],
     ["Authentication fixture", "auth", "fixture-key"],
@@ -272,7 +312,14 @@ try {
     ["Partial fixture", "partial", "fixture-ok\nfixture-failed"],
     ["Unlimited fixture", "unlimited", "fixture-key"],
   ]) {
-    await api("POST", "/api/channel", {name, type: 1, key, base_url: `${upstreamBase}/${prefix}`, models: "fixture-model", group: "default"});
+    await api("POST", "/api/channel", {
+      name,
+      type: 1,
+      key,
+      base_url: `${upstreamBase}/${prefix}`,
+      models: "fixture-model",
+      group: "default",
+    });
   }
   await page.reload();
   for (const [name, expected, amountCount] of [
@@ -282,17 +329,131 @@ try {
     ["Partial fixture", "Only some keys", 2],
     ["Unlimited fixture", "Unlimited", 3],
   ]) {
-    const fixtureRow = page.getByRole("row").filter({has: page.getByRole("cell", {name, exact: true})});
-    await fixtureRow.getByRole("button", {name: "Reconcile", exact: true}).click();
+    const fixtureRow = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name, exact: true }) });
+    await fixtureRow
+      .getByRole("button", { name: "Reconcile", exact: true })
+      .click();
     await dialog.getByText(new RegExp(expected)).first().waitFor();
-    assert.equal(await dialog.locator(".usage-summary strong").count(), amountCount);
-    assert.equal((await dialog.innerText()).includes("fixture-private-upstream-error"), false);
-    assert.equal(await dialog.locator(".task-dialog-body").evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
-    await page.screenshot({path: path.join(out, `usage-${name.replaceAll(" ", "-")}-320.png`)});
+    assert.equal(
+      await dialog.locator(".usage-summary strong").count(),
+      amountCount,
+    );
+    assert.equal(
+      (await dialog.innerText()).includes("fixture-private-upstream-error"),
+      false,
+    );
+    assert.equal(
+      await dialog
+        .locator(".task-dialog-body")
+        .evaluate((node) => node.scrollWidth > node.clientWidth + 1),
+      false,
+    );
+    await page.screenshot({
+      path: path.join(out, `usage-${name.replaceAll(" ", "-")}-320.png`),
+    });
     await page.keyboard.press("Escape");
-    await dialog.waitFor({state: "hidden"});
+    await dialog.waitFor({ state: "hidden" });
   }
-  report.checks.push("unsupported endpoints, authentication failures, business errors, partial totals without differences and unlimited quota are rendered distinctly");
+  report.checks.push(
+    "unsupported endpoints, authentication failures, business errors, partial totals without differences and unlimited quota are rendered distinctly",
+  );
+  const channel = (await api("GET", "/api/channel")).find(
+    (channel) => channel.name === "Usage fixture",
+  );
+  const snapshot = await api(
+    "GET",
+    `/api/channel/${channel.id}/upstream-usage`,
+  );
+  const pattern = `**/api/channel/${channel.id}/upstream-usage`;
+  for (const change of ["close", "session", "credentials", "navigation"]) {
+    let release, enter, finish;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise((resolve) => {
+      enter = resolve;
+    });
+    const finished = new Promise((resolve) => {
+      finish = resolve;
+    });
+    let calls = 0;
+    await page.route(pattern, async (route) => {
+      calls++;
+      enter();
+      await gate;
+      try {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: snapshot }),
+        });
+      } catch {}
+      finish();
+    });
+    await row.getByRole("button", { name: "Reconcile", exact: true }).click();
+    await started;
+    await dialog
+      .getByText("Querying upstream usage…", { exact: true })
+      .waitFor();
+    const pendingButton = row.getByRole("button", {
+      name: "Querying…",
+      exact: true,
+      includeHidden: true,
+    });
+    assert.equal(await pendingButton.isDisabled(), true);
+    await pendingButton.evaluate((node) => {
+      node.click();
+      node.click();
+    });
+    assert.equal(calls, 1);
+    if (change === "close") {
+      await page.keyboard.press("Escape");
+    } else if (change === "session") {
+      await page.evaluate(async () => {
+        const { useSystemAccess } = await import("/src/lib/system-access.ts");
+        const state = useSystemAccess.getState();
+        state.setSession({
+          id: state.session.accountId,
+          group: state.session.group,
+          role: state.role,
+          username: state.session.username,
+        });
+      });
+    } else if (change === "credentials") {
+      await api("PUT", "/api/channel", {
+        id: channel.id,
+        key: "sk-fixture" + "y".repeat(156) + "xxxx",
+      });
+      const refreshed = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === "/api/channel" &&
+          response.request().method() === "GET",
+      );
+      await row
+        .getByRole("button", { name: "Test", exact: true, includeHidden: true })
+        .evaluate((node) => node.click());
+      await refreshed;
+    } else {
+      await page.goto(base + "/admin?tab=models");
+    }
+    await dialog.waitFor({ state: "hidden" });
+    release();
+    await finished;
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    assert.equal(await dialog.count(), 0, `stale response after ${change}`);
+    await page.unroute(pattern);
+    if (change === "navigation") await page.goto(base + "/admin?tab=resources");
+    await row.getByRole("button", { name: "Reconcile", exact: true }).waitFor();
+  }
+  report.checks.push(
+    "pending queries reject duplicate clicks; closing, session rotation, credential refresh and navigation cancel and discard stale results",
+  );
   await page.route("**/upstream-usage", (route) =>
     route.fulfill({
       status: 500,
