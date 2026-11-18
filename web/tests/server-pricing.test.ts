@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ownPrice,
+  hasServerModelPricing,
   readServerPricing,
   replaceServerModelRatios,
   serverPricingMode,
@@ -26,6 +27,13 @@ const fixture = {
   ],
 };
 describe("server token pricing", () => {
+  it("distinguishes missing prices from explicit zero and inherited properties", () => {
+    const state = readServerPricing(fixture);
+    expect(hasServerModelPricing(state, "missing")).toBe(false);
+    expect(hasServerModelPricing(state, "constructor")).toBe(false);
+    for (const id of ["actual", "unrelated", "flat", "dynamic"])
+      expect(hasServerModelPricing(state, id)).toBe(true);
+  });
   it("preserves unrelated exact server entries and explicit zero when replacing a paired model rate", () => {
     const state = readServerPricing(fixture),
       options = replaceServerModelRatios(state, "actual", "3", "5");

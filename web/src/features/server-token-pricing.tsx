@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import { ApiError } from "../lib/api/http";
+import { usePlazaModelMeta } from "../lib/api/plaza-meta";
 import {
   useServerPricing,
   useSaveServerPricing,
@@ -10,6 +11,7 @@ import {
 import { isAdmin, useSystemAccess } from "../lib/system-access";
 import {
   ownPrice,
+  hasServerModelPricing,
   serverPricingMode,
   validServerRatio,
   validServerRequestPrice,
@@ -39,6 +41,7 @@ export function ServerTokenPricing() {
     authenticated = useSystemAccess((s) => s.session.accountId !== null);
   const allowed = authenticated && isAdmin(role),
     query = useServerPricing(allowed),
+    catalog = usePlazaModelMeta(allowed),
     mutation = useSaveServerPricing();
   const [search, setSearch] = useState(""),
     [page, setPage] = useState(0),
@@ -51,6 +54,9 @@ export function ServerTokenPricing() {
   const ids = data
     ? [
         ...new Set([
+          ...(catalog.isError
+            ? []
+            : (catalog.data?.models.map((m) => m.model) ?? [])),
           ...Object.keys(data.input),
           ...Object.keys(data.completion),
           ...Object.keys(data.perRequest),
@@ -86,11 +92,13 @@ export function ServerTokenPricing() {
         ? validServerRequestPrice(draft.request)
         : validServerRatio(draft.input) && validServerRatio(draft.completion));
   const mode = (state: ServerPricing, id: string) =>
-    ({
-      per_token: text("按词元", "Per token", "لكل رمز"),
-      per_request: text("按次", "Per request", "لكل طلب"),
-      expression: text("表达式", "Expression", "تعبير"),
-    })[serverPricingMode(state, id)];
+    !hasServerModelPricing(state, id)
+      ? text("待定价", "Awaiting pricing", "بانتظار التسعير")
+      : {
+          per_token: text("按词元", "Per token", "لكل رمز"),
+          per_request: text("按次", "Per request", "لكل طلب"),
+          expression: text("表达式", "Expression", "تعبير"),
+        }[serverPricingMode(state, id)];
   const begin = (id = "") => {
     if (!data) return;
     mutation.reset();
@@ -184,10 +192,11 @@ export function ServerTokenPricing() {
         </div>
         <div className="stp-actions">
           <Button
-            disabled={query.isFetching}
+            disabled={query.isFetching || catalog.isFetching}
             onClick={() => {
               setNotice("");
               void query.refetch();
+              void catalog.refetch();
             }}
           >
             {text("刷新定价", "Refresh pricing", "تحديث التسعير")}
@@ -227,6 +236,22 @@ export function ServerTokenPricing() {
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
+      {catalog.isError && (
+        <p role="alert">
+          {text(
+            "模型目录读取失败，暂时只展示已有定价；刷新后重试。",
+            "Model catalog unavailable; showing configured prices only. Refresh to retry.",
+            "تعذر تحميل فهرس النماذج؛ تُعرض الأسعار المضبوطة فقط. حدّث للمحاولة مجددًا.",
+          )}
+        </p>
+      )}
+      <p>
+        {text(
+          "目录中的未定价模型可稍后设置价格；待定价不代表免费，实际调用仍按现有计费规则执行。",
+          "Catalog models can be priced later. Awaiting pricing does not mean free; existing billing rules still apply to calls.",
+          "يمكن تسعير نماذج الفهرس لاحقًا. انتظار التسعير لا يعني المجانية؛ تظل قواعد الفوترة الحالية مطبقة على الطلبات.",
+        )}
+      </p>
       <ServerDetailPricing data={data} />
       {data && (
         <>
@@ -244,11 +269,7 @@ export function ServerTokenPricing() {
             </Link>
           </p>
           <label className="stp-search">
-            {text(
-              "搜索已配置模型",
-              "Search configured models",
-              "البحث في النماذج المضبوطة",
-            )}
+            {text("搜索模型", "Search models", "البحث في النماذج")}
             <input
               value={search}
               onChange={(e) => {
@@ -332,23 +353,25 @@ export function ServerTokenPricing() {
                           disabled={!writable}
                           onClick={() => begin(id)}
                         >
-                          {serverPricingMode(data, id) === "expression"
-                            ? text(
-                                "编辑计费表达式",
-                                "Edit billing expression",
-                                "تحرير تعبير الفوترة",
-                              )
-                            : serverPricingMode(data, id) === "per_request"
+                          {!hasServerModelPricing(data, id)
+                            ? text("设置价格", "Set pricing", "تعيين السعر")
+                            : serverPricingMode(data, id) === "expression"
                               ? text(
-                                  "编辑按次价格",
-                                  "Edit request price",
-                                  "تحرير سعر الطلب",
+                                  "编辑计费表达式",
+                                  "Edit billing expression",
+                                  "تحرير تعبير الفوترة",
                                 )
-                              : text(
-                                  "编辑服务器倍率",
-                                  "Edit server ratios",
-                                  "تحرير معاملات الخادم",
-                                )}
+                              : serverPricingMode(data, id) === "per_request"
+                                ? text(
+                                    "编辑按次价格",
+                                    "Edit request price",
+                                    "تحرير سعر الطلب",
+                                  )
+                                : text(
+                                    "编辑服务器倍率",
+                                    "Edit server ratios",
+                                    "تحرير معاملات الخادم",
+                                  )}
                         </Button>
                       </td>
                     </tr>
@@ -459,7 +482,7 @@ export function ServerTokenPricing() {
               <div className="stp-review">
                 <p>
                   {text("计价方式", "Pricing mode", "نمط التسعير")}:{" "}
-                  {draft.locked
+                  {hasServerModelPricing(draft.base, draft.id)
                     ? mode(draft.base, draft.id)
                     : text("未配置", "Unconfigured", "غير مضبوط")}{" "}
                   →{" "}

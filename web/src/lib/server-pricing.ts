@@ -113,6 +113,17 @@ export function serverPricingMode(
       ? "per_request"
       : "per_token";
 }
+export function hasServerModelPricing(
+  state: ServerPricing,
+  id: string,
+): boolean {
+  return [
+    state.input,
+    state.completion,
+    state.perRequest,
+    state.expressions,
+  ].some((values) => ownPrice<string | number>(values, id) !== undefined);
+}
 export function validServerRatio(value: string): boolean {
   return (
     /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value.trim()) &&

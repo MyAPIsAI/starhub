@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ServerTokenPricing } from "../src/features/server-token-pricing";
 import { readServerPricing } from "../src/lib/server-pricing";
+import { emptyModelMetadata } from "../src/lib/model-metadata";
 import {
   useSystemAccess,
   sessionQueryIdentity,
@@ -29,7 +30,12 @@ vi.mock("../src/lib/system-access", async (importOriginal) => {
 });
 const initial = useSystemAccess.getState();
 afterEach(() => useSystemAccess.setState(initial, true));
-function render(role = 100, error = false, guest = false) {
+function render(
+  role = 100,
+  error = false,
+  guest = false,
+  catalogError = false,
+) {
   useSystemAccess
     .getState()
     .setSession(guest ? null : { id: 7, role, group: "default" });
@@ -58,6 +64,27 @@ function render(role = 100, error = false, guest = false) {
       ],
     }),
   );
+  const catalogKey = [
+    "plaza-meta",
+    sessionQueryIdentity(useSystemAccess.getState()),
+  ];
+  client.setQueryData(catalogKey, {
+    revision: 1,
+    revision_guards: true,
+    models: ["awaiting-price", "actual-only"].map((model) => ({
+      ...emptyModelMetadata(),
+      model,
+    })),
+  });
+  if (catalogError)
+    client
+      .getQueryCache()
+      .find({ queryKey: catalogKey })!
+      .setState({
+        status: "error",
+        error: new Error("Unavailable"),
+        fetchStatus: "idle",
+      });
   if (error)
     client
       .getQueryCache()
@@ -78,12 +105,31 @@ function render(role = 100, error = false, guest = false) {
   return html;
 }
 describe("actual server token pricing", () => {
-  it("uses only configured server model IDs and preserves zero", () => {
+  it("joins server catalog models with configured prices and preserves explicit zero", () => {
     const html = render();
     expect(html).toContain('data-server-priced-model="actual-only"');
     expect(html).toContain('data-server-priced-model="zero"');
     expect(html).toContain("2.5");
     expect(html).not.toContain('data-server-priced-model="gpt-4.1"');
+    expect(html.match(/data-server-priced-model="actual-only"/g)).toHaveLength(
+      1,
+    );
+    const row = html.match(
+      /<tr[^>]*data-server-priced-model="awaiting-price"[^>]*>(.*?)<\/tr>/s,
+    )?.[1];
+    expect(row).toContain("待定价");
+    expect(row).toContain("设置价格");
+    expect(row).not.toContain("<bdi>0</bdi>");
+    const zero = html.match(
+      /<tr[^>]*data-server-priced-model="zero"[^>]*>(.*?)<\/tr>/s,
+    )?.[1];
+    expect(zero).not.toContain("待定价");
+  });
+  it("hides stale catalog rows on a catalog error while retaining verified prices", () => {
+    const html = render(100, false, false, true);
+    expect(html).not.toContain('data-server-priced-model="awaiting-price"');
+    expect(html).toContain('data-server-priced-model="actual-only"');
+    expect(html).toContain("模型目录读取失败");
   });
   it("hides cached server prices when the authoritative read fails", () => {
     const html = render(100, true);
