@@ -495,7 +495,9 @@ try {
       },
     }),
   );
-  await arkRow.getByRole("button", { name: "Test", exact: true }).click();
+  await arkRow
+    .getByRole("button", { name: "Check catalog", exact: true })
+    .click();
   const diagnosis = arkRow.getByRole("alert");
   await diagnosis.getByText(/not in the upstream catalog/).waitFor();
   for (const [language, expected] of [
@@ -525,13 +527,68 @@ try {
   report.checks.push(
     "catalog failures show localized reasons, the tested model and elapsed time without hovering in three narrow-screen languages",
   );
-  await arkRow.getByRole("button", { name: "Test", exact: true }).click();
   await arkRow
-    .getByText(/Catalog accessible \(generation not tested\)/)
-    .waitFor();
+    .getByRole("button", { name: "Check catalog", exact: true })
+    .click();
+  await arkRow.getByText(/Catalog accessible/).waitFor();
   assert.equal(
     hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
     beforeImageTests,
+  );
+  const actions = arkRow.locator(".channel-probe-actions");
+  const catalogBox = await actions
+    .getByRole("button", { name: "Check catalog", exact: true })
+    .boundingBox();
+  const generateBox = await actions
+    .getByRole("button", {
+      name: "Test image generation (upstream charges)",
+      exact: true,
+    })
+    .boundingBox();
+  assert.ok(
+    Math.abs(catalogBox.y - generateBox.y) <= 1,
+    "desktop probe buttons must share one row",
+  );
+  for (const language of ["zh", "ar", "en"]) {
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate(
+        async ({ language, theme }) => {
+          const { usePreferences } = await import("/src/lib/preferences.ts");
+          usePreferences.getState().setLanguage(language);
+          usePreferences.getState().setTheme(theme);
+        },
+        { language, theme },
+      );
+      for (const width of [1440, 320]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await actions.scrollIntoViewIfNeeded();
+        assert.equal(
+          await actions.evaluate(
+            (node) => node.scrollWidth > node.clientWidth + 1,
+          ),
+          false,
+        );
+        await capture(`ark-controls-${language}-${theme}-${width}`);
+      }
+    }
+  }
+  await page.evaluate(async () => {
+    const { usePreferences } = await import("/src/lib/preferences.ts");
+    usePreferences.getState().setTheme("light");
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const details = arkRow.locator(".channel-probe-details summary");
+  await details.focus();
+  await page.keyboard.press("Enter");
+  await arkRow.getByText(/Tested model:/).waitFor();
+  await page.keyboard.press("Enter");
+  const controlScan = await new AxeBuilder({ page })
+    .include(".channel-probe-controls")
+    .withTags(["wcag2a", "wcag2aa"])
+    .analyze();
+  assert.deepEqual(controlScan.violations, []);
+  report.checks.push(
+    "compact probe actions align horizontally on desktop, wrap without overflow across three languages and both themes, and expose keyboard-accessible details",
   );
   await arkRow
     .getByRole("button", {
@@ -591,7 +648,9 @@ try {
     .locator(".task-dialog-footer")
     .getByRole("button", { name: "Close", exact: true })
     .click();
-  await arkRow.getByRole("button", { name: "Test", exact: true }).click();
+  await arkRow
+    .getByRole("button", { name: "Check catalog", exact: true })
+    .click();
   await arkRow.getByText(/Catalog accessible/).waitFor();
   await page.route("**/probe.svg", (route) =>
     route.fulfill({ status: 410, body: "expired fixture" }),

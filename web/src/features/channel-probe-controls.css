@@ -1,0 +1,43 @@
+.channel-probe-controls {
+  display: grid;
+  gap: 8px;
+  width: 320px;
+  min-width: 220px;
+  max-width: 360px;
+  text-align: start;
+}
+.channel-probe-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.channel-probe-actions > .button {
+  font-size: 12px;
+  min-height: 30px;
+  padding: 5px 9px;
+  gap: 6px;
+  white-space: nowrap;
+}
+.channel-probe-actions .channel-probe-generate {
+  color: var(--brand);
+}
+.channel-probe-fee {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--secondary);
+  background: var(--subtle);
+}
+.channel-probe-actions .channel-probe-view {
+  color: var(--brand);
+  padding-inline: 4px;
+}
+@media (max-width: 640px) {
+  .channel-probe-controls {
+    width: 260px;
+    min-width: 200px;
+    max-width: 280px;
+  }
+}

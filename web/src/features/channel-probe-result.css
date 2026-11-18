@@ -1,10 +1,52 @@
 .channel-probe-result {
-  display: grid;
-  gap: 4px;
-  max-width: 240px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  max-width: 100%;
   min-width: 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
   text-align: start;
+}
+.channel-probe-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #047857;
+}
+.channel-probe-result[data-ok="false"] .channel-probe-state,
+.channel-probe-error {
+  color: #b91c1c;
+}
+.channel-probe-latency,
+.channel-probe-model {
+  color: var(--muted);
+}
+.channel-probe-model,
+.channel-probe-error {
+  flex-basis: 100%;
+  min-width: 0;
+}
+.channel-probe-details {
+  color: var(--muted);
+}
+.channel-probe-details summary {
+  cursor: pointer;
+  color: var(--brand);
+}
+.channel-probe-details[open] {
+  flex-basis: 100%;
+}
+.channel-probe-details[open] .channel-probe-model {
+  display: block;
+  margin-top: 6px;
+}
+[data-theme="dark"] .channel-probe-state {
+  color: #6ee7b7;
+}
+[data-theme="dark"] .channel-probe-result[data-ok="false"] .channel-probe-state,
+[data-theme="dark"] .channel-probe-error {
+  color: #fca5a5;
 }

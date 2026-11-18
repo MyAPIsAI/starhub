@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Activity } from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
   useTestChannel,
@@ -9,6 +10,7 @@ import { useSessionQueryIdentity } from "../lib/system-access";
 import { ArkImageProbe } from "./ark-image-probe";
 import { ChannelProbeResult } from "./channel-probe-result";
 import { useSettingsText } from "./settings-text";
+import "./channel-probe-controls.css";
 
 export function ChannelProbeControls({ channel }: { channel: AdminChannel }) {
   const identity = useSessionQueryIdentity();
@@ -30,6 +32,10 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
   const [result, setResult] = useState<ChannelTestResult>();
   const [image, setImage] = useState<ChannelTestResult>();
   const imagePending = test.isPending && test.variables?.mode === "image";
+  const firstDomain =
+    channel.model_capabilities?.[channel.models.split(",")[0]?.trim()];
+  const catalogOnly =
+    channel.type === 32 && firstDomain && !["LLM", "VLM"].includes(firstDomain);
   const run = (model?: string, mode?: "image") => {
     if (test.isPending) return;
     setResult(undefined);
@@ -62,27 +68,25 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
     );
   };
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: 4,
-      }}
-    >
-      <Button size="small" disabled={test.isPending} onClick={() => run()}>
-        {test.isPending && !imagePending
-          ? text("测试中…", "Testing…", "اختبار…")
-          : text("测试连通", "Test", "اختبار")}
-      </Button>
-      <ArkImageProbe
-        channel={channel}
-        disabled={test.isPending}
-        pending={imagePending}
-        result={image}
-        onProbe={(model) => run(model, "image")}
-      />
-      {result && <ChannelProbeResult result={result} />}
+    <div className="channel-probe-controls">
+      <div className="channel-probe-actions">
+        <Button size="small" disabled={test.isPending} onClick={() => run()}>
+          <Activity size={14} aria-hidden="true" />
+          {test.isPending && !imagePending
+            ? text("测试中…", "Testing…", "اختبار…")
+            : catalogOnly
+              ? text("目录检查", "Check catalog", "فحص الدليل")
+              : text("测试连通", "Test", "اختبار")}
+        </Button>
+        <ArkImageProbe
+          channel={channel}
+          disabled={test.isPending}
+          pending={imagePending}
+          result={image}
+          onProbe={(model) => run(model, "image")}
+        />
+      </div>
+      {result && <ChannelProbeResult result={result} compact />}
     </div>
   );
 }

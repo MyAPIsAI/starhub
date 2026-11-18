@@ -1,4 +1,5 @@
 import type { ChannelTestResult } from "../lib/api/admin";
+import { CheckCircle2, CircleAlert } from "lucide-react";
 import { useSettingsText } from "./settings-text";
 import "./channel-probe-result.css";
 
@@ -45,7 +46,13 @@ const errors: Record<string, [string, string, string]> = {
   ],
 };
 
-export function ChannelProbeResult({ result }: { result: ChannelTestResult }) {
+export function ChannelProbeResult({
+  result,
+  compact = false,
+}: {
+  result: ChannelTestResult;
+  compact?: boolean;
+}) {
   const { text } = useSettingsText();
   // Recognize responses from a backend that has not loaded diagnostic codes yet.
   const code =
@@ -75,24 +82,48 @@ export function ChannelProbeResult({ result }: { result: ChannelTestResult }) {
       "Plugin validated locally",
       "تم التحقق من الإضافة محليًا",
     );
+  if (compact && result.scope === "catalog" && result.ok)
+    label = text("目录可访问", "Catalog accessible", "الدليل متاح");
+  const model = result.model && (
+    <span className="channel-probe-model">
+      {text("被测模型：", "Tested model: ", "النموذج المختبر: ")}
+      <bdi>{result.model}</bdi>
+    </span>
+  );
   return (
     <div
-      className="channel-probe-result"
+      className={`channel-probe-result${compact ? " channel-probe-result--compact" : ""}`}
       role={result.ok ? "status" : "alert"}
-      style={{ color: result.ok ? "var(--success)" : "var(--danger)" }}
+      data-ok={result.ok}
     >
-      <span>
+      <span className="channel-probe-state">
+        {result.ok ? (
+          <CheckCircle2 size={13} aria-hidden="true" />
+        ) : (
+          <CircleAlert size={13} aria-hidden="true" />
+        )}
         {label}
-        {` · ${result.elapsed_ms}ms`}
       </span>
-      {result.model && (
-        <span>
-          {text("被测模型：", "Tested model: ", "النموذج المختبر: ")}
-          <bdi>{result.model}</bdi>
-        </span>
+      <span className="channel-probe-latency">{` · ${result.elapsed_ms}ms`}</span>
+      {compact ? (
+        <details className="channel-probe-details">
+          <summary>{text("详情", "Details", "التفاصيل")}</summary>
+          {model}
+          {result.scope === "catalog" && (
+            <span className="channel-probe-model">
+              {text(
+                "目录检查未验证实际生成。",
+                "Catalog checks do not verify inference.",
+                "فحص الدليل لا يتحقق من التوليد الفعلي.",
+              )}
+            </span>
+          )}
+        </details>
+      ) : (
+        model
       )}
       {!result.ok && (
-        <span>
+        <span className="channel-probe-error">
           {failure
             ? text(...failure)
             : result.scope === "catalog"

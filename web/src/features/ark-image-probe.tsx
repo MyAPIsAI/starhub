@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ImagePlus, Eye } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import type { AdminChannel, ChannelTestResult } from "../lib/api/admin";
@@ -45,6 +46,8 @@ export function ArkImageProbe({
     <>
       <Button
         size="small"
+        className="channel-probe-generate"
+        aria-label={label}
         disabled={disabled}
         onClick={() => {
           setSelected(candidates.length === 1 ? candidates[0] : "");
@@ -52,16 +55,25 @@ export function ArkImageProbe({
           setOpen(true);
         }}
       >
-        {label}
+        <ImagePlus size={14} aria-hidden="true" />
+        {pending
+          ? text("生成中…", "Generating…", "جارٍ التوليد…")
+          : text("生成图片", "Generate image", "توليد صورة")}
+        <span className="channel-probe-fee">
+          {text("计费", "Paid", "مدفوع")}
+        </span>
       </Button>
       {result && (
         <Button
           size="small"
+          variant="ghost"
+          className="channel-probe-view"
           onClick={() => {
             setViewOnly(true);
             setOpen(true);
           }}
         >
+          <Eye size={14} aria-hidden="true" />
           {result.ok && imagePreviewURL(result.image_url)
             ? text("查看图片", "View image", "عرض الصورة")
             : text("查看结果", "View result", "عرض النتيجة")}

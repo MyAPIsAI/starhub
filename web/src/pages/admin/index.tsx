@@ -1175,7 +1175,7 @@ export default function AdminPortal() {
                         "متوسط TTFT (ملث)",
                       )}
                     </th>
-                    <th style={{ padding: "10px 14px", textAlign: "end" }}>
+                    <th style={{ padding: "10px 14px", textAlign: "start" }}>
                       {text("测试", "Test", "اختبار")}
                     </th>
                     <th style={{ padding: "10px 14px", textAlign: "end" }}>
@@ -1235,6 +1235,7 @@ export default function AdminPortal() {
                               padding: "2px 8px",
                               borderRadius: 4,
                               fontWeight: 600,
+                              whiteSpace: "nowrap",
                               background:
                                 ch.status === 1
                                   ? "var(--success-soft)"
@@ -1258,7 +1259,7 @@ export default function AdminPortal() {
                         <td className="mono" style={{ padding: "10px 14px" }}>
                           {stat ? stat.avg_ttft_ms.toFixed(0) : "—"}
                         </td>
-                        <td style={{ padding: "10px 14px", textAlign: "end" }}>
+                        <td style={{ padding: "10px 14px", textAlign: "start" }}>
                           <ChannelProbeControls channel={ch} />
                         </td>
                         <td style={{ padding: "10px 14px", textAlign: "end" }}>
