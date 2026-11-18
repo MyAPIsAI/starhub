@@ -38,6 +38,7 @@ import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
 import { ChannelModelDiscovery } from "../../features/channel-model-discovery";
 import { UpstreamUsageControl } from "../../features/upstream-usage-control";
 import { ChannelProbeControls } from "../../features/channel-probe-controls";
+import { ChannelStatusControl } from "../../features/channel-status-control";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
@@ -1221,27 +1222,7 @@ export default function AdminPortal() {
                           {ch.models}
                         </td>
                         <td style={{ padding: "10px 14px" }}>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              padding: "2px 8px",
-                              borderRadius: 4,
-                              fontWeight: 600,
-                              whiteSpace: "nowrap",
-                              background:
-                                ch.status === 1
-                                  ? "var(--success-soft)"
-                                  : "var(--danger-soft)",
-                              color:
-                                ch.status === 1
-                                  ? "var(--success)"
-                                  : "var(--danger)",
-                            }}
-                          >
-                            {ch.status === 1
-                              ? text("启用", "Enabled", "مُفعّل")
-                              : text("禁用", "Disabled", "مُعطّل")}
-                          </span>
+                          <ChannelStatusControl channel={ch} />
                         </td>
                         <td className="mono" style={{ padding: "10px 14px" }}>
                           {stat

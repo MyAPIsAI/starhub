@@ -125,6 +125,7 @@ func New() http.Handler {
 	mux.Handle("GET /api/channel/", middleware.AdminAuth(http.HandlerFunc(controller.ListChannels)))
 	mux.Handle("GET /api/channel/{id}", middleware.AdminAuth(http.HandlerFunc(controller.GetChannel)))
 	mux.Handle("PUT /api/channel", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateChannel))))
+	mux.Handle("PUT /api/channel/{id}/status", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.SetChannelStatus))))
 	mux.Handle("PUT /api/channel/", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateChannel))))
 	mux.Handle("DELETE /api/channel/{id}", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.DeleteChannel))))
 	mux.Handle("GET /api/channel/{id}/upstream-usage", middleware.AdminAuth(http.HandlerFunc(controller.GetChannelUpstreamUsage)))

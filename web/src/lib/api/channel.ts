@@ -6,6 +6,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiPost, apiPut, apiDelete, apiRequest } from "./http";
+import type { AdminChannel } from "./admin";
 
 export interface ChannelModelsInput {
   channel_id?: number;
@@ -97,5 +98,20 @@ export function useDeleteChannel() {
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/api/channel/${id}`),
     onSettled: () => invalidateChannelConfiguration(queryClient),
+  });
+}
+
+export function useSetChannelStatus() {
+  const client = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      apiPut<AdminChannel>(`/api/channel/${id}/status`, { enabled }),
+    onSuccess: (channel) => {
+      client.setQueryData<AdminChannel[]>(CHANNELS_KEY, (channels) =>
+        channels?.map((entry) => entry.id === channel.id ? channel : entry),
+      );
+    },
+    onSettled: () => invalidateChannelConfiguration(client),
   });
 }

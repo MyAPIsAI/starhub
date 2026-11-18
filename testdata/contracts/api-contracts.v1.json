@@ -45,6 +45,7 @@
     "GET /api/channel": { "auth": "AdminAuth", "response_200": { "success": true, "data": [{ "id": "int64", "name": "string", "key": "string (masked)", "models": "string", "status": "int" }] } },
     "GET /api/channel/{id}": { "auth": "AdminAuth" },
     "PUT /api/channel": { "auth": "AdminAuth+Audit" },
+    "PUT /api/channel/{id}/status": { "auth": "AdminAuth+Audit", "request": { "enabled": "bool (true restores all resource keys; false closes the channel)" }, "response_200": { "success": true, "data": "masked Channel" } },
     "DELETE /api/channel/{id}": { "auth": "AdminAuth+Audit" },
     "POST /api/channel/test/{id}": { "auth": "AdminAuth+Audit", "response_200": { "success": true, "data": { "ok": "bool", "model": "string", "elapsed_ms": "int64", "message": "string", "status": "int" } } }
   },
