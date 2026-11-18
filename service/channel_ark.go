@@ -21,11 +21,12 @@ func probeArkCatalog(ctx context.Context, ch *model.Channel, name, key string, k
 	catalog, err := FetchArkChannelModelCatalog(ctx, ch.BaseURL, key, "bearer")
 	result.ElapsedMs = time.Since(start).Milliseconds()
 	if err != nil {
-		result.Message = "upstream_models_failed"
+		result.Code = "upstream_models_failed"
 		var failure *ChannelModelsError
 		if errors.As(err, &failure) {
-			result.Message = failure.Code
+			result.Code = failure.Code
 		}
+		result.Message = result.Code
 		return result, ""
 	}
 	for _, entry := range catalog {
@@ -35,6 +36,7 @@ func probeArkCatalog(ctx context.Context, ch *model.Channel, name, key string, k
 			return result, entry.Domain
 		}
 	}
+	result.Code = "upstream_model_not_found"
 	result.Message = "Model ID not in catalog; use an exact version ID. Endpoint IDs require an explicit inference test"
 	return result, ""
 }

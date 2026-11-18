@@ -85,6 +85,7 @@ func enableChannel(channelID int64, reason string) error {
 
 // ProbeResult is the outcome of one health probe against a channel.
 type ProbeResult struct {
+	Code       string // controlled diagnostic code, separate from display text
 	Scope      string // catalog checks do not establish inference health
 	OK         bool   // true when the upstream answered with a success status
 	ElapsedMs  int64  // round-trip latency in milliseconds

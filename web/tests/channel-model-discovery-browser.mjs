@@ -463,6 +463,52 @@ try {
   const beforeImageTests = hits.filter((hit) =>
     hit.path.endsWith("/images/generations"),
   ).length;
+  await page.route("**/api/channel/test/*", (route) =>
+    route.fulfill({
+      json: {
+        success: true,
+        data: {
+          ok: false,
+          code: "upstream_model_not_found",
+          scope: "catalog",
+          model: "doubao-seedream-4.5",
+          elapsed_ms: 127,
+          message: "Model ID not in catalog; use an exact version ID",
+          status: 1,
+        },
+      },
+    }),
+  );
+  await arkRow.getByRole("button", { name: "Test", exact: true }).click();
+  const diagnosis = arkRow.getByRole("alert");
+  await diagnosis.getByText(/not in the upstream catalog/).waitFor();
+  for (const [language, expected] of [
+    ["zh", "配置的模型 ID 不在上游目录中"],
+    ["ar", "معرّف النموذج غير موجود"],
+    ["en", "not in the upstream catalog"],
+  ]) {
+    await page.evaluate(async (language) => {
+      const { usePreferences } = await import("/src/lib/preferences.ts");
+      usePreferences.getState().setLanguage(language);
+    }, language);
+    await page.setViewportSize({ width: 320, height: 844 });
+    await diagnosis.getByText(expected, { exact: false }).waitFor();
+    assert.match(await diagnosis.textContent(), /doubao-seedream-4\.5/);
+    assert.match(await diagnosis.textContent(), /· 127ms/);
+    assert.equal(
+      await diagnosis.evaluate(
+        (node) => node.scrollWidth > node.clientWidth + 1,
+      ),
+      false,
+    );
+    await diagnosis.scrollIntoViewIfNeeded();
+    await capture(`ark-failure-${language}-320`);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.unroute("**/api/channel/test/*");
+  report.checks.push(
+    "catalog failures show localized reasons, the tested model and elapsed time without hovering in three narrow-screen languages",
+  );
   await arkRow.getByRole("button", { name: "Test", exact: true }).click();
   await arkRow
     .getByText(/Catalog accessible \(generation not tested\)/)

@@ -181,6 +181,18 @@ func TestArkCapabilityProbes(t *testing.T) {
 	if !result.OK || result.Scope != "catalog" || images != 0 || chats != 0 {
 		t.Fatal("default image probe submitted inference")
 	}
+	ch.Models = "doubao-seedream-4.5"
+	if err := model.UpdateChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	decodeData(t, call(TestChannel, request), &result)
+	if result.OK || result.Code != "upstream_model_not_found" || result.Model != ch.Models || result.Scope != "catalog" || result.Status != 1 || images != 0 || chats != 0 {
+		t.Fatal("legacy model mismatch was not diagnosed without inference")
+	}
+	ch.Models = modelID
+	if err := model.UpdateChannel(ch); err != nil {
+		t.Fatal(err)
+	}
 	if err := model.UpdateChannelStatus(ch.ID, common.ChannelStatusAutoDisabled); err != nil {
 		t.Fatal(err)
 	}

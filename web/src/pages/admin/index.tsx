@@ -36,6 +36,7 @@ import { ServerTokenPricing } from "../../features/server-token-pricing";
 import { ResourceRegions } from "../../features/resource-regions";
 import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
 import { ChannelModelDiscovery } from "../../features/channel-model-discovery";
+import { ChannelProbeResult } from "../../features/channel-probe-result";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
@@ -160,13 +161,6 @@ export default function AdminPortal() {
       onSuccess: (result) => setTestResults((previous) => ({ ...previous, [id]: result })),
       onError: (error) => setTestResults((previous) => ({ ...previous, [id]: error instanceof Error ? error.message : text("测试失败", "Test failed", "فشل الاختبار") })),
     });
-  };
-  const testResultLabel = (result: ChannelTestResult) => {
-    if (!result.ok) return text("失败", "Failed", "فشل");
-    if (result.scope === "catalog") return text("目录检查通过（未验证生成）", "Catalog accessible (generation not tested)", "الدليل متاح (لم يُختبر التوليد)");
-    if (result.scope === "image") return text("图片生成成功", "Image generated", "تم توليد الصورة");
-    if (result.scope === "local") return text("插件本地校验通过", "Plugin validated locally", "تم التحقق من الإضافة محليًا");
-    return text("成功", "OK", "نجح");
   };
 
   // Upstream usage reconciliation modal state.
@@ -1320,20 +1314,7 @@ export default function AdminPortal() {
                                   {testResults[ch.id] as string}
                                 </span>
                               ) : (
-                                <span
-                                  title={(testResults[ch.id] as ChannelTestResult).message}
-                                  style={{
-                                    fontSize: 11,
-                                    color: (
-                                      testResults[ch.id] as ChannelTestResult
-                                    ).ok
-                                      ? "var(--success)"
-                                      : "var(--danger)",
-                                  }}
-                                >
-                                  {testResultLabel(testResults[ch.id] as ChannelTestResult)}
-                                  {` ? ${(testResults[ch.id] as ChannelTestResult).elapsed_ms}ms`}
-                                </span>
+                                <ChannelProbeResult result={testResults[ch.id] as ChannelTestResult} />
                               ))}
                           </div>
                         </td>

@@ -1,0 +1,10 @@
+.channel-probe-result {
+  display: grid;
+  gap: 4px;
+  max-width: 240px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
