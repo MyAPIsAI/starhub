@@ -322,7 +322,10 @@ try {
   await dialog.locator("#ch-plugin-file").setInputFiles({
     name: "video-v2.js",
     mimeType: "text/javascript",
-    buffer: Buffer.from(source.replace('version: "1.1.0"', 'version: "1.2.0"')),
+    buffer: Buffer.from(
+      source.replace('version: "1.1.0"', 'version: "1.2.0"') +
+        '\nmeta.modelsPath = "/custom/models";\n',
+    ),
   });
   await started;
   assert.equal(
@@ -353,6 +356,12 @@ try {
   );
   report.checks.push(
     "pending plugin upload blocks both button and programmatic channel submission",
+  );
+  await discover().click();
+  await dialog.getByRole("checkbox", { name: "sora-2", exact: true }).waitFor();
+  assert.equal(hits.at(-1).path, "/video/custom/models");
+  report.checks.push(
+    "plugin-declared catalog paths preserve the configured upstream prefix",
   );
   await dialog
     .getByRole("button", { name: "Refresh versions", exact: true })

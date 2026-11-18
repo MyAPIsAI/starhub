@@ -66,15 +66,17 @@ func NormalizeTaskPluginModelsBaseURL(raw string) (string, error) {
 	return u.String(), nil
 }
 
-// FetchTaskPluginChannelModels keeps an existing API version prefix intact.
-func FetchTaskPluginChannelModels(ctx context.Context, baseURL, key, auth string) ([]string, error) {
+// FetchTaskPluginChannelModels reads an OpenAI-shaped catalog beneath the adapter's configured base.
+func FetchTaskPluginChannelModels(ctx context.Context, baseURL, key, auth, path string) ([]string, error) {
 	base, err := NormalizeTaskPluginModelsBaseURL(baseURL)
 	if err != nil {
 		return nil, err
 	}
-	path := "/v1/models"
-	if strings.HasSuffix(base, "/v1") {
-		path = "/models"
+	if path == "" {
+		path = "/v1/models"
+		if strings.HasSuffix(base, "/v1") {
+			path = "/models"
+		}
 	}
 	endpoint, err := (taskplugin.Request{Method: http.MethodGet, Path: path}).URL(base, http.MethodGet)
 	if err != nil {

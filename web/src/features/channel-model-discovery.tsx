@@ -254,9 +254,9 @@ export function ChannelModelDiscovery({
         <>
           <p className="channel-model-hint">
             {text(
-              "选择插件版本并填写上游地址和密钥后，可通过 /v1/models 获取模型；仅显示插件支持的模型。上游不提供目录时，可使用插件声明模型或手动填写。",
-              "Select a plugin and enter the upstream URL and key to fetch /v1/models. Only models supported by the plugin are listed. If the upstream has no catalog, use declared models or enter them manually.",
-              "اختر إضافة وأدخل عنوان المزود والمفتاح لجلب /v1/models. تظهر النماذج المدعومة فقط. إن لم يتوفر دليل، استخدم نماذج الإضافة أو أدخلها يدويًا.",
+              "目录路径可由插件指定，目前读取 OpenAI 格式目录，且仅显示插件支持的模型。上游不提供兼容目录时，可使用插件声明模型或手动填写；声明不代表上游实测可用。",
+              "Plugins can specify the catalog path. Discovery reads OpenAI-format catalogs and lists supported models only. If no compatible catalog exists, use declared models or enter them manually. Declarations do not verify upstream availability.",
+              "يمكن للإضافة تحديد مسار الدليل. يُقرأ دليل بصيغة OpenAI وتظهر النماذج المدعومة فقط. إن لم يتوفر دليل متوافق، استخدم نماذج الإضافة أو أدخلها يدويًا. التصريح لا يؤكد توفرها لدى المزود.",
             )}
           </p>
           <Button

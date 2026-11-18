@@ -98,6 +98,13 @@ export function TaskPluginChannel({
               "يجب أن تتوافق الإضافة مع واجهة الفيديو. استخدم مفتاحاً واحداً؛ تُقفل بيانات الاعتماد والعنوان أثناء المهام المعلقة.",
             )}
       </span>
+      <span>
+        {text(
+          "内置插件仅适用于 OpenAI 视频接口（sora-2 / sora-2-pro），其他上游请上传对应插件。",
+          "The built-in plugin supports the OpenAI video API (sora-2 / sora-2-pro). Upload a matching plugin for other upstreams.",
+          "تدعم الإضافة المدمجة واجهة فيديو OpenAI (sora-2 / sora-2-pro). ارفع إضافة متوافقة للمزودين الآخرين.",
+        )}
+      </span>
       <div className="task-plugin-actions">
         <Button
           size="small"

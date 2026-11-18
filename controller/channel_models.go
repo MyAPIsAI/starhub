@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"slices"
@@ -58,7 +59,6 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 	var pluginModels []string
 	if input.Type == channel.ChannelTypeTaskPlugin {
 		normalizeBase = service.NormalizeTaskPluginModelsBaseURL
-		fetchModels = service.FetchTaskPluginChannelModels
 		if input.TaskPluginID == 0 && saved != nil && saved.Type == input.Type {
 			input.TaskPluginID = saved.TaskPluginID
 		}
@@ -72,6 +72,9 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		auth, pluginModels = plugin.Meta.Auth, plugin.Meta.Models
+		fetchModels = func(ctx context.Context, base, key, auth string) ([]string, error) {
+			return service.FetchTaskPluginChannelModels(ctx, base, key, auth, plugin.Meta.ModelsPath)
+		}
 	}
 	base, err := normalizeBase(baseURL)
 	if err != nil {

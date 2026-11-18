@@ -35,6 +35,8 @@ type Meta struct {
 	APIVersion int      `json:"apiVersion"`
 	Models     []string `json:"models"`
 	Auth       string   `json:"auth"`
+	// ModelsPath optionally overrides the OpenAI-compatible catalog path beneath the channel base URL.
+	ModelsPath string `json:"modelsPath,omitempty"`
 }
 
 type Plugin struct {
@@ -122,6 +124,14 @@ func Compile(ctx context.Context, source string) (*Plugin, error) {
 	}
 	if m.Auth != "bearer" && m.Auth != "x-api-key" {
 		return nil, errors.New("plugin auth must be bearer or x-api-key")
+	}
+	if m.ModelsPath != "" {
+		if len(m.ModelsPath) > 2048 {
+			return nil, errors.New("plugin modelsPath exceeds 2048 bytes")
+		}
+		if _, err := (Request{Method: http.MethodGet, Path: m.ModelsPath}).URL("https://plugin.invalid", http.MethodGet); err != nil {
+			return nil, errors.New("invalid plugin modelsPath")
+		}
 	}
 	seen := map[string]bool{}
 	for _, name := range m.Models {

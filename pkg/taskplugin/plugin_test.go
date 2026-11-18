@@ -3,6 +3,7 @@ package taskplugin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -102,6 +103,20 @@ func TestPluginValidationAndHTTPBoundary(t *testing.T) {
 	_, _ = p.Do(context.Background(), upstream.URL, "host-secret", Request{Method: "POST", Path: "/redirect", Body: json.RawMessage(`{}`)}, "POST")
 	if redirected.Load() != 0 {
 		t.Fatal("redirect followed with credentials")
+	}
+}
+
+func TestPluginModelsPathValidation(t *testing.T) {
+	for _, path := range []string{"/models", "/api/v3/models", "/catalog?limit=50"} {
+		p, err := Compile(context.Background(), example(t)+`meta.modelsPath=`+fmt.Sprintf("%q", path)+`;`)
+		if err != nil || p.Meta.ModelsPath != path {
+			t.Fatalf("valid models path rejected: %s: %v", path, err)
+		}
+	}
+	for _, path := range []string{"https://other.test/models", "//other.test/models", "/../models", "/%2e%2e/models", "models", "/models#fragment", "/\\other/models"} {
+		if _, err := Compile(context.Background(), example(t)+`meta.modelsPath=`+fmt.Sprintf("%q", path)+`;`); err == nil {
+			t.Fatalf("unsafe models path accepted: %s", path)
+		}
 	}
 }
 

@@ -205,6 +205,35 @@ func TestFetchTaskPluginChannelModels(t *testing.T) {
 	expectError(t, fetch(map[string]any{"channel_id": saved.ID, "base_url": upstream.URL}), 400, "models_changed_connection_requires_key")
 }
 
+func TestFetchTaskPluginModelsCustomPath(t *testing.T) {
+	newTestDB(t)
+	plugin := saveExamplePlugin(t, `meta.modelsPath="/catalog/models?limit=50"; meta.auth="x-api-key";`)
+	invalid := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/prefix/catalog/models" || r.URL.RawQuery != "limit=50" || r.Header.Get("x-api-key") != "fixture-key" || r.Header.Get("Authorization") != "" {
+			t.Errorf("custom discovery path or credential mismatch: %s", r.URL.RequestURI())
+		}
+		if invalid {
+			fmt.Fprint(w, `{"models":["sora-2"]}`)
+		} else {
+			fmt.Fprint(w, `{"data":[{"id":"sora-2"},{"id":"chat-model"}]}`)
+		}
+	}))
+	defer upstream.Close()
+	ch := &model.Channel{Name: "custom catalog", Type: channel.ChannelTypeTaskPlugin, TaskPluginID: plugin.ID, Key: "fixture-key", BaseURL: upstream.URL + "/prefix", Models: "sora-2", Group: "default", Status: common.ChannelStatusEnabled, Weight: 1}
+	if err := model.InsertChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	request := testRequest{method: "POST", target: "/api/channel/fetch_models", body: fmt.Sprintf(`{"channel_id":%d}`, ch.ID)}
+	var ids []string
+	decodeData(t, call(FetchChannelModels, request), &ids)
+	if !reflect.DeepEqual(ids, []string{"sora-2"}) {
+		t.Fatalf("unexpected custom catalog models: %v", ids)
+	}
+	invalid = true
+	expectError(t, call(FetchChannelModels, request), http.StatusBadGateway, "upstream_models_invalid_response")
+}
+
 func TestFetchChannelModelsUpstreamFailuresAndLimits(t *testing.T) {
 	redirected := false
 	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = true }))
