@@ -1,12 +1,45 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// BackfillChannelModelMetadata explicitly registers missing models from existing channels.
+// It never runs during startup and does not change channel or billing configuration.
+func BackfillChannelModelMetadata(ctx context.Context) (int64, error) {
+	var inserted int64
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		locked := tx.Model(&ChannelConfigurationState{}).
+			Where("id = 1 AND revision >= 0 AND revision <= ?", maxResourceRevision).
+			UpdateColumn("revision", gorm.Expr("revision"))
+		if locked.Error != nil {
+			return locked.Error
+		}
+		if locked.RowsAffected != 1 {
+			return ErrChannelRevisionUnavailable
+		}
+		var lists []string
+		if err := tx.Model(&Channel{}).Order("id").Pluck("models", &lists).Error; err != nil {
+			return err
+		}
+		var names []string
+		for _, list := range lists {
+			names = append(names, SplitList(list)...)
+		}
+		var err error
+		inserted, err = ensureChannelModelMetadata(tx, names)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+	return inserted, nil
+}
 
 func uniqueModelNames(names []string) []string {
 	seen := make(map[string]bool, len(names))

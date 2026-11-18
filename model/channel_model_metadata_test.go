@@ -157,3 +157,49 @@ func TestAutomaticModelRegistrationDoesNotPublishUnavailableModels(t *testing.T)
 		t.Fatalf("manual catalog publication changed: %v %v", names, err)
 	}
 }
+
+func TestChannelModelBackfillIsExplicitAtomicAndIdempotent(t *testing.T) {
+	groupConfigurationDB(t)
+	ctx := context.Background()
+	existing := &ModelMeta{Model: "existing", Description: "Retain this"}
+	if err := UpsertModelMeta(existing); err != nil {
+		t.Fatal(err)
+	}
+	// Legacy rows bypass current channel creation to represent an existing database.
+	for range 2 {
+		if err := DB.Create(&Channel{Models: " existing, legacy, legacy "}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	options := groupConfigurationSnapshot(t)
+	before, err := ReadModelMetadataCatalog(ctx)
+	if err != nil || len(before.Models) != 1 {
+		t.Fatalf("legacy data was registered implicitly: %+v %v", before, err)
+	}
+	if err := DB.Exec(`CREATE TRIGGER reject_backfill BEFORE UPDATE ON model_metadata_states WHEN NEW.revision > OLD.revision BEGIN SELECT RAISE(ABORT, 'synthetic backfill failure'); END`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count, err := BackfillChannelModelMetadata(ctx); err == nil || count != 0 {
+		t.Fatalf("failed backfill was not atomic: %d %v", count, err)
+	}
+	after, err := ReadModelMetadataCatalog(ctx)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatal("failed backfill changed metadata")
+	}
+	if err := DB.Exec("DROP TRIGGER reject_backfill").Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []int64{1, 0} {
+		if count, err := BackfillChannelModelMetadata(ctx); err != nil || count != want {
+			t.Fatalf("backfill: %d %v; want %d", count, err, want)
+		}
+	}
+	stored, _, err := GetModelMeta(existing.Model)
+	if err != nil || !reflect.DeepEqual(stored, existing) || channelRevision(t) != 0 || groupConfigurationSnapshot(t) != options {
+		t.Fatal("backfill replaced existing metadata or changed channel/billing configuration")
+	}
+	catalog, err := ReadModelMetadataCatalog(ctx)
+	if err != nil || catalog.Revision != before.Revision+1 || len(catalog.Models) != 2 {
+		t.Fatalf("backfill catalog: %+v %v", catalog, err)
+	}
+}
