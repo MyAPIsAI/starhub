@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"starhub/model"
@@ -87,11 +88,35 @@ func ProbeChannelImage(ctx context.Context, ch *model.Channel, name string) (res
 		result.Message = "Invalid image test response"
 		return
 	}
-	urls, b64s, _, err := dto.WalkImageResponse(data, nil)
+	urls, b64s, _, err := dto.WalkImageResponse(data, func(entry dto.ImageEntryRaw) error {
+		if result.ImageURL == "" {
+			var raw string
+			if json.Unmarshal(entry.URL, &raw) == nil {
+				result.ImageURL = imageProbeURL(raw)
+			}
+		}
+		return nil
+	})
 	result.OK = err == nil && (urls > 0 || b64s > 0)
 	result.Message = "Image generation returned no valid image"
 	if result.OK {
 		result.Message = "Image generated successfully"
+		if result.ImageURL == "" {
+			result.Message = "Image generated; no usable preview URL was returned"
+		}
+	} else {
+		result.ImageURL = ""
 	}
 	return
+}
+
+func imageProbeURL(raw string) string {
+	if len(raw) > 8192 {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil {
+		return ""
+	}
+	return raw
 }

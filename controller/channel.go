@@ -292,6 +292,7 @@ func DeleteChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 type channelTestResult struct {
+	ImageURL  string `json:"image_url,omitempty"`
 	Code      string `json:"code,omitempty"`
 	Scope     string `json:"scope"`
 	OK        bool   `json:"ok"`
@@ -356,6 +357,7 @@ func TestChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	status := service.ApplyProbeResult(ch, res)
 	common.ApiSuccess(w, channelTestResult{
+		ImageURL:  res.ImageURL,
 		Code:      res.Code,
 		Scope:     res.Scope,
 		OK:        res.OK,

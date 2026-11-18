@@ -203,7 +203,7 @@ func TestArkCapabilityProbes(t *testing.T) {
 	}
 	request.target += "?mode=image"
 	decodeData(t, call(TestChannel, request), &result)
-	if !result.OK || result.Scope != "image" || images != 1 || chats != 0 {
+	if !result.OK || result.Scope != "image" || result.ImageURL != "https://example.test/probe.png" || images != 1 || chats != 0 {
 		t.Fatal("explicit image probe did not perform exactly one generation")
 	}
 	domain = "LLM"

@@ -106,6 +106,7 @@ export interface AdminChannel {
 
 /** Backend channelTestResult (controller/channel.go:232). */
 export interface ChannelTestResult {
+  image_url?: string;
   code?: string;
   scope?: "catalog" | "image" | "local" | "";
   ok: boolean;
