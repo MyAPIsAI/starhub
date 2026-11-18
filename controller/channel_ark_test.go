@@ -349,6 +349,59 @@ func TestArkVideoAdmissionRejectsChangedConnection(t *testing.T) {
 	}
 }
 
+func TestArkVideoConnectivityNeverGenerates(t *testing.T) {
+	newTestDB(t)
+	const modelID = "doubao-seedance-2-0-260128"
+	denied := false
+	var reads, writes atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/api/v3/models" {
+			writes.Add(1)
+			w.WriteHeader(500)
+			return
+		}
+		reads.Add(1)
+		if denied {
+			w.Header().Set("X-Request-Id", "video-catalog-request")
+			w.WriteHeader(401)
+			fmt.Fprint(w, `{"error":{"code":"AuthenticationError"}}`)
+			return
+		}
+		fmt.Fprint(w, `{"data":[{"id":"`+modelID+`","domain":"VideoGeneration"}]}`)
+	}))
+	defer upstream.Close()
+	ch := &model.Channel{Type: channel.ChannelTypeArk, BaseURL: upstream.URL, Key: "video-key", Models: modelID, Group: "default", Status: common.ChannelStatusAutoDisabled, ModelCapabilities: map[string]string{modelID: "VideoGeneration"}}
+	if err := model.InsertChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	request := testRequest{method: "POST", target: fmt.Sprintf("/api/channel/test/%d", ch.ID), path: map[string]string{"id": fmt.Sprint(ch.ID)}}
+	var result channelTestResult
+	decodeData(t, call(TestChannel, request), &result)
+	if !result.OK || result.Code != "ark_video_catalog_only" || result.Scope != "catalog" || result.Status != common.ChannelStatusAutoDisabled {
+		t.Fatalf("video connectivity was misrepresented: %+v", result)
+	}
+	for _, capabilities := range []map[string]string{nil, {modelID: "VideoGeneration"}} {
+		ch.ModelCapabilities = capabilities
+		if err := model.UpdateChannel(ch); err != nil {
+			t.Fatal(err)
+		}
+		imageRequest := request
+		imageRequest.target += "?mode=image"
+		decodeData(t, call(TestChannel, imageRequest), &result)
+		if result.OK || result.Code != "image_probe_model_not_supported" || result.Status != common.ChannelStatusAutoDisabled {
+			t.Fatal("video model accepted an image probe")
+		}
+	}
+	denied = true
+	decodeData(t, call(TestChannel, request), &result)
+	if result.OK || result.Diagnostic == nil || result.Diagnostic.UpstreamStatus != 401 || result.Diagnostic.RequestID != "video-catalog-request" {
+		t.Fatalf("probe lost diagnostic: %+v", result)
+	}
+	if writes.Load() != 0 || reads.Load() != 2 {
+		t.Fatalf("connectivity generated output or retried: reads=%d writes=%d", reads.Load(), writes.Load())
+	}
+}
+
 func TestArkChannelCapabilitiesPersist(t *testing.T) {
 	newTestDB(t)
 	response := call(CreateChannel, testRequest{method: "POST", target: "/api/channel", body: `{"name":"Ark","type":32,"key":"fixture-key","models":"exact-version","model_capabilities":{"exact-version":"ImageGeneration","unselected":"LLM"}}`})

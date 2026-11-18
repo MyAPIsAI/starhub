@@ -32,6 +32,15 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
   const [result, setResult] = useState<ChannelTestResult>();
   const [image, setImage] = useState<ChannelTestResult>();
   const imagePending = test.isPending && test.variables?.mode === "image";
+  const hasVideo =
+    channel.type === 32 &&
+    channel.models
+      .split(",")
+      .some(
+        (id) =>
+          channel.model_capabilities?.[id.trim()] === "VideoGeneration" ||
+          id.trim().startsWith("doubao-seedance-"),
+      );
   const run = (model?: string, mode?: "image") => {
     if (test.isPending) return;
     setResult(undefined);
@@ -81,6 +90,22 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
         />
       </div>
       {result && <ChannelProbeResult result={result} compact />}
+      {hasVideo && (
+        <details className="channel-probe-video">
+          <summary>
+            {text("视频接入", "Video integration", "ربط الفيديو")}
+          </summary>
+          <p>
+            {text(
+              "测试连通只检查目录，不生成视频。实际生成通过任务 API 提交，可能产生上游费用；按返回的任务 ID 查询结果。",
+              "Connectivity tests only check the catalog and do not generate videos. Submit generation through the task API; upstream charges may apply. Query results using the returned task ID.",
+              "يفحص اختبار الاتصال الدليل فقط دون توليد فيديو. أرسل التوليد عبر واجهة المهام وقد تُطبق رسوم المزود، ثم استعلم بمعرّف المهمة.",
+            )}
+          </p>
+          <code dir="ltr">POST /v1/video/generations</code>
+          <code dir="ltr">GET /v1/video/generations/&#123;id&#125;</code>
+        </details>
+      )}
     </div>
   );
 }

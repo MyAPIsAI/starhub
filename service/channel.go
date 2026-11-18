@@ -86,6 +86,7 @@ func enableChannel(channelID int64, reason string) error {
 
 // ProbeResult is the outcome of one health probe against a channel.
 type ProbeResult struct {
+	Diagnostic *ChannelModelsDiagnostic
 	ImageURL   string // temporary preview URL; never persisted in channel health
 	Code       string // controlled diagnostic code, separate from display text
 	Scope      string // catalog checks do not establish inference health

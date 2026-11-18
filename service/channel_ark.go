@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"starhub/model"
@@ -26,6 +27,10 @@ func probeArkCatalog(ctx context.Context, ch *model.Channel, name, key string, k
 		var failure *ChannelModelsError
 		if errors.As(err, &failure) {
 			result.Code = failure.Code
+			result.Diagnostic = failure.Diagnostic
+			if failure.Diagnostic != nil {
+				result.HTTPStatus = failure.Diagnostic.UpstreamStatus
+			}
 		}
 		result.Message = result.Code
 		return result, ""
@@ -34,6 +39,11 @@ func probeArkCatalog(ctx context.Context, ch *model.Channel, name, key string, k
 		if entry.ID == name {
 			result.OK, result.HTTPStatus = true, http.StatusOK
 			result.Message = "Model catalog accessible; inference was not tested"
+			if entry.Domain == "VideoGeneration" || strings.HasPrefix(name, "doubao-seedance-") {
+				result.Code = "ark_video_catalog_only"
+				result.Message = "Video catalog accessible; generation was not tested. Submit a video task explicitly"
+				return result, "VideoGeneration"
+			}
 			return result, entry.Domain
 		}
 	}
@@ -47,6 +57,10 @@ func ProbeChannelImage(ctx context.Context, ch *model.Channel, name string) (res
 	result.Scope = "image"
 	if ch.Type != channel.ChannelTypeArk {
 		result.Message = "image_probe_unsupported"
+		return
+	}
+	if domain := ch.ModelCapabilities[name]; (domain != "" && domain != "ImageGeneration") || strings.HasPrefix(name, "doubao-seedance-") {
+		result.Scope, result.Code, result.Message = "local", "image_probe_model_not_supported", "Selected model does not support an image generation probe"
 		return
 	}
 	key, keyIdx := ch.SelectKey()

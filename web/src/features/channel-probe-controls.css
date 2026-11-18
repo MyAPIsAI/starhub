@@ -41,3 +41,20 @@
     max-width: 280px;
   }
 }
+.channel-probe-video {
+  margin-block-start: 6px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.channel-probe-video summary {
+  cursor: pointer;
+}
+.channel-probe-video p {
+  margin-block: 6px;
+  line-height: 1.65;
+}
+.channel-probe-video code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}

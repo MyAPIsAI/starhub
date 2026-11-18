@@ -4,6 +4,11 @@ import { useSettingsText } from "./settings-text";
 import "./channel-probe-result.css";
 
 const errors: Record<string, [string, string, string]> = {
+  image_probe_model_not_supported: [
+    "所选模型不是图片模型，请使用对应的任务 API。",
+    "The selected model is not an image model. Use the appropriate task API.",
+    "النموذج المحدد ليس نموذج صور. استخدم واجهة المهام المناسبة.",
+  ],
   upstream_model_not_found: [
     "配置的模型 ID 不在上游目录中。请获取准确版本并替换旧短名；Endpoint ID 需单独验证生成。",
     "The configured model ID is not in the upstream catalog. Fetch an exact version and replace the short name; Endpoint IDs need a separate inference test.",
@@ -117,9 +122,15 @@ export function ChannelProbeResult({
           {result.scope === "catalog" && (
             <span className="channel-probe-model">
               {text(
-                "目录检查未验证实际生成。",
-                "Catalog checks do not verify inference.",
-                "فحص الدليل لا يتحقق من التوليد الفعلي.",
+                result.code === "ark_video_catalog_only"
+                  ? "视频目录可访问，尚未生成视频；实际生成请通过任务 API 提交。"
+                  : "目录检查未验证实际生成。",
+                result.code === "ark_video_catalog_only"
+                  ? "Video catalog accessible; no video was generated. Submit generation through the task API."
+                  : "Catalog checks do not verify inference.",
+                result.code === "ark_video_catalog_only"
+                  ? "دليل الفيديو متاح ولم يُولد فيديو. أرسل التوليد عبر واجهة المهام."
+                  : "فحص الدليل لا يتحقق من التوليد الفعلي.",
               )}
             </span>
           )}
@@ -138,6 +149,12 @@ export function ChannelProbeResult({
                   "تعذر التحقق من الدليل. تحقق من الاتصال وإعدادات النموذج.",
                 )
               : result.message}
+        </span>
+      )}
+      {!result.ok && result.diagnostic?.request_id && (
+        <span className="channel-probe-model">
+          {text("请求 ID：", "Request ID: ", "معرّف الطلب: ")}
+          <bdi>{result.diagnostic.request_id}</bdi>
         </span>
       )}
     </div>

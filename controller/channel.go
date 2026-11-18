@@ -292,14 +292,15 @@ func DeleteChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 type channelTestResult struct {
-	ImageURL  string `json:"image_url,omitempty"`
-	Code      string `json:"code,omitempty"`
-	Scope     string `json:"scope"`
-	OK        bool   `json:"ok"`
-	Model     string `json:"model"`
-	ElapsedMs int64  `json:"elapsed_ms"`
-	Message   string `json:"message"`
-	Status    int    `json:"status"`
+	Diagnostic *service.ChannelModelsDiagnostic `json:"diagnostic,omitempty"`
+	ImageURL   string                           `json:"image_url,omitempty"`
+	Code       string                           `json:"code,omitempty"`
+	Scope      string                           `json:"scope"`
+	OK         bool                             `json:"ok"`
+	Model      string                           `json:"model"`
+	ElapsedMs  int64                            `json:"elapsed_ms"`
+	Message    string                           `json:"message"`
+	Status     int                              `json:"status"`
 }
 
 func TestChannel(w http.ResponseWriter, r *http.Request) {
@@ -357,14 +358,15 @@ func TestChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	status := service.ApplyProbeResult(ch, res)
 	common.ApiSuccess(w, channelTestResult{
-		ImageURL:  res.ImageURL,
-		Code:      res.Code,
-		Scope:     res.Scope,
-		OK:        res.OK,
-		Model:     modelName,
-		ElapsedMs: res.ElapsedMs,
-		Message:   res.Message,
-		Status:    status,
+		Diagnostic: res.Diagnostic,
+		ImageURL:   res.ImageURL,
+		Code:       res.Code,
+		Scope:      res.Scope,
+		OK:         res.OK,
+		Model:      modelName,
+		ElapsedMs:  res.ElapsedMs,
+		Message:    res.Message,
+		Status:     status,
 	})
 }
 

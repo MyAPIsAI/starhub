@@ -56,7 +56,7 @@ try {
       );
     } else if (req.url.endsWith("/api/v3/models"))
       res.end(
-        '{"data":[{"id":"doubao-seedream-4-5-251128","domain":"ImageGeneration"},{"id":"doubao-chat-model","domain":"LLM"}]}',
+        '{"data":[{"id":"doubao-seedream-4-5-251128","domain":"ImageGeneration"},{"id":"doubao-chat-model","domain":"LLM"},{"id":"doubao-seedance-2-0-260128","domain":"VideoGeneration"}]}',
       );
     else if (req.url.startsWith("/video/"))
       res.end(
@@ -862,6 +862,48 @@ try {
   report.checks.push(
     "Ark channel discovery and creation preserve its API prefix and exact model ID",
   );
+  await openNew();
+  await dialog.locator("#ch-type").selectOption("32");
+  await dialog.locator("#ch-name").fill("Ark video channel");
+  await dialog.locator("#ch-base-url").fill(upstreamBase + "/ark/api/v3");
+  await discover().click();
+  await dialog.getByRole("checkbox", {name: /doubao-seedance-2-0-260128/}).check();
+  await dialog.getByRole("button", {name: "Use selected models only", exact: true}).click();
+  await dialog.getByText(/Video models generate through the asynchronous task API/).waitFor();
+  await dialog.getByRole("button", {name: "Create", exact: true}).click();
+  await dialog.waitFor({state:"hidden"});
+  const videoChannel = (await api("GET", "/api/channel")).find(channel => channel.name === "Ark video channel");
+  assert.deepEqual(videoChannel.model_capabilities, {"doubao-seedance-2-0-260128":"VideoGeneration"});
+  const videoRow = page.getByRole("row").filter({hasText:"Ark video channel"});
+  const generatedBeforeVideo = hits.filter(hit => hit.path.endsWith("/images/generations") || hit.path.includes("/contents/generations/tasks")).length;
+  assert.equal(await videoRow.getByRole("button", {name:"Test image generation (upstream charges)", exact:true}).count(),0);
+  await videoRow.getByRole("button", {name:"Test",exact:true}).click();
+  await videoRow.getByText("Catalog accessible",{exact:true}).waitFor();
+  await videoRow.locator(".channel-probe-video summary").click();
+  for (const language of ["zh","ar","en"]) {
+    for (const theme of ["light","dark"]) {
+      await page.evaluate(async ({language,theme})=>{
+        const {usePreferences}=await import("/src/lib/preferences.ts");
+        usePreferences.getState().setLanguage(language);usePreferences.getState().setTheme(theme);
+      },{language,theme});
+      for (const width of [1440,320]) {
+        await page.setViewportSize({width,height:1000});
+        await videoRow.locator(".channel-probe-video").scrollIntoViewIfNeeded();
+        assert.equal(await videoRow.locator(".channel-probe-controls").evaluate(node=>node.scrollWidth>node.clientWidth+1),false);
+        await capture(`video-integration-${language}-${theme}-${width}`);
+      }
+    }
+  }
+  const videoScan=await new AxeBuilder({page}).include(".channel-probe-controls").withTags(["wcag2a","wcag2aa"]).analyze();
+  assert.deepEqual(videoScan.violations,[]);
+  assert.equal(hits.filter(hit=>hit.path.endsWith("/images/generations")||hit.path.includes("/contents/generations/tasks")).length,generatedBeforeVideo);
+  await api("PUT","/api/channel",{id:videoChannel.id,model_capabilities:{}});
+  await page.reload();
+  assert.equal(await videoRow.getByRole("button",{name:"Test image generation (upstream charges)",exact:true}).count(),0);
+  await api("DELETE",`/api/channel/${videoChannel.id}`);
+  await page.reload();
+  await page.setViewportSize({width:1440,height:1000});
+  report.checks.push("video channels preserve exact IDs and capabilities, hide image generation with or without metadata, expose three-language responsive task guidance, and connectivity never generates a video");
   await openNew();
   await discover().click();
   await dialog

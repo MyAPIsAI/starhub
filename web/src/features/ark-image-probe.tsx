@@ -33,8 +33,9 @@ export function ArkImageProbe({
     ),
   ].filter(
     (id) =>
-      !channel.model_capabilities?.[id] ||
-      channel.model_capabilities[id] === "ImageGeneration",
+      (!channel.model_capabilities?.[id] &&
+        !id.startsWith("doubao-seedance-")) ||
+      channel.model_capabilities?.[id] === "ImageGeneration",
   );
   if (channel.type !== 32 || candidates.length === 0) return null;
   const label = text(

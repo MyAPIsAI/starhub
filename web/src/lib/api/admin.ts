@@ -106,6 +106,11 @@ export interface AdminChannel {
 
 /** Backend channelTestResult (controller/channel.go:232). */
 export interface ChannelTestResult {
+  diagnostic?: {
+    upstream_status: number;
+    provider_code?: string;
+    request_id?: string;
+  };
   image_url?: string;
   code?: string;
   scope?: "catalog" | "image" | "local" | "";

@@ -180,7 +180,11 @@ export function ChannelModelDiscovery({
     connection.type === 32 &&
     models
       .split(",")
-      .some((id) => /^doubao-(seedream|seedance)-[0-9]+\.[0-9]+(-(pro|lite|fast|mini))?$/.test(id.trim()));
+      .some((id) =>
+        /^doubao-(seedream|seedance)-[0-9]+\.[0-9]+(-(pro|lite|fast|mini))?$/.test(
+          id.trim(),
+        ),
+      );
   const supported = connection.type === 1 || connection.type === 32 || isPlugin;
   let declaredModels: string[] = [];
   if (isPlugin && plugin) {
@@ -363,6 +367,20 @@ export function ChannelModelDiscovery({
           )}
         </p>
       )}
+      {connection.type === 32 &&
+        current.some(
+          (id) =>
+            capabilities?.[id] === "VideoGeneration" ||
+            id.startsWith("doubao-seedance-"),
+        ) && (
+          <p className="channel-model-hint">
+            {text(
+              "视频模型通过异步任务 API 生成；测试连通仅检查目录，不生成视频。请填写当前上游的 API Key 原文，不含 Bearer 前缀；方舟官方地址须使用方舟 API Key。",
+              "Video models generate through the asynchronous task API. Connectivity tests only check the catalog and do not generate videos. Enter the upstream API key without a Bearer prefix; official Ark URLs require an Ark API key.",
+              "تولد نماذج الفيديو عبر واجهة المهام غير المتزامنة. يفحص اختبار الاتصال الدليل فقط. أدخل مفتاح المزود دون بادئة Bearer؛ تتطلب عناوين Ark الرسمية مفتاح Ark.",
+            )}
+          </p>
+        )}
       {isPlugin && (
         <>
           <p className="channel-model-hint">
