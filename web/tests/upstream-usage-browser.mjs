@@ -32,7 +32,13 @@ try {
     const hit = { path: req.url, authorization: req.headers.authorization };
     hits.push(hit);
     res.setHeader("Content-Type", "application/json");
-    if (req.url.startsWith("/unsupported/")) {
+    if (req.method === "POST" && req.url.endsWith("/images/generations")) {
+      res.end('{"data":[{"url":"https://example.test/image.png"}]}');
+    } else if (req.method === "POST" && req.url.endsWith("/contents/generations/tasks")) {
+      res.end('{"id":"usage-video-fixture"}');
+    } else if (req.url.endsWith("/contents/generations/tasks/usage-video-fixture")) {
+      res.end('{"status":"succeeded","duration":4,"content":{"video_url":"https://example.test/video.mp4"},"usage":{"completion_tokens":40594,"total_tokens":40594}}');
+    } else if (req.url.startsWith("/unsupported/")) {
       res.writeHead(404);
       res.end("{}");
     } else if (
@@ -267,11 +273,11 @@ try {
     type: 32,
     key: "fixture-ark-key",
     base_url: upstreamBase,
-    models: "doubao-seedream-4-5-251128",
+    models: "doubao-seedream-4-5-251128,dreamina-seedance-2-0-fast-260128",
     group: "default",
   });
   await page.reload();
-  const usageHits = hits.length;
+  let usageHits = hits.length;
   await page
     .getByRole("row")
     .filter({ hasText: "Ark usage fixture" })
@@ -279,13 +285,37 @@ try {
     .click();
   await dialog.getByText(/Ark usage queries are not integrated/).waitFor();
   assert.equal(hits.length, usageHits);
-  assert.equal(await dialog.locator(".usage-summary strong").count(), 1);
+  assert.equal(await dialog.locator(".usage-summary strong").count(), 2);
+  await dialog.getByText("No recorded tests", {exact:true}).waitFor();
+  await dialog.getByText("Unconfirmed", {exact:true}).waitFor();
   assert.equal(await dialog.locator(".usage-keys").count(), 0);
-  for (const language of ["en", "zh", "ar"]) {
-    await page.evaluate(async (language) => {
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({state:"hidden"});
+  const arkChannel = (await api("GET", "/api/channel")).find(channel => channel.name === "Ark usage fixture");
+  const beforeUsage = await api("GET", `/api/channel/${arkChannel.id}/upstream-usage`);
+  const image = await api("POST", `/api/channel/test/${arkChannel.id}?mode=image&model=doubao-seedream-4-5-251128`);
+  assert.equal(image.ok,true);
+  const video = await api("POST", `/api/channel/video-test/${arkChannel.id}/task`, {model:"dreamina-seedance-2-0-fast-260128",prompt:"A ball",request_id:"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",confirm_upstream_charge:true});
+  assert.equal(video.status,"submitted");
+  assert.equal((await api("GET", `/api/channel/video-test/${arkChannel.id}/task`)).status,"succeeded");
+  usageHits = hits.length;
+  const local = await api("GET", `/api/channel/${arkChannel.id}/upstream-usage`);
+  assert.equal(local.local_used_quota_nano,beforeUsage.local_used_quota_nano);
+  assert.equal(local.probe_usage.images,1);
+  assert.equal(local.probe_usage.video_successes,1);
+  assert.equal(local.probe_usage.video_output_tokens,"40594");
+  assert.deepEqual((await api("GET", `/api/channel/${arkChannel.id}/upstream-usage`)).probe_usage,local.probe_usage);
+  assert.equal(hits.length,usageHits);
+  await page.getByRole("row").filter({hasText:"Ark usage fixture"}).getByRole("button", {name:"Reconcile",exact:true}).click();
+  await dialog.getByText("40,594",{exact:true}).waitFor();
+  await dialog.getByText("Unconfirmed", {exact:true}).waitFor();
+  for (const language of ["en", "zh", "ar"]) for (const theme of ["light", "dark"]) for (const width of [1440,320]) {
+    await page.evaluate(async ({language,theme}) => {
       const { usePreferences } = await import("/src/lib/preferences.ts");
       usePreferences.getState().setLanguage(language);
-    }, language);
+      usePreferences.getState().setTheme(theme);
+    }, {language,theme});
+    await page.setViewportSize({width,height:844});
     assert.equal(
       await dialog
         .locator(".task-dialog-body")
@@ -293,9 +323,10 @@ try {
       false,
     );
     await page.screenshot({
-      path: path.join(out, `usage-ark-${language}-320.png`),
+      path: path.join(out, `usage-ark-${language}-${theme}-${width}.png`),
     });
   }
+  assert.deepEqual((await new AxeBuilder({ page }).include(".upstream-usage").withTags(["wcag2a", "wcag2aa"]).analyze()).violations,[]);
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "hidden" });
   await page.evaluate(async () => {
@@ -303,7 +334,7 @@ try {
     usePreferences.getState().setLanguage("en");
   });
   report.checks.push(
-    "Ark usage explains the capability boundary in three languages, preserves local usage and sends no upstream request",
+    "Ark reconciliation includes persisted image and video test usage without charging customers or double-counting reads; unknown upstream costs remain unconfirmed in three languages, themes and narrow layouts",
   );
   for (const [name, prefix, key] of [
     ["Unsupported fixture", "unsupported", "fixture-key"],

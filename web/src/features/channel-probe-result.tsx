@@ -4,6 +4,11 @@ import { useSettingsText } from "./settings-text";
 import "./channel-probe-result.css";
 
 const errors: Record<string, [string, string, string]> = {
+  image_probe_usage_unavailable: [
+    "本地图片测试用量记录失败，请检查数据库；请先核对上游执行情况再重试。",
+    "The local image test usage could not be recorded. Check the database and upstream execution before retrying.",
+    "تعذر تسجيل استخدام اختبار الصور محليًا. تحقق من قاعدة البيانات وتنفيذ المزود قبل إعادة المحاولة.",
+  ],
   upstream_video_authentication_failed: [
     "上游返回 401：视频接口认证失败，请更新有效的方舟 API Key。",
     "Upstream returned 401: video API authentication failed. Update the Ark API key.",

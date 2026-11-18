@@ -1,13 +1,14 @@
 import type { UpstreamUsageResult } from "../lib/api/admin";
 import { formatMoney, quotaMoneyNano } from "../lib/money";
 import { useSettingsText } from "./settings-text";
+import { ChannelProbeUsageView } from "./channel-probe-usage";
 import "./upstream-usage-result.css";
 
 const messages: Record<string, [string, string, string]> = {
   ark_usage_not_supported: [
-    "尚未接入方舟官方用量查询，请到火山引擎控制台查看账单。此处仅展示本地消费；模型测试与用量查询是独立能力。",
-    "Ark usage queries are not integrated. View bills in the Volcengine console. Only local usage is shown here; model tests and usage queries are separate capabilities.",
-    "استعلام استخدام Ark غير مدمج. راجع الفواتير في لوحة Volcengine. يعرض هنا الاستخدام المحلي فقط؛ اختبار النماذج واستعلام الاستخدام قدرتان منفصلتان.",
+    "尚未接入方舟官方账单查询，请到对应的火山引擎或 BytePlus 控制台核对。业务扣费和测试用量均不等同于上游实际费用。",
+    "Ark usage queries are not integrated. Check bills in the matching Volcengine or BytePlus console. Customer charges and test usage do not establish actual upstream costs.",
+    "استعلام فواتير Ark غير مدمج. راجع لوحة Volcengine أو BytePlus المطابقة. رسوم العملاء واستخدام الاختبارات لا يمثلان التكلفة الفعلية للمزود.",
   ],
   usage_not_supported: [
     "上游未提供兼容的用量查询接口，请检查地址或在上游控制台查看。",
@@ -85,7 +86,9 @@ export function UpstreamUsageResultView({
   const message = (code?: string) =>
     text(...(messages[code || ""] || messages.usage_query_failed));
   const labels = {
-    local: text("本地累计", "Local used", "الاستخدام المحلي"),
+    local: result.probe_usage
+      ? text("业务调用扣费", "Customer charges", "رسوم استدعاءات العملاء")
+      : text("本地累计", "Local used", "الاستخدام المحلي"),
     upstream: text("上游累计", "Upstream used", "استخدام المزود"),
     diff: text("差异", "Difference", "الفرق"),
     key: text("密钥", "Key", "المفتاح"),
@@ -128,7 +131,9 @@ export function UpstreamUsageResultView({
   ];
   return (
     <div className="upstream-usage" dir={lang === "ar" ? "rtl" : "ltr"}>
-      <div className="usage-summary">
+      <div
+        className={`usage-summary${result.probe_usage ? " usage-summary--probes" : ""}`}
+      >
         {amounts.map((amount) => (
           <div key={amount.label}>
             <span>{amount.label} (USD)</span>
@@ -137,6 +142,19 @@ export function UpstreamUsageResultView({
             </strong>
           </div>
         ))}
+        {result.probe_usage && (
+          <div>
+            <span>
+              {text(
+                "生成测试费用",
+                "Generation test cost",
+                "تكلفة اختبارات التوليد",
+              )}{" "}
+              (USD)
+            </span>
+            <strong>{text("待确认", "Unconfirmed", "غير مؤكدة")}</strong>
+          </div>
+        )}
       </div>
       <details className="usage-exact">
         <summary>
@@ -153,6 +171,9 @@ export function UpstreamUsageResultView({
           ))}
         </dl>
       </details>
+      {result.probe_usage && (
+        <ChannelProbeUsageView usage={result.probe_usage} />
+      )}
       {!complete && (
         <p role="status">
           {message(

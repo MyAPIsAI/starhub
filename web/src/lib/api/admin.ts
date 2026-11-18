@@ -145,7 +145,21 @@ export interface UpstreamKeyUsage {
 }
 
 /** Aggregated upstream usage result. */
+export interface ChannelProbeUsage {
+  image_tests: number;
+  image_successes: number;
+  images: number;
+  uncertain_images: number;
+  video_tests: number;
+  video_successes: number;
+  video_seconds: number;
+  video_output_tokens: string;
+  missing_video_usage: number;
+  pending_videos: number;
+}
+
 export interface UpstreamUsageResult {
+  probe_usage?: ChannelProbeUsage;
   status?: "ok" | "partial" | "unsupported" | "failed";
   code?: string;
   channel_id: number;
@@ -241,7 +255,10 @@ export function useTestChannel() {
 }
 
 export function fetchUpstreamUsage(id: number, signal: AbortSignal) {
-  return apiGet<UpstreamUsageResult>(`/api/channel/${id}/upstream-usage`, signal);
+  return apiGet<UpstreamUsageResult>(
+    `/api/channel/${id}/upstream-usage`,
+    signal,
+  );
 }
 
 // --- Helpers ---
