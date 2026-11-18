@@ -26,54 +26,60 @@ export function UpstreamUsageResultView({
       quota: result.local_used_quota,
       exact: result.local_used_quota_nano,
     },
-    {
-      label: labels.upstream,
-      quota: result.upstream_total_used,
-      exact: result.upstream_total_used_nano,
-    },
-    { label: labels.diff, quota: result.diff, exact: result.diff_nano },
+    ...(result.supported
+      ? [
+          {
+            label: labels.upstream,
+            quota: result.upstream_total_used,
+            exact: result.upstream_total_used_nano,
+          },
+          { label: labels.diff, quota: result.diff, exact: result.diff_nano },
+        ]
+      : []),
   ];
   return (
     <div className="upstream-usage" dir={lang === "ar" ? "rtl" : "ltr"}>
+      <div className="usage-summary">
+        {amounts.map((amount) => (
+          <div key={amount.label}>
+            <span>{amount.label} (USD)</span>
+            <strong className="mono" dir="ltr">
+              {money(amount.quota, amount.exact)}
+            </strong>
+          </div>
+        ))}
+      </div>
+      <details className="usage-exact">
+        <summary>
+          {text("查看精确金额", "View exact amounts", "عرض المبالغ الدقيقة")}
+        </summary>
+        <dl>
+          {amounts.map((amount) => (
+            <div key={amount.label}>
+              <dt>{amount.label} (USD)</dt>
+              <dd className="mono" dir="ltr">
+                {money(amount.quota, amount.exact, true)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </details>
       {!result.supported ? (
         <p>
-          {text(
-            "上游不支持用量查询（可能不是 new-api 实例）",
-            "Upstream does not support usage queries (may not be a new-api instance)",
-            "المنبع لا يدعم استعلامات الاستخدام",
-          )}
+          {result.code === "ark_usage_not_supported"
+            ? text(
+                "尚未接入方舟官方用量查询，请到火山引擎控制台查看账单。此处仅展示本地消费；模型测试与用量查询是独立能力。",
+                "Ark usage queries are not integrated. View bills in the Volcengine console. Only local usage is shown here; model tests and usage queries are separate capabilities.",
+                "استعلام استخدام Ark غير مدمج. راجع الفواتير في لوحة Volcengine. يعرض هنا الاستخدام المحلي فقط؛ اختبار النماذج واستعلام الاستخدام قدرتان منفصلتان.",
+              )
+            : text(
+                "上游不支持用量查询（可能不是 new-api 实例）",
+                "Upstream does not support usage queries (may not be a new-api instance)",
+                "المنبع لا يدعم استعلامات الاستخدام",
+              )}
         </p>
       ) : (
         <>
-          <div className="usage-summary">
-            {amounts.map((amount) => (
-              <div key={amount.label}>
-                <span>{amount.label} (USD)</span>
-                <strong className="mono" dir="ltr">
-                  {money(amount.quota, amount.exact)}
-                </strong>
-              </div>
-            ))}
-          </div>
-          <details className="usage-exact">
-            <summary>
-              {text(
-                "查看精确金额",
-                "View exact amounts",
-                "عرض المبالغ الدقيقة",
-              )}
-            </summary>
-            <dl>
-              {amounts.map((amount) => (
-                <div key={amount.label}>
-                  <dt>{amount.label} (USD)</dt>
-                  <dd className="mono" dir="ltr">
-                    {money(amount.quota, amount.exact, true)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </details>
           <table className="usage-keys">
             <caption>
               {text(

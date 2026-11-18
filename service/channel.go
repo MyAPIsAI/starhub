@@ -230,6 +230,7 @@ type UpstreamKeyUsage struct {
 
 // UpstreamUsageResult is the aggregated response for all keys of a channel.
 type UpstreamUsageResult struct {
+	Code               string             `json:"code,omitempty"`
 	LocalUsedQuotaNano string             `json:"local_used_quota_nano"`
 	UpstreamTotalNano  string             `json:"upstream_total_used_nano,omitempty"`
 	DiffNano           string             `json:"diff_nano,omitempty"`
@@ -252,8 +253,12 @@ func FetchUpstreamTokenUsage(ctx context.Context, ch *model.Channel) (*UpstreamU
 		ChannelID:      ch.ID,
 		ChannelName:    ch.Name,
 		LocalUsedQuota: ch.UsedQuota, LocalUsedQuotaNano: common.QuotaMoney(ch.UsedQuota, ch.UsedQuotaRemainderNano).String(),
-		Keys:      nil,
+		Keys:      []UpstreamKeyUsage{},
 		Supported: false,
+	}
+	if ch.Type == channel.ChannelTypeArk {
+		result.Code = "ark_usage_not_supported"
+		return result, nil
 	}
 	if ch.BaseURL == "" {
 		return result, nil

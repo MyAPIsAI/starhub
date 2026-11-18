@@ -11,7 +11,28 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/relay/channel"
 )
+
+func TestFetchUpstreamTokenUsageArkUnsupported(t *testing.T) {
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer upstream.Close()
+	ch := &model.Channel{ID: 32, Type: channel.ChannelTypeArk, BaseURL: upstream.URL, Key: "fixture-key", UsedQuota: 100, UsedQuotaRemainderNano: 1}
+	result, err := FetchUpstreamTokenUsage(context.Background(), ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 0 || result.Supported || result.Code != "ark_usage_not_supported" {
+		t.Fatalf("unexpected Ark usage result: calls=%d result=%+v", calls, result)
+	}
+	if result.LocalUsedQuotaNano != "200001" || result.UpstreamTotalNano != "" || result.DiffNano != "" || len(result.Keys) != 0 {
+		t.Fatalf("local usage must remain available without fabricated upstream amounts: %+v", result)
+	}
+}
 
 func TestFetchUpstreamTokenUsageUnsupportedUpstream(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

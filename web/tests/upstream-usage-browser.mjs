@@ -175,7 +175,7 @@ try {
     group: "default",
   });
   await page.reload();
-  const row = page.getByRole("row").filter({ hasText: "Usage fixture" });
+  const row = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "Usage fixture", exact: true }) });
   const dialog = page.getByRole("dialog");
   await row.getByRole("button", { name: "Reconcile", exact: true }).click();
   await dialog.waitFor();
@@ -234,6 +234,32 @@ try {
     const { usePreferences } = await import("/src/lib/preferences.ts");
     usePreferences.getState().setLanguage("en");
   });
+  await api("POST", "/api/channel", {
+    name: "Ark usage fixture", type: 32, key: "fixture-ark-key",
+    base_url: upstreamBase, models: "doubao-seedream-4-5-251128", group: "default",
+  });
+  await page.reload();
+  const usageHits = hits.length;
+  await page.getByRole("row").filter({hasText: "Ark usage fixture"}).getByRole("button", {name: "Reconcile", exact: true}).click();
+  await dialog.getByText(/Ark usage queries are not integrated/).waitFor();
+  assert.equal(hits.length, usageHits);
+  assert.equal(await dialog.locator(".usage-summary strong").count(), 1);
+  assert.equal(await dialog.locator(".usage-keys").count(), 0);
+  for (const language of ["en", "zh", "ar"]) {
+    await page.evaluate(async language => {
+      const {usePreferences} = await import("/src/lib/preferences.ts");
+      usePreferences.getState().setLanguage(language);
+    }, language);
+    assert.equal(await dialog.locator(".task-dialog-body").evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
+    await page.screenshot({path: path.join(out, `usage-ark-${language}-320.png`)});
+  }
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({state: "hidden"});
+  await page.evaluate(async () => {
+    const {usePreferences} = await import("/src/lib/preferences.ts");
+    usePreferences.getState().setLanguage("en");
+  });
+  report.checks.push("Ark usage explains the capability boundary in three languages, preserves local usage and sends no upstream request");
   await page.route("**/upstream-usage", (route) =>
     route.fulfill({
       status: 500,

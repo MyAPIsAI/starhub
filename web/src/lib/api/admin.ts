@@ -140,6 +140,7 @@ export interface UpstreamKeyUsage {
 
 /** Aggregated upstream usage result. */
 export interface UpstreamUsageResult {
+  code?: string;
   channel_id: number;
   channel_name: string;
   local_used_quota: number;
