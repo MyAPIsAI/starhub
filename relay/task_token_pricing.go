@@ -35,5 +35,9 @@ func TaskTokenEstimate(request *dto.TaskRequest) channel.TaskPricing {
 	if output <= 0 {
 		output = common.DefaultCompletionBudgetTokens
 	}
-	return channel.TaskPricing{PromptTokens: (dto.EstimateTokens(request.Prompt) + 100) * n, CompletionTokens: output * n}
+	input := dto.EstimateTokens(request.Prompt) + 100
+	if request.EstimatedInputTokens != nil {
+		input = *request.EstimatedInputTokens
+	}
+	return channel.TaskPricing{PromptTokens: input * n, CompletionTokens: output * n}
 }

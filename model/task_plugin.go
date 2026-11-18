@@ -16,7 +16,7 @@ import (
 )
 
 var ErrTaskPluginConfiguration = errors.New("invalid task plugin channel configuration")
-var ErrTaskPluginChannelBusy = errors.New("unfinished plugin tasks prevent changing channel credentials, type, base URL or deleting the channel")
+var ErrTaskPluginChannelBusy = errors.New("unfinished tasks prevent changing channel credentials, type, base URL or deleting the channel")
 var ErrTaskPluginChannelChanged = errors.New("plugin channel configuration changed before admission")
 
 const TaskStatusSubmitting = "submitting"
@@ -108,7 +108,7 @@ func validateTaskPluginChannel(tx *gorm.DB, c *Channel) error {
 }
 
 func guardTaskPluginChannel(tx *gorm.DB, previous *Channel, next *Channel) error {
-	if previous.Type != channel.ChannelTypeTaskPlugin && (next == nil || next.Type != channel.ChannelTypeTaskPlugin) {
+	if previous.Type != channel.ChannelTypeTaskPlugin && previous.Type != channel.ChannelTypeArk && (next == nil || (next.Type != channel.ChannelTypeTaskPlugin && next.Type != channel.ChannelTypeArk)) {
 		return nil
 	}
 	if next != nil && previous.Type == next.Type && strings.TrimSpace(previous.Key) == strings.TrimSpace(next.Key) && previous.BaseURL == next.BaseURL {

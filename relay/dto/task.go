@@ -45,6 +45,9 @@ type TaskRequest struct {
 	Prompt string `json:"prompt"`
 	// MaxOutputTokens is a gateway reservation estimate, not a provider output limit.
 	MaxOutputTokens int64 `json:"max_output_tokens,omitempty"`
+	// EstimatedInputTokens overrides text estimates for provider-specific admission.
+	// It is populated by adaptors, never read from the client's JSON body.
+	EstimatedInputTokens *int64 `json:"estimated_input_tokens,omitempty"`
 	// Video fields (action == "video").
 	Seconds int                        `json:"seconds,omitempty"`
 	Size    string                     `json:"size,omitempty"`
@@ -101,6 +104,7 @@ func ParseVideoTaskRequest(body []byte) (*TaskRequest, error) {
 
 // TaskResult is the normalized result of one upstream poll.
 type TaskResult struct {
+	Seconds            int      `json:"seconds,omitempty"`
 	BillingEvidence    string   `json:"billing_evidence,omitempty"`
 	UsageError         string   `json:"-"`
 	BillingUsageSource string   `json:"billing_usage_source,omitempty"`

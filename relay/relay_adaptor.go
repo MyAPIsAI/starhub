@@ -34,6 +34,8 @@ func GetChatAdaptor(channelType int) (channel.ChatAdaptor, error) {
 // GetTaskAdaptor resolves the async-task adaptor of a channel type (P3.3).
 func GetTaskAdaptor(channelType int) (channel.TaskAdaptor, error) {
 	switch channelType {
+	case channel.ChannelTypeArk:
+		return ark.VideoTaskAdaptor{}, nil
 	case channel.ChannelTypeOpenAI:
 		return openai.VideoTaskAdaptor{}, nil
 	default:

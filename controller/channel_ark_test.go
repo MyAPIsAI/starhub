@@ -1,12 +1,16 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"starhub/common"
@@ -15,6 +19,7 @@ import (
 	"starhub/relay/channel"
 	"starhub/relay/dto"
 	"starhub/service"
+	"starhub/setting"
 )
 
 func TestArkModelDiscovery(t *testing.T) {
@@ -100,6 +105,247 @@ func TestArkDiscoveryAuthenticationDiagnostics(t *testing.T) {
 	for _, key := range []string{"Bearer fixture-key", "fixture key"} {
 		response := call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: fmt.Sprintf(`{"type":32,"base_url":%q,"key":%q}`, upstream.URL, key)})
 		expectError(t, response, 400, "models_key_format_invalid")
+	}
+}
+
+func TestArkVideoTaskLifecycle(t *testing.T) {
+	const modelID = "doubao-seedance-2-0-260128"
+	for _, tc := range []struct {
+		status          string
+		tokens, recover bool
+		want            int64
+	}{
+		{"succeeded", false, false, 40000000}, {"succeeded", true, true, 246000},
+		{"failed", false, false, 0}, {"expired", false, false, 0}, {"cancelled", false, false, 0},
+	} {
+		t.Run(fmt.Sprintf("%s/tokens=%v", tc.status, tc.tokens), func(t *testing.T) {
+			newTestDB(t)
+			prices, rules := `{"`+modelID+`":0.01}`, "{}"
+			if tc.tokens {
+				prices, rules = "{}", strings.ReplaceAll(taskAbsoluteRates, "sora-2", modelID)
+			}
+			if err := setting.ApplyOptions(map[string]string{setting.OptionKeyModelPrice: prices, setting.OptionKeyModelTimeTokenPrices: rules}); err != nil {
+				t.Fatal(err)
+			}
+			var posts, gets atomic.Int32
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") != "Bearer video-key" {
+					t.Error("video credential changed")
+				}
+				switch r.Method + " " + r.URL.Path {
+				case "POST /prefix/api/v3/contents/generations/tasks":
+					posts.Add(1)
+					var body struct {
+						Model    string           `json:"model"`
+						Duration int              `json:"duration"`
+						Content  []map[string]any `json:"content"`
+					}
+					if json.NewDecoder(r.Body).Decode(&body) != nil || body.Model != modelID || body.Duration != 5 || len(body.Content) != 1 || body.Content[0]["text"] != "a cat" {
+						t.Error("video request changed")
+					}
+					fmt.Fprint(w, `{"id":"cgt-fixture"}`)
+				case "GET /prefix/api/v3/contents/generations/tasks/cgt-fixture":
+					count := gets.Add(1)
+					if count == 1 {
+						fmt.Fprint(w, `{"status":"queued"}`)
+						return
+					}
+					if count == 2 {
+						fmt.Fprint(w, `{"status":"running"}`)
+						return
+					}
+					if tc.tokens && count == 3 {
+						fmt.Fprint(w, `{"status":"succeeded","content":{"video_url":"https://example.test/video.mp4"},"usage":{"completion_tokens":123,"total_tokens":124}}`)
+						return
+					}
+					usage := ""
+					if tc.tokens {
+						usage = `,"usage":{"completion_tokens":123,"total_tokens":123}`
+					}
+					fmt.Fprintf(w, `{"status":%q,"duration":4,"content":{"video_url":"https://example.test/video.mp4"}%s}`, tc.status, usage)
+				default:
+					t.Error("unexpected video path")
+					w.WriteHeader(404)
+				}
+			}))
+			defer upstream.Close()
+			ch := &model.Channel{Name: "Ark video", Type: channel.ChannelTypeArk, BaseURL: upstream.URL + "/prefix/api/v3", Key: "video-key", Models: modelID, Group: "default", Status: 1, Weight: 1}
+			if err := model.InsertChannel(ch); err != nil {
+				t.Fatal(err)
+			}
+			if err := model.UpsertModelMeta(&model.ModelMeta{Model: modelID, Tags: "video"}); err != nil {
+				t.Fatal(err)
+			}
+			u := newUser(t, "ark-video", common.RoleUser, 1000000)
+			token := mustToken(t, u.ID, 1000000)
+			r := httptest.NewRequest("POST", "/v1/video/generations", strings.NewReader(`{"model":"`+modelID+`","prompt":"a cat","seconds":5,"n":1}`))
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
+			w := httptest.NewRecorder()
+			middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayTaskSubmitVideo))).ServeHTTP(w, r)
+			var submitted dto.TaskSubmitResponse
+			if json.Unmarshal(w.Body.Bytes(), &submitted) != nil || w.Code != 200 || submitted.ID == "" {
+				t.Fatalf("video admission: %d %s", w.Code, w.Body)
+			}
+			id, err := strconv.ParseInt(submitted.ID, 10, 64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			task, err := model.GetTaskByID(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if task.Platform != "ark-video" || task.Model != modelID || task.Quota <= tc.want || task.KeyIndex != 0 {
+				t.Fatalf("invalid admission: %+v", task)
+			}
+			changed := *ch
+			changed.Key = "replacement-key"
+			if err := model.UpdateChannel(&changed); !errors.Is(err, model.ErrTaskPluginChannelBusy) {
+				t.Fatalf("active task lost its credential: %v", err)
+			}
+			if err := model.DeleteChannel(ch.ID); !errors.Is(err, model.ErrTaskPluginChannelBusy) {
+				t.Fatalf("active video channel was deleted: %v", err)
+			}
+			for range 2 {
+				if _, err := service.PollTask(context.Background(), task); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if task.Status != dto.TaskStatusInProgress {
+				t.Fatalf("running status not mapped: %+v", task)
+			}
+			if tc.tokens {
+				if _, err := service.PollTask(context.Background(), task); err == nil {
+					t.Fatal("malformed usage was accepted")
+				}
+				if task.Status != dto.TaskStatusInProgress || task.PendingStatus != "" {
+					t.Fatal("malformed usage finalized the task")
+				}
+				if count, _ := model.CountLogs(u.ID); count != 0 {
+					t.Fatal("malformed usage created a zero bill")
+				}
+			}
+			if err := setting.ApplyOptions(map[string]string{setting.OptionKeyModelPrice: `{"` + modelID + `":9}`, setting.OptionKeyModelTimeTokenPrices: "{}"}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.recover {
+				if err := model.DB.Exec(`CREATE TRIGGER reject_ark_video_log BEFORE INSERT ON logs BEGIN SELECT RAISE(ABORT,'injected'); END`).Error; err != nil {
+					t.Fatal(err)
+				}
+				if _, err := service.PollTask(context.Background(), task); err == nil {
+					t.Fatal("injected settlement failure ignored")
+				}
+				stored, _ := model.GetTaskByID(task.ID)
+				if stored.PendingQuota != tc.want || stored.PendingStatus != "succeeded" {
+					t.Fatal("settlement intent lost")
+				}
+				if err := model.DB.Exec(`DROP TRIGGER reject_ark_video_log`).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			for range 2 {
+				if _, err := service.PollTask(context.Background(), task); err != nil {
+					t.Fatal(err)
+				}
+			}
+			wantStatus := tc.status
+			if tc.status == "expired" {
+				wantStatus = "failed"
+			}
+			wantGets := int32(3)
+			if tc.tokens {
+				wantGets++
+			}
+			if task.Status != wantStatus || posts.Load() != 1 || gets.Load() != wantGets {
+				t.Fatalf("lifecycle duplicated or lost: status=%s posts=%d gets=%d", task.Status, posts.Load(), gets.Load())
+			}
+			logs, total, err := model.ListLogs(u.ID, 1, 10, modelID)
+			if err != nil || total != 1 || common.QuotaMoney(logs[0].Quota, logs[0].QuotaRemainderNano).Int64() != tc.want {
+				t.Fatalf("invalid settlement: %+v %v", logs, err)
+			}
+			if tc.tokens && (logs[0].PromptTokens != 0 || logs[0].CompletionTokens != 123 || logs[0].UsageSource != "upstream") {
+				t.Fatal("video usage was billed as text")
+			}
+			after, _ := model.GetUserByID(u.ID)
+			if common.QuotaMoney(after.Quota, after.QuotaRemainderNano).Int64() != common.QuotaMoney(u.Quota, u.QuotaRemainderNano).Int64()-tc.want {
+				t.Fatal("reservation did not reconcile")
+			}
+			if err := model.VerifyMoneyLedger(u.ID); err != nil {
+				t.Fatal(err)
+			}
+			if err := model.UpdateChannel(&changed); err != nil {
+				t.Fatalf("terminal task still blocks credential maintenance: %v", err)
+			}
+		})
+	}
+}
+
+func TestArkVideoSubmissionRejectsInvalidAndUncertainRequests(t *testing.T) {
+	for _, invalid := range []bool{true, false} {
+		t.Run(fmt.Sprint(invalid), func(t *testing.T) {
+			newTestDB(t)
+			const modelID = "doubao-seedance-2-0-260128"
+			if err := setting.UpdatePricing(setting.OptionKeyModelPrice, `{"`+modelID+`":0.01}`); err != nil {
+				t.Fatal(err)
+			}
+			var calls atomic.Int32
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				fmt.Fprint(w, `{"status":"accepted-without-id"}`)
+			}))
+			defer upstream.Close()
+			for i := range 2 {
+				if err := model.InsertChannel(&model.Channel{Name: fmt.Sprint(i), Type: channel.ChannelTypeArk, Key: "video-key", BaseURL: upstream.URL, Models: modelID, Group: "default", Status: 1, Weight: 1}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := model.UpsertModelMeta(&model.ModelMeta{Model: modelID, Tags: "video"}); err != nil {
+				t.Fatal(err)
+			}
+			u := newUser(t, "ark-submit", common.RoleUser, 1000000)
+			token := mustToken(t, u.ID, 1000000)
+			n := 1
+			if invalid {
+				n = 2
+			}
+			r := httptest.NewRequest("POST", "/v1/video/generations", strings.NewReader(fmt.Sprintf(`{"model":%q,"prompt":"cat","seconds":5,"n":%d}`, modelID, n)))
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
+			w := httptest.NewRecorder()
+			middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayTaskSubmitVideo))).ServeHTTP(w, r)
+			wantStatus, wantCalls := 502, int32(1)
+			if invalid {
+				wantStatus, wantCalls = 400, 0
+			}
+			if w.Code != wantStatus || calls.Load() != wantCalls {
+				t.Fatalf("unsafe submit: status=%d calls=%d body=%s", w.Code, calls.Load(), w.Body)
+			}
+			after, _ := model.GetUserByID(u.ID)
+			if after.Quota != u.Quota || after.QuotaRemainderNano != u.QuotaRemainderNano || after.UsedQuota != 0 {
+				t.Fatal("failed admission left a charge")
+			}
+		})
+	}
+}
+
+func TestArkVideoAdmissionRejectsChangedConnection(t *testing.T) {
+	newTestDB(t)
+	ch := &model.Channel{Name: "Ark changed", Type: channel.ChannelTypeArk, Key: "old-key", BaseURL: "https://example.test", Models: "ep-fixture", Group: "default", Status: 1}
+	if err := model.InsertChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	expected := *ch
+	ch.Key = "new-key"
+	if err := model.UpdateChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	task := &model.Task{ChannelID: ch.ID, Model: "ep-fixture", Group: "default", Status: model.TaskStatusSubmitting}
+	if err := model.InsertTaskForChannel(task, &expected); err == nil {
+		t.Fatal("stale connection admitted a video task")
+	}
+	var count int64
+	if err := model.DB.Model(&model.Task{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatal("stale admission left a durable task")
 	}
 }
 

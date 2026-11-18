@@ -145,7 +145,12 @@ func taskSubmitAttempt(flow *relayFlow, ch *model.Channel, platform string, task
 		RequestMeta:    string(requestMeta),
 		PricingMeta:    string(pricingMeta),
 	}
-	if err := model.InsertTask(task); err != nil {
+	if ch.Type == channel.ChannelTypeArk {
+		err = model.InsertTaskForChannel(task, ch)
+	} else {
+		err = model.InsertTask(task)
+	}
+	if err != nil {
 		log.Printf("task persistence failed before upstream submit: %v", err)
 		flow.lastErr = fmt.Errorf("task persistence failed: %v", err)
 		return attemptResult{outcome: attemptUncertain, cause: flow.lastErr}

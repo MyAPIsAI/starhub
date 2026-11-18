@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"slices"
 	"starhub/common"
 	"strings"
 	"time"
@@ -66,6 +67,24 @@ type Task struct {
 
 func InsertTask(t *Task) error {
 	return DB.Create(t).Error
+}
+
+// InsertTaskForChannel protects the captured connection before any native submit.
+func InsertTaskForChannel(task *Task, expected *Channel) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		// Acquire the writer before checking the connection to serialize channel edits.
+		if err := tx.Create(task).Error; err != nil {
+			return err
+		}
+		var current Channel
+		if err := tx.First(&current, "id = ?", expected.ID).Error; err != nil {
+			return err
+		}
+		if task.ChannelID != current.ID || current.Type != expected.Type || current.Key != expected.Key || current.BaseURL != expected.BaseURL || current.Status != common.ChannelStatusEnabled || !slices.Contains(SplitList(current.Models), task.Model) || !slices.Contains(ChannelGroups(&current), task.Group) || current.KeyStatuses()[max(task.KeyIndex, 0)] != common.StatusEnabled {
+			return errors.New("task channel changed before submission")
+		}
+		return nil
+	})
 }
 
 func GetTaskByID(id int64) (*Task, error) {
