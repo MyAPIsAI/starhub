@@ -237,18 +237,19 @@ type UpstreamKeyUsage struct {
 
 // UpstreamUsageResult is the aggregated response for all keys of a channel.
 type UpstreamUsageResult struct {
-	Status             string             `json:"status"`
-	Code               string             `json:"code,omitempty"`
-	LocalUsedQuotaNano string             `json:"local_used_quota_nano"`
-	UpstreamTotalNano  string             `json:"upstream_total_used_nano,omitempty"`
-	DiffNano           string             `json:"diff_nano,omitempty"`
-	ChannelID          int64              `json:"channel_id"`
-	ChannelName        string             `json:"channel_name"`
-	LocalUsedQuota     int64              `json:"local_used_quota"`
-	Keys               []UpstreamKeyUsage `json:"keys"`
-	UpstreamTotal      int64              `json:"upstream_total_used"`
-	Diff               int64              `json:"diff"`
-	Supported          bool               `json:"supported"`
+	ProbeUsage         *model.ChannelProbeUsage `json:"probe_usage,omitempty"`
+	Status             string                   `json:"status"`
+	Code               string                   `json:"code,omitempty"`
+	LocalUsedQuotaNano string                   `json:"local_used_quota_nano"`
+	UpstreamTotalNano  string                   `json:"upstream_total_used_nano,omitempty"`
+	DiffNano           string                   `json:"diff_nano,omitempty"`
+	ChannelID          int64                    `json:"channel_id"`
+	ChannelName        string                   `json:"channel_name"`
+	LocalUsedQuota     int64                    `json:"local_used_quota"`
+	Keys               []UpstreamKeyUsage       `json:"keys"`
+	UpstreamTotal      int64                    `json:"upstream_total_used"`
+	Diff               int64                    `json:"diff"`
+	Supported          bool                     `json:"supported"`
 }
 
 // FetchUpstreamTokenUsage queries the upstream new-api instance for each key
@@ -265,6 +266,11 @@ func FetchUpstreamTokenUsage(ctx context.Context, ch *model.Channel) (*UpstreamU
 		Supported: false, Status: "failed",
 	}
 	if ch.Type == channel.ChannelTypeArk {
+		var err error
+		result.ProbeUsage, err = model.GetChannelProbeUsage(ctx, ch.ID)
+		if err != nil {
+			return nil, errors.New("local probe usage is unavailable")
+		}
 		result.Status = "unsupported"
 		result.Code = "ark_usage_not_supported"
 		return result, nil

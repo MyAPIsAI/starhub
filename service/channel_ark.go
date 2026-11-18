@@ -81,6 +81,25 @@ func ProbeChannelImage(ctx context.Context, ch *model.Channel, name string) (res
 	}
 	req.Header.Set("Content-Type", "application/json")
 	_ = (ark.Adaptor{}).PrepareRequest(req, key, body)
+	var images int64
+	if ch.ID > 0 {
+		entry, err := model.StartChannelImageProbe(ch.ID, name)
+		if err != nil {
+			result.Code, result.Message = "image_probe_usage_unavailable", "Local usage could not be recorded; no image test was sent"
+			return
+		}
+		defer func() {
+			state := "uncertain"
+			if result.OK {
+				state = "succeeded"
+			} else if result.HTTPStatus >= 400 && result.HTTPStatus < 500 {
+				state = "failed"
+			}
+			if err := model.CompleteChannelImageProbe(entry.ID, state, images); err != nil {
+				result.Code, result.Message = "image_probe_usage_unavailable", "Image test finished; local usage confirmation failed"
+			}
+		}()
+	}
 	start := time.Now()
 	defer func() { result.ElapsedMs = time.Since(start).Milliseconds() }()
 	client := &http.Client{Timeout: 90 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -113,6 +132,7 @@ func ProbeChannelImage(ctx context.Context, ch *model.Channel, name string) (res
 	result.OK = err == nil && (urls > 0 || b64s > 0)
 	result.Message = "Image generation returned no valid image"
 	if result.OK {
+		images = int64(max(urls, b64s))
 		result.Message = "Image generated successfully"
 		if result.ImageURL == "" {
 			result.Message = "Image generated; no usable preview URL was returned"

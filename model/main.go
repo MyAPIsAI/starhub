@@ -100,6 +100,9 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := migrate(&SMSConfiguration{}, &SMSRequestBucket{}); err != nil {
 		return fmt.Errorf("migrate SMS configuration: %w", err)
 	}
+	if err := migrate(&ChannelImageProbe{}); err != nil {
+		return fmt.Errorf("migrate channel image probe usage: %w", err)
+	}
 	if err := migrate(&TokenQuotaPeriod{}, &QuotaReservation{}); err != nil {
 		return fmt.Errorf("migrate token quota periods: %w", err)
 	}
