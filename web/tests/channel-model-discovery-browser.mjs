@@ -429,6 +429,17 @@ try {
   await dialog.locator("#ch-type").selectOption("32");
   await dialog.locator("#ch-base-url").fill(upstreamBase + "/ark/api/v3");
   await dialog.locator("#ch-models").fill("doubao-seedream-4.5");
+  const beforeInvalidArkSave = channelWrites;
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  assert.equal(channelWrites, beforeInvalidArkSave);
+  assert.equal(
+    await dialog.locator("#ch-models").getAttribute("aria-invalid"),
+    "true",
+  );
+  await dialog
+    .getByRole("alert")
+    .filter({ hasText: "model short name" })
+    .waitFor();
   await discover().click();
   await dialog
     .getByRole("checkbox", { name: /doubao-seedream-4-5-251128/ })

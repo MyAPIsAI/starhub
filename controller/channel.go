@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -27,6 +28,20 @@ type channelPayload struct {
 	Status            *int               `json:"status"`
 	Priority          *int64             `json:"priority"`
 	Weight            *int64             `json:"weight"`
+}
+
+var arkImageShortName = regexp.MustCompile(`^doubao-seedream-[0-9]+\.[0-9]+$`)
+
+func validateArkModelNames(w http.ResponseWriter, channelType int, names []string) bool {
+	if channelType == channel.ChannelTypeArk {
+		for _, name := range names {
+			if arkImageShortName.MatchString(name) {
+				common.ApiError(w, http.StatusBadRequest, "ark_model_version_required")
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // normalizeKeyMode validates the multi-key selection mode: empty keeps the
@@ -60,6 +75,9 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 	models := model.SplitList(req.Models)
 	if len(models) == 0 {
 		common.ApiError(w, http.StatusBadRequest, "models must be a non-empty comma-separated list")
+		return
+	}
+	if !validateArkModelNames(w, channelType, models) {
 		return
 	}
 	group := strings.TrimSpace(req.Group)
@@ -214,6 +232,9 @@ func UpdateChannel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ch.Models = strings.Join(models, ",")
+	}
+	if (req.Models != "" || req.Type != nil && *req.Type != 0) && !validateArkModelNames(w, ch.Type, model.SplitList(ch.Models)) {
+		return
 	}
 	if req.Group != "" {
 		groups := model.SplitList(req.Group)

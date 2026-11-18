@@ -82,6 +82,23 @@ func TestArkChannelCapabilitiesPersist(t *testing.T) {
 	}
 }
 
+func TestArkRejectsImageShortNames(t *testing.T) {
+	newTestDB(t)
+	for _, name := range []string{"doubao-seedream-4.5", "doubao-seedream-5.0"} {
+		expectError(t, call(CreateChannel, testRequest{method: "POST", target: "/api/channel", body: fmt.Sprintf(`{"type":32,"models":%q}`, name)}), 400, "ark_model_version_required")
+	}
+	ch := &model.Channel{Type: channel.ChannelTypeArk, Models: "doubao-seedream-4.5", Group: "default", Status: 1}
+	if err := model.InsertChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	expectError(t, call(UpdateChannel, testRequest{method: "PUT", target: "/api/channel", body: fmt.Sprintf(`{"id":%d,"models":"doubao-seedream-4.5"}`, ch.ID)}), 400, "ark_model_version_required")
+	expectStatus(t, call(UpdateChannel, testRequest{method: "PUT", target: "/api/channel", body: fmt.Sprintf(`{"id":%d,"status":2}`, ch.ID)}), 200)
+	for _, name := range []string{"doubao-seedream-4-5-251128", "ep-fixture"} {
+		expectStatus(t, call(UpdateChannel, testRequest{method: "PUT", target: "/api/channel", body: fmt.Sprintf(`{"id":%d,"models":%q}`, ch.ID, name)}), 200)
+	}
+	expectStatus(t, call(CreateChannel, testRequest{method: "POST", target: "/api/channel", body: `{"type":1,"models":"doubao-seedream-4.5"}`}), 200)
+}
+
 func TestArkImageRelay(t *testing.T) {
 	newTestDB(t)
 	const modelID = "doubao-seedream-4-5-251128"

@@ -161,6 +161,11 @@ export function ChannelModelDiscovery({
   }, [signature]);
 
   const isPlugin = connection.type === TASK_PLUGIN_CHANNEL_TYPE;
+  const invalidArkName =
+    connection.type === 32 &&
+    models
+      .split(",")
+      .some((id) => /^doubao-seedream-[0-9]+\.[0-9]+$/.test(id.trim()));
   const supported = connection.type === 1 || connection.type === 32 || isPlugin;
   let declaredModels: string[] = [];
   if (isPlugin && plugin) {
@@ -288,8 +293,29 @@ export function ChannelModelDiscovery({
         value={models}
         onChange={(event) => onChange(event.target.value)}
         required
+        aria-invalid={invalidArkName || undefined}
+        ref={(node) =>
+          node?.setCustomValidity(
+            invalidArkName
+              ? text(
+                  "请获取并选择准确模型版本，替换当前短名后保存。",
+                  "Fetch an exact model version and replace the short name before saving.",
+                  "اجلب إصدار النموذج الدقيق واستبدل الاسم المختصر قبل الحفظ.",
+                )
+              : "",
+          )
+        }
         placeholder="gpt-4.1,claude-sonnet-4-20250514"
       />
+      {invalidArkName && (
+        <p role="alert" className="channel-model-error">
+          {text(
+            "当前使用了模型短名。请获取上游模型，并用“仅使用所选模型”替换。",
+            "A model short name is configured. Fetch upstream models and use “Use selected models only” to replace it.",
+            "تم إدخال اسم مختصر. اجلب نماذج المزود واستبدله باستخدام النماذج المحددة فقط.",
+          )}
+        </p>
+      )}
       {connection.type === 32 && (
         <p className="channel-model-hint">
           {text(
