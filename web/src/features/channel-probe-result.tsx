@@ -15,9 +15,14 @@ const errors: Record<string, [string, string, string]> = {
     "لا يوجد مفتاح متاح. تحقق من بيانات اعتماد القناة.",
   ],
   upstream_models_authentication_failed: [
-    "上游拒绝目录认证，请检查密钥及目录权限。",
-    "Upstream catalog authentication failed. Check the key and catalog permission.",
-    "فشلت مصادقة الدليل. تحقق من المفتاح وصلاحية الدليل.",
+    "上游返回 401：目录认证失败，请检查 API Key 是否正确、有效且属于当前上游。",
+    "Upstream returned 401: catalog authentication failed. Check that the API key is valid and belongs to this upstream.",
+    "أعاد المزود 401: فشلت مصادقة الدليل. تحقق من صلاحية المفتاح وانتمائه للمزود.",
+  ],
+  upstream_models_permission_denied: [
+    "上游返回 403：目录访问受限，请检查项目权限及上游访问策略。",
+    "Upstream returned 403: catalog access denied. Check project permissions and upstream access policies.",
+    "أعاد المزود 403: الوصول للدليل مرفوض. تحقق من صلاحيات المشروع وسياسات الوصول.",
   ],
   upstream_models_not_found: [
     "上游目录接口不存在，请检查渠道类型和地址。",

@@ -34,9 +34,10 @@ try {
     if (req.url.startsWith("/slow/"))
       await new Promise((resolve) => setTimeout(resolve, 500));
     res.setHeader("Content-Type", "application/json");
-    if (req.url.startsWith("/auth/")) {
-      res.writeHead(401);
-      res.end(JSON.stringify({ error: "fixture authentication failed" }));
+    if (req.url.startsWith("/auth/") || req.url.startsWith("/forbidden/")) {
+      res.setHeader("X-Request-Id", "fixture-request-401");
+      res.writeHead(req.url.startsWith("/auth/") ? 401 : 403);
+      res.end(JSON.stringify({ error: {code: "AuthenticationError.InvalidApiKey", message: "fixture authentication failed"} }));
     } else if (req.url === "/probe.svg") {
       res.setHeader("Content-Type", "image/svg+xml");
       res.setHeader("Cache-Control", "no-store");
@@ -962,9 +963,25 @@ try {
   await discover().click();
   await dialog
     .getByRole("alert")
-    .filter({ hasText: "Upstream authentication failed" })
+    .filter({ hasText: "Upstream returned 401" })
     .waitFor();
   assert.equal(new URL(page.url()).pathname, "/admin");
+  await dialog.getByText(/fixture-request-401/).waitFor();
+  await dialog.locator("#ch-base-url").fill(upstreamBase + "/forbidden");
+  await discover().click();
+  await dialog.getByRole("alert").filter({hasText: "Upstream returned 403"}).waitFor();
+  for (const language of ["zh", "ar", "en"]) {
+    await page.evaluate(async language => {
+      const {usePreferences} = await import("/src/lib/preferences.ts");
+      usePreferences.getState().setLanguage(language);
+    }, language);
+    await page.setViewportSize({width: 320, height: 844});
+    await dialog.getByRole("alert").scrollIntoViewIfNeeded();
+    assert.match(await dialog.getByRole("alert").innerText(), /403/);
+    assert.equal(await dialog.getByRole("alert").evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
+    await capture(`catalog-permission-${language}-320`);
+  }
+  await page.setViewportSize({width: 1440, height: 1000});
   assert.equal(await dialog.locator("#ch-models").inputValue(), saved.models);
   await api("GET", "/api/channel");
   await dialog.locator("#ch-base-url").fill(upstreamBase + "/v1");

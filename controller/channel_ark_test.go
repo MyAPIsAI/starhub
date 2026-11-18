@@ -59,6 +59,50 @@ func TestArkModelDiscovery(t *testing.T) {
 	}
 }
 
+func TestArkDiscoveryAuthenticationDiagnostics(t *testing.T) {
+	newTestDB(t)
+	for _, status := range []int{401, 403} {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") != "Bearer fixture-key" {
+				t.Error("credential changed")
+			}
+			w.Header().Set("X-Request-Id", "fixture-request-id")
+			w.WriteHeader(status)
+			fmt.Fprint(w, `{"error":{"code":"AuthenticationError.InvalidApiKey","message":"fixture-key must never be echoed"}}`)
+		}))
+		response := call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: fmt.Sprintf(`{"type":32,"base_url":%q,"key":"fixture-key"}`, upstream.URL)})
+		code := "upstream_models_authentication_failed"
+		if status == 403 {
+			code = "upstream_models_permission_denied"
+		}
+		expectError(t, response, 502, code)
+		var envelope struct {
+			Data service.ChannelModelsDiagnostic `json:"data"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.Data.UpstreamStatus != status || envelope.Data.ProviderCode != "AuthenticationError" || envelope.Data.RequestID != "fixture-request-id" || strings.Contains(response.Body.String(), "fixture-key") {
+			t.Fatalf("unsafe or incomplete diagnostic: %s", response.Body.String())
+		}
+		upstream.Close()
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-Id", "fixture-key")
+		w.WriteHeader(401)
+		fmt.Fprint(w, `{"error":{"code":"fixture-key"}}`)
+	}))
+	defer upstream.Close()
+	response := call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: fmt.Sprintf(`{"type":32,"base_url":%q,"key":"fixture-key"}`, upstream.URL)})
+	if strings.Contains(response.Body.String(), "fixture-key") {
+		t.Fatal("upstream diagnostic echoed a credential")
+	}
+	for _, key := range []string{"Bearer fixture-key", "fixture key"} {
+		response := call(FetchChannelModels, testRequest{method: "POST", target: "/api/channel/fetch_models", body: fmt.Sprintf(`{"type":32,"base_url":%q,"key":%q}`, upstream.URL, key)})
+		expectError(t, response, 400, "models_key_format_invalid")
+	}
+}
+
 func TestArkChannelCapabilitiesPersist(t *testing.T) {
 	newTestDB(t)
 	response := call(CreateChannel, testRequest{method: "POST", target: "/api/channel", body: `{"name":"Ark","type":32,"key":"fixture-key","models":"exact-version","model_capabilities":{"exact-version":"ImageGeneration","unselected":"LLM"}}`})

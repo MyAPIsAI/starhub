@@ -271,7 +271,7 @@ func TestFetchChannelModelsUpstreamFailuresAndLimits(t *testing.T) {
 	}))
 	defer upstream.Close()
 	for _, tc := range []struct{ path, code string }{
-		{"auth", "upstream_models_authentication_failed"}, {"forbidden", "upstream_models_authentication_failed"},
+		{"auth", "upstream_models_authentication_failed"}, {"forbidden", "upstream_models_permission_denied"},
 		{"missing", "upstream_models_not_found"}, {"limited", "upstream_models_rate_limited"},
 		{"redirect", "upstream_models_redirect_refused"}, {"large", "upstream_models_too_large"},
 		{"many", "upstream_models_too_large"}, {"invalid", "upstream_models_invalid_response"},

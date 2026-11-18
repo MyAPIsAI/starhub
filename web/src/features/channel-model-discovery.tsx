@@ -51,9 +51,19 @@ const errors: Record<string, [string, string, string]> = {
     "اختر إصدار إضافة متاحًا وأعد المحاولة.",
   ],
   upstream_models_authentication_failed: [
-    "上游拒绝认证，请检查密钥及其模型列表权限。",
-    "Upstream authentication failed. Check the key and its model-list permission.",
-    "رفض المزود المصادقة. تحقق من المفتاح وصلاحية قائمة النماذج.",
+    "上游返回 401：认证失败，请检查 API Key 是否正确、有效且属于当前上游。",
+    "Upstream returned 401: authentication failed. Check that the API key is valid and belongs to this upstream.",
+    "أعاد المزود 401: فشلت المصادقة. تحقق من صلاحية المفتاح وانتمائه لهذا المزود.",
+  ],
+  upstream_models_permission_denied: [
+    "上游返回 403：访问受限，请检查密钥、项目权限及上游访问策略。",
+    "Upstream returned 403: access denied. Check the key, project permissions and upstream access policies.",
+    "أعاد المزود 403: الوصول مرفوض. تحقق من المفتاح وصلاحيات المشروع وسياسات الوصول.",
+  ],
+  models_key_format_invalid: [
+    "请填写 API Key 原文，不要包含 Bearer 前缀或空白字符。",
+    "Enter the raw API key without a Bearer prefix or whitespace.",
+    "أدخل المفتاح دون بادئة Bearer أو مسافات.",
   ],
   upstream_models_not_found: [
     "上游模型目录不存在，请检查渠道类型和地址，或手动填写模型。",
@@ -140,6 +150,11 @@ export function ChannelModelDiscovery({
     models: string[];
     capabilities?: Record<string, string>;
     error?: string;
+    diagnostic?: {
+      upstream_status?: number;
+      provider_code?: string;
+      request_id?: string;
+    };
   }>({ status: "idle", models: [] });
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -232,12 +247,35 @@ export function ChannelModelDiscovery({
         latest.current !== signature
       )
         return;
+      const details =
+        error instanceof ApiError
+          ? (error.details as Record<string, unknown> | undefined)
+          : undefined;
+      const safeID = (value: unknown) =>
+        typeof value === "string" && /^[a-zA-Z0-9_-]{8,128}$/.test(value)
+          ? value
+          : undefined;
       setState({
         status: "error",
         signature,
         models: [],
         error:
           error instanceof ApiError ? error.message : "upstream_models_failed",
+        diagnostic: {
+          upstream_status:
+            typeof details?.upstream_status === "number" &&
+            Number.isInteger(details.upstream_status) &&
+            details.upstream_status >= 100 &&
+            details.upstream_status < 600
+              ? details.upstream_status
+              : undefined,
+          provider_code:
+            typeof details?.provider_code === "string" &&
+            /^[a-zA-Z]{1,64}$/.test(details.provider_code)
+              ? details.provider_code
+              : undefined,
+          request_id: safeID(details?.request_id),
+        },
       });
     }
   };
@@ -375,6 +413,19 @@ export function ChannelModelDiscovery({
                   "Cannot fetch models. Retry; existing models are preserved.",
                   "تعذر جلب النماذج. أعد المحاولة؛ النماذج الحالية محفوظة.",
                 )}
+            {(state.diagnostic?.provider_code ||
+              state.diagnostic?.request_id) && (
+              <small style={{ display: "block", overflowWrap: "anywhere" }}>
+                {state.diagnostic.provider_code}
+                {state.diagnostic.request_id && (
+                  <>
+                    {" "}
+                    · {text("请求 ID", "Request ID", "معرّف الطلب")}:{" "}
+                    <bdi>{state.diagnostic.request_id}</bdi>
+                  </>
+                )}
+              </small>
+            )}
           </p>
         )}
         {(state.status === "stale" ||

@@ -49,11 +49,18 @@ export interface ApiRequestOptions {
 }
 
 export class ApiError extends Error {
+  details?: unknown;
   status: number;
   retryAfter?: number;
-  constructor(status: number, message: string, retryAfter?: number) {
+  constructor(
+    status: number,
+    message: string,
+    retryAfter?: number,
+    details?: unknown,
+  ) {
     super(message);
     this.name = "ApiError";
+    this.details = details;
     this.status = status;
     this.retryAfter = retryAfter;
   }
@@ -168,6 +175,7 @@ export async function apiRequest<T>(
       res.status,
       envelope.message ?? "request failed",
       retryAfter,
+      envelope.data,
     );
   }
 

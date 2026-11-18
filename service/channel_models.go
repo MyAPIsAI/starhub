@@ -18,8 +18,15 @@ import (
 
 // ChannelModelsError contains only controlled, credential-free API messages.
 type ChannelModelsError struct {
-	Status int
-	Code   string
+	Status     int
+	Code       string
+	Diagnostic *ChannelModelsDiagnostic
+}
+
+type ChannelModelsDiagnostic struct {
+	UpstreamStatus int    `json:"upstream_status"`
+	ProviderCode   string `json:"provider_code,omitempty"`
+	RequestID      string `json:"request_id,omitempty"`
 }
 
 type ChannelModelInfo struct {
@@ -38,10 +45,10 @@ func NormalizeChannelModelsBaseURL(raw string) (string, error) {
 	u, err := url.Parse(base)
 	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") ||
 		u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawPath != "" {
-		return "", &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
+		return "", &ChannelModelsError{Status: http.StatusBadRequest, Code: "invalid_models_base_url"}
 	}
 	if strings.HasSuffix(u.Path, "/v1") {
-		return "", &ChannelModelsError{http.StatusBadRequest, "models_base_url_contains_v1"}
+		return "", &ChannelModelsError{Status: http.StatusBadRequest, Code: "models_base_url_contains_v1"}
 	}
 	u.Host = strings.ToLower(u.Host)
 	return u.String(), nil
@@ -72,6 +79,10 @@ func FetchArkChannelModels(ctx context.Context, baseURL, key, auth string) ([]st
 }
 
 func FetchArkChannelModelCatalog(ctx context.Context, baseURL, key, auth string) ([]ChannelModelInfo, error) {
+	key = strings.TrimSpace(key)
+	if key == "" || strings.HasPrefix(strings.ToLower(key), "bearer ") || strings.ContainsFunc(key, unicode.IsSpace) {
+		return nil, &ChannelModelsError{Status: http.StatusBadRequest, Code: "models_key_format_invalid"}
+	}
 	base, err := NormalizeArkModelsBaseURL(baseURL)
 	if err != nil {
 		return nil, err
@@ -83,7 +94,7 @@ func FetchArkChannelModelCatalog(ctx context.Context, baseURL, key, auth string)
 func NormalizeTaskPluginModelsBaseURL(raw string) (string, error) {
 	base := strings.TrimRight(strings.TrimSpace(raw), "/")
 	if _, err := (taskplugin.Request{Method: http.MethodGet, Path: "/"}).URL(base, http.MethodGet); err != nil {
-		return "", &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
+		return "", &ChannelModelsError{Status: http.StatusBadRequest, Code: "invalid_models_base_url"}
 	}
 	u, _ := url.Parse(base)
 	u.Host = strings.ToLower(u.Host)
@@ -104,7 +115,7 @@ func FetchTaskPluginChannelModels(ctx context.Context, baseURL, key, auth, path 
 	}
 	endpoint, err := (taskplugin.Request{Method: http.MethodGet, Path: path}).URL(base, http.MethodGet)
 	if err != nil {
-		return nil, &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
+		return nil, &ChannelModelsError{Status: http.StatusBadRequest, Code: "invalid_models_base_url"}
 	}
 	return fetchChannelModels(ctx, endpoint, key, auth)
 }
@@ -125,7 +136,7 @@ func channelModelIDs(catalog []ChannelModelInfo) []string {
 func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) ([]ChannelModelInfo, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
+		return nil, &ChannelModelsError{Status: http.StatusBadRequest, Code: "invalid_models_base_url"}
 	}
 	request.Header.Set("Accept", "application/json")
 	switch auth {
@@ -134,7 +145,7 @@ func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) (
 	case "x-api-key":
 		request.Header.Set("x-api-key", key)
 	default:
-		return nil, &ChannelModelsError{http.StatusBadRequest, "models_plugin_unavailable"}
+		return nil, &ChannelModelsError{Status: http.StatusBadRequest, Code: "models_plugin_unavailable"}
 	}
 	client := &http.Client{
 		Timeout:       10 * time.Second,
@@ -144,16 +155,18 @@ func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) (
 	if err != nil {
 		var networkError net.Error
 		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout()) {
-			return nil, &ChannelModelsError{http.StatusGatewayTimeout, "upstream_models_timeout"}
+			return nil, &ChannelModelsError{Status: http.StatusGatewayTimeout, Code: "upstream_models_timeout"}
 		}
-		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_network_error"}
+		return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: "upstream_models_network_error"}
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		code := "upstream_models_failed"
 		switch response.StatusCode {
-		case http.StatusUnauthorized, http.StatusForbidden:
+		case http.StatusUnauthorized:
 			code = "upstream_models_authentication_failed"
+		case http.StatusForbidden:
+			code = "upstream_models_permission_denied"
 		case http.StatusNotFound:
 			code = "upstream_models_not_found"
 		case http.StatusTooManyRequests:
@@ -163,15 +176,44 @@ func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) (
 				code = "upstream_models_redirect_refused"
 			}
 		}
-		return nil, &ChannelModelsError{http.StatusBadGateway, code}
+		diagnostic := &ChannelModelsDiagnostic{UpstreamStatus: response.StatusCode}
+		if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+			body, _ := io.ReadAll(io.LimitReader(response.Body, 8192))
+			var details struct {
+				RequestID string `json:"request_id"`
+				Error     struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if json.Unmarshal(body, &details) == nil {
+				providerCode, _, _ := strings.Cut(details.Error.Code, ".")
+				switch providerCode {
+				case "AuthenticationError", "InvalidApiKey", "InvalidAPIKey", "InvalidAccessKey", "AccessDenied", "PermissionDenied", "AccountNotAuthorized":
+					diagnostic.ProviderCode = providerCode
+				}
+			}
+			requestID := response.Header.Get("X-Request-Id")
+			if requestID == "" {
+				requestID = response.Header.Get("X-Tt-Logid")
+			}
+			if requestID == "" {
+				requestID = details.RequestID
+			}
+			if len(requestID) >= 8 && len(requestID) <= 128 && !strings.Contains(requestID, key) && !strings.ContainsFunc(requestID, func(c rune) bool {
+				return !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')
+			}) {
+				diagnostic.RequestID = requestID
+			}
+		}
+		return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: code, Diagnostic: diagnostic}
 	}
 	const maxBytes = 2 << 20
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxBytes+1))
 	if err != nil {
-		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_read_failed"}
+		return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: "upstream_models_read_failed"}
 	}
 	if len(body) > maxBytes {
-		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_too_large"}
+		return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: "upstream_models_too_large"}
 	}
 	var result struct {
 		Data          *[]ChannelModelInfo `json:"data"`
@@ -181,13 +223,13 @@ func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) (
 		Next          string              `json:"next"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil || result.Data == nil {
-		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_invalid_response"}
+		return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: "upstream_models_invalid_response"}
 	}
 	if result.HasMore || result.NextCursor != "" || result.NextPageToken != "" || result.Next != "" {
-		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_pagination_unsupported"}
+		return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: "upstream_models_pagination_unsupported"}
 	}
 	if len(*result.Data) > 5000 {
-		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_too_large"}
+		return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: "upstream_models_too_large"}
 	}
 	models := make([]ChannelModelInfo, 0, len(*result.Data))
 	seen := make(map[string]bool)
@@ -197,7 +239,7 @@ func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) (
 			continue
 		}
 		if len(id) > 128 || strings.Contains(id, ",") || strings.ContainsFunc(id, unicode.IsControl) {
-			return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_invalid_id"}
+			return nil, &ChannelModelsError{Status: http.StatusBadGateway, Code: "upstream_models_invalid_id"}
 		}
 		if !seen[id] {
 			switch item.Domain {

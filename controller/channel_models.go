@@ -119,7 +119,7 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var failure *service.ChannelModelsError
 		if errors.As(err, &failure) {
-			common.ApiError(w, failure.Status, failure.Code)
+			common.WriteJSON(w, failure.Status, common.APIResponse{Success: false, Message: failure.Code, Data: failure.Diagnostic})
 		} else {
 			common.ApiError(w, http.StatusBadGateway, "upstream_models_failed")
 		}
