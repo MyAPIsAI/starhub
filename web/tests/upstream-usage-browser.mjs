@@ -35,6 +35,11 @@ try {
     if (req.url.startsWith("/unsupported/")) {
       res.writeHead(404);
       res.end("{}");
+    } else if (req.url.startsWith("/auth/") || (req.url.startsWith("/partial/") && req.headers.authorization.endsWith("failed"))) {
+      res.writeHead(403);
+      res.end("{}");
+    } else if (req.url.startsWith("/invalid/")) {
+      res.end('{"success":false,"message":"fixture-private-upstream-error"}');
     } else {
       res.end(
         JSON.stringify({
@@ -43,7 +48,7 @@ try {
             total_used: 1595625560,
             total_available: 500000,
             total_granted: 1596125560,
-            unlimited_quota: false,
+          unlimited_quota: req.url.startsWith("/unlimited/"),
             expires_at: 0,
           },
         }),
@@ -260,6 +265,34 @@ try {
     usePreferences.getState().setLanguage("en");
   });
   report.checks.push("Ark usage explains the capability boundary in three languages, preserves local usage and sends no upstream request");
+  for (const [name, prefix, key] of [
+    ["Unsupported fixture", "unsupported", "fixture-key"],
+    ["Authentication fixture", "auth", "fixture-key"],
+    ["Invalid usage fixture", "invalid", "fixture-key"],
+    ["Partial fixture", "partial", "fixture-ok\nfixture-failed"],
+    ["Unlimited fixture", "unlimited", "fixture-key"],
+  ]) {
+    await api("POST", "/api/channel", {name, type: 1, key, base_url: `${upstreamBase}/${prefix}`, models: "fixture-model", group: "default"});
+  }
+  await page.reload();
+  for (const [name, expected, amountCount] of [
+    ["Unsupported fixture", "compatible usage endpoint", 1],
+    ["Authentication fixture", "authentication or permission failed", 1],
+    ["Invalid usage fixture", "rejected the usage query", 1],
+    ["Partial fixture", "Only some keys", 2],
+    ["Unlimited fixture", "Unlimited", 3],
+  ]) {
+    const fixtureRow = page.getByRole("row").filter({has: page.getByRole("cell", {name, exact: true})});
+    await fixtureRow.getByRole("button", {name: "Reconcile", exact: true}).click();
+    await dialog.getByText(new RegExp(expected)).first().waitFor();
+    assert.equal(await dialog.locator(".usage-summary strong").count(), amountCount);
+    assert.equal((await dialog.innerText()).includes("fixture-private-upstream-error"), false);
+    assert.equal(await dialog.locator(".task-dialog-body").evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
+    await page.screenshot({path: path.join(out, `usage-${name.replaceAll(" ", "-")}-320.png`)});
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({state: "hidden"});
+  }
+  report.checks.push("unsupported endpoints, authentication failures, business errors, partial totals without differences and unlimited quota are rendered distinctly");
   await page.route("**/upstream-usage", (route) =>
     route.fulfill({
       status: 500,

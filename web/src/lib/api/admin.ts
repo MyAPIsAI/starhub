@@ -118,6 +118,7 @@ export interface ChannelTestResult {
 
 /** Per-key upstream usage from /api/channel/{id}/upstream-usage. */
 export interface UpstreamKeyUsage {
+  code?: string;
   total_used_nano?: string;
   total_available_nano?: string;
   total_granted_nano?: string;
@@ -140,6 +141,7 @@ export interface UpstreamKeyUsage {
 
 /** Aggregated upstream usage result. */
 export interface UpstreamUsageResult {
+  status?: "ok" | "partial" | "unsupported" | "failed";
   code?: string;
   channel_id: number;
   channel_name: string;

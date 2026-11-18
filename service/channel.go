@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -211,6 +212,7 @@ func ApplyProbeResult(ch *model.Channel, res ProbeResult) int {
 // UpstreamKeyUsage is the per-key usage snapshot fetched from the upstream
 // new-api instance. It mirrors the fields returned by /api/usage/token/.
 type UpstreamKeyUsage struct {
+	Code           string `json:"code,omitempty"`
 	KeyIndex       int    `json:"key_index"`
 	KeyMasked      string `json:"key_masked"`
 	Available      bool   `json:"available"`
@@ -230,6 +232,7 @@ type UpstreamKeyUsage struct {
 
 // UpstreamUsageResult is the aggregated response for all keys of a channel.
 type UpstreamUsageResult struct {
+	Status             string             `json:"status"`
 	Code               string             `json:"code,omitempty"`
 	LocalUsedQuotaNano string             `json:"local_used_quota_nano"`
 	UpstreamTotalNano  string             `json:"upstream_total_used_nano,omitempty"`
@@ -246,33 +249,32 @@ type UpstreamUsageResult struct {
 // FetchUpstreamTokenUsage queries the upstream new-api instance for each key
 // of the channel and returns the per-key usage plus a reconciliation diff
 // against the local Channel.UsedQuota. Multi-key channels are queried
-// concurrently (max 5 parallel requests). Upstreams that are not new-api or
-// do not expose /api/usage/token/ are reported as unsupported without error.
+// concurrently (max 5 parallel requests). Unsupported endpoints, failed queries
+// and partial snapshots have distinct statuses. Differences require all keys.
 func FetchUpstreamTokenUsage(ctx context.Context, ch *model.Channel) (*UpstreamUsageResult, error) {
 	result := &UpstreamUsageResult{
 		ChannelID:      ch.ID,
 		ChannelName:    ch.Name,
 		LocalUsedQuota: ch.UsedQuota, LocalUsedQuotaNano: common.QuotaMoney(ch.UsedQuota, ch.UsedQuotaRemainderNano).String(),
 		Keys:      []UpstreamKeyUsage{},
-		Supported: false,
+		Supported: false, Status: "failed",
 	}
 	if ch.Type == channel.ChannelTypeArk {
+		result.Status = "unsupported"
 		result.Code = "ark_usage_not_supported"
 		return result, nil
 	}
 	if ch.BaseURL == "" {
+		result.Code = "usage_base_url_required"
 		return result, nil
 	}
 	keys := ch.Keys()
 	if len(keys) == 0 {
+		result.Code = "usage_key_required"
 		return result, nil
 	}
 	base := strings.TrimRight(strings.TrimSpace(ch.BaseURL), "/")
 
-	type queryResult struct {
-		idx   int
-		usage UpstreamKeyUsage
-	}
 	results := make([]UpstreamKeyUsage, len(keys))
 	sem := make(chan struct{}, 5)
 	var wg sync.WaitGroup
@@ -289,21 +291,37 @@ func FetchUpstreamTokenUsage(ctx context.Context, ch *model.Channel) (*UpstreamU
 	wg.Wait()
 
 	result.Keys = results
-	supported := false
+	available, unsupported := 0, 0
 	upstreamTotal := new(big.Int)
 	for i := range results {
 		if results[i].Available {
-			supported = true
+			available++
 			upstreamTotal.Add(upstreamTotal, big.NewInt(results[i].TotalUsed))
 		}
+		if results[i].Code == "usage_not_supported" {
+			unsupported++
+		}
 	}
-	result.Supported = supported
+	result.Supported = available > 0
+	switch {
+	case available == len(results):
+		result.Status = "ok"
+	case available > 0:
+		result.Status, result.Code = "partial", "usage_incomplete"
+	case unsupported == len(results):
+		result.Status, result.Code = "unsupported", "usage_not_supported"
+	default:
+		result.Code = "usage_query_failed"
+	}
 	result.UpstreamTotal = boundedUsageInteger(upstreamTotal)
 	nano := new(big.Int).Mul(upstreamTotal, big.NewInt(common.NanoPerLegacyQuota))
-	difference := new(big.Int).Sub(nano, common.QuotaMoney(ch.UsedQuota, ch.UsedQuotaRemainderNano))
-	result.Diff = boundedUsageInteger(new(big.Int).Quo(difference, big.NewInt(common.NanoPerLegacyQuota)))
-	if supported {
-		result.UpstreamTotalNano, result.DiffNano = nano.String(), difference.String()
+	if result.Supported {
+		result.UpstreamTotalNano = nano.String()
+	}
+	if result.Status == "ok" {
+		difference := new(big.Int).Sub(nano, common.QuotaMoney(ch.UsedQuota, ch.UsedQuotaRemainderNano))
+		result.Diff = boundedUsageInteger(new(big.Int).Quo(difference, big.NewInt(common.NanoPerLegacyQuota)))
+		result.DiffNano = difference.String()
 	}
 	return result, nil
 }
@@ -313,60 +331,84 @@ func fetchOneUpstreamKey(ctx context.Context, base, key string, idx int) Upstrea
 		KeyIndex:  idx,
 		KeyMasked: maskKey(key),
 	}
-	if key == "" {
-		u.Error = "key is empty"
+	fail := func(code, message string) UpstreamKeyUsage {
+		u.Code, u.Error = code, message
 		return u
+	}
+	if key == "" {
+		return fail("usage_key_required", "key is empty")
 	}
 	url := base + "/api/usage/token/"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		u.Error = "build request failed: " + err.Error()
-		return u
+		return fail("usage_invalid_url", "invalid upstream URL")
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Accept", "application/json")
 	resp, err := upstreamUsageHTTPClient.Do(req)
 	if err != nil {
-		u.Error = "request failed: " + err.Error()
-		return u
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fail("usage_timeout", "upstream usage query timed out")
+		}
+		return fail("usage_network_error", "upstream usage query could not connect")
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
-		u.Error = "upstream does not support usage queries (not a new-api instance)"
-		return u
+		return fail("usage_not_supported", "upstream does not support usage queries")
 	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		u.Error = "upstream token invalid or disabled"
-		return u
+		return fail("usage_auth_failed", "upstream token invalid, disabled or not authorized")
 	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		u.Error = fmt.Sprintf("upstream returned %d", resp.StatusCode)
-		return u
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fail("usage_http_error", fmt.Sprintf("upstream returned %d", resp.StatusCode))
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
+	if err != nil || len(body) > 1<<20 {
+		return fail("usage_invalid_response", "upstream usage response could not be read")
 	}
 	var wrapper struct {
-		Success bool            `json:"success"`
-		Message string          `json:"message"`
-		Code    bool            `json:"code"`
+		Success *bool           `json:"success"`
+		Code    json.RawMessage `json:"code"`
 		Data    json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(body, &wrapper); err != nil {
-		u.Error = "parse response failed: " + err.Error()
-		return u
+		return fail("usage_invalid_response", "upstream usage response is not valid JSON")
 	}
-	var data UpstreamKeyUsage
+	if (wrapper.Success != nil && !*wrapper.Success) || string(wrapper.Code) == "false" {
+		return fail("usage_query_rejected", "upstream rejected the usage query")
+	}
+	var data struct {
+		UpstreamKeyUsage
+		Used           *int64 `json:"total_used"`
+		Remaining      *int64 `json:"total_available"`
+		IsUnlimited    *bool  `json:"unlimited"`
+		UnlimitedQuota *bool  `json:"unlimited_quota"`
+	}
 	raw := body
 	if len(wrapper.Data) > 0 {
 		raw = wrapper.Data
 	}
 	if err := json.Unmarshal(raw, &data); err != nil {
-		u.Error = "parse usage data failed: " + err.Error()
-		return u
+		return fail("usage_invalid_response", "upstream usage data has an invalid format")
+	}
+	if data.Used == nil || data.Remaining == nil || *data.Used < 0 || data.TotalGranted < 0 {
+		return fail("usage_invalid_response", "upstream usage amounts are missing or invalid")
+	}
+	data.TotalUsed, data.TotalAvailable = *data.Used, *data.Remaining
+	if data.IsUnlimited != nil {
+		data.Unlimited = *data.IsUnlimited
+	}
+	if data.UnlimitedQuota != nil {
+		if data.IsUnlimited != nil && *data.IsUnlimited != *data.UnlimitedQuota {
+			return fail("usage_invalid_response", "upstream unlimited quota flags conflict")
+		}
+		data.Unlimited = *data.UnlimitedQuota
 	}
 	data.KeyIndex = idx
 	data.KeyMasked = maskKey(key)
 	data.Available = true
-	return data
+	data.Code, data.Error = "", ""
+	return data.UpstreamKeyUsage
 }
 
 // maskKey returns a masked representation of a key for display: first 7 and

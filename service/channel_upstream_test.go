@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"starhub/common"
 	"starhub/model"
@@ -278,5 +279,118 @@ func TestFetchUpstreamTokenUsageNoDataWrapper(t *testing.T) {
 	}
 	if result.Diff != 0 {
 		t.Fatalf("expected diff=0, got %d", result.Diff)
+	}
+}
+
+func TestUpstreamUsageResponseValidation(t *testing.T) {
+	const valid = `{"total_used":0,"total_available":0,"total_granted":0}`
+	tests := []struct {
+		name, body, code string
+		status           int
+	}{
+		{"valid zero", `{"success":true,"data":` + valid + `}`, "", 200},
+		{"bare zero", valid, "", 200},
+		{"business error", `{"success":false,"message":"fixture-secret","data":` + valid + `}`, "usage_query_rejected", 200},
+		{"code error", `{"code":false,"data":` + valid + `}`, "usage_query_rejected", 200},
+		{"wrong success type", `{"success":"true","data":` + valid + `}`, "usage_invalid_response", 200},
+		{"empty object", `{}`, "usage_invalid_response", 200},
+		{"null", `null`, "usage_invalid_response", 200},
+		{"null data", `{"success":true,"data":null}`, "usage_invalid_response", 200},
+		{"html", `<html>fixture-secret</html>`, "usage_invalid_response", 200},
+		{"missing used", `{"total_available":0}`, "usage_invalid_response", 200},
+		{"missing remaining", `{"total_used":0}`, "usage_invalid_response", 200},
+		{"null used", `{"total_used":null,"total_available":0}`, "usage_invalid_response", 200},
+		{"string amount", `{"total_used":"1","total_available":0}`, "usage_invalid_response", 200},
+		{"fractional amount", `{"total_used":0.5,"total_available":0}`, "usage_invalid_response", 200},
+		{"overflow amount", `{"total_used":9223372036854775808,"total_available":0}`, "usage_invalid_response", 200},
+		{"negative used", `{"total_used":-1,"total_available":0}`, "usage_invalid_response", 200},
+		{"negative granted", `{"total_used":0,"total_available":0,"total_granted":-1}`, "usage_invalid_response", 200},
+		{"negative remaining", `{"total_used":1,"total_available":-1}`, "", 200},
+		{"conflicting unlimited", `{"total_used":0,"total_available":0,"unlimited":false,"unlimited_quota":true}`, "usage_invalid_response", 200},
+		{"oversized", strings.Repeat(" ", (1<<20)+1), "usage_invalid_response", 200},
+		{"unsupported", `{}`, "usage_not_supported", 404},
+		{"method unsupported", `{}`, "usage_not_supported", 405},
+		{"unauthorized", `{}`, "usage_auth_failed", 401},
+		{"forbidden", `{}`, "usage_auth_failed", 403},
+		{"rate limited", `{}`, "usage_http_error", 429},
+		{"server error", `{}`, "usage_http_error", 503},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer upstream.Close()
+			usage := fetchOneUpstreamKey(context.Background(), upstream.URL, "fixture-key", 0)
+			if usage.Code != tc.code || usage.Available != (tc.code == "") {
+				t.Fatalf("unexpected usage: %+v", usage)
+			}
+			if strings.Contains(usage.Error, "fixture-secret") || strings.Contains(usage.Error, "fixture-key") {
+				t.Fatal("upstream details leaked into diagnostic")
+			}
+		})
+	}
+}
+
+func TestUpstreamUsageUnlimitedAliases(t *testing.T) {
+	for _, flag := range []string{"unlimited", "unlimited_quota"} {
+		t.Run(flag, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprintf(w, `{"total_used":1,"total_available":0,%q:true}`, flag)
+			}))
+			defer upstream.Close()
+			usage := fetchOneUpstreamKey(context.Background(), upstream.URL, "fixture-key", 0)
+			if !usage.Available || !usage.Unlimited {
+				t.Fatalf("unlimited quota was not preserved: %+v", usage)
+			}
+		})
+	}
+}
+
+func TestUpstreamUsagePartialAndFailedAggregation(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("Authorization") {
+		case "Bearer fixture-ok":
+			fmt.Fprint(w, `{"total_used":123,"total_available":4}`)
+		case "Bearer fixture-unsupported":
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}))
+	defer upstream.Close()
+	for _, tc := range []struct{ keys, status, code, nano string }{
+		{"fixture-ok\nfixture-invalid", "partial", "usage_incomplete", "246000"},
+		{"fixture-invalid", "failed", "usage_query_failed", ""},
+		{"fixture-unsupported", "unsupported", "usage_not_supported", ""},
+		{"fixture-invalid\nfixture-unsupported", "failed", "usage_query_failed", ""},
+	} {
+		result, err := FetchUpstreamTokenUsage(context.Background(), &model.Channel{BaseURL: upstream.URL, Key: tc.keys, UsedQuotaRemainderNano: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Status != tc.status || result.Code != tc.code || result.UpstreamTotalNano != tc.nano || result.Supported != (tc.status == "partial") {
+			t.Fatalf("unexpected aggregate: %+v", result)
+		}
+		if result.DiffNano != "" || result.Diff != 0 || result.LocalUsedQuotaNano != "1" {
+			t.Fatalf("incomplete queries must not produce a difference or lose local usage: %+v", result)
+		}
+	}
+}
+
+func TestUpstreamUsageTimeoutAndTruncatedResponse(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "999")
+		fmt.Fprint(w, `{"total_used":0,"total_available":0}`)
+	}))
+	defer upstream.Close()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	if got := fetchOneUpstreamKey(ctx, upstream.URL, "fixture-key", 0); got.Code != "usage_timeout" || got.Available {
+		t.Fatalf("timeout was misclassified: %+v", got)
+	}
+	if got := fetchOneUpstreamKey(context.Background(), upstream.URL, "fixture-key", 0); got.Code != "usage_invalid_response" || got.Available {
+		t.Fatalf("truncated response was accepted: %+v", got)
 	}
 }
