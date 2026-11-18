@@ -48,6 +48,7 @@ type Channel struct {
 }
 
 func InsertChannel(c *Channel) error {
+	c.Models = strings.Join(uniqueModelNames(SplitList(c.Models)), ",")
 	c.pruneModelCapabilities()
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		if err := validateTaskPluginChannel(tx, c); err != nil {
@@ -56,11 +57,16 @@ func InsertChannel(c *Channel) error {
 		if err := tx.Create(c).Error; err != nil {
 			return err
 		}
-		return rebuildAbilities(tx, c)
+		if err := rebuildAbilities(tx, c); err != nil {
+			return err
+		}
+		_, err := ensureChannelModelMetadata(tx, SplitList(c.Models))
+		return err
 	})
 }
 
 func UpdateChannel(c *Channel) error {
+	c.Models = strings.Join(uniqueModelNames(SplitList(c.Models)), ",")
 	c.pruneModelCapabilities()
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		var previous Channel
@@ -84,7 +90,11 @@ func UpdateChannel(c *Channel) error {
 		if err := tx.Save(c).Error; err != nil {
 			return err
 		}
-		return rebuildAbilities(tx, c)
+		if err := rebuildAbilities(tx, c); err != nil {
+			return err
+		}
+		_, err = ensureChannelModelMetadata(tx, SplitList(c.Models))
+		return err
 	})
 }
 
