@@ -64,6 +64,7 @@ function invalidateChannelConfiguration(
 ) {
   for (const key of [
     CHANNELS_KEY,
+    ["plaza-meta"],
     ["resource-publication-context"],
     ["resource-publication-state"],
     ["resource-catalog"],
