@@ -8,6 +8,7 @@ import {
 } from "../lib/api/admin";
 import { useSessionQueryIdentity } from "../lib/system-access";
 import { ArkImageProbe } from "./ark-image-probe";
+import { ArkVideoProbe } from "./ark-video-probe";
 import { ChannelProbeResult } from "./channel-probe-result";
 import { useSettingsText } from "./settings-text";
 import "./channel-probe-controls.css";
@@ -88,6 +89,7 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
           result={image}
           onProbe={(model) => run(model, "image")}
         />
+        <ArkVideoProbe channel={channel} disabled={test.isPending} />
       </div>
       {result && <ChannelProbeResult result={result} compact />}
       {hasVideo && (
@@ -97,9 +99,9 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
           </summary>
           <p>
             {text(
-              "测试连通只检查目录，不生成视频。实际生成通过任务 API 提交，可能产生上游费用；按返回的任务 ID 查询结果。",
-              "Connectivity tests only check the catalog and do not generate videos. Submit generation through the task API; upstream charges may apply. Query results using the returned task ID.",
-              "يفحص اختبار الاتصال الدليل فقط دون توليد فيديو. أرسل التوليد عبر واجهة المهام وقد تُطبق رسوم المزود، ثم استعلم بمعرّف المهمة.",
+              "测试连通只读取视频任务接口，不生成视频。“生成视频”会提交计费测试任务，并自动查询结果。也可通过任务 API 接入。",
+              "Connectivity tests read the video task API without generating video. Generate video submits a paid test task and polls its result. The task API is also available for integration.",
+              "يقرأ اختبار الاتصال واجهة المهام دون توليد فيديو. يرسل توليد الفيديو اختبارًا مدفوعًا ويتابع نتيجته. تتوفر واجهة المهام للربط أيضًا.",
             )}
           </p>
           <code dir="ltr">POST /v1/video/generations</code>

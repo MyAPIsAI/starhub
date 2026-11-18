@@ -20,6 +20,7 @@ const report = { checks: [], screenshots: [], pageErrors: [] };
 let backend, vite, browser, upstream;
 let logs = "";
 const hits = [];
+let videoFixture = Buffer.alloc(0), videoPolls = 0;
 async function freePort() {
   const server = net.createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -29,7 +30,7 @@ async function freePort() {
 }
 try {
   upstream = createServer(async (req, res) => {
-    const hit = { path: req.url, authorization: req.headers.authorization };
+    const hit = { path: req.url, authorization: req.headers.authorization, method: req.method };
     hits.push(hit);
     if (req.url.startsWith("/slow/"))
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -38,6 +39,24 @@ try {
       res.setHeader("X-Request-Id", "fixture-request-401");
       res.writeHead(req.url.startsWith("/forbidden/") ? 403 : 401);
       res.end(JSON.stringify({ error: {code: "AuthenticationError.InvalidApiKey", message: "fixture authentication failed"} }));
+    } else if (req.url === "/video.webm") {
+      res.setHeader("Content-Type", "video/webm");
+      res.setHeader("Accept-Ranges", "bytes");
+      const range = /bytes=(\d+)-(\d*)/.exec(req.headers.range || "");
+      if (range) {
+        const start=Number(range[1]),end=range[2]?Math.min(Number(range[2]),videoFixture.length-1):videoFixture.length-1;
+        res.writeHead(206,{"Content-Range":`bytes ${start}-${end}/${videoFixture.length}`,"Content-Length":end-start+1});
+        res.end(videoFixture.subarray(start,end+1));
+      } else res.end(videoFixture);
+    } else if (req.method === "POST" && req.url.endsWith("/api/v3/contents/generations/tasks")) {
+      let body="";for await(const chunk of req) body+=chunk;
+      hit.model=JSON.parse(body).model;
+      res.end('{"id":"browser-video-task"}');
+    } else if (req.method === "GET" && req.url.endsWith("/api/v3/contents/generations/tasks/browser-video-task")) {
+      videoPolls++;
+      res.end(videoPolls<2?'{"status":"running"}':JSON.stringify({status:"succeeded",duration:4,content:{video_url:`http://${req.headers.host}/video.webm`},usage:{completion_tokens:100,total_tokens:100}}));
+    } else if (req.method === "GET" && req.url.includes("/api/v3/contents/generations/tasks?")) {
+      res.end('{"items":[],"total":0}');
     } else if (req.url === "/probe.svg") {
       res.setHeader("Content-Type", "image/svg+xml");
       res.setHeader("Cache-Control", "no-store");
@@ -164,6 +183,9 @@ try {
     username: "root",
     password: "DiscoveryInitial92",
   });
+  for(const method of ["GET","POST"]){
+    assert.equal((await context.request.fetch(base+"/api/channel/video-test/1/task",{method})).status(),403);
+  }
   assert.equal(
     (
       await context.request.post(base + "/api/channel/fetch_models", {
@@ -181,6 +203,7 @@ try {
     "discovery endpoint rejects anonymous and unverified staff sessions",
   );
   const page = await context.newPage();
+  videoFixture=await readFile(path.join(web,"tests/fixtures/video-probe.webm"));
   let channelWrites = 0;
   page.on("request", (request) => {
     if (
@@ -876,10 +899,10 @@ try {
   const videoChannel = (await api("GET", "/api/channel")).find(channel => channel.name === "Ark video channel");
   assert.deepEqual(videoChannel.model_capabilities, {"doubao-seedance-2-0-260128":"VideoGeneration"});
   const videoRow = page.getByRole("row").filter({hasText:"Ark video channel"});
-  const generatedBeforeVideo = hits.filter(hit => hit.path.endsWith("/images/generations") || hit.path.includes("/contents/generations/tasks")).length;
+  const generatedBeforeVideo = hits.filter(hit => hit.method === "POST" && (hit.path.endsWith("/images/generations") || hit.path.includes("/contents/generations/tasks"))).length;
   assert.equal(await videoRow.getByRole("button", {name:"Test image generation (upstream charges)", exact:true}).count(),0);
   await videoRow.getByRole("button", {name:"Test",exact:true}).click();
-  await videoRow.getByText("Catalog accessible (generation not tested)",{exact:true}).waitFor();
+  await videoRow.getByText("Video API accessible (generation not tested)",{exact:true}).waitFor();
   await videoRow.locator(".channel-probe-video summary").click();
   for (const language of ["zh","ar","en"]) {
     for (const theme of ["light","dark"]) {
@@ -897,7 +920,33 @@ try {
   }
   const videoScan=await new AxeBuilder({page}).include(".channel-probe-controls").withTags(["wcag2a","wcag2aa"]).analyze();
   assert.deepEqual(videoScan.violations,[]);
-  assert.equal(hits.filter(hit=>hit.path.endsWith("/images/generations")||hit.path.includes("/contents/generations/tasks")).length,generatedBeforeVideo);
+  assert.equal(hits.filter(hit=>hit.method === "POST" && (hit.path.endsWith("/images/generations")||hit.path.includes("/contents/generations/tasks"))).length,generatedBeforeVideo);
+  await videoRow.getByRole("button",{name:"Test video generation (upstream charges)",exact:true}).click();
+  const beforeVideoSubmit=hits.filter(hit=>hit.method==="POST"&&hit.path.includes("/contents/generations/tasks")).length;
+  await dialog.locator(".task-dialog-footer").getByRole("button",{name:"Close",exact:true}).click();
+  assert.equal(hits.filter(hit=>hit.method==="POST"&&hit.path.includes("/contents/generations/tasks")).length,beforeVideoSubmit);
+  await videoRow.getByRole("button",{name:"Test video generation (upstream charges)",exact:true}).click();
+  await dialog.getByRole("button",{name:"Generate test video (upstream charges)",exact:true}).click();
+  await dialog.getByRole("status").filter({hasText:/^Video generated/}).waitFor({timeout:20000});
+  const video=dialog.locator("video");await video.evaluate(node=>node.play());
+  await page.waitForFunction(()=>document.querySelector("video")?.currentTime>0);
+  assert.ok(await video.evaluate(node=>node.videoWidth>0));
+  assert.equal(hits.filter(hit=>hit.method==="POST"&&hit.path.includes("/contents/generations/tasks")).length,beforeVideoSubmit+1);
+  for(const language of ["zh","en","ar"]){for(const theme of ["light","dark"]){
+    await page.evaluate(async({language,theme})=>{const{usePreferences}=await import("/src/lib/preferences.ts");usePreferences.getState().setLanguage(language);usePreferences.getState().setTheme(theme)},{language,theme});
+    await page.setViewportSize({width:320,height:844});
+    assert.equal(await dialog.evaluate(node=>node.scrollWidth>node.clientWidth+1),false);
+    await capture(`generated-video-${language}-${theme}-320`);
+  }}
+  assert.deepEqual((await new AxeBuilder({page}).include('[role="dialog"]').withTags(["wcag2a","wcag2aa"]).analyze()).violations,[]);
+  await page.evaluate(async()=>{const{usePreferences}=await import("/src/lib/preferences.ts");usePreferences.getState().setLanguage("en")});
+  await dialog.locator(".task-dialog-footer").getByRole("button",{name:"Close",exact:true}).click();
+  await page.reload();
+  await videoRow.getByRole("button",{name:"View video result",exact:true}).waitFor();
+  await videoRow.getByRole("button",{name:"View video result",exact:true}).click();
+  await dialog.getByRole("status").filter({hasText:/^Video generated/}).waitFor();
+  await dialog.locator(".task-dialog-footer").getByRole("button",{name:"Close",exact:true}).click();
+  report.checks.push("paid video probe confirms before submit, creates one durable task, polls and plays the video, restores after reload and supports three languages and both themes");
   await api("PUT","/api/channel",{id:videoChannel.id,model_capabilities:{}});
   await page.reload();
   assert.equal(await videoRow.getByRole("button",{name:"Test image generation (upstream charges)",exact:true}).count(),0);
@@ -1318,12 +1367,12 @@ try {
   report.checks.push("built-in Ark video references work without credentials or HTTP, retain online authentication errors, save only explicit selections and discard in-flight catalogs");
   const offlineRow = page.getByRole("row").filter({hasText:"Offline video channel"});
   const beforeProbe = hits.length;
-  const generatedBeforeProbe = hits.filter(hit => hit.path.includes("generations")).length;
+  const generatedBeforeProbe = hits.filter(hit => hit.method === "POST" && hit.path.includes("generations")).length;
   await offlineRow.getByRole("button",{name:"Test",exact:true}).click();
-  await offlineRow.getByText("Catalog check failed (generation not tested)",{exact:true}).waitFor();
-  await offlineRow.getByText(/Upstream returned 401: catalog authentication failed/).waitFor();
+  await offlineRow.getByText("Video API connection failed",{exact:true}).waitFor();
+  await offlineRow.getByText(/Upstream returned 401: video API authentication failed/).waitFor();
   assert.equal(hits.length,beforeProbe+1);
-  assert.equal(hits.filter(hit=>hit.path.includes("generations")).length,generatedBeforeProbe);
+  assert.equal(hits.filter(hit=>hit.method === "POST" && hit.path.includes("generations")).length,generatedBeforeProbe);
   assert.deepEqual((await api("GET","/api/channel")).find(ch=>ch.id===offlineChannel.id),offlineChannel);
   for (const language of ["zh","en","ar"]) {
     for (const theme of ["light","dark"]) {
@@ -1345,6 +1394,9 @@ try {
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   report.failure = String(error.stack || error);
+  report.videoDebug={bytes:videoFixture.length,magic:videoFixture.subarray(0,8).toString("hex"),requests:hits.slice(-8).map(hit=>({path:hit.path,method:hit.method}))};
+  const failedPage=browser?.contexts()[0]?.pages()[0];
+  if(failedPage)await failedPage.screenshot({path:path.join(out,"failure.png"),mask:[failedPage.locator('input[type="password"]')]});
   throw error;
 } finally {
   await writeFile(

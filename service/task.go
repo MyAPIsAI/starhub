@@ -28,6 +28,9 @@ var taskHTTPClient = &http.Client{Timeout: 30 * time.Second}
 // polling the upstream again.
 // It returns the task after the update.
 func PollTask(ctx context.Context, task *model.Task) (*model.Task, error) {
+	if task.Platform == model.ArkVideoProbePlatform {
+		return PollChannelVideoProbe(ctx, task)
+	}
 	if dto.IsTerminalTaskStatus(task.Status) {
 		return task, nil
 	}
