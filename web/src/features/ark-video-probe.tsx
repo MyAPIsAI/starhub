@@ -180,6 +180,7 @@ export function ArkVideoProbe({
         <Button
           size="small"
           variant="ghost"
+          className="channel-probe-video-view"
           onClick={() => {
             setView(true);
             setOpen(true);

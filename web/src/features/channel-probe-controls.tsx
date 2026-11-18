@@ -75,7 +75,9 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
     );
   };
   return (
-    <div className="channel-probe-controls">
+    <div
+      className={`channel-probe-controls${hasVideo ? " channel-probe-controls--video" : ""}`}
+    >
       <div className="channel-probe-actions">
         <Button size="small" disabled={test.isPending} onClick={() => run()}>
           <Activity size={14} aria-hidden="true" />

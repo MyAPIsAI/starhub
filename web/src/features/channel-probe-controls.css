@@ -58,3 +58,42 @@
   overflow-wrap: anywhere;
   font-size: 11px;
 }
+
+.channel-probe-controls--video {
+  gap: 10px;
+}
+.channel-probe-controls--video .channel-probe-actions > .button {
+  min-height: 32px;
+  padding-inline: 6px;
+  gap: 4px;
+}
+.channel-probe-controls--video .channel-probe-video-view {
+  color: var(--brand);
+}
+.channel-probe-controls--video > .channel-probe-result--compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--subtle);
+}
+.channel-probe-controls--video .channel-probe-state {
+  align-items: flex-start;
+}
+.channel-probe-controls--video .channel-probe-state > svg {
+  flex-shrink: 0;
+  margin-block-start: 2px;
+}
+.channel-probe-controls--video .channel-probe-latency {
+  white-space: nowrap;
+}
+.channel-probe-controls--video .channel-probe-details,
+.channel-probe-controls--video .channel-probe-error,
+.channel-probe-controls--video .channel-probe-model {
+  grid-column: 1 / -1;
+}
+.channel-probe-controls--video > .channel-probe-video {
+  margin-block-start: 0;
+}
