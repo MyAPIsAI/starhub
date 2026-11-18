@@ -17,6 +17,11 @@ import (
 // VideoTaskAdaptor translates the gateway task API to Ark's asynchronous API.
 type VideoTaskAdaptor struct{}
 
+// IsVideoModel recognizes the domestic and BytePlus Seedance model families.
+func IsVideoModel(name string) bool {
+	return strings.HasPrefix(name, "doubao-seedance-") || strings.HasPrefix(name, "dreamina-seedance-") || strings.HasPrefix(name, "seedance-")
+}
+
 func (VideoTaskAdaptor) Name() string     { return "ark-video" }
 func (VideoTaskAdaptor) Platform() string { return "ark-video" }
 func (VideoTaskAdaptor) SubmitURL(base string) string {
@@ -144,15 +149,16 @@ func (VideoTaskAdaptor) ValidateRequestAndSetAction(body []byte, req *dto.TaskRe
 	}
 	fields["size"], _ = json.Marshal("")
 	maxSeconds, minSeconds := 30, 4
-	if strings.HasPrefix(modelName, "doubao-seedance-1-") {
+	family := strings.TrimPrefix(strings.TrimPrefix(modelName, "doubao-"), "dreamina-")
+	if strings.HasPrefix(family, "seedance-1-") {
 		maxSeconds, minSeconds = 12, 2
 	}
-	if strings.HasPrefix(modelName, "doubao-seedance-2-0-") {
+	if strings.HasPrefix(family, "seedance-2-0-") {
 		maxSeconds = 15
 	}
 	if resolution == "" {
 		resolution = "720p"
-		if strings.HasPrefix(modelName, "doubao-seedance-1-") {
+		if strings.HasPrefix(family, "seedance-1-") {
 			resolution = "1080p"
 		}
 	}
@@ -160,10 +166,10 @@ func (VideoTaskAdaptor) ValidateRequestAndSetAction(body []byte, req *dto.TaskRe
 	if pixels == 0 {
 		return errors.New("resolution must be 480p, 720p, 1080p or 4k")
 	}
-	if strings.HasPrefix(modelName, "doubao-seedance-2-") && (strings.Contains(modelName, "-fast-") || strings.Contains(modelName, "-mini-") || strings.Contains(modelName, "-flash-")) && resolution != "480p" && resolution != "720p" {
+	if strings.HasPrefix(family, "seedance-2-") && (strings.Contains(modelName, "-fast-") || strings.Contains(modelName, "-mini-") || strings.Contains(modelName, "-flash-")) && resolution != "480p" && resolution != "720p" {
 		return errors.New("this Seedance model supports 480p or 720p")
 	}
-	if strings.HasPrefix(modelName, "doubao-seedance-1-") && resolution == "4k" {
+	if strings.HasPrefix(family, "seedance-1-") && resolution == "4k" {
 		return errors.New("Seedance 1.x does not support 4k")
 	}
 	if ratio != "" {

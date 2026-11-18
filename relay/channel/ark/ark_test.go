@@ -97,6 +97,28 @@ func TestArkVideoConversionAndValidation(t *testing.T) {
 	}
 }
 
+func TestBytePlusVideoModelParameters(t *testing.T) {
+	a := VideoTaskAdaptor{}
+	for _, name := range []string{"dreamina-seedance-2-0-fast-260128", "seedance-1-0-pro-250528"} {
+		var req dto.TaskRequest
+		if !IsVideoModel(name) || a.ValidateRequestAndSetAction([]byte(`{"model":"`+name+`","prompt":"A ball","seconds":4,"size":"480p"}`), &req) != nil {
+			t.Fatalf("BytePlus model rejected: %s", name)
+		}
+		body, err := a.ConvertSubmitRequest(&req)
+		var upstream struct{ Model string }
+		if err != nil || json.Unmarshal(body, &upstream) != nil || upstream.Model != name {
+			t.Fatal("configured model ID changed during conversion")
+		}
+		if a.ValidateRequestAndSetAction([]byte(`{"model":"`+name+`","prompt":"A ball","seconds":16}`), &req) == nil {
+			t.Fatal("model duration limit was bypassed")
+		}
+	}
+	var req dto.TaskRequest
+	if a.ValidateRequestAndSetAction([]byte(`{"model":"dreamina-seedance-2-0-fast-260128","prompt":"A ball","size":"1080p"}`), &req) == nil {
+		t.Fatal("BytePlus fast model resolution limit was bypassed")
+	}
+}
+
 func TestArkVideoResultAndBilling(t *testing.T) {
 	a := VideoTaskAdaptor{}
 	if id, err := a.ParseSubmitResponse(200, []byte(`{"id":"cgt-fixture"}`)); err != nil || id != "cgt-fixture" {

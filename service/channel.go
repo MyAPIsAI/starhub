@@ -19,6 +19,7 @@ import (
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
+	"starhub/relay/channel/ark"
 	"starhub/relay/dto"
 )
 
@@ -105,7 +106,7 @@ func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) Prob
 		if upstreamKey == "" {
 			return ProbeResult{Scope: "catalog", KeyIdx: keyIdx, Message: "models_key_required"}
 		}
-		if ch.ModelCapabilities[modelName] == "VideoGeneration" || strings.HasPrefix(modelName, "doubao-seedance-") {
+		if ch.ModelCapabilities[modelName] == "VideoGeneration" || ark.IsVideoModel(modelName) {
 			return probeArkVideoAPI(ctx, ch, upstreamKey, keyIdx)
 		}
 		catalog, domain := probeArkCatalog(ctx, ch, modelName, upstreamKey, keyIdx)

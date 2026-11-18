@@ -16,7 +16,7 @@ import (
 func TestChannelVideoProbeLifecycle(t *testing.T) {
 	newTestDB(t)
 	admin := newUser(t, "video-probe-admin", common.RoleAdmin, 1000000)
-	const name = "doubao-seedance-2-0-fast-260128"
+	const name = "dreamina-seedance-2-0-fast-260128"
 	submits, polls := 0, 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer video-key" {

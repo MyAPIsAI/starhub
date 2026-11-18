@@ -56,7 +56,7 @@ func probeArkVideoAPI(ctx context.Context, ch *model.Channel, key string, index 
 
 // SubmitChannelVideoProbe sends one small, explicitly requested admin generation.
 func SubmitChannelVideoProbe(ctx context.Context, ch *model.Channel, userID int64, requestID, name, prompt string) (*model.Task, error) {
-	if ch.Type != 32 || (!strings.HasPrefix(name, "doubao-seedance-") && ch.ModelCapabilities[name] != "VideoGeneration" && !(ch.ModelCapabilities[name] == "" && strings.HasPrefix(name, "ep-"))) {
+	if ch.Type != 32 || (!ark.IsVideoModel(name) && ch.ModelCapabilities[name] != "VideoGeneration" && !(ch.ModelCapabilities[name] == "" && strings.HasPrefix(name, "ep-"))) {
 		return nil, errors.New("video_probe_model_not_supported")
 	}
 	if _, err := NormalizeArkModelsBaseURL(ch.BaseURL); err != nil {
