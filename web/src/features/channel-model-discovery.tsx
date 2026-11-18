@@ -12,6 +12,7 @@ import {
 } from "../lib/api/task-plugin";
 import { useSessionQueryIdentity } from "../lib/system-access";
 import { useSettingsText } from "./settings-text";
+import { arkVideoReferenceModels, isArkVideoModel } from "./ark-video-models";
 import "./channel-model-discovery.css";
 
 const errors: Record<string, [string, string, string]> = {
@@ -127,16 +128,6 @@ const domains: Record<string, [string, string, string]> = {
   Embedding: ["向量化", "Embeddings", "التضمينات"],
 };
 
-// Reference IDs from the Ark video tutorial, checked on 2026-11-18.
-// https://docs.volcengine.com/docs/ark/video-generation-tutorial?lang=en
-const arkVideoModels = [
-  "doubao-seedance-2-0-260128",
-  "doubao-seedance-2-0-fast-260128",
-  "doubao-seedance-2-0-mini-260615",
-  "doubao-seedance-2-5-260628",
-  "doubao-seedance-1-0-pro-250528",
-];
-
 export function ChannelModelDiscovery({
   connection,
   models,
@@ -241,6 +232,7 @@ export function ChannelModelDiscovery({
   const coherent = state.signature === signature;
   const loading = coherent && state.status === "loading";
   const success = builtin || (coherent && state.status === "success");
+  const arkVideoModels = arkVideoReferenceModels(connection.base_url);
   const shownModels = builtin ? arkVideoModels : state.models;
   const shownCapabilities = builtin
     ? Object.fromEntries(arkVideoModels.map((id) => [id, "VideoGeneration"]))
@@ -533,8 +525,7 @@ export function ChannelModelDiscovery({
       {connection.type === 32 &&
         current.some(
           (id) =>
-            capabilities?.[id] === "VideoGeneration" ||
-            id.startsWith("doubao-seedance-"),
+            capabilities?.[id] === "VideoGeneration" || isArkVideoModel(id),
         ) && (
           <p className="channel-model-hint">
             {text(

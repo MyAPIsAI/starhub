@@ -7,6 +7,7 @@ import { apiRequest } from "../lib/api/http";
 import type { AdminChannel } from "../lib/api/admin";
 import { imagePreviewURL } from "./image-probe-preview";
 import { useSettingsText } from "./settings-text";
+import { isArkVideoModel } from "./ark-video-models";
 import "./channel-model-discovery.css";
 
 type VideoTest = {
@@ -65,7 +66,7 @@ export function ArkVideoProbe({
     .filter(
       (id) =>
         channel.model_capabilities?.[id] === "VideoGeneration" ||
-        id.startsWith("doubao-seedance-") ||
+        isArkVideoModel(id) ||
         (!channel.model_capabilities?.[id] && id.startsWith("ep-")),
     );
   const [open, setOpen] = useState(false),

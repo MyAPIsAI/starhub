@@ -898,6 +898,9 @@ try {
   await dialog.waitFor({state:"hidden"});
   const videoChannel = (await api("GET", "/api/channel")).find(channel => channel.name === "Ark video channel");
   assert.deepEqual(videoChannel.model_capabilities, {"doubao-seedance-2-0-260128":"VideoGeneration"});
+  const bytePlusVideoModel = "dreamina-seedance-2-0-fast-260128";
+  await api("PUT", "/api/channel", {id: videoChannel.id, models: bytePlusVideoModel, model_capabilities: {}});
+  await page.reload();
   const videoRow = page.getByRole("row").filter({hasText:"Ark video channel"});
   const generatedBeforeVideo = hits.filter(hit => hit.method === "POST" && (hit.path.endsWith("/images/generations") || hit.path.includes("/contents/generations/tasks"))).length;
   assert.equal(await videoRow.getByRole("button", {name:"Test image generation (upstream charges)", exact:true}).count(),0);
@@ -932,6 +935,7 @@ try {
   await page.waitForFunction(()=>document.querySelector("video")?.currentTime>0);
   assert.ok(await video.evaluate(node=>node.videoWidth>0));
   assert.equal(hits.filter(hit=>hit.method==="POST"&&hit.path.includes("/contents/generations/tasks")).length,beforeVideoSubmit+1);
+  assert.equal(hits.filter(hit=>hit.method==="POST"&&hit.path.includes("/contents/generations/tasks")).at(-1).model,bytePlusVideoModel);
   for(const language of ["zh","en","ar"]){for(const theme of ["light","dark"]){
     await page.evaluate(async({language,theme})=>{const{usePreferences}=await import("/src/lib/preferences.ts");usePreferences.getState().setLanguage(language);usePreferences.getState().setTheme(theme)},{language,theme});
     await page.setViewportSize({width:320,height:844});
@@ -1299,6 +1303,23 @@ try {
   });
   await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
   await page.setViewportSize({width:1440,height:1000});
+  await openNew();
+  await dialog.locator("#ch-type").selectOption("32");
+  await dialog.locator("#ch-base-url").fill("https://ark.ap-southeast.bytepluses.com/api/v3");
+  const beforeBytePlusReferences = hits.length;
+  await dialog.getByRole("button", {name:"Choose built-in video models",exact:true}).click();
+  await dialog.getByRole("checkbox", {name:/dreamina-seedance-2-0-fast-260128/}).waitFor();
+  assert.equal(await dialog.getByRole("checkbox", {name:/doubao-seedance/}).count(),0);
+  await dialog.getByRole("checkbox", {name:/seedance-1-0-pro-250528/}).waitFor();
+  assert.equal(hits.length,beforeBytePlusReferences);
+  await page.evaluate(async () => {
+    const {usePreferences} = await import("/src/lib/preferences.ts");
+    usePreferences.getState().setTheme("light");
+  });
+  await dialog.locator(".channel-model-results").scrollIntoViewIfNeeded();
+  await capture("builtin-video-byteplus-en-light-1440");
+  await dialog.getByRole("button", {name:"Cancel",exact:true}).click();
+  report.checks.push("BytePlus references match the configured official host and generate with the unchanged exact model ID without capability metadata");
   await openNew();
   await dialog.locator("#ch-type").selectOption("32");
   await dialog.locator("#ch-name").fill("Offline video channel");

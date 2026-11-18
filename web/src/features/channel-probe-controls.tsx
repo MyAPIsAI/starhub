@@ -11,6 +11,7 @@ import { ArkImageProbe } from "./ark-image-probe";
 import { ArkVideoProbe } from "./ark-video-probe";
 import { ChannelProbeResult } from "./channel-probe-result";
 import { useSettingsText } from "./settings-text";
+import { isArkVideoModel } from "./ark-video-models";
 import "./channel-probe-controls.css";
 
 export function ChannelProbeControls({ channel }: { channel: AdminChannel }) {
@@ -40,7 +41,7 @@ function ProbeControls({ channel }: { channel: AdminChannel }) {
       .some(
         (id) =>
           channel.model_capabilities?.[id.trim()] === "VideoGeneration" ||
-          id.trim().startsWith("doubao-seedance-"),
+          isArkVideoModel(id.trim()),
       );
   const run = (model?: string, mode?: "image") => {
     if (test.isPending) return;

@@ -6,6 +6,7 @@ import type { AdminChannel, ChannelTestResult } from "../lib/api/admin";
 import { ChannelProbeResult } from "./channel-probe-result";
 import { ImageProbePreview, imagePreviewURL } from "./image-probe-preview";
 import { useSettingsText } from "./settings-text";
+import { isArkVideoModel } from "./ark-video-models";
 
 export function ArkImageProbe({
   channel,
@@ -33,8 +34,7 @@ export function ArkImageProbe({
     ),
   ].filter(
     (id) =>
-      (!channel.model_capabilities?.[id] &&
-        !id.startsWith("doubao-seedance-")) ||
+      (!channel.model_capabilities?.[id] && !isArkVideoModel(id)) ||
       channel.model_capabilities?.[id] === "ImageGeneration",
   );
   if (channel.type !== 32 || candidates.length === 0) return null;
