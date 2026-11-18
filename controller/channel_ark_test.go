@@ -214,4 +214,19 @@ func TestArkCapabilityProbes(t *testing.T) {
 	}
 	request.target += "?mode=unsupported"
 	expectStatus(t, call(TestChannel, request), http.StatusBadRequest)
+	ch.Models = "ep-fixture"
+	ch.ModelCapabilities = nil
+	if err := model.UpdateChannel(ch); err != nil {
+		t.Fatal(err)
+	}
+	request.target = fmt.Sprintf("/api/channel/test/%d?mode=image&model=ep-fixture", ch.ID)
+	decodeData(t, call(TestChannel, request), &result)
+	if !result.OK || result.Model != "ep-fixture" || images != 2 {
+		t.Fatal("explicit endpoint image probe required catalog metadata")
+	}
+	request.target = fmt.Sprintf("/api/channel/test/%d?mode=image&model=unconfigured", ch.ID)
+	expectStatus(t, call(TestChannel, request), http.StatusBadRequest)
+	if images != 2 {
+		t.Fatal("unconfigured model reached image generation")
+	}
 }

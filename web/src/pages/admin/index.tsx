@@ -37,6 +37,7 @@ import { ResourceRegions } from "../../features/resource-regions";
 import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
 import { ChannelModelDiscovery } from "../../features/channel-model-discovery";
 import { ChannelProbeResult } from "../../features/channel-probe-result";
+import { ArkImageProbe } from "../../features/ark-image-probe";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
@@ -1297,12 +1298,7 @@ export default function AdminPortal() {
                                 ? text("测试中…", "Testing…", "اختبار…")
                                 : text("测试连通", "Test", "اختبار")}
                             </Button>
-                            {ch.type === 32 && Object.values(ch.model_capabilities ?? {}).includes("ImageGeneration") && (
-                              <Button size="small" disabled={testChannelMut.isPending && testChannelMut.variables?.id === ch.id}
-                                onClick={() => runChannelTest(ch.id, Object.entries(ch.model_capabilities ?? {}).find(([, domain]) => domain === "ImageGeneration")?.[0], "image")}>
-                                {text("图片生成测试（上游计费）", "Test image generation (upstream charges)", "اختبار توليد الصور (رسوم المزود)")}
-                              </Button>
-                            )}
+                            <ArkImageProbe channel={ch} disabled={testChannelMut.isPending && testChannelMut.variables?.id === ch.id} onProbe={(model) => runChannelTest(ch.id, model, "image")} />
                             {testResults[ch.id] &&
                               (typeof testResults[ch.id] === "string" ? (
                                 <span

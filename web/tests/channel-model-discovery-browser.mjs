@@ -29,16 +29,20 @@ async function freePort() {
 }
 try {
   upstream = createServer(async (req, res) => {
-    hits.push({ path: req.url, authorization: req.headers.authorization });
+    const hit = { path: req.url, authorization: req.headers.authorization };
+    hits.push(hit);
     if (req.url.startsWith("/slow/"))
       await new Promise((resolve) => setTimeout(resolve, 500));
     res.setHeader("Content-Type", "application/json");
     if (req.url.startsWith("/auth/")) {
       res.writeHead(401);
       res.end(JSON.stringify({ error: "fixture authentication failed" }));
-    } else if (req.url.endsWith("/api/v3/images/generations"))
+    } else if (req.url.endsWith("/api/v3/images/generations")) {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      hit.model = JSON.parse(body).model;
       res.end('{"data":[{"url":"https://example.test/probe.png"}]}');
-    else if (req.url.endsWith("/api/v3/models"))
+    } else if (req.url.endsWith("/api/v3/models"))
       res.end(
         '{"data":[{"id":"doubao-seedream-4-5-251128","domain":"ImageGeneration"},{"id":"doubao-chat-model","domain":"LLM"}]}',
       );
@@ -523,6 +527,26 @@ try {
       exact: true,
     })
     .click();
+  await dialog
+    .getByLabel("Image model to test")
+    .selectOption("doubao-seedream-4-5-251128");
+  assert.equal(
+    hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
+    beforeImageTests,
+  );
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await arkRow
+    .getByRole("button", {
+      name: "Test image generation (upstream charges)",
+      exact: true,
+    })
+    .click();
+  await dialog
+    .getByRole("button", {
+      name: "Generate test image (upstream charges)",
+      exact: true,
+    })
+    .click();
   await arkRow.getByText(/Image generated/).waitFor();
   assert.equal(
     hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
@@ -531,6 +555,63 @@ try {
   await capture("ark-image-probe");
   report.checks.push(
     "image models use labeled catalog checks; only explicit image tests generate an image",
+  );
+  await api("PUT", "/api/channel", {
+    id: arkChannel.id,
+    models: "doubao-seedream-4-5-251128,ep-fixture",
+    model_capabilities: {},
+  });
+  await page.reload();
+  await arkRow
+    .getByRole("button", {
+      name: "Test image generation (upstream charges)",
+      exact: true,
+    })
+    .click();
+  assert.equal(
+    await dialog
+      .getByRole("button", {
+        name: "Generate test image (upstream charges)",
+        exact: true,
+      })
+      .isEnabled(),
+    false,
+  );
+  await dialog.getByLabel("Image model to test").selectOption("ep-fixture");
+  for (const language of ["zh", "ar", "en"]) {
+    await page.evaluate(async (language) => {
+      const { usePreferences } = await import("/src/lib/preferences.ts");
+      usePreferences.getState().setLanguage(language);
+    }, language);
+    await page.setViewportSize({ width: 320, height: 844 });
+    assert.equal(
+      await dialog.evaluate((node) => node.scrollWidth > node.clientWidth + 1),
+      false,
+    );
+    await capture(`ark-image-confirm-${language}-320`);
+  }
+  assert.equal(
+    hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
+    beforeImageTests + 1,
+  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await dialog
+    .getByRole("button", {
+      name: "Generate test image (upstream charges)",
+      exact: true,
+    })
+    .click();
+  await arkRow.getByText(/Image generated/).waitFor();
+  assert.equal(
+    hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
+    beforeImageTests + 2,
+  );
+  assert.equal(
+    hits.findLast((hit) => hit.path.endsWith("/images/generations")).model,
+    "ep-fixture",
+  );
+  report.checks.push(
+    "manual Ark models and Endpoint IDs can be explicitly selected for paid image tests without catalog metadata; opening or cancelling submits no generation",
   );
   await api("DELETE", `/api/channel/${arkChannel.id}`);
   report.checks.push(
