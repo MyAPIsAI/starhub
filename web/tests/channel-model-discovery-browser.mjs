@@ -37,11 +37,22 @@ try {
     if (req.url.startsWith("/auth/")) {
       res.writeHead(401);
       res.end(JSON.stringify({ error: "fixture authentication failed" }));
+    } else if (req.url === "/probe.svg") {
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="white"/><circle cx="128" cy="128" r="80" fill="#2563eb"/></svg>',
+      );
     } else if (req.url.endsWith("/api/v3/images/generations")) {
       let body = "";
       for await (const chunk of req) body += chunk;
       hit.model = JSON.parse(body).model;
-      res.end('{"data":[{"url":"https://example.test/probe.png"}]}');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      res.end(
+        JSON.stringify({
+          data: [{ url: `http://${req.headers.host}/probe.svg` }],
+        }),
+      );
     } else if (req.url.endsWith("/api/v3/models"))
       res.end(
         '{"data":[{"id":"doubao-seedream-4-5-251128","domain":"ImageGeneration"},{"id":"doubao-chat-model","domain":"LLM"}]}',
@@ -128,6 +139,7 @@ try {
     viewport: { width: 1440, height: 1000 },
     reducedMotion: "reduce",
   });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await context.addInitScript(() => localStorage.setItem("xy-language", "en"));
   const api = async (method, route, data) => {
     const response = await context.request.fetch(base + route, {
@@ -547,12 +559,89 @@ try {
       exact: true,
     })
     .click();
-  await arkRow.getByText(/Image generated/).waitFor();
+  await dialog.getByText("Generating test image…", { exact: true }).waitFor();
+  await dialog.getByText(/^Image generated/).waitFor();
+  const preview = dialog.getByRole("img", {
+    name: "Generated test image",
+    exact: true,
+  });
+  await preview.evaluate((node) => node.decode());
+  assert.ok(await preview.evaluate((node) => node.naturalWidth > 0));
+  const previewURL = await preview.getAttribute("src");
+  assert.equal(previewURL, upstreamBase + "/probe.svg");
+  await dialog.getByRole("button", { name: "Copy link", exact: true }).click();
+  assert.equal(
+    await page.evaluate(() => navigator.clipboard.readText()),
+    previewURL,
+  );
+  const originalPromise = context.waitForEvent("page");
+  await dialog
+    .getByRole("link", { name: "Open original", exact: true })
+    .click();
+  const original = await originalPromise;
+  await original.waitForLoadState();
+  assert.equal(original.url(), previewURL);
+  await original.close();
   assert.equal(
     hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
     beforeImageTests + 1,
   );
   await capture("ark-image-probe");
+  await dialog
+    .locator(".task-dialog-footer")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await arkRow.getByRole("button", { name: "Test", exact: true }).click();
+  await arkRow.getByText(/Catalog accessible/).waitFor();
+  await page.route("**/probe.svg", (route) =>
+    route.fulfill({ status: 410, body: "expired fixture" }),
+  );
+  await arkRow.getByRole("button", { name: "View image", exact: true }).click();
+  await dialog.getByText(/preview could not load/).waitFor();
+  await page.unroute("**/probe.svg");
+  await dialog
+    .getByRole("button", { name: "Reload preview", exact: true })
+    .click();
+  await preview.evaluate((node) => node.decode());
+  assert.ok(await preview.evaluate((node) => node.naturalWidth > 0));
+  for (const language of ["zh", "ar", "en"]) {
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate(
+        async ({ language, theme }) => {
+          const { usePreferences } = await import("/src/lib/preferences.ts");
+          usePreferences.getState().setLanguage(language);
+          usePreferences.getState().setTheme(theme);
+        },
+        { language, theme },
+      );
+      await page.setViewportSize({ width: 320, height: 844 });
+      assert.equal(
+        await dialog.evaluate(
+          (node) => node.scrollWidth > node.clientWidth + 1,
+        ),
+        false,
+      );
+      await capture(`ark-preview-${language}-${theme}-320`);
+    }
+  }
+  await page.evaluate(async () => {
+    const { usePreferences } = await import("/src/lib/preferences.ts");
+    usePreferences.getState().setTheme("light");
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.keyboard.press("Escape");
+  assert.equal(
+    hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
+    beforeImageTests + 1,
+  );
+  assert.ok(
+    hits
+      .filter((hit) => hit.path === "/probe.svg")
+      .every((hit) => !hit.authorization),
+  );
+  report.checks.push(
+    "generated images can be previewed, copied and opened; catalog checks and preview reloads preserve the image without new generation requests",
+  );
   report.checks.push(
     "image models use labeled catalog checks; only explicit image tests generate an image",
   );
@@ -601,7 +690,11 @@ try {
       exact: true,
     })
     .click();
-  await arkRow.getByText(/Image generated/).waitFor();
+  await dialog.getByText(/^Image generated/).waitFor();
+  await dialog
+    .locator(".task-dialog-footer")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
   assert.equal(
     hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
     beforeImageTests + 2,
@@ -612,6 +705,93 @@ try {
   );
   report.checks.push(
     "manual Ark models and Endpoint IDs can be explicitly selected for paid image tests without catalog metadata; opening or cancelling submits no generation",
+  );
+  await arkRow.getByRole("button", { name: "Edit", exact: true }).click();
+  await dialog.locator("#ch-models").fill("doubao-seedream-4-5-251128");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await arkRow
+    .getByRole("button", { name: "View image", exact: true })
+    .waitFor({ state: "hidden" });
+  assert.equal(
+    await arkRow
+      .getByRole("button", { name: "View image", exact: true })
+      .count(),
+    0,
+  );
+  for (const imageURL of [undefined, "javascript:alert(1)"]) {
+    await page.route("**/api/channel/test/*", (route) =>
+      route.fulfill({
+        json: {
+          success: true,
+          data: {
+            ok: true,
+            model: "doubao-seedream-4-5-251128",
+            scope: "image",
+            elapsed_ms: 1,
+            status: 1,
+            message: "Image generated successfully",
+            image_url: imageURL,
+          },
+        },
+      }),
+    );
+    await arkRow
+      .getByRole("button", {
+        name: "Test image generation (upstream charges)",
+        exact: true,
+      })
+      .click();
+    await dialog
+      .getByRole("button", {
+        name: "Generate test image (upstream charges)",
+        exact: true,
+      })
+      .click();
+    await dialog.getByText(/no usable preview URL/).waitFor();
+    assert.equal(
+      await dialog
+        .getByRole("img", { name: "Generated test image", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await dialog
+        .getByRole("link", { name: "Open original", exact: true })
+        .count(),
+      0,
+    );
+    await dialog
+      .locator(".task-dialog-footer")
+      .getByRole("button", { name: "Close", exact: true })
+      .click();
+    await page.unroute("**/api/channel/test/*");
+  }
+  await page.evaluate(async () => {
+    const { useSystemAccess } = await import("/src/lib/system-access.ts");
+    const state = useSystemAccess.getState();
+    state.setSession({
+      id: state.session.accountId,
+      group: state.session.group,
+      role: state.role,
+      username: state.session.username,
+    });
+  });
+  await arkRow
+    .getByRole("button", { name: "View result", exact: true })
+    .waitFor({ state: "hidden" });
+  assert.equal(
+    await arkRow
+      .getByRole("button", { name: "View result", exact: true })
+      .count(),
+    0,
+  );
+  assert.equal(
+    hits.filter((hit) => hit.path.endsWith("/images/generations")).length,
+    beforeImageTests + 2,
+  );
+  report.checks.push(
+    "connection and session changes discard temporary image results; missing or unsafe preview URLs remain generation successes without unsafe links",
   );
   await api("DELETE", `/api/channel/${arkChannel.id}`);
   report.checks.push(

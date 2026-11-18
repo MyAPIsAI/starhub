@@ -1,0 +1,26 @@
+.image-probe-preview {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  min-width: 0;
+}
+.image-probe-preview img {
+  display: block;
+  width: 100%;
+  max-height: 50vh;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--subtle);
+}
+.image-probe-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.image-probe-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

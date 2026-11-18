@@ -36,8 +36,7 @@ import { ServerTokenPricing } from "../../features/server-token-pricing";
 import { ResourceRegions } from "../../features/resource-regions";
 import { ChannelRoutingNotice } from "../../features/channel-routing-notice";
 import { ChannelModelDiscovery } from "../../features/channel-model-discovery";
-import { ChannelProbeResult } from "../../features/channel-probe-result";
-import { ArkImageProbe } from "../../features/ark-image-probe";
+import { ChannelProbeControls } from "../../features/channel-probe-controls";
 import { FinanceRoleControl } from "../../features/finance-role-control";
 import {
   useAdminUsers,
@@ -45,13 +44,11 @@ import {
   useAdminAudit,
   useAdminMetrics,
   useAdminChannels,
-  useTestChannel,
   useUpstreamUsage,
   userIsActive,
   userStatusText,
   quotaToUsd,
   type AdminUser,
-  type ChannelTestResult,
   type UpstreamUsageResult,
 } from "../../lib/api/admin";
 import {
@@ -143,26 +140,12 @@ export default function AdminPortal() {
   const metricsQuery = useAdminMetrics();
   const channelsQuery = useAdminChannels();
   const pluginsQuery = useTaskPlugins();
-  const testChannelMut = useTestChannel();
   const createChannelMut = useCreateChannel();
   const updateChannelMut = useUpdateChannel();
   const deleteChannelMut = useDeleteChannel();
   const redemptionsQuery = useRedemptions();
   const createRedemptionMut = useCreateRedemption();
   const deleteRedemptionMut = useDeleteRedemption();
-
-  // Channel test result per channel id (cleared on next test).
-  const [testResults, setTestResults] = useState<
-    Record<number, ChannelTestResult | string>
-  >({});
-
-  const runChannelTest = (id: number, model?: string, mode?: "image") => {
-    setTestResults((previous) => { const next = { ...previous }; delete next[id]; return next; });
-    testChannelMut.mutate({ id, model, mode }, {
-      onSuccess: (result) => setTestResults((previous) => ({ ...previous, [id]: result })),
-      onError: (error) => setTestResults((previous) => ({ ...previous, [id]: error instanceof Error ? error.message : text("测试失败", "Test failed", "فشل الاختبار") })),
-    });
-  };
 
   // Upstream usage reconciliation modal state.
   const upstreamMut = useUpstreamUsage();
@@ -1276,43 +1259,7 @@ export default function AdminPortal() {
                           {stat ? stat.avg_ttft_ms.toFixed(0) : "—"}
                         </td>
                         <td style={{ padding: "10px 14px", textAlign: "end" }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 4,
-                              alignItems: "flex-end",
-                            }}
-                          >
-                            <Button
-                              size="small"
-                              variant="secondary"
-                              disabled={
-                                testChannelMut.isPending &&
-                                testChannelMut.variables?.id === ch.id
-                              }
-                              onClick={() => runChannelTest(ch.id)}
-                            >
-                              {testChannelMut.isPending &&
-                              testChannelMut.variables?.id === ch.id
-                                ? text("测试中…", "Testing…", "اختبار…")
-                                : text("测试连通", "Test", "اختبار")}
-                            </Button>
-                            <ArkImageProbe channel={ch} disabled={testChannelMut.isPending && testChannelMut.variables?.id === ch.id} onProbe={(model) => runChannelTest(ch.id, model, "image")} />
-                            {testResults[ch.id] &&
-                              (typeof testResults[ch.id] === "string" ? (
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    color: "var(--danger)",
-                                  }}
-                                >
-                                  {testResults[ch.id] as string}
-                                </span>
-                              ) : (
-                                <ChannelProbeResult result={testResults[ch.id] as ChannelTestResult} />
-                              ))}
-                          </div>
+                          <ChannelProbeControls channel={ch} />
                         </td>
                         <td style={{ padding: "10px 14px", textAlign: "end" }}>
                           <div
