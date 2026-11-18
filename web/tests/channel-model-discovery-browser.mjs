@@ -587,7 +587,7 @@ try {
   const details = arkRow.locator(".channel-probe-details summary");
   await details.focus();
   await page.keyboard.press("Enter");
-  await arkRow.getByText(/Tested model:/).waitFor();
+  await arkRow.getByText(/Catalog model:/).waitFor();
   await page.keyboard.press("Enter");
   const controlScan = await new AxeBuilder({ page })
     .include(".channel-probe-controls")
@@ -879,7 +879,7 @@ try {
   const generatedBeforeVideo = hits.filter(hit => hit.path.endsWith("/images/generations") || hit.path.includes("/contents/generations/tasks")).length;
   assert.equal(await videoRow.getByRole("button", {name:"Test image generation (upstream charges)", exact:true}).count(),0);
   await videoRow.getByRole("button", {name:"Test",exact:true}).click();
-  await videoRow.getByText("Catalog accessible",{exact:true}).waitFor();
+  await videoRow.getByText("Catalog accessible (generation not tested)",{exact:true}).waitFor();
   await videoRow.locator(".channel-probe-video summary").click();
   for (const language of ["zh","ar","en"]) {
     for (const theme of ["light","dark"]) {
@@ -1316,6 +1316,30 @@ try {
   assert.equal(await dialog.getByRole("region",{name:"Upstream model selection",exact:true}).count(),0);
   await dialog.getByRole("button",{name:"Cancel",exact:true}).click();
   report.checks.push("built-in Ark video references work without credentials or HTTP, retain online authentication errors, save only explicit selections and discard in-flight catalogs");
+  const offlineRow = page.getByRole("row").filter({hasText:"Offline video channel"});
+  const beforeProbe = hits.length;
+  const generatedBeforeProbe = hits.filter(hit => hit.path.includes("generations")).length;
+  await offlineRow.getByRole("button",{name:"Test",exact:true}).click();
+  await offlineRow.getByText("Catalog check failed (generation not tested)",{exact:true}).waitFor();
+  await offlineRow.getByText(/Upstream returned 401: catalog authentication failed/).waitFor();
+  assert.equal(hits.length,beforeProbe+1);
+  assert.equal(hits.filter(hit=>hit.path.includes("generations")).length,generatedBeforeProbe);
+  assert.deepEqual((await api("GET","/api/channel")).find(ch=>ch.id===offlineChannel.id),offlineChannel);
+  for (const language of ["zh","en","ar"]) {
+    for (const theme of ["light","dark"]) {
+      await page.evaluate(async ({language,theme}) => {
+        const {usePreferences}=await import("/src/lib/preferences.ts");
+        usePreferences.getState().setLanguage(language);
+        usePreferences.getState().setTheme(theme);
+      },{language,theme});
+      await page.setViewportSize({width:320,height:844});
+      await offlineRow.locator(".channel-probe-result").scrollIntoViewIfNeeded();
+      assert.equal(await offlineRow.locator(".channel-probe-result").evaluate(node=>node.scrollWidth>node.clientWidth+1),false);
+      await capture(`video-catalog-failure-${language}-${theme}-320`);
+    }
+  }
+  assert.deepEqual((await new AxeBuilder({page}).include(".channel-probe-result").withTags(["wcag2a","wcag2aa"]).analyze()).violations,[]);
+  report.checks.push("video catalog authentication failures explicitly leave generation untested, perform no generation and preserve channel status, key state and quota");
   assert.deepEqual(report.pageErrors, []);
   assert.equal(logs.includes("replacement-fixture-key"), false);
   console.log(JSON.stringify(report, null, 2));

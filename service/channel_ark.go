@@ -32,7 +32,7 @@ func probeArkCatalog(ctx context.Context, ch *model.Channel, name, key string, k
 				result.HTTPStatus = failure.Diagnostic.UpstreamStatus
 			}
 		}
-		result.Message = result.Code
+		result.Message = "Catalog request failed; inference was not tested"
 		return result, ""
 	}
 	for _, entry := range catalog {

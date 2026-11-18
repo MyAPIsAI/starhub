@@ -404,6 +404,13 @@ func TestArkVideoConnectivityNeverGenerates(t *testing.T) {
 	if result.OK || result.Diagnostic == nil || result.Diagnostic.UpstreamStatus != 401 || result.Diagnostic.RequestID != "video-catalog-request" {
 		t.Fatalf("probe lost diagnostic: %+v", result)
 	}
+	if result.Scope != "catalog" || !strings.Contains(result.Message, "inference was not tested") || result.Status != common.ChannelStatusAutoDisabled {
+		t.Fatal("catalog failure was mistaken for an inference result")
+	}
+	after, err := model.GetChannelByID(ch.ID)
+	if err != nil || after.Status != common.ChannelStatusAutoDisabled || after.MultiKeyStatus != ch.MultiKeyStatus || after.UsedQuota != ch.UsedQuota {
+		t.Fatal("catalog authentication failure changed channel health, keys or quota")
+	}
 	if writes.Load() != 0 || reads.Load() != 2 {
 		t.Fatalf("connectivity generated output or retried: reads=%d writes=%d", reads.Load(), writes.Load())
 	}

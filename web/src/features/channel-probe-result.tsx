@@ -81,7 +81,11 @@ export function ChannelProbeResult({
           "Catalog accessible (generation not tested)",
           "الدليل متاح (لم يُختبر التوليد)",
         )
-      : text("目录检查失败", "Catalog check failed", "فشل فحص الدليل");
+      : text(
+          "目录检查失败（生成未验证）",
+          "Catalog check failed (generation not tested)",
+          "فشل فحص الدليل (لم يُختبر التوليد)",
+        );
   if (result.scope === "image")
     label = result.ok
       ? text("图片生成成功", "Image generated", "تم توليد الصورة")
@@ -93,10 +97,16 @@ export function ChannelProbeResult({
       "تم التحقق من الإضافة محليًا",
     );
   if (compact && result.scope === "catalog" && result.ok)
-    label = text("目录可访问", "Catalog accessible", "الدليل متاح");
+    label = text(
+      "目录可访问（生成未验证）",
+      "Catalog accessible (generation not tested)",
+      "الدليل متاح (لم يُختبر التوليد)",
+    );
   const model = result.model && (
     <span className="channel-probe-model">
-      {text("被测模型：", "Tested model: ", "النموذج المختبر: ")}
+      {result.scope === "catalog"
+        ? text("目录查询模型：", "Catalog model: ", "نموذج الدليل: ")
+        : text("被测模型：", "Tested model: ", "النموذج المختبر: ")}
       <bdi>{result.model}</bdi>
     </span>
   );
