@@ -426,13 +426,14 @@ try {
   await openNew();
   await dialog.locator("#ch-type").selectOption("32");
   await dialog.locator("#ch-base-url").fill(upstreamBase + "/ark/api/v3");
+  await dialog.locator("#ch-models").fill("doubao-seedream-4.5");
   await discover().click();
   await dialog
-    .getByRole("checkbox", { name: "doubao-seedream-4-5-251128", exact: true })
+    .getByRole("checkbox", { name: /doubao-seedream-4-5-251128/ })
     .check();
   assert.equal(hits.at(-1).path, "/ark/api/v3/models");
   await dialog
-    .getByRole("button", { name: "Add selected models", exact: true })
+    .getByRole("button", { name: "Use selected models only", exact: true })
     .click();
   await capture("ark-model-discovery");
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
@@ -440,6 +441,9 @@ try {
   const arkChannel = (await api("GET", "/api/channel"))[0];
   assert.equal(arkChannel.type, 32);
   assert.equal(arkChannel.models, "doubao-seedream-4-5-251128");
+  assert.deepEqual(arkChannel.model_capabilities, {
+    "doubao-seedream-4-5-251128": "ImageGeneration",
+  });
   await api("DELETE", `/api/channel/${arkChannel.id}`);
   report.checks.push(
     "Ark channel discovery and creation preserve its API prefix and exact model ID",

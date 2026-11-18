@@ -1397,6 +1397,7 @@ export default function AdminPortal() {
                                   name: ch.name,
                                   key: "",
                                   models: ch.models,
+                                  model_capabilities: ch.model_capabilities ?? {},
                                   group: ch.group || "default",
                                   base_url: ch.base_url,
                                   key_mode: ch.key_mode,
@@ -2649,6 +2650,7 @@ export default function AdminPortal() {
                   ...f,
                   type: Number(e.target.value),
                   task_plugin_id: 0,
+                  model_capabilities: {},
                 }))
               }
             >
@@ -2745,8 +2747,11 @@ export default function AdminPortal() {
               (plugin) => plugin.id === channelForm.task_plugin_id,
             )}
             models={channelForm.models}
-            onChange={(models) =>
-              setChannelForm((form) => ({ ...form, models }))
+            capabilities={channelForm.model_capabilities}
+            onChange={(models, capabilities) =>
+              setChannelForm((form) => ({ ...form, models, model_capabilities:
+                Object.fromEntries(Object.entries(capabilities ?? form.model_capabilities ?? {}).filter(([id]) => models.split(",").map((value) => value.trim()).includes(id))),
+              }))
             }
             disabled={createChannelMut.isPending || updateChannelMut.isPending}
           />
@@ -2790,7 +2795,7 @@ export default function AdminPortal() {
               id="ch-base-url"
               value={channelForm.base_url}
               onChange={(e) =>
-                setChannelForm((f) => ({ ...f, base_url: e.target.value }))
+                setChannelForm((f) => ({ ...f, base_url: e.target.value, model_capabilities: {} }))
               }
               placeholder="https://api.openai.com"
             />

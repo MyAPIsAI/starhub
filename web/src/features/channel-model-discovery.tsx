@@ -102,18 +102,30 @@ const errors: Record<string, [string, string, string]> = {
   ],
 };
 
+const domains: Record<string, [string, string, string]> = {
+  LLM: ["文本生成", "Text generation", "توليد النصوص"],
+  VLM: ["多模态理解", "Multimodal understanding", "فهم متعدد الوسائط"],
+  ImageGeneration: ["图片生成", "Image generation", "توليد الصور"],
+  VideoGeneration: ["视频生成", "Video generation", "توليد الفيديو"],
+  "3DGeneration": ["三维生成", "3D generation", "توليد ثلاثي الأبعاد"],
+  Audio: ["音频", "Audio", "الصوت"],
+  Embedding: ["向量化", "Embeddings", "التضمينات"],
+};
+
 export function ChannelModelDiscovery({
   connection,
   models,
   onChange,
   disabled,
   plugin,
+  capabilities = {},
 }: {
   connection: ChannelModelsInput;
   models: string;
-  onChange: (models: string) => void;
+  onChange: (models: string, capabilities?: Record<string, string>) => void;
   disabled: boolean;
   plugin?: TaskPluginVersion;
+  capabilities?: Record<string, string>;
 }) {
   const { text } = useSettingsText();
   const identity = JSON.stringify(useSessionQueryIdentity());
@@ -126,6 +138,7 @@ export function ChannelModelDiscovery({
     status: "idle" | "loading" | "success" | "error" | "stale";
     signature?: string;
     models: string[];
+    capabilities?: Record<string, string>;
     error?: string;
   }>({ status: "idle", models: [] });
   const [selected, setSelected] = useState<string[]>([]);
@@ -188,14 +201,24 @@ export function ChannelModelDiscovery({
     setSelected([]);
     setNotice("");
     try {
-      const found = await fetchChannelModels(connection, controller.signal);
+      const catalog = await fetchChannelModels(connection, controller.signal);
+      const found = catalog.map((entry) => entry.id);
       if (
         request !== sequence.current ||
         controller.signal.aborted ||
         latest.current !== signature
       )
         return;
-      setState({ status: "success", signature, models: found });
+      setState({
+        status: "success",
+        signature,
+        models: found,
+        capabilities: Object.fromEntries(
+          catalog
+            .filter((entry) => entry.domain)
+            .map((entry) => [entry.id, entry.domain!]),
+        ),
+      });
       setSelected(current.filter((model) => found.includes(model)));
     } catch (error) {
       if (
@@ -214,6 +237,23 @@ export function ChannelModelDiscovery({
     }
   };
   const failure = state.error && errors[state.error];
+  const applySelection = (replace = false) => {
+    const ids = [...new Set([...(replace ? [] : current), ...selected])];
+    const hints = { ...capabilities, ...state.capabilities };
+    onChange(
+      ids.join(","),
+      Object.fromEntries(
+        ids.filter((id) => hints[id]).map((id) => [id, hints[id]]),
+      ),
+    );
+    setNotice(
+      text(
+        "所选模型已填入表单，请保存渠道后生效。",
+        "Selected models filled into the form. Save the channel to apply.",
+        "أُضيفت النماذج إلى النموذج. احفظ القناة للتطبيق.",
+      ),
+    );
+  };
 
   return (
     <div className="channel-model-discovery">
@@ -250,6 +290,15 @@ export function ChannelModelDiscovery({
         required
         placeholder="gpt-4.1,claude-sonnet-4-20250514"
       />
+      {connection.type === 32 && (
+        <p className="channel-model-hint">
+          {text(
+            "请使用目录中的准确版本 ID 或方舟 Endpoint ID。模型短名不会自动转换；可用所选模型替换旧短名。",
+            "Use an exact catalog version ID or Ark Endpoint ID. Short names are not converted automatically; replace old names with selected models.",
+            "استخدم معرّف الإصدار الدقيق أو معرّف نقطة Ark. لا تُحوّل الأسماء المختصرة تلقائيًا؛ استبدلها بالنماذج المحددة.",
+          )}
+        </p>
+      )}
       {isPlugin && (
         <>
           <p className="channel-model-hint">
@@ -416,23 +465,19 @@ export function ChannelModelDiscovery({
                         )
                       }
                     />
-                    <span dir="auto">{model}</span>
+                    <span dir="auto">
+                      {model}
+                      {domains[state.capabilities?.[model] ?? ""]
+                        ? ` · ${text(...domains[state.capabilities![model]])}`
+                        : ""}
+                    </span>
                   </label>
                 ))}
               </div>
               <Button
                 size="small"
                 disabled={disabled || !selected.length}
-                onClick={() => {
-                  onChange([...new Set([...current, ...selected])].join(","));
-                  setNotice(
-                    text(
-                      "所选模型已填入表单，请保存渠道后生效。",
-                      "Selected models filled into the form. Save the channel to apply.",
-                      "أُضيفت النماذج إلى النموذج. احفظ القناة للتطبيق.",
-                    ),
-                  );
-                }}
+                onClick={() => applySelection()}
               >
                 {text(
                   "添加所选模型",
@@ -440,6 +485,19 @@ export function ChannelModelDiscovery({
                   "إضافة النماذج المحددة",
                 )}
               </Button>
+              {connection.type === 32 && (
+                <Button
+                  size="small"
+                  disabled={disabled || !selected.length}
+                  onClick={() => applySelection(true)}
+                >
+                  {text(
+                    "仅使用所选模型",
+                    "Use selected models only",
+                    "استخدام النماذج المحددة فقط",
+                  )}
+                </Button>
+              )}
             </>
           )}
           {unlisted.length > 0 && (

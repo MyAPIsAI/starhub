@@ -42,6 +42,43 @@ func TestArkModelDiscovery(t *testing.T) {
 	if hits != 1 {
 		t.Fatal("changed connection leaked a saved credential")
 	}
+	request.body = fmt.Sprintf(`{"channel_id":%d,"include_metadata":true}`, ch.ID)
+	var catalog []struct {
+		ID     string `json:"id"`
+		Domain string `json:"domain"`
+	}
+	decodeData(t, call(FetchChannelModels, request), &catalog)
+	if len(catalog) != 1 || catalog[0].ID != ch.Models || catalog[0].Domain != "ImageGeneration" {
+		t.Fatal("Ark capability metadata was lost")
+	}
+	var channels int64
+	model.DB.Model(&model.Channel{}).Count(&channels)
+	if channels != 1 {
+		t.Fatal("catalog discovery changed channel configuration")
+	}
+}
+
+func TestArkChannelCapabilitiesPersist(t *testing.T) {
+	newTestDB(t)
+	response := call(CreateChannel, testRequest{method: "POST", target: "/api/channel", body: `{"name":"Ark","type":32,"key":"fixture-key","models":"exact-version","model_capabilities":{"exact-version":"ImageGeneration","unselected":"LLM"}}`})
+	var created struct {
+		ID                int64             `json:"id"`
+		ModelCapabilities map[string]string `json:"model_capabilities"`
+	}
+	decodeData(t, response, &created)
+	if !reflect.DeepEqual(created.ModelCapabilities, map[string]string{"exact-version": "ImageGeneration"}) {
+		t.Fatal("unselected capabilities were persisted")
+	}
+	saved, err := model.GetChannelByID(created.ID)
+	if err != nil || !reflect.DeepEqual(saved.ModelCapabilities, created.ModelCapabilities) {
+		t.Fatal("capability metadata did not survive a database read")
+	}
+	response = call(UpdateChannel, testRequest{method: "PUT", target: "/api/channel", body: fmt.Sprintf(`{"id":%d,"models":"replacement"}`, created.ID)})
+	created.ModelCapabilities = nil
+	decodeData(t, response, &created)
+	if len(created.ModelCapabilities) != 0 {
+		t.Fatal("removed model capabilities were retained")
+	}
 }
 
 func TestArkImageRelay(t *testing.T) {

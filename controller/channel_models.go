@@ -17,11 +17,12 @@ import (
 // FetchChannelModels previews draft connection settings without saving them.
 func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		ChannelID    int64   `json:"channel_id"`
-		TaskPluginID int64   `json:"task_plugin_id"`
-		Type         int     `json:"type"`
-		BaseURL      *string `json:"base_url"`
-		Key          string  `json:"key"`
+		ChannelID       int64   `json:"channel_id"`
+		TaskPluginID    int64   `json:"task_plugin_id"`
+		Type            int     `json:"type"`
+		BaseURL         *string `json:"base_url"`
+		Key             string  `json:"key"`
+		IncludeMetadata bool    `json:"include_metadata"`
 	}
 	if !decodeJSONBody(w, r, &input) {
 		return
@@ -108,7 +109,13 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusBadRequest, "models_key_required")
 		return
 	}
-	models, err := fetchModels(r.Context(), base, key, auth)
+	var models []string
+	var catalog []service.ChannelModelInfo
+	if input.IncludeMetadata && input.Type == channel.ChannelTypeArk {
+		catalog, err = service.FetchArkChannelModelCatalog(r.Context(), base, key, auth)
+	} else {
+		models, err = fetchModels(r.Context(), base, key, auth)
+	}
 	if err != nil {
 		var failure *service.ChannelModelsError
 		if errors.As(err, &failure) {
@@ -120,6 +127,16 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 	}
 	if pluginModels != nil {
 		models = slices.DeleteFunc(models, func(name string) bool { return !slices.Contains(pluginModels, name) })
+	}
+	if input.IncludeMetadata {
+		if catalog == nil {
+			catalog = make([]service.ChannelModelInfo, 0, len(models))
+			for _, id := range models {
+				catalog = append(catalog, service.ChannelModelInfo{ID: id})
+			}
+		}
+		common.ApiSuccess(w, catalog)
+		return
 	}
 	common.ApiSuccess(w, models)
 }

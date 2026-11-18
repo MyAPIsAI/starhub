@@ -15,16 +15,26 @@ export interface ChannelModelsInput {
   key?: string;
 }
 
+export interface ChannelModelInfo {
+  id: string;
+  domain?: string;
+}
+
 // Discovery credentials stay in this request, outside the query cache.
 export function fetchChannelModels(
   input: ChannelModelsInput,
   signal: AbortSignal,
 ) {
-  return apiRequest<string[]>("/api/channel/fetch_models", {
-    method: "POST",
-    body: JSON.stringify(input),
-    signal,
-  });
+  return apiRequest<Array<string | ChannelModelInfo>>(
+    "/api/channel/fetch_models",
+    {
+      method: "POST",
+      body: JSON.stringify({ ...input, include_metadata: true }),
+      signal,
+    },
+  ).then((models) =>
+    models.map((entry) => (typeof entry === "string" ? { id: entry } : entry)),
+  );
 }
 
 export interface ChannelInput {
@@ -35,6 +45,7 @@ export interface ChannelInput {
   key_mode?: string;
   base_url?: string;
   models: string;
+  model_capabilities?: Record<string, string>;
   group?: string;
   status?: number;
   priority?: number;

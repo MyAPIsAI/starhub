@@ -15,17 +15,18 @@ import (
 )
 
 type channelPayload struct {
-	Name         string `json:"name"`
-	TaskPluginID *int64 `json:"task_plugin_id"`
-	Type         *int   `json:"type"`
-	Key          string `json:"key"`
-	KeyMode      string `json:"key_mode"`
-	BaseURL      string `json:"base_url"`
-	Models       string `json:"models"`
-	Group        string `json:"group"`
-	Status       *int   `json:"status"`
-	Priority     *int64 `json:"priority"`
-	Weight       *int64 `json:"weight"`
+	Name              string             `json:"name"`
+	TaskPluginID      *int64             `json:"task_plugin_id"`
+	Type              *int               `json:"type"`
+	Key               string             `json:"key"`
+	KeyMode           string             `json:"key_mode"`
+	BaseURL           string             `json:"base_url"`
+	Models            string             `json:"models"`
+	ModelCapabilities *map[string]string `json:"model_capabilities"`
+	Group             string             `json:"group"`
+	Status            *int               `json:"status"`
+	Priority          *int64             `json:"priority"`
+	Weight            *int64             `json:"weight"`
 }
 
 // normalizeKeyMode validates the multi-key selection mode: empty keeps the
@@ -108,6 +109,9 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 	if req.TaskPluginID != nil {
 		ch.TaskPluginID = *req.TaskPluginID
 	}
+	if req.ModelCapabilities != nil {
+		ch.ModelCapabilities = *req.ModelCapabilities
+	}
 	if err := model.InsertChannel(ch); err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, model.ErrTaskPluginConfiguration) {
@@ -164,6 +168,12 @@ func UpdateChannel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		common.ApiError(w, http.StatusNotFound, "channel not found")
 		return
+	}
+	if req.Type != nil && *req.Type != ch.Type || req.BaseURL != nil && *req.BaseURL != ch.BaseURL {
+		ch.ModelCapabilities = nil
+	}
+	if req.ModelCapabilities != nil {
+		ch.ModelCapabilities = *req.ModelCapabilities
 	}
 	if req.TaskPluginID != nil {
 		ch.TaskPluginID = *req.TaskPluginID
@@ -371,22 +381,23 @@ func normalizeBaseURL(w http.ResponseWriter, raw string) (string, bool) {
 
 func maskedChannel(c *model.Channel) map[string]any {
 	return map[string]any{
-		"id":               c.ID,
-		"task_plugin_id":   c.TaskPluginID,
-		"name":             c.Name,
-		"type":             c.Type,
-		"key":              common.MaskKey(c.Key),
-		"key_mode":         c.KeyMode,
-		"key_count":        len(c.Keys()),
-		"multi_key_status": c.KeyStatuses(),
-		"base_url":         c.BaseURL,
-		"models":           c.Models,
-		"group":            c.Group,
-		"status":           c.Status,
-		"priority":         c.Priority,
-		"weight":           c.Weight,
-		"response_time":    c.ResponseTime,
-		"used_quota":       c.UsedQuota, "used_quota_nano": common.QuotaMoney(c.UsedQuota, c.UsedQuotaRemainderNano).String(),
+		"id":                 c.ID,
+		"task_plugin_id":     c.TaskPluginID,
+		"name":               c.Name,
+		"type":               c.Type,
+		"key":                common.MaskKey(c.Key),
+		"key_mode":           c.KeyMode,
+		"key_count":          len(c.Keys()),
+		"multi_key_status":   c.KeyStatuses(),
+		"base_url":           c.BaseURL,
+		"models":             c.Models,
+		"model_capabilities": c.ModelCapabilities,
+		"group":              c.Group,
+		"status":             c.Status,
+		"priority":           c.Priority,
+		"weight":             c.Weight,
+		"response_time":      c.ResponseTime,
+		"used_quota":         c.UsedQuota, "used_quota_nano": common.QuotaMoney(c.UsedQuota, c.UsedQuotaRemainderNano).String(),
 		"created_at": c.CreatedAt,
 	}
 }

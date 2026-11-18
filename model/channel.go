@@ -25,28 +25,30 @@ const (
 )
 
 type Channel struct {
-	UsedQuotaRemainderNano int64           `gorm:"not null;default:0" json:"-"`
-	RuntimeRoute           *RoutingAttempt `gorm:"-" json:"-"`
-	RuntimeModel           string          `gorm:"-" json:"-"`
-	ID                     int64           `gorm:"primaryKey;autoIncrement" json:"id"`
-	TaskPluginID           int64           `gorm:"not null;default:0;index" json:"task_plugin_id"`
-	Name                   string          `gorm:"size:128;not null;default:''" json:"name"`
-	Type                   int             `gorm:"not null;default:1" json:"type"`
-	Key                    string          `gorm:"type:text;serializer:channel_credential;not null;default:''" json:"key"`
-	KeyMode                string          `gorm:"size:16;not null;default:''" json:"key_mode"`
-	MultiKeyStatus         string          `gorm:"size:512;not null;default:''" json:"multi_key_status"`
-	BaseURL                string          `gorm:"size:256;not null;default:''" json:"base_url"`
-	Models                 string          `gorm:"type:text;not null;default:''" json:"models"`
-	Group                  string          `gorm:"column:group;size:256;not null;default:'default'" json:"group"`
-	Status                 int             `gorm:"not null;default:1" json:"status"`
-	Priority               int64           `gorm:"not null;default:0" json:"priority"`
-	Weight                 int64           `gorm:"not null;default:1" json:"weight"`
-	ResponseTime           int64           `gorm:"not null;default:0" json:"response_time"`
-	UsedQuota              int64           `gorm:"not null;default:0" json:"used_quota"`
-	CreatedAt              int64           `gorm:"autoCreateTime" json:"created_at"`
+	UsedQuotaRemainderNano int64             `gorm:"not null;default:0" json:"-"`
+	RuntimeRoute           *RoutingAttempt   `gorm:"-" json:"-"`
+	RuntimeModel           string            `gorm:"-" json:"-"`
+	ID                     int64             `gorm:"primaryKey;autoIncrement" json:"id"`
+	TaskPluginID           int64             `gorm:"not null;default:0;index" json:"task_plugin_id"`
+	Name                   string            `gorm:"size:128;not null;default:''" json:"name"`
+	Type                   int               `gorm:"not null;default:1" json:"type"`
+	Key                    string            `gorm:"type:text;serializer:channel_credential;not null;default:''" json:"key"`
+	KeyMode                string            `gorm:"size:16;not null;default:''" json:"key_mode"`
+	MultiKeyStatus         string            `gorm:"size:512;not null;default:''" json:"multi_key_status"`
+	BaseURL                string            `gorm:"size:256;not null;default:''" json:"base_url"`
+	Models                 string            `gorm:"type:text;not null;default:''" json:"models"`
+	ModelCapabilities      map[string]string `gorm:"serializer:json;type:text" json:"model_capabilities"`
+	Group                  string            `gorm:"column:group;size:256;not null;default:'default'" json:"group"`
+	Status                 int               `gorm:"not null;default:1" json:"status"`
+	Priority               int64             `gorm:"not null;default:0" json:"priority"`
+	Weight                 int64             `gorm:"not null;default:1" json:"weight"`
+	ResponseTime           int64             `gorm:"not null;default:0" json:"response_time"`
+	UsedQuota              int64             `gorm:"not null;default:0" json:"used_quota"`
+	CreatedAt              int64             `gorm:"autoCreateTime" json:"created_at"`
 }
 
 func InsertChannel(c *Channel) error {
+	c.pruneModelCapabilities()
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		if err := validateTaskPluginChannel(tx, c); err != nil {
 			return fmt.Errorf("%w: %v", ErrTaskPluginConfiguration, err)
@@ -59,6 +61,7 @@ func InsertChannel(c *Channel) error {
 }
 
 func UpdateChannel(c *Channel) error {
+	c.pruneModelCapabilities()
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
 		var previous Channel
 		err := tx.Select("id", "type", "key", "base_url", "task_plugin_id").First(&previous, "id = ?", c.ID).Error
@@ -83,6 +86,23 @@ func UpdateChannel(c *Channel) error {
 		}
 		return rebuildAbilities(tx, c)
 	})
+}
+
+// Capability hints belong only to explicitly configured Ark models, never to authorization or pricing.
+func (c *Channel) pruneModelCapabilities() {
+	var kept map[string]string
+	if c.Type == channel.ChannelTypeArk {
+		for _, id := range SplitList(c.Models) {
+			switch domain := c.ModelCapabilities[id]; domain {
+			case "LLM", "VLM", "ImageGeneration", "VideoGeneration", "3DGeneration", "Audio", "Embedding":
+				if kept == nil {
+					kept = map[string]string{}
+				}
+				kept[id] = domain
+			}
+		}
+	}
+	c.ModelCapabilities = kept
 }
 
 func DeleteChannel(id int64) error {

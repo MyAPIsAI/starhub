@@ -22,6 +22,11 @@ type ChannelModelsError struct {
 	Code   string
 }
 
+type ChannelModelInfo struct {
+	ID     string `json:"id"`
+	Domain string `json:"domain,omitempty"`
+}
+
 func (e *ChannelModelsError) Error() string { return e.Code }
 
 // NormalizeChannelModelsBaseURL follows the OpenAI relay's root URL convention.
@@ -62,11 +67,16 @@ func NormalizeArkModelsBaseURL(raw string) (string, error) {
 }
 
 func FetchArkChannelModels(ctx context.Context, baseURL, key, auth string) ([]string, error) {
+	catalog, err := FetchArkChannelModelCatalog(ctx, baseURL, key, auth)
+	return channelModelIDs(catalog), err
+}
+
+func FetchArkChannelModelCatalog(ctx context.Context, baseURL, key, auth string) ([]ChannelModelInfo, error) {
 	base, err := NormalizeArkModelsBaseURL(baseURL)
 	if err != nil {
 		return nil, err
 	}
-	return fetchChannelModels(ctx, base+"/models", key, auth)
+	return fetchChannelModelCatalog(ctx, base+"/models", key, auth)
 }
 
 // NormalizeTaskPluginModelsBaseURL preserves the adapter's configured path prefix.
@@ -100,6 +110,19 @@ func FetchTaskPluginChannelModels(ctx context.Context, baseURL, key, auth, path 
 }
 
 func fetchChannelModels(ctx context.Context, endpoint, key, auth string) ([]string, error) {
+	catalog, err := fetchChannelModelCatalog(ctx, endpoint, key, auth)
+	return channelModelIDs(catalog), err
+}
+
+func channelModelIDs(catalog []ChannelModelInfo) []string {
+	ids := make([]string, 0, len(catalog))
+	for _, entry := range catalog {
+		ids = append(ids, entry.ID)
+	}
+	return ids
+}
+
+func fetchChannelModelCatalog(ctx context.Context, endpoint, key, auth string) ([]ChannelModelInfo, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &ChannelModelsError{http.StatusBadRequest, "invalid_models_base_url"}
@@ -151,13 +174,11 @@ func fetchChannelModels(ctx context.Context, endpoint, key, auth string) ([]stri
 		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_too_large"}
 	}
 	var result struct {
-		Data *[]struct {
-			ID string `json:"id"`
-		} `json:"data"`
-		HasMore       bool   `json:"has_more"`
-		NextCursor    string `json:"next_cursor"`
-		NextPageToken string `json:"next_page_token"`
-		Next          string `json:"next"`
+		Data          *[]ChannelModelInfo `json:"data"`
+		HasMore       bool                `json:"has_more"`
+		NextCursor    string              `json:"next_cursor"`
+		NextPageToken string              `json:"next_page_token"`
+		Next          string              `json:"next"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil || result.Data == nil {
 		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_invalid_response"}
@@ -168,7 +189,7 @@ func fetchChannelModels(ctx context.Context, endpoint, key, auth string) ([]stri
 	if len(*result.Data) > 5000 {
 		return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_too_large"}
 	}
-	models := make([]string, 0, len(*result.Data))
+	models := make([]ChannelModelInfo, 0, len(*result.Data))
 	seen := make(map[string]bool)
 	for _, item := range *result.Data {
 		id := strings.TrimSpace(item.ID)
@@ -179,7 +200,12 @@ func fetchChannelModels(ctx context.Context, endpoint, key, auth string) ([]stri
 			return nil, &ChannelModelsError{http.StatusBadGateway, "upstream_models_invalid_id"}
 		}
 		if !seen[id] {
-			models = append(models, id)
+			switch item.Domain {
+			case "LLM", "VLM", "ImageGeneration", "VideoGeneration", "3DGeneration", "Audio", "Embedding":
+			default:
+				item.Domain = ""
+			}
+			models = append(models, ChannelModelInfo{ID: id, Domain: item.Domain})
 			seen[id] = true
 		}
 	}

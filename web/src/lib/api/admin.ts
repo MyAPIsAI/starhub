@@ -84,6 +84,7 @@ export interface MetricsSnapshot {
 // --- Types: Channels ---
 
 export interface AdminChannel {
+  model_capabilities?: Record<string, string>;
   task_plugin_id?: number;
   id: number;
   name: string;
