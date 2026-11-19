@@ -89,6 +89,13 @@ func ReadResourceGatewayPolicy(ctx context.Context, channelID int64, group, mode
 		if resourceNativeProtocol(ch.Type) == "" || ch.Status != common.ChannelStatusEnabled {
 			return nil
 		}
+		var disabled int64
+		if err := tx.Model(&ChannelResourceDisable{}).Where("channel_id = ? AND model = ?", channelID, model).Count(&disabled).Error; err != nil {
+			return err
+		}
+		if disabled > 0 {
+			return nil
+		}
 		var route ResourceGatewayRoute
 		if err := tx.Where("channel_id = ? AND model = ? AND \"group\" = ?", channelID, model, group).Where(resourceGatewayGroupCondition("resource_gateway_routes")).First(&route).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {

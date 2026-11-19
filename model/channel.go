@@ -137,6 +137,9 @@ func DeleteChannel(id int64) error {
 		if err := revokeResourceGatewayChannel(tx, id); err != nil {
 			return err
 		}
+		if err := tx.Where("channel_id = ?", id).Delete(&ChannelResourceDisable{}).Error; err != nil {
+			return err
+		}
 		return tx.Where("channel_id = ?", id).Delete(&Ability{}).Error
 	})
 }
@@ -189,8 +192,11 @@ func UpdateChannelStatus(id int64, status int) error {
 		if res.RowsAffected == 0 {
 			return ErrChannelNotFound
 		}
-		return tx.Model(&Ability{}).Where("channel_id = ?", id).
-			Updates(map[string]any{"enabled": status == common.ChannelStatusEnabled}).Error
+		if err := tx.Model(&Ability{}).Where("channel_id = ?", id).
+			Updates(map[string]any{"enabled": status == common.ChannelStatusEnabled}).Error; err != nil {
+			return err
+		}
+		return applyChannelResourceDisables(tx, id)
 	})
 }
 

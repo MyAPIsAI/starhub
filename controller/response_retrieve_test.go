@@ -31,6 +31,30 @@ type responseReadFixture struct {
 	getStatus                          atomic.Int64
 }
 
+func TestStoredResponseRetrievalHonorsModelResourceDisable(t *testing.T) {
+	f := newResponseReadFixture(t, false, "true", "true")
+	f.create(t)
+	if _, err := model.SetChannelResourceEnabled(f.channel.ID, "gpt-4o", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := model.DB.Model(&model.Ability{}).Where("channel_id = ?", f.channel.ID).Update("enabled", true).Error; err != nil {
+		t.Fatal(err)
+	}
+	read := readStoredResponse(f.token.PlaintextKey(), "resp_scoped", "")
+	if read.Code != 404 || f.gets.Load() != 0 {
+		t.Fatalf("disabled model retrieval reached upstream: %d %s", read.Code, read.Body)
+	}
+	assertResponsesBill(t, f.owner, f.token, 100, 20, 1)
+	if _, err := model.SetChannelResourceEnabled(f.channel.ID, "gpt-4o", true); err != nil {
+		t.Fatal(err)
+	}
+	read = readStoredResponse(f.token.PlaintextKey(), "resp_scoped", "")
+	if read.Code != 200 || f.gets.Load() != 1 {
+		t.Fatalf("enabled model retrieval failed: %d %s", read.Code, read.Body)
+	}
+	assertResponsesBill(t, f.owner, f.token, 100, 20, 1)
+}
+
 func newResponseReadFixture(t *testing.T, stream bool, requestStore, providerStore string) *responseReadFixture {
 	t.Helper()
 	newTestDB(t)

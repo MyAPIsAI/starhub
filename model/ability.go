@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"hash/fnv"
@@ -32,10 +33,7 @@ func rebuildAbilities(tx *gorm.DB, c *Channel) error {
 	if err := tx.Where("channel_id = ?", c.ID).Delete(&Ability{}).Error; err != nil {
 		return err
 	}
-	if err := addAbilities(tx, c); err != nil {
-		return err
-	}
-	return applyChannelResourceDisables(tx, c.ID)
+	return addAbilities(tx, c)
 }
 
 func AddAbilities(c *Channel) error {
@@ -65,7 +63,10 @@ func addAbilities(tx *gorm.DB, c *Channel) error {
 			})
 		}
 	}
-	return tx.Create(&abilities).Error
+	if err := tx.Create(&abilities).Error; err != nil {
+		return err
+	}
+	return applyChannelResourceDisables(tx, c.ID)
 }
 
 func DeleteAbilitiesByChannel(channelID int64) error {
@@ -76,9 +77,21 @@ func DeleteAbilitiesByChannel(channelID int64) error {
 
 func SetAbilitiesEnabledByChannel(channelID int64, enabled bool) error {
 	return mutateChannelConfiguration(func(tx *gorm.DB) error {
-		return tx.Model(&Ability{}).Where("channel_id = ?", channelID).
-			Updates(map[string]any{"enabled": enabled}).Error
+		if err := tx.Model(&Ability{}).Where("channel_id = ?", channelID).
+			Updates(map[string]any{"enabled": enabled}).Error; err != nil {
+			return err
+		}
+		return applyChannelResourceDisables(tx, channelID)
 	})
+}
+
+// ChannelHasEnabledAbility applies the same gates as discovery and channel selection.
+func ChannelHasEnabledAbility(ctx context.Context, channelID int64, group, name string) (bool, error) {
+	var count int64
+	err := DB.WithContext(ctx).Table("abilities AS a").Joins("JOIN channels c ON c.id = a.channel_id").
+		Where("a.channel_id = ? AND a.\"group\" = ? AND a.model = ? AND a.enabled = TRUE AND c.status = ?", channelID, group, name, common.ChannelStatusEnabled).
+		Where(resourceGatewayAbilityCondition("a")).Count(&count).Error
+	return count > 0, err
 }
 
 func GetSatisfiedChannel(group, model string) (*Channel, error) {
