@@ -16,6 +16,25 @@ type openAIWireMessage struct {
 	ToolCallID string               `json:"tool_call_id,omitempty"`
 }
 
+type openAIUsage struct {
+	Usage
+	PromptCacheHitTokens *int64 `json:"prompt_cache_hit_tokens"`
+}
+
+// normalized preserves standard details and supports legacy DeepSeek reports.
+func (u *openAIUsage) normalized() *Usage {
+	if u == nil {
+		return nil
+	}
+	result := u.Usage
+	if result.PromptTokensDetails == nil && u.PromptCacheHitTokens != nil {
+		result.PromptTokensDetails = &PromptTokensDetails{
+			CachedTokens: clampNonNegative(*u.PromptCacheHitTokens, result.PromptTokens),
+		}
+	}
+	return &result
+}
+
 type openAIWireToolCall struct {
 	ID       string `json:"id,omitempty"`
 	Type     string `json:"type,omitempty"`
@@ -258,12 +277,12 @@ func ParseOpenAIChatResponse(body []byte) (*ChatResponse, error) {
 			Delta   *openAIWireMessage `json:"delta"`
 			Finish  *string            `json:"finish_reason"`
 		} `json:"choices"`
-		Usage *Usage `json:"usage"`
+		Usage *openAIUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}
-	ir := &ChatResponse{ID: resp.ID, Model: resp.Model, Usage: resp.Usage}
+	ir := &ChatResponse{ID: resp.ID, Model: resp.Model, Usage: resp.Usage.normalized()}
 	if len(resp.Choices) > 0 {
 		c := resp.Choices[0]
 		if c.Finish != nil {
@@ -296,20 +315,24 @@ func ParseOpenAIStreamPayload(payload []byte) (textDelta string, usage *Usage, f
 			Delta struct {
 				Content json.RawMessage `json:"content"`
 			} `json:"delta"`
-			Finish *string `json:"finish_reason"`
+			Finish *string      `json:"finish_reason"`
+			Usage  *openAIUsage `json:"usage"`
 		} `json:"choices"`
-		Usage *Usage `json:"usage"`
+		Usage *openAIUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(payload, &chunk); err != nil {
 		return "", nil, "", err
 	}
 	if len(chunk.Choices) > 0 {
 		textDelta = ContentText(chunk.Choices[0].Delta.Content)
+		if chunk.Usage == nil {
+			chunk.Usage = chunk.Choices[0].Usage
+		}
 		if chunk.Choices[0].Finish != nil {
 			finishReason = *chunk.Choices[0].Finish
 		}
 	}
-	return textDelta, chunk.Usage, finishReason, nil
+	return textDelta, chunk.Usage.normalized(), finishReason, nil
 }
 
 // ContentText extracts the text of an OpenAI message content field (string

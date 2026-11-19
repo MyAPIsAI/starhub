@@ -102,6 +102,13 @@ func (req smartRequirements) managedAllowed(policy *model.ResourceGatewayPolicy)
 	for _, message := range messages {
 		for name := range message {
 			switch name {
+			case "reasoning_content":
+				var role string
+				var reasoning *string
+				if req.path != "/v1/chat/completions" || json.Unmarshal(message["role"], &role) != nil || role != "assistant" || json.Unmarshal(message[name], &reasoning) != nil {
+					return false
+				}
+				needed = append(needed, "reasoning")
 			case "role", "content", "name", "tool_calls", "function_call", "tool_call_id", "audio":
 			default:
 				return false
