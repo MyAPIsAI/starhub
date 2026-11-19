@@ -25,6 +25,7 @@
     "test:browser:catalog": "node tests/catalog-management-browser.mjs",
     "test:browser:channels": "node tests/channel-workspace-browser.mjs",
     "test:browser:channel-models": "node tests/channel-model-discovery-browser.mjs",
+    "test:browser:channel-providers": "node tests/channel-providers-browser.mjs",
     "test:browser:playground": "node tests/playground-browser.mjs",
     "test:browser:plugins": "node tests/task-plugins-browser.mjs",
     "test:browser:requests": "node tests/request-history-browser.mjs",

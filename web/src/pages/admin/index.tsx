@@ -73,6 +73,7 @@ import { ApiError } from "../../lib/api/http";
 import { copyText } from "../../features/code-example";
 import { useAdminIncidents, useCreateIncident } from "../../lib/api/incident";
 import { IncidentList } from "../../features/incident-list";
+import { channelTypeOptions, channelTypeOption } from "../../lib/channel-types";
 
 const newChannelForm = (type = 1): ChannelInput => ({
   name: "",
@@ -2205,21 +2206,21 @@ export default function AdminPortal() {
                 }))
               }
             >
-              <option value={1}>OpenAI</option>
-              <option value={32}>
-                {text("火山方舟（豆包）", "Volcengine Ark (Doubao)", "Volcengine Ark (Doubao)")}
-              </option>
-              <option value={14}>Claude</option>
-              <option value={15}>AWS Bedrock</option>
-              <option value={25}>Gemini</option>
-              <option value={TASK_PLUGIN_CHANNEL_TYPE}>
-                {text(
-                  "视频任务插件",
-                  "Video task plugin",
-                  "إضافة مهام الفيديو",
-                )}
-              </option>
+              {channelTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {text(...option.label)}
+                </option>
+              ))}
             </select>
+            {channelTypeOption(channelForm.type ?? 1)?.chatOnly && (
+              <p className="channel-model-hint">
+                {text(
+                  "当前接入对话接口，请使用对应供应商的密钥和模型 ID。",
+                  "Chat API supported. Use this provider’s API key and model IDs.",
+                  "واجهة المحادثة مدعومة. استخدم مفتاح هذا المزوّد ومعرّفات نماذجه.",
+                )}
+              </p>
+            )}
           </div>
           {channelForm.type === TASK_PLUGIN_CHANNEL_TYPE && (
             <TaskPluginChannel
@@ -2353,8 +2354,17 @@ export default function AdminPortal() {
               onChange={(e) =>
                 setChannelForm((f) => ({ ...f, base_url: e.target.value, model_capabilities: {} }))
               }
-              placeholder="https://api.openai.com"
+              placeholder={channelTypeOption(channelForm.type ?? 1)?.defaultBaseURL ?? "https://api.openai.com"}
             />
+            {channelTypeOption(channelForm.type ?? 1)?.defaultBaseURL && (
+              <p className="channel-model-hint">
+                {text(
+                  "留空使用上方默认地址；也可填写自定义上游根地址或该供应商的 API 前缀。",
+                  "Leave empty to use the default above, or enter a custom upstream root or this provider’s API prefix.",
+                  "اتركه فارغًا لاستخدام العنوان الافتراضي أعلاه، أو أدخل جذر مزوّد مخصص أو بادئة واجهته.",
+                )}
+              </p>
+            )}
           </div>
         </form>
       </Modal>

@@ -11,6 +11,7 @@ import {
   type TaskPluginVersion,
 } from "../lib/api/task-plugin";
 import { useSessionQueryIdentity } from "../lib/system-access";
+import { channelTypeOption } from "../lib/channel-types";
 import { useSettingsText } from "./settings-text";
 import { arkVideoReferenceModels, isArkVideoModel } from "./ark-video-models";
 import "./channel-model-discovery.css";
@@ -47,9 +48,9 @@ const errors: Record<string, [string, string, string]> = {
     "القناة أو بيانات اعتمادها غير متاحة. حدّث وأعد المحاولة.",
   ],
   models_channel_type_unsupported: [
-    "当前支持 OpenAI 兼容渠道和视频任务插件获取模型，其他类型请手动填写。",
-    "Discovery supports OpenAI-compatible and video task plugin channels. Enter models manually for other types.",
-    "الجلب متاح لقنوات OpenAI وإضافات الفيديو. أدخل النماذج يدويًا للأنواع الأخرى.",
+    "当前类型暂不支持自动获取模型，请手动填写。",
+    "Model discovery is not supported for this type. Enter models manually.",
+    "الجلب غير مدعوم لهذا النوع. أدخل النماذج يدويًا.",
   ],
   models_plugin_unavailable: [
     "请选择可用的插件版本后重试。",
@@ -216,7 +217,8 @@ export function ChannelModelDiscovery({
           id.trim(),
         ),
       );
-  const supported = connection.type === 1 || connection.type === 32 || isPlugin;
+  const typeOption = channelTypeOption(connection.type);
+  const supported = typeOption?.discovery === true;
   let declaredModels: string[] = [];
   if (isPlugin && plugin) {
     try {
@@ -434,7 +436,9 @@ export function ChannelModelDiscovery({
               : "",
           )
         }
-        placeholder="gpt-4.1,claude-sonnet-4-20250514"
+        placeholder={typeOption?.chatOnly
+          ? text("填写上游模型 ID，多个用逗号分隔", "Upstream model IDs, separated by commas", "معرّفات نماذج المزوّد مفصولة بفواصل")
+          : "gpt-4.1,claude-sonnet-4-20250514"}
       />
       {supported && (
         <p className="channel-model-hint">
@@ -560,9 +564,9 @@ export function ChannelModelDiscovery({
       {!supported && (
         <p className="channel-model-hint">
           {text(
-            "当前类型请手动填写模型；获取功能支持 OpenAI 兼容渠道和视频任务插件。",
-            "Enter models manually for this type. Discovery supports OpenAI-compatible and video task plugin channels.",
-            "أدخل النماذج يدويًا لهذا النوع. الجلب متاح لقنوات OpenAI وإضافات الفيديو.",
+            "当前类型暂未接入模型目录，请按供应商控制台手动填写模型 ID。",
+            "Model discovery is not configured for this type. Enter model IDs from the provider’s console.",
+            "دليل النماذج غير مُعدّ لهذا النوع. أدخل المعرّفات من لوحة المزوّد.",
           )}
         </p>
       )}

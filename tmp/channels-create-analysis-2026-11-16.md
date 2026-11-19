@@ -379,5 +379,5 @@ Claude、Gemini、AWS Bedrock 与视频任务插件的目录、认证和返回�
 
 - 第 1 项：已增加 Moonshot=24、智谱=26、DeepSeek=45 类型及注册，复用 OpenAI 处理并集中配置默认地址与 API 前缀。智谱保留其默认末块用量行为，Kimi/DeepSeek 沿用流式用量请求；首批只开放对话，其他未适配端点明确拒绝。`go test ./relay ./controller -run TestCompatible -count=1` 通过，覆盖默认/自定义/已有前缀地址、认证、扩展字段、流式参数及创建/编辑密钥保留。
 - 第 2 项：Kimi/DeepSeek 目录查询已复用各自推理前缀，保留凭证按类型/地址隔离、错误脱敏、手填和显式选择边界；智谱目录暂未适配。资源发布的协议识别和 SQL 候选过滤均已接纳三家，修复“预览通过但实际无可用渠道”的关联限制。`go test ./controller ./model -run 'TestCompatible|TestFetchChannelModels|TestAdvanced|TestResourcePublication|TestResourceGateway' -count=1` 通过，覆盖目录读取、默认地址、拒绝凭证跨连接复用、准确发布与分组隔离。第 1 项提交：`48eb8c0`。
-- 第 3 项：待实施。
+- 第 3 项：已集中维护九种渠道选项和发现支持范围，新增智谱（GLM）、Kimi（Moonshot）、DeepSeek；默认地址由后端解析，前端仅作提示，切换类型不覆盖手填地址/模型。智谱显示手填说明，Kimi/DeepSeek 可获取并明确选择模型。前端生产构建与隔离浏览器四组验证通过，涵盖三家创建/刷新/编辑、已存密钥、目录认证失败不登出、三语、深浅主题、桌面/320 像素、键盘、滚动和无障碍；已查看新版截图，页面异常及无障碍违例为零。证据：`web/test-results/channel-providers/`。第 2 项提交：`3097775`。
 - 第 4 项：待实施。
