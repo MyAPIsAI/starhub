@@ -31,6 +31,16 @@ export function useAdminIncidents(enabled: boolean) {
   });
 }
 
+export function usePublicIncidents() {
+  return useQuery({
+    queryKey: ["incidents", "public"],
+    retry: false,
+    refetchInterval: 60000,
+    queryFn: async ({ signal }) =>
+      (await apiGet<ServiceIncident[] | null>("/api/status/incidents", signal)) ?? [],
+  });
+}
+
 export function useCreateIncident() {
   const client = useQueryClient();
   const identity = useSessionQueryIdentity();

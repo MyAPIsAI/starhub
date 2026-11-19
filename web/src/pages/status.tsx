@@ -5,13 +5,14 @@ import { PublicHeader } from "../components/product-shell";
 import { catalogModels } from "../config/models";
 import { useProductPreview } from "../lib/product-preview";
 import { usePreferences } from "../lib/preferences";
-import { writtenLanguage } from "../lib/localize";
 import { useServiceQuality } from "../lib/api/service-quality";
+import { usePublicIncidents } from "../lib/api/incident";
 
 export default function StatusPage() {
   const { t } = useTranslation();
   const lang = usePreferences((s) => s.language);
-  const incidents = useProductPreview((s) => s.incidents);
+  const incidentsQuery = usePublicIncidents();
+  const incidents = incidentsQuery.data ?? [];
   const upstreamOutage = useProductPreview((s) => s.demoMode.upstreamOutage);
   // Fetch real service-quality metrics (last 7 days). Degrades to
   // demo defaults when the endpoint is unavailable or has no data.
@@ -184,6 +185,7 @@ export default function StatusPage() {
               {incidents.map((incident) => (
                 <div
                   key={incident.id}
+                  data-incident-id={incident.id}
                   style={{
                     background: "var(--surface)",
                     border: "1px solid var(--border)",
@@ -205,9 +207,10 @@ export default function StatusPage() {
                         fontSize: "var(--text-base)",
                       }}
                     >
-                      {incident.title[writtenLanguage(lang)]}
+                      {incident.title}
                     </div>
                     <span
+                      data-incident-status={incident.status}
                       style={{
                         fontSize: "var(--text-xs)",
                         padding: "2px 8px",
@@ -244,7 +247,7 @@ export default function StatusPage() {
                       lineHeight: "var(--leading-base)",
                     }}
                   >
-                    {incident.content[writtenLanguage(lang)]}
+                    {incident.description}
                   </p>
                   <div
                     className="mono"
@@ -258,7 +261,7 @@ export default function StatusPage() {
                       : lang === "ar"
                         ? "تحديث"
                         : "Updated"}{" "}
-                    {incident.updatedAt}
+                    {new Date(incident.updated_at * 1000).toLocaleString(lang)}
                   </div>
                 </div>
               ))}

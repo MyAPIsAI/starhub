@@ -131,6 +131,25 @@ try {
   }
   report.checks.push("admin announcements render in three languages, both themes and narrow layouts");
   const anonymous = await browser.newContext();
+  const publicResponse = await anonymous.request.get(base + "/api/status/incidents");
+  assert.equal(publicResponse.status(), 200);
+  assert.equal((await publicResponse.json()).data[0].id, incident.id);
+  const publicPage = await anonymous.newPage();
+  publicPage.setDefaultTimeout(15000);
+  publicPage.on("pageerror", (error) => report.errors.push(String(error)));
+  const publicRequests = [];
+  publicPage.on("request", (request) => publicRequests.push(new URL(request.url()).pathname));
+  await publicPage.goto(base + "/status");
+  await publicPage.locator(`[data-incident-id="${incident.id}"]`).getByText(description, { exact: true }).waitFor();
+  assert.equal(await publicPage.locator("[data-incident-id]").count(), 1);
+  assert.equal(publicRequests.includes("/api/incident"), false);
+  await publicPage.reload();
+  await publicPage.locator(`[data-incident-id="${incident.id}"]`).getByText(title, { exact: true }).waitFor();
+  await api("PUT", `/api/incident/${incident.id}`, { status: "resolved", message: "Fixture resolved" });
+  await publicPage.reload();
+  await publicPage.locator('[data-incident-status="resolved"]').waitFor();
+  await publicPage.screenshot({ path: path.join(out, "public-anonymous.png") });
+  report.checks.push("the anonymous status page reads the persisted announcement and recent resolution through the public API");
   assert.equal((await anonymous.request.get(base + "/api/incident")).status(), 401);
   assert.equal((await anonymous.request.post(base + "/api/incident", { data: { title: "Denied" } })).status(), 401);
   await anonymous.request.post(base + "/api/user/register", { data: { username: "incident-reader", password: "IncidentReader93" } });
