@@ -61,12 +61,20 @@ export function ArkVideoIntegration() {
                   <dt>{channel.name}</dt>
                   <dd>
                     {!status
-                      ? text("状态待确认", "Status unconfirmed", "الحالة غير مؤكدة")
+                      ? text(
+                          "状态待确认",
+                          "Status unconfirmed",
+                          "الحالة غير مؤكدة",
+                        )
                       : status === "enabled"
-                      ? text("启用", "Enabled", "مُفعّل")
-                      : status === "partial"
-                        ? text("部分启用", "Partially enabled", "مُفعّل جزئيًا")
-                        : text("关闭", "Closed", "متوقف")}
+                        ? text("启用", "Enabled", "مُفعّل")
+                        : status === "partial"
+                          ? text(
+                              "部分启用",
+                              "Partially enabled",
+                              "مُفعّل جزئيًا",
+                            )
+                          : text("关闭", "Closed", "متوقف")}
                   </dd>
                 </div>
               );

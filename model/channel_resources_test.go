@@ -84,6 +84,14 @@ func TestChannelResourceStateCountsModelsInsteadOfKeys(t *testing.T) {
 
 func TestChannelResourceStateUsesPublishedModelAliases(t *testing.T) {
 	ch, _, bindings := publicationFixture(t)
+	catalog, err := ReadResourceCatalog(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "alpha"
+	if _, err := SaveResourcePlacement(t.Context(), catalog.Revision, "resource-1", ResourcePlacement{ModelID: &name, GroupIDs: []string{"default", "vip"}, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
 	plan := publicationPlan(t, bindings)
 	if _, err := PublishResourceGateway(t.Context(), publicationExpected(&plan.ResourcePublicationContext), bindings, plan.ReviewDigest, 1); err != nil {
 		t.Fatal(err)

@@ -109,7 +109,7 @@ export function useSetChannelStatus() {
       apiPut<AdminChannel>(`/api/channel/${id}/status`, { enabled }),
     onSuccess: (channel) => {
       client.setQueryData<AdminChannel[]>(CHANNELS_KEY, (channels) =>
-        channels?.map((entry) => entry.id === channel.id ? channel : entry),
+        channels?.map((entry) => (entry.id === channel.id ? channel : entry)),
       );
     },
     onSettled: () => invalidateChannelConfiguration(client),
@@ -120,11 +120,22 @@ export function useSetChannelResourceStatus() {
   const client = useQueryClient();
   return useMutation({
     retry: false,
-    mutationFn: ({ id, model, enabled }: { id: number; model: string; enabled: boolean }) =>
-      apiPut<AdminChannel>(`/api/channel/${id}/resource-status`, { model, enabled }),
+    mutationFn: ({
+      id,
+      model,
+      enabled,
+    }: {
+      id: number;
+      model: string;
+      enabled: boolean;
+    }) =>
+      apiPut<AdminChannel>(`/api/channel/${id}/resource-status`, {
+        model,
+        enabled,
+      }),
     onSuccess: (channel) => {
       client.setQueryData<AdminChannel[]>(CHANNELS_KEY, (channels) =>
-        channels?.map((entry) => entry.id === channel.id ? channel : entry),
+        channels?.map((entry) => (entry.id === channel.id ? channel : entry)),
       );
     },
     onSettled: () => invalidateChannelConfiguration(client),
