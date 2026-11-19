@@ -105,7 +105,10 @@ export function ChannelStatusControl({ channel }: { channel: AdminChannel }) {
             size="small"
             data-channel-bulk="enable"
             disabled={pending || !resources.total || status === "enabled"}
-            onClick={() => mutation.mutate({ id: channel.id, enabled: true })}
+            onClick={() => {
+              resourceMutation.reset();
+              mutation.mutate({ id: channel.id, enabled: true });
+            }}
           >
             {text("全部启用", "Enable all", "تفعيل الكل")}
           </Button>
@@ -113,12 +116,15 @@ export function ChannelStatusControl({ channel }: { channel: AdminChannel }) {
             size="small"
             data-channel-bulk="close"
             disabled={pending || !resources.total || channel.status !== 1}
-            onClick={() => mutation.mutate({ id: channel.id, enabled: false })}
+            onClick={() => {
+              resourceMutation.reset();
+              mutation.mutate({ id: channel.id, enabled: false });
+            }}
           >
             {text("全部关闭", "Close all", "إيقاف الكل")}
           </Button>
         </div>
-        {channel.status !== 1 && (
+        {channel.status !== 1 && resources.total > 0 && (
           <p>
             {text(
               "渠道已关闭，请先点击“全部启用”。",
@@ -157,13 +163,14 @@ export function ChannelStatusControl({ channel }: { channel: AdminChannel }) {
                   `تفعيل المورد ${resource.model}`,
                 )}
                 disabled={pending || channel.status !== 1}
-                onClick={() =>
+                onClick={() => {
+                  mutation.reset();
                   resourceMutation.mutate({
                     id: channel.id,
                     model: resource.model,
                     enabled: !resource.enabled,
-                  })
-                }
+                  });
+                }}
               >
                 {resource.enabled
                   ? text("启用", "Enabled", "مُفعّل")
