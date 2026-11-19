@@ -88,9 +88,9 @@ export function TaskPluginChannel({
       <span id="ch-plugin-help" role="status">
         {versions.isSuccess && versions.data.length === 0
           ? text(
-              "尚无插件版本，请添加 OpenAI 视频插件，或上传适配上游的可信插件。",
-              "No plugin versions yet. Add the OpenAI video plugin or upload a trusted adapter for your upstream.",
-              "لا توجد إصدارات. أضف إضافة فيديو OpenAI أو ارفع إضافة موثوقة لمزودك.",
+              "尚无插件版本。OpenAI 视频可添加示例插件；豆包视频请选择火山方舟（豆包）渠道。",
+              "No plugin versions yet. Add the sample plugin for OpenAI video; select Volcengine Ark (Doubao) for Doubao video.",
+              "لا توجد إصدارات. أضف الإضافة النموذجية لفيديو OpenAI؛ واختر قناة Volcengine Ark (Doubao) لفيديو Doubao.",
             )
           : text(
               "插件必须适配上游视频接口。使用单个上游密钥；有未完成任务时不可更换密钥或地址。",
@@ -100,9 +100,9 @@ export function TaskPluginChannel({
       </span>
       <span>
         {text(
-          "内置插件仅适用于 OpenAI 视频接口（sora-2 / sora-2-pro），其他上游请上传对应插件。",
-          "The built-in plugin supports the OpenAI video API (sora-2 / sora-2-pro). Upload a matching plugin for other upstreams.",
-          "تدعم الإضافة المدمجة واجهة فيديو OpenAI (sora-2 / sora-2-pro). ارفع إضافة متوافقة للمزودين الآخرين.",
+          "OpenAI 示例插件适配 sora-2 / sora-2-pro。豆包视频请选择“火山方舟（豆包）”渠道，无需上传插件；其他自定义接口需匹配的可信插件。",
+          "The OpenAI sample supports sora-2 / sora-2-pro. For Doubao video, select Volcengine Ark (Doubao) without uploading a plugin. Other custom APIs need a matching trusted plugin.",
+          "تدعم إضافة OpenAI النموذجية sora-2 / sora-2-pro. لفيديو Doubao اختر Volcengine Ark (Doubao) دون رفع إضافة. تحتاج الواجهات المخصصة الأخرى إلى إضافة موثوقة متوافقة.",
         )}
       </span>
       <div className="task-plugin-actions">

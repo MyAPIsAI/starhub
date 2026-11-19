@@ -200,6 +200,19 @@ try {
     await page.screenshot({ path: path.join(out, name), fullPage: true });
     report.screenshots.push(name);
     await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await page.goto(`${base}/admin?tab=resources`);
+    await page.getByRole("button", { name: language === "zh" ? "新建渠道" : language === "ar" ? "قناة جديدة" : "New channel", exact: true }).click();
+    await page.locator("#ch-type").selectOption("61");
+    await page.locator("#ch-plugin-help").waitFor();
+    await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('[role="dialog"]')).opacity) >= 0.99);
+    await page.locator("#ch-plugin-help + span").scrollIntoViewIfNeeded();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${language} channel form overflow`);
+    const helpName = `channel-help-${language}-${theme}-${width}.png`;
+    await page.screenshot({ path: path.join(out, helpName) });
+    report.screenshots.push(helpName);
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
   }
   report.checks.push("desktop, narrow screen, light/dark, Chinese/English/Arabic and dialogs");
   const anonymous = await browser.newContext();

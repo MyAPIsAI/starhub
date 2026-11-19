@@ -38,9 +38,9 @@ function TaskPluginsView() {
       </h1>
       <p>
         {text(
-          "上传可信来源的插件，再到资源页为渠道选择固定版本。禁用后停止接收新任务，已有任务继续查询。",
-          "Upload trusted plugins, then select a fixed version for a channel in Resources. Disabling stops new tasks; existing tasks continue polling.",
-          "ارفع إضافات موثوقة ثم اختر إصداراً ثابتاً للقناة في الموارد. التعطيل يمنع المهام الجديدة وتستمر المهام الحالية.",
+          "豆包视频可直接配置火山方舟渠道。自定义视频接口可上传可信插件，再为渠道绑定固定版本；禁用插件后已有任务继续查询。",
+          "Configure a Volcengine Ark channel for Doubao video. For custom video APIs, upload a trusted plugin and bind a fixed version to a channel. Existing tasks continue polling when a plugin is disabled.",
+          "أعدّ قناة Volcengine Ark لفيديو Doubao. للواجهات المخصصة، ارفع إضافة موثوقة واربط إصدارًا ثابتًا بالقناة. تستمر متابعة المهام الحالية عند تعطيل الإضافة.",
         )}
       </p>
       <ArkVideoIntegration />
@@ -103,9 +103,9 @@ function TaskPluginsView() {
       {versions.data?.length === 0 && (
         <p>
           {text(
-            "还没有插件，请上传一个可信插件。",
-            "No plugins yet. Upload a trusted plugin.",
-            "لا توجد إضافات. ارفع إضافة موثوقة.",
+            "尚未上传自定义插件；豆包视频可直接配置上方渠道。",
+            "No custom plugins uploaded. Configure Doubao video using the channel above.",
+            "لم تُرفع إضافات مخصصة. أعدّ فيديو Doubao عبر القناة أعلاه.",
           )}
         </p>
       )}
