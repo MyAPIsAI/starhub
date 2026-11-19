@@ -28,7 +28,10 @@ const backend = `http://127.0.0.1:${backendPort}`;
 const password = "PluginTestOnly-2026";
 const processHandle = spawn(binary, [], {
   cwd: temp,
-  env: { ...process.env, STARHUB_CONFIG: "", STARHUB_PORT: String(backendPort), STARHUB_DB: path.join(temp, "starhub.db"), STARHUB_COOKIE_SECURE: "false", STARHUB_ROOT_PASSWORD: password },
+  env: { ...process.env, STARHUB_CONFIG: "", STARHUB_PORT: String(backendPort), STARHUB_DB: path.join(temp, "starhub.db"), STARHUB_COOKIE_SECURE: "false", STARHUB_ROOT_PASSWORD: password,
+    STARHUB_ENV: "development", STARHUB_CRYPTO_SECRET: "plugin-browser-fixture-secret",
+    STARHUB_CREDENTIAL_KEYS: JSON.stringify({ fixture: "11".repeat(32) }), STARHUB_CREDENTIAL_ACTIVE_KEY: "fixture",
+    RESOURCE_CATALOG_NOTIFY_URL: "", STARHUB_REGION_PROFILE: "" },
   stdio: ["ignore", "ignore", "pipe"],
   windowsHide: true,
 });
@@ -55,8 +58,22 @@ try {
   const login = await context.request.post(`${base}/api/user/login`, { data: { username: "root", password } });
   assert.equal(login.status(), 200);
   assert.equal((await login.json()).success, true);
+  for (const [route, data] of [
+    ["/api/user/self", { current_password: password, new_password: "PluginChangedOnly-2026" }],
+    ["/api/user/2fa/skip", undefined],
+    ["/api/option", { key: "ip_rate_limit", value: "10000" }],
+  ]) {
+    const response = await context.request.fetch(`${base}${route}`, { method: route === "/api/user/2fa/skip" ? "POST" : "PUT", data });
+    assert.equal(response.status(), 200, await response.text());
+  }
   await page.goto(`${base}/admin?tab=plugins`);
   await page.locator('.task-plugins input[type="file"]').waitFor();
+  const native = page.locator(".task-plugin-native");
+  await native.getByText("豆包 Seedance", { exact: true }).waitFor();
+  assert.equal(await native.getByRole("button").count(), 0);
+  assert.equal(await native.getByRole("link", { name: "配置渠道", exact: true }).getAttribute("href"), "/admin?tab=resources#regions");
+  assert.deepEqual((await (await context.request.get(`${base}/api/task-plugin`)).json()).data, []);
+  report.checks.push("Doubao native integration remains discoverable without installing a plugin");
   await page.locator('.task-plugins input[type="file"]').setInputFiles(path.join(project, "plugins/tasks/openai-video.js"));
   await page.locator(".task-plugins li").filter({ hasText: "openai-video" }).waitFor();
   report.checks.push("upload and list immutable plugin version");
@@ -110,6 +127,10 @@ try {
     await page.goto(`${base}/admin?tab=plugins`);
     await page.locator(".task-plugins li").waitFor();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${language} page overflow`);
+    const nativeName = `native-${language}-${theme}-${width}.png`;
+    await page.locator(".task-plugin-native").scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(out, nativeName), fullPage: true });
+    report.screenshots.push(nativeName);
     await page.locator(".task-plugins li button").last().click();
     await page.getByRole("dialog").waitFor();
     await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('[role="dialog"]')).opacity) >= 0.99);

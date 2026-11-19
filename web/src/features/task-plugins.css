@@ -11,6 +11,23 @@
   color: var(--secondary);
   line-height: 1.6;
 }
+.task-plugin-native {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.task-plugin-native > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
 .task-plugins [role="alert"] {
   color: var(--danger, #b42318);
 }
