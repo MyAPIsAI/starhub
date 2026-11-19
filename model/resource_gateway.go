@@ -36,7 +36,12 @@ type ResourceGatewayRoute struct {
 func resourceGatewayAbilityCondition(alias string) string {
 	return fmt.Sprintf(`(NOT EXISTS (
 		SELECT 1 FROM channel_resource_disables crd WHERE crd.channel_id = %[1]s.channel_id AND crd.model = %[1]s.model
-	) AND (NOT EXISTS (
+	) AND %s)`, alias, resourceGatewayGrantCondition(alias))
+}
+
+// resourceGatewayGrantCondition keeps published resources visible when operationally closed.
+func resourceGatewayGrantCondition(alias string) string {
+	return fmt.Sprintf(`(NOT EXISTS (
 		SELECT 1 FROM resource_gateway_managed_channels rgm WHERE rgm.channel_id = %[1]s.channel_id
 	) OR EXISTS (
 		SELECT 1 FROM resource_gateway_managed_channels rgm
@@ -47,7 +52,7 @@ func resourceGatewayAbilityCondition(alias string) string {
 		AND EXISTS (SELECT 1 FROM channels rgc WHERE rgc.id = rgm.channel_id AND ((rgm.profile = 'openai_text_exact_v1' AND rgc.type = 1) OR (rgm.profile = 'exact_resource_policy_v2' AND ((rgc.type IN (1,24,26,45) AND rgr.protocols = '["OpenAI"]') OR (rgc.type = 14 AND rgr.protocols = '["Anthropic"]') OR (rgc.type = 25 AND rgr.protocols = '["Gemini"]')))))
 		AND `+resourceGatewayGroupCondition("rgr")+`
 		AND rgr.model = %[1]s.model AND rgr."group" = %[1]s."group"
-	)))`, alias)
+	))`, alias)
 }
 
 func resourceGatewayGroupCondition(alias string) string {

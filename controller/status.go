@@ -19,6 +19,17 @@ func PublicStatusHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// PublicStatusOverviewHandler exposes a fixed anonymous projection to every visitor.
+func PublicStatusOverviewHandler(w http.ResponseWriter, r *http.Request) {
+	view, err := model.ReadPublicStatusOverview(r.Context())
+	if err != nil {
+		common.ApiError(w, http.StatusServiceUnavailable, "public service status is unavailable")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	common.ApiSuccess(w, view)
+}
+
 // StatusHistoryHandler handles GET /api/status/history?months=3 (public).
 // Returns monthly availability aggregated from the Log table.
 func StatusHistoryHandler(w http.ResponseWriter, r *http.Request) {
