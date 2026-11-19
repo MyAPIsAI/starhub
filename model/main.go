@@ -139,7 +139,7 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := migrate(&OwnedTokenReceipt{}); err != nil {
 		return fmt.Errorf("migrate owned token receipts: %w", err)
 	}
-	if err := migrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}); err != nil {
+	if err := migrate(&ResourceGatewayManagedChannel{}, &ResourceGatewayRoute{}, &ResourceGatewayPublication{}, &ResourceGatewayBindingChange{}, &ChannelResourceDisable{}); err != nil {
 		return fmt.Errorf("migrate resource gateway ownership: %w", err)
 	}
 	if err := createNonemptyUniqueIndex(db, &ResourceGatewayManagedChannel{}, "resource_gateway_managed_channels", "idx_resource_gateway_source_binding", "source_channel_id"); err != nil {

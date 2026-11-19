@@ -47,7 +47,13 @@ func TestSetChannelStatusValidationAndMaskedResponse(t *testing.T) {
 
 func maskedChannelJSON(t *testing.T, ch *model.Channel) map[string]any {
 	t.Helper()
-	data, err := json.Marshal(maskedChannel(ch))
+	states, err := model.ReadChannelResourceStates([]model.Channel{*ch})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := maskedChannel(ch)
+	row["resource_state"] = states[ch.ID]
+	data, err := json.Marshal(row)
 	if err != nil {
 		t.Fatal(err)
 	}

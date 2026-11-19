@@ -138,7 +138,7 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, status, err.Error())
 		return
 	}
-	common.ApiSuccess(w, maskedChannel(ch))
+	writeChannelResponses(w, []model.Channel{*ch}, true)
 }
 
 func ListChannels(w http.ResponseWriter, r *http.Request) {
@@ -147,11 +147,7 @@ func ListChannels(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	data := make([]map[string]any, 0, len(channels))
-	for i := range channels {
-		data = append(data, maskedChannel(&channels[i]))
-	}
-	common.ApiSuccess(w, data)
+	writeChannelResponses(w, channels, false)
 }
 
 func GetChannel(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +160,7 @@ func GetChannel(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, http.StatusNotFound, "channel not found")
 		return
 	}
-	common.ApiSuccess(w, maskedChannel(ch))
+	writeChannelResponses(w, []model.Channel{*ch}, true)
 }
 
 type channelUpdateRequest struct {
@@ -268,7 +264,7 @@ func UpdateChannel(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, status, err.Error())
 		return
 	}
-	common.ApiSuccess(w, maskedChannel(ch))
+	writeChannelResponses(w, []model.Channel{*ch}, true)
 }
 
 func DeleteChannel(w http.ResponseWriter, r *http.Request) {

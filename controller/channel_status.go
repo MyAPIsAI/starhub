@@ -34,5 +34,5 @@ func SetChannelStatus(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, status, err.Error())
 		return
 	}
-	common.ApiSuccess(w, maskedChannel(ch))
+	writeChannelResponses(w, []model.Channel{*ch}, true)
 }
