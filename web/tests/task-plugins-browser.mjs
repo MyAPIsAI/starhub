@@ -71,9 +71,70 @@ try {
   const native = page.locator(".task-plugin-native");
   await native.getByText("豆包 Seedance", { exact: true }).waitFor();
   assert.equal(await native.getByRole("button").count(), 0);
-  assert.equal(await native.getByRole("link", { name: "配置渠道", exact: true }).getAttribute("href"), "/admin?tab=resources#regions");
+  assert.equal(await native.getByRole("link", { name: "配置渠道", exact: true }).getAttribute("href"), "/admin?tab=resources&create_channel=ark#channels");
   assert.deepEqual((await (await context.request.get(`${base}/api/task-plugin`)).json()).data, []);
   report.checks.push("Doubao native integration remains discoverable without installing a plugin");
+
+  await native.getByRole("link", { name: "配置渠道", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  const channelDialog = page.getByRole("dialog");
+  await channelDialog.waitFor();
+  assert.equal(await channelDialog.locator("#ch-type").inputValue(), "32");
+  assert.equal(await channelDialog.locator("#ch-plugin").count(), 0);
+  assert.equal(new URL(page.url()).searchParams.has("create_channel"), false);
+  assert.deepEqual((await (await context.request.get(`${base}/api/channel`)).json()).data, []);
+  await channelDialog.getByRole("button", { name: "取消", exact: true }).click();
+  await channelDialog.waitFor({ state: "hidden" });
+  await page.waitForFunction(() => document.activeElement?.id === "channels");
+  await page.reload();
+  await page.locator("#channels").waitFor();
+  assert.equal(await page.getByRole("dialog").count(), 0);
+  await page.goto(`${base}/admin?tab=plugins`);
+  await native.getByRole("link", { name: "配置渠道", exact: true }).click();
+  await channelDialog.locator("#ch-name").fill("Doubao enabled");
+  await channelDialog.locator("#ch-key").fill("native-test-placeholder");
+  await channelDialog.locator("#ch-models").fill("doubao-seedance-2-0-260128");
+  await channelDialog.locator("#ch-base-url").fill("http://127.0.0.1:1");
+  await channelDialog.getByRole("button", { name: "创建", exact: true }).click();
+  await channelDialog.waitFor({ state: "hidden" });
+  await page.getByText("Doubao enabled", { exact: true }).waitFor();
+  const createNative = async (name, input) => {
+    const response = await context.request.post(`${base}/api/channel`, { data: {
+      type: 32, name, models: "doubao-seedance-2-0-260128", key: "native-fixture-key", base_url: "http://127.0.0.1:1", ...input,
+    } });
+    assert.equal(response.status(), 200, await response.text());
+    return (await response.json()).data;
+  };
+  const closed = await createNative("Doubao closed", { status: 2 });
+  const partial = await createNative("Endpoint video", { models: "ep-video-fixture", key: "native-first\nnative-second", model_capabilities: { "ep-video-fixture": "VideoGeneration" } });
+  await createNative("Ark text only", { models: "text-only-fixture" });
+  let failChannels = false;
+  // Present an isolated partial-key state without submitting a provider task.
+  await page.route(`${base}/api/channel`, async route => {
+    if (route.request().method() !== "GET") return route.continue();
+    if (failChannels) return route.fulfill({ status: 503, json: { success: false, message: "Fixture unavailable" } });
+    const response = await route.fetch();
+    const body = await response.json();
+    body.data = body.data.map(entry => entry.id === partial.id ? { ...entry, multi_key_status: [2, 1] } : entry);
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(`${base}/admin?tab=plugins`);
+  await native.locator(`[data-native-channel="${partial.id}"] dd`).getByText("部分启用", { exact: true }).waitFor();
+  assert.equal(await native.locator("[data-native-channel]").count(), 3);
+  assert.equal(await native.locator(`[data-native-channel="${closed.id}"] dd`).innerText(), "关闭");
+  assert.equal(await native.getByText("Ark text only", { exact: true }).count(), 0);
+  await native.getByRole("link", { name: "管理渠道", exact: true }).click();
+  await page.waitForFunction(() => document.activeElement?.id === "channels");
+  assert.equal(await page.getByRole("dialog").count(), 0);
+  await page.goto(`${base}/admin?tab=plugins`);
+  failChannels = true;
+  await page.reload();
+  await native.getByRole("alert").waitFor();
+  assert.equal(await native.locator("[data-native-channel]").count(), 0);
+  failChannels = false;
+  await native.getByRole("button", { name: "重试", exact: true }).click();
+  await native.locator(`[data-native-channel="${partial.id}"] dd`).getByText("部分启用", { exact: true }).waitFor();
+  report.checks.push("native channel shortcut selects Ark once, saves only on confirmation, lists video availability, focuses channel management and retries failed reads");
   await page.locator('.task-plugins input[type="file"]').setInputFiles(path.join(project, "plugins/tasks/openai-video.js"));
   await page.locator(".task-plugins li").filter({ hasText: "openai-video" }).waitFor();
   report.checks.push("upload and list immutable plugin version");
@@ -121,7 +182,7 @@ try {
   const probe = await context.request.post(`${base}/api/channel/test/${bound.id}`);
   assert.equal((await probe.json()).data.ok, true);
   report.checks.push("bind a fixed plugin version using channel form");
-  for (const [language, theme, width] of [["zh", "light", 1440], ["en", "dark", 390], ["ar", "light", 390]]) {
+  for (const [language, theme, width] of [["zh", "light", 1440], ["en", "dark", 320], ["ar", "light", 390]]) {
     await page.evaluate(({ language, theme }) => { localStorage.setItem("xy-language", language); localStorage.setItem("xy-theme", theme); }, { language, theme });
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${base}/admin?tab=plugins`);

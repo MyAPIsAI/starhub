@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import {
@@ -12,6 +11,7 @@ import {
 import { useSettingsText } from "./settings-text";
 import "./task-plugins.css";
 import { useSessionQueryIdentity } from "../lib/system-access";
+import { ArkVideoIntegration } from "./ark-video-integration";
 
 export function TaskPlugins() {
   const identity = useSessionQueryIdentity();
@@ -43,25 +43,7 @@ function TaskPluginsView() {
           "ارفع إضافات موثوقة ثم اختر إصداراً ثابتاً للقناة في الموارد. التعطيل يمنع المهام الجديدة وتستمر المهام الحالية.",
         )}
       </p>
-      <article className="task-plugin-native">
-        <div>
-          <strong>
-            {text("豆包 Seedance", "Doubao Seedance", "Doubao Seedance")}
-          </strong>
-          <p>
-            {text(
-              "内置适配，无需上传插件。通过火山方舟渠道接入视频生成。",
-              "Built-in support. Configure a Volcengine Ark channel to generate video without uploading a plugin.",
-              "دعم مدمج. أعدّ قناة Volcengine Ark لتوليد الفيديو دون رفع إضافة.",
-            )}
-          </p>
-        </div>
-        <Button asChild>
-          <Link to="/admin?tab=resources#regions">
-            {text("配置渠道", "Configure channel", "إعداد القناة")}
-          </Link>
-        </Button>
-      </article>
+      <ArkVideoIntegration />
       <label>
         {text(
           "插件文件（JavaScript，最大 256 KB）",

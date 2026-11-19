@@ -1,7 +1,7 @@
 import { useMoneyAdjustment } from "../../lib/api/money-wallet";
 import { decimalUsdToNano, quotaMoneyNano, formatMoney } from "../../lib/money";
 import { useEffect, useState, useRef } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Users,
@@ -72,9 +72,25 @@ import {
 import { ApiError } from "../../lib/api/http";
 import { copyText } from "../../features/code-example";
 
+const newChannelForm = (type = 1): ChannelInput => ({
+  name: "",
+  key: "",
+  models: "",
+  group: "default",
+  base_url: "",
+  key_mode: "",
+  type,
+  status: 1,
+  priority: 0,
+  weight: 1,
+});
+
 export default function AdminPortal() {
   const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { hash } = useLocation();
+  const navigate = useNavigate();
+  const channelsSection = useRef<HTMLElement>(null);
   const lang = i18n.language.startsWith("zh")
     ? "zh"
     : i18n.language.startsWith("ar")
@@ -151,18 +167,29 @@ export default function AdminPortal() {
   const [channelModalOpen, setChannelModalOpen] = useState(false);
   const [pluginBusy, setPluginBusy] = useState(false);
   const [editingChannel, setEditingChannel] = useState<number | null>(null);
-  const [channelForm, setChannelForm] = useState<ChannelInput>({
-    name: "",
-    key: "",
-    models: "",
-    group: "default",
-    base_url: "",
-    key_mode: "",
-    type: 1,
-    status: 1,
-    priority: 0,
-    weight: 1,
-  });
+  const [channelForm, setChannelForm] = useState<ChannelInput>(newChannelForm);
+  useEffect(() => {
+    if (
+      tab !== "resources" ||
+      searchParams.get("create_channel") !== "ark" ||
+      !isAdmin(authRole)
+    ) return;
+    setEditingChannel(null);
+    setChannelForm(newChannelForm(32));
+    setChannelModalOpen(true);
+    // Consume the action so canceling or refreshing does not reopen the modal.
+    const next = new URLSearchParams(searchParams);
+    next.delete("create_channel");
+    navigate({ search: `?${next}`, hash }, { replace: true });
+  }, [tab, searchParams, navigate, hash, authRole]);
+  useEffect(() => {
+    if (tab !== "resources" || hash !== "#channels" || channelModalOpen) return;
+    const frame = requestAnimationFrame(() => {
+      channelsSection.current?.scrollIntoView({ block: "start" });
+      channelsSection.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [tab, hash, channelModalOpen, channelsQuery.isLoading]);
 
   const pluginUnavailable =
     channelForm.type === TASK_PLUGIN_CHANNEL_TYPE &&
@@ -1104,6 +1131,10 @@ export default function AdminPortal() {
 
             {/* Channel list from backend */}
             <section
+              id="channels"
+              ref={channelsSection}
+              tabIndex={-1}
+              aria-label={text("渠道列表", "Channels", "القنوات")}
               style={{
                 background: "var(--surface)",
                 border: "1px solid var(--border)",
@@ -1142,18 +1173,7 @@ export default function AdminPortal() {
                       variant="primary"
                       onClick={() => {
                         setEditingChannel(null);
-                        setChannelForm({
-                          name: "",
-                          key: "",
-                          models: "",
-                          group: "default",
-                          base_url: "",
-                          key_mode: "",
-                          type: 1,
-                          status: 1,
-                          priority: 0,
-                          weight: 1,
-                        });
+                        setChannelForm(newChannelForm());
                         setChannelModalOpen(true);
                       }}
                     >

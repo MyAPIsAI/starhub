@@ -22,11 +22,31 @@
   border-radius: var(--radius-md);
   background: var(--surface);
 }
-.task-plugin-native > div {
+.task-plugin-native > div:first-child {
   display: grid;
   gap: 8px;
   min-width: 0;
   flex: 1 1 240px;
+}
+.task-plugin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.task-plugin-native-channels {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.task-plugin-native-channels > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  overflow-wrap: anywhere;
+}
+.task-plugin-native-channels dd {
+  margin: 0;
+  color: var(--secondary);
 }
 .task-plugins [role="alert"] {
   color: var(--danger, #b42318);
