@@ -7,12 +7,15 @@ import { useProductPreview } from "../lib/product-preview";
 import { usePreferences } from "../lib/preferences";
 import { useServiceQuality } from "../lib/api/service-quality";
 import { usePublicIncidents } from "../lib/api/incident";
+import { IncidentList } from "../features/incident-list";
 
 export default function StatusPage() {
   const { t } = useTranslation();
   const lang = usePreferences((s) => s.language);
   const incidentsQuery = usePublicIncidents();
   const incidents = incidentsQuery.data ?? [];
+  const incidentsUnconfirmed =
+    incidentsQuery.isPending || incidentsQuery.isError;
   const upstreamOutage = useProductPreview((s) => s.demoMode.upstreamOutage);
   // Fetch real service-quality metrics (last 7 days). Degrades to
   // demo defaults when the endpoint is unavailable or has no data.
@@ -94,7 +97,9 @@ export default function StatusPage() {
             borderRadius: "var(--radius-lg)",
             background: isGlobalDegraded
               ? "var(--warning-soft)"
-              : "var(--success-soft)",
+              : incidentsUnconfirmed
+                ? "var(--subtle)"
+                : "var(--success-soft)",
             border: `1px solid ${isGlobalDegraded ? "var(--warning)" : "var(--success)"}`,
             display: "flex",
             alignItems: "center",
@@ -113,6 +118,8 @@ export default function StatusPage() {
           >
             {isGlobalDegraded ? (
               <AlertTriangle size={28} style={{ color: "var(--warning)" }} />
+            ) : incidentsUnconfirmed ? (
+              <Radio size={28} style={{ color: "var(--muted)" }} />
             ) : (
               <CheckCircle2 size={28} style={{ color: "var(--success)" }} />
             )}
@@ -124,7 +131,15 @@ export default function StatusPage() {
                   margin: "0 0 2px 0",
                 }}
               >
-                {isGlobalDegraded ? t("someDegraded") : t("allOperational")}
+                {isGlobalDegraded
+                  ? t("someDegraded")
+                  : incidentsUnconfirmed
+                    ? lang === "zh"
+                      ? "公告状态待确认"
+                      : lang === "ar"
+                        ? "حالة الإشعارات غير مؤكدة"
+                        : "Incident status unconfirmed"
+                    : t("allOperational")}
               </h1>
               <p
                 style={{
@@ -164,110 +179,25 @@ export default function StatusPage() {
         </div>
 
         {/* Active Incidents Announcement Section */}
-        {incidents.length > 0 && (
-          <section style={{ marginBottom: "var(--space-8)" }}>
-            <h2
-              style={{
-                fontSize: "var(--text-lg)",
-                fontWeight: "var(--weight-bold)",
-                marginBottom: "var(--space-3)",
-              }}
-            >
-              {t("activeIncidents")}
-            </h2>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-3)",
-              }}
-            >
-              {incidents.map((incident) => (
-                <div
-                  key={incident.id}
-                  data-incident-id={incident.id}
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: "var(--space-4)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      marginBottom: "var(--space-2)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: "var(--weight-semibold)",
-                        fontSize: "var(--text-base)",
-                      }}
-                    >
-                      {incident.title}
-                    </div>
-                    <span
-                      data-incident-status={incident.status}
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        padding: "2px 8px",
-                        borderRadius: "var(--radius-sm)",
-                        background:
-                          incident.status === "resolved"
-                            ? "var(--success-soft)"
-                            : "var(--warning-soft)",
-                        color:
-                          incident.status === "resolved"
-                            ? "var(--success)"
-                            : "var(--warning)",
-                        fontWeight: "var(--weight-medium)",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {lang === "zh"
-                        ? (
-                            {
-                              resolved: "已解决",
-                              investigating: "调查中",
-                              identified: "已定位",
-                              monitoring: "监测中",
-                            } as Record<string, string>
-                          )[incident.status] || incident.status
-                        : incident.status}
-                    </span>
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "var(--text-sm)",
-                      color: "var(--muted)",
-                      margin: "0 0 var(--space-2) 0",
-                      lineHeight: "var(--leading-base)",
-                    }}
-                  >
-                    {incident.description}
-                  </p>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    {lang === "zh"
-                      ? "更新于"
-                      : lang === "ar"
-                        ? "تحديث"
-                        : "Updated"}{" "}
-                    {new Date(incident.updated_at * 1000).toLocaleString(lang)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <section style={{ marginBottom: "var(--space-8)" }}>
+          <h2
+            style={{
+              fontSize: "var(--text-lg)",
+              fontWeight: "var(--weight-bold)",
+              marginBottom: "var(--space-3)",
+            }}
+          >
+            {t("activeIncidents")}
+          </h2>
+          <IncidentList
+            incidents={incidentsQuery.data}
+            loading={incidentsQuery.isPending}
+            error={incidentsQuery.isError}
+            refreshing={incidentsQuery.isFetching}
+            onRetry={() => void incidentsQuery.refetch()}
+            publicView
+          />
+        </section>
 
         {/* Grouped Vendor Models List */}
         <section>

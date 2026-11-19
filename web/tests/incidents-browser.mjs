@@ -121,19 +121,76 @@ try {
   assert.equal((await api("GET", "/api/incident")).length, 1);
   report.checks.push("publication waits for server success, prevents duplicate submissions and survives refresh and navigation");
 
+  const statusLabels = {
+    zh: { investigating: "调查中", identified: "已定位", monitoring: "监测中", resolved: "已解决" },
+    en: { investigating: "Investigating", identified: "Identified", monitoring: "Monitoring", resolved: "Resolved" },
+    ar: { investigating: "قيد التحقيق", identified: "تم تحديد السبب", monitoring: "قيد المراقبة", resolved: "تم الحل" },
+  };
+  for (const status of ["identified", "monitoring", "resolved"]) {
+    const entry = await api("POST", "/api/incident", {
+      title: `${status} announcement`, description: "First line.\nSecond line & workaround.", component: "OpenAI",
+    });
+    await api("PUT", `/api/incident/${entry.id}`, { status, message: "Fixture status" });
+  }
+  const records = await api("GET", "/api/incident");
   for (const [language, theme, width] of [["zh", "light", 1440], ["en", "dark", 320], ["ar", "light", 390]]) {
     await page.evaluate(({ language, theme }) => { localStorage.setItem("xy-language", language); localStorage.setItem("xy-theme", theme); }, { language, theme });
     await page.setViewportSize({ width, height: 1000 });
-    await page.reload();
-    await card().getByText(description, { exact: true }).waitFor();
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-    await page.screenshot({ path: path.join(out, `admin-${language}-${theme}-${width}.png`) });
+    for (const [view, target] of [["admin", "/admin?tab=incidents"], ["public", "/status"]]) {
+      await page.goto(base + target);
+      await card().getByText(description, { exact: true }).waitFor();
+      for (const record of records) {
+        const item = page.locator(`[data-incident-id="${record.id}"]`);
+        assert.equal(await item.locator("[data-incident-status]").innerText(), statusLabels[language][record.status]);
+        assert.equal(await item.locator("time").getAttribute("datetime"), new Date(record.updated_at * 1000).toISOString());
+        assert.ok((await item.locator("time").innerText()).endsWith(" UTC"));
+      }
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${view} ${language} page overflow`);
+      await page.screenshot({ path: path.join(out, `${view}-${language}-${theme}-${width}.png`) });
+    }
   }
-  report.checks.push("admin announcements render in three languages, both themes and narrow layouts");
+  report.checks.push("both pages localize all four statuses and show real UTC timestamps in three languages, both themes and narrow layouts");
+
+  await page.evaluate(() => { localStorage.setItem("xy-language", "zh"); localStorage.setItem("xy-theme", "light"); });
+  await page.setViewportSize({ width: 390, height: 1000 });
+  for (const [view, target, endpoint] of [["admin", "/admin?tab=incidents", "/api/incident"], ["public", "/status", "/api/status/incidents"]]) {
+    let readMode = "loading", releaseRead;
+    const readGate = new Promise((resolve) => { releaseRead = resolve; });
+    await page.route(base + endpoint, async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      if (readMode === "loading") await readGate;
+      if (readMode === "error") return route.fulfill({ status: 503, json: { success: false, message: "Fixture unavailable" } });
+      if (readMode === "empty") return route.fulfill({ json: { success: true, data: null } });
+      await route.continue();
+    });
+    await page.goto(base + target);
+    const list = page.locator(".incident-list");
+    await list.getByRole("status").getByText("正在读取公告…", { exact: true }).waitFor();
+    assert.equal(await list.locator("[data-incident-id]").count(), 0);
+    releaseRead();
+    await card().waitFor();
+    readMode = "error";
+    await page.reload();
+    await list.getByRole("alert").waitFor();
+    assert.equal(await list.locator("[data-incident-id]").count(), 0);
+    if (view === "public") await page.getByRole("heading", { name: "公告状态待确认", exact: true }).waitFor();
+    await page.screenshot({ path: path.join(out, `${view}-error.png`) });
+    readMode = "live";
+    await list.getByRole("button", { name: "重试", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await card().waitFor();
+    readMode = "empty";
+    await page.reload();
+    await list.getByRole("status").getByText("暂无公告。", { exact: true }).waitFor();
+    assert.equal(await list.getByRole("alert").count(), 0);
+    await page.screenshot({ path: path.join(out, `${view}-empty.png`) });
+    await page.unroute(base + endpoint);
+  }
+  report.checks.push("both pages distinguish loading, empty and failed reads, support keyboard retry and never show demo announcements on failure");
   const anonymous = await browser.newContext();
   const publicResponse = await anonymous.request.get(base + "/api/status/incidents");
   assert.equal(publicResponse.status(), 200);
-  assert.equal((await publicResponse.json()).data[0].id, incident.id);
+  assert.ok((await publicResponse.json()).data.some((entry) => entry.id === incident.id));
   const publicPage = await anonymous.newPage();
   publicPage.setDefaultTimeout(15000);
   publicPage.on("pageerror", (error) => report.errors.push(String(error)));
@@ -141,13 +198,13 @@ try {
   publicPage.on("request", (request) => publicRequests.push(new URL(request.url()).pathname));
   await publicPage.goto(base + "/status");
   await publicPage.locator(`[data-incident-id="${incident.id}"]`).getByText(description, { exact: true }).waitFor();
-  assert.equal(await publicPage.locator("[data-incident-id]").count(), 1);
+  assert.equal(await publicPage.locator("[data-incident-id]").count(), records.length);
   assert.equal(publicRequests.includes("/api/incident"), false);
   await publicPage.reload();
   await publicPage.locator(`[data-incident-id="${incident.id}"]`).getByText(title, { exact: true }).waitFor();
   await api("PUT", `/api/incident/${incident.id}`, { status: "resolved", message: "Fixture resolved" });
   await publicPage.reload();
-  await publicPage.locator('[data-incident-status="resolved"]').waitFor();
+  await publicPage.locator(`[data-incident-id="${incident.id}"] [data-incident-status="resolved"]`).waitFor();
   await publicPage.screenshot({ path: path.join(out, "public-anonymous.png") });
   report.checks.push("the anonymous status page reads the persisted announcement and recent resolution through the public API");
   assert.equal((await anonymous.request.get(base + "/api/incident")).status(), 401);

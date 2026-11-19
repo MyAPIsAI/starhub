@@ -1,0 +1,62 @@
+.incident-list {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.incident-list > article {
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.incident-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.incident-title {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.incident-status {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  background: var(--warning-soft);
+  color: var(--text);
+}
+.incident-status[data-incident-status="resolved"] {
+  background: var(--success-soft);
+}
+.incident-description {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--secondary);
+}
+.incident-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+}
+.incident-error {
+  padding: var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+}
+.incident-error p {
+  margin: 0 0 12px;
+}

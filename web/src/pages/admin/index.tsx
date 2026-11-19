@@ -72,6 +72,7 @@ import {
 import { ApiError } from "../../lib/api/http";
 import { copyText } from "../../features/code-example";
 import { useAdminIncidents, useCreateIncident } from "../../lib/api/incident";
+import { IncidentList } from "../../features/incident-list";
 
 const newChannelForm = (type = 1): ChannelInput => ({
   name: "",
@@ -1389,70 +1390,13 @@ export default function AdminPortal() {
               )}
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-3)",
-              }}
-            >
-              {incidentsQuery.data?.map((inc) => (
-                <div
-                  key={inc.id}
-                  data-incident-id={inc.id}
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: "var(--space-4)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: 6,
-                    }}
-                  >
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: "var(--text-base)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {inc.title}
-                    </h3>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        padding: "2px 8px",
-                        background: "var(--subtle)",
-                        borderRadius: 4,
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {inc.status}
-                    </span>
-                  </div>
-                  <p
-                    style={{
-                      margin: "0 0 8px 0",
-                      color: "var(--muted)",
-                      fontSize: "var(--text-sm)",
-                    }}
-                  >
-                    {inc.description}
-                  </p>
-                  <div
-                    className="mono"
-                    style={{ fontSize: 11, color: "var(--muted)" }}
-                  >
-                    Vendor: {inc.component || "—"} · {new Date(inc.updated_at * 1000).toLocaleString(i18n.language)}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <IncidentList
+              incidents={incidentsQuery.data}
+              loading={incidentsQuery.isPending}
+              error={incidentsQuery.isError}
+              refreshing={incidentsQuery.isFetching}
+              onRetry={() => void incidentsQuery.refetch()}
+            />
           </div>
         )}
 
