@@ -2,11 +2,36 @@ package controller
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"starhub/common"
 	"starhub/model"
 )
+
+func TestSetChannelResourceStatusValidation(t *testing.T) {
+	newTestDB(t)
+	ch := mustChannel(t, "resource toggle", "alpha,beta", "fixture-key", common.ChannelStatusEnabled)
+	invoke := func(body string) *httptest.ResponseRecorder {
+		return call(SetChannelResourceStatus, testRequest{method: "PUT", target: fmt.Sprintf("/api/channel/%d/resource-status", ch.ID), path: map[string]string{"id": fmt.Sprint(ch.ID)}, body: body})
+	}
+	for _, body := range []string{`{}`, `{"model":"alpha"}`, `{"model":"alpha","enabled":null}`, `{"model":"alpha","enabled":"false"}`, `{"model":"alpha,beta","enabled":false}`} {
+		if response := invoke(body); response.Code != http.StatusBadRequest {
+			t.Fatal(response.Body)
+		}
+	}
+	if response := invoke(`{"model":"missing","enabled":true}`); response.Code != http.StatusNotFound {
+		t.Fatal(response.Body)
+	}
+	var updated struct {
+		ResourceState model.ChannelResourceState `json:"resource_state"`
+	}
+	decodeData(t, invoke(`{"model":"alpha","enabled":false}`), &updated)
+	if updated.ResourceState.State != "partial" || updated.ResourceState.Enabled != 1 {
+		t.Fatal(updated)
+	}
+}
 
 func TestChannelResponsesIncludeResourceSummary(t *testing.T) {
 	newTestDB(t)

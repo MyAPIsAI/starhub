@@ -32,7 +32,10 @@ func rebuildAbilities(tx *gorm.DB, c *Channel) error {
 	if err := tx.Where("channel_id = ?", c.ID).Delete(&Ability{}).Error; err != nil {
 		return err
 	}
-	return addAbilities(tx, c)
+	if err := addAbilities(tx, c); err != nil {
+		return err
+	}
+	return applyChannelResourceDisables(tx, c.ID)
 }
 
 func AddAbilities(c *Channel) error {

@@ -1,10 +1,51 @@
 package model
 
 import (
+	"errors"
 	"testing"
 
 	"starhub/common"
 )
+
+func TestSetChannelResourceEnabledPersistsAndRebuilds(t *testing.T) {
+	newTestDB(t)
+	ch := addChannel(t, "single key", "default,vip", "alpha,beta", 0, 1, common.ChannelStatusEnabled)
+	other := addChannel(t, "other", "default", "other", 0, 1, common.ChannelStatusEnabled)
+	if _, err := SetChannelResourceEnabled(ch.ID, "alpha", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := GetSatisfiedChannel("default", "alpha"); !errors.Is(err, ErrNoChannel) {
+		t.Fatal("closed resource still routes", err)
+	}
+	if _, err := GetSatisfiedChannel("default", "beta"); err != nil {
+		t.Fatal("unrelated resource closed", err)
+	}
+	stored, _ := GetChannelByID(ch.ID)
+	if err := UpdateChannel(stored); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := GetSatisfiedChannel("vip", "alpha"); !errors.Is(err, ErrNoChannel) {
+		t.Fatal("ordinary edit restored disabled resource", err)
+	}
+	if _, err := SetChannelResourceEnabled(ch.ID, "missing", true); !errors.Is(err, ErrChannelResourceNotFound) {
+		t.Fatal(err)
+	}
+	if _, err := SetChannelResourcesEnabled(ch.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetChannelResourceEnabled(ch.ID, "alpha", true); !errors.Is(err, ErrChannelResourceUnavailable) {
+		t.Fatal("single enable opened closed channel", err)
+	}
+	if _, err := SetChannelResourcesEnabled(ch.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := GetSatisfiedChannel("default", "alpha"); err != nil {
+		t.Fatal("enable all did not restore model", err)
+	}
+	if selected, err := GetSatisfiedChannel("default", "other"); err != nil || selected.ID != other.ID {
+		t.Fatal("unrelated channel changed", err)
+	}
+}
 
 func TestChannelResourceStateCountsModelsInsteadOfKeys(t *testing.T) {
 	newTestDB(t)

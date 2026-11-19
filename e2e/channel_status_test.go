@@ -41,8 +41,8 @@ func TestChannelStatusRouteAuthorizationAndPersistence(t *testing.T) {
 		if err != nil || (stored.Status == common.ChannelStatusEnabled) != enabled {
 			t.Fatal("availability was not persisted")
 		}
-		if enabled && strings.Contains(stored.MultiKeyStatus, "2") {
-			t.Fatal("explicit enable did not restore disabled resources")
+		if stored.MultiKeyStatus != "2,1" {
+			t.Fatal("model resource availability changed disabled keys")
 		}
 		list := doRequest(env.base, http.MethodGet, "/api/channel", env.session, nil)
 		if list.Status != http.StatusOK || !strings.Contains(list.Body, fmt.Sprintf(`"status":%d`, stored.Status)) {

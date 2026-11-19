@@ -88,7 +88,15 @@ export interface MetricsSnapshot {
 
 // --- Types: Channels ---
 
+export interface ChannelResourceState {
+  state: "enabled" | "partial" | "closed";
+  total: number;
+  enabled: number;
+  resources: { model: string; enabled: boolean }[];
+}
+
 export interface AdminChannel {
+  resource_state?: ChannelResourceState;
   model_capabilities?: Record<string, string>;
   task_plugin_id?: number;
   id: number;

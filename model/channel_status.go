@@ -9,8 +9,7 @@ import (
 	"starhub/common"
 )
 
-// SetChannelResourcesEnabled changes only availability, using the latest stored keys.
-// Explicitly enabling a channel restores all keys, including automatically disabled keys.
+// SetChannelResourcesEnabled changes model availability without restoring disabled keys.
 func SetChannelResourcesEnabled(id int64, enabled bool) (*Channel, error) {
 	var ch Channel
 	err := mutateChannelConfiguration(func(tx *gorm.DB) error {
@@ -23,13 +22,25 @@ func SetChannelResourcesEnabled(id int64, enabled bool) (*Channel, error) {
 		ch.Status = common.ChannelStatusManuallyDisabled
 		if enabled {
 			ch.Status = common.ChannelStatusEnabled
-			ch.MultiKeyStatus = ""
 			if err := validateTaskPluginChannel(tx, &ch); err != nil {
 				return fmt.Errorf("%w: %v", ErrTaskPluginConfiguration, err)
 			}
+			states, err := readChannelResourceStates(tx, []Channel{ch})
+			if err != nil {
+				return err
+			}
+			names := make([]string, 0, states[id].Total)
+			for _, resource := range states[id].Resources {
+				names = append(names, resource.Model)
+			}
+			if len(names) > 0 {
+				if err := tx.Where("channel_id = ? AND model IN ?", id, names).Delete(&ChannelResourceDisable{}).Error; err != nil {
+					return err
+				}
+			}
 		}
 		if err := tx.Model(&Channel{}).Where("id = ?", id).Updates(map[string]any{
-			"status": ch.Status, "multi_key_status": ch.MultiKeyStatus,
+			"status": ch.Status,
 		}).Error; err != nil {
 			return err
 		}

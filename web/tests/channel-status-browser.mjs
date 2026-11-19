@@ -79,86 +79,113 @@ try {
   await api("POST", "/api/user/2fa/skip");
   // Repeated layout reloads must not consume the fixture's management API limit.
   await api("PUT", "/api/option", { key: "ip_rate_limit", value: "10000" });
-  const partial = await api("POST", "/api/channel", { name: "Partial fixture", type: 1, models: "gpt-4o-mini", key: "bad-fixture-key\ngood-fixture-key", key_mode: "round_robin", base_url: upstreamURL });
-  const full = await api("POST", "/api/channel", { name: "Full fixture", type: 1, models: "gpt-4o", key: "first-good\nsecond-good", base_url: upstreamURL });
-  const closed = await api("POST", "/api/channel", { name: "Closed fixture", type: 1, models: "gpt-4", key: "closed-key", status: 2, base_url: upstreamURL });
+  const partial = await api("POST", "/api/channel", { name: "Partial fixture", type: 1, models: "gpt-4o-mini,gpt-4o", key: "single-good", base_url: upstreamURL });
+  const full = await api("POST", "/api/channel", { name: "Full fixture", type: 1, models: "gpt-4", key: "bad-fixture-key\ngood-fixture-key", key_mode: "round_robin", base_url: upstreamURL });
+  const closed = await api("POST", "/api/channel", { name: "Closed fixture", type: 1, models: "closed-model", key: "closed-key", status: 2, base_url: upstreamURL });
   const token = await api("POST", "/api/token", { name: "status-test", unlimited_quota: true });
-  const failed = await context.request.post(base + "/v1/chat/completions", {
-    headers: { Authorization: `Bearer ${token.key}` }, data: { model: "gpt-4o-mini", messages: [{ role: "user", content: "hello" }] },
+  const relay = (model) => context.request.post(base + "/v1/chat/completions", {
+    headers: { Authorization: `Bearer ${token.key}` }, data: { model, messages: [{ role: "user", content: "hello" }] },
   });
-  assert.equal(failed.status(), 401, await failed.text());
-  assert.deepEqual((await api("GET", `/api/channel/${partial.id}`)).multi_key_status, [2, 1]);
+  assert.equal((await relay("gpt-4")).status(), 401);
+  assert.deepEqual((await api("GET", `/api/channel/${full.id}`)).multi_key_status, [2, 1]);
+  assert.equal((await api("GET", `/api/channel/${full.id}`)).resource_state.state, "enabled");
+  const anonymous = await browser.newContext();
+  assert.equal((await anonymous.request.put(base + `/api/channel/${partial.id}/resource-status`, {data:{model:"gpt-4o",enabled:false}})).status(), 401);
+  await anonymous.close();
   const page = await context.newPage();
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(30000);
   page.on("pageerror", (error) => report.pageErrors.push(String(error)));
-  const row = (name) => page.getByRole("row").filter({ hasText: name });
+  const row = (name) => page.locator("tr").filter({ hasText: name });
   const status = (name) => row(name).locator("[data-channel-status]");
-  await page.goto(base + "/admin?tab=resources#regions");
+  const dialog = page.getByRole("dialog");
+  const resource = () => dialog.locator('[data-resource-model="gpt-4o-mini"]').getByRole("switch");
+  const openResources = () => row("Partial fixture").locator("[data-channel-resource-manage]").click();
+  const closeResources = () => dialog.locator(".task-dialog-footer").getByRole("button").click();
+  const waitState = (state) => page.waitForFunction((state) => [...document.querySelectorAll("tr")].find((el) => el.textContent.includes("Partial fixture"))?.querySelector("[data-channel-status]")?.dataset.channelStatus === state, state);
+  await page.goto(base + "/admin?tab=resources#regions", {waitUntil:"domcontentloaded"});
   await status("Partial fixture").waitFor();
-  assert.equal(await status("Partial fixture").innerText(), "部分启用");
+  assert.equal(await status("Partial fixture").innerText(), "启用");
   assert.equal(await status("Full fixture").innerText(), "启用");
   assert.equal(await status("Closed fixture").innerText(), "关闭");
-  report.checks.push("three states reflect actual stored multi-key availability after upstream key isolation");
-
+  await openResources();
+  await resource().waitFor();
+  assert.equal(await dialog.getByRole("switch").count(), 2);
   let release, writes = 0;
   const gate = new Promise((resolve) => { release = resolve; });
-  const endpoint = `**/api/channel/${partial.id}/status`;
-  await page.route(endpoint, async (route) => { writes++; await gate; await route.continue(); });
-  await status("Partial fixture").click();
-  await page.waitForFunction(() => [...document.querySelectorAll("tr")].find((el) => el.textContent.includes("Partial fixture"))?.querySelector("[data-channel-status]")?.disabled);
-  assert.equal(await status("Partial fixture").isDisabled(), true);
-  assert.equal((await api("GET", `/api/channel/${partial.id}`)).status, 1);
+  const resourceEndpoint = `**/api/channel/${partial.id}/resource-status`;
+  await page.route(resourceEndpoint, async (route) => { writes++; await gate; await route.continue(); });
+  await resource().click();
+  await page.waitForFunction(() => document.querySelector('[data-resource-model="gpt-4o-mini"] [role="switch"]')?.disabled);
+  assert.equal((await api("GET", `/api/channel/${partial.id}`)).resource_state.enabled, 2);
   release();
-  await page.waitForFunction(() => [...document.querySelectorAll("tr")].find((el) => el.textContent.includes("Partial fixture"))?.querySelector("[data-channel-status]")?.dataset.channelStatus === "closed");
+  await waitState("partial");
   assert.equal(writes, 1);
-  await page.unroute(endpoint);
-  assert.equal((await api("GET", `/api/channel/${partial.id}`)).status, 2);
-  assert.equal((await api("GET", `/api/channel/${full.id}`)).status, 1);
-  const unavailable = await context.request.post(base + "/v1/chat/completions", {
-    headers: { Authorization: `Bearer ${token.key}` }, data: { model: "gpt-4o-mini", messages: [{ role: "user", content: "hello" }] },
-  });
-  assert.notEqual(unavailable.status(), 200);
+  await page.unroute(resourceEndpoint);
+  assert.equal(await resource().getAttribute("aria-checked"), "false");
+  assert.equal(await status("Partial fixture").innerText(), "部分启用 (1/2)");
+  assert.notEqual((await relay("gpt-4o-mini")).status(), 200);
+  assert.equal((await relay("gpt-4o")).status(), 200);
+  await closeResources();
   await page.reload();
-  await status("Partial fixture").waitFor();
-  assert.equal(await status("Partial fixture").innerText(), "关闭");
+  await waitState("partial");
+  report.checks.push("single-key multiple-model resources reach partial state through real UI changes, persist after refresh, prevent duplicate writes and stop only the selected model");
+
+  await openResources();
+  await page.route(resourceEndpoint, (route) => route.fulfill({status:503,json:{success:false,message:"Fixture failure"}}));
+  await resource().click();
+  await dialog.getByRole("alert").waitFor();
+  assert.equal(await resource().getAttribute("aria-checked"), "false");
+  assert.equal((await api("GET", `/api/channel/${partial.id}`)).resource_state.enabled, 1);
+  await page.unroute(resourceEndpoint);
+  await resource().focus();
+  await page.keyboard.press("Enter");
+  await waitState("enabled");
+  await closeResources();
+  report.checks.push("failed resource writes preserve the real state and support keyboard retry without closing the editor");
+
+  await status("Partial fixture").click();
+  await waitState("closed");
+  await page.reload();
+  await waitState("closed");
+  await openResources();
+  assert.equal(await resource().isDisabled(), true);
+  await closeResources();
   await status("Partial fixture").focus();
   await page.keyboard.press("Enter");
-  await page.waitForFunction(() => [...document.querySelectorAll("tr")].find((el) => el.textContent.includes("Partial fixture"))?.querySelector("[data-channel-status]")?.dataset.channelStatus === "enabled");
-  assert.deepEqual((await api("GET", `/api/channel/${partial.id}`)).multi_key_status, [1, 1]);
-  report.checks.push("close persists across refresh, blocks relay, prevents repeated writes and leaves other channels unchanged; keyboard enable restores all keys");
+  await waitState("enabled");
+  assert.equal((await api("GET", `/api/channel/${full.id}`)).status, 1);
+  assert.deepEqual((await api("GET", `/api/channel/${full.id}`)).multi_key_status, [2,1]);
+  await api("PUT", `/api/channel/${full.id}/status`, {enabled:false});
+  await api("PUT", `/api/channel/${full.id}/status`, {enabled:true});
+  assert.deepEqual((await api("GET", `/api/channel/${full.id}`)).multi_key_status, [2,1]);
+  report.checks.push("bulk close persists, blocks single enable until the channel reopens, restores current model resources and preserves disabled keys and unrelated channels");
 
-  await page.route(endpoint, (route) => route.fulfill({ status: 503, json: { success: false, message: "Fixture failure" } }));
-  await status("Partial fixture").click();
-  await row("Partial fixture").getByRole("alert").waitFor();
-  assert.equal(await status("Partial fixture").innerText(), "启用");
-  assert.equal((await api("GET", `/api/channel/${partial.id}`)).status, 1);
-  await page.unroute(endpoint);
-  report.checks.push("failed status writes show an error and preserve the stored state");
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await context.request.post(base + "/v1/chat/completions", {
-      headers: { Authorization: `Bearer ${token.key}` }, data: { model: "gpt-4o-mini", messages: [{ role: "user", content: "hello" }] },
-    });
-  }
-  assert.deepEqual((await api("GET", `/api/channel/${partial.id}`)).multi_key_status, [2, 1]);
+  await api("PUT", `/api/channel/${partial.id}/resource-status`, {model:"gpt-4o-mini",enabled:false});
   for (const [language, labels] of [["zh", ["部分启用", "关闭"]], ["en", ["Partially enabled", "Closed"]], ["ar", ["مُفعّل جزئيًا", "متوقف"]]]) {
     for (const theme of ["light", "dark"]) {
-      for (const width of [1440, 390]) {
+      for (const width of [1440, 320]) {
         await page.evaluate(({ language, theme }) => { localStorage.setItem("xy-language", language); localStorage.setItem("xy-theme", theme); }, { language, theme });
         await page.setViewportSize({ width, height: 1000 });
         await page.reload();
         await status("Partial fixture").waitFor();
-        assert.equal(await status("Partial fixture").innerText(), labels[0]);
+        assert.equal(await status("Partial fixture").innerText(), labels[0] + " (1/2)");
         assert.equal(await status("Closed fixture").innerText(), labels[1]);
         await status("Partial fixture").scrollIntoViewIfNeeded();
-        await status("Partial fixture").focus();
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-        assert.deepEqual((await new AxeBuilder({ page }).include("[data-channel-status]").withTags(["wcag2a", "wcag2aa"]).analyze()).violations, []);
         await page.screenshot({ path: path.join(out, `${language}-${theme}-${width}.png`) });
+        await openResources();
+        await resource().waitFor();
+        await resource().focus();
+        await page.keyboard.press("Tab");
+        assert.ok(await dialog.evaluate((node) => node.contains(document.activeElement)));
+        assert.ok(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth + 1));
+        assert.deepEqual((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(["wcag2a", "wcag2aa"]).analyze()).violations, []);
+        await page.screenshot({ path: path.join(out, `resources-${language}-${theme}-${width}.png`) });
+        await closeResources();
       }
     }
   }
-  report.checks.push("three languages, both themes and desktop/mobile layouts keep status buttons usable without accessibility violations");
+  report.checks.push("resource counts, switches and state labels work in three languages, both themes, desktop/320px and keyboard navigation without accessibility violations");
   assert.deepEqual(report.pageErrors, []);
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {

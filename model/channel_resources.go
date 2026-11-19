@@ -1,12 +1,18 @@
 package model
 
 import (
+	"errors"
+	"fmt"
 	"sort"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"starhub/common"
 )
+
+var ErrChannelResourceNotFound = errors.New("channel resource not found")
+var ErrChannelResourceUnavailable = errors.New("channel is closed or its publication is inactive")
 
 // ChannelResourceDisable is an operational gate, separate from publication grants.
 type ChannelResourceDisable struct {
@@ -95,4 +101,60 @@ func readChannelResourceStates(tx *gorm.DB, channels []Channel) (map[int64]Chann
 		states[ch.ID] = state
 	}
 	return states, nil
+}
+
+func SetChannelResourceEnabled(id int64, name string, enabled bool) (*Channel, error) {
+	var ch Channel
+	err := mutateChannelConfiguration(func(tx *gorm.DB) error {
+		if err := tx.First(&ch, "id = ?", id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrChannelNotFound
+			}
+			return err
+		}
+		states, err := readChannelResourceStates(tx, []Channel{ch})
+		if err != nil {
+			return err
+		}
+		found := false
+		for _, resource := range states[id].Resources {
+			found = found || resource.Model == name
+		}
+		if !found {
+			return ErrChannelResourceNotFound
+		}
+		if enabled {
+			if ch.Status != common.ChannelStatusEnabled {
+				return ErrChannelResourceUnavailable
+			}
+			var owner ResourceGatewayManagedChannel
+			err := tx.First(&owner, "channel_id = ?", id).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if err == nil && (!owner.Active || !validResourceProfile(owner.Profile)) {
+				return ErrChannelResourceUnavailable
+			}
+			if err := validateTaskPluginChannel(tx, &ch); err != nil {
+				return fmt.Errorf("%w: %v", ErrTaskPluginConfiguration, err)
+			}
+			if err := tx.Where("channel_id = ? AND model = ?", id, name).Delete(&ChannelResourceDisable{}).Error; err != nil {
+				return err
+			}
+		} else {
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&ChannelResourceDisable{ChannelID: id, Model: name}).Error; err != nil {
+				return err
+			}
+		}
+		return rebuildAbilities(tx, &ch)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ch, nil
+}
+
+func applyChannelResourceDisables(tx *gorm.DB, id int64) error {
+	return tx.Model(&Ability{}).Where("channel_id = ? AND model IN (?)", id,
+		tx.Model(&ChannelResourceDisable{}).Select("model").Where("channel_id = ?", id)).Update("enabled", false).Error
 }

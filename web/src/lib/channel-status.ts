@@ -1,13 +1,23 @@
 import type { AdminChannel } from "./api/admin";
 
 export function channelResourceStatus(
-  channel: Pick<AdminChannel, "status" | "key_count" | "multi_key_status">,
-): "enabled" | "partial" | "closed" {
-  if (channel.status !== 1) return "closed";
-  let enabled = 0;
-  for (let index = 0; index < channel.key_count; index++) {
-    if ((channel.multi_key_status?.[index] ?? 1) === 1) enabled++;
-  }
-  if (!enabled) return "closed";
-  return enabled === channel.key_count ? "enabled" : "partial";
+  channel: Pick<AdminChannel, "resource_state">,
+): "enabled" | "partial" | "closed" | undefined {
+  const value = channel.resource_state;
+  if (
+    !value ||
+    !Number.isSafeInteger(value.total) ||
+    !Number.isSafeInteger(value.enabled) ||
+    value.total < 0 ||
+    value.enabled < 0 ||
+    value.enabled > value.total
+  )
+    return undefined;
+  const state =
+    value.enabled === 0
+      ? "closed"
+      : value.enabled === value.total
+        ? "enabled"
+        : "partial";
+  return value.state === state ? state : undefined;
 }

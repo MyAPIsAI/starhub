@@ -35,9 +35,8 @@ func TestSetChannelResourcesEnabledPersistsAvailabilityOnly(t *testing.T) {
 		want.Status = common.ChannelStatusManuallyDisabled
 		if enabled {
 			want.Status = common.ChannelStatusEnabled
-			want.MultiKeyStatus = ""
-			if !reflect.DeepEqual(stored.KeyStatuses(), []int{1, 1}) {
-				t.Fatal("explicit enable did not restore all resources")
+			if !reflect.DeepEqual(stored.KeyStatuses(), []int{2, 1}) {
+				t.Fatal("model resource enable changed key health")
 			}
 		}
 		if !reflect.DeepEqual(stored, &want) {
