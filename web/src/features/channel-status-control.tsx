@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
 import type { AdminChannel } from "../lib/api/admin";
@@ -27,65 +28,48 @@ export function ChannelStatusControl({ channel }: { channel: AdminChannel }) {
         )}
       </span>
     );
-  const enabled = status === "closed";
   const color =
     status === "enabled"
       ? "success"
       : status === "partial"
         ? "warning"
         : "danger";
-  const action = enabled
-    ? text(
-        `启用渠道 ${channel.name} 的所有资源`,
-        `Enable all resources in channel ${channel.name}`,
-        `تفعيل جميع موارد القناة ${channel.name}`,
-      )
-    : text(
-        `关闭渠道 ${channel.name} 的所有资源`,
-        `Close all resources in channel ${channel.name}`,
-        `إيقاف جميع موارد القناة ${channel.name}`,
-      );
+  const label =
+    status === "enabled"
+      ? text("启用", "Enabled", "مُفعّل")
+      : status === "partial"
+        ? text("部分启用", "Partially enabled", "مُفعّل جزئيًا")
+        : text("关闭", "Closed", "متوقف");
+  const summary =
+    label +
+    (status === "partial" ? ` (${resources.enabled}/${resources.total})` : "");
+  const action = text(
+    `${summary}，管理渠道 ${channel.name} 的资源`,
+    `${summary}. Manage resources in channel ${channel.name}`,
+    `${summary}. إدارة موارد القناة ${channel.name}`,
+  );
   return (
     <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        <Button
-          size="small"
-          variant="ghost"
-          data-channel-status={status}
-          style={{
-            background: `var(--${color}-soft)`,
-            color: "var(--text)",
-            borderColor: `var(--${color})`,
-            fontWeight: 600,
-          }}
-          aria-label={action}
-          title={action}
-          loading={pending}
-          disabled={!resources.total}
-          onClick={() => mutation.mutate({ id: channel.id, enabled })}
-        >
-          {status === "enabled"
-            ? text("启用", "Enabled", "مُفعّل")
-            : status === "partial"
-              ? text("部分启用", "Partially enabled", "مُفعّل جزئيًا")
-              : text("关闭", "Closed", "متوقف")}
-          {status === "partial" && ` (${resources.enabled}/${resources.total})`}
-        </Button>
-        <Button
-          size="small"
-          variant="ghost"
-          onClick={() => setOpen(true)}
-          data-channel-resource-manage
-          disabled={pending}
-          aria-label={text(
-            `管理渠道 ${channel.name} 的资源`,
-            `Manage resources in channel ${channel.name}`,
-            `إدارة موارد القناة ${channel.name}`,
-          )}
-        >
-          {text("资源", "Resources", "الموارد")}
-        </Button>
-      </div>
+      <Button
+        size="small"
+        variant="ghost"
+        data-channel-status={status}
+        style={{
+          background: `var(--${color}-soft)`,
+          color: "var(--text)",
+          borderColor: `var(--${color})`,
+          fontWeight: 600,
+        }}
+        aria-label={action}
+        title={action}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        disabled={pending}
+        onClick={() => setOpen(true)}
+      >
+        {summary}
+        <ChevronDown size={12} aria-hidden="true" />
+      </Button>
       <Modal
         open={open}
         onOpenChange={(next) => {
@@ -97,13 +81,13 @@ export function ChannelStatusControl({ channel }: { channel: AdminChannel }) {
           `موارد القناة: ${channel.name}`,
         )}
         description={text(
-          "按模型分别启停，保存后立即生效；不改变密钥状态和投放授权。",
-          "Toggle each model immediately. Key status and publication grants stay unchanged.",
-          "فعّل كل نموذج أو أوقفه فورًا دون تغيير حالة المفاتيح أو صلاحيات النشر.",
+          "可批量或按模型分别启停，操作后立即生效。",
+          "Enable or close all resources, or toggle individual models. Changes apply immediately.",
+          "فعّل جميع الموارد أو أوقفها، أو تحكّم بكل نموذج على حدة. تُطبّق التغييرات فورًا.",
         )}
         footer={
           <Button disabled={pending} onClick={() => setOpen(false)}>
-            {text("关闭", "Close", "إغلاق")}
+            {text("完成", "Done", "تم")}
           </Button>
         }
       >
@@ -114,12 +98,32 @@ export function ChannelStatusControl({ channel }: { channel: AdminChannel }) {
             `${resources.enabled}/${resources.total} من الموارد مفعّلة`,
           )}
         </p>
+        <div
+          style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBlock: 12 }}
+        >
+          <Button
+            size="small"
+            data-channel-bulk="enable"
+            disabled={pending || !resources.total || status === "enabled"}
+            onClick={() => mutation.mutate({ id: channel.id, enabled: true })}
+          >
+            {text("全部启用", "Enable all", "تفعيل الكل")}
+          </Button>
+          <Button
+            size="small"
+            data-channel-bulk="close"
+            disabled={pending || !resources.total || channel.status !== 1}
+            onClick={() => mutation.mutate({ id: channel.id, enabled: false })}
+          >
+            {text("全部关闭", "Close all", "إيقاف الكل")}
+          </Button>
+        </div>
         {channel.status !== 1 && (
           <p>
             {text(
-              "渠道已关闭，请先在渠道列表启用全部资源。",
-              "This channel is closed. Enable all resources from the channel list first.",
-              "القناة متوقفة. فعّل جميع الموارد من قائمة القنوات أولًا.",
+              "渠道已关闭，请先点击“全部启用”。",
+              "This channel is closed. Select Enable all first.",
+              "القناة متوقفة. اختر تفعيل الكل أولًا.",
             )}
           </p>
         )}

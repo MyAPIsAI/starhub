@@ -99,8 +99,10 @@ try {
   const status = (name) => row(name).locator("[data-channel-status]");
   const dialog = page.getByRole("dialog");
   const resource = () => dialog.locator('[data-resource-model="gpt-4o-mini"]').getByRole("switch");
-  const openResources = () => row("Partial fixture").locator("[data-channel-resource-manage]").click();
+  const openResources = () => status("Partial fixture").click();
   const closeResources = () => dialog.locator(".task-dialog-footer").getByRole("button").click();
+  const enableAll = () => dialog.locator('[data-channel-bulk="enable"]');
+  const closeAll = () => dialog.locator('[data-channel-bulk="close"]');
   const waitState = (state) => page.waitForFunction((state) => [...document.querySelectorAll("tr")].find((el) => el.textContent.includes("Partial fixture"))?.querySelector("[data-channel-status]")?.dataset.channelStatus === state, state);
   await page.goto(base + "/admin?tab=resources#regions", {waitUntil:"domcontentloaded"});
   await status("Partial fixture").waitFor();
@@ -143,16 +145,18 @@ try {
   await closeResources();
   report.checks.push("failed resource writes preserve the real state and support keyboard retry without closing the editor");
 
-  await status("Partial fixture").click();
+  await openResources();
+  await closeAll().click();
   await waitState("closed");
+  await closeResources();
   await page.reload();
   await waitState("closed");
   await openResources();
   assert.equal(await resource().isDisabled(), true);
-  await closeResources();
-  await status("Partial fixture").focus();
+  await enableAll().focus();
   await page.keyboard.press("Enter");
   await waitState("enabled");
+  await closeResources();
   assert.equal((await api("GET", `/api/channel/${full.id}`)).status, 1);
   assert.deepEqual((await api("GET", `/api/channel/${full.id}`)).multi_key_status, [2,1]);
   await api("PUT", `/api/channel/${full.id}/status`, {enabled:false});
