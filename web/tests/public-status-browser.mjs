@@ -107,10 +107,14 @@ try {
   const incident = await api("POST","/api/incident",{title:"Confirmed outage notice",description:"Critical fixture",severity:"critical",component:"Other"});
   await page.reload({waitUntil:"domcontentloaded"});
   await page.waitForFunction(() => document.querySelector("[data-status-state]")?.dataset.statusState === "degraded");
+  await api("PUT",`/api/channel/${ch.id}/status`,{enabled:false});
+  await page.reload({waitUntil:"domcontentloaded"});
+  await page.waitForFunction(() => document.querySelector("[data-status-state]")?.dataset.statusState === "unavailable");
+  await api("PUT",`/api/channel/${ch.id}/status`,{enabled:true});
   await api("PUT",`/api/incident/${incident.id}`,{status:"resolved",message:"Fixture restored"});
   await page.reload({waitUntil:"domcontentloaded"});
   await page.waitForFunction(() => document.querySelector("[data-status-state]")?.dataset.statusState === "operational");
-  report.checks.push("real successful relay logs drive public health, information notices do not invent outages, and unresolved critical notices affect the banner until resolved");
+  report.checks.push("real successful relay logs drive public health, info notices do not invent outages, critical notices affect the banner until resolved and cannot downgrade a known total resource outage");
   await api("PUT","/api/channel",{id:ch.id,name:"Public fixture",key:"",models:"status-good,status-failed,status-unknown,status-closed"});
   await api("PUT",`/api/channel/${ch.id}/resource-status`,{model:"status-closed",enabled:false});
   await api("POST","/api/channel",{name:"Private fixture",type:1,key:"private-fixture-key",models:"private-fixture-model",group:"private"});
@@ -130,6 +134,46 @@ try {
   assert.ok(!(await page.locator("main").innerText()).includes("99.98%"));
   assert.ok(!requests.includes("/api/service-quality"));
   report.checks.push("real failed requests remain 0%, no samples remain null, closed resources stay visible, private models stay hidden and actual UTC daily history replaces synthetic bars");
+  await page.screenshot({path:path.join(out,"overview-zh-light-1440.png"),fullPage:true});
+  await page.evaluate(async () => {
+    const { useProductPreview } = await import("/src/lib/product-preview.ts");
+    useProductPreview.getState().demoSetUpstreamOutage(true);
+  });
+  assert.equal(await card("status-good").locator("[data-state]").getAttribute("data-state"),"operational");
+  const endpoint = "**/api/status/overview";
+  let mode = "hold", release;
+  const gate = new Promise((resolve) => {release=resolve;});
+  await page.route(endpoint,async (route) => {
+    if (mode === "hold") {await gate; return route.continue();}
+    if (mode === "error") return route.fulfill({status:503,json:{success:false,message:"Fixture status unavailable"}});
+    if (mode === "malformed") return route.fulfill({status:200,json:{success:true,data:{}}});
+    await route.continue();
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  await page.getByText("正在读取模型指标…",{exact:true}).waitFor();
+  assert.equal(await page.locator("[data-status-model]").count(),0);
+  assert.equal(await state(),"unknown");
+  release();
+  await card("status-good").waitFor();
+  mode = "error";
+  await page.reload({waitUntil:"domcontentloaded"});
+  const metricError = page.locator("[data-status-models]").getByRole("alert");
+  await metricError.waitFor();
+  assert.equal(await state(),"unknown");
+  assert.equal(await page.locator("[data-status-model]").count(),0);
+  await page.getByText("Stored info notice",{exact:true}).waitFor();
+  mode = "success";
+  await metricError.getByRole("button").focus();
+  await page.keyboard.press("Enter");
+  await card("status-good").waitFor();
+  mode = "malformed";
+  await page.reload({waitUntil:"domcontentloaded"});
+  await metricError.waitFor();
+  assert.equal(await state(),"unknown");
+  await page.unroute(endpoint);
+  await metricError.getByRole("button").click();
+  await card("status-good").waitFor();
+  report.checks.push("loading, unavailable and malformed public responses never restore demo or stale healthy cards, keep real notices independent, and recover through keyboard retry; local demo outage settings do not affect real model health");
   for (const language of ["zh","en","ar"]) for (const theme of ["light","dark"]) for (const width of [1440,320]) {
     await page.evaluate(({language,theme}) => {localStorage.setItem("xy-language",language);localStorage.setItem("xy-theme",theme);},{language,theme});
     await page.setViewportSize({width,height:1000});
@@ -140,6 +184,10 @@ try {
     await page.keyboard.press("Enter");
     await card("status-good").locator("table").waitFor();
     assert.equal(await card("status-good").locator("tbody tr").count(),90);
+    await page.keyboard.press("Tab");
+    assert.equal(await card("status-good").locator(".public-status-history").evaluate((node) => node === document.activeElement),true);
+    await page.keyboard.press("End");
+    await page.waitForFunction(() => document.activeElement?.classList.contains("public-status-history") && document.activeElement.scrollTop > 0);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     assert.deepEqual((await new AxeBuilder({page}).include("main").withTags(["wcag2a","wcag2aa"]).analyze()).violations,[]);
     await page.screenshot({path:path.join(out,`${language}-${theme}-${width}.png`)});

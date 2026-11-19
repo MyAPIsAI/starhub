@@ -36,7 +36,7 @@ type ResourceGatewayRoute struct {
 func resourceGatewayAbilityCondition(alias string) string {
 	return fmt.Sprintf(`(NOT EXISTS (
 		SELECT 1 FROM channel_resource_disables crd WHERE crd.channel_id = %[1]s.channel_id AND crd.model = %[1]s.model
-	) AND %s)`, alias, resourceGatewayGrantCondition(alias))
+	) AND %[2]s)`, alias, resourceGatewayGrantCondition(alias))
 }
 
 // resourceGatewayGrantCondition keeps published resources visible when operationally closed.

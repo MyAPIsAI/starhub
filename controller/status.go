@@ -12,7 +12,7 @@ import (
 )
 
 // PublicStatusHandler handles GET /api/status (public, no auth).
-// Returns the resource provider mode and whether the system is operational.
+// Returns deployment metadata; request observations are exposed by the overview.
 func PublicStatusHandler(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, map[string]any{
 		"resource_provider_mode": setting.ResourceProviderModeValue(),

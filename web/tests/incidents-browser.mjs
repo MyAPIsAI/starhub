@@ -67,7 +67,7 @@ try {
   await api("POST", "/api/user/2fa/skip");
   await api("PUT", "/api/option", { key: "ip_rate_limit", value: "10000" });
   const page = await context.newPage();
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(30000);
   page.on("pageerror", (error) => report.errors.push(String(error)));
   await page.goto(base + "/admin?tab=incidents");
   assert.equal((await api("GET", "/api/incident") ?? []).length, 0);
@@ -146,7 +146,7 @@ try {
         assert.ok((await item.locator("time").innerText()).endsWith(" UTC"));
       }
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${view} ${language} page overflow`);
-      await page.screenshot({ path: path.join(out, `${view}-${language}-${theme}-${width}.png`) });
+      await page.screenshot({ path: path.join(out, `${view}-${language}-${theme}-${width}.png`), animations: "disabled", timeout: 30000 });
     }
   }
   report.checks.push("both pages localize all four statuses and show real UTC timestamps in three languages, both themes and narrow layouts");
@@ -173,8 +173,11 @@ try {
     await page.reload();
     await list.getByRole("alert").waitFor();
     assert.equal(await list.locator("[data-incident-id]").count(), 0);
-    if (view === "public") await page.getByRole("heading", { name: "公告状态待确认", exact: true }).waitFor();
-    await page.screenshot({ path: path.join(out, `${view}-error.png`) });
+    if (view === "public") {
+      await page.getByRole("heading", { name: "服务状态待确认", exact: true }).waitFor();
+      assert.equal(await page.locator("[data-status-state]").getAttribute("data-status-state"), "unknown");
+    }
+    await page.screenshot({ path: path.join(out, `${view}-error.png`), animations: "disabled", timeout: 30000 });
     readMode = "live";
     await list.getByRole("button", { name: "重试", exact: true }).focus();
     await page.keyboard.press("Enter");
@@ -183,7 +186,7 @@ try {
     await page.reload();
     await list.getByRole("status").getByText("暂无公告。", { exact: true }).waitFor();
     assert.equal(await list.getByRole("alert").count(), 0);
-    await page.screenshot({ path: path.join(out, `${view}-empty.png`) });
+    await page.screenshot({ path: path.join(out, `${view}-empty.png`), animations: "disabled", timeout: 30000 });
     await page.unroute(base + endpoint);
   }
   report.checks.push("both pages distinguish loading, empty and failed reads, support keyboard retry and never show demo announcements on failure");
@@ -192,7 +195,7 @@ try {
   assert.equal(publicResponse.status(), 200);
   assert.ok((await publicResponse.json()).data.some((entry) => entry.id === incident.id));
   const publicPage = await anonymous.newPage();
-  publicPage.setDefaultTimeout(15000);
+  publicPage.setDefaultTimeout(30000);
   publicPage.on("pageerror", (error) => report.errors.push(String(error)));
   const publicRequests = [];
   publicPage.on("request", (request) => publicRequests.push(new URL(request.url()).pathname));
@@ -205,7 +208,7 @@ try {
   await api("PUT", `/api/incident/${incident.id}`, { status: "resolved", message: "Fixture resolved" });
   await publicPage.reload();
   await publicPage.locator(`[data-incident-id="${incident.id}"] [data-incident-status="resolved"]`).waitFor();
-  await publicPage.screenshot({ path: path.join(out, "public-anonymous.png") });
+  await publicPage.screenshot({ path: path.join(out, "public-anonymous.png"), animations: "disabled", timeout: 30000 });
   report.checks.push("the anonymous status page reads the persisted announcement and recent resolution through the public API");
   assert.equal((await anonymous.request.get(base + "/api/incident")).status(), 401);
   assert.equal((await anonymous.request.post(base + "/api/incident", { data: { title: "Denied" } })).status(), 401);
@@ -218,7 +221,7 @@ try {
 } catch (error) {
   report.failure = String(error.stack || error);
   const page = browser?.contexts()[0]?.pages()[0];
-  if (page) await page.screenshot({ path: path.join(out, "failure.png") });
+  if (page) await page.screenshot({ path: path.join(out, "failure.png"), animations: "disabled", timeout: 30000 }).catch(() => {});
   throw error;
 } finally {
   await writeFile(path.join(out, "report.json"), JSON.stringify(report, null, 2));

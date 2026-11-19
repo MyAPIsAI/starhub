@@ -34,9 +34,8 @@ export default function StatusPage() {
         notice.status !== "resolved" &&
         ["warning", "critical", "maintenance"].includes(notice.severity),
     );
-  let state: PublicServiceState = incidentImpact
-    ? "degraded"
-    : (view?.state ?? "unknown");
+  let state: PublicServiceState = view?.state ?? "unknown";
+  if (incidentImpact && state !== "unavailable") state = "degraded";
   const unconfirmed =
     query.isPending || query.isError || notices.isPending || notices.isError;
   if (unconfirmed && state === "operational") state = "unknown";

@@ -72,3 +72,46 @@ func TestPublicStatusCatalogKeepsOnlyValidManagedGrants(t *testing.T) {
 		t.Fatalf("revoked grants remained public: %+v %v", view, err)
 	}
 }
+
+func TestPublicStatusCatalogMetadataRegionAndMultipleGroups(t *testing.T) {
+	newTestDB(t)
+	setting.ResetAllToDefaults()
+	t.Cleanup(setting.ResetAllToDefaults)
+	if err := SeedOptions(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SaveOption(setting.OptionKeyGroupRatio, `{"default":1,"vip":1}`, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := LoadOptionsToSettings(); err != nil {
+		t.Fatal(err)
+	}
+	ch := addChannel(t, "multiple groups", "default,vip", "alpha,beta,gamma", 0, 1, 1)
+	for _, meta := range []ModelMeta{{Model: "alpha", Vendor: "actual", VendorDisplay: "Configured vendor"}, {Model: "beta", CompatibleGroups: "private"}} {
+		if err := UpsertModelMeta(&meta); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := DB.Create(&Log{ChannelID: ch.ID, Model: "alpha", Status: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	view, err := ReadPublicStatusOverview(t.Context())
+	if err != nil || len(view.Models) != 2 || view.Models[0].VendorDisplay != "Configured vendor" || view.Models[0].Recent.TotalRequests != 1 {
+		t.Fatalf("duplicate grants or metadata: %+v %v", view, err)
+	}
+	profile := RegionProfile{ID: "status-region", Name: "Status region", Enabled: true, Timezone: "UTC", FeatureFlags: "{}", AllowedModels: "alpha"}
+	if err := DB.Create(&profile).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STARHUB_REGION_PROFILE", profile.ID)
+	view, err = ReadPublicStatusOverview(t.Context())
+	if err != nil || len(view.Models) != 1 || view.Models[0].ID != "alpha" || view.State != "operational" {
+		t.Fatalf("region projection: %+v %v", view, err)
+	}
+	if err := DB.Model(&RegionProfile{}).Where("id = ?", profile.ID).Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadPublicStatusOverview(t.Context()); err == nil {
+		t.Fatal("disabled region fell back to a public catalog")
+	}
+}
