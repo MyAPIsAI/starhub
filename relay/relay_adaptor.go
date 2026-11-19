@@ -7,6 +7,7 @@ import (
 	"starhub/relay/channel/ark"
 	"starhub/relay/channel/aws"
 	"starhub/relay/channel/claude"
+	"starhub/relay/channel/compatible"
 	"starhub/relay/channel/gemini"
 	"starhub/relay/channel/openai"
 )
@@ -15,6 +16,9 @@ import (
 // provider means adding one case here (P3.1: the registry is the only
 // place provider packages are wired together).
 func GetChatAdaptor(channelType int) (channel.ChatAdaptor, error) {
+	if adaptor, ok := compatible.ForType(channelType); ok {
+		return adaptor, nil
+	}
 	switch channelType {
 	case channel.ChannelTypeOpenAI:
 		return openai.New(), nil
@@ -45,6 +49,9 @@ func GetTaskAdaptor(channelType int) (channel.TaskAdaptor, error) {
 
 // ChannelTypeName returns the human-readable name of a channel type.
 func ChannelTypeName(channelType int) string {
+	if adaptor, ok := compatible.ForType(channelType); ok {
+		return adaptor.Name()
+	}
 	switch channelType {
 	case channel.ChannelTypeOpenAI:
 		return "openai"
@@ -73,5 +80,8 @@ func SupportedChannelTypes() map[int]string {
 		channel.ChannelTypeClaude:     ChannelTypeName(channel.ChannelTypeClaude),
 		channel.ChannelTypeGemini:     ChannelTypeName(channel.ChannelTypeGemini),
 		channel.ChannelTypeAWS:        ChannelTypeName(channel.ChannelTypeAWS),
+		channel.ChannelTypeZhipu:      ChannelTypeName(channel.ChannelTypeZhipu),
+		channel.ChannelTypeMoonshot:   ChannelTypeName(channel.ChannelTypeMoonshot),
+		channel.ChannelTypeDeepSeek:   ChannelTypeName(channel.ChannelTypeDeepSeek),
 	}
 }

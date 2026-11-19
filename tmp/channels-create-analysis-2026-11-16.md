@@ -351,3 +351,33 @@ Claude、Gemini、AWS Bedrock 与视频任务插件的目录、认证和返回�
 使用临时数据库与随机端口启动新发布程序，确认健康检查及嵌入页面返回 200、静态资源包含“获取上游模型”功能、新接口对匿名请求返回 401。启动验证未使用业务数据库或真实上游密钥，测试进程已结束。Vite 开发服务已恢复，`http://127.0.0.1:5173/` 返回 200；现有业务后端未替换。
 
 今后保持 Vite 运行时构建，可执行 `node scripts/build-release.mjs --stop-dev-server`，构建后在 `web` 目录执行 `npm run dev` 恢复开发。也可先在开发终端按 `Ctrl+C`，再执行原构建命令。
+
+## 十一、智谱、Kimi、DeepSeek 渠道类型缺失分析与分项修复（2026-11-19）
+
+### 1. 当前问题与原因
+
+已查看 `D:/Workspace/Talen/cc2.png` 红框。`admin?tab=resources#regions` 的新建/编辑渠道共用表单，目前类型写死为 OpenAI、火山方舟、Claude、AWS Bedrock、Gemini、视频任务插件六项。后端 `relay/channel/adapter.go`、`relay/relay_adaptor.go` 同样仅注册这些类型，`controller/channel.go` 创建和修改都会校验类型，因此仅增加前端选项会被后端拒绝。`controller/channel_models.go` 和前端 `channel-model-discovery.tsx` 的模型发现也只放行 OpenAI、方舟和任务插件。另一个关联限制是 `model/resource_gateway_advanced.go` 的 `resourceNativeProtocol()`，新增兼容渠道若未登记 OpenAI 协议，会在资源发布和路由策略检查时被拒绝，不能把“渠道已保存”视为已经可投放。
+
+三家均有 OpenAI 兼容的对话接口，可以复用现有认证、消息和 SSE 处理，但地址与能力要按厂商区分：智谱的 API 前缀为 `https://open.bigmodel.cn/api/paas/v4`，Kimi 为 `https://api.moonshot.cn/v1`，DeepSeek 为 `https://api.deepseek.com`。现有 OpenAI 适配器固定追加 `/v1/chat/completions`，不能直接用于智谱；也不能让新类型的空地址回退到 OpenAI 官方服务。需要为三家提供独立且稳定的类型及默认地址，支持自定义上游，避免 API 前缀重复拼接。保留旧类型、旧渠道及用户手填地址和模型，不自动转换已有记录，无需数据库迁移。
+
+本轮核对的官方依据：[智谱兼容接口](https://docs.bigmodel.cn/cn/guide/develop/openai/introduction)、[Kimi 快速开始](https://platform.kimi.com/docs/get-api-key)、[Kimi 流式输出](https://platform.kimi.com/docs/guide/utilize-the-streaming-output-feature-of-kimi-api)、[DeepSeek 对话接口](https://api-docs.deepseek.com/api/create-chat-completion/)、[DeepSeek 模型目录](https://api-docs.deepseek.com/api/list-models/)。模型名称及能力随上游变化，前端不以静态示例代替真实目录或保证模型可用。能读取兼容目录的类型接入获取逻辑；未确认或不提供目录的类型保留手动输入和明确说明，不伪造成功目录。缓存命中字段与推理字段需验证，避免兼容 JSON 后漏算缓存计价或丢失原生推理信息。
+
+### 2. 精简实现顺序
+
+每项完成并验证后单独提交到本地，P27 文档保留原有修改且不纳入提交。
+
+| 顺序 | 实施内容 | 验收重点 |
+| --- | --- | --- |
+| 1 | 后端增加三家稳定类型、注册名称和精简兼容适配器，复用 OpenAI 请求/响应处理并区分默认地址和接口前缀 | 创建/编辑接受新类型；默认与自定义地址正确；普通和流式对话可用；不把未适配的图片、音频、视频等端点作为通用能力开放 |
+| 2 | 接通模型发现及资源发布协议识别 | 查询和推理采用同一地址规则；凭证复用继续按类型/地址隔离；错误保留手填；发布后能按准确模型和分组选择新类型渠道 |
+| 3 | 前端增加智谱（GLM）、Kimi（Moonshot）、DeepSeek，集中维护选项、默认地址提示和发现支持范围 | 三语及窄屏可用；切换类型保留手填内容；创建、刷新、编辑回显一致 |
+| 4 | 补齐完整链路、缓存用量和原生推理字段验证，修复验证发现的实际问题 | 本地模拟上游覆盖非流式/SSE、用量、发布路由和异常；Go build/vet/test、前端构建和浏览器检查通过 |
+
+所有自动化验证使用本地模拟上游和隔离数据库，不调用真实供应商、不消费真实额度。原生 OpenAI 格式透传应保留供应商扩展字段；跨协议转换的能力按既有 IR 范围处理，不借本次渠道选项扩展全部多模态或供应商专用 API。现有前端交接文件包含历史演示边界，与当前已接入 Go 后端的代码不同，本轮以实际注册和控制器为准。
+
+### 3. 实施记录
+
+- 第 1 项：已增加 Moonshot=24、智谱=26、DeepSeek=45 类型及注册，复用 OpenAI 处理并集中配置默认地址与 API 前缀。智谱保留其默认末块用量行为，Kimi/DeepSeek 沿用流式用量请求；首批只开放对话，其他未适配端点明确拒绝。`go test ./relay ./controller -run TestCompatible -count=1` 通过，覆盖默认/自定义/已有前缀地址、认证、扩展字段、流式参数及创建/编辑密钥保留。
+- 第 2 项：待实施。
+- 第 3 项：待实施。
+- 第 4 项：待实施。

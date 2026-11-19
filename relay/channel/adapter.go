@@ -18,8 +18,11 @@ const (
 	ChannelTypeOpenAI     = 1
 	ChannelTypeClaude     = 14
 	ChannelTypeAWS        = 15
+	ChannelTypeMoonshot   = 24
 	ChannelTypeGemini     = 25
+	ChannelTypeZhipu      = 26
 	ChannelTypeArk        = 32
+	ChannelTypeDeepSeek   = 45
 	ChannelTypeTaskPlugin = 61
 )
 
