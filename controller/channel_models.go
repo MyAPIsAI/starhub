@@ -11,6 +11,7 @@ import (
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
+	"starhub/relay/channel/compatible"
 	"starhub/service"
 )
 
@@ -48,7 +49,8 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 			input.Type = saved.Type
 		}
 	}
-	if input.Type != channel.ChannelTypeOpenAI && input.Type != channel.ChannelTypeTaskPlugin && input.Type != channel.ChannelTypeArk {
+	provider, isCompatible := compatible.ForType(input.Type)
+	if input.Type != channel.ChannelTypeOpenAI && input.Type != channel.ChannelTypeTaskPlugin && input.Type != channel.ChannelTypeArk && !(isCompatible && provider.HasModelCatalog()) {
 		common.ApiError(w, http.StatusBadRequest, "models_channel_type_unsupported")
 		return
 	}
@@ -62,6 +64,14 @@ func FetchChannelModels(w http.ResponseWriter, r *http.Request) {
 	auth := "bearer"
 	normalizeBase := service.NormalizeChannelModelsBaseURL
 	fetchModels := service.FetchChannelModelsWithAuth
+	if isCompatible {
+		normalizeBase = func(raw string) (string, error) {
+			return service.NormalizeCompatibleModelsBaseURL(input.Type, raw)
+		}
+		fetchModels = func(ctx context.Context, base, key, auth string) ([]string, error) {
+			return service.FetchCompatibleChannelModels(ctx, input.Type, base, key, auth)
+		}
+	}
 	if input.Type == channel.ChannelTypeArk {
 		normalizeBase = service.NormalizeArkModelsBaseURL
 		fetchModels = service.FetchArkChannelModels

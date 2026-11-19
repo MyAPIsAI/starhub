@@ -2,8 +2,41 @@ package model
 
 import (
 	"context"
+	"strconv"
 	"testing"
+
+	"starhub/relay/channel"
 )
+
+func TestCompatibleProviderResourcePublication(t *testing.T) {
+	for _, typeID := range []int{channel.ChannelTypeZhipu, channel.ChannelTypeMoonshot, channel.ChannelTypeDeepSeek} {
+		t.Run(strconv.Itoa(typeID), func(t *testing.T) {
+			ch, _, bindings := publicationFixture(t)
+			ch.Type = typeID
+			if err := UpdateChannel(ch); err != nil {
+				t.Fatal(err)
+			}
+			plan := publicationPlan(t, bindings)
+			if !plan.Ready || plan.Profile != ResourceGatewayAdvancedProfile {
+				t.Fatalf("type %d preview: %+v", typeID, plan)
+			}
+			ctx := context.Background()
+			if _, err := PublishResourceGateway(ctx, publicationExpected(&plan.ResourcePublicationContext), bindings, plan.ReviewDigest, 7); err != nil {
+				t.Fatal(err)
+			}
+			policy, managed, err := ReadResourceGatewayPolicy(ctx, ch.ID, "default", "alpha")
+			if err != nil || !managed || policy == nil || !policy.Allows("/v1/chat/completions", nil, 1, 1) || policy.UpstreamModel() != "alpha" {
+				t.Fatalf("type %d policy: %+v %v", typeID, policy, err)
+			}
+			if _, err := GetSatisfiedChannel("default", "alpha"); err != nil {
+				t.Fatal(err)
+			}
+			if other, _, err := ReadResourceGatewayPolicy(ctx, ch.ID, "vip", "alpha"); err != nil || other != nil {
+				t.Fatal("publication crossed group boundary", err)
+			}
+		})
+	}
+}
 
 func TestAdvancedPublicationKeepsAliasPolicyAndRejectsConflictingTargets(t *testing.T) {
 	ch, _, bindings := publicationFixture(t)

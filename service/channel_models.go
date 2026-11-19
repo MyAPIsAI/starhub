@@ -14,6 +14,7 @@ import (
 
 	"starhub/pkg/taskplugin"
 	"starhub/relay/channel/ark"
+	"starhub/relay/channel/compatible"
 )
 
 // ChannelModelsError contains only controlled, credential-free API messages.
@@ -70,6 +71,23 @@ func FetchChannelModelsWithAuth(ctx context.Context, baseURL, key, auth string) 
 		return nil, err
 	}
 	return fetchChannelModels(ctx, base+"/v1/models", key, auth)
+}
+
+// NormalizeCompatibleModelsBaseURL shares the provider's inference prefix.
+func NormalizeCompatibleModelsBaseURL(channelType int, raw string) (string, error) {
+	adaptor, ok := compatible.ForType(channelType)
+	if !ok || !adaptor.HasModelCatalog() {
+		return "", &ChannelModelsError{Status: http.StatusBadRequest, Code: "models_channel_type_unsupported"}
+	}
+	return NormalizeTaskPluginModelsBaseURL(adaptor.APIBaseURL(raw))
+}
+
+func FetchCompatibleChannelModels(ctx context.Context, channelType int, baseURL, key, auth string) ([]string, error) {
+	base, err := NormalizeCompatibleModelsBaseURL(channelType, baseURL)
+	if err != nil {
+		return nil, err
+	}
+	return fetchChannelModels(ctx, base+"/models", key, auth)
 }
 
 // NormalizeArkModelsBaseURL uses the same API prefix as inference requests.

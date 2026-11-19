@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"regexp"
 	"slices"
+
+	"starhub/relay/channel"
 )
 
 const ResourceGatewayAdvancedProfile = "exact_resource_policy_v2"
@@ -13,7 +15,7 @@ var resourceAdvancedCapabilities = []string{"text", "code", "vision", "reasoning
 // A protocol declares the provider wire format, not a grant to every endpoint.
 func resourceNativeProtocol(channelType int) string {
 	switch channelType {
-	case 1:
+	case channel.ChannelTypeOpenAI, channel.ChannelTypeZhipu, channel.ChannelTypeMoonshot, channel.ChannelTypeDeepSeek:
 		return "OpenAI"
 	case 14:
 		return "Anthropic"

@@ -42,7 +42,7 @@ func resourceGatewayAbilityCondition(alias string) string {
 		WHERE rgm.channel_id = %[1]s.channel_id AND rgm.active = TRUE
 		AND ((rgm.profile = 'openai_text_exact_v1' AND rgr.upstream_model = '' AND rgr.capabilities IN ('["text"]', '["code"]', '["code","text"]')) OR (rgm.profile = 'exact_resource_policy_v2' AND `+resourceAdvancedSQL("rgr")+`))
 		AND rgr.context_length BETWEEN 0 AND 9007199254740991
-		AND EXISTS (SELECT 1 FROM channels rgc WHERE rgc.id = rgm.channel_id AND ((rgm.profile = 'openai_text_exact_v1' AND rgc.type = 1) OR (rgm.profile = 'exact_resource_policy_v2' AND ((rgc.type = 1 AND rgr.protocols = '["OpenAI"]') OR (rgc.type = 14 AND rgr.protocols = '["Anthropic"]') OR (rgc.type = 25 AND rgr.protocols = '["Gemini"]')))))
+		AND EXISTS (SELECT 1 FROM channels rgc WHERE rgc.id = rgm.channel_id AND ((rgm.profile = 'openai_text_exact_v1' AND rgc.type = 1) OR (rgm.profile = 'exact_resource_policy_v2' AND ((rgc.type IN (1,24,26,45) AND rgr.protocols = '["OpenAI"]') OR (rgc.type = 14 AND rgr.protocols = '["Anthropic"]') OR (rgc.type = 25 AND rgr.protocols = '["Gemini"]')))))
 		AND `+resourceGatewayGroupCondition("rgr")+`
 		AND rgr.model = %[1]s.model AND rgr."group" = %[1]s."group"
 	))`, alias)
