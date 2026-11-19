@@ -71,6 +71,7 @@ import {
 } from "../../lib/api/task-plugin";
 import { ApiError } from "../../lib/api/http";
 import { copyText } from "../../features/code-example";
+import { useAdminIncidents, useCreateIncident } from "../../lib/api/incident";
 
 const newChannelForm = (type = 1): ChannelInput => ({
   name: "",
@@ -162,6 +163,8 @@ export default function AdminPortal() {
   const redemptionsQuery = useRedemptions();
   const createRedemptionMut = useCreateRedemption();
   const deleteRedemptionMut = useDeleteRedemption();
+  const incidentsQuery = useAdminIncidents(tab === "incidents");
+  const createIncidentMut = useCreateIncident();
 
   // Channel create/edit modal state.
   const [channelModalOpen, setChannelModalOpen] = useState(false);
@@ -201,18 +204,6 @@ export default function AdminPortal() {
   const [redeemQuota, setRedeemQuota] = useState("10");
   const [redeemCount, setRedeemCount] = useState("1");
   const [redeemNotice, setRedeemNotice] = useState("");
-
-  // Incidents have no backend endpoint — keep as local state.
-  const [incidents, setIncidents] = useState<
-    {
-      id: string;
-      title: { en: string; zh: string; ar: string };
-      impactedVendor: string;
-      status: string;
-      updatedAt: string;
-      content: { en: string; zh: string; ar: string };
-    }[]
-  >([]);
 
   // Top-up modal state — targets a specific user.
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -331,21 +322,17 @@ export default function AdminPortal() {
 
   const handlePublishIncidentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!incTitle || !incContent) return;
-    setIncidents((prev) => [
+    if (!incTitle.trim() || !incContent.trim() || createIncidentMut.isPending || !isAdmin(authRole)) return;
+    createIncidentMut.mutate(
+      { title: incTitle.trim(), description: incContent.trim(), component: incVendor },
       {
-        id: `inc_${Date.now()}`,
-        title: { en: incTitle, zh: incTitle, ar: incTitle },
-        impactedVendor: incVendor,
-        status: "investigating",
-        updatedAt: text("刚刚", "Just now", "الآن"),
-        content: { en: incContent, zh: incContent, ar: incContent },
+        onSuccess: () => {
+          setIncidentOpen(false);
+          setIncTitle("");
+          setIncContent("");
+        },
       },
-      ...prev,
-    ]);
-    setIncidentOpen(false);
-    setIncTitle("");
-    setIncContent("");
+    );
   };
 
   return (
@@ -1392,7 +1379,10 @@ export default function AdminPortal() {
               </div>
 
               {isAdmin(authRole) && (
-                <Button variant="primary" onClick={() => setIncidentOpen(true)}>
+                <Button variant="primary" onClick={() => {
+                  createIncidentMut.reset();
+                  setIncidentOpen(true);
+                }}>
                   <Plus size={15} style={{ marginInlineEnd: 4 }} />
                   {t("publishIncident")}
                 </Button>
@@ -1406,9 +1396,10 @@ export default function AdminPortal() {
                 gap: "var(--space-3)",
               }}
             >
-              {incidents.map((inc) => (
+              {incidentsQuery.data?.map((inc) => (
                 <div
                   key={inc.id}
+                  data-incident-id={inc.id}
                   style={{
                     background: "var(--surface)",
                     border: "1px solid var(--border)",
@@ -1430,7 +1421,7 @@ export default function AdminPortal() {
                         fontWeight: 600,
                       }}
                     >
-                      {inc.title[lang] || inc.title.en}
+                      {inc.title}
                     </h3>
                     <span
                       style={{
@@ -1451,13 +1442,13 @@ export default function AdminPortal() {
                       fontSize: "var(--text-sm)",
                     }}
                   >
-                    {inc.content[lang] || inc.content.en}
+                    {inc.description}
                   </p>
                   <div
                     className="mono"
                     style={{ fontSize: 11, color: "var(--muted)" }}
                   >
-                    Vendor: {inc.impactedVendor} · {inc.updatedAt}
+                    Vendor: {inc.component || "—"} · {new Date(inc.updated_at * 1000).toLocaleString(i18n.language)}
                   </div>
                 </div>
               ))}
@@ -2059,7 +2050,9 @@ export default function AdminPortal() {
         size="default"
         preventOutsideClose
         open={incidentOpen}
-        onOpenChange={setIncidentOpen}
+        onOpenChange={(open) => {
+          if (!createIncidentMut.isPending) setIncidentOpen(open);
+        }}
         title={t("publishIncident")}
         description={text(
           "向公开服务状态页发布服务异常公告。",
@@ -2068,10 +2061,10 @@ export default function AdminPortal() {
         )}
         footer={
           <>
-            <Button onClick={() => setIncidentOpen(false)}>
+            <Button disabled={createIncidentMut.isPending} onClick={() => setIncidentOpen(false)}>
               {t("cancel")}
             </Button>
-            <Button variant="primary" type="submit" form="admin-incident-form">
+            <Button variant="primary" type="submit" form="admin-incident-form" loading={createIncidentMut.isPending}>
               {text(
                 "发布事件公告",
                 "Publish incident announcement",
@@ -2090,6 +2083,15 @@ export default function AdminPortal() {
             gap: "var(--space-4)",
           }}
         >
+          {createIncidentMut.isError && (
+            <p role="alert" style={{ color: "var(--danger)" }}>
+              {text(
+                "公告发布失败，请核对后重试。",
+                "Publishing failed. Check your notice and retry.",
+                "تعذر نشر الإشعار. راجع البيانات وأعد المحاولة.",
+              )}
+            </p>
+          )}
           <div>
             <label
               htmlFor="admin-incident-title"
@@ -2104,6 +2106,7 @@ export default function AdminPortal() {
             </label>
             <Input
               id="admin-incident-title"
+              disabled={createIncidentMut.isPending}
               type="text"
               value={incTitle}
               onChange={(e) => setIncTitle(e.target.value)}
@@ -2130,6 +2133,7 @@ export default function AdminPortal() {
             </label>
             <select
               id="admin-incident-vendor"
+              disabled={createIncidentMut.isPending}
               value={incVendor}
               onChange={(e) => setIncVendor(e.target.value)}
               className="select-trigger"
@@ -2161,6 +2165,7 @@ export default function AdminPortal() {
             </label>
             <textarea
               id="admin-incident-content"
+              disabled={createIncidentMut.isPending}
               value={incContent}
               onChange={(e) => setIncContent(e.target.value)}
               placeholder={text(
