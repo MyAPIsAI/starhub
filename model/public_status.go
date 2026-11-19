@@ -51,7 +51,10 @@ type publicStatusScope struct {
 }
 
 func ReadPublicStatusOverview(ctx context.Context) (*PublicStatusOverview, error) {
-	view, _, err := readPublicStatusCatalog(ctx, time.Now().UTC())
+	view, scope, err := readPublicStatusCatalog(ctx, time.Now().UTC())
+	if err == nil {
+		err = populatePublicStatusMetrics(ctx, view, scope)
+	}
 	return view, err
 }
 
