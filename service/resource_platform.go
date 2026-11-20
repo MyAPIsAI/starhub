@@ -81,7 +81,45 @@ func NotifyResourceCatalogOnce(ctx context.Context) error {
 	return model.DB.Model(&model.PlatformCatalogRecord{}).Where("revision <= ?", catalog.Revision).Update("notified", true).Error
 }
 
+// probeResourcePlatformConnectivity performs a one-time startup connectivity
+// check against the configured resource platform. It helps deployers discover
+// network, TLS or configuration issues before traffic flows. The probe is
+// best-effort: failures are logged as warnings and do not block startup.
+func probeResourcePlatformConnectivity() {
+	base := strings.TrimRight(os.Getenv("RESOURCE_CATALOG_NOTIFY_URL"), "/")
+	if base == "" {
+		return
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		log.Printf("WARNING: resource platform URL is invalid; integration will fail: %s", base)
+		return
+	}
+	probeURL := base + "/api/channel/catalog/version"
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, probeURL, nil)
+	if err != nil {
+		log.Printf("WARNING: resource platform probe request could not be built: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("METRIC_AUTHORIZATION"))
+	req.Header.Set("X-Protection-Node", os.Getenv("NODE_NAME"))
+	probeClient := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := probeClient.Do(req)
+	if err != nil {
+		log.Printf("WARNING: resource platform unreachable at startup; integration will retry in background: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("WARNING: resource platform probe returned HTTP %d; verify METRIC_AUTHORIZATION and service credentials", resp.StatusCode)
+		return
+	}
+	log.Printf("resource platform: connectivity probe succeeded (%s)", base)
+}
+
 func RunResourcePlatform(ctx context.Context) {
+	probeResourcePlatformConnectivity()
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	wasStale := false
