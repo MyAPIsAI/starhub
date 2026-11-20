@@ -31,6 +31,7 @@ func main() {
 	} else {
 		log.Print("web console: not embedded; this is an API-only build and / returns 404. Build with node scripts/build-release.mjs and run the binary from release/")
 	}
+	cryptoSecretExplicit := os.Getenv("STARHUB_CRYPTO_SECRET") != ""
 	if err := config.LoadLocalEnvironment(); err != nil {
 		log.Fatalf("invalid local environment: %v", err)
 	}
@@ -50,6 +51,10 @@ func main() {
 	}
 	if generated {
 		log.Print("crypto secret: generated and saved to .env; keep this file with your database backups")
+	} else if cryptoSecretExplicit {
+		log.Print("crypto secret: configured from explicit STARHUB_CRYPTO_SECRET")
+	} else {
+		log.Print("crypto secret: loaded from .env; ensure this file is backed up alongside the database")
 	}
 	if err := config.ValidateProduction(startup.Bootstrap, os.Getenv); err != nil {
 		log.Fatal(err)
