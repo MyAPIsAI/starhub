@@ -53,4 +53,8 @@ initial_options:
 # Administrators can configure Alibaba Cloud SMS in Account center > Phone > SMS configuration.
 # An external STARHUB_SMS_BRIDGE_URL overrides the stored Alibaba Cloud configuration.
 # RESOURCE_CATALOG_NOTIFY_URL / NODE_NAME: resource integration and stable node ID.
+# STARHUB_SETUP_TOKEN: one-time token protecting the first-run setup wizard.
+#   Leave unset to allow unauthenticated initialization on a trusted network.
+# STARHUB_DB_BUSY_TIMEOUT: SQLite busy timeout in milliseconds (default 10000).
+# STARHUB_SMS_ALIYUN_*: Alibaba Cloud SMS provider credentials when not using the bridge.
 # See PRODUCTION.md, CREDENTIAL_STORAGE.md and SERVICE_MTLS.md before deployment.
