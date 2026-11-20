@@ -20,6 +20,9 @@ func TestTokenPasswordVerificationIsOwnerBoundReadOnlyAndCookieFree(t *testing.T
 	// Database fixtures reuse IDs while the global session store outlives them.
 	// Keep one known, long-lived session so unrelated expiry/map order cannot
 	// masquerade as a mutation performed by this read-only endpoint.
+	// Without this cleanup, sessions from prior tests (which may share the same
+	// recycled user ID) pollute ListByUser and cause intermittent snapshot
+	// inequality. See P27 chapter 15 risk 5 and fix 0675f0f.
 	middleware.Sessions.RemoveAllExcept(owner.ID, "")
 	session := middleware.Sessions.Create(owner.ID, sessionTTLForTest)
 	t.Cleanup(func() { middleware.Sessions.Remove(session) })
