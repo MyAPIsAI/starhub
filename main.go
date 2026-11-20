@@ -98,6 +98,7 @@ func main() {
 	if _, err := service.DatabaseBackupInterval(); err != nil {
 		log.Fatal(err)
 	}
+	log.Print("session storage: in-process memory; all sessions are lost on restart and not shared across instances")
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	var workers sync.WaitGroup
 	run := func(task func(context.Context)) {
