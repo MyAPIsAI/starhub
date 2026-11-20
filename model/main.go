@@ -2,6 +2,8 @@ package model
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,12 +27,26 @@ type DatabaseConfig struct {
 // dsn applies the per-connection pragmas every pooled connection needs:
 // busy_timeout makes concurrent billing writers queue instead of failing
 // with SQLITE_BUSY, WAL keeps readers flowing while a writer commits.
+// The timeout defaults to 10 seconds and can be overridden through
+// STARHUB_DB_BUSY_TIMEOUT (milliseconds) for high-contention deployments.
 func dsn(path string) string {
 	separator := "?"
 	if strings.Contains(path, "?") {
 		separator = "&"
 	}
-	return path + separator + "_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"
+	busyTimeout := sqliteBusyTimeoutMs()
+	return path + separator + "_pragma=busy_timeout(" + strconv.Itoa(busyTimeout) + ")&_pragma=journal_mode(WAL)"
+}
+
+// sqliteBusyTimeoutMs reads STARHUB_DB_BUSY_TIMEOUT and falls back to 10000.
+func sqliteBusyTimeoutMs() int {
+	if v := strings.TrimSpace(os.Getenv("STARHUB_DB_BUSY_TIMEOUT")); v != "" {
+		ms, err := strconv.Atoi(v)
+		if err == nil && ms >= 1000 && ms <= 120000 {
+			return ms
+		}
+	}
+	return 10000
 }
 
 // InitDB opens a SQLite database at the given file path. It is kept for

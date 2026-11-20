@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -134,7 +135,10 @@ func ResetAlertThrottle() {
 
 // --- Business alert helpers ---
 
-// NotifyBillingFailure reports a settlement or refund failure.
+// NotifyBillingFailure reports a settlement or refund failure. When the
+// underlying error indicates a database lock contention (SQLITE_BUSY or
+// equivalent), an additional database_busy alert is emitted so operators
+// can monitor SQLite single-writer pressure.
 func NotifyBillingFailure(userID int64, message string) {
 	deliverAlert(AlertEvent{
 		Type:      "billing_failure",
@@ -142,6 +146,19 @@ func NotifyBillingFailure(userID int64, message string) {
 		Severity:  "critical",
 		Timestamp: time.Now().Unix(),
 	})
+	if isDatabaseBusyMessage(message) {
+		NotifyDatabaseBusy("billing settlement hit database lock contention: " + message)
+	}
+}
+
+// isDatabaseBusyMessage checks whether an error message indicates a
+// database lock or busy timeout without importing the driver package.
+func isDatabaseBusyMessage(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "database is locked") ||
+		strings.Contains(lower, "sqlite_busy") ||
+		strings.Contains(lower, "lock contention") ||
+		strings.Contains(lower, "timeout")
 }
 
 // NotifyReconciliationDiff reports a daily reconciliation discrepancy.
@@ -174,6 +191,18 @@ func NotifyPaymentCallbackFailed(orderID int64, message string) {
 		Type:      "payment_callback_failed",
 		Message:   message,
 		Severity:  "critical",
+		Timestamp: time.Now().Unix(),
+	})
+}
+
+// NotifyDatabaseBusy reports a SQLITE_BUSY (or equivalent write-contention)
+// error so operators can monitor SQLite single-writer pressure and decide
+// whether to raise STARHUB_DB_BUSY_TIMEOUT or move to a network database.
+func NotifyDatabaseBusy(message string) {
+	deliverAlert(AlertEvent{
+		Type:      "database_busy",
+		Message:   message,
+		Severity:  "warning",
 		Timestamp: time.Now().Unix(),
 	})
 }
