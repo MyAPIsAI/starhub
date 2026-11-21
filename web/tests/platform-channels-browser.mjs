@@ -359,16 +359,124 @@ try {
   );
   await panel.getByLabel("Search platform channels", { exact: true }).fill("");
   if (!process.argv.includes("--state-only")) {
+    const bindingsPanel = page.getByRole("region", {
+      name: "Persistent gateway bindings",
+      exact: true,
+    });
+    await bindingsPanel.getByText(/Default TTL \(seconds\): 300/).waitFor();
+    const openGlobal = () =>
+      bindingsPanel
+        .getByRole("button", { name: "Edit global configuration", exact: true })
+        .click();
+    const saveAffinity = () =>
+      dialog
+        .getByRole("button", { name: "Save configuration", exact: true })
+        .click();
+    await openGlobal();
+    await dialog.getByLabel("Setting to change").selectOption("ttl_seconds");
+    await dialog.getByRole("spinbutton").fill("360");
+    await api("PUT", "/api/option", {
+      key: "routing_affinity_ttl_seconds",
+      value: "420",
+    });
+    await saveAffinity();
+    await dialog
+      .getByRole("alert")
+      .filter({ hasText: "Configuration changed" })
+      .waitFor();
+    assert.equal(await dialog.getByRole("spinbutton").inputValue(), "360");
+    await dialog.getByRole("button", { name: "Reload configuration" }).click();
+    await dialog.getByLabel("Setting to change").selectOption("ttl_seconds");
+    assert.equal(await dialog.getByRole("spinbutton").inputValue(), "420");
+    await dialog.getByRole("spinbutton").fill("360");
+    await saveAffinity();
+    await dialog.waitFor({ state: "hidden" });
+    await bindingsPanel.getByText(/Default TTL \(seconds\): 360/).waitFor();
+    const openRules = () =>
+      bindingsPanel
+        .getByRole("button", { name: "Manage affinity rules", exact: true })
+        .click();
+    await openRules();
+    for (const [name, source] of [
+      ["by-header", "request_header"],
+      ["by-json", "gjson"],
+    ]) {
+      await dialog
+        .getByRole("button", { name: "Add rule", exact: true })
+        .click();
+      await dialog.getByLabel("Rule name", { exact: true }).fill(name);
+      await dialog
+        .getByLabel("Model patterns (one per line)", { exact: true })
+        .fill("^gpt");
+      await dialog.getByLabel(/Source type/).selectOption(source);
+      await dialog
+        .getByLabel(source === "gjson" ? "Field path" : "Header name", {
+          exact: true,
+        })
+        .fill(source === "gjson" ? "metadata.session" : "X-Session");
+    }
+    await dialog.getByRole("button", { name: "Move up", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const editorBounds = await dialog.boundingBox();
+    assert.ok(
+      editorBounds &&
+        editorBounds.x >= 0 &&
+        editorBounds.x + editorBounds.width <= 391,
+    );
+    await page.screenshot({
+      path: path.join(temp, "affinity-rules-mobile.png"),
+    });
+    await saveAffinity();
+    await dialog.waitFor({ state: "hidden" });
+    await openRules();
+    await dialog.getByLabel("Rule order").waitFor();
+    assert.deepEqual(
+      await dialog.getByLabel("Rule order").locator("option").allTextContents(),
+      ["1. by-json", "2. by-header"],
+    );
+    await dialog.getByRole("button", { name: "Remove rule" }).click();
+    await saveAffinity();
+    await dialog.waitFor({ state: "hidden" });
+    const storedRules = (await api("GET", "/api/option")).find(
+      (o) => o.key === "routing_affinity_rules",
+    );
+    assert.deepEqual(
+      JSON.parse(storedRules.value).map((r) => r.name),
+      ["by-header"],
+    );
+    assert.equal(
+      await page
+        .getByRole("heading", { name: "Gateway affinity cache", exact: true })
+        .count(),
+      0,
+    );
     const cachePath = "**/api/option/routing_affinity_cache";
     await page.route(cachePath, (route) =>
       route.request().method() === "DELETE"
-        ? route.fulfill({ status: 503, json: { success: false, message: "Fixture unavailable" } })
-        : route.fulfill({ json: { success: true, data: { enabled: true, total: 1, by_rule_name: { sample: 1 }, rules: 1 } } }),
+        ? route.fulfill({
+            status: 503,
+            json: { success: false, message: "Fixture unavailable" },
+          })
+        : route.fulfill({
+            json: {
+              success: true,
+              data: {
+                enabled: true,
+                total: 1,
+                by_rule_name: { sample: 1 },
+                rules: 1,
+              },
+            },
+          }),
     );
     await page.reload();
-    const affinityPanel = page.getByRole("region", { name: "Gateway affinity cache", exact: true });
-    await affinityPanel.getByRole("button", { name: "Clear all rule bindings on this replica" }).click();
-    await affinityPanel.getByRole("alert").filter({ hasText: "The clear was not confirmed" }).waitFor();
+    await bindingsPanel
+      .getByRole("button", { name: "Clear all rule bindings on this replica" })
+      .click();
+    await bindingsPanel
+      .getByRole("alert")
+      .filter({ hasText: "The clear was not confirmed" })
+      .waitFor();
     await page.unroute(cachePath);
     for (const lang of ["en", "zh", "ar"]) {
       await page.evaluate(

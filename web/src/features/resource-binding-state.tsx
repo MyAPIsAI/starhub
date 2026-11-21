@@ -90,6 +90,7 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
           {text("刷新绑定状态", "Refresh binding state", "تحديث حالة الروابط")}
         </Button>
       </header>
+      <RoutingAffinityPanel enabled={enabled} />
       <p>
         {text(
           "已存组合是当前保留的路线数；路由条件通过数还核对渠道启用、能力、分组身份及已配置倍率。它不代表具体用户授权、余额、请求上下文或供应商健康检查通过。撤销后仍保留来源绑定，已释放的渠道仍保留防止旧权限恢复的记录。",
@@ -379,7 +380,6 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
           setReview(undefined);
         }}
       />
-      <RoutingAffinityPanel enabled={enabled} />
     </section>
   );
 }

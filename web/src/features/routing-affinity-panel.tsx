@@ -5,12 +5,9 @@ import {
 } from "../lib/api/routing-affinity";
 import { useSettingsText } from "./settings-text";
 import "./resource-publication.css";
+import { AffinityEditorActions } from "./routing-affinity-editor";
 
-/** RoutingAffinityPanel shows the live rule-affinity cache state and a
- *  clear button. It is embedded under the persistent gateway bindings
- *  section so an operator can see how many sessions are pinned and evict
- *  them when a bound channel is rotated. Rules themselves are configured
- *  through the routing_affinity_rules option in the option manager. */
+/** The binding section hosts global HTTP configuration and replica-local cache controls. */
 export function RoutingAffinityPanel({ enabled }: { enabled: boolean }) {
   const { text } = useSettingsText();
   const query = useRoutingAffinityStats(enabled);
@@ -23,31 +20,77 @@ export function RoutingAffinityPanel({ enabled }: { enabled: boolean }) {
       )
     : [];
   return (
-    <section
-      className="rp-result"
-      aria-label={text(
-        "网关亲和性缓存",
-        "Gateway affinity cache",
-        "ذاكرة التقارب",
-      )}
-    >
-      <header>
-        <h3>
-          {text(
-            "网关亲和性缓存",
-            "Gateway affinity cache",
-            "ذاكرة التقارب",
-          )}
-        </h3>
+    <>
+      <div className="rp-actions">
+        {stats && (
+          <p className="rp-versions">
+            {text(
+              "全局亲和配置",
+              "Global affinity configuration",
+              "إعدادات التقارب العامة",
+            )}{" "}
+            ·{" "}
+            {stats.config
+              ? stats.config.enabled
+                ? text("已启用", "Enabled", "مفعّل")
+                : text("未启用", "Disabled", "غير مفعّل")
+              : "—"}
+            {" · "}
+            {text("规则数", "Rules", "قواعد")}: {stats.rules} ·{" "}
+            {text(
+              "本副本粘滞条目",
+              "Pinned entries on this replica",
+              "روابط هذه النسخة",
+            )}
+            : {stats.total}
+          </p>
+        )}
+        <AffinityEditorActions />
         <Button
-          disabled={query.isFetching || clear.isPending || (stats?.total ?? 0) === 0}
+          disabled={
+            query.isFetching || clear.isPending || (stats?.total ?? 0) === 0
+          }
           onClick={() => clear.mutate()}
         >
           {clear.isPending
             ? text("清空中…", "Clearing…", "جارٍ المسح…")
-            : text("清空本副本规则缓存", "Clear all rule bindings on this replica", "مسح جميع روابط القواعد في هذه النسخة")}
+            : text(
+                "清空本副本规则缓存",
+                "Clear all rule bindings on this replica",
+                "مسح جميع روابط القواعد في هذه النسخة",
+              )}
         </Button>
-      </header>
+      </div>
+      {stats?.config && (
+        <p className="rp-versions">
+          {text("模式", "Mode", "الوضع")}:{" "}
+          {stats.config.mode === "hash"
+            ? text("哈希分配", "Hash", "التجزئة")
+            : text("会话粘滞", "Sticky", "تثبيت الجلسة")}{" "}
+          ·{" "}
+          {text(
+            "默认有效期（秒）",
+            "Default TTL (seconds)",
+            "مدة الصلاحية الافتراضية (ثوانٍ)",
+          )}
+          : {stats.config.ttl_seconds} ·{" "}
+          {text(
+            "失败冷却（秒）",
+            "Failure cooldown (seconds)",
+            "مهلة الفشل (ثوانٍ)",
+          )}
+          : {stats.config.cooldown_seconds} ·{" "}
+          {text(
+            "提示词前缀亲和",
+            "Prompt-prefix affinity",
+            "تقارب بادئة الطلب",
+          )}
+          :{" "}
+          {stats.config.prefix_cache
+            ? text("开", "On", "مفعّل")
+            : text("关", "Off", "غير مفعّل")}
+        </p>
+      )}
       <p>
         {text(
           "此处统计当前服务副本的全部 HTTP 请求亲和规则缓存。清空将移除本副本所有会话的渠道偏好；已发布的路由授权和其他副本不受影响。",
@@ -71,13 +114,6 @@ export function RoutingAffinityPanel({ enabled }: { enabled: boolean }) {
       )}
       {stats && (
         <>
-          <p className="rp-versions">
-            {stats.enabled
-              ? text("已启用", "Enabled", "مفعّل")
-              : text("未启用", "Disabled", "غير مفعّل")}{" "}
-            · {text("规则数", "Rules", "قواعد")}: {stats.rules} ·{" "}
-            {text("粘滞条目", "Pinned entries", "إدخالات مثبتة")}: {stats.total}
-          </p>
           {ruleEntries.length > 0 && (
             <div className="rp-table" role="region" tabIndex={0}>
               <table>
@@ -128,6 +164,6 @@ export function RoutingAffinityPanel({ enabled }: { enabled: boolean }) {
           )}
         </p>
       )}
-    </section>
+    </>
   );
 }

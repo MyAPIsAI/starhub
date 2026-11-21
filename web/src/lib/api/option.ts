@@ -42,6 +42,7 @@ export function useUpdateOption() {
       queryClient.invalidateQueries({ queryKey: OPTION_HISTORY_KEY });
       for (const key of [
         "server-pricing",
+        "routing-affinity-cache",
         "time-pricing",
         "time-token-pricing",
         "resource-publication-context",

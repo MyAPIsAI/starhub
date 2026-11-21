@@ -225,10 +225,11 @@ func ClearRuleAffinity(meta *AffinityMeta) bool {
 
 // AffinityCacheStats is the admin-visible cache summary.
 type AffinityCacheStats struct {
-	Enabled    bool           `json:"enabled"`
-	Total      int            `json:"total"`
-	ByRuleName map[string]int `json:"by_rule_name"`
-	Rules      int            `json:"rules"`
+	Config     setting.AffinityRuntimeConfig `json:"config"`
+	Enabled    bool                          `json:"enabled"`
+	Total      int                           `json:"total"`
+	ByRuleName map[string]int                `json:"by_rule_name"`
+	Rules      int                           `json:"rules"`
 }
 
 // RuleAffinityStats counts live cache entries grouped by rule name. Entries
@@ -259,6 +260,7 @@ func RuleAffinityStats() AffinityCacheStats {
 		}
 	}
 	return AffinityCacheStats{
+		Config:     setting.CurrentAffinityConfig(),
 		Enabled:    setting.RoutingAffinityEnabled() && len(rules) > 0,
 		Total:      total,
 		ByRuleName: byRule,

@@ -53,6 +53,21 @@ const (
 	MaxAffinityRules = 64
 )
 
+// AffinityRuntimeConfig contains the global options currently loaded on this replica.
+type AffinityRuntimeConfig struct {
+	Enabled         bool   `json:"enabled"`
+	Mode            string `json:"mode"`
+	TTLSeconds      int64  `json:"ttl_seconds"`
+	CooldownSeconds int64  `json:"cooldown_seconds"`
+	PrefixCache     bool   `json:"prefix_cache"`
+}
+
+func CurrentAffinityConfig() AffinityRuntimeConfig {
+	routeAffMu.RLock()
+	defer routeAffMu.RUnlock()
+	return AffinityRuntimeConfig{Enabled: routingAffinityEnabled, Mode: routingAffinityMode, TTLSeconds: int64(routingAffinityTTL / time.Second), CooldownSeconds: int64(routingAffinityCooldown / time.Second), PrefixCache: routingAffinityPrefixCache}
+}
+
 // AffinityKeySource extracts the affinity value from one request field. The
 // first source in a rule's KeySources that yields a non-empty value wins.
 type AffinityKeySource struct {

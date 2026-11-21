@@ -1,7 +1,35 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiDelete } from "./http";
+import type { Option, OptionStatus } from "./option";
+
+export async function readAffinityDraft(signal: AbortSignal) {
+  // Capture the precondition before reading values so a concurrent write can
+  // only cause a conflict, never authorize overwriting a newer configuration.
+  const { database_version: version } = await apiGet<OptionStatus>(
+    "/api/option/status",
+    signal,
+  );
+  if (!Number.isSafeInteger(version) || version < 0)
+    throw Error("Invalid option version");
+  const rows = await apiGet<Option[]>("/api/option", signal);
+  return {
+    version,
+    values: Object.fromEntries(
+      rows
+        .filter((row) => row.key.startsWith("routing_affinity_"))
+        .map((row) => [row.key.slice("routing_affinity_".length), row.value]),
+    ),
+  };
+}
 
 export interface RoutingAffinityStats {
+  config?: {
+    enabled: boolean;
+    mode: "sticky" | "hash";
+    ttl_seconds: number;
+    cooldown_seconds: number;
+    prefix_cache: boolean;
+  };
   enabled: boolean;
   total: number;
   by_rule_name: Record<string, number>;
