@@ -52,6 +52,20 @@ func TestResolveAffinityDisabledIgnoresRules(t *testing.T) {
 	}
 }
 
+func TestRuleCacheScope(t *testing.T) {
+	a := AffinityRequest{TokenID: 1, ModelName: "a:b", UsingGroup: "c"}
+	b := a
+	b.TokenID++
+	c := a
+	c.ModelName = "a"
+	c.UsingGroup = "b:c"
+	r := setting.AffinityRule{Name: "r"}
+	k := affinityCacheKey(r, a, "session")
+	if k == affinityCacheKey(r, b, "session") || k == affinityCacheKey(r, c, "session") || k == affinityCacheKey(setting.AffinityRule{Name: "s"}, a, "session") {
+		t.Fatal("independent cache scopes collided")
+	}
+}
+
 func TestResolveAffinityMatchesAndMissesCache(t *testing.T) {
 	resetAffinityForTest(t)
 	enableRuleAffinity(t, `[{"name":"codex","model_regex":["^gpt-5$"],"path_regex":["/v1/responses"],"key_sources":[{"type":"gjson","path":"prompt_cache_key"}],"include_rule_name":true,"session_mode":"strict"}]`)

@@ -52,14 +52,15 @@ const (
 // ruleAffinityEntry is one remembered channel plus its expiry. The TTL keeps
 // a stale preference from pinning traffic once the bound channel shifts.
 type ruleAffinityEntry struct {
+	ruleName  string
 	channelID int64
 	expiresAt time.Time
 }
 
 var (
-	ruleAffinityCache    sync.Map // string cacheKey -> ruleAffinityEntry
-	affinityRegexCache   sync.Map // pattern string -> *regexp.Regexp
-	ruleAffinityClearMu  sync.Mutex
+	ruleAffinityCache   sync.Map // string cacheKey -> ruleAffinityEntry
+	affinityRegexCache  sync.Map // pattern string -> *regexp.Regexp
+	ruleAffinityClearMu sync.Mutex
 )
 
 // ResolveAffinity evaluates the configured rules in order and returns the
@@ -132,6 +133,7 @@ func RecordRuleAffinity(meta AffinityMeta, channelID int64) {
 		}
 	}
 	ruleAffinityCache.Store(meta.CacheKey, ruleAffinityEntry{
+		ruleName:  meta.RuleName,
 		channelID: channelID,
 		expiresAt: time.Now().Add(time.Duration(ttl) * time.Second),
 	})
@@ -148,10 +150,10 @@ func ClearRuleAffinity(meta AffinityMeta) {
 
 // AffinityCacheStats is the admin-visible cache summary.
 type AffinityCacheStats struct {
-	Enabled    bool              `json:"enabled"`
-	Total      int               `json:"total"`
-	ByRuleName map[string]int    `json:"by_rule_name"`
-	Rules      int               `json:"rules"`
+	Enabled    bool           `json:"enabled"`
+	Total      int            `json:"total"`
+	ByRuleName map[string]int `json:"by_rule_name"`
+	Rules      int            `json:"rules"`
 }
 
 // RuleAffinityStats counts live cache entries grouped by rule name. Entries
@@ -160,7 +162,7 @@ func RuleAffinityStats() AffinityCacheStats {
 	rules := setting.RoutingAffinityRules()
 	byRule := make(map[string]int, len(rules))
 	for _, r := range rules {
-		if r.IncludeRuleName && strings.TrimSpace(r.Name) != "" {
+		if strings.TrimSpace(r.Name) != "" {
 			byRule[r.Name] = 0
 		}
 	}
@@ -174,10 +176,7 @@ func RuleAffinityStats() AffinityCacheStats {
 			return true // expired; leave for a sweep
 		}
 		total++
-		// The rule segment is the first part of the composite key when
-		// IncludeRuleName is on; otherwise the entry cannot be attributed.
-		cacheKey, _ := key.(string)
-		if name := ruleNameFromKey(cacheKey); name != "" {
+		if name := entry.ruleName; name != "" {
 			if _, tracked := byRule[name]; tracked {
 				byRule[name]++
 			} else {
@@ -234,34 +233,13 @@ func loadRuleAffinity(key string) (ruleAffinityEntry, bool) {
 }
 
 func affinityCacheKey(rule setting.AffinityRule, req AffinityRequest, value string) string {
-	parts := make([]string, 0, 4)
-	if rule.IncludeRuleName && strings.TrimSpace(rule.Name) != "" {
-		parts = append(parts, rule.Name)
+	// Length-prefix every field; optional legacy flags cannot weaken isolation.
+	h := sha256.New()
+	for _, field := range []string{strconv.FormatInt(req.TokenID, 10), rule.Name, req.ModelName, req.UsingGroup, value} {
+		fmt.Fprintf(h, "%d:", len(field))
+		h.Write([]byte(field))
 	}
-	if rule.IncludeModelName && req.ModelName != "" {
-		parts = append(parts, req.ModelName)
-	}
-	if rule.IncludeUsingGroup && req.UsingGroup != "" {
-		parts = append(parts, req.UsingGroup)
-	}
-	parts = append(parts, value)
-	return affinityCacheNamespace + ":" + strings.Join(parts, ":")
-}
-
-// ruleNameFromKey extracts the rule-name segment from a composite cache key.
-// Returns "" when the key does not carry a rule segment or the namespace
-// prefix is absent.
-func ruleNameFromKey(key string) string {
-	prefix := affinityCacheNamespace + ":"
-	rest, ok := strings.CutPrefix(key, prefix)
-	if !ok || rest == "" {
-		return ""
-	}
-	// The first segment up to ":" is the rule name when IncludeRuleName was on.
-	if idx := strings.Index(rest, ":"); idx >= 0 {
-		return rest[:idx]
-	}
-	return ""
+	return affinityCacheNamespace + ":" + hex.EncodeToString(h.Sum(nil))
 }
 
 func affinityFingerprint(s string) string {
