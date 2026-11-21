@@ -384,9 +384,9 @@ try {
       accessibility.violations.map((entry) => entry.id),
       [],
     );
-    await api("GET", "/api/user/logout");
+    await api("POST", "/api/user/logout");
     await page.reload();
-    await page.waitForURL("**/login**");
+    await page.waitForURL(base + "/");
     assert.equal(await page.locator("#platform-channels").count(), 0);
     assert.deepEqual(errors, []);
     console.log(
