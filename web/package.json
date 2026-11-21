@@ -24,6 +24,7 @@
     "test:browser:settings-reset": "node tests/settings-reset-browser.mjs",
     "test:browser:catalog": "node tests/catalog-management-browser.mjs",
     "test:browser:channels": "node tests/channel-workspace-browser.mjs",
+    "test:browser:platform-channels": "node tests/platform-channels-browser.mjs",
     "test:browser:channel-models": "node tests/channel-model-discovery-browser.mjs",
     "test:browser:channel-providers": "node tests/channel-providers-browser.mjs",
     "test:browser:playground": "node tests/playground-browser.mjs",
