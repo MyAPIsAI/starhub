@@ -47,6 +47,8 @@ type AffinityMeta struct {
 
 const (
 	affinityCacheNamespace = "routing_affinity:v1"
+	maxRuleBindings        = 16384
+	maxAffinityValueBytes  = 4096
 )
 
 // ruleAffinityEntry is one remembered channel plus its expiry. The TTL keeps
@@ -58,9 +60,10 @@ type ruleAffinityEntry struct {
 }
 
 var (
-	ruleAffinityCache   sync.Map // string cacheKey -> ruleAffinityEntry
-	affinityRegexCache  sync.Map // pattern string -> *regexp.Regexp
-	ruleAffinityClearMu sync.Mutex
+	ruleAffinityCache  = make(map[string]ruleAffinityEntry)
+	nextAffinitySweep  time.Time
+	affinityRegexCache sync.Map // pattern string -> *regexp.Regexp
+	ruleAffinityMu     sync.Mutex
 )
 
 // ResolveAffinity evaluates the configured rules in order and returns the
@@ -88,7 +91,7 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule)
 			continue
 		}
 		value, _ := affinityExtractValue(req, rule.KeySources)
-		if value == "" {
+		if value == "" || len(value) > maxAffinityValueBytes {
 			continue
 		}
 		if rule.ValueRegex != "" && !affinityMatchAny([]string{rule.ValueRegex}, value) {
@@ -136,11 +139,30 @@ func RecordRuleAffinity(meta AffinityMeta, channelID int64) {
 			ttl = capped
 		}
 	}
-	ruleAffinityCache.Store(meta.CacheKey, ruleAffinityEntry{
+	ruleAffinityMu.Lock()
+	defer ruleAffinityMu.Unlock()
+	now := time.Now()
+	if !now.Before(nextAffinitySweep) {
+		sweepRuleAffinity(now)
+		nextAffinitySweep = now.Add(time.Minute)
+	}
+	if _, ok := ruleAffinityCache[meta.CacheKey]; !ok && len(ruleAffinityCache) >= maxRuleBindings {
+		return
+	}
+	ruleAffinityCache[meta.CacheKey] = ruleAffinityEntry{
 		ruleName:  meta.RuleName,
 		channelID: channelID,
 		expiresAt: time.Now().Add(time.Duration(ttl) * time.Second),
-	})
+	}
+}
+
+// sweepRuleAffinity requires ruleAffinityMu.
+func sweepRuleAffinity(now time.Time) {
+	for key, e := range ruleAffinityCache {
+		if !now.Before(e.expiresAt) {
+			delete(ruleAffinityCache, key)
+		}
+	}
 }
 
 // ClearRuleAffinity evicts the cache entry for the meta's key. Called when
@@ -149,7 +171,9 @@ func ClearRuleAffinity(meta AffinityMeta) {
 	if meta.CacheKey == "" {
 		return
 	}
-	ruleAffinityCache.Delete(meta.CacheKey)
+	ruleAffinityMu.Lock()
+	defer ruleAffinityMu.Unlock()
+	delete(ruleAffinityCache, meta.CacheKey)
 }
 
 // AffinityCacheStats is the admin-visible cache summary.
@@ -171,14 +195,10 @@ func RuleAffinityStats() AffinityCacheStats {
 		}
 	}
 	total := 0
-	ruleAffinityCache.Range(func(key, value any) bool {
-		entry, ok := value.(ruleAffinityEntry)
-		if !ok {
-			return true
-		}
-		if time.Now().After(entry.expiresAt) {
-			return true // expired; leave for a sweep
-		}
+	ruleAffinityMu.Lock()
+	defer ruleAffinityMu.Unlock()
+	sweepRuleAffinity(time.Now())
+	for _, entry := range ruleAffinityCache {
 		total++
 		if name := entry.ruleName; name != "" {
 			if _, tracked := byRule[name]; tracked {
@@ -189,8 +209,7 @@ func RuleAffinityStats() AffinityCacheStats {
 		} else {
 			byRule[""]++
 		}
-		return true
-	})
+	}
 	return AffinityCacheStats{
 		Enabled:    setting.RoutingAffinityEnabled() && len(rules) > 0,
 		Total:      total,
@@ -201,19 +220,17 @@ func RuleAffinityStats() AffinityCacheStats {
 
 // ClearAllRuleAffinity evicts every cached entry and returns the count.
 func ClearAllRuleAffinity() int {
-	count := 0
-	ruleAffinityCache.Range(func(key, value any) bool {
-		ruleAffinityCache.Delete(key)
-		count++
-		return true
-	})
+	ruleAffinityMu.Lock()
+	defer ruleAffinityMu.Unlock()
+	count := len(ruleAffinityCache)
+	clear(ruleAffinityCache)
 	return count
 }
 
 // ResetRuleAffinityCache clears all rule affinity state (used by tests).
 func ResetRuleAffinityCache() {
-	ruleAffinityCache = sync.Map{}
-	affinityRegexCache = sync.Map{}
+	ClearAllRuleAffinity()
+	affinityRegexCache.Clear()
 }
 
 func effectiveRuleTTL(rule setting.AffinityRule) int {
@@ -224,13 +241,14 @@ func effectiveRuleTTL(rule setting.AffinityRule) int {
 }
 
 func loadRuleAffinity(key string) (ruleAffinityEntry, bool) {
-	raw, ok := ruleAffinityCache.Load(key)
+	ruleAffinityMu.Lock()
+	defer ruleAffinityMu.Unlock()
+	entry, ok := ruleAffinityCache[key]
 	if !ok {
 		return ruleAffinityEntry{}, false
 	}
-	entry := raw.(ruleAffinityEntry)
 	if time.Now().After(entry.expiresAt) {
-		ruleAffinityCache.CompareAndDelete(key, entry)
+		delete(ruleAffinityCache, key)
 		return ruleAffinityEntry{}, false
 	}
 	return entry, true

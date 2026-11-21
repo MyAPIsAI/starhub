@@ -2,6 +2,7 @@ package service
 
 import (
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -157,12 +158,10 @@ func TestResolveAffinityTTLExpiry(t *testing.T) {
 	meta := ResolveAffinity(AffinityRequest{ModelName: "x", Body: []byte(`{"k":"v"}`)})
 	RecordRuleAffinity(meta, 9)
 	// Manually expire the entry.
-	ruleAffinityCache.Range(func(key, value any) bool {
-		entry := value.(ruleAffinityEntry)
+	for key, entry := range ruleAffinityCache {
 		entry.expiresAt = time.Now().Add(-time.Second)
-		ruleAffinityCache.Store(key, entry)
-		return true
-	})
+		ruleAffinityCache[key] = entry
+	}
 	if m := ResolveAffinity(AffinityRequest{ModelName: "x", Body: []byte(`{"k":"v"}`)}); m.Found {
 		t.Fatal("expired entry must not be found")
 	}
@@ -214,5 +213,21 @@ func TestGjsonPathWalker(t *testing.T) {
 	}
 	if got := affinityGjsonPath([]byte(`not-json`), "x"); got != "" {
 		t.Fatalf("invalid json must yield empty, got %q", got)
+	}
+}
+
+func TestRuleAffinityCapacityAndSweep(t *testing.T) {
+	resetAffinityForTest(t)
+	live := time.Now().Add(time.Hour)
+	for i := range maxRuleBindings {
+		ruleAffinityCache[strconv.Itoa(i)] = ruleAffinityEntry{expiresAt: live}
+	}
+	RecordRuleAffinity(AffinityMeta{CacheKey: "extra", TTLSeconds: 60}, 1)
+	if len(ruleAffinityCache) != maxRuleBindings {
+		t.Fatal("capacity exceeded")
+	}
+	ruleAffinityCache["0"] = ruleAffinityEntry{}
+	if RuleAffinityStats().Total != maxRuleBindings-1 || len(ruleAffinityCache) != maxRuleBindings-1 {
+		t.Fatal("expired binding not reclaimed")
 	}
 }
