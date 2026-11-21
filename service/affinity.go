@@ -33,16 +33,18 @@ type AffinityRequest struct {
 // is true when a rule matched (regardless of a cache hit); the caller uses
 // Matched to decide rule affinity vs the legacy TokenID-based stickiness.
 type AffinityMeta struct {
-	RuleName       string
-	CacheKey       string
-	TTLSeconds     int
-	SessionMode    string
-	SkipRetry      bool
-	KeyHint        string
-	KeyFingerprint string
-	ChannelID      int64
-	Matched        bool
-	Found          bool
+	KeyIndex           int
+	EndpointGeneration string
+	RuleName           string
+	CacheKey           string
+	TTLSeconds         int
+	SessionMode        string
+	SkipRetry          bool
+	KeyHint            string
+	KeyFingerprint     string
+	ChannelID          int64
+	Matched            bool
+	Found              bool
 }
 
 const (
@@ -54,9 +56,11 @@ const (
 // ruleAffinityEntry is one remembered channel plus its expiry. The TTL keeps
 // a stale preference from pinning traffic once the bound channel shifts.
 type ruleAffinityEntry struct {
-	ruleName  string
-	channelID int64
-	expiresAt time.Time
+	keyIndex           int
+	endpointGeneration string
+	ruleName           string
+	channelID          int64
+	expiresAt          time.Time
 }
 
 var (
@@ -112,6 +116,7 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule)
 		meta.CacheKey = affinityCacheKey(rule, req, value)
 		if entry, ok := loadRuleAffinity(meta.CacheKey); ok {
 			meta.ChannelID = entry.channelID
+			meta.KeyIndex, meta.EndpointGeneration = entry.keyIndex, entry.endpointGeneration
 			meta.Found = true
 		}
 		return meta
@@ -122,9 +127,13 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule)
 // RecordRuleAffinity writes the channel as the preferred one for the meta's
 // cache key. Called from noteAffinity on a successful attempt so the next
 // request with the same affinity value lands on the same channel.
-func RecordRuleAffinity(meta AffinityMeta, channelID int64) {
+func RecordRuleAffinity(meta AffinityMeta, channelID int64) bool {
+	return RecordRuleAffinityKey(meta, channelID, -1, "")
+}
+
+func RecordRuleAffinityKey(meta AffinityMeta, channelID int64, index int, generation string) bool {
 	if channelID <= 0 || meta.CacheKey == "" || meta.SessionMode == setting.AffinitySessionOff {
-		return
+		return false
 	}
 	ttl := meta.TTLSeconds
 	if ttl <= 0 {
@@ -147,13 +156,15 @@ func RecordRuleAffinity(meta AffinityMeta, channelID int64) {
 		nextAffinitySweep = now.Add(time.Minute)
 	}
 	if _, ok := ruleAffinityCache[meta.CacheKey]; !ok && len(ruleAffinityCache) >= maxRuleBindings {
-		return
+		return false
 	}
 	ruleAffinityCache[meta.CacheKey] = ruleAffinityEntry{
+		keyIndex: index, endpointGeneration: generation,
 		ruleName:  meta.RuleName,
 		channelID: channelID,
 		expiresAt: time.Now().Add(time.Duration(ttl) * time.Second),
 	}
+	return true
 }
 
 // sweepRuleAffinity requires ruleAffinityMu.

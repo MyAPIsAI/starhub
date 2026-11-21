@@ -218,3 +218,20 @@ func TestStrictBindingSurvivesUpstreamFailure(t *testing.T) {
 		t.Fatalf("lost or reused cooling binding: %+v %v", next.affinityMeta, err)
 	}
 }
+
+func TestRuleCredentialAffinity(t *testing.T) {
+	newTestDB(t)
+	t.Cleanup(setting.ResetAffinityToDefaults)
+	t.Cleanup(service.ResetRuleAffinityCache)
+	ch := mustChannel(t, "multi", "m", "a\nb", common.ChannelStatusEnabled)
+	enableRuleAffinityForRelay(t, `[{"name":"r","model_regex":[".*"],"key_sources":[{"type":"gjson","path":"s"}]}]`)
+	f := newRuleAffinityFlow(t, 7, common.DefaultGroup, "m", `{"s":"same"}`)
+	f.resolveRuleAffinity()
+	f.affinityKeyIdx = 1
+	f.noteAffinity(ch, attemptSuccess)
+	next := newRuleAffinityFlow(t, 7, common.DefaultGroup, "m", `{"s":"same"}`)
+	next.resolveRuleAffinity()
+	if key, idx := next.selectKey(ch); key != "b" || idx != 1 {
+		t.Fatalf("expected retained credential index 1, got %d", idx)
+	}
+}

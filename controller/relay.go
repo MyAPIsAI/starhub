@@ -390,7 +390,7 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			if preferred != 0 && ch.ID == preferred {
 				f.affinityPreferred = ch.ID
 			}
-			if !f.affinityCounted && f.affinityEligible() && setting.RoutingAffinityMode() != setting.AffinityModeHash {
+			if !f.affinityCounted && f.affinityEligible() && f.affinityMeta.SessionMode != setting.AffinitySessionOff && setting.RoutingAffinityMode() != setting.AffinityModeHash {
 				f.affinityCounted = true
 				if preferred != 0 && ch.ID == preferred {
 					metric.RecordAffinity(metric.AffinityHit)
@@ -527,7 +527,15 @@ func (f *relayFlow) begin(ch *model.Channel) {
 // chosen index is recorded for noteAffinity to persist on success.
 func (f *relayFlow) selectKey(ch *model.Channel) (string, int) {
 	f.affinityKeyIdx = -1
-	if f.affinityEligible() {
+	if f.affinityEligible() && f.affinityRuleUsed {
+		m := f.affinityMeta
+		if m.Found && m.ChannelID == ch.ID && m.KeyIndex >= 0 && m.EndpointGeneration == model.ChannelEndpointGeneration(ch) {
+			if key, ok := ch.KeyAt(m.KeyIndex); ok {
+				f.affinityKeyIdx = m.KeyIndex
+				return key, m.KeyIndex
+			}
+		}
+	} else if f.affinityEligible() {
 		if idx, ok := model.AffinityKeyIndex(f.affinityKey()); ok {
 			if aid, ok := model.AffinityChannel(f.affinityKey()); ok && aid == ch.ID {
 				if key, ok := ch.KeyAt(idx); ok {
@@ -595,8 +603,13 @@ func (f *relayFlow) noteAffinity(ch *model.Channel, outcome attemptOutcome) {
 func (f *relayFlow) noteRuleAffinity(ch *model.Channel, outcome attemptOutcome) {
 	switch outcome {
 	case attemptSuccess:
-		service.RecordRuleAffinity(f.affinityMeta, ch.ID)
-		metric.RecordAffinity(metric.AffinityWrite)
+		generation := ""
+		if ch.IsMultiKey() {
+			generation = model.ChannelEndpointGeneration(ch)
+		}
+		if service.RecordRuleAffinityKey(f.affinityMeta, ch.ID, f.affinityKeyIdx, generation) {
+			metric.RecordAffinity(metric.AffinityWrite)
+		}
 		if f.affinityFailed {
 			metric.RecordAffinity(metric.AffinityFallbackSuccess)
 		}
@@ -815,7 +828,7 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 func (f *relayFlow) beginMetricAttempt(ch *model.Channel) {
 	f.attempt = f.span.BeginAttempt(ch.ID)
 	affinity := "disabled"
-	if f.affinityEligible() {
+	if f.affinityEligible() && f.affinityMeta.SessionMode != setting.AffinitySessionOff {
 		affinity = "miss"
 		if f.affinityPreferred == ch.ID {
 			affinity = "hit"
