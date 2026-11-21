@@ -85,6 +85,8 @@ var (
 	routingAffinityCooldown    = DefaultRoutingAffinityCooldown
 	routingAffinityPrefixCache = false
 	routingAffinityRules       []AffinityRule
+	ruleRevision               uint64
+	ruleEncoding               string
 )
 
 // AffinityOptionKeys lists the option keys owned by this file.
@@ -150,9 +152,20 @@ func RoutingAffinityPrefixCacheEnabled() bool {
 // Returns nil when no rules are configured (rule affinity is inactive and
 // the legacy TokenID+Model+Group+Prefix affinity governs stickiness).
 func RoutingAffinityRules() []AffinityRule {
+	rules, _ := AffinityRulesSnapshot()
+	return rules
+}
+
+func AffinityRulesRevision() uint64 {
 	routeAffMu.RLock()
 	defer routeAffMu.RUnlock()
-	return slices.Clone(routingAffinityRules)
+	return ruleRevision
+}
+
+func AffinityRulesSnapshot() ([]AffinityRule, uint64) {
+	routeAffMu.RLock()
+	defer routeAffMu.RUnlock()
+	return slices.Clone(routingAffinityRules), ruleRevision
 }
 
 // EffectiveAffinitySessionMode resolves a rule's session mode against the
@@ -303,6 +316,10 @@ func UpdateAffinity(key, value string) error {
 			return fmt.Errorf("invalid value for %s: %w", key, err)
 		}
 		routeAffMu.Lock()
+		if canonical != ruleEncoding {
+			ruleRevision++
+			ruleEncoding = canonical
+		}
 		routingAffinityRules = normalized
 		routeAffMu.Unlock()
 		return nil
@@ -350,6 +367,8 @@ func ResetAffinityToDefaults() {
 	routingAffinityCooldown = DefaultRoutingAffinityCooldown
 	routingAffinityPrefixCache = false
 	routingAffinityRules = nil
+	ruleRevision++
+	ruleEncoding = ""
 }
 
 // parseBoolOption accepts a JSON boolean as well as the common textual

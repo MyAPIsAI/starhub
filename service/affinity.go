@@ -33,6 +33,7 @@ type AffinityRequest struct {
 // is true when a rule matched (regardless of a cache hit); the caller uses
 // Matched to decide rule affinity vs the legacy TokenID-based stickiness.
 type AffinityMeta struct {
+	ruleRevision                uint64
 	cacheEpoch, observedVersion uint64
 	KeyIndex                    int
 	EndpointGeneration          string
@@ -66,6 +67,7 @@ type ruleAffinityEntry struct {
 }
 
 var (
+	cachedRulesRevision     uint64
 	cacheEpoch, nextVersion uint64
 	ruleAffinityCache       = make(map[string]ruleAffinityEntry)
 	nextAffinitySweep       time.Time
@@ -82,11 +84,12 @@ func ResolveAffinity(req AffinityRequest) AffinityMeta {
 	if !setting.RoutingAffinityEnabled() {
 		return AffinityMeta{}
 	}
-	return ResolveAffinityWithRules(req, setting.RoutingAffinityRules())
+	rules, rev := setting.AffinityRulesSnapshot()
+	return ResolveAffinityWithRules(req, rules, rev)
 }
 
 // ResolveAffinityWithRules matches the current routing hop against a request snapshot.
-func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule) AffinityMeta {
+func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule, rev uint64) AffinityMeta {
 	for _, rule := range rules {
 		if !affinityMatchAny(rule.ModelRegex, req.ModelName) {
 			continue
@@ -105,6 +108,7 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule)
 			continue
 		}
 		meta := AffinityMeta{
+			ruleRevision:   rev,
 			RuleName:       rule.Name,
 			TTLSeconds:     effectiveRuleTTL(rule),
 			SessionMode:    setting.EffectiveAffinitySessionMode(rule),
@@ -118,6 +122,11 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule)
 		}
 		meta.CacheKey = affinityCacheKey(rule, req, value)
 		ruleAffinityMu.Lock()
+		syncRuleRevisionLocked()
+		if cachedRulesRevision != rev {
+			ruleAffinityMu.Unlock()
+			return meta
+		}
 		meta.cacheEpoch = cacheEpoch
 		if entry, ok := loadRuleAffinityLocked(meta.CacheKey); ok {
 			meta.observedVersion = entry.version
@@ -158,6 +167,10 @@ func RecordRuleAffinityKey(meta AffinityMeta, channelID int64, index int, genera
 	ruleAffinityMu.Lock()
 	defer ruleAffinityMu.Unlock()
 	now := time.Now()
+	syncRuleRevisionLocked()
+	if meta.ruleRevision != cachedRulesRevision {
+		return false
+	}
 	if cacheEpoch != meta.cacheEpoch || ruleAffinityCache[meta.CacheKey].version != meta.observedVersion {
 		return false
 	}
@@ -179,6 +192,14 @@ func RecordRuleAffinityKey(meta AffinityMeta, channelID int64, index int, genera
 }
 
 // sweepRuleAffinity requires ruleAffinityMu.
+func syncRuleRevisionLocked() {
+	if rev := setting.AffinityRulesRevision(); rev != cachedRulesRevision {
+		clear(ruleAffinityCache)
+		cachedRulesRevision = rev
+		cacheEpoch++
+	}
+}
+
 func sweepRuleAffinity(now time.Time) {
 	for key, e := range ruleAffinityCache {
 		if !now.Before(e.expiresAt) {
@@ -225,6 +246,7 @@ func RuleAffinityStats() AffinityCacheStats {
 	ruleAffinityMu.Lock()
 	defer ruleAffinityMu.Unlock()
 	sweepRuleAffinity(time.Now())
+	syncRuleRevisionLocked()
 	for _, entry := range ruleAffinityCache {
 		total++
 		if name := entry.ruleName; name != "" {

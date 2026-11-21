@@ -269,6 +269,7 @@ type relayFlow struct {
 	affinityRuleGroup    string
 	affinityRuleModel    string
 	affinityRules        []setting.AffinityRule
+	affinityRevision     uint64
 	affinityRuleUsed     bool
 }
 
@@ -447,7 +448,7 @@ func (f *relayFlow) resolveRuleAffinity() {
 		return
 	}
 	if !f.affinityRuleResolved {
-		f.affinityRules = setting.RoutingAffinityRules()
+		f.affinityRules, f.affinityRevision = setting.AffinityRulesSnapshot()
 	}
 	f.affinityRuleResolved = true
 	f.affinityRuleGroup, f.affinityRuleModel = f.currentGroup, f.req.modelName
@@ -459,7 +460,7 @@ func (f *relayFlow) resolveRuleAffinity() {
 		Body:        f.req.body,
 		UsingGroup:  f.currentGroup,
 		TokenID:     f.req.tokenID,
-	}, f.affinityRules)
+	}, f.affinityRules, f.affinityRevision)
 	f.affinityMeta = meta
 	f.affinityRuleUsed = meta.Matched
 }

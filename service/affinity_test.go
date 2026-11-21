@@ -218,11 +218,12 @@ func TestGjsonPathWalker(t *testing.T) {
 
 func TestRuleAffinityCapacityAndSweep(t *testing.T) {
 	resetAffinityForTest(t)
+	RuleAffinityStats()
 	live := time.Now().Add(time.Hour)
 	for i := range maxRuleBindings {
 		ruleAffinityCache[strconv.Itoa(i)] = ruleAffinityEntry{expiresAt: live}
 	}
-	RecordRuleAffinity(AffinityMeta{CacheKey: "extra", TTLSeconds: 60, cacheEpoch: cacheEpoch}, 1)
+	RecordRuleAffinity(AffinityMeta{CacheKey: "extra", TTLSeconds: 60, cacheEpoch: cacheEpoch, ruleRevision: cachedRulesRevision}, 1)
 	if len(ruleAffinityCache) != maxRuleBindings {
 		t.Fatal("capacity exceeded")
 	}
@@ -248,5 +249,23 @@ func TestAffinityStaleCompletion(t *testing.T) {
 	ClearAllRuleAffinity()
 	if RecordRuleAffinity(current, 2) {
 		t.Fatal("cleared binding resurrected")
+	}
+}
+
+func TestRuleRevisionPreventsStaleWrites(t *testing.T) {
+	resetAffinityForTest(t)
+	rules := `[{"name":"r","model_regex":[".*"],"key_sources":[{"type":"gjson","path":"k"}]}]`
+	enableRuleAffinity(t, rules)
+	req := AffinityRequest{ModelName: "m", Body: []byte(`{"k":"s"}`)}
+	old := ResolveAffinity(req)
+	RecordRuleAffinity(old, 1)
+	enableRuleAffinity(t, rules)
+	if !ResolveAffinity(req).Found {
+		t.Fatal("unchanged rules lost session")
+	}
+	enableRuleAffinity(t, `[]`)
+	enableRuleAffinity(t, rules)
+	if RecordRuleAffinity(old, 2) || ResolveAffinity(req).Found {
+		t.Fatal("binding crossed configuration generations")
 	}
 }
