@@ -45,14 +45,14 @@ export function RoutingAffinityPanel({ enabled }: { enabled: boolean }) {
         >
           {clear.isPending
             ? text("清空中…", "Clearing…", "جارٍ المسح…")
-            : text("清空亲和缓存", "Clear affinity cache", "مسح ذاكرة التقارب")}
+            : text("清空本副本规则缓存", "Clear all rule bindings on this replica", "مسح جميع روابط القواعد في هذه النسخة")}
         </Button>
       </header>
       <p>
         {text(
-          "展示当前副本上被规则粘滞的会话数。缓存为进程内状态，重启即失；多副本不共享。撤销绑定或停用渠道后请手动清空，避免旧粘滞在 TTL 内残留。",
-          "Shows sessions pinned by rules on this replica. The cache is process-local and resets on restart; replicas do not share it. After revoking a binding or disabling a channel, clear manually so a stale pin does not survive its TTL.",
-          "يعرض الجلسات المثبتة بقواعد على هذه النسخة. الذاكرة محلية للعملية وتُفرّغ عند إعادة التشغيل؛ النسخ لا تتشاركها. بعد إلغاء رابط أو تعطيل قناة، أمسح يدويًا كي لا تبقى التثبيتات القديمة ضمن مدة البقاء.",
+          "此处统计当前服务副本的全部 HTTP 请求亲和规则缓存。清空将移除本副本所有会话的渠道偏好；已发布的路由授权和其他副本不受影响。",
+          "These are all HTTP rule-affinity entries on this replica. Clearing them removes channel preferences for all sessions here. Published routing grants and other replicas are unaffected.",
+          "تشمل الإحصاءات جميع روابط قواعد طلبات HTTP في هذه النسخة. يزيل المسح تفضيلات القنوات لجميع الجلسات هنا دون تغيير صلاحيات التوجيه المنشورة أو النسخ الأخرى.",
         )}
       </p>
       {query.isLoading && (
