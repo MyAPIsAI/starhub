@@ -218,6 +218,9 @@ func TestAffinityRulesValidation(t *testing.T) {
 	for _, bad := range []string{
 		`[{"name":"","model_regex":["x"],"key_sources":[{"type":"gjson","path":"p"}]}]`,
 		`[{"name":"r","model_regex":[],"key_sources":[{"type":"gjson","path":"p"}]}]`,
+		`[{"name":"r","model_regex":["["],"key_sources":[{"type":"gjson","path":"p"}]}]`,
+		`[{"name":"r","model_regex":["."],"path_regex":["("],"key_sources":[{"type":"gjson","path":"p"}]}]`,
+		`[{"name":"r","model_regex":["."],"value_regex":"[","key_sources":[{"type":"gjson","path":"p"}]}]`,
 		`[{"name":"r","model_regex":["x"],"key_sources":[]}]`,
 		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"bogus","path":"p"}]}]`,
 		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"request_header"}]}]`,

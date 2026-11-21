@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,7 +70,6 @@ var (
 	cacheEpoch, nextVersion uint64
 	ruleAffinityCache       = make(map[string]ruleAffinityEntry)
 	nextAffinitySweep       time.Time
-	affinityRegexCache      sync.Map // pattern string -> *regexp.Regexp
 	ruleAffinityMu          sync.Mutex
 )
 
@@ -91,10 +89,10 @@ func ResolveAffinity(req AffinityRequest) AffinityMeta {
 // ResolveAffinityWithRules matches the current routing hop against a request snapshot.
 func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule, rev uint64) AffinityMeta {
 	for _, rule := range rules {
-		if !affinityMatchAny(rule.ModelRegex, req.ModelName) {
+		if !rule.MatchesModel(req.ModelName) {
 			continue
 		}
-		if len(rule.PathRegex) > 0 && !affinityMatchAny(rule.PathRegex, req.RequestPath) {
+		if !rule.MatchesPath(req.RequestPath) {
 			continue
 		}
 		if len(rule.UserAgentInclude) > 0 && !affinityMatchIncludeFold(rule.UserAgentInclude, req.UserAgent) {
@@ -104,7 +102,7 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule,
 		if value == "" || len(value) > maxAffinityValueBytes {
 			continue
 		}
-		if rule.ValueRegex != "" && !affinityMatchAny([]string{rule.ValueRegex}, value) {
+		if !rule.MatchesValue(value) {
 			continue
 		}
 		meta := AffinityMeta{
@@ -280,7 +278,6 @@ func ClearAllRuleAffinity() int {
 // ResetRuleAffinityCache clears all rule affinity state (used by tests).
 func ResetRuleAffinityCache() {
 	ClearAllRuleAffinity()
-	affinityRegexCache.Clear()
 }
 
 func effectiveRuleTTL(rule setting.AffinityRule) int {
@@ -333,26 +330,6 @@ func affinityKeyHint(s string) string {
 	return s[:4] + "..." + s[len(s)-4:]
 }
 
-func affinityMatchAny(patterns []string, s string) bool {
-	if len(patterns) == 0 || s == "" {
-		return false
-	}
-	for _, pattern := range patterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			continue
-		}
-		re := affinityRegex(pattern)
-		if re == nil {
-			continue
-		}
-		if re.MatchString(s) {
-			return true
-		}
-	}
-	return false
-}
-
 func affinityMatchIncludeFold(patterns []string, s string) bool {
 	if len(patterns) == 0 || s == "" {
 		return false
@@ -368,19 +345,6 @@ func affinityMatchIncludeFold(patterns []string, s string) bool {
 		}
 	}
 	return false
-}
-
-func affinityRegex(pattern string) *regexp.Regexp {
-	if cached, ok := affinityRegexCache.Load(pattern); ok {
-		return cached.(*regexp.Regexp)
-	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		affinityRegexCache.Store(pattern, (*regexp.Regexp)(nil))
-		return nil
-	}
-	affinityRegexCache.Store(pattern, re)
-	return re
 }
 
 // affinityExtractValue returns the first non-empty value from the key sources

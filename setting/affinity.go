@@ -3,6 +3,7 @@ package setting
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -63,18 +64,54 @@ type AffinityKeySource struct {
 // AffinityRule defines one rule-driven sticky binding. Rules are evaluated in
 // order; the first matching rule wins. Match conditions are ANDed.
 type AffinityRule struct {
-	Name               string              `json:"name"`
-	ModelRegex         []string            `json:"model_regex"`
-	PathRegex          []string            `json:"path_regex,omitempty"`
-	UserAgentInclude   []string            `json:"user_agent_include,omitempty"`
-	KeySources         []AffinityKeySource `json:"key_sources"`
-	ValueRegex         string              `json:"value_regex,omitempty"`
-	TTLSeconds         int                 `json:"ttl_seconds,omitempty"`
-	SessionMode        string              `json:"session_mode,omitempty"`
-	SkipRetryOnFailure bool                `json:"skip_retry_on_failure,omitempty"`
-	IncludeRuleName    bool                `json:"include_rule_name,omitempty"`
-	IncludeModelName   bool                `json:"include_model_name,omitempty"`
-	IncludeUsingGroup  bool                `json:"include_using_group,omitempty"`
+	modelPatterns, pathPatterns, valuePatterns []*regexp.Regexp
+	Name                                       string              `json:"name"`
+	ModelRegex                                 []string            `json:"model_regex"`
+	PathRegex                                  []string            `json:"path_regex,omitempty"`
+	UserAgentInclude                           []string            `json:"user_agent_include,omitempty"`
+	KeySources                                 []AffinityKeySource `json:"key_sources"`
+	ValueRegex                                 string              `json:"value_regex,omitempty"`
+	TTLSeconds                                 int                 `json:"ttl_seconds,omitempty"`
+	SessionMode                                string              `json:"session_mode,omitempty"`
+	SkipRetryOnFailure                         bool                `json:"skip_retry_on_failure,omitempty"`
+	IncludeRuleName                            bool                `json:"include_rule_name,omitempty"`
+	IncludeModelName                           bool                `json:"include_model_name,omitempty"`
+	IncludeUsingGroup                          bool                `json:"include_using_group,omitempty"`
+}
+
+func (r AffinityRule) MatchesModel(s string) bool { return matchesRulePattern(r.modelPatterns, s) }
+func (r AffinityRule) MatchesPath(s string) bool {
+	return len(r.pathPatterns) == 0 || matchesRulePattern(r.pathPatterns, s)
+}
+func (r AffinityRule) MatchesValue(s string) bool {
+	return len(r.valuePatterns) == 0 || matchesRulePattern(r.valuePatterns, s)
+}
+func matchesRulePattern(patterns []*regexp.Regexp, s string) bool {
+	for _, p := range patterns {
+		if s != "" && p.MatchString(s) {
+			return true
+		}
+	}
+	return false
+}
+
+func compileRulePatterns(patterns []string) ([]*regexp.Regexp, error) {
+	if len(patterns) > 64 {
+		return nil, fmt.Errorf("too many patterns")
+	}
+	out := make([]*regexp.Regexp, 0, len(patterns))
+	for _, p := range patterns {
+		p = strings.TrimSpace(p)
+		if p == "" || len(p) > 1024 {
+			return nil, fmt.Errorf("invalid pattern length")
+		}
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, re)
+	}
+	return out, nil
 }
 
 var (
@@ -199,6 +236,18 @@ func validateAffinityRules(rules []AffinityRule) error {
 		if len(r.ModelRegex) == 0 {
 			return fmt.Errorf("affinity rule %q: model_regex is required", name)
 		}
+		var err error
+		if rules[i].modelPatterns, err = compileRulePatterns(r.ModelRegex); err != nil {
+			return fmt.Errorf("rule %q model_regex: %w", name, err)
+		}
+		if rules[i].pathPatterns, err = compileRulePatterns(r.PathRegex); err != nil {
+			return fmt.Errorf("rule %q path_regex: %w", name, err)
+		}
+		if r.ValueRegex != "" {
+			if rules[i].valuePatterns, err = compileRulePatterns([]string{r.ValueRegex}); err != nil {
+				return fmt.Errorf("rule %q value_regex: %w", name, err)
+			}
+		}
 		if len(r.KeySources) == 0 {
 			return fmt.Errorf("affinity rule %q: at least one key_source is required", name)
 		}
@@ -219,8 +268,8 @@ func validateAffinityRules(rules []AffinityRule) error {
 			mode != AffinitySessionPrefer && mode != AffinitySessionStrict {
 			return fmt.Errorf("affinity rule %q: invalid session_mode %q", name, r.SessionMode)
 		}
-		if r.TTLSeconds < 0 {
-			return fmt.Errorf("affinity rule %q: ttl_seconds must be >= 0", name)
+		if r.TTLSeconds < 0 || int64(r.TTLSeconds) > MaxRoutingAffinityTTLSeconds {
+			return fmt.Errorf("affinity rule %q: ttl_seconds out of range", name)
 		}
 	}
 	return nil
@@ -311,16 +360,12 @@ func UpdateAffinity(key, value string) error {
 		if err != nil {
 			return fmt.Errorf("invalid value for %s: %w", key, err)
 		}
-		var normalized []AffinityRule
-		if err := json.Unmarshal([]byte(canonical), &normalized); err != nil {
-			return fmt.Errorf("invalid value for %s: %w", key, err)
-		}
 		routeAffMu.Lock()
 		if canonical != ruleEncoding {
 			ruleRevision++
 			ruleEncoding = canonical
 		}
-		routingAffinityRules = normalized
+		routingAffinityRules = rules
 		routeAffMu.Unlock()
 		return nil
 	default:
