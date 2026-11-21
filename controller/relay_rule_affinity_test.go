@@ -192,3 +192,29 @@ func TestAffinitySkipRetryRequiresActualHit(t *testing.T) {
 		}
 	}
 }
+
+func TestStrictBindingSurvivesUpstreamFailure(t *testing.T) {
+	newTestDB(t)
+	t.Cleanup(service.ResetRuleAffinityCache)
+	t.Cleanup(model.ResetAffinity)
+	t.Cleanup(setting.ResetAffinityToDefaults)
+	a := mustChannel(t, "only", "m", "key", common.ChannelStatusEnabled)
+	enableRuleAffinityForRelay(t, `[{"name":"r","model_regex":[".*"],"key_sources":[{"type":"gjson","path":"s"}],"session_mode":"strict"}]`)
+	makeFlow := func() *relayFlow { return newRuleAffinityFlow(t, 7, common.DefaultGroup, "m", `{"s":"same"}`) }
+	seed := makeFlow()
+	seed.resolveRuleAffinity()
+	service.RecordRuleAffinity(seed.affinityMeta, a.ID)
+	f := makeFlow()
+	calls := 0
+	f.runChannels(func(*model.Channel) attemptResult {
+		calls++
+		return attemptResult{outcome: attemptUpstreamError, cause: errors.New("fixture")}
+	})
+	if calls != 1 || f.sw.status != 503 {
+		t.Fatalf("attempts=%d status=%d", calls, f.sw.status)
+	}
+	next := makeFlow()
+	if _, err := next.pick(); !errors.Is(err, model.ErrStrictAffinity) || next.affinityMeta.ChannelID != a.ID {
+		t.Fatalf("lost or reused cooling binding: %+v %v", next.affinityMeta, err)
+	}
+}

@@ -353,6 +353,8 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 					id := f.affinityMeta.ChannelID
 					if !f.tried[id] && !model.ChannelCoolingDown(id) {
 						preferred = id
+					} else if f.affinityMeta.SessionMode == setting.AffinitySessionStrict {
+						return nil, f.strictUnavailable()
 					}
 				} else if !f.affinityRuleResolved || !f.affinityRuleUsed {
 					id, ok := model.AffinityChannel(f.affinityKey())
@@ -402,11 +404,7 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			// fails instead of silently switching upstreams.
 			if f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
 				f.affinityMeta.ChannelID > 0 && ch.ID != f.affinityMeta.ChannelID {
-				if !f.sw.wrote {
-					f.errorOut(http.StatusServiceUnavailable, "server_error", "strict_affinity_unavailable",
-						"the affinity-bound channel is unavailable in strict mode")
-				}
-				return nil, model.ErrStrictAffinity
+				return nil, f.strictUnavailable()
 			}
 			return ch, nil
 		}
@@ -418,11 +416,7 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		// the bound channel is required and its absence is a hard failure.
 		if f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
 			f.affinityMeta.ChannelID > 0 {
-			if !f.sw.wrote {
-				f.errorOut(http.StatusServiceUnavailable, "server_error", "strict_affinity_unavailable",
-					"the affinity-bound channel is unavailable in strict mode")
-			}
-			return nil, model.ErrStrictAffinity
+			return nil, f.strictUnavailable()
 		}
 		// Current group exhausted: advance to the next auto group, if any.
 		if f.req.group != common.AutoGroup || f.groupIdx >= len(f.req.autoGroups)-1 {
@@ -434,6 +428,13 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		f.groupIdx++
 		f.currentGroup = f.req.autoGroups[f.groupIdx]
 	}
+}
+
+func (f *relayFlow) strictUnavailable() error {
+	if !f.sw.wrote {
+		f.errorOut(http.StatusServiceUnavailable, "server_error", "strict_affinity_unavailable", "the affinity-bound channel is unavailable in strict mode")
+	}
+	return model.ErrStrictAffinity
 }
 
 // resolveRuleAffinity evaluates the configured routing_affinity_rules once
@@ -602,8 +603,10 @@ func (f *relayFlow) noteRuleAffinity(ch *model.Channel, outcome attemptOutcome) 
 	case attemptUpstreamError:
 		wasPreferred := f.affinityPreferred == ch.ID
 		if wasPreferred {
-			service.ClearRuleAffinity(f.affinityMeta)
-			metric.RecordAffinity(metric.AffinityClear)
+			if f.affinityMeta.SessionMode != setting.AffinitySessionStrict {
+				service.ClearRuleAffinity(f.affinityMeta)
+				metric.RecordAffinity(metric.AffinityClear)
+			}
 			f.affinityFailed = true
 			metric.RecordAffinity(metric.AffinityPreferredFailed)
 			model.CoolDownChannel(ch.ID, setting.RoutingAffinityCooldown())
@@ -909,6 +912,10 @@ loop:
 			return
 		case attemptUpstreamError:
 			f.sent++
+			if f.affinityRuleUsed && f.affinityPreferred == ch.ID && f.affinityMeta.SessionMode == setting.AffinitySessionStrict {
+				f.strictUnavailable()
+				return
+			}
 			// Rule-driven affinity with skip_retry_on_failure: the bound
 			// channel failed and the operator asked not to fall over to
 			// other channels. Surface the failure and stop the loop.
