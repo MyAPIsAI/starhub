@@ -1,0 +1,76 @@
+.affinity-settings {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.affinity-settings table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 14px;
+}
+.affinity-settings th,
+.affinity-settings td {
+  text-align: start;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.affinity-settings thead {
+  background: var(--subtle);
+  color: var(--muted);
+  font-size: 12px;
+}
+.affinity-settings tbody tr {
+  border-top: 1px solid var(--border);
+}
+.affinity-settings tbody th {
+  font-weight: 500;
+}
+.affinity-settings select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.affinity-duration,
+.affinity-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.affinity-duration span {
+  color: var(--muted);
+}
+.affinity-toggle input {
+  appearance: none;
+  width: 36px;
+  height: 22px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  cursor: pointer;
+  flex: none;
+  margin: 0;
+}
+.affinity-toggle input::after {
+  display: block;
+  content: "";
+  margin: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+}
+.affinity-toggle input:checked {
+  background: var(--accent);
+}
+.affinity-toggle input:checked::after {
+  margin-inline-start: 16px;
+}
+.affinity-settings input:focus-visible,
+.affinity-settings select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

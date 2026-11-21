@@ -5,6 +5,7 @@ import { ApiError } from "../lib/api/http";
 import { useUpdateOption } from "../lib/api/option";
 import { readAffinityDraft } from "../lib/api/routing-affinity";
 import { useSettingsText } from "./settings-text";
+import "./routing-affinity-editor.css";
 
 type Kind = "global" | "rules";
 type Field =
@@ -50,6 +51,13 @@ const title = (kind: Kind, t: Text) =>
   kind === "global"
     ? t("编辑全局配置", "Edit global configuration", "تحرير الإعدادات العامة")
     : t("管理亲和规则", "Manage affinity rules", "إدارة قواعد التقارب");
+
+const globalFields = Object.keys(fields) as Field[];
+const limit = (field: Field) =>
+  field === "ttl_seconds" ? 86400 : field === "cooldown_seconds" ? 600 : 0;
+const invalidTime = (field: Field, value: string) =>
+  limit(field) > 0 &&
+  (!/^[1-9]\d*$/.test(value) || Number(value) > limit(field));
 
 export function AffinityEditorActions() {
   const { text } = useSettingsText();
@@ -104,8 +112,7 @@ function AffinityEditor({
   const update = useUpdateOption();
   const [draft, setDraft] = useState<Draft>();
   const [rules, setRules] = useState<Rule[]>([]);
-  const [field, setField] = useState<Field>("enabled");
-  const [value, setValue] = useState("");
+  const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [blocked, setBlocked] = useState(false);
@@ -125,8 +132,7 @@ function AffinityEditor({
         } else {
           if (Object.keys(fields).some((k) => d.values[k] === undefined))
             throw Error();
-          setField("enabled");
-          setValue(d.values.enabled);
+          setValues({ ...d.values });
         }
         setDraft(d);
       })
@@ -135,15 +141,21 @@ function AffinityEditor({
       });
     return () => c.abort();
   }, [kind, reload]);
+  const changes = globalFields
+    .filter((f) => draft && values[f] !== draft.values[f])
+    .map((f) => ({ key: "routing_affinity_" + f, value: values[f] }));
   const save = async () => {
     if (!draft || blocked || update.isPending) return;
-    const key = kind === "rules" ? "rules" : field;
     try {
-      await update.mutateAsync({
-        key: "routing_affinity_" + key,
-        value: kind === "rules" ? JSON.stringify(rules) : value,
-        expected_version: draft.version,
-      });
+      await update.mutateAsync(
+        kind === "rules"
+          ? {
+              key: "routing_affinity_rules",
+              value: JSON.stringify(rules),
+              expected_version: draft.version,
+            }
+          : { options: changes, expected_version: draft.version },
+      );
       saved();
     } catch (e) {
       if (e instanceof ApiError && e.status === 400) {
@@ -156,7 +168,6 @@ function AffinityEditor({
       }
     }
   };
-  const isNumber = field === "ttl_seconds" || field === "cooldown_seconds";
   const valid =
     kind === "rules"
       ? rules.every(
@@ -168,10 +179,7 @@ function AffinityEditor({
               (s.type === "gjson" ? s.path : s.key)?.trim(),
             ),
         )
-      : !isNumber ||
-        (/^\d+$/.test(value) &&
-          Number(value) > 0 &&
-          Number(value) <= (field === "ttl_seconds" ? 86400 : 600));
+      : globalFields.every((f) => !invalidTime(f, values[f]));
   return (
     <Modal
       open
@@ -181,7 +189,7 @@ function AffinityEditor({
         "Applies to platform HTTP routing, not binding grants. Hash mode does not evaluate session rules.",
         "تسري على توجيه HTTP للمنصة ولا تغيّر صلاحيات الروابط. لا يقيّم وضع التجزئة قواعد الجلسة.",
       )}
-      size={kind === "rules" ? "wide" : "compact"}
+      size={kind === "rules" ? "wide" : "default"}
       preventOutsideClose
       onOpenChange={(open) => {
         if (!open && !update.isPending) close();
@@ -198,7 +206,7 @@ function AffinityEditor({
               !valid ||
               blocked ||
               update.isPending ||
-              (kind === "global" && value === draft.values[field])
+              (kind === "global" && changes.length === 0)
             }
             onClick={() => void save()}
           >
@@ -253,65 +261,95 @@ function AffinityEditor({
           (kind === "rules" ? (
             <RulesEditor rules={rules} setRules={setRules} text={text} />
           ) : (
-            <>
-              <label>
-                {text(
-                  "选择要修改的配置项",
-                  "Setting to change",
-                  "الإعداد المراد تعديله",
-                )}
-                <select
-                  value={field}
-                  onChange={(e) => {
-                    const f = e.target.value as Field;
-                    setField(f);
-                    setValue(draft.values[f]);
-                    setError("");
-                  }}
-                >
-                  {(Object.keys(fields) as Field[]).map((f) => (
-                    <option key={f} value={f}>
-                      {text(...fields[f])}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {text(...fields[field])}
-                {isNumber ? (
-                  <input
-                    type="number"
-                    min={1}
-                    max={field === "ttl_seconds" ? 86400 : 600}
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                  />
-                ) : (
-                  <select
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                  >
-                    {(field === "mode"
-                      ? [
-                          [
-                            "sticky",
-                            text("会话粘滞", "Sticky", "تثبيت الجلسة"),
-                          ],
-                          ["hash", text("哈希分配", "Hash", "التجزئة")],
-                        ]
-                      : [
-                          ["true", text("启用", "Enabled", "مفعّل")],
-                          ["false", text("停用", "Disabled", "غير مفعّل")],
-                        ]
-                    ).map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </label>
-            </>
+            <div className="affinity-settings">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">{text("选项", "Option", "الخيار")}</th>
+                    <th scope="col">{text("设置", "Setting", "الإعداد")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {globalFields.map((f) => {
+                    const id = `affinity-field-${f}`;
+                    const change = (v: string) =>
+                      setValues((old) => ({ ...old, [f]: v }));
+                    const invalid = invalidTime(f, values[f]);
+                    return (
+                      <tr key={f}>
+                        <th scope="row">
+                          <label htmlFor={id}>{text(...fields[f])}</label>
+                        </th>
+                        <td>
+                          {limit(f) ? (
+                            <>
+                              <div className="affinity-duration">
+                                <input
+                                  id={id}
+                                  type="number"
+                                  dir="ltr"
+                                  min={1}
+                                  max={limit(f)}
+                                  disabled={update.isPending}
+                                  aria-invalid={invalid}
+                                  aria-describedby={
+                                    invalid ? id + "-error" : undefined
+                                  }
+                                  value={values[f]}
+                                  onChange={(e) => change(e.target.value)}
+                                />
+                                <span>{text("秒", "s", "ث")}</span>
+                              </div>
+                              {invalid && (
+                                <small id={id + "-error"} role="alert">
+                                  {text(
+                                    `请输入 1–${limit(f)} 的整数。`,
+                                    `Enter a whole number from 1 to ${limit(f)}.`,
+                                    `أدخل عددًا صحيحًا من 1 إلى ${limit(f)}.`,
+                                  )}
+                                </small>
+                              )}
+                            </>
+                          ) : f === "mode" ? (
+                            <select
+                              id={id}
+                              value={values[f]}
+                              disabled={update.isPending}
+                              onChange={(e) => change(e.target.value)}
+                            >
+                              <option value="sticky">
+                                {text("会话粘滞", "Sticky", "تثبيت الجلسة")}
+                              </option>
+                              <option value="hash">
+                                {text("哈希分配", "Hash", "التجزئة")}
+                              </option>
+                            </select>
+                          ) : (
+                            <div className="affinity-toggle">
+                              <input
+                                id={id}
+                                type="checkbox"
+                                role="switch"
+                                checked={values[f] === "true"}
+                                disabled={update.isPending}
+                                onChange={(e) =>
+                                  change(String(e.target.checked))
+                                }
+                              />
+                              <span>
+                                {values[f] === "true"
+                                  ? text("启用", "Enabled", "مفعّل")
+                                  : text("停用", "Disabled", "غير مفعّل")}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ))}
       </div>
     </Modal>

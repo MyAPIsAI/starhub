@@ -31,11 +31,19 @@ export function useOptions() {
 export function useUpdateOption() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
-      key: string;
-      value: string;
-      expected_version?: number;
-    }) => apiPut("/api/option", input),
+    mutationFn: (
+      input:
+        | {
+            key: string;
+            value: string;
+            expected_version?: number;
+          }
+        | { options: Option[]; expected_version: number },
+    ) =>
+      apiPut(
+        "options" in input ? "/api/option/routing_affinity" : "/api/option",
+        input,
+      ),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: OPTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: OPTION_STATUS_KEY });

@@ -143,6 +143,38 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, nil)
 }
 
+func UpdateGlobalAffinityOptions(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ExpectedVersion *int64         `json:"expected_version"`
+		Options         []model.Option `json:"options"`
+	}
+	if !decodeResourceBody(w, r, &req) {
+		return
+	}
+	if req.ExpectedVersion == nil {
+		common.ApiError(w, 400, "expected_version is required")
+		return
+	}
+	actor, _ := r.Context().Value(common.CtxUserID).(int64)
+	version, err := model.SaveAffinityOptionsIfVersion(r.Context(), req.Options, actor, *req.ExpectedVersion)
+	if err != nil {
+		switch {
+		case errors.Is(err, model.ErrInvalidAffinityBatch):
+			common.ApiError(w, 400, err.Error())
+		case errors.Is(err, model.ErrOptionVersionConflict):
+			common.ApiError(w, 409, "configuration changed; reload and review again")
+		default:
+			common.ApiError(w, 500, "global affinity settings could not be saved")
+		}
+		return
+	}
+	if err := model.LoadOptionsToSettings(); err != nil {
+		common.ApiError(w, 500, "settings saved but could not be reloaded")
+		return
+	}
+	common.ApiSuccess(w, map[string]int64{"version": version})
+}
+
 // GetRoutingAffinityCacheStats reports the live rule-affinity cache: total
 // entries, per-rule counts, the rule count and whether the feature is on.
 // Admin-only; the cache is process-local so the numbers reflect this replica.

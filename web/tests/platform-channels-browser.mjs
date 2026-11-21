@@ -373,8 +373,21 @@ try {
         .getByRole("button", { name: "Save configuration", exact: true })
         .click();
     await openGlobal();
-    await dialog.getByLabel("Setting to change").selectOption("ttl_seconds");
-    await dialog.getByRole("spinbutton").fill("360");
+    const ttl = dialog.getByLabel("Default TTL (seconds)", { exact: true });
+    const cooldown = dialog.getByLabel("Failure cooldown (seconds)", {
+      exact: true,
+    });
+    await ttl.waitFor();
+    assert.equal(await dialog.getByRole("row").count(), 6);
+    await cooldown.fill("601");
+    await dialog.getByRole("alert").filter({ hasText: "600" }).waitFor();
+    assert.ok(
+      await dialog
+        .getByRole("button", { name: "Save configuration" })
+        .isDisabled(),
+    );
+    await cooldown.fill("45");
+    await ttl.fill("360");
     await api("PUT", "/api/option", {
       key: "routing_affinity_ttl_seconds",
       value: "420",
@@ -384,14 +397,29 @@ try {
       .getByRole("alert")
       .filter({ hasText: "Configuration changed" })
       .waitFor();
-    assert.equal(await dialog.getByRole("spinbutton").inputValue(), "360");
+    assert.equal(await ttl.inputValue(), "360");
+    assert.equal(await cooldown.inputValue(), "45");
     await dialog.getByRole("button", { name: "Reload configuration" }).click();
-    await dialog.getByLabel("Setting to change").selectOption("ttl_seconds");
-    assert.equal(await dialog.getByRole("spinbutton").inputValue(), "420");
-    await dialog.getByRole("spinbutton").fill("360");
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#affinity-field-ttl_seconds")?.value === "420",
+    );
+    assert.equal(await cooldown.inputValue(), "30");
+    await ttl.fill("360");
+    await cooldown.fill("45");
+    await page.setViewportSize({ width: 320, height: 720 });
+    assert.ok(
+      await dialog
+        .getByRole("table")
+        .evaluate((el) => el.getBoundingClientRect().right <= innerWidth),
+    );
+    await page.screenshot({
+      path: path.join(temp, "affinity-global-mobile.png"),
+    });
     await saveAffinity();
     await dialog.waitFor({ state: "hidden" });
     await bindingsPanel.getByText(/Default TTL \(seconds\): 360/).waitFor();
+    await bindingsPanel.getByText(/Failure cooldown \(seconds\): 45/).waitFor();
     const openRules = () =>
       bindingsPanel
         .getByRole("button", { name: "Manage affinity rules", exact: true })
