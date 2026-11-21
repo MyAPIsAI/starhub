@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -382,7 +383,9 @@ func affinityGjsonPath(body []byte, path string) string {
 		return ""
 	}
 	var current any
-	if err := json.Unmarshal(body, &current); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if !json.Valid(body) || decoder.Decode(&current) != nil {
 		return ""
 	}
 	for _, segment := range strings.Split(path, ".") {
@@ -407,11 +410,8 @@ func affinityValueString(value any) string {
 	switch v := value.(type) {
 	case string:
 		return strings.TrimSpace(v)
-	case float64:
-		if v == float64(int64(v)) {
-			return strconv.FormatInt(int64(v), 10)
-		}
-		return strconv.FormatFloat(v, 'f', -1, 64)
+	case json.Number:
+		return v.String()
 	case bool:
 		if v {
 			return "true"

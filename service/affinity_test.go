@@ -194,6 +194,11 @@ func TestRuleAffinityStatsAndClearAll(t *testing.T) {
 }
 
 func TestGjsonPathWalker(t *testing.T) {
+	for _, n := range []string{"9007199254740992", "9007199254740993", "18446744073709551615"} {
+		if got := affinityGjsonPath([]byte(`{"id":`+n+`}`), "id"); got != n {
+			t.Fatalf("lost JSON identity: %s became %s", n, got)
+		}
+	}
 	body := []byte(`{"metadata":{"user_id":"u-42"},"prompt_cache_key":"pk","count":3,"flag":true,"arr":[1,2]}`)
 	for _, tc := range []struct {
 		path string
