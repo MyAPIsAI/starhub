@@ -87,6 +87,24 @@ func TestRelayFlowRuleAffinitySticky(t *testing.T) {
 	}
 }
 
+func TestStrictAffinityRecordsActualAutoGroup(t *testing.T) {
+	newTestDB(t)
+	t.Cleanup(service.ResetRuleAffinityCache)
+	t.Cleanup(setting.ResetAffinityToDefaults)
+	mustChannel(t, "eligible", "gpt-4o", "k", common.ChannelStatusEnabled)
+	enableRuleAffinityForRelay(t, `[{"name":"strict","model_regex":[".*"],"key_sources":[{"type":"gjson","path":"s"}],"session_mode":"strict"}]`)
+	for i := 0; i < 2; i++ {
+		f := newRuleAffinityFlow(t, 7, common.AutoGroup, "gpt-4o", `{"s":"same"}`)
+		f.currentGroup = "empty"
+		f.req.autoGroups = []string{"empty", common.DefaultGroup}
+		ch, err := f.pick()
+		if err != nil || f.currentGroup != common.DefaultGroup || f.affinityMeta.Found != (i == 1) {
+			t.Fatalf("hop %d: %+v %v", i, f.affinityMeta, err)
+		}
+		f.noteAffinity(ch, attemptSuccess)
+	}
+}
+
 // Strict session mode fails the request (503) when the bound channel is no
 // longer selectable, instead of silently switching to another channel.
 func TestRelayFlowRuleAffinityStrictFailsWhenBoundUnavailable(t *testing.T) {

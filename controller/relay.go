@@ -264,9 +264,12 @@ type relayFlow struct {
 	// configured routing_affinity_rules. When affinityRuleUsed is true the
 	// legacy TokenID-based stickiness is bypassed and noteAffinity records
 	// into the rule cache instead of the legacy store.
-	affinityMeta        service.AffinityMeta
+	affinityMeta         service.AffinityMeta
 	affinityRuleResolved bool
-	affinityRuleUsed    bool
+	affinityRuleGroup    string
+	affinityRuleModel    string
+	affinityRules        []setting.AffinityRule
+	affinityRuleUsed     bool
 }
 
 func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat, mode string) *relayFlow {
@@ -439,11 +442,15 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 // request. When a rule matched, affinityRuleUsed is set and the legacy
 // TokenID-based stickiness is skipped.
 func (f *relayFlow) resolveRuleAffinity() {
-	if f.affinityRuleResolved {
+	if f.affinityRuleResolved && f.affinityRuleGroup == f.currentGroup && f.affinityRuleModel == f.req.modelName {
 		return
 	}
+	if !f.affinityRuleResolved {
+		f.affinityRules = setting.RoutingAffinityRules()
+	}
 	f.affinityRuleResolved = true
-	meta := service.ResolveAffinity(service.AffinityRequest{
+	f.affinityRuleGroup, f.affinityRuleModel = f.currentGroup, f.req.modelName
+	meta := service.ResolveAffinityWithRules(service.AffinityRequest{
 		ModelName:   f.req.modelName,
 		RequestPath: f.req.requestPath,
 		UserAgent:   f.req.userAgent,
@@ -451,12 +458,9 @@ func (f *relayFlow) resolveRuleAffinity() {
 		Body:        f.req.body,
 		UsingGroup:  f.currentGroup,
 		TokenID:     f.req.tokenID,
-	})
-	if !meta.Matched {
-		return
-	}
+	}, f.affinityRules)
 	f.affinityMeta = meta
-	f.affinityRuleUsed = true
+	f.affinityRuleUsed = meta.Matched
 }
 
 // affinityKey returns the sticky-affinity scope of the request: the token,
@@ -838,7 +842,7 @@ func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
 			return
 		}
 	}
-	loop:
+loop:
 	for {
 		if f.ctx.Err() != nil || f.sw.wrote {
 			break

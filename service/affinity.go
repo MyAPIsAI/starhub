@@ -69,10 +69,14 @@ var (
 // When a rule matches but the cache has no entry yet, Matched is true and
 // Found is false (ChannelID == 0); the caller records the channel on success.
 func ResolveAffinity(req AffinityRequest) AffinityMeta {
-	rules := setting.RoutingAffinityRules()
-	if len(rules) == 0 || !setting.RoutingAffinityEnabled() {
+	if !setting.RoutingAffinityEnabled() {
 		return AffinityMeta{}
 	}
+	return ResolveAffinityWithRules(req, setting.RoutingAffinityRules())
+}
+
+// ResolveAffinityWithRules matches the current routing hop against a request snapshot.
+func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule) AffinityMeta {
 	for _, rule := range rules {
 		if !affinityMatchAny(rule.ModelRegex, req.ModelName) {
 			continue
