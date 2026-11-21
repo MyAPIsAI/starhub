@@ -616,8 +616,7 @@ func (f *relayFlow) noteRuleAffinity(ch *model.Channel, outcome attemptOutcome) 
 	case attemptUpstreamError:
 		wasPreferred := f.affinityPreferred == ch.ID
 		if wasPreferred {
-			if f.affinityMeta.SessionMode != setting.AffinitySessionStrict {
-				service.ClearRuleAffinity(f.affinityMeta)
+			if f.affinityMeta.SessionMode != setting.AffinitySessionStrict && service.ClearRuleAffinity(&f.affinityMeta) {
 				metric.RecordAffinity(metric.AffinityClear)
 			}
 			f.affinityFailed = true

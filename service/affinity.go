@@ -33,18 +33,19 @@ type AffinityRequest struct {
 // is true when a rule matched (regardless of a cache hit); the caller uses
 // Matched to decide rule affinity vs the legacy TokenID-based stickiness.
 type AffinityMeta struct {
-	KeyIndex           int
-	EndpointGeneration string
-	RuleName           string
-	CacheKey           string
-	TTLSeconds         int
-	SessionMode        string
-	SkipRetry          bool
-	KeyHint            string
-	KeyFingerprint     string
-	ChannelID          int64
-	Matched            bool
-	Found              bool
+	cacheEpoch, observedVersion uint64
+	KeyIndex                    int
+	EndpointGeneration          string
+	RuleName                    string
+	CacheKey                    string
+	TTLSeconds                  int
+	SessionMode                 string
+	SkipRetry                   bool
+	KeyHint                     string
+	KeyFingerprint              string
+	ChannelID                   int64
+	Matched                     bool
+	Found                       bool
 }
 
 const (
@@ -56,6 +57,7 @@ const (
 // ruleAffinityEntry is one remembered channel plus its expiry. The TTL keeps
 // a stale preference from pinning traffic once the bound channel shifts.
 type ruleAffinityEntry struct {
+	version            uint64
 	keyIndex           int
 	endpointGeneration string
 	ruleName           string
@@ -64,10 +66,11 @@ type ruleAffinityEntry struct {
 }
 
 var (
-	ruleAffinityCache  = make(map[string]ruleAffinityEntry)
-	nextAffinitySweep  time.Time
-	affinityRegexCache sync.Map // pattern string -> *regexp.Regexp
-	ruleAffinityMu     sync.Mutex
+	cacheEpoch, nextVersion uint64
+	ruleAffinityCache       = make(map[string]ruleAffinityEntry)
+	nextAffinitySweep       time.Time
+	affinityRegexCache      sync.Map // pattern string -> *regexp.Regexp
+	ruleAffinityMu          sync.Mutex
 )
 
 // ResolveAffinity evaluates the configured rules in order and returns the
@@ -114,11 +117,15 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule)
 			return meta
 		}
 		meta.CacheKey = affinityCacheKey(rule, req, value)
-		if entry, ok := loadRuleAffinity(meta.CacheKey); ok {
+		ruleAffinityMu.Lock()
+		meta.cacheEpoch = cacheEpoch
+		if entry, ok := loadRuleAffinityLocked(meta.CacheKey); ok {
+			meta.observedVersion = entry.version
 			meta.ChannelID = entry.channelID
 			meta.KeyIndex, meta.EndpointGeneration = entry.keyIndex, entry.endpointGeneration
 			meta.Found = true
 		}
+		ruleAffinityMu.Unlock()
 		return meta
 	}
 	return AffinityMeta{}
@@ -151,6 +158,9 @@ func RecordRuleAffinityKey(meta AffinityMeta, channelID int64, index int, genera
 	ruleAffinityMu.Lock()
 	defer ruleAffinityMu.Unlock()
 	now := time.Now()
+	if cacheEpoch != meta.cacheEpoch || ruleAffinityCache[meta.CacheKey].version != meta.observedVersion {
+		return false
+	}
 	if !now.Before(nextAffinitySweep) {
 		sweepRuleAffinity(now)
 		nextAffinitySweep = now.Add(time.Minute)
@@ -158,7 +168,8 @@ func RecordRuleAffinityKey(meta AffinityMeta, channelID int64, index int, genera
 	if _, ok := ruleAffinityCache[meta.CacheKey]; !ok && len(ruleAffinityCache) >= maxRuleBindings {
 		return false
 	}
-	ruleAffinityCache[meta.CacheKey] = ruleAffinityEntry{
+	nextVersion++
+	ruleAffinityCache[meta.CacheKey] = ruleAffinityEntry{version: nextVersion,
 		keyIndex: index, endpointGeneration: generation,
 		ruleName:  meta.RuleName,
 		channelID: channelID,
@@ -178,13 +189,18 @@ func sweepRuleAffinity(now time.Time) {
 
 // ClearRuleAffinity evicts the cache entry for the meta's key. Called when
 // the bound channel is unavailable (prefer mode) or fails (upstream error).
-func ClearRuleAffinity(meta AffinityMeta) {
-	if meta.CacheKey == "" {
-		return
+func ClearRuleAffinity(meta *AffinityMeta) bool {
+	if meta.CacheKey == "" || meta.observedVersion == 0 {
+		return false
 	}
 	ruleAffinityMu.Lock()
 	defer ruleAffinityMu.Unlock()
+	if cacheEpoch != meta.cacheEpoch || ruleAffinityCache[meta.CacheKey].version != meta.observedVersion {
+		return false
+	}
 	delete(ruleAffinityCache, meta.CacheKey)
+	meta.observedVersion = 0
+	return true
 }
 
 // AffinityCacheStats is the admin-visible cache summary.
@@ -234,6 +250,7 @@ func ClearAllRuleAffinity() int {
 	ruleAffinityMu.Lock()
 	defer ruleAffinityMu.Unlock()
 	count := len(ruleAffinityCache)
+	cacheEpoch++
 	clear(ruleAffinityCache)
 	return count
 }
@@ -251,9 +268,7 @@ func effectiveRuleTTL(rule setting.AffinityRule) int {
 	return int(setting.RoutingAffinityTTL() / time.Second)
 }
 
-func loadRuleAffinity(key string) (ruleAffinityEntry, bool) {
-	ruleAffinityMu.Lock()
-	defer ruleAffinityMu.Unlock()
+func loadRuleAffinityLocked(key string) (ruleAffinityEntry, bool) {
 	entry, ok := ruleAffinityCache[key]
 	if !ok {
 		return ruleAffinityEntry{}, false

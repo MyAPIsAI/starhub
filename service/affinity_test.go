@@ -124,7 +124,7 @@ func TestResolveAffinityHeaderSourceAndCacheHit(t *testing.T) {
 	}
 
 	// Clear → miss again.
-	ClearRuleAffinity(meta2)
+	ClearRuleAffinity(&meta2)
 	meta3 := ResolveAffinity(req)
 	if meta3.Found {
 		t.Fatal("cache should be empty after clear")
@@ -146,8 +146,8 @@ func TestResolveAffinitySessionOffSkipsCache(t *testing.T) {
 		t.Fatalf("off mode must not build a cache key, got %q", meta.CacheKey)
 	}
 	RecordRuleAffinity(meta, 7)
-	if entry, ok := loadRuleAffinity("any"); ok {
-		t.Fatalf("off mode must not record, got %v", entry)
+	if RuleAffinityStats().Total != 0 {
+		t.Fatal("off mode must not record")
 	}
 }
 
@@ -222,12 +222,31 @@ func TestRuleAffinityCapacityAndSweep(t *testing.T) {
 	for i := range maxRuleBindings {
 		ruleAffinityCache[strconv.Itoa(i)] = ruleAffinityEntry{expiresAt: live}
 	}
-	RecordRuleAffinity(AffinityMeta{CacheKey: "extra", TTLSeconds: 60}, 1)
+	RecordRuleAffinity(AffinityMeta{CacheKey: "extra", TTLSeconds: 60, cacheEpoch: cacheEpoch}, 1)
 	if len(ruleAffinityCache) != maxRuleBindings {
 		t.Fatal("capacity exceeded")
 	}
 	ruleAffinityCache["0"] = ruleAffinityEntry{}
 	if RuleAffinityStats().Total != maxRuleBindings-1 || len(ruleAffinityCache) != maxRuleBindings-1 {
 		t.Fatal("expired binding not reclaimed")
+	}
+}
+
+func TestAffinityStaleCompletion(t *testing.T) {
+	resetAffinityForTest(t)
+	enableRuleAffinity(t, `[{"name":"r","model_regex":[".*"],"key_sources":[{"type":"gjson","path":"k"}]}]`)
+	req := AffinityRequest{TokenID: 7, ModelName: "m", Body: []byte(`{"k":"s"}`)}
+	RecordRuleAffinity(ResolveAffinity(req), 1)
+	old := ResolveAffinity(req)
+	if !RecordRuleAffinity(old, 2) {
+		t.Fatal("expected refresh")
+	}
+	if ClearRuleAffinity(&old) || RecordRuleAffinity(old, 1) || ResolveAffinity(req).ChannelID != 2 {
+		t.Fatal("stale completion replaced newer binding")
+	}
+	current := ResolveAffinity(req)
+	ClearAllRuleAffinity()
+	if RecordRuleAffinity(current, 2) {
+		t.Fatal("cleared binding resurrected")
 	}
 }
