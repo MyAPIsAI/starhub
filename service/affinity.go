@@ -89,6 +89,8 @@ func ResolveAffinity(req AffinityRequest) AffinityMeta {
 
 // ResolveAffinityWithRules matches the current routing hop against a request snapshot.
 func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule, rev uint64) AffinityMeta {
+	// When all rules miss, count only the furthest matching stage for this hop.
+	reason := conditionsUnmatched
 	for _, rule := range rules {
 		if !rule.MatchesModel(req.ModelName) {
 			continue
@@ -99,11 +101,13 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule,
 		if len(rule.UserAgentInclude) > 0 && !affinityMatchIncludeFold(rule.UserAgentInclude, req.UserAgent) {
 			continue
 		}
-		value, _ := affinityExtractValue(req, rule.KeySources)
-		if value == "" || len(value) > maxAffinityValueBytes {
+		value, source := affinityExtractValue(req, rule.KeySources)
+		if value == "" {
+			reason = max(reason, missingSource)
 			continue
 		}
-		if !rule.MatchesValue(value) {
+		if len(value) > maxAffinityValueBytes || !rule.MatchesValue(value) {
+			reason = invalidValue
 			continue
 		}
 		meta := AffinityMeta{
@@ -117,9 +121,14 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule,
 			Matched:        true,
 		}
 		if meta.SessionMode == setting.AffinitySessionOff {
+			ruleOff.count()
 			return meta
 		}
 		meta.CacheKey = affinityCacheKey(rule, req, value)
+		if strings.TrimSpace(source.Type) == "context_int" {
+			// A session named "42" must not share the token-wide binding for token 42.
+			meta.CacheKey += ":token"
+		}
 		ruleAffinityMu.Lock()
 		syncRuleRevisionLocked()
 		if cachedRulesRevision != rev {
@@ -132,9 +141,14 @@ func ResolveAffinityWithRules(req AffinityRequest, rules []setting.AffinityRule,
 			meta.ChannelID = entry.channelID
 			meta.KeyIndex, meta.EndpointGeneration = entry.keyIndex, entry.endpointGeneration
 			meta.Found = true
+		} else {
+			coldStart.count()
 		}
 		ruleAffinityMu.Unlock()
 		return meta
+	}
+	if len(rules) > 0 {
+		reason.count()
 	}
 	return AffinityMeta{}
 }
@@ -168,9 +182,15 @@ func RecordRuleAffinityKey(meta AffinityMeta, channelID int64, index int, genera
 	now := time.Now()
 	syncRuleRevisionLocked()
 	if meta.ruleRevision != cachedRulesRevision {
+		writeRevision.count()
 		return false
 	}
-	if cacheEpoch != meta.cacheEpoch || ruleAffinityCache[meta.CacheKey].version != meta.observedVersion {
+	if cacheEpoch != meta.cacheEpoch {
+		writeClear.count()
+		return false
+	}
+	if ruleAffinityCache[meta.CacheKey].version != meta.observedVersion {
+		writeRaced.count()
 		return false
 	}
 	if !now.Before(nextAffinitySweep) {
@@ -178,6 +198,7 @@ func RecordRuleAffinityKey(meta AffinityMeta, channelID int64, index int, genera
 		nextAffinitySweep = now.Add(time.Minute)
 	}
 	if _, ok := ruleAffinityCache[meta.CacheKey]; !ok && len(ruleAffinityCache) >= maxRuleBindings {
+		writeFull.count()
 		return false
 	}
 	nextVersion++
@@ -187,10 +208,11 @@ func RecordRuleAffinityKey(meta AffinityMeta, channelID int64, index int, genera
 		channelID: channelID,
 		expiresAt: time.Now().Add(time.Duration(ttl) * time.Second),
 	}
+	writeOK.count()
 	return true
 }
 
-// sweepRuleAffinity requires ruleAffinityMu.
+// syncRuleRevisionLocked requires ruleAffinityMu.
 func syncRuleRevisionLocked() {
 	if rev := setting.AffinityRulesRevision(); rev != cachedRulesRevision {
 		clear(ruleAffinityCache)
@@ -225,6 +247,9 @@ func ClearRuleAffinity(meta *AffinityMeta) bool {
 
 // AffinityCacheStats is the admin-visible cache summary.
 type AffinityCacheStats struct {
+	Instance   string                        `json:"instance"`
+	ObservedAt int64                         `json:"observed_at"`
+	Events     map[string]uint64             `json:"events"`
 	Config     setting.AffinityRuntimeConfig `json:"config"`
 	Enabled    bool                          `json:"enabled"`
 	Total      int                           `json:"total"`
@@ -260,6 +285,7 @@ func RuleAffinityStats() AffinityCacheStats {
 		}
 	}
 	return AffinityCacheStats{
+		Instance: AffinityInstance(), ObservedAt: time.Now().UnixMilli(), Events: affinityEventSnapshot(),
 		Config:     setting.CurrentAffinityConfig(),
 		Enabled:    setting.RoutingAffinityEnabled() && len(rules) > 0,
 		Total:      total,
@@ -358,6 +384,10 @@ func affinityExtractValue(req AffinityRequest, sources []setting.AffinityKeySour
 		t := strings.TrimSpace(src.Type)
 		var value string
 		switch t {
+		case "context_int":
+			if strings.TrimSpace(src.Key) == "token_id" && req.TokenID > 0 {
+				value = strconv.FormatInt(req.TokenID, 10)
+			}
 		case "request_header":
 			if req.Header != nil {
 				value = strings.TrimSpace(req.Header.Get(strings.TrimSpace(src.Key)))

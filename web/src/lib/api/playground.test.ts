@@ -26,7 +26,11 @@ describe("session-authorized playground requests", () => {
       const signal = new AbortController().signal;
       await sendPlaygroundRequest(
         12,
-        { ...defaultDemoRequest("test-model"), protocol },
+        {
+          ...defaultDemoRequest("test-model"),
+          protocol,
+          sessionId: "playground-affinity-fixture",
+        },
         identity(),
         signal,
       );
@@ -35,6 +39,7 @@ describe("session-authorized playground requests", () => {
       expect(init?.credentials).toBe("same-origin");
       expect(init?.signal).toBe(signal);
       const headers = new Headers(init?.headers);
+      expect(headers.get("X-Session-Id")).toBe("playground-affinity-fixture");
       expect(headers.get("X-StarHub-Expected-User-ID")).toBe("7");
       for (const header of ["Authorization", "x-api-key", "x-goog-api-key"])
         expect(headers.has(header)).toBe(false);

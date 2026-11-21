@@ -16,7 +16,11 @@ type Field =
   | "ttl_seconds"
   | "cooldown_seconds"
   | "prefix_cache_enabled";
-type Source = { type: "request_header" | "gjson"; key?: string; path?: string };
+type Source = {
+  type: "request_header" | "gjson" | "context_int";
+  key?: string;
+  path?: string;
+};
 type Rule = {
   name: string;
   model_regex: string[];
@@ -515,7 +519,9 @@ function RulesEditor({
                       replace(
                         e.target.value === "gjson"
                           ? { type: "gjson", path: "" }
-                          : { type: "request_header", key: "" },
+                          : e.target.value === "context_int"
+                            ? { type: "context_int", key: "token_id" }
+                            : { type: "request_header", key: "" },
                       )
                     }
                   >
@@ -529,24 +535,41 @@ function RulesEditor({
                         "مسار حقل JSON",
                       )}
                     </option>
+                    <option value="context_int">
+                      {text(
+                        "已认证令牌 ID",
+                        "Authenticated token ID",
+                        "معرّف الرمز الموثّق",
+                      )}
+                    </option>
                   </select>
                 </label>
-                <label>
-                  {s.type === "gjson"
-                    ? text("字段路径", "Field path", "مسار الحقل")
-                    : text("请求头名称", "Header name", "اسم الترويسة")}
-                  <input
-                    dir="ltr"
-                    value={(s.type === "gjson" ? s.path : s.key) ?? ""}
-                    onChange={(e) =>
-                      replace(
-                        s.type === "gjson"
-                          ? { ...s, path: e.target.value }
-                          : { ...s, key: e.target.value },
-                      )
-                    }
-                  />
-                </label>
+                {s.type === "context_int" ? (
+                  <p>
+                    {text(
+                      "同一令牌下的对话共用此绑定。仅作备选时，请放在会话来源之后。",
+                      "Conversations using the same token share this binding. Place it after session sources to use it as a fallback.",
+                      "تشترك المحادثات التي تستخدم الرمز نفسه في هذا الربط. ضعه بعد مصادر الجلسة لاستخدامه كخيار احتياطي.",
+                    )}
+                  </p>
+                ) : (
+                  <label>
+                    {s.type === "gjson"
+                      ? text("字段路径", "Field path", "مسار الحقل")
+                      : text("请求头名称", "Header name", "اسم الترويسة")}
+                    <input
+                      dir="ltr"
+                      value={(s.type === "gjson" ? s.path : s.key) ?? ""}
+                      onChange={(e) =>
+                        replace(
+                          s.type === "gjson"
+                            ? { ...s, path: e.target.value }
+                            : { ...s, key: e.target.value },
+                        )
+                      }
+                    />
+                  </label>
+                )}
                 <div className="ri-actions">
                   <Button
                     disabled={!i}

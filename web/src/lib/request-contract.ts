@@ -10,6 +10,7 @@ export interface DemoRequest {
   protocol: DemoProtocol;
   capability?: DemoCapability;
   chainId?: string;
+  sessionId?: string;
 }
 
 export function defaultDemoRequest(model = "gpt-4.1"): DemoRequest {
@@ -47,7 +48,11 @@ export function validateDemoRequest(request: DemoRequest): boolean {
     request.messages.some((message) => message.content.trim()) &&
     (request.chainId === undefined ||
       (typeof request.chainId === "string" &&
-        /^[A-Za-z0-9._:-]{1,100}$/.test(request.chainId))),
+        /^[A-Za-z0-9._:-]{1,100}$/.test(request.chainId))) &&
+    (request.sessionId === undefined ||
+      (typeof request.sessionId === "string" &&
+        request.sessionId.trim().length > 0 &&
+        request.sessionId.trim().length <= 200)),
   );
 }
 
@@ -190,6 +195,7 @@ export function buildCurlRequest(
       ? `X-MyAPIs-Capability: ${request.capability}`
       : undefined,
     request.chainId ? `X-MyAPIs-Chain-Id: ${request.chainId}` : undefined,
+    request.sessionId ? `X-Session-Id: ${request.sessionId}` : undefined,
   ]
     .filter((header): header is string => Boolean(header))
     .map((header) => " \\\n  -H " + shellQuote(header))

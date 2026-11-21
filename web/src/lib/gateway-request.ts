@@ -42,6 +42,8 @@ export function buildRelayRequest(request: DemoRequest) {
   }
   if (request.capability) headers["X-MyAPIs-Capability"] = request.capability;
   if (request.chainId) headers["X-MyAPIs-Chain-Id"] = request.chainId;
+  if (request.sessionId && request.sessionId.trim())
+    headers["X-Session-Id"] = request.sessionId.trim();
   return {
     endpoint:
       request.protocol === "Anthropic"

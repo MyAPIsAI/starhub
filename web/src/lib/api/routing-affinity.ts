@@ -23,6 +23,9 @@ export async function readAffinityDraft(signal: AbortSignal) {
 }
 
 export interface RoutingAffinityStats {
+  instance?: string;
+  observed_at?: number;
+  events?: Record<string, number>;
   config?: {
     enabled: boolean;
     mode: "sticky" | "hash";

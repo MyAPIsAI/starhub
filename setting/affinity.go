@@ -71,7 +71,7 @@ func CurrentAffinityConfig() AffinityRuntimeConfig {
 // AffinityKeySource extracts the affinity value from one request field. The
 // first source in a rule's KeySources that yields a non-empty value wins.
 type AffinityKeySource struct {
-	Type string `json:"type"` // request_header | gjson
+	Type string `json:"type"` // request_header | gjson | context_int (token_id only)
 	Key  string `json:"key,omitempty"`
 	Path string `json:"path,omitempty"`
 }
@@ -268,8 +268,11 @@ func validateAffinityRules(rules []AffinityRule) error {
 		}
 		for j, src := range r.KeySources {
 			t := strings.TrimSpace(src.Type)
-			if t != "request_header" && t != "gjson" {
+			if t != "request_header" && t != "gjson" && t != "context_int" {
 				return fmt.Errorf("affinity rule %q: key_source[%d]: unknown type %q", name, j, src.Type)
+			}
+			if t == "context_int" && strings.TrimSpace(src.Key) != "token_id" {
+				return fmt.Errorf("affinity rule %q: key_source[%d]: context_int requires key token_id", name, j)
 			}
 			if t == "request_header" && strings.TrimSpace(src.Key) == "" {
 				return fmt.Errorf("affinity rule %q: key_source[%d]: key is required for type %q", name, j, t)

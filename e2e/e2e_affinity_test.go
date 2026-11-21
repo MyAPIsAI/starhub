@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"testing"
 
 	"starhub/model"
+	"starhub/service"
 	"starhub/setting"
 )
 
@@ -155,6 +158,65 @@ func TestStrictAffinityHTTPRefund(t *testing.T) {
 		}
 		if balance() != paid || calls.Load() != 2 {
 			t.Fatal("failed request changed balance or sent an extra attempt")
+		}
+	}
+}
+
+func TestPlaygroundHeaderAffinityDiagnostics(t *testing.T) {
+	env := setupRelayApp(t)
+	model.ResetAffinity()
+	t.Cleanup(model.ResetAffinity)
+	t.Cleanup(setting.ResetAffinityToDefaults)
+	up := newMockUpstream(t)
+	createChannelID(t, env, map[string]any{"name": "diagnostics", "type": 1, "key": upstreamKey, "base_url": up.URL, "models": "gpt-4o-mini"})
+	for key, value := range map[string]string{"routing_affinity_enabled": "true", "routing_affinity_rules": `[{"name":"diagnostic-rule","model_regex":["^gpt-4o-mini$"],"path_regex":["^/v1/chat/completions$"],"key_sources":[{"type":"request_header","key":"X-Session-Id"}]}]`} {
+		r := doRequest(env.base, "PUT", "/api/option", env.session, map[string]string{"key": key, "value": value})
+		if r.Status != 200 {
+			t.Fatal(r.Body)
+		}
+	}
+	path := fmt.Sprintf("/api/playground/%d", env.tokenID)
+	unlock := doRequest(env.base, "POST", path+"/unlock", env.session, map[string]any{"expected_user_id": env.rootID, "password": "123456"})
+	if unlock.Status != 200 {
+		t.Fatal(unlock.Body)
+	}
+	stats := func() service.AffinityCacheStats {
+		r := doRequest(env.base, "GET", "/api/option/routing_affinity_cache", env.session, nil)
+		var s struct{ Data service.AffinityCacheStats }
+		if r.Status != 200 || json.Unmarshal([]byte(r.Body), &s) != nil || s.Data.Instance == "" {
+			t.Fatalf("invalid statistics: %s", r.Body)
+		}
+		return s.Data
+	}
+	before := stats()
+	for i, want := range []int{0, 0, 1, 1} {
+		r, err := http.NewRequest("POST", env.base+path+"/chat/completions", strings.NewReader(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Header.Set("Content-Type", "application/json")
+		r.AddCookie(&http.Cookie{Name: "session", Value: env.session})
+		if i >= 2 {
+			r.Header.Set("X-Session-Id", "diagnostic-fixture")
+		}
+		resp, err := http.DefaultClient.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil || resp.StatusCode != 200 || resp.Header.Get("X-StarHub-Affinity-Instance") != before.Instance {
+			t.Fatalf("unexpected relay: %d %s", resp.StatusCode, body)
+		}
+		after := stats()
+		if after.Total != want || after.ByRuleName["diagnostic-rule"] != want {
+			t.Fatalf("attempt %d: %+v", i, after)
+		}
+	}
+	after := stats()
+	for event, want := range map[string]uint64{"missing_source": 2, "legacy_hit": 1, "cold_start": 1, "rule_hit": 1, "write_ok": 2} {
+		if delta := after.Events[event] - before.Events[event]; delta != want {
+			t.Errorf("%s: %d, want %d", event, delta, want)
 		}
 	}
 }

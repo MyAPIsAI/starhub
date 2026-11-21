@@ -124,8 +124,13 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
             </>
           )}
           <Button
-            disabled={query.isFetching}
-            onClick={() => void query.refetch()}
+            disabled={query.isFetching || affinity.isFetching}
+            onClick={() =>
+              void Promise.allSettled([
+                query.refetch(),
+                ...(enabled ? [affinity.refetch()] : []),
+              ])
+            }
           >
             {text(
               "刷新绑定状态",

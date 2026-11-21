@@ -88,6 +88,11 @@ export default function Playground({
     NonNullable<DemoRequest["capability"]>
   >(draft.capability || "text");
   const [chainId, setChainId] = useState<string>(draft.chainId || "");
+  const [sessionId] = useState(
+    () =>
+      draft.sessionId ||
+      `playground-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+  );
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
   const [unlocking, setUnlocking] = useState(false);
@@ -149,6 +154,7 @@ export default function Playground({
     protocol,
     capability,
     ...(chainId ? { chainId } : {}),
+    sessionId,
   };
   const code = buildCurlRequest(
     request,
@@ -173,6 +179,7 @@ export default function Playground({
           maxTokens,
           capability,
           chainId,
+          sessionId,
         }),
       );
     } catch {}
@@ -186,6 +193,7 @@ export default function Playground({
     maxTokens,
     capability,
     chainId,
+    sessionId,
     draftKey,
   ]);
   useEffect(

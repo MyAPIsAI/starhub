@@ -131,6 +131,36 @@ func TestResolveAffinityHeaderSourceAndCacheHit(t *testing.T) {
 	}
 }
 
+func TestRuleAuthenticatedTokenFallback(t *testing.T) {
+	resetAffinityForTest(t)
+	enableRuleAffinity(t, `[{"name":"glm","model_regex":["^glm-.*$"],"key_sources":[{"type":"request_header","key":"X-Session-Id"},{"type":"context_int","key":"token_id"}]}]`)
+	req := AffinityRequest{ModelName: "glm-5.2", Header: make(http.Header), Body: []byte(`{"token_id":42}`)}
+	req.Header.Set("token_id", "42")
+	for _, id := range []int64{0, -1} {
+		req.TokenID = id
+		if ResolveAffinity(req).Matched {
+			t.Fatal("client fields cannot supply an authenticated token ID")
+		}
+	}
+	req.TokenID = 42
+	if !RecordRuleAffinity(ResolveAffinity(req), 7) {
+		t.Fatal("token fallback did not establish a named binding")
+	}
+	req.Header.Set("X-Session-Id", "42")
+	meta := ResolveAffinity(req)
+	if meta.Found || !RecordRuleAffinity(meta, 8) || ResolveAffinity(req).ChannelID != 8 {
+		t.Fatal("explicit session must have its own binding even when its value equals the token ID")
+	}
+	req.Header.Del("X-Session-Id")
+	if ResolveAffinity(req).ChannelID != 7 || RuleAffinityStats().ByRuleName["glm"] != 2 {
+		t.Fatal("expected separate session and reusable token bindings under the same rule")
+	}
+	req.TokenID++
+	if ResolveAffinity(req).Found {
+		t.Fatal("another token must not reuse the fallback binding")
+	}
+}
+
 func TestResolveAffinitySessionOffSkipsCache(t *testing.T) {
 	resetAffinityForTest(t)
 	enableRuleAffinity(t, `[{"name":"off","model_regex":[".*"],"key_sources":[{"type":"gjson","path":"k"}],"session_mode":"off"}]`)

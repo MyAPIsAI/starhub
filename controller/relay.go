@@ -255,10 +255,11 @@ type relayFlow struct {
 	upstreamCancels []context.CancelFunc
 
 	// Affinity bookkeeping per request (used by pick and noteAffinity).
-	affinityPreferred int64 // channel picked by affinity (0 when none)
-	affinityKeyIdx    int   // key index used for the current attempt (-1 = none)
-	affinityFailed    bool  // true when the affinity channel failed this request
-	affinityCounted   bool  // true when affinity hit/miss has been counted
+	affinityPreferred        int64 // channel picked by affinity (0 when none)
+	affinityKeyIdx           int   // key index used for the current attempt (-1 = none)
+	affinityFailed           bool  // true when the affinity channel failed this request
+	affinityCounted          bool  // true when affinity hit/miss has been counted
+	affinityReadinessCounted bool  // true when rule bypass preconditions have been counted
 
 	// Rule-driven affinity (P27 phase 1): resolved once per request from the
 	// configured routing_affinity_rules. When affinityRuleUsed is true the
@@ -338,6 +339,7 @@ func (f *relayFlow) errorOut(status int, errType, code, message string) {
 // pricier on failure). It also populates affinityPreferred for metrics and
 // noteAffinity.
 func (f *relayFlow) pick() (*model.Channel, error) {
+	f.recordAffinityReadiness()
 	for {
 		preferred, hashKey := int64(0), ""
 		if f.affinityEligible() {
@@ -428,6 +430,27 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		}
 		f.groupIdx++
 		f.currentGroup = f.req.autoGroups[f.groupIdx]
+	}
+}
+
+// recordAffinityReadiness distinguishes rules that were skipped by global
+// prerequisites from rules that were evaluated and did not match.
+func (f *relayFlow) recordAffinityReadiness() {
+	if f.affinityReadinessCounted {
+		return
+	}
+	f.affinityReadinessCounted = true
+	rules, _ := setting.AffinityRulesSnapshot()
+	if len(rules) == 0 {
+		return
+	}
+	switch {
+	case !setting.RoutingAffinityEnabled():
+		service.RecordAffinityBypass(service.AffinityBypassDisabled)
+	case f.req.tokenID <= 0:
+		service.RecordAffinityBypass(service.AffinityBypassMissingToken)
+	case setting.RoutingAffinityMode() == setting.AffinityModeHash:
+		service.RecordAffinityBypass(service.AffinityBypassHashMode)
 	}
 }
 
@@ -827,11 +850,13 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 // consume the attempt budget.
 func (f *relayFlow) beginMetricAttempt(ch *model.Channel) {
 	f.attempt = f.span.BeginAttempt(ch.ID)
+	f.w.Header().Set("X-StarHub-Affinity-Instance", service.AffinityInstance())
 	affinity := "disabled"
 	if f.affinityEligible() && f.affinityMeta.SessionMode != setting.AffinitySessionOff {
 		affinity = "miss"
 		if f.affinityPreferred == ch.ID {
 			affinity = "hit"
+			service.RecordAffinitySelection(f.affinityRuleUsed)
 		}
 	}
 	key := fmt.Sprintf("%d:%s", ch.ID, f.req.modelName)

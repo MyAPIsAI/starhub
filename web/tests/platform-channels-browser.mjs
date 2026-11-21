@@ -363,6 +363,27 @@ try {
       name: "Persistent gateway bindings",
       exact: true,
     });
+    await bindingsPanel
+      .getByText("Affinity diagnostics (since replica start)", { exact: true })
+      .click();
+    await bindingsPanel
+      .getByText("Missing session key: 0", { exact: true })
+      .waitFor();
+    const [cacheResponse] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname === "/api/option/routing_affinity_cache" &&
+          r.ok(),
+      ),
+      bindingsPanel
+        .getByRole("button", { name: "Refresh binding state", exact: true })
+        .click(),
+    ]);
+    const { data: sample } = await cacheResponse.json();
+    await bindingsPanel.getByText(sample.instance, { exact: true }).waitFor();
+    await bindingsPanel
+      .locator(`time[datetime="${new Date(sample.observed_at).toISOString()}"]`)
+      .waitFor();
     await bindingsPanel.getByText(/Default TTL \(seconds\): 300/).waitFor();
     const openGlobal = () =>
       bindingsPanel
@@ -442,6 +463,10 @@ try {
           exact: true,
         })
         .fill(source === "gjson" ? "metadata.session" : "X-Session");
+      if (source === "request_header") {
+        await dialog.getByRole("button", { name: "Add source" }).click();
+        await dialog.getByLabel(/2\. Source type/).selectOption("context_int");
+      }
     }
     await dialog.getByRole("button", { name: "Move up", exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 });
@@ -480,6 +505,10 @@ try {
       JSON.parse(storedRules.value).map((r) => r.name),
       ["by-header-updated"],
     );
+    assert.deepEqual(JSON.parse(storedRules.value)[0].key_sources, [
+      { type: "request_header", key: "X-Session" },
+      { type: "context_int", key: "token_id" },
+    ]);
     assert.equal(
       await page
         .getByRole("heading", { name: "Gateway affinity cache", exact: true })
