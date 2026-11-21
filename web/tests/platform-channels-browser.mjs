@@ -183,51 +183,217 @@ try {
     .getByRole("button", { name: "Refresh channels", exact: true })
     .click();
   await panel.getByLabel("Search platform channels", { exact: true }).fill("");
-  for (const lang of ["en", "zh", "ar"]) {
-    await page.evaluate(
-      (language) => localStorage.setItem("xy-language", language),
-      lang,
-    );
-    await page.reload();
-    await panel.locator("[data-platform-channel]").first().waitFor();
-    for (const width of [1440, 390, 320]) {
-      await page.setViewportSize({ width, height: 1000 });
-      await panel.scrollIntoViewIfNeeded();
-      assert.ok(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth <= innerWidth + 1,
-        ),
-        `${lang}/${width} page overflow`,
-      );
-      await panel.locator(".rp-table").focus();
-      assert.equal(
-        await panel
-          .locator(".rp-table")
-          .evaluate((element) => element === document.activeElement),
-        true,
-      );
-      await page.screenshot({
-        path: path.join(temp, `platform-${lang}-${width}.png`),
-      });
-    }
-  }
-  await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
-  await page.screenshot({ path: path.join(temp, "platform-dark.png") });
-  const accessibility = await new AxeBuilder({ page })
-    .include("#platform-channels")
-    .analyze();
-  assert.deepEqual(
-    accessibility.violations.map((entry) => entry.id),
-    [],
+  // Seed inventory through the API, then exercise changes through the live UI.
+  const gateway = (await api("GET", "/api/channel")).find(
+    (channel) => channel.name === "Platform fixture 01",
   );
-  await api("GET", "/api/user/logout");
+  const snapshot = {
+    id: "platform-state-inventory",
+    sequence: 1,
+    publishedAt: new Date().toISOString(),
+    source: "platform-state-fixture",
+    channels: [
+      { id: "supplier", name: "Supplier", provider: "", enabled: true },
+    ],
+    instances: [
+      {
+        id: "resource",
+        channelId: "supplier",
+        upstreamModel: "gpt-4.1",
+        canonicalModel: "gpt-4.1",
+        protocols: ["OpenAI"],
+        capabilities: ["text"],
+        contextLength: 128000,
+        region: "",
+        status: "available",
+        latencyMs: 0,
+      },
+    ],
+  };
+  let catalog = await api("GET", "/api/resource");
+  catalog = await api("PUT", "/api/resource", {
+    expected_revision: catalog.revision,
+    snapshot,
+  });
+  await api("PUT", "/api/placement/resource", {
+    expected_revision: catalog.revision,
+    placement: { modelId: "gpt-4.1", groupIds: ["default"], enabled: true },
+  });
   await page.reload();
-  await page.waitForURL("**/login**");
-  assert.equal(await page.locator("#platform-channels").count(), 0);
-  assert.deepEqual(errors, []);
-  console.log(
-    `Platform channel checks passed: empty inventory, 21 real channels, pagination, search, disabled status, refresh/error recovery, management link, three languages, narrow screens, keyboard focus, dark theme, accessibility and logout. Screenshots: ${temp}`,
+  await panel
+    .getByLabel("Search platform channels", { exact: true })
+    .fill(gateway.name);
+  const gatewayRow = panel.locator(`[data-platform-channel="${gateway.id}"]`);
+  const publication = page.locator("#gateway-publication");
+  const dialog = page.getByRole("dialog");
+  await publication
+    .getByLabel("Gateway channel: supplier", { exact: true })
+    .selectOption(String(gateway.id));
+  const expectState = async (label) => {
+    await gatewayRow.getByText(label, { exact: true }).waitFor();
+    const current = (await api("GET", "/api/channel")).find(
+      (channel) => channel.id === gateway.id,
+    );
+    assert.equal(
+      current.resource_state.state,
+      label === "Enabled" ? "enabled" : "closed",
+    );
+  };
+  const publish = async () => {
+    await publication
+      .getByRole("button", { name: "Generate server preview", exact: true })
+      .click();
+    await publication
+      .getByRole("button", { name: "Publish this review", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", { name: "Confirm publication", exact: true })
+      .click();
+    await dialog.waitFor({ state: "hidden" });
+    await expectState("Enabled");
+  };
+  const changeBinding = async (operation) => {
+    const label = operation === "revoke" ? "Revoke routes" : "Release binding";
+    await publication
+      .getByRole("button", { name: `${label}: ${gateway.id}`, exact: true })
+      .click();
+    await dialog
+      .getByRole("button", {
+        name:
+          operation === "revoke"
+            ? "Confirm route revocation"
+            : "Confirm binding release",
+        exact: true,
+      })
+      .click();
+    await dialog.waitFor({ state: "hidden" });
+    await expectState("Closed");
+  };
+  const placement = async (enabled) => {
+    await page
+      .locator('[data-resource-id="resource"]')
+      .getByRole("button", { name: "Edit placement", exact: true })
+      .click();
+    await dialog
+      .getByLabel("Enable inventory placement", { exact: true })
+      .setChecked(enabled);
+    await dialog
+      .getByRole("button", { name: "Review changes", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", { name: "Confirm save", exact: true })
+      .click();
+    await dialog.waitFor({ state: "hidden" });
+  };
+  await publish();
+  await changeBinding("revoke");
+  await publish();
+  await placement(false);
+  await expectState("Closed");
+  await placement(true);
+  await publish();
+  await page
+    .getByRole("button", { name: "Import snapshot", exact: true })
+    .click();
+  await dialog.getByLabel("Snapshot JSON", { exact: true }).fill(
+    JSON.stringify({
+      ...snapshot,
+      sequence: 2,
+      publishedAt: new Date().toISOString(),
+      instances: [{ ...snapshot.instances[0], contextLength: 64000 }],
+    }),
   );
+  await dialog
+    .getByRole("button", { name: "Review changes", exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Confirm save", exact: true })
+    .click();
+  await dialog.waitFor({ state: "hidden" });
+  await expectState("Closed");
+  await publish();
+  // An uncertain response must still trigger a read of the committed server state.
+  await page.route(`**/api/resource/bindings/${gateway.id}`, async (route) => {
+    // Preserve the browser's same-origin context when Playwright forwards the request.
+    const response = await route.fetch({
+      headers: {
+        ...(await route.request().allHeaders()),
+        "sec-fetch-site": "same-origin",
+      },
+    });
+    assert.equal(response.status(), 200, await response.text());
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: '{"success":false,"message":"Fixture response lost"}',
+    });
+  });
+  await publication
+    .getByRole("button", { name: `Revoke routes: ${gateway.id}`, exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Confirm route revocation", exact: true })
+    .click();
+  await dialog.getByRole("alert").waitFor();
+  await expectState("Closed");
+  await page.unroute(`**/api/resource/bindings/${gateway.id}`);
+  await dialog.getByText("Close", { exact: true }).click();
+  await publish();
+  await changeBinding("release");
+  console.log(
+    "Platform channel state checks passed: publication, revocation, placement changes, snapshot changes, uncertain response and binding release refresh the mounted list without a manual refresh.",
+  );
+  await panel.getByLabel("Search platform channels", { exact: true }).fill("");
+  if (!process.argv.includes("--state-only")) {
+    for (const lang of ["en", "zh", "ar"]) {
+      await page.evaluate(
+        (language) => localStorage.setItem("xy-language", language),
+        lang,
+      );
+      await page.reload();
+      await panel.locator("[data-platform-channel]").first().waitFor();
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await panel.scrollIntoViewIfNeeded();
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+          `${lang}/${width} page overflow`,
+        );
+        await panel.locator(".rp-table").focus();
+        assert.equal(
+          await panel
+            .locator(".rp-table")
+            .evaluate((element) => element === document.activeElement),
+          true,
+        );
+        await page.screenshot({
+          path: path.join(temp, `platform-${lang}-${width}.png`),
+        });
+      }
+    }
+    await page.evaluate(
+      () => (document.documentElement.dataset.theme = "dark"),
+    );
+    await page.screenshot({ path: path.join(temp, "platform-dark.png") });
+    const accessibility = await new AxeBuilder({ page })
+      .include("#platform-channels")
+      .analyze();
+    assert.deepEqual(
+      accessibility.violations.map((entry) => entry.id),
+      [],
+    );
+    await api("GET", "/api/user/logout");
+    await page.reload();
+    await page.waitForURL("**/login**");
+    assert.equal(await page.locator("#platform-channels").count(), 0);
+    assert.deepEqual(errors, []);
+    console.log(
+      `Platform channel checks passed: empty inventory, 21 real channels, pagination, search, disabled status, refresh/error recovery, management link, three languages, narrow screens, keyboard focus, dark theme, accessibility and logout. Screenshots: ${temp}`,
+    );
+  }
+  assert.deepEqual(errors, []);
 } finally {
   await browser?.close();
   await vite?.close();

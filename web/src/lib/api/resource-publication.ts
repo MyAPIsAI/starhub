@@ -81,6 +81,7 @@ export async function refreshPublicationQueries(
       "resource-catalog",
       "resource-publication-context",
       "resource-publication-state",
+      "admin-channels",
       "admin-audit",
       "plaza-models",
       "plaza-model",

@@ -50,6 +50,7 @@ export function useResourceMutation() {
         "resource-catalog",
         "resource-publication-context",
         "resource-publication-state",
+        "admin-channels",
         "admin-audit",
       ])
         void client.invalidateQueries({ queryKey: [key] });
