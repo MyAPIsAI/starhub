@@ -170,6 +170,8 @@ func New() http.Handler {
 	mux.Handle("GET /api/option", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/status", middleware.AdminAuth(http.HandlerFunc(controller.OptionStatus)))
+	mux.Handle("GET /api/option/routing_affinity_cache", middleware.AdminAuth(http.HandlerFunc(controller.GetRoutingAffinityCacheStats)))
+	mux.Handle("DELETE /api/option/routing_affinity_cache", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.ClearRoutingAffinityCache))))
 	mux.Handle("GET /api/option/pricing", middleware.AdminAuth(http.HandlerFunc(controller.GetPricingOptions)))
 	mux.Handle("PUT /api/option/pricing", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdatePricingOptions))))
 	mux.Handle("GET /api/option/time-pricing", middleware.AdminAuth(http.HandlerFunc(controller.GetTimePricing)))

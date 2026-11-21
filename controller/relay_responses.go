@@ -74,6 +74,9 @@ func RelayResponses(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	if _, err := flow.pick(); err != nil {
+		if errors.Is(err, model.ErrStrictAffinity) {
+			return // pick() already wrote the 503 strict-affinity response.
+		}
 		if errors.Is(err, model.ErrNoChannel) {
 			flow.exhausted()
 		} else {

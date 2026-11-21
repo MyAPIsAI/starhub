@@ -7,6 +7,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/service"
 	"starhub/setting"
 )
 
@@ -266,6 +267,85 @@ func TestListOptionsReturnsSeededKeys(t *testing.T) {
 		if !seen[key] {
 			t.Fatalf("seeded option %q is missing from the listing", key)
 		}
+	}
+}
+
+func TestRoutingAffinityRulesOptionRoundTrip(t *testing.T) {
+	newTestDB(t)
+	uid, role := admin()
+	t.Cleanup(setting.ResetAffinityToDefaults)
+
+	payload := `{"key":"routing_affinity_rules","value":"[{\"name\":\"r\",\"model_regex\":[\".*\"],\"key_sources\":[{\"type\":\"gjson\",\"path\":\"sid\"}],\"session_mode\":\"prefer\",\"include_rule_name\":true}]"}`
+	rr := call(UpdateOption, testRequest{
+		method: http.MethodPut, target: "/api/option", body: payload, userID: uid, role: role,
+	})
+	expectStatus(t, rr, http.StatusOK)
+	if rules := setting.RoutingAffinityRules(); len(rules) != 1 || rules[0].Name != "r" {
+		t.Fatalf("rules after update = %+v, want one rule named r", rules)
+	}
+
+	// The seeded value must round-trip through ListOptions.
+	rr = call(ListOptions, testRequest{target: "/api/option", userID: uid, role: role})
+	var opts []map[string]string
+	decodeData(t, rr, &opts)
+	for _, o := range opts {
+		if o["key"] == setting.OptionKeyRoutingAffinityRules {
+			if o["value"] != "[]" {
+				// Persisted as the canonical JSON of the configured rule.
+				if o["value"] == "" {
+					t.Fatalf("routing_affinity_rules value is empty after update")
+				}
+			}
+			return
+		}
+	}
+	t.Fatalf("routing_affinity_rules not found in option listing")
+}
+
+func TestRoutingAffinityCacheStatsAndClear(t *testing.T) {
+	newTestDB(t)
+	uid, role := admin()
+	t.Cleanup(setting.ResetAffinityToDefaults)
+	t.Cleanup(service.ResetRuleAffinityCache)
+
+	// No rules configured: stats reports disabled.
+	rr := call(GetRoutingAffinityCacheStats, testRequest{target: "/api/option/routing_affinity_cache", userID: uid, role: role})
+	expectStatus(t, rr, http.StatusOK)
+	var stats service.AffinityCacheStats
+	decodeData(t, rr, &stats)
+	if stats.Enabled || stats.Total != 0 {
+		t.Fatalf("stats with no rules = %+v, want disabled/0", stats)
+	}
+
+	// Enable + seed one cache entry.
+	if err := setting.UpdateOption(setting.OptionKeyRoutingAffinityEnabled, `true`); err != nil {
+		t.Fatal(err)
+	}
+	if err := setting.UpdateOption(setting.OptionKeyRoutingAffinityRules, `[{"name":"r","model_regex":[".*"],"key_sources":[{"type":"gjson","path":"k"}],"include_rule_name":true}]`); err != nil {
+		t.Fatal(err)
+	}
+	meta := service.ResolveAffinity(service.AffinityRequest{ModelName: "x", Body: []byte(`{"k":"v"}`)})
+	service.RecordRuleAffinity(meta, 5)
+
+	rr = call(GetRoutingAffinityCacheStats, testRequest{target: "/api/option/routing_affinity_cache", userID: uid, role: role})
+	expectStatus(t, rr, http.StatusOK)
+	decodeData(t, rr, &stats)
+	if !stats.Enabled || stats.Total != 1 || stats.ByRuleName["r"] != 1 {
+		t.Fatalf("stats after seed = %+v, want enabled/1/r=1", stats)
+	}
+
+	// Clear evicts the entry.
+	rr = call(ClearRoutingAffinityCache, testRequest{method: http.MethodDelete, target: "/api/option/routing_affinity_cache", userID: uid, role: role})
+	expectStatus(t, rr, http.StatusOK)
+	var cleared struct {
+		Removed int `json:"removed"`
+	}
+	decodeData(t, rr, &cleared)
+	if cleared.Removed != 1 {
+		t.Fatalf("clear removed = %d, want 1", cleared.Removed)
+	}
+	if total := service.RuleAffinityStats().Total; total != 0 {
+		t.Fatalf("after clear total = %d, want 0", total)
 	}
 }
 

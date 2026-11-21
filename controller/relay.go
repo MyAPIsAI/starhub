@@ -136,6 +136,11 @@ type relayRequest struct {
 	channelCheck          func(*model.Channel, string) (bool, error)
 	chainAdmission        func() error
 	pricing               map[string]relay.PriceData
+	// Request fields consumed by rule-driven affinity (path, user-agent and
+	// headers). Populated from *http.Request by relayRequestFromContext.
+	requestPath string
+	userAgent   string
+	header      http.Header
 }
 
 func relayRequestFromContext(r *http.Request) relayRequest {
@@ -169,6 +174,9 @@ func relayRequestFromContext(r *http.Request) relayRequest {
 	}
 	req.body, _ = ctx.Value(common.CtxRequestBody).([]byte)
 	req.requestedCapabilities = middleware.TelemetryCapabilities(r, req.body)
+	req.requestPath = r.URL.Path
+	req.userAgent = r.UserAgent()
+	req.header = r.Header
 	groups := []string{req.billingGroup()}
 	if req.group == common.AutoGroup {
 		groups = append(groups, req.autoGroups...)
@@ -251,6 +259,14 @@ type relayFlow struct {
 	affinityKeyIdx    int   // key index used for the current attempt (-1 = none)
 	affinityFailed    bool  // true when the affinity channel failed this request
 	affinityCounted   bool  // true when affinity hit/miss has been counted
+
+	// Rule-driven affinity (P27 phase 1): resolved once per request from the
+	// configured routing_affinity_rules. When affinityRuleUsed is true the
+	// legacy TokenID-based stickiness is bypassed and noteAffinity records
+	// into the rule cache instead of the legacy store.
+	affinityMeta        service.AffinityMeta
+	affinityRuleResolved bool
+	affinityRuleUsed    bool
 }
 
 func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat, mode string) *relayFlow {
@@ -325,9 +341,21 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			case setting.AffinityModeHash:
 				hashKey = f.affinityHashKey()
 			default:
-				id, ok := model.AffinityChannel(f.affinityKey())
-				if ok && !f.tried[id] && !model.ChannelCoolingDown(id) {
-					preferred = id
+				// Rule-driven affinity takes precedence when a rule matched.
+				// Resolved once per request; on later pick() calls (retries)
+				// the cached meta is reused so the bound channel stays the
+				// preferred one until it is tried or cooling down.
+				f.resolveRuleAffinity()
+				if f.affinityRuleUsed && f.affinityMeta.ChannelID > 0 {
+					id := f.affinityMeta.ChannelID
+					if !f.tried[id] && !model.ChannelCoolingDown(id) {
+						preferred = id
+					}
+				} else if !f.affinityRuleResolved || !f.affinityRuleUsed {
+					id, ok := model.AffinityChannel(f.affinityKey())
+					if ok && !f.tried[id] && !model.ChannelCoolingDown(id) {
+						preferred = id
+					}
 				}
 			}
 		}
@@ -365,10 +393,33 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 					metric.RecordAffinity(metric.AffinityMiss)
 				}
 			}
+			// Strict session mode: the bound channel was required. If a
+			// different channel was selected (the bound one is unavailable,
+			// cooling, in a lower priority tier or already tried) the request
+			// fails instead of silently switching upstreams.
+			if f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
+				f.affinityMeta.ChannelID > 0 && ch.ID != f.affinityMeta.ChannelID {
+				if !f.sw.wrote {
+					f.errorOut(http.StatusServiceUnavailable, "server_error", "strict_affinity_unavailable",
+						"the affinity-bound channel is unavailable in strict mode")
+				}
+				return nil, model.ErrStrictAffinity
+			}
 			return ch, nil
 		}
 		if !errors.Is(err, model.ErrNoChannel) {
 			return nil, err
+		}
+		// Strict affinity: no channel was selected at all. In prefer mode this
+		// falls through to the auto-group / smart-model walk; in strict mode
+		// the bound channel is required and its absence is a hard failure.
+		if f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
+			f.affinityMeta.ChannelID > 0 {
+			if !f.sw.wrote {
+				f.errorOut(http.StatusServiceUnavailable, "server_error", "strict_affinity_unavailable",
+					"the affinity-bound channel is unavailable in strict mode")
+			}
+			return nil, model.ErrStrictAffinity
 		}
 		// Current group exhausted: advance to the next auto group, if any.
 		if f.req.group != common.AutoGroup || f.groupIdx >= len(f.req.autoGroups)-1 {
@@ -380,6 +431,32 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		f.groupIdx++
 		f.currentGroup = f.req.autoGroups[f.groupIdx]
 	}
+}
+
+// resolveRuleAffinity evaluates the configured routing_affinity_rules once
+// per request and caches the result on the flow. Subsequent calls (retries)
+// reuse the cached meta so the preferred channel stays stable within one
+// request. When a rule matched, affinityRuleUsed is set and the legacy
+// TokenID-based stickiness is skipped.
+func (f *relayFlow) resolveRuleAffinity() {
+	if f.affinityRuleResolved {
+		return
+	}
+	f.affinityRuleResolved = true
+	meta := service.ResolveAffinity(service.AffinityRequest{
+		ModelName:   f.req.modelName,
+		RequestPath: f.req.requestPath,
+		UserAgent:   f.req.userAgent,
+		Header:      f.req.header,
+		Body:        f.req.body,
+		UsingGroup:  f.currentGroup,
+		TokenID:     f.req.tokenID,
+	})
+	if !meta.Matched {
+		return
+	}
+	f.affinityMeta = meta
+	f.affinityRuleUsed = true
 }
 
 // affinityKey returns the sticky-affinity scope of the request: the token,
@@ -464,8 +541,17 @@ func (f *relayFlow) selectKey(ch *model.Channel) (string, int) {
 // successful attempt is remembered; a retryable failure of the remembered
 // channel clears it so the next request does not keep hitting a broken
 // upstream first. 4xx (client error) is intentionally a no-op.
+//
+// When rule-driven affinity is active for this request (affinityRuleUsed),
+// the record/clear goes to the rule cache (service.RecordRuleAffinity /
+// ClearRuleAffinity) instead of the legacy TokenID-keyed store. The cooldown
+// is shared so a failed channel is suppressed for both paths.
 func (f *relayFlow) noteAffinity(ch *model.Channel, outcome attemptOutcome) {
 	if !f.affinityEligible() {
+		return
+	}
+	if f.affinityRuleUsed {
+		f.noteRuleAffinity(ch, outcome)
 		return
 	}
 	key := f.affinityKey()
@@ -489,6 +575,31 @@ func (f *relayFlow) noteAffinity(ch *model.Channel, outcome attemptOutcome) {
 		model.ForgetAffinityIf(key, ch.ID)
 		metric.RecordAffinity(metric.AffinityClear)
 		if wasPreferred {
+			f.affinityFailed = true
+			metric.RecordAffinity(metric.AffinityPreferredFailed)
+			model.CoolDownChannel(ch.ID, setting.RoutingAffinityCooldown())
+		}
+	}
+}
+
+// noteRuleAffinity is noteAffinity's rule-driven counterpart. On success it
+// records the serving channel (following SwitchOnSuccess: the channel that
+// actually served the request, which is the one passed in). On a retryable
+// failure of the bound channel it evicts the cache entry and cools the
+// channel down so the next request does not lead with a broken upstream.
+func (f *relayFlow) noteRuleAffinity(ch *model.Channel, outcome attemptOutcome) {
+	switch outcome {
+	case attemptSuccess:
+		service.RecordRuleAffinity(f.affinityMeta, ch.ID)
+		metric.RecordAffinity(metric.AffinityWrite)
+		if f.affinityFailed {
+			metric.RecordAffinity(metric.AffinityFallbackSuccess)
+		}
+	case attemptUpstreamError:
+		wasPreferred := f.affinityPreferred == ch.ID
+		if wasPreferred {
+			service.ClearRuleAffinity(f.affinityMeta)
+			metric.RecordAffinity(metric.AffinityClear)
 			f.affinityFailed = true
 			metric.RecordAffinity(metric.AffinityPreferredFailed)
 			model.CoolDownChannel(ch.ID, setting.RoutingAffinityCooldown())
@@ -727,13 +838,19 @@ func (f *relayFlow) runChannels(attempt func(ch *model.Channel) attemptResult) {
 			return
 		}
 	}
-loop:
+	loop:
 	for {
 		if f.ctx.Err() != nil || f.sw.wrote {
 			break
 		}
 		ch, err := f.pick()
 		if err != nil {
+			// ErrStrictAffinity is surfaced by pick() after it writes the
+			// 503 response; the loop must stop without exhausting() writing
+			// a second, conflicting error envelope.
+			if errors.Is(err, model.ErrStrictAffinity) {
+				return
+			}
 			break
 		}
 		f.begin(ch)
@@ -788,6 +905,18 @@ loop:
 			return
 		case attemptUpstreamError:
 			f.sent++
+			// Rule-driven affinity with skip_retry_on_failure: the bound
+			// channel failed and the operator asked not to fall over to
+			// other channels. Surface the failure and stop the loop.
+			if f.affinityRuleUsed && f.affinityMeta.SkipRetry {
+				f.lastErr = res.cause
+				if !f.sw.wrote {
+					f.errorOut(http.StatusBadGateway, "server_error", "affinity_channel_failed",
+						fmt.Sprintf("affinity channel %d failed for model %s: %v",
+							ch.ID, f.req.modelName, res.cause))
+				}
+				return
+			}
 			limit := common.RetryTimes + 1
 			if setting.IsCommercialMode() {
 				limit = min(limit, 3)
@@ -882,6 +1011,9 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 	flow.chatIR = ir
 	defer flow.finish()
 	if _, err := flow.pick(); err != nil {
+		if errors.Is(err, model.ErrStrictAffinity) {
+			return // pick() already wrote the 503 strict-affinity response.
+		}
 		if errors.Is(err, model.ErrNoChannel) {
 			flow.errorOut(http.StatusServiceUnavailable, "server_error", "no_available_channel",
 				"no available channel for model "+req.modelName+" in the authorized groups")

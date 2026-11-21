@@ -118,6 +118,22 @@ func NormalizeOption(key, value string) (string, error) {
 			return "", fmt.Errorf("invalid value for %s: %w", key, err)
 		}
 		return strconv.FormatBool(v), nil
+	case OptionKeyRoutingAffinityRules:
+		var rules []AffinityRule
+		if err := json.Unmarshal([]byte(value), &rules); err != nil {
+			return "", fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		if err := validateAffinityRules(rules); err != nil {
+			return "", fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		canonical, err := marshalAffinityRules(rules)
+		if err != nil {
+			return "", fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		if canonical == "" {
+			canonical = "[]"
+		}
+		return canonical, nil
 	case OptionKeyResourceProviderMode:
 		v := strings.TrimSpace(value)
 		if v != ResourceProviderModeLocal && v != ResourceProviderModeCommercial {

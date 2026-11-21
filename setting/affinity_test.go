@@ -166,3 +166,78 @@ func TestAffinityPrefixCacheUpdate(t *testing.T) {
 		t.Fatal("invalid bool must be rejected")
 	}
 }
+
+func TestAffinityRulesUpdateAndSnapshot(t *testing.T) {
+	ResetAffinityToDefaults()
+	t.Cleanup(ResetAffinityToDefaults)
+
+	if rules := RoutingAffinityRules(); len(rules) != 0 {
+		t.Fatalf("default rules should be empty, got %d", len(rules))
+	}
+	payload := `[{` +
+		`"name":"codex-trace",` +
+		`"model_regex":["^gpt-5$"],` +
+		`"path_regex":["/v1/responses"],` +
+		`"key_sources":[{"type":"gjson","path":"prompt_cache_key"}],` +
+		`"ttl_seconds":600,` +
+		`"session_mode":"strict",` +
+		`"skip_retry_on_failure":true,` +
+		`"include_rule_name":true,` +
+		`"include_using_group":true` +
+		`}]`
+	if err := UpdateOption(OptionKeyRoutingAffinityRules, payload); err != nil {
+		t.Fatalf("valid rules rejected: %v", err)
+	}
+	rules := RoutingAffinityRules()
+	if len(rules) != 1 || rules[0].Name != "codex-trace" {
+		t.Fatalf("rules = %+v, want one codex-trace rule", rules)
+	}
+	if mode := EffectiveAffinitySessionMode(rules[0]); mode != AffinitySessionStrict {
+		t.Fatalf("effective session mode = %q, want %q", mode, AffinitySessionStrict)
+	}
+	snapshot, err := SnapshotOption(OptionKeyRoutingAffinityRules)
+	if err != nil {
+		t.Fatalf("snapshot failed: %v", err)
+	}
+	if err := UpdateOption(OptionKeyRoutingAffinityRules, snapshot); err != nil {
+		t.Fatalf("round-trip snapshot rejected: %v", err)
+	}
+	// Empty array clears the rules.
+	if err := UpdateOption(OptionKeyRoutingAffinityRules, `[]`); err != nil {
+		t.Fatalf("empty array rejected: %v", err)
+	}
+	if rules := RoutingAffinityRules(); len(rules) != 0 {
+		t.Fatalf("empty array should clear rules, got %d", len(rules))
+	}
+}
+
+func TestAffinityRulesValidation(t *testing.T) {
+	ResetAffinityToDefaults()
+	t.Cleanup(ResetAffinityToDefaults)
+
+	for _, bad := range []string{
+		`[{"name":"","model_regex":["x"],"key_sources":[{"type":"gjson","path":"p"}]}]`,
+		`[{"name":"r","model_regex":[],"key_sources":[{"type":"gjson","path":"p"}]}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[]}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"bogus","path":"p"}]}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"request_header"}]}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"gjson"}]}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"gjson","path":"p"}],"session_mode":"bogus"}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"gjson","path":"p"}],"ttl_seconds":-1}]`,
+		`[{"name":"dup","model_regex":["x"],"key_sources":[{"type":"gjson","path":"p"}]},{"name":"dup","model_regex":["y"],"key_sources":[{"type":"gjson","path":"q"}]}]`,
+		`not-json`,
+	} {
+		if err := UpdateOption(OptionKeyRoutingAffinityRules, bad); err == nil {
+			t.Fatalf("invalid rules %q must be rejected", bad)
+		}
+	}
+	// "inherit" and empty session_mode are accepted (resolved at match time).
+	for _, good := range []string{
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"gjson","path":"p"}],"session_mode":"inherit"}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"gjson","path":"p"}],"session_mode":""}]`,
+	} {
+		if err := UpdateOption(OptionKeyRoutingAffinityRules, good); err != nil {
+			t.Fatalf("valid rules %q rejected: %v", good, err)
+		}
+	}
+}

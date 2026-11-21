@@ -7,6 +7,7 @@ import (
 
 	"starhub/common"
 	"starhub/model"
+	"starhub/service"
 	"starhub/setting"
 )
 
@@ -140,4 +141,18 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.ApiSuccess(w, nil)
+}
+
+// GetRoutingAffinityCacheStats reports the live rule-affinity cache: total
+// entries, per-rule counts, the rule count and whether the feature is on.
+// Admin-only; the cache is process-local so the numbers reflect this replica.
+func GetRoutingAffinityCacheStats(w http.ResponseWriter, r *http.Request) {
+	common.ApiSuccess(w, service.RuleAffinityStats())
+}
+
+// ClearRoutingAffinityCache evicts every rule-affinity cache entry. Returns
+// the number of entries removed. Admin-only.
+func ClearRoutingAffinityCache(w http.ResponseWriter, r *http.Request) {
+	removed := service.ClearAllRuleAffinity()
+	common.ApiSuccess(w, map[string]any{"removed": removed})
 }

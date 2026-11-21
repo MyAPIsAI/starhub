@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -39,6 +40,9 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 	for {
 		ch, err := flow.pick()
 		if err != nil {
+			if errors.Is(err, model.ErrStrictAffinity) {
+				return // pick() already wrote the 503 strict-affinity response.
+			}
 			break
 		}
 		flow.begin(ch)

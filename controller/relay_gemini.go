@@ -42,6 +42,9 @@ func RelayGemini(w http.ResponseWriter, r *http.Request) {
 	flow := newRelayFlow(r.Context(), w, req, dto.InboundGemini, "gemini")
 	defer flow.finish()
 	if _, err := flow.pick(); err != nil {
+		if errors.Is(err, model.ErrStrictAffinity) {
+			return // pick() already wrote the 503 strict-affinity response.
+		}
 		if errors.Is(err, model.ErrNoChannel) {
 			flow.exhausted()
 		} else {

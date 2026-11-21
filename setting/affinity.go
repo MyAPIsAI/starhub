@@ -3,6 +3,7 @@ package setting
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,17 +18,28 @@ import (
 //	routing_affinity_mode             sticky    sticky | hash
 //	routing_affinity_cooldown_seconds 30        how long to suppress a failed channel
 //	routing_affinity_prefix_cache_enabled  false  enable prompt-prefix scoping
+//	routing_affinity_rules            []        rule-driven session affinity (see AffinityRule)
 const (
 	OptionKeyRoutingAffinityEnabled     = "routing_affinity_enabled"
 	OptionKeyRoutingAffinityTTL         = "routing_affinity_ttl_seconds"
 	OptionKeyRoutingAffinityMode        = "routing_affinity_mode"
 	OptionKeyRoutingAffinityCooldown    = "routing_affinity_cooldown_seconds"
 	OptionKeyRoutingAffinityPrefixCache = "routing_affinity_prefix_cache_enabled"
+	OptionKeyRoutingAffinityRules       = "routing_affinity_rules"
 )
 
 const (
 	AffinityModeSticky = "sticky"
 	AffinityModeHash   = "hash"
+
+	// Session modes for rule-driven affinity. "inherit" defers to the global
+	// default; off disables stickiness for a matching rule; prefer falls back
+	// to normal selection when the bound channel is unavailable; strict fails
+	// the request instead of falling back.
+	AffinitySessionInherit = "inherit"
+	AffinitySessionOff     = "off"
+	AffinitySessionPrefer  = "prefer"
+	AffinitySessionStrict  = "strict"
 
 	DefaultRoutingAffinityTTL    = 5 * time.Minute
 	MaxRoutingAffinityTTL        = 24 * time.Hour
@@ -36,7 +48,34 @@ const (
 	DefaultRoutingAffinityCooldown    = 30 * time.Second
 	MaxRoutingAffinityCooldown        = 10 * time.Minute
 	MaxRoutingAffinityCooldownSeconds = int64(10 * 60)
+
+	MaxAffinityRules = 64
 )
+
+// AffinityKeySource extracts the affinity value from one request field. The
+// first source in a rule's KeySources that yields a non-empty value wins.
+type AffinityKeySource struct {
+	Type string `json:"type"` // context_int | context_string | request_header | gjson
+	Key  string `json:"key,omitempty"`
+	Path string `json:"path,omitempty"`
+}
+
+// AffinityRule defines one rule-driven sticky binding. Rules are evaluated in
+// order; the first matching rule wins. Match conditions are ANDed.
+type AffinityRule struct {
+	Name               string              `json:"name"`
+	ModelRegex         []string            `json:"model_regex"`
+	PathRegex          []string            `json:"path_regex,omitempty"`
+	UserAgentInclude   []string            `json:"user_agent_include,omitempty"`
+	KeySources         []AffinityKeySource `json:"key_sources"`
+	ValueRegex         string              `json:"value_regex,omitempty"`
+	TTLSeconds         int                 `json:"ttl_seconds,omitempty"`
+	SessionMode        string              `json:"session_mode,omitempty"`
+	SkipRetryOnFailure bool                `json:"skip_retry_on_failure,omitempty"`
+	IncludeRuleName    bool                `json:"include_rule_name,omitempty"`
+	IncludeModelName   bool                `json:"include_model_name,omitempty"`
+	IncludeUsingGroup  bool                `json:"include_using_group,omitempty"`
+}
 
 var (
 	routeAffMu                 sync.RWMutex
@@ -45,6 +84,7 @@ var (
 	routingAffinityMode        = AffinityModeSticky
 	routingAffinityCooldown    = DefaultRoutingAffinityCooldown
 	routingAffinityPrefixCache = false
+	routingAffinityRules       []AffinityRule
 )
 
 // AffinityOptionKeys lists the option keys owned by this file.
@@ -55,6 +95,7 @@ func AffinityOptionKeys() []string {
 		OptionKeyRoutingAffinityMode,
 		OptionKeyRoutingAffinityCooldown,
 		OptionKeyRoutingAffinityPrefixCache,
+		OptionKeyRoutingAffinityRules,
 	}
 }
 
@@ -63,7 +104,7 @@ func IsAffinityOptionKey(key string) bool {
 	switch key {
 	case OptionKeyRoutingAffinityEnabled, OptionKeyRoutingAffinityTTL,
 		OptionKeyRoutingAffinityMode, OptionKeyRoutingAffinityCooldown,
-		OptionKeyRoutingAffinityPrefixCache:
+		OptionKeyRoutingAffinityPrefixCache, OptionKeyRoutingAffinityRules:
 		return true
 	}
 	return false
@@ -103,6 +144,84 @@ func RoutingAffinityPrefixCacheEnabled() bool {
 	routeAffMu.RLock()
 	defer routeAffMu.RUnlock()
 	return routingAffinityPrefixCache
+}
+
+// RoutingAffinityRules returns a copy of the rule-driven affinity rules.
+// Returns nil when no rules are configured (rule affinity is inactive and
+// the legacy TokenID+Model+Group+Prefix affinity governs stickiness).
+func RoutingAffinityRules() []AffinityRule {
+	routeAffMu.RLock()
+	defer routeAffMu.RUnlock()
+	return slices.Clone(routingAffinityRules)
+}
+
+// EffectiveAffinitySessionMode resolves a rule's session mode against the
+// global default. A rule with "inherit" (or empty) takes the global mode;
+// the global default is "prefer" when unset.
+func EffectiveAffinitySessionMode(rule AffinityRule) string {
+	mode := strings.TrimSpace(rule.SessionMode)
+	if mode == "" || mode == AffinitySessionInherit {
+		return AffinitySessionPrefer
+	}
+	return mode
+}
+
+// validateAffinityRules checks the structural constraints shared by Update
+// and Normalize: bounded count, non-empty name, at least one model_regex,
+// at least one key_source with a valid type, and a recognized session_mode.
+func validateAffinityRules(rules []AffinityRule) error {
+	if len(rules) > MaxAffinityRules {
+		return fmt.Errorf("too many affinity rules: %d > %d", len(rules), MaxAffinityRules)
+	}
+	seen := make(map[string]struct{}, len(rules))
+	for i, r := range rules {
+		name := strings.TrimSpace(r.Name)
+		if name == "" {
+			return fmt.Errorf("affinity rule[%d]: name is required", i)
+		}
+		if _, dup := seen[name]; dup {
+			return fmt.Errorf("affinity rule[%d]: duplicate name %q", i, name)
+		}
+		seen[name] = struct{}{}
+		if len(r.ModelRegex) == 0 {
+			return fmt.Errorf("affinity rule %q: model_regex is required", name)
+		}
+		if len(r.KeySources) == 0 {
+			return fmt.Errorf("affinity rule %q: at least one key_source is required", name)
+		}
+		for j, src := range r.KeySources {
+			t := strings.TrimSpace(src.Type)
+			if t != "context_int" && t != "context_string" && t != "request_header" && t != "gjson" {
+				return fmt.Errorf("affinity rule %q: key_source[%d]: unknown type %q", name, j, src.Type)
+			}
+			if (t == "context_int" || t == "context_string" || t == "request_header") && strings.TrimSpace(src.Key) == "" {
+				return fmt.Errorf("affinity rule %q: key_source[%d]: key is required for type %q", name, j, t)
+			}
+			if t == "gjson" && strings.TrimSpace(src.Path) == "" {
+				return fmt.Errorf("affinity rule %q: key_source[%d]: path is required for gjson", name, j)
+			}
+		}
+		mode := strings.TrimSpace(r.SessionMode)
+		if mode != "" && mode != AffinitySessionInherit && mode != AffinitySessionOff &&
+			mode != AffinitySessionPrefer && mode != AffinitySessionStrict {
+			return fmt.Errorf("affinity rule %q: invalid session_mode %q", name, r.SessionMode)
+		}
+		if r.TTLSeconds < 0 {
+			return fmt.Errorf("affinity rule %q: ttl_seconds must be >= 0", name)
+		}
+	}
+	return nil
+}
+
+// marshalAffinityRules returns the canonical JSON for the rule list. The
+// persisted form is always produced from the parsed value so reloads are
+// stable regardless of how the operator formatted the input.
+func marshalAffinityRules(rules []AffinityRule) (string, error) {
+	canonical, err := json.Marshal(rules)
+	if err != nil {
+		return "", fmt.Errorf("encode affinity rules: %w", err)
+	}
+	return string(canonical), nil
 }
 
 // UpdateAffinity applies a routing-affinity option key.
@@ -167,6 +286,26 @@ func UpdateAffinity(key, value string) error {
 		routingAffinityPrefixCache = v
 		routeAffMu.Unlock()
 		return nil
+	case OptionKeyRoutingAffinityRules:
+		var rules []AffinityRule
+		if err := json.Unmarshal([]byte(value), &rules); err != nil {
+			return fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		if err := validateAffinityRules(rules); err != nil {
+			return fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		canonical, err := marshalAffinityRules(rules)
+		if err != nil {
+			return fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		var normalized []AffinityRule
+		if err := json.Unmarshal([]byte(canonical), &normalized); err != nil {
+			return fmt.Errorf("invalid value for %s: %w", key, err)
+		}
+		routeAffMu.Lock()
+		routingAffinityRules = normalized
+		routeAffMu.Unlock()
+		return nil
 	default:
 		return fmt.Errorf("unknown affinity option key: %s", key)
 	}
@@ -187,6 +326,15 @@ func SnapshotAffinity(key string) (string, error) {
 		return strconv.FormatInt(int64(routingAffinityCooldown/time.Second), 10), nil
 	case OptionKeyRoutingAffinityPrefixCache:
 		return strconv.FormatBool(routingAffinityPrefixCache), nil
+	case OptionKeyRoutingAffinityRules:
+		canonical, err := marshalAffinityRules(routingAffinityRules)
+		if err != nil {
+			return "", err
+		}
+		if canonical == "" {
+			canonical = "[]"
+		}
+		return canonical, nil
 	default:
 		return "", fmt.Errorf("unknown affinity option key: %s", key)
 	}
@@ -201,6 +349,7 @@ func ResetAffinityToDefaults() {
 	routingAffinityMode = AffinityModeSticky
 	routingAffinityCooldown = DefaultRoutingAffinityCooldown
 	routingAffinityPrefixCache = false
+	routingAffinityRules = nil
 }
 
 // parseBoolOption accepts a JSON boolean as well as the common textual

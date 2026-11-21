@@ -10,6 +10,7 @@ import {
 } from "../lib/resource-binding-change";
 import type { ResourceBindingStatus } from "../lib/resource-binding-state";
 import { ResourceBindingChangeDialog } from "./resource-binding-change";
+import { RoutingAffinityPanel } from "./routing-affinity-panel";
 
 export function ResourceBindingList({ enabled }: { enabled: boolean }) {
   const { text } = useSettingsText();
@@ -378,6 +379,7 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
           setReview(undefined);
         }}
       />
+      <RoutingAffinityPanel enabled={enabled} />
     </section>
   );
 }

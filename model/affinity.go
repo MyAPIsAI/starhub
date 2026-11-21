@@ -1,9 +1,15 @@
 package model
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
+
+// ErrStrictAffinity signals that a rule-driven affinity binding required a
+// specific channel (session_mode=strict) but that channel was unavailable.
+// The relay flow maps it to a 503 instead of falling back to other channels.
+var ErrStrictAffinity = errors.New("strict affinity channel unavailable")
 
 // AffinityKey is the scope of a sticky channel preference: one token asking
 // for one model in one group. Group is part of the key so neither a model
