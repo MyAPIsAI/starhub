@@ -64,7 +64,7 @@
   background: white;
 }
 .affinity-toggle input:checked {
-  background: var(--accent);
+  background: var(--success);
 }
 .affinity-toggle input:checked::after {
   margin-inline-start: 16px;
