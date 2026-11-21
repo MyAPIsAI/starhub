@@ -357,15 +357,8 @@ func affinityExtractValue(req AffinityRequest, sources []setting.AffinityKeySour
 		switch t {
 		case "request_header":
 			if req.Header != nil {
-				value = strings.TrimSpace(req.Header.Get(src.Key))
+				value = strings.TrimSpace(req.Header.Get(strings.TrimSpace(src.Key)))
 			}
-		case "context_string":
-			// Context string keys are looked up by the caller's middleware.
-			// The relay flow does not carry a generic context bag, so this
-			// source is reserved for future wiring; an empty key yields "".
-			value = ""
-		case "context_int":
-			value = ""
 		case "gjson":
 			value = affinityGjsonPath(req.Body, src.Path)
 		default:

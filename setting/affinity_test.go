@@ -223,6 +223,8 @@ func TestAffinityRulesValidation(t *testing.T) {
 		`[{"name":"r","model_regex":["."],"value_regex":"[","key_sources":[{"type":"gjson","path":"p"}]}]`,
 		`[{"name":"r","model_regex":["x"],"key_sources":[]}]`,
 		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"bogus","path":"p"}]}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"context_string","key":"q"}]}]`,
+		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"context_int","key":"q"}]}]`,
 		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"request_header"}]}]`,
 		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"gjson"}]}]`,
 		`[{"name":"r","model_regex":["x"],"key_sources":[{"type":"gjson","path":"p"}],"session_mode":"bogus"}]`,
