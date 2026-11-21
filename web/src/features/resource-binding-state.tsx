@@ -11,11 +11,19 @@ import {
 import type { ResourceBindingStatus } from "../lib/resource-binding-state";
 import { ResourceBindingChangeDialog } from "./resource-binding-change";
 import { RoutingAffinityPanel } from "./routing-affinity-panel";
+import { AffinityEditorActions } from "./routing-affinity-editor";
+import {
+  useRoutingAffinityStats,
+  useClearRoutingAffinityCache,
+} from "../lib/api/routing-affinity";
 
 export function ResourceBindingList({ enabled }: { enabled: boolean }) {
   const { text } = useSettingsText();
   const [page, setPage] = useState(1);
   const query = useResourceBindingState(enabled, page);
+  const affinity = useRoutingAffinityStats(enabled);
+  const clear = useClearRoutingAffinityCache();
+  const [affinitySaved, setAffinitySaved] = useState(false);
   const state = query.error ? undefined : query.data;
   const { hash } = useLocation();
   const section = useRef<HTMLElement>(null);
@@ -83,14 +91,51 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
             "روابط البوابة الدائمة",
           )}
         </h3>
-        <Button
-          disabled={query.isFetching}
-          onClick={() => void query.refetch()}
-        >
-          {text("刷新绑定状态", "Refresh binding state", "تحديث حالة الروابط")}
-        </Button>
+        <div className="rp-binding-toolbar">
+          {enabled && (
+            <>
+              <AffinityEditorActions onNotice={setAffinitySaved} />
+              <Button
+                disabled={
+                  affinity.isFetching ||
+                  affinity.isError ||
+                  clear.isPending ||
+                  !affinity.data?.total
+                }
+                onClick={() => clear.mutate()}
+              >
+                {clear.isPending
+                  ? text("清空中…", "Clearing…", "جارٍ المسح…")
+                  : text(
+                      "清空本副本规则缓存",
+                      "Clear all rule bindings on this replica",
+                      "مسح جميع روابط القواعد في هذه النسخة",
+                    )}
+              </Button>
+            </>
+          )}
+          <Button
+            disabled={query.isFetching}
+            onClick={() => void query.refetch()}
+          >
+            {text(
+              "刷新绑定状态",
+              "Refresh binding state",
+              "تحديث حالة الروابط",
+            )}
+          </Button>
+        </div>
       </header>
-      <RoutingAffinityPanel enabled={enabled} />
+      {enabled && affinitySaved && (
+        <p role="status">
+          {text(
+            "亲和配置已保存。",
+            "Affinity configuration saved.",
+            "حُفظت إعدادات التقارب.",
+          )}
+        </p>
+      )}
+      {enabled && <RoutingAffinityPanel query={affinity} clear={clear} />}
       <p>
         {text(
           "已存组合是当前保留的路线数；路由条件通过数还核对渠道启用、能力、分组身份及已配置倍率。它不代表具体用户授权、余额、请求上下文或供应商健康检查通过。撤销后仍保留来源绑定，已释放的渠道仍保留防止旧权限恢复的记录。",

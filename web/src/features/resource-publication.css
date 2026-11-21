@@ -149,6 +149,18 @@
 #gateway-bindings {
   scroll-margin-top: 90px;
 }
+#gateway-bindings > header h3 {
+  margin: 0;
+}
+.rp-binding-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-inline-start: auto;
+}
 .rp-publish-dialog p,
 .rp-publish-dialog li {
   overflow-wrap: anywhere;
@@ -172,6 +184,10 @@
     flex-direction: column;
   }
   .rp-actions {
+    justify-content: flex-start;
+  }
+  .rp-binding-toolbar {
+    margin-inline-start: 0;
     justify-content: flex-start;
   }
 }

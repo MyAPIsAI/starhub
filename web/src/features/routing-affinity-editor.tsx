@@ -59,17 +59,20 @@ const invalidTime = (field: Field, value: string) =>
   limit(field) > 0 &&
   (!/^[1-9]\d*$/.test(value) || Number(value) > limit(field));
 
-export function AffinityEditorActions() {
+export function AffinityEditorActions({
+  onNotice,
+}: {
+  onNotice: (saved: boolean) => void;
+}) {
   const { text } = useSettingsText();
   const [kind, setKind] = useState<Kind>();
-  const [notice, setNotice] = useState(false);
   return (
     <>
       {(["global", "rules"] as const).map((k) => (
         <Button
           key={k}
           onClick={() => {
-            setNotice(false);
+            onNotice(false);
             setKind(k);
           }}
         >
@@ -82,18 +85,9 @@ export function AffinityEditorActions() {
           close={() => setKind(undefined)}
           saved={() => {
             setKind(undefined);
-            setNotice(true);
+            onNotice(true);
           }}
         />
-      )}
-      {notice && (
-        <span role="status">
-          {text(
-            "亲和配置已保存。",
-            "Affinity configuration saved.",
-            "حُفظت إعدادات التقارب.",
-          )}
-        </span>
       )}
     </>
   );

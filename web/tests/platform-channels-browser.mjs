@@ -532,6 +532,9 @@ try {
         await page.screenshot({
           path: path.join(temp, `platform-${lang}-${width}.png`),
         });
+        await page.locator("#gateway-bindings > header").screenshot({
+          path: path.join(temp, `binding-actions-${lang}-${width}.png`),
+        });
       }
     }
     await page.evaluate(

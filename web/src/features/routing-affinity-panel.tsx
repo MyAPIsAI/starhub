@@ -1,18 +1,19 @@
-import { Button } from "../components/ui/button";
-import {
+import type {
   useRoutingAffinityStats,
   useClearRoutingAffinityCache,
 } from "../lib/api/routing-affinity";
 import { useSettingsText } from "./settings-text";
 import "./resource-publication.css";
-import { AffinityEditorActions } from "./routing-affinity-editor";
 
 /** The binding section hosts global HTTP configuration and replica-local cache controls. */
-export function RoutingAffinityPanel({ enabled }: { enabled: boolean }) {
+export function RoutingAffinityPanel({
+  query,
+  clear,
+}: {
+  query: ReturnType<typeof useRoutingAffinityStats>;
+  clear: ReturnType<typeof useClearRoutingAffinityCache>;
+}) {
   const { text } = useSettingsText();
-  const query = useRoutingAffinityStats(enabled);
-  const clear = useClearRoutingAffinityCache();
-  if (!enabled) return null;
   const stats = query.error ? undefined : query.data;
   const ruleEntries = stats
     ? Object.entries(stats.by_rule_name).filter(
@@ -21,46 +22,29 @@ export function RoutingAffinityPanel({ enabled }: { enabled: boolean }) {
     : [];
   return (
     <>
-      <div className="rp-actions">
-        {stats && (
-          <p className="rp-versions">
-            {text(
-              "全局亲和配置",
-              "Global affinity configuration",
-              "إعدادات التقارب العامة",
-            )}{" "}
-            ·{" "}
-            {stats.config
-              ? stats.config.enabled
-                ? text("已启用", "Enabled", "مفعّل")
-                : text("未启用", "Disabled", "غير مفعّل")
-              : "—"}
-            {" · "}
-            {text("规则数", "Rules", "قواعد")}: {stats.rules} ·{" "}
-            {text(
-              "本副本粘滞条目",
-              "Pinned entries on this replica",
-              "روابط هذه النسخة",
-            )}
-            : {stats.total}
-          </p>
-        )}
-        <AffinityEditorActions />
-        <Button
-          disabled={
-            query.isFetching || clear.isPending || (stats?.total ?? 0) === 0
-          }
-          onClick={() => clear.mutate()}
-        >
-          {clear.isPending
-            ? text("清空中…", "Clearing…", "جارٍ المسح…")
-            : text(
-                "清空本副本规则缓存",
-                "Clear all rule bindings on this replica",
-                "مسح جميع روابط القواعد في هذه النسخة",
-              )}
-        </Button>
-      </div>
+      {stats && (
+        <p className="rp-versions">
+          {text(
+            "全局亲和配置",
+            "Global affinity configuration",
+            "إعدادات التقارب العامة",
+          )}{" "}
+          ·{" "}
+          {stats.config
+            ? stats.config.enabled
+              ? text("已启用", "Enabled", "مفعّل")
+              : text("未启用", "Disabled", "غير مفعّل")
+            : "—"}
+          {" · "}
+          {text("规则数", "Rules", "قواعد")}: {stats.rules} ·{" "}
+          {text(
+            "本副本粘滞条目",
+            "Pinned entries on this replica",
+            "روابط هذه النسخة",
+          )}
+          : {stats.total}
+        </p>
+      )}
       {stats?.config && (
         <p className="rp-versions">
           {text("模式", "Mode", "الوضع")}:{" "}
