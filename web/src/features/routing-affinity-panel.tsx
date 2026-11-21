@@ -119,6 +119,15 @@ export function RoutingAffinityPanel({ enabled }: { enabled: boolean }) {
           {text("条粘滞", "entries", "إدخال")}
         </p>
       )}
+      {clear.isError && (
+        <p role="alert">
+          {text(
+            "未能确认清空结果，请核对最新缓存统计后再试。",
+            "The clear was not confirmed. Check the latest cache counts before retrying.",
+            "لم يتأكد المسح. تحقّق من أحدث إحصاءات الذاكرة قبل إعادة المحاولة.",
+          )}
+        </p>
+      )}
     </section>
   );
 }

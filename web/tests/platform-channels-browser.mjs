@@ -359,6 +359,17 @@ try {
   );
   await panel.getByLabel("Search platform channels", { exact: true }).fill("");
   if (!process.argv.includes("--state-only")) {
+    const cachePath = "**/api/option/routing_affinity_cache";
+    await page.route(cachePath, (route) =>
+      route.request().method() === "DELETE"
+        ? route.fulfill({ status: 503, json: { success: false, message: "Fixture unavailable" } })
+        : route.fulfill({ json: { success: true, data: { enabled: true, total: 1, by_rule_name: { sample: 1 }, rules: 1 } } }),
+    );
+    await page.reload();
+    const affinityPanel = page.getByRole("region", { name: "Gateway affinity cache", exact: true });
+    await affinityPanel.getByRole("button", { name: "Clear all rule bindings on this replica" }).click();
+    await affinityPanel.getByRole("alert").filter({ hasText: "The clear was not confirmed" }).waitFor();
+    await page.unroute(cachePath);
     for (const lang of ["en", "zh", "ar"]) {
       await page.evaluate(
         (language) => localStorage.setItem("xy-language", language),
