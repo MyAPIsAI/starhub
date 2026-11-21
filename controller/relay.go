@@ -912,12 +912,11 @@ loop:
 			// Rule-driven affinity with skip_retry_on_failure: the bound
 			// channel failed and the operator asked not to fall over to
 			// other channels. Surface the failure and stop the loop.
-			if f.affinityRuleUsed && f.affinityMeta.SkipRetry {
+			if f.affinityRuleUsed && f.affinityMeta.SkipRetry && f.affinityPreferred == ch.ID {
 				f.lastErr = res.cause
 				if !f.sw.wrote {
 					f.errorOut(http.StatusBadGateway, "server_error", "affinity_channel_failed",
-						fmt.Sprintf("affinity channel %d failed for model %s: %v",
-							ch.ID, f.req.modelName, res.cause))
+						"the affinity-bound upstream failed")
 				}
 				return
 			}

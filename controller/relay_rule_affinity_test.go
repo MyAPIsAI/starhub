@@ -169,3 +169,26 @@ func TestRelayFlowRuleAffinitySkipRetry(t *testing.T) {
 	}
 	_ = b
 }
+
+func TestAffinitySkipRetryRequiresActualHit(t *testing.T) {
+	newTestDB(t)
+	t.Cleanup(service.ResetRuleAffinityCache)
+	t.Cleanup(setting.ResetAffinityToDefaults)
+	mustChannel(t, "first", "gpt-4o", "a", common.ChannelStatusEnabled)
+	mustChannel(t, "second", "gpt-4o", "b", common.ChannelStatusEnabled)
+	for _, mode := range []string{"off", "prefer"} {
+		enableRuleAffinityForRelay(t, `[{"name":"r","model_regex":[".*"],"key_sources":[{"type":"gjson","path":"s"}],"session_mode":"`+mode+`","skip_retry_on_failure":true}]`)
+		f := newRuleAffinityFlow(t, 7, common.DefaultGroup, "gpt-4o", `{"s":"new"}`)
+		calls := 0
+		f.runChannels(func(ch *model.Channel) attemptResult {
+			calls++
+			if calls == 1 {
+				return attemptResult{outcome: attemptUpstreamError, cause: errors.New("fixture")}
+			}
+			return attemptResult{outcome: attemptSuccess}
+		})
+		if calls != 2 {
+			t.Fatalf("%s: %d attempts", mode, calls)
+		}
+	}
+}
