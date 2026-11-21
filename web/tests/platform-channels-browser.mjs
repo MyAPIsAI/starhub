@@ -149,16 +149,30 @@ try {
       .getAttribute("href"),
     "/admin?tab=resources#channels",
   );
+  assert.equal(await page.locator("#platform-channels").count(), 1);
   assert.ok(
-    await page.evaluate(() =>
-      Boolean(
-        document
-          .querySelector("#gateway-publication")
-          .compareDocumentPosition(
-            document.querySelector("#platform-channels"),
-          ) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ),
-    ),
+    await page.evaluate(() => {
+      const publication = document.querySelector("#gateway-publication");
+      const channels = document.querySelector("#platform-channels");
+      const bindings = document.querySelector("#gateway-bindings");
+      return (
+        publication.contains(channels) &&
+        Boolean(
+          channels.compareDocumentPosition(bindings) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        )
+      );
+    }),
+  );
+  assert.equal(
+    await page.getByLabel("Search source channels", { exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByRole("region", { name: "Source to gateway bindings", exact: true })
+      .count(),
+    0,
   );
   await panel
     .getByLabel("Search platform channels", { exact: true })

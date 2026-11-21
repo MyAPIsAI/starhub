@@ -59,15 +59,15 @@ function PlatformChannelListView() {
   return (
     <section
       id="platform-channels"
-      className="resource-publication"
+      className="rp-result"
       aria-label={text("当前平台渠道", "Platform channels", "قنوات المنصة")}
     >
       <header>
         <div>
-          <h2>
+          <h3>
             {text("当前平台渠道", "Platform channels", "قنوات المنصة")}
             {channels && ` · ${channels.length}`}
-          </h2>
+          </h3>
           <p>
             {text(
               "展示当前平台已创建的真实渠道，包含未绑定来源快照的渠道。",

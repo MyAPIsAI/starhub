@@ -18,6 +18,7 @@ import {
 import { useSettingsText } from "./settings-text";
 import { PublicationCommit } from "./resource-publication-commit";
 import { ResourceBindingList } from "./resource-binding-state";
+import { PlatformChannelList } from "./platform-channel-list";
 import "./resource-publication.css";
 
 export function ResourcePublication(props: {
@@ -312,6 +313,11 @@ function PublicationPanel({
               )}
             </p>
           )}
+        </>
+      )}
+      <PlatformChannelList />
+      {context && catalog && Boolean(catalog.snapshot?.channels.length) && (
+        <>
           <label className="rp-search">
             {text(
               "搜索来源渠道",

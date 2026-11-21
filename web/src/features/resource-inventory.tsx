@@ -17,7 +17,6 @@ import type { ResourceSnapshot } from "../config/models";
 import { useSettingsText } from "./settings-text";
 import "./resource-inventory.css";
 import { ResourcePublication } from "./resource-publication";
-import { PlatformChannelList } from "./platform-channel-list";
 
 type Draft =
   | {
@@ -530,7 +529,6 @@ function ResourceInventoryView() {
         catalog={data}
         refreshCatalog={() => query.refetch()}
       />
-      <PlatformChannelList />
       <Modal
         open={Boolean(draft)}
         onOpenChange={(open) => !open && close()}
