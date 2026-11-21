@@ -456,11 +456,19 @@ try {
     });
     await saveAffinity();
     await dialog.waitFor({ state: "hidden" });
+    await bindingsPanel
+      .getByRole("button", { name: "Edit rule: by-header", exact: true })
+      .click();
+    const ruleName = dialog.getByLabel("Rule name", { exact: true });
+    assert.equal(await ruleName.inputValue(), "by-header");
+    await ruleName.fill("by-header-updated");
+    await saveAffinity();
+    await dialog.waitFor({ state: "hidden" });
     await openRules();
     await dialog.getByLabel("Rule order").waitFor();
     assert.deepEqual(
       await dialog.getByLabel("Rule order").locator("option").allTextContents(),
-      ["1. by-json", "2. by-header"],
+      ["1. by-json", "2. by-header-updated"],
     );
     await dialog.getByRole("button", { name: "Remove rule" }).click();
     await saveAffinity();
@@ -470,7 +478,7 @@ try {
     );
     assert.deepEqual(
       JSON.parse(storedRules.value).map((r) => r.name),
-      ["by-header"],
+      ["by-header-updated"],
     );
     assert.equal(
       await page
@@ -498,6 +506,19 @@ try {
           }),
     );
     await page.reload();
+    await bindingsPanel
+      .getByRole("button", { name: "Edit rule: sample", exact: true })
+      .click();
+    await dialog
+      .getByRole("alert")
+      .filter({ hasText: "renamed or removed" })
+      .waitFor();
+    assert.ok(
+      await dialog
+        .getByRole("button", { name: "Save configuration" })
+        .isDisabled(),
+    );
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await bindingsPanel
       .getByRole("button", { name: "Clear all rule bindings on this replica" })
       .click();

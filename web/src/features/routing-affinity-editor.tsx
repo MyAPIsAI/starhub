@@ -8,6 +8,8 @@ import { useSettingsText } from "./settings-text";
 import "./routing-affinity-editor.css";
 
 type Kind = "global" | "rules";
+export type AffinityEditorTarget =
+  { kind: "global" } | { kind: "rules"; ruleName?: string };
 type Field =
   | "enabled"
   | "mode"
@@ -60,48 +62,34 @@ const invalidTime = (field: Field, value: string) =>
   (!/^[1-9]\d*$/.test(value) || Number(value) > limit(field));
 
 export function AffinityEditorActions({
-  onNotice,
+  onOpen,
 }: {
-  onNotice: (saved: boolean) => void;
+  onOpen: (target: AffinityEditorTarget) => void;
 }) {
   const { text } = useSettingsText();
-  const [kind, setKind] = useState<Kind>();
   return (
     <>
       {(["global", "rules"] as const).map((k) => (
-        <Button
-          key={k}
-          onClick={() => {
-            onNotice(false);
-            setKind(k);
-          }}
-        >
+        <Button key={k} onClick={() => onOpen({ kind: k })}>
           {title(k, text)}
         </Button>
       ))}
-      {kind && (
-        <AffinityEditor
-          kind={kind}
-          close={() => setKind(undefined)}
-          saved={() => {
-            setKind(undefined);
-            onNotice(true);
-          }}
-        />
-      )}
     </>
   );
 }
 
-function AffinityEditor({
-  kind,
+export function AffinityEditor({
+  target,
   close,
   saved,
 }: {
-  kind: Kind;
+  target: AffinityEditorTarget;
   close: () => void;
   saved: () => void;
 }) {
+  const { kind } = target;
+  const ruleName = target.kind === "rules" ? target.ruleName : undefined;
+  const [initialIndex, setInitialIndex] = useState(0);
   const { text } = useSettingsText();
   const update = useUpdateOption();
   const [draft, setDraft] = useState<Draft>();
@@ -122,6 +110,15 @@ function AffinityEditor({
           if (d.values.rules === undefined) throw Error();
           const parsed = JSON.parse(d.values.rules) ?? [];
           if (!Array.isArray(parsed)) throw Error();
+          const index =
+            ruleName === undefined
+              ? 0
+              : parsed.findIndex((r: Rule) => r.name === ruleName);
+          if (index < 0) {
+            setError("missing");
+            return;
+          }
+          setInitialIndex(index);
           setRules(parsed);
         } else {
           if (Object.keys(fields).some((k) => d.values[k] === undefined))
@@ -134,7 +131,7 @@ function AffinityEditor({
         if (!c.signal.aborted) setError("load");
       });
     return () => c.abort();
-  }, [kind, reload]);
+  }, [kind, ruleName, reload]);
   const changes = globalFields
     .filter((f) => draft && values[f] !== draft.values[f])
     .map((f) => ({ key: "routing_affinity_" + f, value: values[f] }));
@@ -218,19 +215,25 @@ function AffinityEditor({
                   "Configuration changed. Your draft did not overwrite it. Reload to discard the draft.",
                   "تغيّر إصدار الإعدادات. أعد التحميل لتجاهل المسودة.",
                 )
-              : error === "load"
+              : error === "missing"
                 ? text(
-                    "无法读取配置。",
-                    "Could not read configuration.",
-                    "تعذرت قراءة الإعدادات.",
+                    "该规则已改名或删除，请关闭弹窗并核对规则列表。",
+                    "This rule was renamed or removed. Close the editor and check the rule list.",
+                    "تغيّر اسم القاعدة أو حُذفت. أغلق المحرر وراجع القائمة.",
                   )
-                : error === "unknown"
+                : error === "load"
                   ? text(
-                      "未确认保存结果，请重新读取。",
-                      "Save outcome unconfirmed. Reload to verify.",
-                      "تعذر تأكيد الحفظ. أعد التحميل للتحقق.",
+                      "无法读取配置。",
+                      "Could not read configuration.",
+                      "تعذرت قراءة الإعدادات.",
                     )
-                  : error}
+                  : error === "unknown"
+                    ? text(
+                        "未确认保存结果，请重新读取。",
+                        "Save outcome unconfirmed. Reload to verify.",
+                        "تعذر تأكيد الحفظ. أعد التحميل للتحقق.",
+                      )
+                    : error}
           </p>
         )}
         {(blocked || error === "load") && (
@@ -253,7 +256,12 @@ function AffinityEditor({
         )}
         {draft &&
           (kind === "rules" ? (
-            <RulesEditor rules={rules} setRules={setRules} text={text} />
+            <RulesEditor
+              rules={rules}
+              setRules={setRules}
+              text={text}
+              initialIndex={initialIndex}
+            />
           ) : (
             <div className="affinity-settings">
               <table>
@@ -351,15 +359,17 @@ function AffinityEditor({
 }
 
 function RulesEditor({
+  initialIndex,
   rules,
   setRules,
   text,
 }: {
+  initialIndex: number;
   rules: Rule[];
   setRules: (r: Rule[]) => void;
   text: Text;
 }) {
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(initialIndex);
   const r = rules[index];
   const change = (patch: Partial<Rule>) =>
     setRules(rules.map((row, i) => (i === index ? { ...row, ...patch } : row)));

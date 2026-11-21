@@ -11,7 +11,11 @@ import {
 import type { ResourceBindingStatus } from "../lib/resource-binding-state";
 import { ResourceBindingChangeDialog } from "./resource-binding-change";
 import { RoutingAffinityPanel } from "./routing-affinity-panel";
-import { AffinityEditorActions } from "./routing-affinity-editor";
+import {
+  AffinityEditor,
+  AffinityEditorActions,
+  type AffinityEditorTarget,
+} from "./routing-affinity-editor";
 import {
   useRoutingAffinityStats,
   useClearRoutingAffinityCache,
@@ -24,6 +28,11 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
   const affinity = useRoutingAffinityStats(enabled);
   const clear = useClearRoutingAffinityCache();
   const [affinitySaved, setAffinitySaved] = useState(false);
+  const [editor, setEditor] = useState<AffinityEditorTarget>();
+  const openEditor = (target: AffinityEditorTarget) => {
+    setAffinitySaved(false);
+    setEditor(target);
+  };
   const state = query.error ? undefined : query.data;
   const { hash } = useLocation();
   const section = useRef<HTMLElement>(null);
@@ -94,7 +103,7 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
         <div className="rp-binding-toolbar">
           {enabled && (
             <>
-              <AffinityEditorActions onNotice={setAffinitySaved} />
+              <AffinityEditorActions onOpen={openEditor} />
               <Button
                 disabled={
                   affinity.isFetching ||
@@ -135,7 +144,23 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
           )}
         </p>
       )}
-      {enabled && <RoutingAffinityPanel query={affinity} clear={clear} />}
+      {enabled && (
+        <RoutingAffinityPanel
+          query={affinity}
+          clear={clear}
+          onEditRule={(ruleName) => openEditor({ kind: "rules", ruleName })}
+        />
+      )}
+      {enabled && editor && (
+        <AffinityEditor
+          target={editor}
+          close={() => setEditor(undefined)}
+          saved={() => {
+            setEditor(undefined);
+            setAffinitySaved(true);
+          }}
+        />
+      )}
       <p>
         {text(
           "已存组合是当前保留的路线数；路由条件通过数还核对渠道启用、能力、分组身份及已配置倍率。它不代表具体用户授权、余额、请求上下文或供应商健康检查通过。撤销后仍保留来源绑定，已释放的渠道仍保留防止旧权限恢复的记录。",

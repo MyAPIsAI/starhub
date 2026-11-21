@@ -9,9 +9,11 @@ import "./resource-publication.css";
 export function RoutingAffinityPanel({
   query,
   clear,
+  onEditRule,
 }: {
   query: ReturnType<typeof useRoutingAffinityStats>;
   clear: ReturnType<typeof useClearRoutingAffinityCache>;
+  onEditRule: (name: string) => void;
 }) {
   const { text } = useSettingsText();
   const stats = query.error ? undefined : query.data;
@@ -109,9 +111,25 @@ export function RoutingAffinityPanel({
                 </thead>
                 <tbody>
                   {ruleEntries.map(([name, count]) => (
-                    <tr key={name || "_unattributed"}>
+                    <tr key={name}>
                       <td>
-                        {name || text("未归属", "Unattributed", "غير منسوبة")}
+                        {name ? (
+                          <button
+                            type="button"
+                            className="rp-rule-edit"
+                            aria-haspopup="dialog"
+                            aria-label={text(
+                              `编辑规则：${name}`,
+                              `Edit rule: ${name}`,
+                              `تحرير القاعدة: ${name}`,
+                            )}
+                            onClick={() => onEditRule(name)}
+                          >
+                            {name}
+                          </button>
+                        ) : (
+                          text("未归属", "Unattributed", "غير منسوبة")
+                        )}
                       </td>
                       <td>
                         <code>{count}</code>

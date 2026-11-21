@@ -161,6 +161,18 @@
   max-width: 100%;
   margin-inline-start: auto;
 }
+.rp-rule-edit {
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  color: var(--brand);
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 .rp-publish-dialog p,
 .rp-publish-dialog li {
   overflow-wrap: anywhere;
