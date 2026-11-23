@@ -15,6 +15,7 @@ const (
 	AffinityBypassDisabled     AffinityBypassReason = "disabled"
 	AffinityBypassMissingToken AffinityBypassReason = "missing_token"
 	AffinityBypassHashMode     AffinityBypassReason = "hash_mode"
+	AffinityBypassTraffic      AffinityBypassReason = "traffic_allocation"
 )
 
 const (
@@ -33,10 +34,11 @@ const (
 	writeClear
 	writeRaced
 	writeFull
+	trafficAllocation
 	eventCount
 )
 
-var eventNames = [eventCount]string{"conditions_unmatched", "affinity_disabled", "missing_token", "hash_mode_bypass", "missing_source", "invalid_value", "rule_off", "cold_start", "rule_hit", "legacy_hit", "write_ok", "write_revision", "write_clear", "write_raced", "write_full"}
+var eventNames = [eventCount]string{"conditions_unmatched", "affinity_disabled", "missing_token", "hash_mode_bypass", "missing_source", "invalid_value", "rule_off", "cold_start", "rule_hit", "legacy_hit", "write_ok", "write_revision", "write_clear", "write_raced", "write_full", "traffic_allocation"}
 var affinityEvents [eventCount]atomic.Uint64
 var affinityInstance = uuid.NewString()
 
@@ -65,6 +67,8 @@ func RecordAffinitySelection(rule bool) {
 // Reasons are fixed values so request data never becomes a metric label.
 func RecordAffinityBypass(reason AffinityBypassReason) {
 	switch reason {
+	case AffinityBypassTraffic:
+		trafficAllocation.count()
 	case AffinityBypassDisabled:
 		affinityDisabled.count()
 	case AffinityBypassMissingToken:

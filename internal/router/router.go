@@ -172,6 +172,8 @@ func New() http.Handler {
 	mux.Handle("GET /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/status", middleware.AdminAuth(http.HandlerFunc(controller.OptionStatus)))
 	mux.Handle("GET /api/option/gateway", middleware.AdminAuth(http.HandlerFunc(controller.GetGatewayOptions)))
+	mux.Handle("GET /api/option/channel-traffic", middleware.AdminAuth(http.HandlerFunc(controller.GetChannelTraffic)))
+	mux.Handle("PUT /api/option/channel-traffic", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateChannelTraffic))))
 	mux.Handle("PUT /api/option/gateway", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateGatewayOptions))))
 	mux.Handle("GET /api/option/upstream", middleware.AdminAuth(http.HandlerFunc(controller.GetUpstreamPolicy)))
 	mux.Handle("PUT /api/option/upstream", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateUpstreamPolicy))))

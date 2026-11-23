@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/internal/traffic"
 	"starhub/internal/upstream"
 	"starhub/metric"
 	"starhub/middleware"
@@ -306,6 +307,8 @@ type relayFlow struct {
 	affinityRules        []setting.AffinityRule
 	affinityRevision     uint64
 	affinityRuleUsed     bool
+	trafficPolicy        *traffic.Policy
+	trafficRule          *traffic.Rule
 }
 
 func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat, mode string) *relayFlow {
@@ -324,7 +327,8 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 	sw := newStatusWriter(w)
 	sw.onResponseComplete = func() { middleware.MarkResponseCompleted(ctx) }
 	flow := &relayFlow{
-		ctx: ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
+		trafficPolicy: traffic.Snapshot(),
+		ctx:           ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
 		startTime:      time.Now(),
 		cancel:         cancel,
 		tried:          map[int64]bool{},
@@ -379,8 +383,12 @@ func (f *relayFlow) errorOut(status int, errType, code, message string) {
 // pricier on failure). It also populates affinityPreferred for metrics and
 // noteAffinity.
 func (f *relayFlow) pick() (*model.Channel, error) {
-	f.recordAffinityReadiness()
 	for {
+		f.trafficRule = nil
+		if !setting.IsCommercialMode() && f.trafficPolicy != nil {
+			f.trafficRule = f.trafficPolicy.Lookup(f.currentGroup, f.req.modelName)
+		}
+		f.recordAffinityReadiness()
 		preferred, hashKey := int64(0), ""
 		if f.affinityEligible() {
 			switch setting.RoutingAffinityMode() {
@@ -413,10 +421,8 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		)
 		if setting.IsCommercialMode() {
 			ch, err = model.GetScoredChannel(f.currentGroup, f.req.modelName, f.tried, preferred, hashKey, model.RoutingTextMode(f.mode), f.req.channelCheck, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
-		} else if hashKey != "" {
-			ch, err = model.GetSatisfiedChannelHashed(f.currentGroup, f.req.modelName, f.tried, hashKey, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
 		} else {
-			ch, err = model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
+			ch, err = model.GetSatisfiedChannelTraffic(f.currentGroup, f.req.modelName, f.tried, preferred, hashKey, f.trafficRule, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
 		}
 		if ch != nil {
 			f.recordProtectedSkips(ch.RuntimeSkipped)
@@ -452,7 +458,7 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			// different channel was selected (the bound one is unavailable,
 			// cooling, in a lower priority tier or already tried) the request
 			// fails instead of silently switching upstreams.
-			if f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
+			if f.affinityEligible() && f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
 				f.affinityMeta.ChannelID > 0 && ch.ID != f.affinityMeta.ChannelID {
 				return nil, f.strictUnavailable()
 			}
@@ -464,7 +470,7 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		// Strict affinity: no channel was selected at all. In prefer mode this
 		// falls through to the auto-group / smart-model walk; in strict mode
 		// the bound channel is required and its absence is a hard failure.
-		if f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
+		if f.affinityEligible() && f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
 			f.affinityMeta.ChannelID > 0 {
 			return nil, f.strictUnavailable()
 		}
@@ -487,6 +493,10 @@ func (f *relayFlow) recordAffinityReadiness() {
 		return
 	}
 	f.affinityReadinessCounted = true
+	if f.trafficRule != nil {
+		service.RecordAffinityBypass(service.AffinityBypassTraffic)
+		return
+	}
 	rules, _ := setting.AffinityRulesSnapshot()
 	if len(rules) == 0 {
 		return
@@ -564,7 +574,7 @@ func (f *relayFlow) affinityHashKey() string {
 
 // affinityEligible reports whether sticky routing applies to this request.
 func (f *relayFlow) affinityEligible() bool {
-	return f.req.tokenID > 0 && setting.RoutingAffinityEnabled()
+	return f.trafficRule == nil && f.req.tokenID > 0 && setting.RoutingAffinityEnabled()
 }
 
 // settleGroup returns the group the settlement should bill through: the
@@ -1080,14 +1090,14 @@ loop:
 			return
 		case attemptUpstreamError:
 			f.sent++
-			if f.affinityRuleUsed && f.affinityPreferred == ch.ID && f.affinityMeta.SessionMode == setting.AffinitySessionStrict {
+			if f.affinityEligible() && f.affinityRuleUsed && f.affinityPreferred == ch.ID && f.affinityMeta.SessionMode == setting.AffinitySessionStrict {
 				f.strictUnavailable()
 				return
 			}
 			// Rule-driven affinity with skip_retry_on_failure: the bound
 			// channel failed and the operator asked not to fall over to
 			// other channels. Surface the failure and stop the loop.
-			if f.affinityRuleUsed && f.affinityMeta.SkipRetry && f.affinityPreferred == ch.ID {
+			if f.affinityEligible() && f.affinityRuleUsed && f.affinityMeta.SkipRetry && f.affinityPreferred == ch.ID {
 				f.lastErr = res.cause
 				if !f.sw.wrote {
 					f.errorOut(http.StatusBadGateway, "server_error", "affinity_channel_failed",

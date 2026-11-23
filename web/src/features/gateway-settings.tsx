@@ -18,6 +18,7 @@ import { useSettingsText } from "./settings-text";
 import { ConfigurationSync } from "./configuration-sync";
 import "./gateway-settings.css";
 import { UpstreamProtectionSettings } from "./upstream-protection";
+import { ChannelTrafficSettings } from "./channel-traffic";
 
 const keys = [
   "ip_rate_limit",
@@ -469,6 +470,7 @@ function GatewaySettingsForm() {
               </Button>
             </footer>
           </form>
+          <ChannelTrafficSettings />
           <section className="gateway-panel">
             <h2>{text("最近变更", "Recent changes", "التغييرات الأخيرة")}</h2>
             <p className="gateway-description">

@@ -7,10 +7,12 @@ import (
 	"hash/fnv"
 	"math"
 	"math/rand/v2"
+	"sort"
 
 	"gorm.io/gorm"
 
 	"starhub/common"
+	"starhub/internal/traffic"
 	"starhub/internal/upstream"
 	"starhub/setting"
 )
@@ -135,6 +137,15 @@ func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred 
 	if setting.IsCommercialMode() {
 		return GetScoredChannel(group, model, exclude, preferred, hashKey, modelIsText(model), nil, profiles...)
 	}
+	return GetSatisfiedChannelTraffic(group, model, exclude, preferred, hashKey, traffic.Snapshot().Lookup(group, model), profiles...)
+}
+
+// GetSatisfiedChannelTraffic uses the request's policy snapshot throughout retries.
+// An explicit allocation never changes persisted channel or ability weights.
+func GetSatisfiedChannelTraffic(group, model string, exclude map[int64]bool, preferred int64, hashKey string, allocation *traffic.Rule, profiles ...upstream.Profile) (*Channel, error) {
+	if allocation != nil {
+		preferred, hashKey = 0, ""
+	}
 	var rows []Ability
 	query := DB.Where("\"group\" = ? AND model = ? AND enabled = ?", group, model, true)
 	query = query.Where(resourceGatewayAbilityCondition("abilities"))
@@ -150,6 +161,19 @@ func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred 
 	err := query.Order("priority DESC").Find(&rows).Error
 	if err != nil {
 		return nil, err
+	}
+	if allocation != nil {
+		filtered := rows[:0]
+		for _, row := range rows {
+			if weight := allocation.Weight(row.ChannelID); weight > 0 {
+				row.Weight = weight
+				row.Priority = allocation.Priority(row.ChannelID, row.Priority)
+				filtered = append(filtered, row)
+			}
+		}
+		rows = filtered
+		// Overrides can move a channel across tiers, so re-sort before the tier walk.
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Priority > rows[j].Priority })
 	}
 	if len(rows) == 0 {
 		return nil, ErrNoChannel

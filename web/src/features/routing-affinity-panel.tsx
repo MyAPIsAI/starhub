@@ -10,6 +10,11 @@ import { useSettingsText } from "./settings-text";
 import "./resource-publication.css";
 
 const eventLabels: Record<string, [string, string, string]> = {
+  traffic_allocation: [
+    "比例分流跳过亲和",
+    "Affinity bypassed for traffic allocation",
+    "تجاوز التقارب لتوزيع الحركة",
+  ],
   conditions_unmatched: [
     "条件未匹配",
     "Conditions not matched",

@@ -1,0 +1,120 @@
+.traffic-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.traffic-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.traffic-selectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 16px;
+  margin-block: 22px 16px;
+}
+.traffic-selectors > label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.traffic-selectors select,
+.traffic-table input {
+  width: 100%;
+  min-width: 0;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+.traffic-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.traffic-toggle input {
+  accent-color: var(--brand);
+}
+.traffic-table-wrap {
+  overflow-x: auto;
+  margin-block-start: 18px;
+}
+.traffic-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  font-size: 13px;
+}
+.traffic-table th,
+.traffic-table td {
+  text-align: start;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.traffic-table th {
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.traffic-table input {
+  min-width: 90px;
+  max-width: 140px;
+}
+.traffic-table small {
+  display: block;
+  color: var(--muted);
+  margin-block-start: 5px;
+}
+.traffic-table strong {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.traffic-share {
+  color: var(--brand);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.channel-traffic input:disabled,
+.channel-traffic select:disabled {
+  opacity: 0.6;
+}
+.channel-traffic input:focus-visible,
+.channel-traffic select:focus-visible,
+.traffic-table-wrap:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.traffic-history {
+  margin-block-start: 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.traffic-history summary {
+  cursor: pointer;
+}
+.traffic-history li {
+  margin-block: 8px;
+}
+@media (max-width: 600px) {
+  .traffic-selectors {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .traffic-table input {
+    min-width: 72px;
+  }
+  .traffic-table th,
+  .traffic-table td {
+    padding-inline: 6px;
+  }
+}

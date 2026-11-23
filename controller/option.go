@@ -7,6 +7,7 @@ import (
 
 	"starhub/common"
 	"starhub/config"
+	"starhub/internal/traffic"
 	"starhub/model"
 	"starhub/service"
 	"starhub/setting"
@@ -85,6 +86,10 @@ func RollbackOption(w http.ResponseWriter, r *http.Request) {
 	if config.IsGatewayOption(change.Key) && !requireGatewayRoot(w, r) {
 		return
 	}
+	if change.Key == traffic.OptionKey {
+		common.ApiError(w, http.StatusBadRequest, "use channel traffic settings to review current channel capabilities before changing allocation")
+		return
+	}
 	version, err := model.RollbackOption(req.Version, req.ExpectedVersion, actorID)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -113,6 +118,10 @@ func UpdateOption(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if config.IsGatewayOption(req.Key) && !requireGatewayRoot(w, r) {
+		return
+	}
+	if req.Key == traffic.OptionKey {
+		common.ApiError(w, http.StatusBadRequest, "use the channel-traffic endpoint with channel and configuration versions")
 		return
 	}
 	if !setting.IsOptionKey(req.Key) {
