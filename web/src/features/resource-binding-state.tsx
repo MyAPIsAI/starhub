@@ -249,9 +249,9 @@ export function ResourceBindingList({
       )}
       <p>
         {text(
-          "已存组合是当前保留的托管路线数；路由条件通过数不代表用户授权、余额或上游健康检查通过。撤销会停止托管路由并保留来源；释放会按渠道当前模型和分组配置恢复普通调用，并从此表移除。旧版已释放记录可点击“恢复普通调用”。",
-          "Stored pairs count managed routes; route eligibility does not prove user authorization, balance or upstream health. Revoke stops managed routing and retains ownership. Release restores ordinary routing from the current channel configuration and removes the entry. Previously released entries can use Restore ordinary routing.",
-          "تحصي الأزواج المخزنة المسارات المُدارة ولا تثبت صلاحية المستخدم أو الرصيد أو سلامة المزود. يوقف الإلغاء التوجيه المُدار مع حفظ المصدر. يعيد التحرير التوجيه العادي حسب إعدادات القناة الحالية ويحذف السجل. يمكن استعادة التوجيه العادي للسجلات المحررة سابقًا.",
+          "已存组合是当前保留的托管路线数；路由条件通过数不代表用户授权、余额或上游健康检查通过。释放会按渠道当前模型和分组配置恢复普通调用，并从此表移除。旧版已释放记录可点击“恢复普通调用”。",
+          "Stored pairs count managed routes; route eligibility does not prove user authorization, balance or upstream health. Release restores ordinary routing from the current channel configuration and removes the entry. Previously released entries can use Restore ordinary routing.",
+          "تحصي الأزواج المخزنة المسارات المُدارة ولا تثبت صلاحية المستخدم أو الرصيد أو سلامة المزود. يعيد التحرير التوجيه العادي حسب إعدادات القناة الحالية ويحذف السجل. يمكن استعادة التوجيه العادي للسجلات المحررة سابقًا.",
         )}
       </p>
       {actionError && <p role="alert">{actionError}</p>}
@@ -462,26 +462,6 @@ export function ResourceBindingList({
                     <td>
                       {row.source_channel_id ? (
                         <div className="rp-binding-actions">
-                          <Button
-                            variant="danger"
-                            aria-label={text(
-                              `撤销路线：${row.gateway_channel_id}`,
-                              `Revoke routes: ${row.gateway_channel_id}`,
-                              `إلغاء المسارات: ${row.gateway_channel_id}`,
-                            )}
-                            disabled={
-                              !changesEnabled ||
-                              (!row.configured_active &&
-                                row.stored_pair_count === 0)
-                            }
-                            onClick={() => choose(row, "revoke")}
-                          >
-                            {text(
-                              "撤销路线",
-                              "Revoke routes",
-                              "إلغاء المسارات",
-                            )}
-                          </Button>
                           <Button
                             aria-label={text(
                               `释放绑定：${row.gateway_channel_id}`,
