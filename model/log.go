@@ -40,6 +40,14 @@ func utcMidnight() int64 {
 
 type Log struct {
 	BusinessDaySnapshot
+	RequestObserved            bool   `gorm:"not null;default:false" json:"request_observed"`
+	AdmissionRejected          bool   `gorm:"not null;default:false" json:"admission_rejected"`
+	UpstreamAttempts           int64  `gorm:"not null;default:0" json:"upstream_attempts"`
+	HTTPStatus                 int    `gorm:"not null;default:0" json:"http_status"`
+	FailureStage               string `gorm:"size:32;not null;default:''" json:"failure_stage"`
+	ErrorCode                  string `gorm:"size:128;not null;default:''" json:"error_code"`
+	ErrorMessage               string `gorm:"size:512;not null;default:''" json:"error_message"`
+	RequestPath                string `gorm:"size:256;not null;default:''" json:"request_path"`
 	BillingEvidence            string `gorm:"type:text;not null;default:''" json:"billing_evidence,omitempty"`
 	AmountUnit                 string `gorm:"size:24;not null;default:''" json:"amount_unit,omitempty"`
 	QuotaRemainderNano         int64  `gorm:"not null;default:0" json:"-"`
@@ -55,7 +63,7 @@ type Log struct {
 	Model                      string `gorm:"size:128;not null;default:'';index:idx_logs_quality_window,priority:2;index:idx_logs_quality_model,priority:1" json:"model"`
 	RequestedModel             string `gorm:"size:128;not null;default:''" json:"requested_model"`
 	Protocol                   string `gorm:"size:16;not null;default:''" json:"protocol"`
-	RequestID                  string `gorm:"size:64;not null;default:''" json:"request_id"`
+	RequestID                  string `gorm:"size:64;not null;default:'';index" json:"request_id"`
 	UpstreamRequestID          string `gorm:"size:64;not null;default:''" json:"upstream_request_id"`
 	PromptTokens               int64  `gorm:"not null;default:0" json:"prompt_tokens"`
 	CompletionTokens           int64  `gorm:"not null;default:0" json:"completion_tokens"`
@@ -127,7 +135,9 @@ func InsertFailedLog(l *Log) error {
 		at := time.Unix(reservation.AdmittedAt, 0).UTC()
 		l.AdmissionDay = time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Unix()
 	}
-	l.Status = 2 // failed
+	if l.Status != 3 {
+		l.Status = 2 // failed
+	}
 	l.Quota = 0
 	l.QuotaRemainderNano = 0
 	l.UnfundedQuota = 0

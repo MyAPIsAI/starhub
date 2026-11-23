@@ -275,6 +275,11 @@ type relayFlow struct {
 }
 
 func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, inbound dto.InboundFormat, mode string) *relayFlow {
+	middleware.SetRequestStage(ctx, "routing")
+	if observation := middleware.RequestObservation(ctx); observation != nil {
+		observation.Entry.UserID, observation.Entry.TokenID, observation.Entry.TokenName = req.userID, req.tokenID, req.tokenName
+		observation.Entry.Model, observation.Entry.RequestedModel, observation.Entry.Protocol = req.modelName, req.requestedModel, req.protocol
+	}
 	var cancel context.CancelFunc
 	if setting.IsCommercialMode() {
 		ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
@@ -530,6 +535,11 @@ func (f *relayFlow) settleGroup() string {
 // inside the attempt reads the trail, so the current channel must already
 // be on it.
 func (f *relayFlow) begin(ch *model.Channel) {
+	if observation := middleware.RequestObservation(f.ctx); observation != nil {
+		observation.Entry.ChannelID = ch.ID
+		observation.Outcome = 0
+		observation.Entry.FailureStage, observation.Entry.ErrorCode, observation.Entry.ErrorMessage = "", "", ""
+	}
 	model.BeginRoutingAttempt(ch.RuntimeRoute)
 	if meta, found, err := model.GetModelMeta(f.req.modelName); err == nil && found {
 		f.vendor = meta.Vendor
@@ -716,12 +726,15 @@ func (f *relayFlow) refundUnlessSettled() {
 		log.Printf("relay for model %s failed on channels [%s], refunded %d quota",
 			f.req.modelName, f.trailString(), f.preQuota)
 	}
-	// Log the failed request for analytics (does not affect quota).
-	// Only when a channel was actually tried (trail is non-empty),
-	// so pre-channel failures (no channel available) don't inflate
-	// usage counts.
+	// Persist attempted failures alongside their reservation. The outer request
+	// observer separately records admission failures without a channel or charge.
 	if len(f.trail) > 0 {
-		_ = model.InsertFailedLog(&model.Log{
+		status := 2
+		if errors.Is(f.ctx.Err(), context.Canceled) {
+			status = 3
+		}
+		if err := model.InsertFailedLog(&model.Log{
+			Status:             status,
 			QuotaReservationID: f.req.quotaReservationID,
 			UserID:             f.req.userID,
 			TokenID:            f.req.tokenID,
@@ -733,7 +746,9 @@ func (f *relayFlow) refundUnlessSettled() {
 			UsedChannels:       f.trailString(),
 			DurationMs:         time.Since(f.startTime).Milliseconds(),
 			RequestID:          middleware.CtxRequestIDValue(f.ctx),
-		})
+		}); err != nil {
+			log.Printf("failed relay log persistence failed: %v", err)
+		}
 	}
 }
 
@@ -806,6 +821,10 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 		ch.RuntimeRoute.Sent = true
 	}
 	f.attempt.MarkSent()
+	if observation := middleware.RequestObservation(f.ctx); observation != nil {
+		observation.Entry.UpstreamAttempts++
+		observation.Stage = "upstream"
+	}
 	resp, err := upstreamHTTPClient.Do(req)
 	if err != nil {
 		if call.sideEffect {
@@ -821,6 +840,7 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 		f.attempt.RecordHeaders(upstreamRequestID(resp))
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
+		middleware.SetRequestFailure(f.ctx, "upstream", fmt.Sprintf("upstream_http_%d", resp.StatusCode), "The upstream returned an HTTP error.")
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		resp.Body.Close()
 		if resp.StatusCode < http.StatusInternalServerError {
@@ -902,6 +922,20 @@ loop:
 		f.beginMetricAttempt(ch)
 		f.sw.firstContent = f.attempt.RecordFirstToken
 		res := attempt(ch)
+		if observation := middleware.RequestObservation(f.ctx); observation != nil {
+			if res.outcome == attemptSuccess {
+				if observation.Outcome == 0 {
+					observation.Outcome = 1
+				}
+			} else {
+				if observation.Outcome != 3 {
+					observation.Outcome = 2
+				}
+				if observation.Entry.ErrorCode == "" && res.outcome != attemptClientError {
+					middleware.SetRequestFailure(f.ctx, observation.Stage, "upstream_failed", "The upstream attempt did not complete.")
+				}
+			}
+		}
 		if ch.RuntimeRoute != nil {
 			class := "unknown"
 			switch {
@@ -1082,6 +1116,7 @@ func relayChat(w http.ResponseWriter, r *http.Request, inbound dto.InboundFormat
 	} else {
 		estimate = relay.EstimatePreConsumeQuotaWithPriceData(flow.req.priceFor(billingGroup), flow.req.body)
 	}
+	middleware.SetRequestStage(flow.ctx, "billing")
 	preQuota, preErr := relay.PreConsumeQuotaAmount(req.userID, req.tokenID, req.tokenUnlimited, estimate, req.quotaReservationID)
 	if preErr != nil {
 		writePreConsumeError(flow.w, inbound, preErr)
@@ -1169,15 +1204,7 @@ func chatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, inboun
 
 	if passthrough {
 		usage, content, herr := adaptor.HandlePassthroughResponse(flow.w, resp, flow.req.stream)
-		result := settleChatAttempt(flow, ch, ir, usage, content)
-		if herr != nil {
-			log.Printf("relay response handling error: %v", herr)
-			result.outcome, result.cause = attemptUpstreamError, herr
-			if flow.req.stream {
-				flow.span.MarkStreamInterrupted()
-			}
-		}
-		return result
+		return settleChatAttempt(flow, ch, ir, usage, content, herr)
 	}
 	return convertedChatAttempt(flow, ch, adaptor, ir, inbound, resp)
 }
@@ -1214,10 +1241,12 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 			if flow.attempt != nil {
 				flow.attempt.RecordFirstToken()
 			}
-			_ = emitter.Emit(&dto.ChatStreamEvent{TextDelta: chatResp.Text})
+			if err := emitter.Emit(&dto.ChatStreamEvent{TextDelta: chatResp.Text}); err != nil {
+				return settleChatAttempt(flow, ch, ir, chatResp.Usage, chatResp.Text, err)
+			}
 		}
-		_ = emitter.Finish(chatResp.Usage, chatResp.FinishReason)
-		return settleChatAttempt(flow, ch, ir, chatResp.Usage, chatResp.Text)
+		finishErr := emitter.Finish(chatResp.Usage, chatResp.FinishReason)
+		return settleChatAttempt(flow, ch, ir, chatResp.Usage, chatResp.Text, finishErr)
 	}
 
 	reader, err := adaptor.StreamChatEvents(resp)
@@ -1261,22 +1290,38 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 			content.WriteString(ev.TextDelta)
 		}
 	}
-	_ = emitter.Finish(lastUsage, finishReason)
+	if finishErr := emitter.Finish(lastUsage, finishReason); streamError == nil {
+		streamError = finishErr
+	}
 	if clientGone {
 		flow.span.MarkStreamInterrupted()
+		if streamError == nil {
+			streamError = context.Canceled
+		}
 	}
-	result := settleChatAttempt(flow, ch, ir, lastUsage, content.String())
-	if streamError != nil {
-		result.outcome, result.cause = attemptUpstreamError, streamError
-		flow.span.MarkStreamInterrupted()
-	}
-	return result
+	return settleChatAttempt(flow, ch, ir, lastUsage, content.String(), streamError)
 }
 
 // settleChatAttempt balances the books of a successful attempt: missing
 // usage falls back to the IR-based estimate so a usage-less upstream still
 // bills (P2 invariant).
-func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, usage *relay.Usage, content string) attemptResult {
+func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, usage *relay.Usage, content string, responseErrors ...error) attemptResult {
+	var responseErr error
+	if len(responseErrors) > 0 {
+		responseErr = responseErrors[0]
+	}
+	if responseErr == nil {
+		responseErr = flow.ctx.Err()
+	}
+	status := middleware.RecordRelayOutcome(flow.ctx, responseErr)
+	if status != 1 && flow.req.stream {
+		flow.span.MarkStreamInterrupted()
+	}
+	// An empty failed response has no confirmed usage to settle.
+	// The deferred refund releases the reservation exactly once.
+	if status != 1 && (usage == nil || usage.TotalTokens() == 0) && content == "" {
+		return attemptResult{outcome: attemptUpstreamError, cause: responseErr}
+	}
 	if usage != nil && flow.attempt != nil {
 		flow.attempt.RecordUsage(usage.PromptTokens, usage.CompletionTokens)
 		if !flow.req.stream && content != "" {
@@ -1286,6 +1331,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	if usage == nil || usage.TotalTokens() == 0 {
 		usage = relay.EstimateIRUsage(ir, content)
 	}
+	usage.RequestStatus = status
 	usage.RequestProtocol = flow.req.protocol
 	usage.RoutingFallback = flow.modelFallback || len(flow.trail) > 1
 	usage.ActualVendor = flow.vendor
@@ -1294,8 +1340,16 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 		flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), middleware.CtxRequestIDValue(flow.ctx), flow.req.requestedModel); err != nil {
 		log.Printf("post consume quota failed: %v", err)
 		service.NotifyBillingFailure(flow.req.userID, "settlement failed: "+err.Error())
+		middleware.SetRequestFailure(flow.ctx, "billing", "settlement_failed", "Usage settlement failed.")
+		if observation := middleware.RequestObservation(flow.ctx); observation != nil {
+			observation.Outcome = 2
+		}
+		return attemptResult{outcome: attemptUpstreamError, cause: err}
 	}
 	flow.settled = true
+	if status != 1 {
+		return attemptResult{outcome: attemptUpstreamError, statusCode: http.StatusOK, cause: responseErr, usage: usage, content: content}
+	}
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK, usage: usage, content: content}
 }
 

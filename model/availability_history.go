@@ -45,6 +45,7 @@ func AggregateMonthlyAvailability(monthsBack int) ([]AvailabilityRecord, error) 
 		}
 		var rows []row
 		err := DB.Model(&Log{}).
+			Where("request_observed = FALSE OR upstream_attempts > 0").
 			Select("status, COUNT(*) AS count").
 			Where("created_at >= ? AND created_at < ? AND channel_id > 0 AND status IN ?",
 				monthStart.Unix(), monthEnd.Unix(), []int{1, 2}).

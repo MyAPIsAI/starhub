@@ -60,6 +60,10 @@ import {
 export type { RechargeOrder } from "./billing";
 
 export type PreviewRequest = Omit<RequestRecord, "source"> & {
+  request_id?: string;
+  http_status?: number;
+  failure_stage?: string;
+  upstream_attempts?: number;
   usage_source?: "upstream" | "admission_estimate";
   source: "api" | "playground";
   pricing_revision?: string;

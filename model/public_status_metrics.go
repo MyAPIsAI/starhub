@@ -60,7 +60,7 @@ func populatePublicStatusMetrics(ctx context.Context, view *PublicStatusOverview
 		sort.Strings(names)
 		filter = filter.Or("channel_id = ? AND model IN ?", id, names)
 	}
-	base := DB.WithContext(ctx).Model(&Log{}).Where("created_at >= ? AND created_at < ? AND status IN ?", start.Unix(), view.WindowEnd, []int{1, 2}).Where(filter)
+	base := DB.WithContext(ctx).Model(&Log{}).Where("created_at >= ? AND created_at < ? AND status IN ?", start.Unix(), view.WindowEnd, []int{1, 2}).Where("request_observed = FALSE OR upstream_attempts > 0").Where(filter)
 	var totals []publicStatusCounts
 	err = base.Select("model, "+publicStatusCountSQL+`,
 		SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS recent_total,

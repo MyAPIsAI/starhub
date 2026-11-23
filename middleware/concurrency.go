@@ -46,6 +46,7 @@ func ConcurrencyLimit(next http.Handler) http.Handler {
 
 		// Global check.
 		if global > 0 && globalInFlight.Load() >= global {
+			SetRequestFailure(r.Context(), "concurrency", "platform_concurrency_exceeded", "Platform concurrency limit exceeded.")
 			common.ApiError(w, http.StatusTooManyRequests, "platform is at maximum concurrency; retry later")
 			return
 		}
@@ -57,6 +58,7 @@ func ConcurrencyLimit(next http.Handler) http.Handler {
 				val, _ := concurrentCounters.LoadOrStore(userID, &atomic.Int64{})
 				counter := val.(*atomic.Int64)
 				if counter.Load() >= perAccount {
+					SetRequestFailure(r.Context(), "concurrency", "account_concurrency_exceeded", "Account concurrency limit exceeded.")
 					common.ApiError(w, http.StatusTooManyRequests, "account concurrency limit exceeded")
 					return
 				}

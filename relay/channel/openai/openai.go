@@ -139,19 +139,40 @@ func handleStream(w http.ResponseWriter, resp *http.Response) (*dto.Usage, strin
 	reader := channel.NewSSEReader(resp.Body)
 	var usage *dto.Usage
 	var content strings.Builder
+	terminal := false
 	for {
 		line, err := reader.Next()
 		if err != nil {
 			if err == io.EOF {
+				if !terminal {
+					return usage, content.String(), io.ErrUnexpectedEOF
+				}
 				break
 			}
 			return usage, content.String(), err
 		}
 		payload := line.Data
-		if payload == "" || payload == "[DONE]" {
+		if payload == "[DONE]" {
+			terminal = true
+			break
+		}
+		if payload == "" {
 			continue
 		}
-		textDelta, chunkUsage, _, perr := dto.ParseOpenAIStreamPayload([]byte(payload))
+		if dto.ParseProviderErrorBody([]byte(payload)) != nil {
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", payload)
+			if canFlush {
+				flusher.Flush()
+			}
+			return usage, content.String(), fmt.Errorf("upstream sent a stream error")
+		}
+		textDelta, chunkUsage, finishReason, perr := dto.ParseOpenAIStreamPayload([]byte(payload))
+		if perr != nil {
+			return usage, content.String(), fmt.Errorf("invalid upstream stream frame")
+		}
+		if finishReason != "" {
+			terminal = true
+		}
 		if perr == nil {
 			if textDelta != "" {
 				if observer, ok := w.(interface{ RecordFirstContent() }); ok {
@@ -172,7 +193,9 @@ func handleStream(w http.ResponseWriter, resp *http.Response) (*dto.Usage, strin
 		}
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
-	fmt.Fprint(w, "data: [DONE]\n\n")
+	if _, err := fmt.Fprint(w, "data: [DONE]\n\n"); err != nil {
+		return usage, content.String(), err
+	}
 	if canFlush {
 		flusher.Flush()
 	}

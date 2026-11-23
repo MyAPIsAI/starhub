@@ -21,6 +21,7 @@ import {
   type RequestHistoryStatus,
 } from "../lib/request-history";
 import "./request-history.css";
+import type { LogPageSummary } from "../lib/api/usage";
 
 const ranges: RequestTimeRange[] = ["today", "7d", "30d", "custom", "all"];
 const statuses: RequestHistoryStatus[] = [
@@ -34,10 +35,19 @@ export default function RequestHistory({
   requests,
   onSelect,
   onExport,
+  server,
 }: {
   requests: PreviewRequest[];
   onSelect: (row: PreviewRequest) => void;
   onExport: () => void;
+  server?: {
+    total: number;
+    page: number;
+    summary?: LogPageSummary;
+    loading: boolean;
+    error: unknown;
+    refetch: () => unknown;
+  };
 }) {
   const { t, i18n } = useTranslation();
   const c = (zh: string, en: string, ar: string) =>
@@ -57,15 +67,19 @@ export default function RequestHistory({
     status,
     query,
   });
-  const pages = Math.max(1, Math.ceil(result.rows.length / PAGE_SIZE));
+  const total = server ? server.total : result.rows.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const requestedPage = Number(params.get("page"));
-  const page = Number.isInteger(requestedPage)
-    ? Math.max(1, Math.min(pages, requestedPage))
-    : 1;
-  const visibleRows = result.rows.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE,
-  );
+  const page = server
+    ? server.page
+    : Number.isInteger(requestedPage)
+      ? Math.max(1, Math.min(pages, requestedPage))
+      : 1;
+  const visibleRows = server
+    ? result.error || server.error || server.loading
+      ? []
+      : requests
+    : result.rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const change = (updates: Record<string, string | null>, replace = false) => {
     setParams(
       (previous) => {
@@ -129,7 +143,39 @@ export default function RequestHistory({
         </div>
       </header>
       <div className="request-history-panel">
+        {server?.loading && (
+          <p role="status">
+            {c("正在读取调用记录…", "Loading requests…", "جارٍ تحميل الطلبات…")}
+          </p>
+        )}
+        {server?.error != null && (
+          <p role="alert">
+            {server.error instanceof Error &&
+            server.error.message === "request_log_filters_unavailable"
+              ? c(
+                  "当前后端尚不支持调用记录筛选，请更新并重启后端。",
+                  "Update and restart the backend to enable request filtering.",
+                  "حدّث الخادم وأعد تشغيله لتفعيل تصفية الطلبات.",
+                )
+              : c(
+                  "读取调用记录失败，请重试。",
+                  "Could not load requests. Try again.",
+                  "تعذر تحميل الطلبات. حاول مجددًا.",
+                )}
+            <Button onClick={() => void server.refetch()}>
+              {c("重试", "Retry", "إعادة المحاولة")}
+            </Button>
+          </p>
+        )}
         <div className="request-history-toolbar">
+          {server && (
+            <Button
+              disabled={server.loading || !!result.error}
+              onClick={() => void server.refetch()}
+            >
+              {c("刷新", "Refresh", "تحديث")}
+            </Button>
+          )}
           <label className="request-history-search">
             <span className="sr-only">
               {c("搜索调用", "Search requests", "بحث الطلبات")}
@@ -139,6 +185,7 @@ export default function RequestHistory({
               type="search"
               aria-label={c("搜索调用", "Search requests", "بحث الطلبات")}
               value={query}
+              maxLength={256}
               onChange={(e) => change({ query: e.target.value }, true)}
               placeholder={c(
                 "搜索业务编号、模型或错误代码",
@@ -255,12 +302,8 @@ export default function RequestHistory({
         )}
         <div className="request-history-summary">
           <span aria-live="polite">
-            {c(
-              `共 ${result.rows.length} 条调用`,
-              `${result.rows.length} requests`,
-              `${result.rows.length} طلبًا`,
-            )}
-            {requests.length !== result.rows.length && (
+            {c(`共 ${total} 条调用`, `${total} requests`, `${total} طلبًا`)}
+            {!server && requests.length !== result.rows.length && (
               <small>
                 {c(
                   ` / 全部 ${requests.length} 条`,
@@ -278,6 +321,24 @@ export default function RequestHistory({
             )}
           </span>
         </div>
+        {server?.summary && (
+          <div className="request-history-summary" aria-live="polite">
+            <span>
+              {c(
+                `当前筛选：已完成入口请求 ${server.summary.observed_requests} · 上游发送前拒绝或失败 ${server.summary.rejected_requests} · 上游尝试 ${server.summary.upstream_attempts}`,
+                `Current filter: completed incoming requests ${server.summary.observed_requests} · rejected or failed before upstream ${server.summary.rejected_requests} · upstream attempts ${server.summary.upstream_attempts}`,
+                `التصفية الحالية: الطلبات الواردة المكتملة ${server.summary.observed_requests} · المرفوضة أو الفاشلة قبل الإرسال ${server.summary.rejected_requests} · محاولات المزوّد ${server.summary.upstream_attempts}`,
+              )}
+            </span>
+            <small>
+              {c(
+                `成功 ${server.summary.success_count} · 失败 ${server.summary.failed_count} · 取消 ${server.summary.cancelled_count}。另有 ${server.summary.historical_requests} 条旧记录未采集入口与尝试次数。`,
+                `Succeeded ${server.summary.success_count} · failed ${server.summary.failed_count} · cancelled ${server.summary.cancelled_count}. ${server.summary.historical_requests} older records lack admission and attempt counts.`,
+                `ناجحة ${server.summary.success_count} · فاشلة ${server.summary.failed_count} · ملغاة ${server.summary.cancelled_count}. تفتقر ${server.summary.historical_requests} سجلات قديمة إلى أعداد الدخول والمحاولات.`,
+              )}
+            </small>
+          </div>
+        )}
         {visibleRows.length > 0 && (
           <div className="request-history-table-wrap">
             <table className="request-history-table">
@@ -329,11 +390,13 @@ export default function RequestHistory({
                       </button>
                     </td>
                     <td>
-                      <strong>{row.requested_model || row.model}</strong>
+                      <strong>{row.requested_model || row.model || "—"}</strong>
                       <small>
                         →{" "}
                         {row.actual_model ||
-                          (row.status === "success" ? row.model : "—")}
+                          (row.status === "success" && row.channel_id
+                            ? row.model
+                            : "—")}
                       </small>
                     </td>
                     <td className="mono request-channel-id">
@@ -358,6 +421,12 @@ export default function RequestHistory({
                                 : "pSucceeded",
                             )}
                       </span>
+                      {row.http_status && <small>HTTP {row.http_status}</small>}
+                      {row.error_code && (
+                        <small>
+                          <bdi>{row.error_code}</bdi>
+                        </small>
+                      )}
                     </td>
                     <td className="mono request-number">
                       {row.duration_ms} {c("毫秒", "ms", "مللي ثانية")}
@@ -371,7 +440,7 @@ export default function RequestHistory({
             </table>
           </div>
         )}
-        {!visibleRows.length && (
+        {!visibleRows.length && !server?.loading && !server?.error && (
           <div className="request-empty" role="status">
             {result.error ? (
               <>
@@ -384,7 +453,7 @@ export default function RequestHistory({
                 </strong>
                 <p>{errorText}</p>
               </>
-            ) : !requests.length ? (
+            ) : !requests.length && !hasFilters && page === 1 ? (
               <>
                 <strong>
                   {c("还没有调用记录", "No requests yet", "لا توجد طلبات بعد")}
@@ -429,11 +498,11 @@ export default function RequestHistory({
         )}
         <footer className="request-history-pagination">
           <span>
-            {result.rows.length
+            {total > 0 && visibleRows.length > 0
               ? c(
-                  `第 ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, result.rows.length)} 条，共 ${result.rows.length} 条`,
-                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, result.rows.length)} of ${result.rows.length}`,
-                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, result.rows.length)} من ${result.rows.length}`,
+                  `第 ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} 条，共 ${total} 条`,
+                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} of ${total}`,
+                  `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} من ${total}`,
                 )
               : c("0 条记录", "0 records", "0 سجلات")}
           </span>
@@ -441,7 +510,7 @@ export default function RequestHistory({
             <Button
               size="small"
               variant="secondary"
-              disabled={page <= 1}
+              disabled={page <= 1 || server?.loading}
               aria-label={c("上一页", "Previous page", "الصفحة السابقة")}
               onClick={() => change({ page: String(page - 1) })}
             >
@@ -453,7 +522,12 @@ export default function RequestHistory({
             <Button
               size="small"
               variant="secondary"
-              disabled={page >= pages}
+              disabled={
+                page >= pages ||
+                server?.loading ||
+                !!server?.error ||
+                !!result.error
+              }
               aria-label={c("下一页", "Next page", "الصفحة التالية")}
               onClick={() => change({ page: String(page + 1) })}
             >

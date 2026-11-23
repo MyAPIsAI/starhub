@@ -110,6 +110,7 @@ func ResetRateLimits() {
 func IPRateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !ipLimiter.allow(clientIP(r), time.Now()) {
+			SetRequestFailure(r.Context(), "ip_rate_limit", "ip_rate_limit_exceeded", "IP request rate limit exceeded.")
 			writeRateLimited(w, r)
 			return
 		}
@@ -121,6 +122,7 @@ func UserRateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID, _ := r.Context().Value(common.CtxUserID).(int64)
 		if userID > 0 && !userLimiter.allow("user:"+strconv.FormatInt(userID, 10), time.Now()) {
+			SetRequestFailure(r.Context(), "user_rate_limit", "user_rate_limit_exceeded", "User request rate limit exceeded.")
 			writeRateLimited(w, r)
 			return
 		}

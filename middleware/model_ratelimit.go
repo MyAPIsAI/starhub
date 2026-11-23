@@ -72,6 +72,7 @@ func TokenRateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenID, _ := r.Context().Value(common.CtxTokenID).(int64)
 		if tokenID > 0 && !tokenLimiter.allow("token:"+strconv.FormatInt(tokenID, 10), time.Now()) {
+			SetRequestFailure(r.Context(), "token_rate_limit", "token_rate_limit_exceeded", "API key request rate limit exceeded.")
 			writeRateLimited(w, r)
 			return
 		}
@@ -85,6 +86,7 @@ func ModelRateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		model, _ := r.Context().Value(common.CtxRequestModel).(string)
 		if model != "" && !modelLimiter.allow("model:"+model, time.Now()) {
+			SetRequestFailure(r.Context(), "model_rate_limit", "model_rate_limit_exceeded", "Model request rate limit exceeded.")
 			writeRateLimited(w, r)
 			return
 		}
@@ -129,6 +131,7 @@ func ModelRateLimitWithOverrides(next http.Handler) http.Handler {
 		perModelMu.RUnlock()
 		if hasCustom {
 			if !customLimiter.allow("model:"+model, now) {
+				SetRequestFailure(r.Context(), "model_rate_limit", "model_rate_limit_exceeded", "Model request rate limit exceeded.")
 				writeRateLimited(w, r)
 				return
 			}
@@ -136,6 +139,7 @@ func ModelRateLimitWithOverrides(next http.Handler) http.Handler {
 			return
 		}
 		if !modelLimiter.allow("model:"+model, now) {
+			SetRequestFailure(r.Context(), "model_rate_limit", "model_rate_limit_exceeded", "Model request rate limit exceeded.")
 			writeRateLimited(w, r)
 			return
 		}

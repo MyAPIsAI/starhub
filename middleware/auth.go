@@ -95,6 +95,7 @@ func TokenConversationAuth(next http.Handler) http.Handler {
 
 func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		SetRequestStage(r.Context(), "authentication")
 		if readOnly {
 			w.Header().Set("Cache-Control", "private, no-store")
 			w.Header().Add("Vary", "Authorization")
@@ -134,6 +135,9 @@ func tokenAuth(next http.Handler, readOnly, control bool) http.Handler {
 			writeRelayRequestError(w, r, http.StatusInternalServerError,
 				"server_error", "token_lookup_failed", err.Error())
 			return
+		}
+		if observation := RequestObservation(r.Context()); observation != nil {
+			observation.Entry.UserID, observation.Entry.TokenID, observation.Entry.TokenName = token.UserID, token.ID, token.Name
 		}
 		if token.Status != common.StatusEnabled {
 			writeRelayRequestError(w, r, http.StatusUnauthorized,

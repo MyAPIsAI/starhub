@@ -78,7 +78,7 @@ func SummarizeServiceQualityForMonth(userID int64, month time.Time, modelFilter 
 }
 
 func summarizeServiceQuality(userID int64, windowHours int, start, end int64, modelFilter string) (*ServiceQualitySummary, error) {
-	baseWhere := "created_at >= ? AND created_at < ?"
+	baseWhere := "created_at >= ? AND created_at < ? AND (request_observed = FALSE OR upstream_attempts > 0)"
 	args := []any{start, end}
 	if userID > 0 {
 		baseWhere += " AND user_id = ?"

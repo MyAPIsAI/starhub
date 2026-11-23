@@ -288,7 +288,8 @@ export default function RequestInspector({
             </p>
             {failed && (
               <div className="request-inspector-actions">
-                {record.error_code === "upstream_unavailable" ? (
+                {record.source !== "api" &&
+                record.error_code === "upstream_unavailable" ? (
                   <Button
                     onClick={() => {
                       setOutage(false);
@@ -340,6 +341,66 @@ export default function RequestInspector({
             </strong>
           </div>
           <dl className="product-detail-list">
+            {record.source === "api" && (
+              <>
+                <div>
+                  <dt>{text("请求 ID", "Request ID", "معرّف الطلب")}</dt>
+                  <dd className="mono" dir="ltr">
+                    {record.request_id || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{text("HTTP 状态", "HTTP status", "حالة HTTP")}</dt>
+                  <dd>
+                    {record.http_status ||
+                      text("未记录", "Not recorded", "غير مسجل")}
+                  </dd>
+                </div>
+                <div>
+                  <dt>
+                    {text(
+                      "渠道 ID / 上游尝试次数",
+                      "Channel ID / upstream attempts",
+                      "معرّف القناة / محاولات المزوّد",
+                    )}
+                  </dt>
+                  <dd>
+                    {record.channel_id || "—"} /{" "}
+                    {record.upstream_attempts ??
+                      text("未记录", "Not recorded", "غير مسجل")}
+                  </dd>
+                </div>
+                {failed && (
+                  <>
+                    <div>
+                      <dt>
+                        {text("失败阶段", "Failure stage", "مرحلة الفشل")}
+                      </dt>
+                      <dd>
+                        {record.failure_stage ||
+                          text("未记录", "Not recorded", "غير مسجل")}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>
+                        {text(
+                          "错误代码 / 原因",
+                          "Error code / reason",
+                          "رمز الخطأ / السبب",
+                        )}
+                      </dt>
+                      <dd>
+                        <code>{record.error_code || "—"}</code>
+                        <p>
+                          {record.error_message ||
+                            text("未记录", "Not recorded", "غير مسجل")}
+                        </p>
+                      </dd>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
             <div>
               <dt>{text("业务记录", "Business record", "سجل العملية")}</dt>
               <dd className="mono" dir="ltr">
@@ -349,13 +410,13 @@ export default function RequestInspector({
             <div>
               <dt>{text("请求模型", "Requested model", "النموذج المطلوب")}</dt>
               <dd className="mono" dir="ltr">
-                {record.requested_model ?? record.model}
+                {record.requested_model || record.model || "—"}
               </dd>
             </div>
             <div>
               <dt>{text("实际模型", "Actual model", "النموذج الفعلي")}</dt>
               <dd className="mono" dir="ltr">
-                {record.actual_model ??
+                {record.actual_model ||
                   (record.status === "success" ? record.model : "—")}
               </dd>
             </div>

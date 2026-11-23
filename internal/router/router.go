@@ -329,5 +329,5 @@ func New() http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
-	return web.Handler(middleware.RequestID(middleware.ManagementSecurity(middleware.IPRateLimit(middleware.ResourceStartupGate(dispatch)))))
+	return web.Handler(middleware.RequestID(middleware.RequestLog(middleware.ManagementSecurity(middleware.IPRateLimit(middleware.ResourceStartupGate(dispatch))))))
 }

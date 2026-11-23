@@ -54,6 +54,7 @@ func DistributeWithDefaultModel(inbound dto.InboundFormat, defaultModel string) 
 func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			SetRequestStage(r.Context(), "validation")
 			fail := func(status int, code, message string) {
 				dto.WriteRelayError(w, status, inbound, "invalid_request_error", code, message)
 			}
@@ -156,6 +157,17 @@ func distribute(inbound dto.InboundFormat, defaultModel string) func(http.Handle
 			}
 
 			requestedModel := modelName
+			if observation := RequestObservation(r.Context()); observation != nil {
+				observation.Entry.Model, observation.Entry.RequestedModel = modelName, requestedModel
+				switch inbound {
+				case dto.InboundClaude:
+					observation.Entry.Protocol = "Anthropic"
+				case dto.InboundGemini:
+					observation.Entry.Protocol = "Gemini"
+				default:
+					observation.Entry.Protocol = "OpenAI"
+				}
+			}
 			if isAutoModel(requestedModel) && !region.FeatureEnabled("smart_routing") {
 				fail(403, "smart_routing_disabled", "smart routing is disabled in this region")
 				return

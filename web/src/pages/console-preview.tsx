@@ -245,9 +245,9 @@ function ConsoleWorkspace() {
   const usageQuery = useUserUsage(days === "7" ? 7 : 30);
   const logsQuery = useLogs(1, 5);
   const backendLogs: LogRow[] = logsQuery.data?.items ?? [];
-  // Backend logs for the requests page (larger page size).
-  const { rows: backendRequests, refetch: refreshRequests } =
-    useBackendRequests(100);
+  // Backend filtering and pagination for the requests page.
+  const requestPage = useBackendRequests(20);
+  const { rows: backendRequests, refetch: refreshRequests } = requestPage;
   // Admin metrics for the health card; gracefully degrades to null
   // when the current user is not an admin.
   const metricsQuery = useAdminMetrics();
@@ -2147,6 +2147,7 @@ function ConsoleWorkspace() {
           {section === "requests" && (
             <RequestHistory
               requests={backendRequests as any}
+              server={requestPage}
               onSelect={setSelected}
               onExport={() => {
                 setExportType("requests");

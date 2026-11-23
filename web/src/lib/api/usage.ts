@@ -7,6 +7,12 @@
 import { quotaMoneyNano } from "../money";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import {
+  requestTimeBounds,
+  type RequestTimeRange,
+  type RequestHistoryStatus,
+} from "../request-history";
 import { apiGet } from "./http";
 import { catalogModels } from "../../config/models";
 
@@ -58,6 +64,14 @@ export interface UsageResponse {
 // --- Types matching the backend Log struct (model/log.go) ---
 
 export interface LogRow {
+  request_id?: string;
+  http_status?: number;
+  failure_stage?: string;
+  error_code?: string;
+  error_message?: string;
+  request_observed?: boolean;
+  admission_rejected?: boolean;
+  upstream_attempts?: number;
   quota_nano?: string;
   unfunded_quota_nano?: string;
   id: number;
@@ -80,10 +94,22 @@ export interface LogRow {
 }
 
 export interface LogsResponse {
+  filtering_supported?: boolean;
   items: LogRow[];
   total: number;
   page: number;
   page_size: number;
+  summary?: LogPageSummary;
+}
+
+export interface LogPageSummary {
+  observed_requests: number;
+  rejected_requests: number;
+  upstream_attempts: number;
+  historical_requests: number;
+  success_count: number;
+  failed_count: number;
+  cancelled_count: number;
 }
 
 // --- Hooks ---
@@ -185,10 +211,14 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
   return {
     trace_id: `log_${log.id}`,
     source: "api",
+    request_id: log.request_id || undefined,
+    http_status: log.http_status || undefined,
+    failure_stage: log.failure_stage || undefined,
+    upstream_attempts: log.request_observed ? log.upstream_attempts : undefined,
     time: new Date(log.created_at * 1000).toISOString(),
     model: log.model,
     requested_model: log.requested_model || log.model,
-    actual_model: log.model,
+    actual_model: log.channel_id > 0 ? log.model : "",
     channel_id:
       Number.isSafeInteger(log.channel_id) && log.channel_id > 0
         ? String(log.channel_id)
@@ -213,12 +243,16 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     key_id: log.token_id ? String(log.token_id) : "",
     input_tokens: log.prompt_tokens,
     output_tokens: log.completion_tokens,
-    error_code: "",
-    error_message: "",
+    error_code: log.error_code || "",
+    error_message: log.error_message || "",
   };
 }
 
 export interface PreviewRequestLike {
+  request_id?: string;
+  http_status?: number;
+  failure_stage?: string;
+  upstream_attempts?: number;
   source?: "api";
   trace_id: string;
   time: string;
@@ -244,12 +278,65 @@ export interface PreviewRequestLike {
  * Fetch backend logs with a larger page size for the requests page.
  * Returns adapted PreviewRequest-compatible objects.
  */
-export function useBackendRequests(pageSize: number = 100) {
-  const { data, isLoading, error, refetch } = useLogs(1, pageSize);
+export function useBackendRequests(pageSize: number = 20) {
+  const [params] = useSearchParams();
+  const rawPage = Number(params.get("page"));
+  const page =
+    Number.isSafeInteger(rawPage) && rawPage > 0 && rawPage <= 1_000_000_000
+      ? rawPage
+      : 1;
+  const rawRange = params.get("range") as RequestTimeRange;
+  const range = (["today", "7d", "30d", "custom", "all"] as string[]).includes(
+    rawRange,
+  )
+    ? rawRange
+    : "7d";
+  const rawStatus = params.get("status") as RequestHistoryStatus;
+  const status = (
+    ["all", "success", "failed", "cancelled"] as string[]
+  ).includes(rawStatus)
+    ? rawStatus
+    : "all";
+  const bounds = requestTimeBounds({
+    range,
+    start: params.get("start") || "",
+    end: params.get("end") || "",
+  });
+  const search = new URLSearchParams({
+    p: String(page),
+    page_size: String(pageSize),
+    status,
+  });
+  if (Number.isFinite(bounds.from))
+    search.set("from", String(Math.floor(bounds.from / 1000)));
+  if (Number.isFinite(bounds.until))
+    search.set("until", String(Math.floor(bounds.until / 1000)));
+  if (params.get("query")?.trim())
+    search.set("query", params.get("query")!.trim());
+  const query = useQuery({
+    queryKey: ["logs", "filtered", search.toString()],
+    queryFn: async ({ signal }) => {
+      const data = await apiGet<LogsResponse>(`/api/log?${search}`, signal);
+      if (data.filtering_supported !== true)
+        throw new Error("request_log_filters_unavailable");
+      return data;
+    },
+    enabled: !bounds.error,
+  });
+  const { isLoading, error, refetch } = query;
+  const data = bounds.error || error ? undefined : query.data;
   // Stable rows keep URL-selected detail effects from reopening on each render.
   const rows = useMemo(
     () => (data?.items ?? []).map(adaptLogRow),
     [data?.items],
   );
-  return { rows, total: data?.total ?? 0, loading: isLoading, error, refetch };
+  return {
+    rows,
+    total: data?.total ?? 0,
+    page,
+    summary: data?.summary,
+    loading: isLoading,
+    error,
+    refetch,
+  };
 }
