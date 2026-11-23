@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/internal/upstream"
 	"starhub/metric"
 	"starhub/middleware"
 	"starhub/model"
@@ -252,26 +253,29 @@ func (req relayRequest) billingGroup() string {
 // flow owns the trail bookkeeping, the terminal error surface and the
 // pre-payment state (refund / settle).
 type relayFlow struct {
-	chatIR        *dto.ChatRequest
-	modelFallback bool
-	vendor        string
-	cancel        context.CancelFunc
-	ctx           context.Context
-	w             http.ResponseWriter
-	req           relayRequest
-	inbound       dto.InboundFormat // error envelope format; "" defaults to openai
-	preQuota      int64
-	settled       bool
-	tried         map[int64]bool
-	trail         []string
-	lastErr       error
-	unsupported   int
-	sent          int       // actual upstream send attempts (unsupported skips excluded)
-	uncertain     bool      // a side-effecting attempt may have executed upstream
-	budgetStop    bool      // stopped because the total attempt budget was exhausted
-	currentGroup  string    // group of the current attempt (for auto-group walk)
-	groupIdx      int       // cursor into req.autoGroups (auto-group mode)
-	startTime     time.Time // request start for duration_ms logging
+	protection     relayProtection
+	lastUpstream   relayProtection
+	protectedSkips map[string]bool
+	chatIR         *dto.ChatRequest
+	modelFallback  bool
+	vendor         string
+	cancel         context.CancelFunc
+	ctx            context.Context
+	w              http.ResponseWriter
+	req            relayRequest
+	inbound        dto.InboundFormat // error envelope format; "" defaults to openai
+	preQuota       int64
+	settled        bool
+	tried          map[int64]bool
+	trail          []string
+	lastErr        error
+	unsupported    int
+	sent           int       // actual upstream send attempts (unsupported skips excluded)
+	uncertain      bool      // a side-effecting attempt may have executed upstream
+	budgetStop     bool      // stopped because the total attempt budget was exhausted
+	currentGroup   string    // group of the current attempt (for auto-group walk)
+	groupIdx       int       // cursor into req.autoGroups (auto-group mode)
+	startTime      time.Time // request start for duration_ms logging
 
 	lastChannelID int64 // last selected channel for the terminal failure log
 
@@ -408,11 +412,18 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			err error
 		)
 		if setting.IsCommercialMode() {
-			ch, err = model.GetScoredChannel(f.currentGroup, f.req.modelName, f.tried, preferred, hashKey, model.RoutingTextMode(f.mode), f.req.channelCheck)
+			ch, err = model.GetScoredChannel(f.currentGroup, f.req.modelName, f.tried, preferred, hashKey, model.RoutingTextMode(f.mode), f.req.channelCheck, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
 		} else if hashKey != "" {
-			ch, err = model.GetSatisfiedChannelHashed(f.currentGroup, f.req.modelName, f.tried, hashKey)
+			ch, err = model.GetSatisfiedChannelHashed(f.currentGroup, f.req.modelName, f.tried, hashKey, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
 		} else {
-			ch, err = model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred)
+			ch, err = model.GetSatisfiedChannelPreferred(f.currentGroup, f.req.modelName, f.tried, preferred, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
+		}
+		if ch != nil {
+			f.recordProtectedSkips(ch.RuntimeSkipped)
+		}
+		var protected *model.ProtectedChannelsError
+		if errors.As(err, &protected) {
+			f.recordProtectedSkips(protected.Channels)
 		}
 		if err == nil {
 			if f.req.channelCheck != nil {
@@ -566,6 +577,7 @@ func (f *relayFlow) settleGroup() string {
 // inside the attempt reads the trail, so the current channel must already
 // be on it.
 func (f *relayFlow) begin(ch *model.Channel) {
+	f.protection = relayProtection{}
 	if observation := middleware.RequestObservation(f.ctx); observation != nil {
 		observation.Entry.ChannelID = ch.ID
 		observation.Outcome = 0
@@ -591,6 +603,13 @@ func (f *relayFlow) begin(ch *model.Channel) {
 // key-level affinity so prefix-cache traffic stays on the same account. The
 // chosen index is recorded for noteAffinity to persist on success.
 func (f *relayFlow) selectKey(ch *model.Channel) (string, int) {
+	key, index := f.selectRawKey(ch)
+	key, index = ch.ProtectedKey(key, index)
+	f.affinityKeyIdx = index
+	return key, index
+}
+
+func (f *relayFlow) selectRawKey(ch *model.Channel) (string, int) {
 	f.affinityKeyIdx = -1
 	if f.affinityEligible() && f.affinityRuleUsed {
 		m := f.affinityMeta
@@ -693,6 +712,9 @@ func (f *relayFlow) noteRuleAffinity(ch *model.Channel, outcome attemptOutcome) 
 
 // applyOutcome keeps the outcome bookkeeping of a finished attempt.
 func (f *relayFlow) applyOutcome(res attemptResult) {
+	if errors.Is(res.cause, upstream.ErrBlocked) {
+		return
+	}
 	switch res.outcome {
 	case attemptUnsupported:
 		f.unsupported++
@@ -715,6 +737,11 @@ func (f *relayFlow) exhausted() {
 		return
 	}
 	if len(f.trail) == 0 {
+		if len(f.protectedSkips) > 0 {
+			middleware.SetRequestFailure(f.ctx, "routing", "upstream_resources_protected", "Eligible upstream resources are temporarily protected.")
+			f.errorOut(http.StatusServiceUnavailable, "server_error", "upstream_resources_protected", "Eligible upstream resources are temporarily protected.")
+			return
+		}
 		groups := f.req.group
 		if f.req.group == common.AutoGroup {
 			groups = strings.Join(f.req.autoGroups, ",")
@@ -727,6 +754,13 @@ func (f *relayFlow) exhausted() {
 		f.errorOut(http.StatusBadRequest, "invalid_request_error", "unsupported_mode",
 			fmt.Sprintf("no channel for model %s serves this API (channels tried: %s)",
 				f.req.modelName, strings.Join(f.trail, "->")))
+		return
+	}
+	if errors.Is(f.lastErr, upstream.ErrBlocked) {
+		f.errorOut(http.StatusServiceUnavailable, "server_error", "upstream_resources_protected", "Upstream resources are temporarily protected.")
+		return
+	}
+	if f.upstreamTerminal() {
 		return
 	}
 	if f.budgetStop {
@@ -848,6 +882,22 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 			cause: fmt.Errorf("channel %d: prepare request: %v", ch.ID, err)}
 	}
 
+	identity := model.UpstreamIdentity(ch, f.req.modelName, call.key)
+	identity.Capability = f.mode
+	identity.Stream = f.req.stream
+	protected, admissionErr := upstream.Capture(model.DB.WithContext(ctx), identity, upstream.CurrentPolicy())
+	if admissionErr != nil {
+		if errors.Is(admissionErr, upstream.ErrBlocked) {
+			f.recordProtectedSkips([]int64{ch.ID})
+			if f.lastErr == nil {
+				f.lastErr = admissionErr
+			}
+			return nil, &attemptResult{outcome: attemptUnsupported, cause: admissionErr}
+		}
+		f.errorOut(http.StatusServiceUnavailable, "server_error", "upstream_health_unavailable", "Resource health could not be checked.")
+		return nil, &attemptResult{outcome: attemptClientError, cause: admissionErr}
+	}
+	f.protection.attempt, f.protection.sent, f.protection.unsafe = protected, true, call.sideEffect
 	if ch.RuntimeRoute != nil {
 		ch.RuntimeRoute.Sent = true
 	}
@@ -858,6 +908,9 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 	}
 	resp, err := upstreamHTTPClient.Do(req)
 	if err != nil {
+		if f.ctx.Err() == nil {
+			f.protection.verdict = upstream.Verdict{Class: "transport_failure", Scope: "interface", Retry: true}
+		}
 		if call.sideEffect {
 			return nil, &attemptResult{outcome: attemptUncertain,
 				cause: fmt.Errorf("channel %d: send result uncertain: %v", ch.ID, err)}
@@ -865,6 +918,7 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 		return nil, &attemptResult{outcome: attemptUpstreamError,
 			cause: fmt.Errorf("channel %d unreachable: %v", ch.ID, err)}
 	}
+	f.protection.status = resp.StatusCode
 	// Record TTFT (time from attempt start to response headers) and the
 	// upstream request-id so a slow channel is identifiable end-to-end.
 	if f.attempt != nil {
@@ -874,17 +928,14 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 		middleware.SetRequestFailure(f.ctx, "upstream", fmt.Sprintf("upstream_http_%d", resp.StatusCode), "The upstream returned an HTTP error.")
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		resp.Body.Close()
+		policy := upstream.CurrentPolicy()
+		f.protection.verdict = upstream.HTTP(resp.StatusCode, body, resp.Header.Get("Retry-After"), policy)
+		if f.protection.verdict.Retry && policy.Retry && !call.sideEffect {
+			return nil, &attemptResult{outcome: attemptUpstreamError, statusCode: resp.StatusCode, cause: fmt.Errorf("upstream %s (%d)", f.protection.verdict.Class, resp.StatusCode)}
+		}
 		if resp.StatusCode < http.StatusInternalServerError {
-			// Client-class error: terminate, pass the upstream answer through
-			// (envelope converted to the inbound format). A broken key must
-			// not poison later requests: on multi-key channels only the
-			// offending key is disabled — including a throttled one (429) —
-			// so the channel survives while other keys remain.
-			disableKey := service.ShouldDisableChannel(resp.StatusCode, string(body)) ||
-				(ch.IsMultiKey() && resp.StatusCode == http.StatusTooManyRequests)
-			if disableKey {
-				disableBrokenKey(ch, call.keyIdx, resp.StatusCode)
-			}
+			// Non-retryable errors retain the provider envelope. Credential
+			// isolation is recorded separately without changing channel abilities.
 			dto.WriteUpstreamError(f.w, resp.StatusCode, f.inbound, body, resp.Header.Get("Content-Type"))
 			return nil, &attemptResult{outcome: attemptClientError, statusCode: resp.StatusCode}
 		}
@@ -949,6 +1000,11 @@ loop:
 			}
 			break
 		}
+		policy := upstream.CurrentPolicy()
+		if f.sent > 0 && (f.sent >= policy.MaxAttempts || time.Since(f.startTime) >= time.Duration(policy.RetryWindow)*time.Second) {
+			f.budgetStop = true
+			break
+		}
 		f.begin(ch)
 		f.beginMetricAttempt(ch)
 		f.sw.firstContent = f.attempt.RecordFirstToken
@@ -975,14 +1031,15 @@ loop:
 				}
 			}
 		}
+		retryAllowed, retryReason := f.observeUpstream(res)
 		if ch.RuntimeRoute != nil {
 			class := "unknown"
 			switch {
-			case res.outcome == attemptSuccess:
+			case f.protection.verdict.Class == "success":
 				class = "success"
-			case res.statusCode == 401 || res.statusCode == 403:
+			case f.protection.verdict.Class == "credential_rejected":
 				class = "credential_error"
-			case res.statusCode == 404:
+			case f.protection.verdict.Class == "model_unavailable":
 				class = "model_not_found"
 			case res.statusCode == 408 || res.statusCode == 504:
 				class = "upstream_timeout"
@@ -993,16 +1050,16 @@ loop:
 			case res.outcome == attemptClientError:
 				class = "customer_error"
 			}
-			if f.ctx.Err() != nil {
+			if f.ctx.Err() != nil && class != "success" {
 				class = "cancelled"
 			}
 			if err := model.EndRoutingAttempt(ch.RuntimeRoute, middleware.CtxRequestIDValue(f.ctx), class, res.statusCode, time.Now()); err != nil {
 				log.Printf("routing event persistence failed: %v", err)
 			}
 		}
-		if setting.IsCommercialMode() && res.outcome != attemptUnsupported && res.outcome != attemptUncertain && f.ctx.Err() == nil {
-			if err := model.RecordRoutingOutcome(ch.RuntimeRoute, res.outcome == attemptSuccess, res.statusCode, f.attempt.FirstContentLatency(f.req.stream), time.Now()); err != nil {
-				log.Printf("routing outcome persistence failed: %v", err)
+		if setting.IsCommercialMode() && f.protection.verdict.Class == "success" {
+			if err := model.RecordRoutingOutcome(ch.RuntimeRoute, true, f.protection.status, f.attempt.FirstContentLatency(f.req.stream), time.Now()); err != nil {
+				log.Printf("routing latency persistence failed: %v", err)
 			}
 		}
 		f.span.EndAttempt(f.attempt, attemptOutcomeToMetric(res.outcome), res.statusCode)
@@ -1038,7 +1095,7 @@ loop:
 				}
 				return
 			}
-			limit := common.RetryTimes + 1
+			limit := upstream.CurrentPolicy().MaxAttempts
 			if setting.IsCommercialMode() {
 				limit = min(limit, 3)
 			}
@@ -1047,6 +1104,10 @@ loop:
 				if f.lastErr == nil {
 					f.lastErr = fmt.Errorf("retry budget exhausted after %d upstream send(s)", f.sent)
 				}
+				break loop
+			}
+			if !retryAllowed {
+				f.budgetStop = retryReason == "retry_window_exhausted" || retryReason == "attempt_budget_exhausted"
 				break loop
 			}
 		}

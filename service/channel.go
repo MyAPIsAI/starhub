@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/internal/upstream"
 	"starhub/model"
 	"starhub/relay"
 	"starhub/relay/channel"
@@ -99,9 +100,48 @@ type ProbeResult struct {
 }
 
 // ProbeChannel checks Ark capabilities before selecting a catalog-only or chat probe.
-// It performs no database writes; pair it with ApplyProbeResult for inference health updates.
+// It shares probe admission with recovery checks; ApplyProbeResult updates legacy health.
 func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) ProbeResult {
+	copy := *ch
+	ch = &copy
 	upstreamKey, keyIdx := ch.SelectKey()
+	p := upstream.CurrentPolicy()
+	if p.Enabled {
+		allowed := false
+		for _, group := range model.ChannelGroups(ch) {
+			ok, err := model.PrepareUpstreamAdmission(ch, group, modelName, upstream.Profile{Capability: "chat"})
+			if err != nil {
+				return ProbeResult{Scope: "protected_skip", Code: "probe_blocked", Message: "probe admission unavailable"}
+			}
+			if ok {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return ProbeResult{Scope: "protected_skip", Code: "probe_blocked", Message: "no unprotected probe credential"}
+		}
+		upstreamKey, keyIdx = ch.ProtectedKey(upstreamKey, keyIdx)
+		identity := model.UpstreamIdentity(ch, modelName, upstreamKey)
+		identity.Capability = "chat"
+		lease, err := upstream.ClaimCheck(model.DB.WithContext(ctx), identity, p)
+		if err != nil || lease == "" {
+			return ProbeResult{Scope: "protected_skip", Code: "probe_blocked", Message: "probe deferred by resource protection", KeyIdx: keyIdx}
+		}
+		defer func() {
+			saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+			defer cancel()
+			if err := upstream.ReleaseCheck(model.DB.WithContext(saveCtx), lease); err != nil {
+				upstream.PersistenceFailed()
+			}
+		}()
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(p.ProbeTimeout)*time.Second)
+		defer cancel()
+		if ch.RuntimeModel != "" {
+			modelName = ch.RuntimeModel
+		}
+	}
 	if ch.Type == channel.ChannelTypeArk {
 		if upstreamKey == "" {
 			return ProbeResult{Scope: "catalog", KeyIdx: keyIdx, Message: "models_key_required"}
@@ -156,7 +196,10 @@ func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) Prob
 				resp.StatusCode, strings.TrimSpace(string(body))),
 		}
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	parsed, parseErr := adaptor.ParseChatResponse(resp)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 || parseErr != nil || parsed == nil || parsed.FinishReason == "" {
+		return ProbeResult{KeyIdx: keyIdx, ElapsedMs: elapsed, HTTPStatus: resp.StatusCode, Message: "upstream response was not a complete chat result"}
+	}
 	return ProbeResult{OK: true, KeyIdx: keyIdx, ElapsedMs: elapsed,
 		HTTPStatus: resp.StatusCode, Message: "ok"}
 }
@@ -167,7 +210,7 @@ func ProbeChannel(ctx context.Context, ch *model.Channel, modelName string) Prob
 // channel goes down when the last key dies. It returns the channel status
 // after the probe.
 func ApplyProbeResult(ch *model.Channel, res ProbeResult) int {
-	if res.Scope == "catalog" || res.Scope == "video_api" {
+	if res.Scope == "catalog" || res.Scope == "video_api" || res.Scope == "protected_skip" {
 		return ch.Status
 	}
 	if res.HTTPStatus > 0 {
@@ -185,7 +228,9 @@ func ApplyProbeResult(ch *model.Channel, res ProbeResult) int {
 		}
 		return ch.Status
 	}
-	if ch.Status != common.ChannelStatusEnabled || !ShouldDisableChannel(res.HTTPStatus, res.Message) {
+	// Production protection owns temporary failures. The legacy checker must
+	// not turn isolated credentials or model failures into channel-wide bans.
+	if upstream.CurrentPolicy().Enabled || ch.Status != common.ChannelStatusEnabled || !ShouldDisableChannel(res.HTTPStatus, res.Message) {
 		return ch.Status
 	}
 	if !ch.IsMultiKey() {

@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"starhub/common"
+	"starhub/internal/upstream"
 	"starhub/setting"
 )
 
@@ -116,8 +117,8 @@ func GetSatisfiedChannelExcluding(group, model string, exclude map[int64]bool) (
 // available priority tier it is returned directly, otherwise the tier's
 // weighted draw runs unchanged. The preference therefore never lets a
 // lower-priority channel bypass a higher tier.
-func GetSatisfiedChannelPreferred(group, model string, exclude map[int64]bool, preferred int64) (*Channel, error) {
-	return getSatisfiedChannel(group, model, exclude, preferred, "")
+func GetSatisfiedChannelPreferred(group, model string, exclude map[int64]bool, preferred int64, profiles ...upstream.Profile) (*Channel, error) {
+	return getSatisfiedChannel(group, model, exclude, preferred, "", profiles...)
 }
 
 // GetSatisfiedChannelHashed is GetSatisfiedChannelExcluding with a stateless
@@ -126,20 +127,19 @@ func GetSatisfiedChannelPreferred(group, model string, exclude map[int64]bool, p
 // result is deterministic for a given hashKey and candidate set, so every
 // gateway replica routes the same affinity key to the same channel without
 // shared state. preferred is ignored in this mode.
-func GetSatisfiedChannelHashed(group, model string, exclude map[int64]bool, hashKey string) (*Channel, error) {
-	return getSatisfiedChannel(group, model, exclude, 0, hashKey)
+func GetSatisfiedChannelHashed(group, model string, exclude map[int64]bool, hashKey string, profiles ...upstream.Profile) (*Channel, error) {
+	return getSatisfiedChannel(group, model, exclude, 0, hashKey, profiles...)
 }
 
-func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred int64, hashKey string) (*Channel, error) {
+func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred int64, hashKey string, profiles ...upstream.Profile) (*Channel, error) {
 	if setting.IsCommercialMode() {
-		return GetScoredChannel(group, model, exclude, preferred, hashKey, modelIsText(model), nil)
+		return GetScoredChannel(group, model, exclude, preferred, hashKey, modelIsText(model), nil, profiles...)
 	}
 	var rows []Ability
 	query := DB.Where("\"group\" = ? AND model = ? AND enabled = ?", group, model, true)
 	query = query.Where(resourceGatewayAbilityCondition("abilities"))
-	// Exclude already-attempted channels in SQL, BEFORE the window limit:
-	// filtering in Go after LIMIT 64 hides every candidate beyond the
-	// window when the first 64 are all already tried or disabled.
+	// Filter attempts in SQL. Read every tier so protected leading candidates
+	// cannot hide healthy lower-priority channels behind a fixed window.
 	if len(exclude) > 0 {
 		ids := make([]int64, 0, len(exclude))
 		for id := range exclude {
@@ -147,7 +147,7 @@ func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred 
 		}
 		query = query.Where("channel_id NOT IN ?", ids)
 	}
-	err := query.Order("priority DESC").Limit(64).Find(&rows).Error
+	err := query.Order("priority DESC").Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -168,10 +168,28 @@ func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred 
 		return nil, err
 	}
 	enabled := make(map[int64]*Channel, len(channels))
+	pointers := make([]*Channel, 0, len(channels))
+	for i := range channels {
+		pointers = append(pointers, &channels[i])
+	}
+	if err := PrepareUpstreamAdmissions(pointers, group, model, profiles...); err != nil {
+		return nil, err
+	}
+	skipped := []int64{}
 	for i := range channels {
 		if exclude == nil || !exclude[channels[i].ID] {
+			if len(channels[i].RuntimeKeys) == 0 {
+				skipped = append(skipped, channels[i].ID)
+				continue
+			}
 			enabled[channels[i].ID] = &channels[i]
 		}
+	}
+	for _, ch := range enabled {
+		ch.RuntimeSkipped = skipped
+	}
+	if len(enabled) == 0 && len(skipped) > 0 {
+		return nil, &ProtectedChannelsError{Channels: skipped}
 	}
 	// rows are ordered by priority DESC; walk contiguous priority tiers.
 	for i := 0; i < len(rows); {

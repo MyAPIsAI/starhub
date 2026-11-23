@@ -17,6 +17,7 @@ import {
 import { useSettingsText } from "./settings-text";
 import { ConfigurationSync } from "./configuration-sync";
 import "./gateway-settings.css";
+import { UpstreamProtectionSettings } from "./upstream-protection";
 
 const keys = [
   "ip_rate_limit",
@@ -549,6 +550,7 @@ function GatewaySettingsForm() {
         </summary>
         {syncOpen && <ConfigurationSync />}
       </details>
+      <UpstreamProtectionSettings />
     </div>
   );
 }

@@ -28,6 +28,8 @@ const (
 )
 
 type Channel struct {
+	RuntimeKeys            map[string]bool   `gorm:"-" json:"-"`
+	RuntimeSkipped         []int64           `gorm:"-" json:"-"`
 	UsedQuotaRemainderNano int64             `gorm:"not null;default:0" json:"-"`
 	RuntimeRoute           *RoutingAttempt   `gorm:"-" json:"-"`
 	RuntimeModel           string            `gorm:"-" json:"-"`

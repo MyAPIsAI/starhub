@@ -17,6 +17,7 @@ import type { ResourceSnapshot } from "../config/models";
 import { useSettingsText } from "./settings-text";
 import "./resource-inventory.css";
 import { ResourcePublication } from "./resource-publication";
+import { UpstreamHealth } from "./upstream-protection";
 
 type Draft =
   | {
@@ -523,6 +524,7 @@ function ResourceInventoryView() {
           )}
         </>
       )}
+      <UpstreamHealth />
       <ResourcePublication
         openImport={() => {
           returnToGuide.current = true;

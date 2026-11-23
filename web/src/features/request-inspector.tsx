@@ -18,6 +18,7 @@ import { copyText } from "./code-example";
 import "../components/demo-scenarios.css";
 import { PricingSnapshot } from "../components/pricing-snapshot";
 import { useSystemAccess, isAdmin } from "../lib/system-access";
+import { UpstreamEvents } from "./upstream-protection";
 
 const errors: Record<string, [string, string, string]> = {
   insufficient_balance: [
@@ -629,6 +630,9 @@ export default function RequestInspector({
               </pre>
             )}
           </details>
+          {isOps && record.request_id && (
+            <UpstreamEvents requestId={record.request_id} />
+          )}
         </>
       )}
     </Drawer>

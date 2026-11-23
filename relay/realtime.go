@@ -1,7 +1,9 @@
 package relay
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/internal/upstream"
 	"starhub/metric"
 	"starhub/model"
 	"starhub/relay/dto"
@@ -90,30 +93,44 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			preferred = id
 		}
 	}
-	var upstream *WSConn
+	var upstreamConn *WSConn
 	var upstreamChannel *model.Channel
 	span := metric.BeginRequest(metric.RequestMeta{Model: modelName, Group: group, Mode: "realtime"})
 	status := 502
 	defer func() { span.EndRequest(status) }()
 	var servingAttempt *metric.AttemptSpan
+	policy := upstream.CurrentPolicy()
+	if setting.IsCommercialMode() {
+		policy.MaxAttempts = min(policy.MaxAttempts, 3)
+	}
+	started := time.Now()
+	sent := 0
+	canRetry := true
 	for {
-		ch, err := model.GetSatisfiedChannelPreferred(group, modelName, tried, preferred)
+		if ctx.Err() != nil || !canRetry || sent >= policy.MaxAttempts || sent > 0 && time.Since(started) >= time.Duration(policy.RetryWindow)*time.Second {
+			break
+		}
+		ch, err := model.GetSatisfiedChannelPreferred(group, modelName, tried, preferred, upstream.Profile{Capability: "realtime"})
 		if err != nil {
 			break
 		}
 		tried[ch.ID] = true
-		policy, managed, policyErr := model.ReadResourceGatewayPolicy(r.Context(), ch.ID, group, modelName)
+		resourcePolicy, managed, policyErr := model.ReadResourceGatewayPolicy(r.Context(), ch.ID, group, modelName)
 		if policyErr != nil {
 			break
 		}
-		if managed && !policy.Allows("/v1/realtime", nil, 0, 0) {
+		if managed && !resourcePolicy.Allows("/v1/realtime", nil, 0, 0) {
 			continue
 		}
 		adaptor, err := GetChatAdaptor(ch.Type)
 		if err != nil {
 			continue
 		}
-		wsURL, err := adaptor.RealtimeURL(ch.BaseURL, modelName)
+		actualModel := modelName
+		if ch.RuntimeModel != "" {
+			actualModel = ch.RuntimeModel
+		}
+		wsURL, err := adaptor.RealtimeURL(ch.BaseURL, actualModel)
 		if err != nil {
 			continue // channel type without realtime support
 		}
@@ -124,6 +141,16 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 					key, keyIdx = k, idx
 				}
 			}
+		}
+		key, keyIdx = ch.ProtectedKey(key, keyIdx)
+		identity := model.UpstreamIdentity(ch, modelName, key)
+		identity.Capability = "realtime"
+		protected, err := upstream.Capture(model.DB.WithContext(ctx), identity, policy)
+		if errors.Is(err, upstream.ErrBlocked) {
+			continue
+		}
+		if err != nil {
+			break
 		}
 		header := http.Header{}
 		header.Set("Authorization", "Bearer "+key)
@@ -138,7 +165,34 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		}
 		a.SetRouteMetadata(metric.AttemptMetadata{ResourceKey: fmt.Sprintf("%d:%s", ch.ID, modelName), Generation: model.ChannelEndpointGeneration(ch), Protocol: "OpenAI", Capability: "realtime", Group: group, Affinity: affinity})
 		a.MarkSent()
-		conn, err := WSDial(wsURL, header)
+		conn, err := WSDialContext(ctx, wsURL, header)
+		sent++
+		verdict := upstream.Verdict{Class: "success"}
+		httpStatus := http.StatusSwitchingProtocols
+		if err != nil {
+			httpStatus = 0
+			verdict = upstream.Verdict{Class: "transport_failure", Scope: "interface", Retry: true}
+			var handshake *WSHandshakeError
+			if errors.As(err, &handshake) {
+				httpStatus = handshake.Status
+				verdict = upstream.HTTP(handshake.Status, handshake.Body, handshake.RetryAfter, policy)
+			}
+			if ctx.Err() != nil {
+				verdict = upstream.Verdict{Class: "client_disconnected"}
+			}
+		}
+		retry, reason := upstream.RetryReason(policy, verdict, upstream.RetryInput{Cancelled: ctx.Err() != nil, Attempts: sent, Elapsed: time.Since(started)})
+		if err == nil {
+			retry, reason = false, "handshake_completed"
+		}
+		canRetry = retry
+		saveCtx, saveCancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		requestID, _ := ctx.Value(common.CtxRequestID).(string)
+		recordErr := upstream.Record(model.DB.WithContext(saveCtx), protected, verdict, upstream.Event{RequestID: requestID, Status: httpStatus, Sent: true, Retry: retry, Decision: reason}, policy)
+		saveCancel()
+		if recordErr != nil {
+			log.Printf("realtime protection persistence failed: %v", recordErr)
+		}
 		if err != nil {
 			span.EndAttempt(a, metric.AttemptUpstreamError, 0)
 			log.Printf("realtime dial channel %d failed: %v", ch.ID, err)
@@ -151,17 +205,17 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		if affinityOn {
 			model.RememberAffinity(affinityKey, ch.ID, keyIdx, setting.RoutingAffinityTTL())
 		}
-		upstream = conn
+		upstreamConn = conn
 		upstreamChannel = ch
 		servingAttempt = a
 		break
 	}
-	if upstream == nil {
+	if upstreamConn == nil {
 		common.RelayError(w, http.StatusBadGateway, "server_error", "upstream_unavailable",
 			fmt.Sprintf("no realtime channel for model %s (group %s)", modelName, group))
 		return
 	}
-	defer upstream.Close()
+	defer upstreamConn.Close()
 
 	// Upgrade the client.
 	client, err := WSAccept(w, r)
@@ -174,7 +228,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Close()
 
-	usage, outputText := pipeRealtime(client, upstream)
+	usage, outputText := pipeRealtime(client, upstreamConn)
 	if usage != nil {
 		servingAttempt.RecordUsage(usage.PromptTokens, usage.CompletionTokens)
 	}

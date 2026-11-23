@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/tls"
@@ -98,6 +99,23 @@ func WSAccept(w http.ResponseWriter, r *http.Request) (*WSConn, error) {
 // wsDial connects to a websocket server (ws:// or wss://) with extra
 // headers. The returned connection masks frames as a client must.
 func WSDial(rawURL string, header http.Header) (*WSConn, error) {
+	return WSDialContext(context.Background(), rawURL, header)
+}
+
+// WSHandshakeError preserves provider classification without logging its body.
+type WSHandshakeError struct {
+	Status     int
+	Body       []byte
+	RetryAfter string
+}
+
+func (e *WSHandshakeError) Error() string {
+	return fmt.Sprintf("websocket upstream returned %d", e.Status)
+}
+
+func WSDialContext(ctx context.Context, rawURL string, header http.Header) (*WSConn, error) {
+	ctx, cancel := context.WithTimeout(ctx, wsHandshakeTimeout)
+	defer cancel()
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -112,15 +130,20 @@ func WSDial(rawURL string, header http.Header) (*WSConn, error) {
 		}
 	}
 	var conn net.Conn
+	dialer := &net.Dialer{Timeout: wsHandshakeTimeout}
 	if useTLS {
-		conn, err = tls.Dial("tcp", host, &tls.Config{ServerName: parsed.Hostname()})
+		tlsDialer := &tls.Dialer{NetDialer: dialer, Config: &tls.Config{ServerName: parsed.Hostname()}}
+		conn, err = tlsDialer.DialContext(ctx, "tcp", host)
 	} else {
-		conn, err = net.Dial("tcp", host)
+		conn, err = dialer.DialContext(ctx, "tcp", host)
 	}
 	if err != nil {
 		return nil, err
 	}
-	conn.SetDeadline(time.Now().Add(wsHandshakeTimeout))
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
+	deadline, _ := ctx.Deadline()
+	conn.SetDeadline(deadline)
 	defer conn.SetDeadline(time.Time{})
 
 	path := parsed.RequestURI()
@@ -160,12 +183,21 @@ func WSDial(rawURL string, header http.Header) (*WSConn, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusSwitchingProtocols {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		conn.Close()
-		return nil, fmt.Errorf("websocket upstream returned %d", resp.StatusCode)
+		return nil, &WSHandshakeError{Status: resp.StatusCode, Body: body, RetryAfter: resp.Header.Get("Retry-After")}
 	}
 	if !strings.EqualFold(resp.Header.Get("Upgrade"), "websocket") {
 		conn.Close()
 		return nil, errors.New("upstream did not upgrade to websocket")
+	}
+	if resp.Header.Get("Sec-WebSocket-Accept") != WSAcceptKey(clientKey) {
+		conn.Close()
+		return nil, errors.New("upstream websocket accept mismatch")
+	}
+	if ctx.Err() != nil {
+		conn.Close()
+		return nil, ctx.Err()
 	}
 	return &WSConn{conn: conn, reader: reader, client: false}, nil
 }

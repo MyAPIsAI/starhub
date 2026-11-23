@@ -129,6 +129,7 @@ func main() {
 	run(service.RunResourceObservations)
 	run(service.RunResourceEventDelivery)
 	run(service.RunLocalRoutingProbes)
+	run(service.RunUpstreamProtection)
 	run(service.RunSecurityNotifications)
 	run(service.RunDatabaseBackups)
 	address := net.JoinHostPort(bootstrap.BindAddress, bootstrap.Port)

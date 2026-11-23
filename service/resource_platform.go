@@ -204,6 +204,11 @@ func RunLocalRoutingProbesOnce(ctx context.Context) error {
 			probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			result := ProbeChannel(probeCtx, ch, probe.Item.ModelName)
 			cancel()
+			// A deferred check supplies no failure evidence. Let the legacy
+			// lease expire without changing its circuit or backoff.
+			if result.Scope == "protected_skip" {
+				return
+			}
 			if err := model.CompleteLocalRoutingProbe(probe, result.OK, time.Now(), time.Duration(result.ElapsedMs)*time.Millisecond); err != nil {
 				errorsFound <- err
 			}

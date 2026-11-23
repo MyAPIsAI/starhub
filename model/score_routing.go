@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 	"starhub/common"
+	"starhub/internal/upstream"
 	"starhub/setting"
 )
 
@@ -110,7 +111,7 @@ func routeItemAllowed(item RouteItem, group RoutingGroupPolicy, text bool) bool 
 
 // GetScoredChannel keeps authorization and capability filtering ahead of ranking.
 // Retries walk the original score order; fourth place never receives fresh traffic.
-func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int64, hashKey string, text bool, compatible func(*Channel, string) (bool, error)) (*Channel, error) {
+func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int64, hashKey string, text bool, compatible func(*Channel, string) (bool, error), profiles ...upstream.Profile) (*Channel, error) {
 	routingSnapshotState.RLock()
 	if routingSnapshotState.snapshot == nil {
 		routingSnapshotState.RUnlock()
@@ -141,10 +142,18 @@ func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int
 		return nil, err
 	}
 	enabled := map[int64]*Channel{}
+	pointers := make([]*Channel, 0, len(channels))
+	for i := range channels {
+		pointers = append(pointers, &channels[i])
+	}
+	if err := PrepareUpstreamAdmissions(pointers, group, name, profiles...); err != nil {
+		return nil, err
+	}
 	for i := range channels {
 		enabled[channels[i].ID] = &channels[i]
 	}
 	candidates := []routeCandidate{}
+	skipped := []int64{}
 	for _, item := range items {
 		if item.ModelName != name || !routeItemAllowed(item, policy, text) {
 			continue
@@ -173,6 +182,10 @@ func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int
 			return nil, err
 		}
 		if state.OpenUntil > 0 {
+			continue
+		}
+		if len(ch.RuntimeKeys) == 0 {
+			skipped = append(skipped, ch.ID)
 			continue
 		}
 		ch.RuntimeRoute = &RoutingAttempt{Item: item, FailureGeneration: state.FailureGeneration, StartedAt: time.Now()}
@@ -207,7 +220,13 @@ func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int
 		}
 	}
 	candidates = unique
+	for _, candidate := range candidates {
+		candidate.channel.RuntimeSkipped = skipped
+	}
 	if len(candidates) == 0 {
+		if len(skipped) > 0 {
+			return nil, &ProtectedChannelsError{Channels: skipped}
+		}
 		return nil, ErrNoChannel
 	}
 	if !stale && text && len(excluded) > 0 {

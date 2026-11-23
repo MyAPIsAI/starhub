@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"starhub/common"
+	"starhub/internal/upstream"
 )
 
 var DB *gorm.DB
@@ -189,10 +190,19 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := migrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}); err != nil {
 		return fmt.Errorf("migrate production telemetry: %w", err)
 	}
+	if err := migrate(&upstream.State{}, &upstream.Event{}, &upstream.Guard{}, &upstream.ProbeSlot{}); err != nil {
+		return err
+	}
+	if err := upstream.InitGuard(db); err != nil {
+		return err
+	}
 	if err := initProductionStorage(db); err != nil {
 		return fmt.Errorf("initialize production storage budget: %w", err)
 	}
 	DB = db
+	if err := migrateUpstreamIdentities(); err != nil {
+		return fmt.Errorf("migrate upstream identities: %w", err)
+	}
 	if _, err := MigrateCredentialStorage(false, "system", "Upgrade legacy credential storage"); err != nil {
 		return fmt.Errorf("migrate credential storage: %w", err)
 	}

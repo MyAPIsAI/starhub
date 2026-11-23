@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"starhub/internal/upstream"
 )
 
 type Runtime struct {
@@ -38,7 +40,7 @@ var (
 
 func OptionKeys() []string {
 	return []string{OptionChannelTestInterval, OptionTaskPollInterval, OptionCookieSecure,
-		OptionIPRateLimit, OptionUserRateLimit, OptionTokenRateLimit, OptionModelRateLimit}
+		OptionIPRateLimit, OptionUserRateLimit, OptionTokenRateLimit, OptionModelRateLimit, upstream.OptionKey}
 }
 
 func GatewayOptionKeys() []string {
@@ -46,6 +48,9 @@ func GatewayOptionKeys() []string {
 }
 
 func IsGatewayOption(key string) bool {
+	if key == upstream.OptionKey {
+		return true
+	}
 	for _, known := range GatewayOptionKeys() {
 		if key == known {
 			return true
@@ -110,6 +115,9 @@ func Subscribe(fn func(Runtime)) {
 }
 
 func SnapshotOption(key string) (string, error) {
+	if key == upstream.OptionKey {
+		return upstream.PolicyJSON(), nil
+	}
 	c := Current()
 	switch key {
 	case OptionChannelTestInterval:
@@ -133,6 +141,9 @@ func SnapshotOption(key string) (string, error) {
 
 // NormalizeOption validates a runtime option without changing live state.
 func NormalizeOption(key, value string) (string, error) {
+	if key == upstream.OptionKey {
+		return upstream.NormalizePolicy(value)
+	}
 	value = strings.TrimSpace(value)
 	if key == OptionCookieSecure {
 		v, err := strconv.ParseBool(value)
@@ -158,6 +169,9 @@ func NormalizeOption(key, value string) (string, error) {
 }
 
 func ApplyOption(key, value string) error {
+	if key == upstream.OptionKey {
+		return upstream.ApplyPolicy(value)
+	}
 	normalized, err := NormalizeOption(key, value)
 	if err != nil {
 		return err

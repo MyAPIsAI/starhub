@@ -1,0 +1,33 @@
+.upstream-panel {
+  margin-block: 1rem;
+  min-width: 0;
+}
+.upstream-panel fieldset {
+  margin-block: 1rem;
+}
+.upstream-panel small,
+.upstream-events small {
+  display: block;
+  color: var(--text-muted);
+  margin-block-start: 0.3rem;
+}
+.upstream-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.upstream-events {
+  margin-block-start: 1rem;
+  min-width: 0;
+}
+.upstream-history {
+  max-height: 15rem;
+  overflow: auto;
+  direction: ltr;
+  text-align: left;
+}
+.upstream-panel > p,
+.upstream-events > p {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
