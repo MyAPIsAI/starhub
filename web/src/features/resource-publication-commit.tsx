@@ -22,7 +22,7 @@ export function PublicationCommit({
   review: PublicationPreview | undefined;
   disabled: boolean;
   renderRoutes: (review: PublicationPreview) => ReactNode;
-  onCommitted: () => void;
+  onCommitted: (review: PublicationPreview) => void;
 }) {
   const { text } = useSettingsText();
   const publish = usePublishResourceReview();
@@ -34,6 +34,7 @@ export function PublicationCommit({
   const [historical, setHistorical] = useState(false);
   const mounted = useRef(true);
   const inFlight = useRef(false);
+  const committedReview = useRef<PublicationPreview>();
   const errorElement = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     if (error) errorElement.current?.focus();
@@ -55,7 +56,7 @@ export function PublicationCommit({
       if (!mounted.current) return;
       setAck(result);
       setCaptured(undefined);
-      onCommitted();
+      committedReview.current = captured;
     } catch (cause) {
       if (!mounted.current) return;
       setError(
@@ -94,7 +95,7 @@ export function PublicationCommit({
       setAck(receipt);
       setHistorical(true);
       setCaptured(undefined);
-      onCommitted();
+      committedReview.current = captured;
     } catch (cause) {
       if (mounted.current)
         setError(
@@ -169,6 +170,11 @@ export function PublicationCommit({
       )}
       <Modal
         open={Boolean(captured)}
+        onAfterClose={() => {
+          const completed = committedReview.current;
+          committedReview.current = undefined;
+          if (completed) onCommitted(completed);
+        }}
         onOpenChange={(open) => {
           if (!open && !inFlight.current && !pending) setCaptured(undefined);
         }}

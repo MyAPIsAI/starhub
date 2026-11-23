@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { useResourceBindingState } from "../lib/api/resource-publication";
@@ -21,7 +21,19 @@ import {
   useClearRoutingAffinityCache,
 } from "../lib/api/routing-affinity";
 
-export function ResourceBindingList({ enabled }: { enabled: boolean }) {
+export function ResourceBindingList({
+  enabled,
+  creating,
+  guide,
+  onCreate,
+  published,
+}: {
+  enabled: boolean;
+  creating: boolean;
+  guide: ReactNode;
+  onCreate: () => void;
+  published?: { id: string };
+}) {
   const { text } = useSettingsText();
   const [page, setPage] = useState(1);
   const query = useResourceBindingState(enabled, page);
@@ -36,6 +48,34 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
   const state = query.error ? undefined : query.data;
   const { hash } = useLocation();
   const section = useRef<HTMLElement>(null);
+  const searchPages = useRef<{ id: string; lo: number; hi: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    searchPages.current = published
+      ? { id: published.id, lo: 1, hi: Infinity }
+      : null;
+  }, [published]);
+  useEffect(() => {
+    const target = searchPages.current;
+    if (!target || !state || query.isFetching || state.page !== page) return;
+    const row = section.current?.querySelector<HTMLElement>(
+      `[data-binding-gateway="${CSS.escape(target.id)}"]`,
+    );
+    if (row) {
+      row.focus();
+      searchPages.current = null;
+      return;
+    }
+    target.hi = Math.min(target.hi, Math.ceil(state.total / state.page_size));
+    const last = state.bindings.at(-1);
+    if (last && BigInt(last.gateway_channel_id) < BigInt(target.id))
+      target.lo = Math.max(target.lo, page + 1);
+    else target.hi = Math.min(target.hi, page - 1);
+    if (target.lo <= target.hi)
+      setPage(Math.floor((target.lo + target.hi) / 2));
+    else searchPages.current = null;
+  }, [published, state, query.isFetching, page]);
   useEffect(() => {
     if (hash !== "#gateway-bindings" || !enabled) return;
     const frame = requestAnimationFrame(() => {
@@ -94,11 +134,7 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
     >
       <header>
         <h3>
-          {text(
-            "持久网关绑定",
-            "Persistent gateway bindings",
-            "روابط البوابة الدائمة",
-          )}
+          {text("HTTP 会话亲和", "HTTP session affinity", "تقارب جلسات HTTP")}
         </h3>
         <div className="rp-binding-toolbar">
           {enabled && (
@@ -165,6 +201,23 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
             setAffinitySaved(true);
           }}
         />
+      )}
+      <header>
+        <h3>
+          {text(
+            "已发布的资源路由绑定",
+            "Published resource route bindings",
+            "روابط مسارات الموارد المنشورة",
+          )}
+        </h3>
+        <Button aria-expanded={creating} onClick={onCreate}>
+          {text("新建持久绑定", "New persistent binding", "إنشاء ربط دائم")}
+        </Button>
+      </header>
+      {guide && (
+        <div id="binding-creation-guide" tabIndex={-1}>
+          {guide}
+        </div>
       )}
       <p>
         {text(
@@ -294,6 +347,7 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
                   <tr
                     key={row.gateway_channel_id}
                     data-binding-gateway={row.gateway_channel_id}
+                    tabIndex={-1}
                   >
                     <td>
                       <strong>
@@ -418,9 +472,9 @@ export function ResourceBindingList({ enabled }: { enabled: boolean }) {
           {state.total === 0 && (
             <p>
               {text(
-                "尚无持久绑定。请先显式预览并确认发布。",
-                "No persistent bindings yet. Review explicit selections and confirm publication first.",
-                "لا توجد روابط دائمة بعد. راجع الاختيارات الصريحة وأكد النشر أولًا.",
+                "尚未发布资源路由；不影响上方 HTTP 会话亲和。",
+                "No resource routes published yet. HTTP session affinity is independent.",
+                "لم تُنشر مسارات موارد بعد. تقارب جلسات HTTP مستقل.",
               )}
             </p>
           )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Modal } from "../components/ui/overlay";
@@ -51,6 +51,7 @@ function ResourceInventoryView() {
   const [page, setPage] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [review, setReview] = useState(false);
+  const returnToGuide = useRef(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   if (role !== ROLE_ADMIN && role !== ROLE_ROOT) return null;
@@ -90,6 +91,42 @@ function ResourceInventoryView() {
     setReview(false);
     setError("");
     setNotice("");
+  };
+  const openImport = () =>
+    data &&
+    begin({
+      kind: "import",
+      revision: data.revision,
+      json: JSON.stringify(
+        snapshot
+          ? {
+              ...snapshot,
+              sequence: snapshot.sequence + 1,
+              publishedAt: new Date().toISOString(),
+            }
+          : {
+              id: "inventory-1",
+              sequence: 1,
+              publishedAt: new Date().toISOString(),
+              source: "",
+              channels: [],
+              instances: [],
+            },
+        null,
+        2,
+      ),
+    });
+  const openPlacement = (id: string) => {
+    if (!data) return;
+    const placement = data.placements[id];
+    begin({
+      kind: "placement",
+      revision: data.revision,
+      id,
+      model: placement?.modelId ?? "",
+      groups: placement?.groupIds.join(", ") ?? "",
+      enabled: placement?.enabled ?? false,
+    });
   };
   const close = () => {
     if (!mutation.isPending) {
@@ -193,34 +230,7 @@ function ResourceInventoryView() {
           >
             {text("刷新", "Refresh", "تحديث")}
           </Button>
-          <Button
-            disabled={!data}
-            onClick={() =>
-              data &&
-              begin({
-                kind: "import",
-                revision: data.revision,
-                json: JSON.stringify(
-                  snapshot
-                    ? {
-                        ...snapshot,
-                        sequence: snapshot.sequence + 1,
-                        publishedAt: new Date().toISOString(),
-                      }
-                    : {
-                        id: "inventory-1",
-                        sequence: 1,
-                        publishedAt: new Date().toISOString(),
-                        source: "",
-                        channels: [],
-                        instances: [],
-                      },
-                  null,
-                  2,
-                ),
-              })
-            }
-          >
+          <Button disabled={!data} onClick={openImport}>
             {text("导入快照", "Import snapshot", "استيراد لقطة")}
           </Button>
           <Button asChild>
@@ -462,19 +472,7 @@ function ResourceInventoryView() {
                               </small>
                             </td>
                             <td>
-                              <Button
-                                onClick={() =>
-                                  begin({
-                                    kind: "placement",
-                                    revision: data.revision,
-                                    id: row.id,
-                                    model: placement?.modelId ?? "",
-                                    groups:
-                                      placement?.groupIds.join(", ") ?? "",
-                                    enabled: placement?.enabled ?? false,
-                                  })
-                                }
-                              >
+                              <Button onClick={() => openPlacement(row.id)}>
                                 {text(
                                   "编辑投放",
                                   "Edit placement",
@@ -526,11 +524,24 @@ function ResourceInventoryView() {
         </>
       )}
       <ResourcePublication
+        openImport={() => {
+          returnToGuide.current = true;
+          openImport();
+        }}
+        openPlacement={(id) => {
+          returnToGuide.current = true;
+          openPlacement(id);
+        }}
         catalog={data}
         refreshCatalog={() => query.refetch()}
       />
       <Modal
         open={Boolean(draft)}
+        onAfterClose={() => {
+          if (returnToGuide.current)
+            document.getElementById("binding-creation-guide")?.focus();
+          returnToGuide.current = false;
+        }}
         onOpenChange={(open) => !open && close()}
         preventOutsideClose
         size="wide"

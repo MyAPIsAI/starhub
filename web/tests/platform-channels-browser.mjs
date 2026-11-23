@@ -197,7 +197,7 @@ try {
     .getByRole("button", { name: "Refresh channels", exact: true })
     .click();
   await panel.getByLabel("Search platform channels", { exact: true }).fill("");
-  // Seed inventory through the API, then exercise changes through the live UI.
+  // Start from the empty binding list and follow the guided publication path.
   const gateway = (await api("GET", "/api/channel")).find(
     (channel) => channel.name === "Platform fixture 01",
   );
@@ -224,22 +224,41 @@ try {
       },
     ],
   };
-  let catalog = await api("GET", "/api/resource");
-  catalog = await api("PUT", "/api/resource", {
-    expected_revision: catalog.revision,
-    snapshot,
-  });
-  await api("PUT", "/api/placement/resource", {
-    expected_revision: catalog.revision,
-    placement: { modelId: "gpt-4.1", groupIds: ["default"], enabled: true },
-  });
-  await page.reload();
+  const dialog = page.getByRole("dialog");
+  const saveDraft = async () => {
+    await dialog.getByRole("button", { name: "Review changes" }).click();
+    await dialog.getByRole("button", { name: "Confirm save" }).click();
+    await dialog.waitFor({ state: "hidden" });
+  };
+  await page.getByRole("button", { name: "New persistent binding" }).click();
+  await page.getByRole("button", { name: "Import resource snapshot" }).click();
+  await dialog.getByLabel("Snapshot JSON").fill(JSON.stringify(snapshot));
+  await saveDraft();
+  await page.getByLabel("Source to bind").selectOption("supplier");
+  await page.getByRole("button", { name: "Configure placement" }).click();
+  await dialog.getByLabel("Standard model identifier").fill("gpt-4.1");
+  await dialog
+    .getByLabel("Group identifiers (comma-separated)")
+    .fill("default");
+  await dialog.getByLabel("Enable inventory placement").check();
+  await saveDraft();
+  assert.equal(
+    await page.getByLabel("Source to bind").inputValue(),
+    "supplier",
+  );
+  await page
+    .getByRole("button", { name: "Select gateway and preview" })
+    .click();
+  assert.equal(
+    await page.getByLabel("Gateway channel: supplier").inputValue(),
+    "",
+  );
+  assert.equal((await api("GET", "/api/resource/publication-state")).total, 0);
   await panel
     .getByLabel("Search platform channels", { exact: true })
     .fill(gateway.name);
   const gatewayRow = panel.locator(`[data-platform-channel="${gateway.id}"]`);
   const publication = page.locator("#gateway-publication");
-  const dialog = page.getByRole("dialog");
   await publication
     .getByLabel("Gateway channel: supplier", { exact: true })
     .selectOption(String(gateway.id));
@@ -300,6 +319,12 @@ try {
     await dialog.waitFor({ state: "hidden" });
   };
   await publish();
+  await page.waitForFunction(
+    (id) =>
+      document.activeElement?.getAttribute("data-binding-gateway") ===
+      String(id),
+    gateway.id,
+  );
   await changeBinding("revoke");
   await publish();
   await placement(false);
@@ -582,9 +607,16 @@ try {
         await page.screenshot({
           path: path.join(temp, `platform-${lang}-${width}.png`),
         });
-        await page.locator("#gateway-bindings > header").screenshot({
-          path: path.join(temp, `binding-actions-${lang}-${width}.png`),
-        });
+        for (const [index, header] of (
+          await page.locator("#gateway-bindings > header").all()
+        ).entries()) {
+          await header.screenshot({
+            path: path.join(
+              temp,
+              `binding-actions-${index}-${lang}-${width}.png`,
+            ),
+          });
+        }
       }
     }
     await page.evaluate(

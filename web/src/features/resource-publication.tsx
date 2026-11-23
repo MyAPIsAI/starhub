@@ -21,10 +21,13 @@ import { ResourceBindingList } from "./resource-binding-state";
 import { PlatformChannelList } from "./platform-channel-list";
 import "./resource-publication.css";
 
-export function ResourcePublication(props: {
+type PublicationProps = {
+  openImport: () => void;
+  openPlacement: (id: string) => void;
   catalog: ResourceCatalog | undefined;
   refreshCatalog: () => Promise<unknown>;
-}) {
+};
+export function ResourcePublication(props: PublicationProps) {
   const identity = useSessionQueryIdentity();
   return <PublicationPanel key={JSON.stringify(identity)} {...props} />;
 }
@@ -32,10 +35,9 @@ export function ResourcePublication(props: {
 function PublicationPanel({
   catalog,
   refreshCatalog,
-}: {
-  catalog: ResourceCatalog | undefined;
-  refreshCatalog: () => Promise<unknown>;
-}) {
+  openImport,
+  openPlacement,
+}: PublicationProps) {
   const { text } = useSettingsText();
   const role = useSystemAccess((s) => s.role),
     account = useSystemAccess((s) => s.session.accountId);
@@ -48,6 +50,21 @@ function PublicationPanel({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const active = useRef<AbortController>();
+  const [creating, setCreating] = useState(false);
+  const [sourceId, setSourceId] = useState("");
+  const [focusTarget, setFocusTarget] = useState("");
+  const mappingTable = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusTarget) {
+      mappingTable.current
+        ?.querySelector<HTMLSelectElement>(
+          `[data-publication-source="${CSS.escape(focusTarget)}"] select`,
+        )
+        ?.focus();
+      setFocusTarget("");
+    }
+  }, [focusTarget]);
+  const [published, setPublished] = useState<{ id: string }>();
   useEffect(() => () => active.current?.abort(), []);
   if (!enabled) return null;
   const context = query.error ? undefined : query.data;
@@ -69,6 +86,133 @@ function PublicationPanel({
   );
   const pages = Math.max(1, Math.ceil(sources.length / 20)),
     current = Math.min(page, pages - 1);
+  const sourceInstances =
+    catalog?.snapshot?.instances.filter((i) => i.channelId === sourceId) ?? [];
+  const guide = !creating ? null : !catalog || !context || !coherent ? (
+    <p role="status">
+      {text(
+        "发布上下文不可用，请刷新发布上下文。",
+        "Refresh the publication context before continuing.",
+        "حدّث سياق النشر للمتابعة.",
+      )}{" "}
+      <Button
+        onClick={() =>
+          void Promise.allSettled([query.refetch(), refreshCatalog()])
+        }
+      >
+        {text(
+          "刷新发布上下文",
+          "Refresh publication context",
+          "تحديث سياق النشر",
+        )}
+      </Button>
+    </p>
+  ) : !catalog.snapshot?.channels.length ? (
+    <div>
+      <p>
+        {text(
+          "创建持久绑定需要先导入来源渠道。现有渠道和会话亲和可继续使用。",
+          "Import source channels before creating a persistent binding. Existing channels and session affinity remain available.",
+          "استورد قنوات المصدر أولًا. تبقى القنوات الحالية وتقارب الجلسة متاحين.",
+        )}
+      </p>
+      <Button onClick={openImport}>
+        {text(
+          "导入资源快照",
+          "Import resource snapshot",
+          "استيراد لقطة الموارد",
+        )}
+      </Button>
+    </div>
+  ) : (
+    <div>
+      {context.publish_available !== true && (
+        <p>
+          {text(
+            "当前服务器未开放发布，仅可预览。",
+            "This server allows previews only.",
+            "يتيح هذا الخادم المعاينة فقط.",
+          )}
+        </p>
+      )}
+      <label>
+        {text("选择要绑定的来源", "Source to bind", "مصدر الربط")}{" "}
+        <select value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
+          <option value="">—</option>
+          {catalog.snapshot.channels.map((ch) => (
+            <option key={ch.id} value={ch.id}>
+              {ch.name} · {ch.id}
+            </option>
+          ))}
+        </select>
+      </label>
+      {sourceId && (
+        <>
+          {!sourceInstances.length && (
+            <p>
+              {text(
+                "来源没有资源，请更新快照。",
+                "This source has no resources. Update the snapshot.",
+                "لا موارد لهذا المصدر. حدّث اللقطة.",
+              )}{" "}
+              <Button onClick={openImport}>
+                {text(
+                  "导入资源快照",
+                  "Import resource snapshot",
+                  "استيراد لقطة الموارد",
+                )}
+              </Button>
+            </p>
+          )}
+          {sourceInstances.map((i) => {
+            const p = catalog.placements[i.id];
+            return (
+              <p key={i.id}>
+                <bdi>
+                  {i.upstreamModel} · {i.id}
+                </bdi>{" "}
+                —{" "}
+                {p?.enabled && p.modelId && p.groupIds.length
+                  ? `${p.modelId} / ${p.groupIds.join(", ")}`
+                  : text(
+                      "尚未启用有效的模型和分组投放",
+                      "An enabled model and group placement is missing",
+                      "إعداد نشر فعّال للنموذج والمجموعة مفقود",
+                    )}{" "}
+                <Button onClick={() => openPlacement(i.id)}>
+                  {text("配置投放", "Configure placement", "إعداد النشر")}
+                </Button>
+              </p>
+            );
+          })}
+          {sourceInstances.some((i) => {
+            const p = catalog.placements[i.id];
+            return p?.enabled && p.modelId && p.groupIds.length;
+          }) && (
+            <Button
+              onClick={() => {
+                setSearch("");
+                setPage(
+                  Math.floor(
+                    catalog.snapshot!.channels.findIndex(
+                      (ch) => ch.id === sourceId,
+                    ) / 20,
+                  ),
+                );
+                setFocusTarget(sourceId);
+              }}
+            >
+              {text(
+                "选择真实渠道并预览",
+                "Select gateway and preview",
+                "اختيار البوابة ومعاينتها",
+              )}
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
   const reset = () => {
     active.current?.abort();
     active.current = undefined;
@@ -333,6 +477,7 @@ function PublicationPanel({
             />
           </label>
           <div
+            ref={mappingTable}
             className="rp-table"
             tabIndex={0}
             role="region"
@@ -529,7 +674,10 @@ function PublicationPanel({
           query.isFetching ||
           context?.publish_available !== true
         }
-        onCommitted={() => {
+        onCommitted={(review) => {
+          const first = review.bindings[0];
+          if (first) setPublished({ id: first.gateway_channel_id });
+          setCreating(false);
           reset();
           void Promise.allSettled([query.refetch(), refreshCatalog()]);
         }}
@@ -546,7 +694,14 @@ function PublicationPanel({
           />
         )}
       />
-      <ResourceBindingList enabled={enabled} />
+      <ResourceBindingList
+        enabled={enabled}
+        channels={context?.channels}
+        guide={guide}
+        creating={creating}
+        onCreate={() => setCreating(!creating)}
+        published={published}
+      />
     </section>
   );
 }

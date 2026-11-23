@@ -16,6 +16,7 @@ export function Modal({
   children,
   footer,
   initialFocus,
+  onAfterClose,
   size = "default",
   className = "",
   preventOutsideClose = false,
@@ -27,6 +28,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   initialFocus?: RefObject<HTMLElement>;
+  onAfterClose?: () => void;
   size?: "compact" | "default" | "wide";
   className?: string;
   preventOutsideClose?: boolean;
@@ -41,6 +43,10 @@ export function Modal({
         <DialogPrimitive.Content
           className={`task-dialog task-dialog--${size} ${className}`}
           {...focusReturn}
+          onCloseAutoFocus={(event) => {
+            focusReturn.onCloseAutoFocus(event);
+            onAfterClose?.();
+          }}
           onPointerDownOutside={(event) => {
             if (preventOutsideClose) event.preventDefault();
           }}
