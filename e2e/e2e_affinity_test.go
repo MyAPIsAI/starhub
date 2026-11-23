@@ -214,6 +214,11 @@ func TestPlaygroundHeaderAffinityDiagnostics(t *testing.T) {
 		}
 	}
 	after := stats()
+	detail := doRequest(env.base, "GET", "/api/option/routing_affinity_cache?rule=diagnostic-rule&page=1", env.session, nil)
+	var details struct{ Data service.AffinityBindingPage }
+	if detail.Status != 200 || json.Unmarshal([]byte(detail.Body), &details) != nil || details.Data.Instance != after.Instance || details.Data.Total != 1 || len(details.Data.Entries) != 1 || details.Data.Entries[0].ChannelID <= 0 || details.Data.Entries[0].ExpiresAt <= details.Data.ObservedAt || strings.Contains(detail.Body, "diagnostic-fixture") {
+		t.Fatalf("unexpected rule details: %s", detail.Body)
+	}
 	for event, want := range map[string]uint64{"missing_source": 2, "legacy_hit": 1, "cold_start": 1, "rule_hit": 1, "write_ok": 2} {
 		if delta := after.Events[event] - before.Events[event]; delta != want {
 			t.Errorf("%s: %d, want %d", event, delta, want)

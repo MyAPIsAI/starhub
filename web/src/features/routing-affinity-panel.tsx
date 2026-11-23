@@ -1,3 +1,7 @@
+import { useState } from "react";
+import type { PublicationChannel } from "../lib/resource-publication";
+import { AffinityDetails } from "./routing-affinity-details";
+import { Button } from "../components/ui/button";
 import type {
   useRoutingAffinityStats,
   useClearRoutingAffinityCache,
@@ -72,12 +76,15 @@ export function RoutingAffinityPanel({
   query,
   clear,
   onEditRule,
+  channels,
 }: {
   query: ReturnType<typeof useRoutingAffinityStats>;
   clear: ReturnType<typeof useClearRoutingAffinityCache>;
   onEditRule: (name: string) => void;
+  channels?: PublicationChannel[];
 }) {
   const { text } = useSettingsText();
+  const [detail, setDetail] = useState<{ rule: string; instance: string }>();
   const stats = query.error ? undefined : query.data;
   const ruleEntries = stats
     ? Object.entries(stats.by_rule_name).filter(
@@ -239,6 +246,22 @@ export function RoutingAffinityPanel({
                       </td>
                       <td>
                         <code>{count}</code>
+                        {count > 0 && stats.instance && (
+                          <Button
+                            onClick={() =>
+                              setDetail({
+                                rule: name,
+                                instance: stats.instance!,
+                              })
+                            }
+                          >
+                            {text(
+                              "查看亲和明细",
+                              "View affinity details",
+                              "عرض تفاصيل التقارب",
+                            )}
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -256,6 +279,13 @@ export function RoutingAffinityPanel({
             </p>
           )}
         </>
+      )}
+      {detail && (
+        <AffinityDetails
+          {...detail}
+          channels={channels}
+          close={() => setDetail(undefined)}
+        />
       )}
       {clear.data && (
         <p role="status" className="rp-result-status">

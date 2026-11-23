@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiDelete } from "./http";
 import type { Option, OptionStatus } from "./option";
+import { useSessionQueryIdentity } from "../system-access";
 
 export async function readAffinityDraft(signal: AbortSignal) {
   // Capture the precondition before reading values so a concurrent write can
@@ -67,5 +68,36 @@ export function useClearRoutingAffinityCache() {
       ),
     onSettled: () =>
       client.invalidateQueries({ queryKey: ["routing-affinity-cache"] }),
+  });
+}
+
+export function useAffinityDetails(
+  instance: string,
+  rule: string,
+  page: number,
+) {
+  const identity = useSessionQueryIdentity();
+  return useQuery({
+    queryKey: [
+      "routing-affinity-cache",
+      "details",
+      identity,
+      instance,
+      rule,
+      page,
+    ],
+    retry: false,
+    gcTime: 0,
+    refetchInterval: 15000,
+    queryFn: ({ signal }) =>
+      apiGet<{
+        instance: string;
+        observed_at: number;
+        total: number;
+        entries: { channel_id: string; expires_at: number }[];
+      }>(
+        `/api/option/routing_affinity_cache?${new URLSearchParams({ rule, page: String(page) })}`,
+        signal,
+      ),
   });
 }

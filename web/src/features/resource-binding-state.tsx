@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { PublicationChannel } from "../lib/resource-publication";
 import { useLocation } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { useResourceBindingState } from "../lib/api/resource-publication";
@@ -23,12 +24,14 @@ import {
 
 export function ResourceBindingList({
   enabled,
+  channels,
   creating,
   guide,
   onCreate,
   published,
 }: {
   enabled: boolean;
+  channels?: PublicationChannel[];
   creating: boolean;
   guide: ReactNode;
   onCreate: () => void;
@@ -187,6 +190,7 @@ export function ResourceBindingList({
       )}
       {enabled && (
         <RoutingAffinityPanel
+          channels={channels}
           query={affinity}
           clear={clear}
           onEditRule={(ruleName) => openEditor({ kind: "rules", ruleName })}

@@ -552,6 +552,7 @@ try {
               success: true,
               data: {
                 enabled: true,
+                instance: "test-replica",
                 total: 1,
                 by_rule_name: { sample: 1 },
                 rules: 1,
@@ -560,6 +561,34 @@ try {
           }),
     );
     await page.reload();
+    const detailPath = "**/api/option/routing_affinity_cache?*";
+    await page.route(detailPath, (route) =>
+      route.fulfill({
+        json: {
+          success: true,
+          data: {
+            instance: "test-replica",
+            observed_at: 5000,
+            total: 1,
+            entries: [{ channel_id: String(gateway.id), expires_at: 7000 }],
+          },
+        },
+      }),
+    );
+    await bindingsPanel
+      .getByRole("button", { name: "View affinity details" })
+      .click();
+    await dialog
+      .getByText(`#${gateway.id} · ${gateway.name}`, { exact: true })
+      .waitFor();
+    await dialog
+      .getByText("Entries expired or were removed. Refresh to check.")
+      .waitFor();
+    await dialog
+      .getByRole("button", { name: "Close", exact: true })
+      .last()
+      .click();
+    await page.unroute(detailPath);
     await bindingsPanel
       .getByRole("button", { name: "Edit rule: sample", exact: true })
       .click();

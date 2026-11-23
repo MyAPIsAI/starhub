@@ -159,6 +159,13 @@ func TestRuleAuthenticatedTokenFallback(t *testing.T) {
 	if ResolveAffinity(req).Found {
 		t.Fatal("another token must not reuse the fallback binding")
 	}
+	page := RuleAffinityDetails("glm", 1)
+	if len(page.Entries) != 2 || page.Entries[0].ChannelID != 7 || page.Entries[1].ChannelID != 8 {
+		t.Fatalf("unexpected rule detail snapshot: %+v", page)
+	}
+	if next := RuleAffinityDetails("glm", 2); next.Total != 2 || len(next.Entries) != 0 {
+		t.Fatal("out-of-range detail page must not repeat entries")
+	}
 }
 
 func TestResolveAffinitySessionOffSkipsCache(t *testing.T) {

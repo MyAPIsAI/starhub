@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -292,6 +293,44 @@ func RuleAffinityStats() AffinityCacheStats {
 		ByRuleName: byRule,
 		Rules:      len(rules),
 	}
+}
+
+type AffinityBindingDetail struct {
+	ChannelID int64 `json:"channel_id,string"`
+	ExpiresAt int64 `json:"expires_at"`
+}
+
+type AffinityBindingPage struct {
+	Instance   string                  `json:"instance"`
+	ObservedAt int64                   `json:"observed_at"`
+	Total      int                     `json:"total"`
+	Entries    []AffinityBindingDetail `json:"entries"`
+}
+
+// RuleAffinityDetails snapshots one rule without exposing session keys or token IDs.
+func RuleAffinityDetails(name string, page int) AffinityBindingPage {
+	const pageSize = 50
+	ruleAffinityMu.Lock()
+	now := time.Now()
+	syncRuleRevisionLocked()
+	rows := []AffinityBindingDetail{}
+	for _, entry := range ruleAffinityCache {
+		if entry.ruleName == name && entry.expiresAt.After(now) {
+			rows = append(rows, AffinityBindingDetail{entry.channelID, entry.expiresAt.UnixMilli()})
+		}
+	}
+	ruleAffinityMu.Unlock()
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].ChannelID == rows[j].ChannelID {
+			return rows[i].ExpiresAt < rows[j].ExpiresAt
+		}
+		return rows[i].ChannelID < rows[j].ChannelID
+	})
+	start := len(rows)
+	if page >= 1 && page <= len(rows)/pageSize+1 {
+		start = (page - 1) * pageSize
+	}
+	return AffinityBindingPage{AffinityInstance(), now.UnixMilli(), len(rows), rows[start:min(start+pageSize, len(rows))]}
 }
 
 // ClearAllRuleAffinity evicts every cached entry and returns the count.

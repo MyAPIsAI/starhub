@@ -179,6 +179,20 @@ func UpdateGlobalAffinityOptions(w http.ResponseWriter, r *http.Request) {
 // entries, per-rule counts, the rule count and whether the feature is on.
 // Admin-only; the cache is process-local so the numbers reflect this replica.
 func GetRoutingAffinityCacheStats(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	if q.Has("rule") {
+		page := 1
+		if q.Has("page") {
+			var err error
+			page, err = strconv.Atoi(q.Get("page"))
+			if err != nil || page < 1 {
+				common.ApiError(w, http.StatusBadRequest, "invalid detail page")
+				return
+			}
+		}
+		common.ApiSuccess(w, service.RuleAffinityDetails(q.Get("rule"), page))
+		return
+	}
 	common.ApiSuccess(w, service.RuleAffinityStats())
 }
 
