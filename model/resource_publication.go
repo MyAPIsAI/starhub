@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -20,10 +21,11 @@ const maxResourcePublicationPairs = 10000
 const maxResourcePublicationIssues = 10000
 
 type ResourceGatewayChannel struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Type   int    `json:"type"`
-	Status int    `json:"status"`
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Type   int      `json:"type"`
+	Status int      `json:"status"`
+	Models []string `json:"models"`
 }
 
 type ResourcePublicationContext struct {
@@ -39,10 +41,11 @@ type ResourcePublicationContext struct {
 	AffectsGatewayRouting bool                     `json:"affects_gateway_routing"`
 }
 
-// Bindings are explicit: inventory source IDs are never interpreted as gateway IDs.
+// Bindings are explicit: imported and current-channel sources are never guessed from gateway IDs.
 type ResourceChannelBinding struct {
-	SourceChannelID  string `json:"source_channel_id"`
-	GatewayChannelID string `json:"gateway_channel_id"`
+	SourceChannelID  string   `json:"source_channel_id"`
+	GatewayChannelID string   `json:"gateway_channel_id"`
+	SourceModels     []string `json:"source_models,omitempty"`
 }
 
 type ResourcePublicationPrecondition struct {
@@ -121,11 +124,11 @@ func readResourcePublicationState(tx *gorm.DB) (*resourcePublicationState, error
 	}
 	var rows []Channel
 	// Never load credential or endpoint columns into publication context objects.
-	if err := tx.Select("id", "name", "type", "status").Order("id").Find(&rows).Error; err != nil {
+	if err := tx.Select("id", "name", "type", "status", "models").Order("id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	for _, row := range rows {
-		result.context.Channels = append(result.context.Channels, ResourceGatewayChannel{ID: strconv.FormatInt(row.ID, 10), Name: row.Name, Type: row.Type, Status: row.Status})
+		result.context.Channels = append(result.context.Channels, ResourceGatewayChannel{ID: strconv.FormatInt(row.ID, 10), Name: row.Name, Type: row.Type, Status: row.Status, Models: SplitList(row.Models)})
 	}
 	var ratio Option
 	if err := tx.Where(map[string]any{"key": setting.OptionKeyGroupRatio}).First(&ratio).Error; err != nil {
@@ -224,6 +227,83 @@ func previewResourcePublicationInTransaction(tx *gorm.DB, expected ResourcePubli
 				sources[source.ID] = source
 			}
 		}
+		// Current channel resources are projected as reviewed, exact-model sources.
+		// The "channel:" namespace keeps them distinct from imported snapshot IDs.
+		var resources []ResourceInstance
+		placements := map[string]ResourcePlacement{}
+		usedResourceIDs := map[string]bool{}
+		if state.catalog.Snapshot != nil {
+			resources = append(resources, state.catalog.Snapshot.Instances...)
+			for _, resource := range resources {
+				usedResourceIDs[resource.ID] = true
+			}
+		}
+		for _, binding := range result.Bindings {
+			if !strings.HasPrefix(binding.SourceChannelID, "channel:") {
+				continue
+			}
+			id, parseErr := strconv.ParseInt(strings.TrimPrefix(binding.SourceChannelID, "channel:"), 10, 64)
+			if parseErr != nil || id <= 0 || strconv.FormatInt(id, 10) != strings.TrimPrefix(binding.SourceChannelID, "channel:") || len(binding.SourceModels) == 0 {
+				result.Issues = append(result.Issues, ResourcePublicationIssue{SourceChannelID: binding.SourceChannelID, Code: "unknown_source_channel"})
+				continue
+			}
+			var source Channel
+			if err := tx.Select("id", "name", "type", "status", "models").First(&source, id).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					result.Issues = append(result.Issues, ResourcePublicationIssue{SourceChannelID: binding.SourceChannelID, Code: "unknown_source_channel"})
+					continue
+				}
+				return err
+			}
+			models := map[string]bool{}
+			for _, modelName := range SplitList(source.Models) {
+				models[modelName] = true
+			}
+			seenModels := map[string]bool{}
+			var abilities []Ability
+			if err := tx.Where("channel_id = ? AND enabled = ?", id, true).Find(&abilities).Error; err != nil {
+				return err
+			}
+			groupsByModel := map[string][]string{}
+			for _, ability := range abilities {
+				groupsByModel[ability.Model] = append(groupsByModel[ability.Model], ability.Group)
+			}
+			var metadata []ModelMeta
+			if err := tx.Where("model IN ?", binding.SourceModels).Find(&metadata).Error; err != nil {
+				return err
+			}
+			metadataByModel := map[string]ModelMeta{}
+			for _, meta := range metadata {
+				metadataByModel[meta.Model] = meta
+			}
+			protocol := resourceNativeProtocol(source.Type)
+			sources[binding.SourceChannelID] = ResourceChannel{ID: binding.SourceChannelID, Name: source.Name, Provider: protocol, Enabled: source.Status == common.ChannelStatusEnabled}
+			for index, modelName := range binding.SourceModels {
+				if !resourceText(modelName, 128, true) || !models[modelName] || seenModels[modelName] {
+					result.Issues = append(result.Issues, ResourcePublicationIssue{SourceChannelID: binding.SourceChannelID, ResourceID: modelName, Code: "model_alias_not_supported"})
+					continue
+				}
+				seenModels[modelName] = true
+				caps := []string{"text"}
+				if source.Type != common.DefaultChannelType {
+					caps = SplitList(metadataByModel[modelName].Tags)
+					if !resourceEnums(caps, resourceAdvancedCapabilities...) {
+						caps = nil
+					}
+				}
+				for groupIndex, group := range groupsByModel[modelName] {
+					resourceID := "current-" + strconv.FormatInt(id, 10) + "-" + strconv.Itoa(index) + "-" + strconv.Itoa(groupIndex)
+					for suffix := 0; usedResourceIDs[resourceID]; suffix++ {
+						resourceID = "current-" + strconv.FormatInt(id, 10) + "-" + strconv.Itoa(index) + "-" + strconv.Itoa(groupIndex) + "-" + strconv.Itoa(suffix+1)
+					}
+					usedResourceIDs[resourceID] = true
+					instance := ResourceInstance{ID: resourceID, ChannelID: binding.SourceChannelID, UpstreamModel: modelName, CanonicalModel: modelName, Protocols: []string{protocol}, Capabilities: caps, ContextLength: metadataByModel[modelName].ContextLength, Status: "available"}
+					resources = append(resources, instance)
+					modelID := modelName
+					placements[resourceID] = ResourcePlacement{ModelID: &modelID, GroupIDs: []string{group}, Enabled: true}
+				}
+			}
+		}
 		owners, err := readResourcePublicationOwners(tx, result.Bindings)
 		if err != nil {
 			return err
@@ -255,12 +335,15 @@ func previewResourcePublicationInTransaction(tx *gorm.DB, expected ResourcePubli
 		routes := map[ResourcePublicationPair]ResourcePublicationRoute{}
 		tooManyIssues := false
 		issueLimitError := fmt.Errorf("%w: publication preview exceeds 10000 blocking issues", ErrInvalidResource)
-		if state.catalog.Snapshot != nil {
-			for _, resource := range state.catalog.Snapshot.Instances {
+		if len(resources) > 0 {
+			for _, resource := range resources {
 				if tooManyIssues {
 					return issueLimitError
 				}
-				placement := state.catalog.Placements[resource.ID]
+				placement, direct := placements[resource.ID]
+				if !direct {
+					placement = state.catalog.Placements[resource.ID]
+				}
 				if !placement.Enabled {
 					continue
 				}

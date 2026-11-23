@@ -133,8 +133,12 @@ export async function previewResourcePublication(
   const bindingKey = (items: PublicationBinding[]) =>
     JSON.stringify(
       items
-        .map((item) => [item.source_channel_id, item.gateway_channel_id])
-        .sort((a, b) => a[0].localeCompare(b[0])),
+        .map((item) => [
+          item.source_channel_id,
+          item.gateway_channel_id,
+          item.source_models ?? [],
+        ])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
     );
   const request = publicationRequest(context, bindings);
   const preview = readPublicationPreview(

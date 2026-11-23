@@ -41,6 +41,90 @@
   font-size: 13px;
   color: var(--muted);
 }
+.rp-direct-source {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.rp-direct-source > label:not(.rp-model-choice) {
+  display: grid;
+  gap: 6px;
+  max-width: 480px;
+  font-size: 13px;
+}
+.rp-direct-source select {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.rp-model-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.rp-model-picker {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.rp-model-picker > label {
+  display: grid;
+  gap: 6px;
+}
+.rp-model-picker input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.rp-model-options {
+  display: grid;
+  gap: 10px;
+  max-height: 240px;
+  overflow: auto;
+}
+.rp-model-choice code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rp-create-dialog p {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.rp-create-dialog h3 {
+  font-size: 16px;
+}
+.rp-create-dialog .rp-direct-source {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.rp-create-dialog > .task-dialog-footer {
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  .rp-create-dialog > .task-dialog-footer > .button {
+    flex: 1 1 130px;
+  }
+  .rp-create-dialog > .task-dialog-footer > .button-primary {
+    flex-basis: 100%;
+  }
+}
 .rp-search {
   display: grid;
   gap: 8px;

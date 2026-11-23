@@ -18,11 +18,15 @@ export function PublicationCommit({
   disabled,
   renderRoutes,
   onCommitted,
+  publishLabel,
+  showReceipt = true,
 }: {
   review: PublicationPreview | undefined;
   disabled: boolean;
   renderRoutes: (review: PublicationPreview) => ReactNode;
   onCommitted: (review: PublicationPreview) => void;
+  publishLabel?: string;
+  showReceipt?: boolean;
 }) {
   const { text } = useSettingsText();
   const publish = usePublishResourceReview();
@@ -118,7 +122,7 @@ export function PublicationCommit({
   };
   return (
     <>
-      {ack && (
+      {ack && showReceipt && (
         <div className="rp-result-status" role="status">
           <strong>
             {historical
@@ -165,7 +169,8 @@ export function PublicationCommit({
             setHistorical(false);
           }}
         >
-          {text("发布这份预览", "Publish this review", "نشر هذه المعاينة")}
+          {publishLabel ??
+            text("发布这份预览", "Publish this review", "نشر هذه المعاينة")}
         </Button>
       )}
       <Modal

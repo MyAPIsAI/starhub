@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -111,10 +112,16 @@ func ReadResourceBindingState(ctx context.Context, page, pageSize int) (*Resourc
 			id := strconv.FormatInt(owner.ChannelID, 10)
 			channel, present := channels[id]
 			source, sourcePresent := sources[owner.SourceChannelID]
+			sourceEnabled := sourcePresent && source.Enabled
+			if strings.HasPrefix(owner.SourceChannelID, "channel:") {
+				current, exists := channels[strings.TrimPrefix(owner.SourceChannelID, "channel:")]
+				sourcePresent = exists
+				sourceEnabled = exists && current.Status == 1
+			}
 			if stored[owner.ChannelID] < 0 || stored[owner.ChannelID] > maxResourceRevision || eligible[owner.ChannelID] < 0 || eligible[owner.ChannelID] > stored[owner.ChannelID] {
 				return fmt.Errorf("binding route counts are unavailable")
 			}
-			value.Bindings = append(value.Bindings, ResourceBindingStatus{GatewayChannelID: id, GatewayName: channel.Name, GatewayPresent: present, GatewayStatus: channel.Status, GatewayType: channel.Type, SourceChannelID: owner.SourceChannelID, SourcePresent: sourcePresent, SourceEnabled: sourcePresent && source.Enabled, ConfiguredActive: owner.Active, Profile: owner.Profile, PublicationID: strconv.FormatInt(owner.PublicationID, 10), StoredPairCount: stored[owner.ChannelID], RouteEligiblePairCount: eligible[owner.ChannelID]})
+			value.Bindings = append(value.Bindings, ResourceBindingStatus{GatewayChannelID: id, GatewayName: channel.Name, GatewayPresent: present, GatewayStatus: channel.Status, GatewayType: channel.Type, SourceChannelID: owner.SourceChannelID, SourcePresent: sourcePresent, SourceEnabled: sourceEnabled, ConfiguredActive: owner.Active, Profile: owner.Profile, PublicationID: strconv.FormatInt(owner.PublicationID, 10), StoredPairCount: stored[owner.ChannelID], RouteEligiblePairCount: eligible[owner.ChannelID]})
 		}
 		result = value
 		return nil

@@ -25,14 +25,12 @@ import {
 export function ResourceBindingList({
   enabled,
   channels,
-  creating,
   guide,
   onCreate,
   published,
 }: {
   enabled: boolean;
   channels?: PublicationChannel[];
-  creating: boolean;
   guide: ReactNode;
   onCreate: () => void;
   published?: { id: string };
@@ -51,17 +49,34 @@ export function ResourceBindingList({
   const state = query.error ? undefined : query.data;
   const { hash } = useLocation();
   const section = useRef<HTMLElement>(null);
+  const [refreshedPublication, setRefreshedPublication] =
+    useState<typeof published>();
   const searchPages = useRef<{ id: string; lo: number; hi: number } | null>(
     null,
   );
   useEffect(() => {
+    let active = true;
     searchPages.current = published
       ? { id: published.id, lo: 1, hi: Infinity }
       : null;
-  }, [published]);
+    if (published)
+      void query.refetch().then(() => {
+        if (active) setRefreshedPublication(published);
+      });
+    return () => {
+      active = false;
+    };
+  }, [published, query.refetch]);
   useEffect(() => {
     const target = searchPages.current;
-    if (!target || !state || query.isFetching || state.page !== page) return;
+    if (
+      !target ||
+      refreshedPublication !== published ||
+      !state ||
+      query.isFetching ||
+      state.page !== page
+    )
+      return;
     const row = section.current?.querySelector<HTMLElement>(
       `[data-binding-gateway="${CSS.escape(target.id)}"]`,
     );
@@ -78,7 +93,7 @@ export function ResourceBindingList({
     if (target.lo <= target.hi)
       setPage(Math.floor((target.lo + target.hi) / 2));
     else searchPages.current = null;
-  }, [published, state, query.isFetching, page]);
+  }, [published, refreshedPublication, state, query.isFetching, page]);
   useEffect(() => {
     if (hash !== "#gateway-bindings" || !enabled) return;
     const frame = requestAnimationFrame(() => {
@@ -214,7 +229,7 @@ export function ResourceBindingList({
             "روابط مسارات الموارد المنشورة",
           )}
         </h3>
-        <Button aria-expanded={creating} onClick={onCreate}>
+        <Button aria-haspopup="dialog" onClick={onCreate}>
           {text("新建持久绑定", "New persistent binding", "إنشاء ربط دائم")}
         </Button>
       </header>
@@ -222,6 +237,15 @@ export function ResourceBindingList({
         <div id="binding-creation-guide" tabIndex={-1}>
           {guide}
         </div>
+      )}
+      {published && (
+        <p className="rp-result-status" role="status">
+          {text(
+            `服务器已确认发布渠道 ${published.id} 的绑定。下表显示重新读取的绑定状态；若读取失败，请点击“刷新绑定状态”。`,
+            `The server confirmed publication for channel ${published.id}. The table reloads the binding state; if loading fails, click Refresh binding state.`,
+            `أكد الخادم نشر ربط القناة ${published.id}. يعيد الجدول تحميل حالة الروابط؛ إذا فشل التحميل، انقر تحديث حالة الروابط.`,
+          )}
+        </p>
       )}
       <p>
         {text(

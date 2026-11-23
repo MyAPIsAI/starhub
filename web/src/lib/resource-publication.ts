@@ -5,6 +5,7 @@ export interface PublicationChannel {
   name: string;
   type: number;
   status: number;
+  models?: string[];
 }
 export interface PublicationContext {
   schema: typeof RESOURCE_PUBLICATION_SCHEMA;
@@ -21,6 +22,7 @@ export interface PublicationContext {
 export interface PublicationBinding {
   source_channel_id: string;
   gateway_channel_id: string;
+  source_models?: string[];
 }
 export interface PublicationPair {
   gateway_channel_id: string;
@@ -93,7 +95,11 @@ export function readPublicationContext(value: unknown): PublicationContext {
       ids.has(channel.id) ||
       typeof channel.name !== "string" ||
       !Number.isSafeInteger(channel.type) ||
-      !Number.isSafeInteger(channel.status)
+      !Number.isSafeInteger(channel.status) ||
+      (channel.models !== undefined &&
+        (!Array.isArray(channel.models) ||
+          channel.models.length > 10000 ||
+          !channel.models.every((model) => text(model, 128))))
     )
       return invalid();
     ids.add(channel.id);
@@ -110,12 +116,28 @@ export function publicationRequest(
   const sources = new Set<string>(),
     targets = new Set<string>();
   for (const binding of bindings) {
+    const directID = binding.source_channel_id.startsWith("channel:")
+      ? binding.source_channel_id.slice("channel:".length)
+      : undefined;
+    const directSource = directID
+      ? context.channels.find((ch) => ch.id === directID)
+      : undefined;
     if (
       !text(binding.source_channel_id, 128) ||
       !id(binding.gateway_channel_id) ||
       sources.has(binding.source_channel_id) ||
       targets.has(binding.gateway_channel_id) ||
-      !context.channels.some((ch) => ch.id === binding.gateway_channel_id)
+      !context.channels.some((ch) => ch.id === binding.gateway_channel_id) ||
+      (directID !== undefined &&
+        (!directSource ||
+          !Array.isArray(binding.source_models) ||
+          binding.source_models.length === 0 ||
+          new Set(binding.source_models).size !==
+            binding.source_models.length ||
+          !binding.source_models.every((model) =>
+            (directSource.models ?? []).includes(model),
+          ))) ||
+      (directID === undefined && binding.source_models !== undefined)
     )
       return invalid();
     sources.add(binding.source_channel_id);
