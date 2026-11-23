@@ -140,6 +140,11 @@ npm run test:e2e
 
 ### 容器与 HTTPS
 
+Docker Compose 和 PowerShell 部署说明见 [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)。
+首次执行 `./init-deploy.ps1`，再执行 `./build-deploy.ps1`，即可构建包含前端的镜像、更新容器并等待健康检查。
+默认地址为 `http://127.0.0.1:3008`；`-BuildOnly` 仅构建，`-WithResource` 加入同级 resource 的共享网络。
+部署配置使用独立的 `.env.docker` 文件。
+
 ```bash
 docker build -t starhub .
 docker run --rm -p 3000:3000 -v starhub-data:/data -e STARHUB_ROOT_PASSWORD=change-this-password starhub

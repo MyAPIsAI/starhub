@@ -138,6 +138,12 @@ The browser tests start their own Go router, a temporary SQLite database and a l
 
 ### Container and HTTPS
 
+For Docker Compose and PowerShell deployment, see [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md).
+Run `./init-deploy.ps1` once, then `./build-deploy.ps1` to build the embedded console
+and backend and wait for the service health check. The default URL is
+`http://127.0.0.1:3008`; `-BuildOnly` builds without deployment and `-WithResource`
+adds the optional sibling resource network. Configuration lives in `.env.docker`.
+
 ```bash
 docker build -t starhub .
 docker run --rm -p 3000:3000 -v starhub-data:/data -e STARHUB_ROOT_PASSWORD=change-this-password starhub

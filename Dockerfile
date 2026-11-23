@@ -4,6 +4,8 @@ COPY web/package.json web/package-lock.json ./
 COPY web/scripts ./scripts
 RUN npm ci
 COPY web/ ./
+# The console embeds task plugin examples from the sibling source directory.
+COPY plugins/tasks /src/plugins/tasks
 RUN npm run typecheck && npm run build
 
 FROM golang:1.26-bookworm AS backend
@@ -17,7 +19,7 @@ COPY --from=console /src/web/dist ./web/dist
 RUN go build -trimpath -tags frontend -o /out/starhub .
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tzdata && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 starhub && mkdir /data && chown starhub /data
 COPY --from=backend /out/starhub /usr/local/bin/starhub
 COPY NOTICE THIRD-PARTY-LICENSES.md /licenses/

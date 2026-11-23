@@ -13,3 +13,16 @@ web/playwright-report
 config.yml
 starhub
 starhub.exe
+.env
+.env.*
+**/.env
+**/.env.*
+data
+logs
+backups
+tmp
+.gocache
+.gomodcache
+old-web
+.workbuddy
+doc

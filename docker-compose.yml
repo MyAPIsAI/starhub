@@ -1,0 +1,47 @@
+name: starhub
+
+services:
+  starhub:
+    image: ${STARHUB_IMAGE:-starhub:local}
+    platform: ${STARHUB_PLATFORM:-linux/amd64}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    restart: unless-stopped
+    stop_grace_period: 55s
+    ports:
+      - "${STARHUB_HOST_IP:-127.0.0.1}:${STARHUB_HOST_PORT:-3008}:3000"
+    volumes:
+      - starhub_data:/data
+    environment:
+      STARHUB_ENV: production
+      STARHUB_BIND_ADDRESS: 0.0.0.0
+      STARHUB_PORT: "3000"
+      STARHUB_DB: /data/starhub.db
+      STARHUB_ROOT_PASSWORD: ${STARHUB_ROOT_PASSWORD:?Run init-deploy.ps1 or set STARHUB_ROOT_PASSWORD}
+      STARHUB_CRYPTO_SECRET: ${STARHUB_CRYPTO_SECRET:?Run init-deploy.ps1 or set STARHUB_CRYPTO_SECRET}
+      STARHUB_CREDENTIAL_KEYS: ${STARHUB_CREDENTIAL_KEYS:-}
+      STARHUB_CREDENTIAL_ACTIVE_KEY: ${STARHUB_CREDENTIAL_ACTIVE_KEY:-}
+      STARHUB_COOKIE_SECURE: ${STARHUB_COOKIE_SECURE:-false}
+      STARHUB_TRUSTED_PROXIES: ${STARHUB_TRUSTED_PROXIES:-}
+      STARHUB_ADMIN_IP_WHITELIST: ${STARHUB_ADMIN_IP_WHITELIST:-}
+      STARHUB_REGION_PROFILE: ${STARHUB_REGION_PROFILE:-}
+      NODE_NAME: ${NODE_NAME:-starhub-node-1}
+      TZ: ${TZ:-Asia/Shanghai}
+    healthcheck:
+      # Check the database without waiting for a commercial routing snapshot.
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  starhub_data:

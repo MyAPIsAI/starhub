@@ -6,6 +6,8 @@ config.yml
 /.env
 /.env.lock
 /.env-init-*
+/.env.docker*
+!/.env.docker.example
 web/node_modules/
 web/dist/
 web/test-results/

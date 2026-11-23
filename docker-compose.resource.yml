@@ -1,0 +1,19 @@
+# Optional local resource integration. Start the resource Compose project first.
+# Production transport requirements are documented in RESOURCE_PLATFORM.md.
+services:
+  starhub:
+    environment:
+      RESOURCE_CATALOG_NOTIFY_URL: ${RESOURCE_CATALOG_NOTIFY_URL:-http://resource-backend:3001}
+      RESOURCE_CATALOG_NOTIFY_ENABLED: ${RESOURCE_CATALOG_NOTIFY_ENABLED:-1}
+      METRIC_AUTHORIZATION: ${METRIC_AUTHORIZATION:?Set the resource service token without the Bearer prefix}
+      ROUTING_PROTECTION_SOURCE: ${ROUTING_PROTECTION_SOURCE:-talen}
+      ROUTING_OBSERVATION_V2_ENABLED: ${ROUTING_OBSERVATION_V2_ENABLED:-1}
+    networks:
+      default:
+      resource-control:
+        aliases: [starhub-backend]
+
+networks:
+  resource-control:
+    external: true
+    name: ${RESOURCE_NETWORK_NAME:-talen-resource-dev}
