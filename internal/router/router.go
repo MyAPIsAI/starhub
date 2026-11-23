@@ -171,6 +171,8 @@ func New() http.Handler {
 	mux.Handle("GET /api/option", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/", middleware.AdminAuth(http.HandlerFunc(controller.ListOptions)))
 	mux.Handle("GET /api/option/status", middleware.AdminAuth(http.HandlerFunc(controller.OptionStatus)))
+	mux.Handle("GET /api/option/gateway", middleware.AdminAuth(http.HandlerFunc(controller.GetGatewayOptions)))
+	mux.Handle("PUT /api/option/gateway", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateGatewayOptions))))
 	mux.Handle("GET /api/option/routing_affinity_cache", middleware.AdminAuth(http.HandlerFunc(controller.GetRoutingAffinityCacheStats)))
 	mux.Handle("PUT /api/option/routing_affinity", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.UpdateGlobalAffinityOptions))))
 	mux.Handle("DELETE /api/option/routing_affinity_cache", middleware.Audit(middleware.AdminAuth(http.HandlerFunc(controller.ClearRoutingAffinityCache))))

@@ -41,6 +41,19 @@ func OptionKeys() []string {
 		OptionIPRateLimit, OptionUserRateLimit, OptionTokenRateLimit, OptionModelRateLimit}
 }
 
+func GatewayOptionKeys() []string {
+	return []string{OptionIPRateLimit, OptionUserRateLimit, OptionTokenRateLimit, OptionModelRateLimit}
+}
+
+func IsGatewayOption(key string) bool {
+	for _, known := range GatewayOptionKeys() {
+		if key == known {
+			return true
+		}
+	}
+	return false
+}
+
 func IsOptionKey(key string) bool {
 	for _, known := range OptionKeys() {
 		if key == known {

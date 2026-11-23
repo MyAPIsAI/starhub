@@ -1,0 +1,221 @@
+.gateway-settings {
+  width: 100%;
+  max-width: 1040px;
+  margin-inline: auto;
+  display: grid;
+  gap: 22px;
+  color: var(--text);
+}
+.gateway-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+.gateway-heading h1 {
+  margin: 8px 0;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+}
+.gateway-heading p,
+.gateway-description {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 6px 0 0;
+}
+.gateway-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+}
+.gateway-sync-badge {
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.gateway-sync-badge[data-synced="true"] {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+.gateway-panel {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 24px;
+  min-width: 0;
+}
+.gateway-panel h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.gateway-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px 32px;
+  border: 0;
+  padding: 0;
+  margin: 26px 0;
+  min-width: 0;
+}
+.gateway-field {
+  min-width: 0;
+}
+.gateway-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 26px;
+  margin-bottom: 9px;
+}
+.gateway-field-heading > label {
+  font-weight: 600;
+  font-size: 13px;
+}
+.gateway-field-heading .gateway-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.gateway-toggle input {
+  accent-color: var(--brand);
+}
+.gateway-number {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.gateway-number:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.gateway-number input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+}
+.gateway-number input:disabled {
+  color: var(--muted);
+}
+.gateway-number span {
+  white-space: nowrap;
+  padding-inline-end: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.gateway-field p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.gateway-rule {
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--brand-soft);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.gateway-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  margin-top: 22px;
+  padding-top: 20px;
+}
+.gateway-actions > span {
+  margin-inline-end: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.gateway-error,
+.gateway-field .gateway-error-text {
+  color: var(--danger);
+}
+.gateway-error,
+.gateway-notice {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.gateway-notice {
+  padding: 12px 16px;
+  border-radius: 9px;
+  background: var(--brand-soft);
+  margin: 0;
+}
+.gateway-history {
+  overflow-x: auto;
+  margin-top: 18px;
+}
+.gateway-history table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: start;
+}
+.gateway-history th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.gateway-history th,
+.gateway-history td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  white-space: nowrap;
+}
+.gateway-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding-block: 16px;
+}
+.gateway-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.gateway-details .configuration-sync {
+  margin-top: 18px;
+}
+@media (max-width: 680px) {
+  .gateway-heading {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .gateway-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+  .gateway-panel {
+    padding: 18px;
+  }
+  .gateway-actions {
+    flex-wrap: wrap;
+  }
+  .gateway-actions > span {
+    flex-basis: 100%;
+  }
+}

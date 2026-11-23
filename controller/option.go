@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"starhub/common"
+	"starhub/config"
 	"starhub/model"
 	"starhub/service"
 	"starhub/setting"
@@ -76,6 +77,14 @@ func RollbackOption(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
+	var change model.OptionChange
+	if err := model.DB.Where("version = ?", req.Version).First(&change).Error; err != nil {
+		common.ApiError(w, http.StatusBadRequest, "configuration change is unavailable")
+		return
+	}
+	if config.IsGatewayOption(change.Key) && !requireGatewayRoot(w, r) {
+		return
+	}
 	version, err := model.RollbackOption(req.Version, req.ExpectedVersion, actorID)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -101,6 +110,9 @@ type optionUpdateRequest struct {
 func UpdateOption(w http.ResponseWriter, r *http.Request) {
 	var req optionUpdateRequest
 	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if config.IsGatewayOption(req.Key) && !requireGatewayRoot(w, r) {
 		return
 	}
 	if !setting.IsOptionKey(req.Key) {

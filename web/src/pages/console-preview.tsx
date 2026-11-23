@@ -87,8 +87,10 @@ import SmartRouting from "../features/resource-routing";
 import { StandardModels } from "../features/standard-models";
 import { Channels } from "../features/channels";
 import { ServiceGroups } from "../features/service-groups";
+import { GatewaySettings } from "../features/gateway-settings";
 import {
   useSystemAccess,
+  ROLE_ROOT,
   isAdmin,
   canReadFinance,
   sessionUsername,
@@ -655,6 +657,13 @@ function ConsoleWorkspace() {
       label: c("服务分组", "Service groups", "مجموعات الخدمة"),
       Icon: Boxes,
     },
+    ...(role === ROLE_ROOT
+      ? [{
+          path: "gateway-settings",
+          label: c("网关配置", "Gateway settings", "إعدادات البوابة"),
+          Icon: Settings,
+        }]
+      : []),
   ];
   const systemSection = systemNavigation.find((item) => item.path === section);
   const activeKeyCount = keys.filter((key) => key.active).length;
@@ -912,6 +921,7 @@ function ConsoleWorkspace() {
           </div>
         )}
         <main className="xy-main">
+          {section === "gateway-settings" && <GatewaySettings />}
           {systemSection && !isSystemAdmin && (
             <section className="xy-card" style={{ padding: 28 }}>
               <ShieldCheck size={28} />
