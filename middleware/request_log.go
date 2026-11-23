@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -24,6 +25,15 @@ type RequestLogObservation struct {
 	Stage              string
 	Outcome            int
 	ClientDisconnected bool
+	ResponseCompleted  bool
+}
+
+// MarkResponseCompleted is called only after a valid protocol response was
+// written successfully. A subsequent context cancellation is not an interruption.
+func MarkResponseCompleted(ctx context.Context) {
+	if value := RequestObservation(ctx); value != nil && !value.ClientDisconnected {
+		value.ResponseCompleted = true
+	}
 }
 
 func RequestObservation(ctx context.Context) *RequestLogObservation {
@@ -96,7 +106,10 @@ func RequestLog(next http.Handler) http.Handler {
 				entry.Status = 2
 				SetRequestFailure(ctx, observation.Stage, "request_interrupted", "Request processing did not complete.")
 			}
-			if observation.ClientDisconnected || errors.Is(r.Context().Err(), context.Canceled) {
+			// Explicit relay outcomes take precedence over late lifecycle signals.
+			// In particular, cancellation must not replace success or billing errors.
+			if completed && observation.Outcome == 0 && !observation.ResponseCompleted &&
+				(observation.ClientDisconnected || errors.Is(r.Context().Err(), context.Canceled)) {
 				entry.Status = 3
 			}
 			if entry.Status != 1 {
@@ -187,30 +200,47 @@ func (w *requestLogWriter) Write(data []byte) (int, error) {
 		_, _ = w.body.Write(data[:min(len(data), 4096-w.body.Len())])
 	}
 	n, err := w.ResponseWriter.Write(data)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
 	if err != nil {
 		w.observation.ClientDisconnected = true
 	}
 	return n, err
 }
 func (w *requestLogWriter) Flush() {
+	_ = w.FlushError()
+}
+
+func (w *requestLogWriter) FlushError() error {
 	if w.status == 0 {
 		w.WriteHeader(http.StatusOK)
 	}
-	if err := http.NewResponseController(w.ResponseWriter).Flush(); err != nil && !errors.Is(err, http.ErrNotSupported) {
+	err := http.NewResponseController(w.ResponseWriter).Flush()
+	if err != nil && !errors.Is(err, http.ErrNotSupported) {
 		w.observation.ClientDisconnected = true
 	}
+	return err
 }
 
 // RecordRelayOutcome distinguishes a transport failure from an HTTP 200 stream.
-func RecordRelayOutcome(ctx context.Context, err error) int {
+func RecordRelayOutcome(ctx context.Context, err error, completed ...bool) int {
+	value := RequestObservation(ctx)
+	responseCompleted := value != nil && value.ResponseCompleted
+	if len(completed) > 0 {
+		responseCompleted = completed[0]
+	}
 	status := 1
 	if err != nil {
 		status = 2
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+	if errors.Is(err, context.Canceled) || (err == nil && !responseCompleted && errors.Is(ctx.Err(), context.Canceled)) {
 		status = 3
 	}
-	if value := RequestObservation(ctx); value != nil {
+	if err == nil && !responseCompleted && ctx.Err() != nil && status == 1 {
+		status = 2
+	}
+	if value != nil {
 		if value.ClientDisconnected {
 			status = 3
 		}

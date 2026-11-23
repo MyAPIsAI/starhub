@@ -30,10 +30,24 @@ var upstreamHTTPClient = &http.Client{Timeout: 10 * time.Minute}
 // poking at the writer from every error path.
 type statusWriter struct {
 	http.ResponseWriter
-	status       int
-	wrote        bool
-	firstContent func()
+	status             int
+	wrote              bool
+	firstContent       func()
+	writeError         error
+	responseCompleted  bool
+	onResponseComplete func()
 }
+
+func (w *statusWriter) RecordResponseComplete() {
+	if w.writeError == nil && w.wrote && w.status >= 200 && w.status < 300 {
+		w.responseCompleted = true
+		if w.onResponseComplete != nil {
+			w.onResponseComplete()
+		}
+	}
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *statusWriter) RecordFirstContent() {
 	if w.firstContent != nil {
@@ -58,15 +72,31 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 		w.status = http.StatusOK
 		w.wrote = true
 	}
-	return w.ResponseWriter.Write(b)
+	n, err := w.ResponseWriter.Write(b)
+	if err == nil && n != len(b) {
+		err = io.ErrShortWrite
+	}
+	if err != nil && w.writeError == nil {
+		w.writeError = err
+	}
+	return n, err
 }
 
 // Flush delegates to the underlying writer so SSE streaming keeps its
 // real-time push behavior through the wrapper.
 func (w *statusWriter) Flush() {
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
+	_ = w.FlushError()
+}
+
+func (w *statusWriter) FlushError() error {
+	if !w.wrote {
+		w.WriteHeader(http.StatusOK)
 	}
+	err := http.NewResponseController(w.ResponseWriter).Flush()
+	if err != nil && !errors.Is(err, http.ErrNotSupported) && w.writeError == nil {
+		w.writeError = err
+	}
+	return err
 }
 
 // upstreamRequestID extracts the provider's request-id from the response
@@ -288,6 +318,7 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 		inbound = dto.InboundOpenAI
 	}
 	sw := newStatusWriter(w)
+	sw.onResponseComplete = func() { middleware.MarkResponseCompleted(ctx) }
 	flow := &relayFlow{
 		ctx: ctx, w: sw, sw: sw, req: req, inbound: inbound, mode: mode,
 		startTime:      time.Now(),
@@ -926,10 +957,18 @@ loop:
 			if res.outcome == attemptSuccess {
 				if observation.Outcome == 0 {
 					observation.Outcome = 1
+					if observation.ClientDisconnected {
+						observation.Outcome = 3
+					}
 				}
 			} else {
 				if observation.Outcome != 3 {
-					observation.Outcome = 2
+					if observation.Outcome == 0 && !observation.ResponseCompleted &&
+						(observation.ClientDisconnected || errors.Is(f.ctx.Err(), context.Canceled)) {
+						observation.Outcome = 3
+					} else {
+						observation.Outcome = 2
+					}
 				}
 				if observation.Entry.ErrorCode == "" && res.outcome != attemptClientError {
 					middleware.SetRequestFailure(f.ctx, observation.Stage, "upstream_failed", "The upstream attempt did not complete.")
@@ -1221,8 +1260,11 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 			return attemptResult{outcome: attemptUpstreamError,
 				cause: fmt.Errorf("channel %d: parse response: %v", ch.ID, err)}
 		}
-		relay.WriteChatResponse(flow.w, inbound, chatResp)
-		return settleChatAttempt(flow, ch, ir, chatResp.Usage, chatResp.Text)
+		writeErr := relay.WriteChatResponse(flow.w, inbound, chatResp)
+		if writeErr == nil {
+			flow.sw.RecordResponseComplete()
+		}
+		return settleChatAttempt(flow, ch, ir, chatResp.Usage, chatResp.Text, writeErr)
 	}
 
 	// Streamed conversion. Some upstreams answer a stream request with a
@@ -1246,6 +1288,9 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 			}
 		}
 		finishErr := emitter.Finish(chatResp.Usage, chatResp.FinishReason)
+		if finishErr == nil {
+			flow.sw.RecordResponseComplete()
+		}
 		return settleChatAttempt(flow, ch, ir, chatResp.Usage, chatResp.Text, finishErr)
 	}
 
@@ -1290,8 +1335,14 @@ func convertedChatAttempt(flow *relayFlow, ch *model.Channel, adaptor channel.Ch
 			content.WriteString(ev.TextDelta)
 		}
 	}
-	if finishErr := emitter.Finish(lastUsage, finishReason); streamError == nil {
-		streamError = finishErr
+	if streamError == nil && finishReason == "" {
+		streamError = io.ErrUnexpectedEOF
+	}
+	if streamError == nil && !clientGone {
+		streamError = emitter.Finish(lastUsage, finishReason)
+		if streamError == nil {
+			flow.sw.RecordResponseComplete()
+		}
 	}
 	if clientGone {
 		flow.span.MarkStreamInterrupted()
@@ -1311,9 +1362,15 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 		responseErr = responseErrors[0]
 	}
 	if responseErr == nil {
-		responseErr = flow.ctx.Err()
+		responseErr = flow.sw.writeError
 	}
-	status := middleware.RecordRelayOutcome(flow.ctx, responseErr)
+	if responseErr == nil && !flow.sw.responseCompleted {
+		responseErr = flow.ctx.Err()
+		if responseErr == nil {
+			responseErr = io.ErrUnexpectedEOF
+		}
+	}
+	status := middleware.RecordRelayOutcome(flow.ctx, responseErr, flow.sw.responseCompleted)
 	if status != 1 && flow.req.stream {
 		flow.span.MarkStreamInterrupted()
 	}

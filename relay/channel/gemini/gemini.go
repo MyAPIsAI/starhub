@@ -71,10 +71,15 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	if _, err := w.Write(body); err != nil {
+		return nil, "", err
+	}
 	ir, err := dto.ParseGeminiChatResponse(body)
 	if err != nil {
-		return nil, "", nil
+		return nil, "", err
+	}
+	if observer, ok := w.(interface{ RecordResponseComplete() }); ok {
+		observer.RecordResponseComplete()
 	}
 	return ir.Usage, ir.Text, nil
 }

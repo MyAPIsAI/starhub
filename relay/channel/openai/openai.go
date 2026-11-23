@@ -122,10 +122,15 @@ func handleNonStream(w http.ResponseWriter, resp *http.Response) (*dto.Usage, st
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	if _, err := w.Write(body); err != nil {
+		return nil, "", err
+	}
 	ir, err := dto.ParseOpenAIChatResponse(body)
 	if err != nil {
-		return nil, "", nil // unreadable body: relayed verbatim, billed by estimate
+		return nil, "", err
+	}
+	if observer, ok := w.(interface{ RecordResponseComplete() }); ok {
+		observer.RecordResponseComplete()
 	}
 	return ir.Usage, ir.Text, nil
 }
@@ -199,6 +204,9 @@ func handleStream(w http.ResponseWriter, resp *http.Response) (*dto.Usage, strin
 	if canFlush {
 		flusher.Flush()
 	}
+	if observer, ok := w.(interface{ RecordResponseComplete() }); ok {
+		observer.RecordResponseComplete()
+	}
 	return usage, content.String(), nil
 }
 
@@ -217,23 +225,41 @@ func (Adaptor) StreamChatEvents(resp *http.Response) (channel.ChatStreamReader, 
 }
 
 type streamReader struct {
-	reader *channel.SSEReader
-	closer io.Closer
+	reader   *channel.SSEReader
+	closer   io.Closer
+	terminal bool
+	done     bool
 }
 
 func (s *streamReader) Next() (*dto.ChatStreamEvent, error) {
+	if s.done {
+		return nil, io.EOF
+	}
 	for {
 		line, err := s.reader.Next()
 		if err != nil {
+			if err == io.EOF && !s.terminal {
+				return nil, io.ErrUnexpectedEOF
+			}
 			return nil, err
 		}
 		payload := line.Data
-		if payload == "" || payload == "[DONE]" {
+		if payload == "[DONE]" {
+			s.done, s.terminal = true, true
+			return nil, io.EOF
+		}
+		if payload == "" {
 			continue
+		}
+		if dto.ParseProviderErrorBody([]byte(payload)) != nil {
+			return nil, fmt.Errorf("upstream sent a stream error")
 		}
 		textDelta, usage, finish, perr := dto.ParseOpenAIStreamPayload([]byte(payload))
 		if perr != nil {
-			continue // tolerate keepalives and non-JSON frames
+			return nil, perr
+		}
+		if finish != "" {
+			s.terminal = true
 		}
 		return &dto.ChatStreamEvent{
 			TextDelta:    textDelta,

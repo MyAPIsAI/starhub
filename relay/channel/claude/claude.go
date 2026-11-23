@@ -66,10 +66,15 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 			return nil, "", err
 		}
 		writeJSONHead(w, resp)
-		_, _ = w.Write(body)
+		if _, err := w.Write(body); err != nil {
+			return nil, "", err
+		}
 		ir, err := dto.ParseClaudeChatResponse(body)
 		if err != nil {
-			return nil, "", nil
+			return nil, "", err
+		}
+		if observer, ok := w.(interface{ RecordResponseComplete() }); ok {
+			observer.RecordResponseComplete()
 		}
 		return ir.Usage, ir.Text, nil
 	}
@@ -85,17 +90,23 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 		line, err := reader.Next()
 		if err != nil {
 			if err == io.EOF {
-				break
+				err = io.ErrUnexpectedEOF
 			}
 			return accounting.Snapshot(), content.String(), err
 		}
 		if line.Event != "" {
-			fmt.Fprintf(w, "event: %s\n", line.Event)
+			if _, err := fmt.Fprintf(w, "event: %s\n", line.Event); err != nil {
+				return accounting.Snapshot(), content.String(), err
+			}
 		}
 		if line.Data != "" {
-			fmt.Fprintf(w, "data: %s\n", line.Data)
+			if _, err := fmt.Fprintf(w, "data: %s\n", line.Data); err != nil {
+				return accounting.Snapshot(), content.String(), err
+			}
 		}
-		fmt.Fprint(w, "\n")
+		if _, err := fmt.Fprint(w, "\n"); err != nil {
+			return accounting.Snapshot(), content.String(), err
+		}
 		if canFlush {
 			flusher.Flush()
 		}
@@ -104,12 +115,19 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 		}
 		ev, perr := dto.ParseClaudeStreamEvent([]byte(line.Data))
 		if perr != nil {
-			continue
+			return accounting.Snapshot(), content.String(), perr
 		}
 		if _, err := accounting.Merge(ev.UsageFields); err != nil {
 			return accounting.Snapshot(), content.String(), err
 		}
 		switch ev.Type {
+		case "error":
+			return accounting.Snapshot(), content.String(), fmt.Errorf("upstream sent a stream error")
+		case "message_stop":
+			if observer, ok := w.(interface{ RecordResponseComplete() }); ok {
+				observer.RecordResponseComplete()
+			}
+			return accounting.Snapshot(), content.String(), nil
 		case "content_block_delta":
 			if ev.TextDelta != "" {
 				if observer, ok := w.(interface{ RecordFirstContent() }); ok {
@@ -119,7 +137,6 @@ func (Adaptor) HandlePassthroughResponse(w http.ResponseWriter, resp *http.Respo
 			content.WriteString(ev.TextDelta)
 		}
 	}
-	return accounting.Snapshot(), content.String(), nil
 }
 
 // ParseChatResponse reads a non-stream Claude response into IR.
@@ -140,18 +157,18 @@ type streamReader struct {
 	reader     *channel.SSEReader
 	closer     io.Closer
 	accounting dto.ClaudeUsageAccumulator
-	usageSent  bool
+	done       bool
 }
 
 func (s *streamReader) Next() (*dto.ChatStreamEvent, error) {
+	if s.done {
+		return nil, io.EOF
+	}
 	for {
 		line, err := s.reader.Next()
 		if err != nil {
-			if err == io.EOF && !s.usageSent {
-				if snapshot := s.accounting.Snapshot(); snapshot != nil {
-					s.usageSent = true
-					return &dto.ChatStreamEvent{Usage: snapshot}, nil
-				}
+			if err == io.EOF {
+				err = io.ErrUnexpectedEOF
 			}
 			return nil, err
 		}
@@ -160,13 +177,15 @@ func (s *streamReader) Next() (*dto.ChatStreamEvent, error) {
 		}
 		ev, perr := dto.ParseClaudeStreamEvent([]byte(line.Data))
 		if perr != nil {
-			continue
+			return nil, perr
 		}
 		snapshot, err := s.accounting.Merge(ev.UsageFields)
 		if err != nil {
 			return nil, err
 		}
 		switch ev.Type {
+		case "error":
+			return nil, fmt.Errorf("upstream sent a stream error")
 		case "message_start":
 			continue
 		case "content_block_delta", "message_delta", "message_stop":
@@ -179,7 +198,9 @@ func (s *streamReader) Next() (*dto.ChatStreamEvent, error) {
 		}
 		if ev.UsageFields != nil || ev.Type == "message_stop" {
 			out.Usage = snapshot
-			s.usageSent = snapshot != nil
+		}
+		if ev.Type == "message_stop" {
+			s.done = true
 		}
 		return out, nil
 	}

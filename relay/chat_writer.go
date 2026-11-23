@@ -10,16 +10,16 @@ import (
 
 // WriteChatResponse serializes a non-stream IR chat response in the
 // client's inbound format (P3.2 matrix: any inbound x any channel).
-func WriteChatResponse(w http.ResponseWriter, inbound dto.InboundFormat, resp *dto.ChatResponse) {
+func WriteChatResponse(w http.ResponseWriter, inbound dto.InboundFormat, resp *dto.ChatResponse) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if inbound == dto.InboundClaude {
 		body, err := dto.BuildClaudeChatResponse(resp)
 		if err != nil {
-			return
+			return err
 		}
-		_, _ = w.Write(body)
-		return
+		_, err = w.Write(body)
+		return err
 	}
 	id := resp.ID
 	if id == "" {
@@ -61,8 +61,12 @@ func WriteChatResponse(w http.ResponseWriter, inbound dto.InboundFormat, resp *d
 	if resp.Usage != nil {
 		body["usage"] = resp.Usage
 	}
-	raw, _ := json.Marshal(body)
-	_, _ = w.Write(raw)
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(raw)
+	return err
 }
 
 // ChatStreamEmitter serializes IR stream events in the client's inbound
