@@ -294,6 +294,9 @@ export default function RequestHistory({
                       "المطلوب → الفعلي",
                     )}
                   </th>
+                  <th className="request-channel-id" scope="col">
+                    {c("渠道 ID", "Channel ID", "معرّف القناة")}
+                  </th>
                   <th>{c("厂商", "Vendor", "المزوّد")}</th>
                   <th>{c("分组", "Group", "المجموعة")}</th>
                   <th>{c("状态", "Status", "الحالة")}</th>
@@ -332,6 +335,9 @@ export default function RequestHistory({
                         {row.actual_model ||
                           (row.status === "success" ? row.model : "—")}
                       </small>
+                    </td>
+                    <td className="mono request-channel-id">
+                      <bdi>{row.channel_id || "—"}</bdi>
                     </td>
                     <td>{row.vendor}</td>
                     <td>{row.tier ? <TierBadge id={row.tier} /> : "—"}</td>

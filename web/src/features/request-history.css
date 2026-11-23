@@ -178,7 +178,7 @@
 .request-history-table {
   border-collapse: collapse;
   width: 100%;
-  min-width: 880px;
+  min-width: 960px;
   font-size: 12px;
 }
 .request-history-table thead {
@@ -216,6 +216,10 @@
 }
 .request-history-table .request-cost {
   font-weight: 600;
+}
+.request-history-table .request-channel-id {
+  min-width: 88px;
+  white-space: nowrap;
 }
 .request-history-table .request-empty {
   padding: 44px 24px;

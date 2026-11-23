@@ -189,6 +189,10 @@ export function adaptLogRow(log: LogRow): PreviewRequestLike {
     model: log.model,
     requested_model: log.requested_model || log.model,
     actual_model: log.model,
+    channel_id:
+      Number.isSafeInteger(log.channel_id) && log.channel_id > 0
+        ? String(log.channel_id)
+        : undefined,
     usage_source:
       log.usage_source === "upstream" ||
       log.usage_source === "admission_estimate"
@@ -221,6 +225,7 @@ export interface PreviewRequestLike {
   model: string;
   requested_model: string;
   actual_model: string;
+  channel_id?: string;
   usage_source?: "upstream" | "admission_estimate";
   protocol?: "OpenAI" | "Anthropic" | "Gemini";
   outcome?: "success" | "failed" | "cancelled";
