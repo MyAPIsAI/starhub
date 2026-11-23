@@ -44,7 +44,10 @@ func addAbilities(tx *gorm.DB, c *Channel) error {
 	if managed, err := addResourceGatewayAbilities(tx, c); managed || err != nil {
 		return err
 	}
-	models := SplitList(c.Models)
+	return addModelAbilities(tx, c, SplitList(c.Models))
+}
+
+func addModelAbilities(tx *gorm.DB, c *Channel, models []string) error {
 	groups := ChannelGroups(c)
 	if len(models) == 0 {
 		return errors.New("channel has no models")

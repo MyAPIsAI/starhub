@@ -41,6 +41,7 @@ func New() http.Handler {
 		mux.Handle("GET "+path, middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourcePlatformCatalog)))
 	}
 	mux.Handle("PUT /api/resource-platform/credential", middleware.AdminAuth(http.HandlerFunc(controller.RotateResourceCredential)))
+	mux.Handle("POST /api/resource-platform/channels/{id}/models", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourcePlatformAppendChannelModel)))
 
 	mux.HandleFunc("POST /api/user/login", controller.Login)
 	mux.HandleFunc("POST /api/user/register", controller.Register)

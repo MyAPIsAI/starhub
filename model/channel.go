@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 
@@ -16,6 +17,8 @@ import (
 )
 
 var ErrChannelNotFound = errors.New("channel not found")
+var ErrResourceGatewayManagedChannel = errors.New("resource-gateway managed channels do not support direct model append")
+var ErrInvalidChannelModel = errors.New("channel model must contain 1 to 128 characters and cannot contain commas or newlines")
 
 // Multi-key channels store several upstream keys in Key (newline separated)
 // and pick one per request according to KeyMode.
@@ -96,6 +99,54 @@ func UpdateChannel(c *Channel) error {
 		_, err = ensureChannelModelMetadata(tx, SplitList(c.Models))
 		return err
 	})
+}
+
+// AppendChannelModel adds one model without replacing the channel's existing model list.
+func AppendChannelModel(channelID int64, name string) (bool, error) {
+	name = strings.TrimSpace(name)
+	if channelID <= 0 || name == "" || utf8.RuneCountInString(name) > 128 || strings.ContainsAny(name, ",\r\n") {
+		return false, ErrInvalidChannelModel
+	}
+	added := false
+	err := mutateChannelConfiguration(func(tx *gorm.DB) error {
+		var ch Channel
+		if err := tx.First(&ch, "id = ?", channelID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrChannelNotFound
+			}
+			return err
+		}
+		var managed int64
+		if err := tx.Model(&ResourceGatewayManagedChannel{}).Where("channel_id = ?", channelID).Count(&managed).Error; err != nil {
+			return err
+		}
+		if managed > 0 {
+			return ErrResourceGatewayManagedChannel
+		}
+		models := SplitList(ch.Models)
+		for _, existing := range models {
+			if existing == name {
+				return nil
+			}
+		}
+		ch.Models = strings.Join(append(models, name), ",")
+		ch.pruneModelCapabilities()
+		if err := validateTaskPluginChannel(tx, &ch); err != nil {
+			return fmt.Errorf("%w: %v", ErrTaskPluginConfiguration, err)
+		}
+		if err := tx.Model(&Channel{}).Where("id = ?", channelID).Update("models", ch.Models).Error; err != nil {
+			return err
+		}
+		if err := addModelAbilities(tx, &ch, []string{name}); err != nil {
+			return err
+		}
+		if _, err := ensureChannelModelMetadata(tx, []string{name}); err != nil {
+			return err
+		}
+		added = true
+		return nil
+	})
+	return added, err
 }
 
 // Capability hints belong only to explicitly configured Ark models, never to authorization or pricing.

@@ -245,6 +245,48 @@ func ResourcePlatformProbe(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, map[string]any{"success": result.OK, "ok": result.OK, "time": float64(result.ElapsedMs) / 1000, "elapsed_ms": result.ElapsedMs, "status": result.HTTPStatus})
 }
 
+func ResourcePlatformAppendChannelModel(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var body struct {
+		Model string `json:"model"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		common.ApiError(w, http.StatusBadRequest, "invalid channel model body")
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		common.ApiError(w, http.StatusBadRequest, "unexpected trailing channel model data")
+		return
+	}
+	added, err := model.AppendChannelModel(id, body.Model)
+	if errors.Is(err, model.ErrChannelNotFound) {
+		common.ApiError(w, http.StatusNotFound, "channel not found")
+		return
+	}
+	if errors.Is(err, model.ErrResourceGatewayManagedChannel) {
+		common.ApiError(w, http.StatusConflict, err.Error())
+		return
+	}
+	if errors.Is(err, model.ErrInvalidChannelModel) {
+		common.ApiError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, model.ErrTaskPluginConfiguration) {
+			status = http.StatusBadRequest
+		}
+		common.ApiError(w, status, err.Error())
+		return
+	}
+	common.ApiSuccess(w, map[string]any{"channel_id": id, "model": strings.TrimSpace(body.Model), "added": added})
+}
+
 func ResourcePlatformCatalog(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/api/channel/models/changes" {
 		since, err := strconv.ParseInt(r.URL.Query().Get("since_revision"), 10, 64)

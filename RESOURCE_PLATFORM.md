@@ -116,6 +116,48 @@ Stateful continuations retain their existing pinning behavior.
 
 ## Synchronization and diagnostics
 
+### Restricted channel model append
+
+`POST /api/resource-platform/channels/{id}/models` is the resource-service
+write operation. It uses the dedicated service credential and accepts
+`{"model":"..."}`. The operation atomically appends and deduplicates one model,
+preserving the channel's existing models and groups, then creates abilities
+for the channel's current groups. It cannot create channels or change
+credentials. Model names are limited to 128 Unicode characters. Resource
+Gateway managed channels are rejected because their published route records
+require a separate workflow. The gateway mTLS egress allowlist admits this
+POST route shape and separately allows `GET /api/channel/test/{id}` for the
+service probe.
+
+The resource service stores a separate entry ID and reuses it for repeated
+submissions. It probes the specific channel/model pair and pulls the resulting
+catalog through the existing synchronization path. Probe failure is reported
+independently and does not disable the model; an enabled channel can route the
+model under current admission rules. The service does not create channels or
+handle provider credentials.
+
+### Resource entry request and recovery contract
+
+The sibling resource service writes through this idempotent POST, then probes
+the exact channel/model pair through `GET /api/channel/test/{id}?model=...`.
+The GET compatibility route is dispatched to the Resource Platform probe
+handler and requires the dedicated service credential; it does not use the
+admin-only browser test route and does not apply customer traffic isolation.
+The append response and probe response fields are decoded by the resource
+client. Resource persists probe work as pending/running/completed and recovers
+interrupted probes from its database. Catalog import remains resource-side and
+asynchronous after this StarHub append succeeds.
+
+The channel identifier must be treated as a canonical decimal string by the
+resource side because StarHub catalog exports numeric channel IDs, which the
+resource importer formats in canonical decimal form. The resource service
+normalizes parsed IDs before persistence and requests so entry lookup matches
+the later catalog row. StarHub's append operation remains idempotent, allowing
+the resource service to retry after an interrupted or uncertain request.
+Resource and StarHub cannot share a database transaction; an absent HTTP
+response can leave the caller uncertain whether the append committed. This is
+handled by idempotent retry rather than claiming cross-service atomicity.
+
 All `/api/metric/*`, catalog-export, and platform probe endpoints require the
 dedicated service credential. The full and incremental catalog endpoints
 retain 128 durable revisions; an unavailable revision returns HTTP 409 so

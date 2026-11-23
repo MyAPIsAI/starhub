@@ -18,10 +18,11 @@ Certificate lifetime and purpose are verified in both directions, including
 resumed sessions. System HTTP proxy variables are not inherited.
 
 The gateway role allows only the existing service metric, snapshot, catalog,
-and isolated channel-probe routes. The resource role allows only catalog,
-protection, hard-failure, observation and attempt-metadata POST routes. Customer
-relay and management routes are unavailable. Redirects are rejected, encoded or
-unclean paths are rejected, and untrusted forwarding headers are replaced.
+isolated channel-probe routes, and the append-model service route. The resource
+role allows only catalog, protection, hard-failure, observation and
+attempt-metadata POST routes. Customer relay and management routes are
+unavailable. Redirects are rejected, encoded or unclean paths are rejected,
+and untrusted forwarding headers are replaced.
 Bearer headers and existing node headers continue to reach the backend.
 
 The certificate URI identifies the service peer. Backend source credentials,

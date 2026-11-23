@@ -45,7 +45,16 @@ func allowed(role, method, route string) bool {
 	}
 	if role == "gateway" {
 		if method == http.MethodPost {
-			return route == "/api/metric/runtime/summary"
+			if route == "/api/metric/runtime/summary" {
+				return true
+			}
+			const prefix = "/api/resource-platform/channels/"
+			if strings.HasSuffix(route, "/models") && strings.HasPrefix(route, prefix) {
+				id := strings.TrimSuffix(strings.TrimPrefix(route, prefix), "/models")
+				number, err := strconv.ParseInt(id, 10, 64)
+				return err == nil && number > 0
+			}
+			return false
 		}
 		if method != http.MethodGet {
 			return false
