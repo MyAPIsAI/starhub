@@ -115,9 +115,9 @@ export function ResourceBindingChangeDialog({
       title={
         review?.operation === "release"
           ? text(
-              "确认释放来源绑定",
-              "Confirm source binding release",
-              "تأكيد تحرير رابط المصدر",
+              "确认释放绑定并恢复普通调用",
+              "Confirm release and restore ordinary routing",
+              "تأكيد تحرير الربط واستعادة التوجيه العادي",
             )
           : text(
               "确认撤销托管路由",
@@ -158,9 +158,9 @@ export function ResourceBindingChangeDialog({
           >
             {review?.operation === "release"
               ? text(
-                  "确认释放绑定",
-                  "Confirm binding release",
-                  "تأكيد تحرير الرابط",
+                  "释放并恢复普通调用",
+                  "Release and restore routing",
+                  "تحرير واستعادة التوجيه",
                 )
               : text(
                   "确认撤销路由",
@@ -195,9 +195,9 @@ export function ResourceBindingChangeDialog({
           <p>
             {review.operation === "release"
               ? text(
-                  "清除该渠道的全部托管路线及能力，并释放来源归属，允许之后显式绑定其他渠道。目标渠道保留保护记录，不恢复旧的模型/分组权限。",
-                  "Clear all managed routes and abilities on this channel and release source ownership for a later explicit binding elsewhere. The target retains a protective marker; legacy model/group grants do not return.",
-                  "يمسح هذا جميع المسارات والقدرات المُدارة للقناة ويحرر ملكية المصدر لربط صريح لاحق في موضع آخر. يحتفظ الهدف بعلامة وقائية ولا تعود صلاحيات النماذج والمجموعات القديمة.",
+                  "解除该渠道的托管绑定，按渠道当前配置的全部模型和分组恢复普通路由授权，范围可能大于本次已发布的组合。渠道及单模型停用设置继续生效；已删除的渠道不会重建。完成后此记录退出托管绑定列表，可在渠道管理中查看普通渠道。",
+                  "Remove managed ownership and restore ordinary routing for all models and groups currently configured on this channel, which may exceed the published pairs. Channel and model disable settings remain in effect; deleted channels are not recreated. The entry leaves this managed list; view the ordinary channel in channel management.",
+                  "أزل الربط المُدار واستعد التوجيه العادي لجميع نماذج القناة ومجموعاتها الحالية، وقد يتجاوز ذلك الأزواج المنشورة. تبقى إعدادات تعطيل القناة والنماذج سارية ولا تُعاد القنوات المحذوفة. يخرج السجل من قائمة الروابط المُدارة وتبقى القناة في إدارة القنوات.",
                 )
               : text(
                   "清除该渠道的全部托管路线及能力；保留来源归属。后续请求将不能使用这些路线，恢复须重新预览并明确发布。",

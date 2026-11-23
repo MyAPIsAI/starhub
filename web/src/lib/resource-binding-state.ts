@@ -24,6 +24,7 @@ export interface ResourceBindingState {
   bindings: ResourceBindingStatus[];
   read_only: true;
   binding_changes_available?: boolean;
+  release_restores_ordinary_routing?: boolean;
 }
 const object = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -47,6 +48,8 @@ export function readResourceBindingState(
     value.read_only !== true ||
     (value.binding_changes_available !== undefined &&
       typeof value.binding_changes_available !== "boolean") ||
+    (value.release_restores_ordinary_routing !== undefined &&
+      typeof value.release_restores_ordinary_routing !== "boolean") ||
     !integer(value.resource_revision) ||
     !integer(value.channel_revision) ||
     !integer(value.option_version) ||

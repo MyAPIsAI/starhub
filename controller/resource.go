@@ -46,12 +46,13 @@ func GetResourceBindingState(w http.ResponseWriter, r *http.Request) {
 
 func ChangeResourceBinding(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		ResourceRevision *int64 `json:"expected_resource_revision"`
-		ChannelRevision  *int64 `json:"expected_channel_revision"`
-		SourceChannelID  string `json:"expected_source_channel_id"`
-		PublicationID    string `json:"expected_publication_id"`
-		Operation        string `json:"operation"`
-		RequestID        string `json:"request_id"`
+		ResourceRevision       *int64 `json:"expected_resource_revision"`
+		ChannelRevision        *int64 `json:"expected_channel_revision"`
+		SourceChannelID        string `json:"expected_source_channel_id"`
+		PublicationID          string `json:"expected_publication_id"`
+		Operation              string `json:"operation"`
+		RequestID              string `json:"request_id"`
+		RestoreOrdinaryRouting bool   `json:"restore_ordinary_routing"`
 	}
 	if !decodeResourceBody(w, r, &request) {
 		return
@@ -61,7 +62,7 @@ func ChangeResourceBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actorID, _ := r.Context().Value(common.CtxUserID).(int64)
-	receipt, err := model.ChangeResourceBinding(r.Context(), r.PathValue("id"), model.ResourceBindingChangeRequest{ResourceRevision: *request.ResourceRevision, ChannelRevision: *request.ChannelRevision, SourceChannelID: request.SourceChannelID, PublicationID: request.PublicationID, Operation: request.Operation, RequestID: request.RequestID}, actorID)
+	receipt, err := model.ChangeResourceBinding(r.Context(), r.PathValue("id"), model.ResourceBindingChangeRequest{ResourceRevision: *request.ResourceRevision, ChannelRevision: *request.ChannelRevision, SourceChannelID: request.SourceChannelID, PublicationID: request.PublicationID, Operation: request.Operation, RequestID: request.RequestID, RestoreOrdinaryRouting: request.RestoreOrdinaryRouting}, actorID)
 	if err != nil {
 		writeResourceResult(w, nil, err)
 		return

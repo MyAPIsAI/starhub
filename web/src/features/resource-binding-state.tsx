@@ -249,9 +249,9 @@ export function ResourceBindingList({
       )}
       <p>
         {text(
-          "已存组合是当前保留的路线数；路由条件通过数还核对渠道启用、能力、分组身份及已配置倍率。它不代表具体用户授权、余额、请求上下文或供应商健康检查通过。撤销后仍保留来源绑定，已释放的渠道仍保留防止旧权限恢复的记录。",
-          "Stored pairs count retained routes. Route-eligible pairs also pass channel, ability, group identity and configured ratio checks. They do not prove user authorization, balance, request context or provider health. Revoked bindings retain source ownership; released channels retain a marker that prevents legacy grants from returning.",
-          "تحصي الأزواج المخزنة المسارات المحتفظ بها. تجتاز الأزواج المؤهلة أيضًا فحوص القناة والقدرة وهوية المجموعة والمعامل المحدد. لا تثبت صلاحية المستخدم أو الرصيد أو سياق الطلب أو سلامة المزود. تحتفظ الروابط الملغاة بملكية المصدر، وتحتفظ القنوات المحررة بعلامة تمنع عودة الصلاحيات القديمة.",
+          "已存组合是当前保留的托管路线数；路由条件通过数不代表用户授权、余额或上游健康检查通过。撤销会停止托管路由并保留来源；释放会按渠道当前模型和分组配置恢复普通调用，并从此表移除。旧版已释放记录可点击“恢复普通调用”。",
+          "Stored pairs count managed routes; route eligibility does not prove user authorization, balance or upstream health. Revoke stops managed routing and retains ownership. Release restores ordinary routing from the current channel configuration and removes the entry. Previously released entries can use Restore ordinary routing.",
+          "تحصي الأزواج المخزنة المسارات المُدارة ولا تثبت صلاحية المستخدم أو الرصيد أو سلامة المزود. يوقف الإلغاء التوجيه المُدار مع حفظ المصدر. يعيد التحرير التوجيه العادي حسب إعدادات القناة الحالية ويحذف السجل. يمكن استعادة التوجيه العادي للسجلات المحررة سابقًا.",
         )}
       </p>
       {actionError && <p role="alert">{actionError}</p>}
@@ -272,9 +272,9 @@ export function ResourceBindingList({
           <p>
             {receipt.operation === "release"
               ? text(
-                  "已提交释放绑定",
-                  "Binding release committed",
-                  "اعتُمد تحرير الرابط",
+                  "已解除托管，恢复按渠道配置进行普通路由",
+                  "Managed ownership removed; ordinary routing restored from channel configuration",
+                  "أزيل الربط المُدار واستُعيد التوجيه العادي حسب إعدادات القناة",
                 )
               : text(
                   "已提交撤销路由",
@@ -293,9 +293,9 @@ export function ResourceBindingList({
           </p>
           <p>
             {text(
-              "这是历史提交事实；当前状态请以服务器最新成功读取结果为准。不会自动重新发布或恢复旧权限。",
-              "This proves a historical commit. Verify current state with a successful server read. It does not republish or restore legacy grants automatically.",
-              "يثبت هذا اعتمادًا تاريخيًا. تحقق من الحالة الحالية بقراءة ناجحة من الخادم. لا يحدث نشر أو استعادة للصلاحيات القديمة تلقائيًا.",
+              "这是历史提交事实；当前状态请以服务器最新读取结果为准。普通调用仍受渠道启用状态、用户和密钥授权等条件约束。",
+              "This proves a historical commit. Check current server state. Ordinary calls still require an enabled channel and valid user and token authorization.",
+              "يثبت هذا اعتمادًا تاريخيًا. تحقق من حالة الخادم الحالية. تتطلب الاستدعاءات العادية قناة مفعلة وصلاحيات مستخدم ومفتاح سارية.",
             )}
           </p>
         </div>
@@ -325,6 +325,16 @@ export function ResourceBindingList({
               )}
             </p>
           )}
+          {state.binding_changes_available === true &&
+            state.release_restores_ordinary_routing !== true && (
+              <p role="status">
+                {text(
+                  "当前服务器尚不支持释放后恢复普通调用，请更新后端后再操作。",
+                  "This server does not support restoring ordinary routing on release. Update the backend first.",
+                  "لا يدعم هذا الخادم استعادة التوجيه العادي عند التحرير. حدّث الخادم أولًا.",
+                )}
+              </p>
+            )}
           <p className="rp-versions">
             {text("资源", "Resources", "الموارد")} v{state.resource_revision} ·{" "}
             {text("渠道", "Channels", "القنوات")} v{state.channel_revision} ·{" "}
@@ -412,9 +422,9 @@ export function ResourceBindingList({
                     <td>
                       {!row.source_channel_id
                         ? text(
-                            "已释放，保留保护记录",
-                            "Released; protective marker retained",
-                            "محررة؛ العلامة الوقائية محفوظة",
+                            "旧版已释放，普通调用尚未恢复",
+                            "Previously released; ordinary routing not restored",
+                            "محررة سابقًا؛ لم يُستعد التوجيه العادي",
                           )
                         : row.configured_active
                           ? text(
@@ -478,7 +488,10 @@ export function ResourceBindingList({
                               `Release binding: ${row.gateway_channel_id}`,
                               `تحرير الرابط: ${row.gateway_channel_id}`,
                             )}
-                            disabled={!changesEnabled}
+                            disabled={
+                              !changesEnabled ||
+                              state.release_restores_ordinary_routing !== true
+                            }
                             onClick={() => choose(row, "release")}
                           >
                             {text(
@@ -489,7 +502,19 @@ export function ResourceBindingList({
                           </Button>
                         </div>
                       ) : (
-                        "—"
+                        <Button
+                          disabled={
+                            !changesEnabled ||
+                            state.release_restores_ordinary_routing !== true
+                          }
+                          onClick={() => choose(row, "release")}
+                        >
+                          {text(
+                            "恢复普通调用",
+                            "Restore ordinary routing",
+                            "استعادة التوجيه العادي",
+                          )}
+                        </Button>
                       )}
                     </td>
                   </tr>
@@ -535,6 +560,7 @@ export function ResourceBindingList({
         onCommitted={(value) => {
           setReceipt(value);
           setReview(undefined);
+          if (value.operation === "release") setPage(1);
         }}
       />
     </section>

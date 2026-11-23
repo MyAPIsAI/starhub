@@ -30,7 +30,8 @@ export interface BindingChangeReceipt {
   created_at: number;
   historical: true;
   committed: true;
-  protective_marker_retained: true;
+  protective_marker_retained: boolean;
+  ordinary_routing_restored?: boolean;
 }
 const object = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -64,7 +65,9 @@ export function prepareBindingChange(
     state.resource_revision >= Number.MAX_SAFE_INTEGER ||
     state.channel_revision >= Number.MAX_SAFE_INTEGER ||
     !requestID(key) ||
-    !text(row.source_channel_id, 128) ||
+    !text(row.source_channel_id, 128, operation !== "release") ||
+    (operation === "release" &&
+      state.release_restores_ordinary_routing !== true) ||
     !text(row.profile, 64, false) ||
     !["revoke", "release"].includes(operation) ||
     !state.bindings.some((item) => JSON.stringify(item) === JSON.stringify(row))
@@ -88,7 +91,7 @@ export function bindingChangeRequest(review: BindingChangeReview) {
     !requestID(review.request_id) ||
     !id(review.row.gateway_channel_id) ||
     !(review.row.publication_id === "0" || id(review.row.publication_id)) ||
-    !text(review.row.source_channel_id, 128) ||
+    !text(review.row.source_channel_id, 128, review.operation !== "release") ||
     !["revoke", "release"].includes(review.operation)
   )
     return invalid();
@@ -99,6 +102,7 @@ export function bindingChangeRequest(review: BindingChangeReview) {
     expected_publication_id: review.row.publication_id,
     operation: review.operation,
     request_id: review.request_id,
+    ...(review.operation === "release" ? { restore_ordinary_routing: true } : {}),
   };
 }
 
@@ -111,7 +115,7 @@ export function readBindingChangeReceipt(value: unknown): BindingChangeReceipt {
     !id(value.gateway_channel_id) ||
     !(value.publication_id === "0" || id(value.publication_id)) ||
     !requestID(value.request_id) ||
-    !text(value.source_channel_id, 128) ||
+    !text(value.source_channel_id, 128, value.operation !== "release") ||
     !text(value.profile, 64, false) ||
     (value.operation !== "revoke" && value.operation !== "release") ||
     value.retained_source_channel_id !==
@@ -128,7 +132,12 @@ export function readBindingChangeReceipt(value: unknown): BindingChangeReceipt {
     !Number.isFinite(new Date(value.created_at * 1000).getTime()) ||
     value.historical !== true ||
     value.committed !== true ||
-    value.protective_marker_retained !== true
+    (value.ordinary_routing_restored !== undefined &&
+      typeof value.ordinary_routing_restored !== "boolean") ||
+    (value.ordinary_routing_restored === true &&
+      value.operation !== "release") ||
+    value.protective_marker_retained !==
+      (value.ordinary_routing_restored !== true)
   )
     return invalid();
   return value as unknown as BindingChangeReceipt;
@@ -141,6 +150,8 @@ export function bindingReceiptMatchesReview(
   return (
     receipt.request_id === review.request_id &&
     receipt.operation === review.operation &&
+    (review.operation !== "release" ||
+      receipt.ordinary_routing_restored === true) &&
     receipt.gateway_channel_id === review.row.gateway_channel_id &&
     receipt.source_channel_id === review.row.source_channel_id &&
     receipt.publication_id === review.row.publication_id &&

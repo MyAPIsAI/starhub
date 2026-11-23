@@ -22,7 +22,7 @@ func bindingChangeRequest(t *testing.T, id string, operation string) ResourceBin
 	}
 	for _, row := range state.Bindings {
 		if row.GatewayChannelID == id {
-			return ResourceBindingChangeRequest{ResourceRevision: state.ResourceRevision, ChannelRevision: state.ChannelRevision, SourceChannelID: row.SourceChannelID, PublicationID: row.PublicationID, Operation: operation, RequestID: strings.Repeat("a", 32)}
+			return ResourceBindingChangeRequest{ResourceRevision: state.ResourceRevision, ChannelRevision: state.ChannelRevision, SourceChannelID: row.SourceChannelID, PublicationID: row.PublicationID, Operation: operation, RestoreOrdinaryRouting: operation == "release", RequestID: strings.Repeat("a", 32)}
 		}
 	}
 	t.Fatal("binding missing")
@@ -48,11 +48,15 @@ func TestResourceBindingChangeRevokeAndReleaseAreAtomicAndHistorical(t *testing.
 			if operation == "release" {
 				retained = ""
 			}
-			if receipt.Operation != operation || receipt.ActorID != "9" || receipt.SourceChannelID != bindings[0].SourceChannelID || receipt.RetainedSourceChannelID != retained || receipt.PublicationID != ack.PublicationID || receipt.RemovedRouteCount != 2 || receipt.RemovedAbilityCount != 2 || receipt.ResourceRevision != before.Catalog.Revision+1 || receipt.ChannelRevision != before.ChannelRevision+1 || !receipt.WasConfiguredActive || !receipt.Historical || !receipt.Committed || !receipt.ProtectiveMarkerRetained {
+			if receipt.Operation != operation || receipt.ActorID != "9" || receipt.SourceChannelID != bindings[0].SourceChannelID || receipt.RetainedSourceChannelID != retained || receipt.PublicationID != ack.PublicationID || receipt.RemovedRouteCount != 2 || receipt.RemovedAbilityCount != 2 || receipt.ResourceRevision != before.Catalog.Revision+1 || receipt.ChannelRevision != before.ChannelRevision+1 || !receipt.WasConfiguredActive || !receipt.Historical || !receipt.Committed || receipt.ProtectiveMarkerRetained != (operation == "revoke") || receipt.OrdinaryRoutingRestored != (operation == "release") {
 				t.Fatalf("incorrect receipt: %+v", receipt)
 			}
 			after := publicationDatabaseSnapshot(t)
-			if len(after.BindingChanges) != 1 || len(after.Owners) != 1 || after.Owners[0].Active || after.Owners[0].SourceChannelID != retained || after.Owners[0].PublicationID != before.Owners[0].PublicationID || len(after.Routes) != 0 || len(after.Abilities) != 0 || !reflect.DeepEqual(before.Channels, after.Channels) || !reflect.DeepEqual(before.Catalog.Snapshot, after.Catalog.Snapshot) || !reflect.DeepEqual(before.Catalog.Placements, after.Catalog.Placements) {
+			expectedOwners, expectedAbilities := 1, 0
+			if operation == "release" {
+				expectedOwners, expectedAbilities = 0, 4
+			}
+			if len(after.BindingChanges) != 1 || len(after.Owners) != expectedOwners || (operation == "revoke" && (after.Owners[0].Active || after.Owners[0].SourceChannelID != retained || after.Owners[0].PublicationID != before.Owners[0].PublicationID)) || len(after.Routes) != 0 || len(after.Abilities) != expectedAbilities || !reflect.DeepEqual(before.Channels, after.Channels) || !reflect.DeepEqual(before.Catalog.Snapshot, after.Catalog.Snapshot) || !reflect.DeepEqual(before.Catalog.Placements, after.Catalog.Placements) {
 				t.Fatalf("partial or excessive mutation: %+v", after)
 			}
 			if again, err := ReadResourceBindingChange(context.Background(), request.RequestID); err != nil || !reflect.DeepEqual(receipt, again) {
@@ -82,14 +86,22 @@ func TestResourceBindingChangeRevokeAndReleaseAreAtomicAndHistorical(t *testing.
 			if err := UpdateChannelStatus(ch.ID, common.ChannelStatusEnabled); err != nil {
 				t.Fatal(err)
 			}
-			assertGatewayPairs(t, ch.ID, false)
+			if operation == "revoke" {
+				assertGatewayPairs(t, ch.ID, false)
+			} else if got, err := ListModelsByGroup("default"); err != nil || !reflect.DeepEqual(got, []string{"alpha", "beta"}) {
+				t.Fatalf("ordinary model discovery not restored: %v %v", got, err)
+			}
 			if err := DeleteChannel(ch.ID); err != nil {
 				t.Fatal(err)
 			}
 			if err := InsertChannel(ch); err != nil {
 				t.Fatal(err)
 			}
-			assertGatewayPairs(t, ch.ID, false)
+			if operation == "revoke" {
+				assertGatewayPairs(t, ch.ID, false)
+			} else if got, err := ListModelsByGroup("default"); err != nil || !reflect.DeepEqual(got, []string{"alpha", "beta"}) {
+				t.Fatalf("ordinary model discovery not restored: %v %v", got, err)
+			}
 			if _, err := ChangeResourceBinding(context.Background(), bindings[0].GatewayChannelID, request, 9); !errors.Is(err, ErrResourceConflict) {
 				t.Fatalf("replay reapplied: %v", err)
 			}
@@ -106,7 +118,7 @@ func TestResourceBindingChangeRevokeAndReleaseAreAtomicAndHistorical(t *testing.
 func TestResourceBindingChangeCanReduceAccessWithoutReadablePricingOrInventory(t *testing.T) {
 	_, _, bindings := publicationFixture(t)
 	publishReviewedFixture(t, bindings)
-	request := bindingChangeRequest(t, bindings[0].GatewayChannelID, "release")
+	request := bindingChangeRequest(t, bindings[0].GatewayChannelID, "revoke")
 	if err := DB.Model(&ResourceCatalogRecord{}).Where("id = 1").Update("snapshot", "corrupt snapshot").Error; err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +129,7 @@ func TestResourceBindingChangeCanReduceAccessWithoutReadablePricingOrInventory(t
 		t.Fatal(err)
 	}
 	result, err := ChangeResourceBinding(context.Background(), bindings[0].GatewayChannelID, request, 9)
-	if err != nil || result.RetainedSourceChannelID != "" || result.RemovedRouteCount != 2 {
+	if err != nil || result.RetainedSourceChannelID != bindings[0].SourceChannelID || result.RemovedRouteCount != 2 {
 		t.Fatalf("unrelated read state blocked access reduction: %+v %v", result, err)
 	}
 	var catalog ResourceCatalogRecord
@@ -125,7 +137,7 @@ func TestResourceBindingChangeCanReduceAccessWithoutReadablePricingOrInventory(t
 		t.Fatal("reduction rewrote inventory")
 	}
 	var owner ResourceGatewayManagedChannel
-	if err := DB.First(&owner, "channel_id = ?", bindings[0].GatewayChannelID).Error; err != nil || owner.Active || owner.SourceChannelID != "" {
+	if err := DB.First(&owner, "channel_id = ?", bindings[0].GatewayChannelID).Error; err != nil || owner.Active || owner.SourceChannelID != bindings[0].SourceChannelID {
 		t.Fatal("protective ownership lost")
 	}
 	for _, table := range []any{&Ability{}, &ResourceGatewayRoute{}} {
@@ -163,8 +175,8 @@ func TestResourceBindingChangeReleaseAllowsOnlyExplicitRepublishToAnotherGateway
 	if err := RebuildAbilities(old); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := GetSatisfiedChannelPreferred("default", "alpha", nil, old.ID); err != nil || got.ID != next.ID {
-		t.Fatalf("released target inherited grants: %+v %v", got, err)
+	if got, err := GetSatisfiedChannelPreferred("default", "alpha", nil, old.ID); err != nil || got.ID != old.ID {
+		t.Fatalf("released target did not restore ordinary grants: %+v %v", got, err)
 	}
 }
 
@@ -314,7 +326,9 @@ func TestResourceBindingChangeRestartOrphanReleaseAndCorruptReceipt(t *testing.T
 	if err := InsertChannel(ch); err != nil {
 		t.Fatal(err)
 	}
-	assertGatewayPairs(t, ch.ID, false)
+	if got, err := ListModelsByGroup("default"); err != nil || !reflect.DeepEqual(got, []string{"alpha", "beta"}) {
+		t.Fatalf("released channel recreation did not restore ordinary models: %v %v", got, err)
+	}
 	if _, err := ReadResourceBindingChange(context.Background(), strings.Repeat("b", 32)); !errors.Is(err, ErrResourceBindingChangeNotFound) {
 		t.Fatalf("missing receipt: %v", err)
 	}

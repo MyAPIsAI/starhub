@@ -12,6 +12,7 @@ import (
 
 // Managed rows are durable ownership markers. Revocation never removes the marker,
 // so ordinary channel rebuilds and same-ID recreation cannot restore legacy grants.
+// Explicit release removes ownership and rebuilds ordinary channel grants.
 type ResourceGatewayManagedChannel struct {
 	ChannelID       int64  `gorm:"primaryKey;autoIncrement:false"`
 	SourceChannelID string `gorm:"size:128;not null"`

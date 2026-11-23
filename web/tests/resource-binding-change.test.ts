@@ -18,6 +18,7 @@ const state = (): ResourceBindingState => ({
   total: 1,
   read_only: true,
   binding_changes_available: true,
+  release_restores_ordinary_routing: true,
   bindings: [
     {
       gateway_channel_id: "9007199254740993",
@@ -64,7 +65,8 @@ const receipt = (operation: BindingChangeReview["operation"] = "release") => ({
   created_at: 1793232000,
   historical: true,
   committed: true,
-  protective_marker_retained: true,
+  protective_marker_retained: operation === "revoke",
+  ordinary_routing_restored: operation === "release",
 });
 
 describe("guarded binding reduction commands and receipts", () => {
@@ -76,6 +78,7 @@ describe("guarded binding reduction commands and receipts", () => {
       expected_source_channel_id: "source",
       expected_publication_id: "9007199254740994",
       operation: "release",
+      restore_ordinary_routing: true,
       request_id: "a".repeat(32),
     });
     expect(command).not.toHaveProperty("actor_id");
@@ -129,7 +132,7 @@ describe("guarded binding reduction commands and receipts", () => {
       { operation: "delete" },
       { row: { ...value.bindings[0], gateway_channel_id: "01" } },
       { row: { ...value.bindings[0], publication_id: "01" } },
-      { row: { ...value.bindings[0], source_channel_id: "" } },
+      { row: { ...value.bindings[0], source_channel_id: " " } },
     ])
       expect(() =>
         bindingChangeRequest({ ...review(), ...change } as BindingChangeReview),
@@ -169,7 +172,7 @@ describe("guarded binding reduction commands and receipts", () => {
       { publication_id: "01" },
       { operation: ["release"] },
       { operation: "delete" },
-      { source_channel_id: "" },
+      { source_channel_id: " " },
       { retained_source_channel_id: "source" },
       { profile: "x".repeat(65) },
       { was_configured_active: 1 },
@@ -180,7 +183,7 @@ describe("guarded binding reduction commands and receipts", () => {
       { created_at: Number.MAX_SAFE_INTEGER },
       { historical: false },
       { committed: false },
-      { protective_marker_retained: false },
+      { protective_marker_retained: true },
     ])
       expect(() =>
         readBindingChangeReceipt({ ...receipt(), ...change }),

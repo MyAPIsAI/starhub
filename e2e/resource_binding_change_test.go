@@ -41,7 +41,7 @@ func TestResourceBindingChangeActualPolicyAndGatewayRevocation(t *testing.T) {
 	ack := publish(id)
 	state := publicationAPIData[model.ResourceBindingState](t, doRequest(env.base, "GET", "/api/resource/publication-state", env.session, nil))
 	command := func(operation, requestID string) map[string]any {
-		return map[string]any{"expected_resource_revision": state.ResourceRevision, "expected_channel_revision": state.ChannelRevision, "expected_source_channel_id": "binding-source", "expected_publication_id": ack.PublicationID, "operation": operation, "request_id": requestID}
+		return map[string]any{"expected_resource_revision": state.ResourceRevision, "expected_channel_revision": state.ChannelRevision, "expected_source_channel_id": "binding-source", "expected_publication_id": ack.PublicationID, "operation": operation, "request_id": requestID, "restore_ordinary_routing": operation == "release"}
 	}
 	path := "/api/resource/bindings/" + strconv.FormatInt(id, 10)
 	requestID := strings.Repeat("a", 32)
@@ -114,13 +114,12 @@ func TestResourceBindingChangeActualPolicyAndGatewayRevocation(t *testing.T) {
 	ack = publish(id)
 	state = publicationAPIData[model.ResourceBindingState](t, doRequest(env.base, "GET", "/api/resource/publication-state", env.session, nil))
 	release := publicationAPIData[model.ResourceBindingChangeReceipt](t, doRequest(env.base, "PUT", path, session, command("release", strings.Repeat("b", 32))))
-	if release.RetainedSourceChannelID != "" || release.PublicationID != ack.PublicationID || release.Operation != "release" {
+	if release.RetainedSourceChannelID != "" || release.PublicationID != ack.PublicationID || release.Operation != "release" || !release.OrdinaryRoutingRestored || release.ProtectiveMarkerRetained {
 		t.Fatalf("release receipt: %+v", release)
 	}
-	deny()
 	current := publicationAPIData[model.ResourceBindingState](t, doRequest(env.base, "GET", "/api/resource/publication-state", env.session, nil))
-	if current.Bindings[0].SourceChannelID != "" || current.Bindings[0].ConfiguredActive || current.Bindings[0].RouteEligiblePairCount != 0 {
-		t.Fatal("release removed protective marker")
+	if len(current.Bindings) != 0 || current.Total != 0 {
+		t.Fatal("release retained managed ownership")
 	}
 	after, _ := model.GetUserByID(env.rootID)
 	keyAfter, _ := model.GetTokenByID(env.tokenID)
