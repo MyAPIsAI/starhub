@@ -15,20 +15,27 @@ import (
 const OptionKey = "upstream_protection"
 
 type Policy struct {
-	Enabled          bool `json:"enabled"`
-	Retry            bool `json:"retry"`
-	MaxAttempts      int  `json:"max_attempts"`
-	RetryWindow      int  `json:"retry_window_seconds"`
-	Failures         int  `json:"failure_threshold"`
-	OpenSeconds      int  `json:"open_seconds"`
-	MaxOpenSeconds   int  `json:"max_open_seconds"`
-	RateSeconds      int  `json:"rate_limit_seconds"`
-	IsolationSeconds int  `json:"isolation_seconds"`
-	ProbeConcurrency int  `json:"probe_concurrency"`
-	ProbeTimeout     int  `json:"probe_timeout_seconds"`
+	Enabled            bool   `json:"enabled"`
+	Retry              bool   `json:"retry"`
+	MaxAttempts        int    `json:"max_attempts"`
+	RetryWindow        int    `json:"retry_window_seconds"`
+	Failures           int    `json:"failure_threshold"`
+	OpenSeconds        int    `json:"open_seconds"`
+	MaxOpenSeconds     int    `json:"max_open_seconds"`
+	RateSeconds        int    `json:"rate_limit_seconds"`
+	IsolationSeconds   int    `json:"isolation_seconds"`
+	ProbeConcurrency   int    `json:"probe_concurrency"`
+	ProbeTimeout       int    `json:"probe_timeout_seconds"`
+	RetryStatusCodes   string `json:"retry_status_codes"`
+	NoRetryStatusCodes string `json:"no_retry_status_codes"`
 }
 
-func DefaultPolicy() Policy { return Policy{true, true, 4, 60, 5, 30, 300, 30, 900, 4, 30} }
+func DefaultPolicy() Policy {
+	return Policy{Enabled: true, Retry: true, MaxAttempts: 4, RetryWindow: 60,
+		Failures: 5, OpenSeconds: 30, MaxOpenSeconds: 300, RateSeconds: 30,
+		IsolationSeconds: 900, ProbeConcurrency: 4, ProbeTimeout: 30,
+		NoRetryStatusCodes: "400"}
+}
 
 var policyMu sync.RWMutex
 var currentPolicy = DefaultPolicy()
@@ -49,6 +56,16 @@ func NormalizePolicy(value string) (string, error) {
 	}
 	if p.MaxAttempts < 1 || p.MaxAttempts > 10 || p.RetryWindow < 1 || p.RetryWindow > 600 || p.Failures < 1 || p.Failures > 100 || p.OpenSeconds < 1 || p.MaxOpenSeconds < p.OpenSeconds || p.MaxOpenSeconds > 3600 || p.RateSeconds < 1 || p.RateSeconds > 86400 || p.IsolationSeconds < 60 || p.IsolationSeconds > 86400 || p.ProbeConcurrency < 1 || p.ProbeConcurrency > 16 || p.ProbeTimeout < 1 || p.ProbeTimeout > 120 {
 		return "", errors.New("invalid upstream protection policy")
+	}
+	for _, value := range []*string{&p.RetryStatusCodes, &p.NoRetryStatusCodes} {
+		if _, err := parseStatusCodes(*value); err != nil {
+			return "", err
+		}
+		parts := strings.Split(strings.ReplaceAll(*value, "，", ","), ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		*value = strings.Join(parts, ",")
 	}
 	b, err := json.Marshal(p)
 	return string(b), err
@@ -76,7 +93,20 @@ type Verdict struct {
 }
 
 // HTTP classifies provider errors before any response is committed downstream.
-func HTTP(status int, body []byte, retryAfter string, p Policy) Verdict {
+func HTTP(status int, body []byte, retryAfter string, p Policy) (verdict Verdict) {
+	// Status overrides change retry eligibility, never the protection scope.
+	defer func() {
+		if status < 400 || status > 599 {
+			return
+		}
+		denied, _ := parseStatusCodes(p.NoRetryStatusCodes)
+		allowed, _ := parseStatusCodes(p.RetryStatusCodes)
+		if denied[status] {
+			verdict.Retry = false
+		} else if allowed[status] {
+			verdict.Retry = true
+		}
+	}()
 	var envelope struct {
 		Error struct {
 			Code string `json:"code"`
@@ -112,6 +142,39 @@ func HTTP(status int, body []byte, retryAfter string, p Policy) Verdict {
 		return Verdict{Class: "upstream_failure", Scope: "interface", Retry: true}
 	}
 	return Verdict{Class: "request_rejected"}
+}
+
+// Accept explicit HTTP errors and inclusive ranges, such as 429,500-599.
+func parseStatusCodes(value string) (map[int]bool, error) {
+	result := map[int]bool{}
+	if len(value) > 2048 {
+		return nil, errors.New("status code list is too long")
+	}
+	if strings.TrimSpace(value) == "" {
+		return result, nil
+	}
+	for _, item := range strings.Split(strings.ReplaceAll(value, "，", ","), ",") {
+		parts := strings.Split(strings.TrimSpace(item), "-")
+		if len(parts) > 2 {
+			return nil, errors.New("expected HTTP status codes or ranges between 400 and 599")
+		}
+		bounds := []int{}
+		for _, part := range parts {
+			code, err := strconv.Atoi(part)
+			if err != nil || len(part) != 3 || code < 400 || code > 599 {
+				return nil, errors.New("expected HTTP status codes or ranges between 400 and 599")
+			}
+			bounds = append(bounds, code)
+		}
+		first, last := bounds[0], bounds[len(bounds)-1]
+		if first > last {
+			return nil, errors.New("status code range must be ascending")
+		}
+		for code := first; code <= last; code++ {
+			result[code] = true
+		}
+	}
+	return result, nil
 }
 
 func retryDelay(value string, fallback int) int {

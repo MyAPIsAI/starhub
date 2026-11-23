@@ -12,10 +12,12 @@ import { useSettingsText } from "./settings-text";
 import "./gateway-settings.css";
 import "./upstream-protection.css";
 
-type Policy = { enabled: boolean; retry: boolean } & Record<
-  string,
-  number | boolean
->;
+type Policy = {
+  enabled: boolean;
+  retry: boolean;
+  retry_status_codes: string;
+  no_retry_status_codes: string;
+} & Record<string, number | boolean | string>;
 type Snapshot = {
   version: number;
   value: string;
@@ -243,6 +245,20 @@ function useProtectionLabels() {
   return (value: string) => labels[value] ?? value ?? "—";
 }
 
+function validStatusCodes(value: string) {
+  if (value.length > 2048) return false;
+  if (!value.trim()) return true;
+  return value
+    .replaceAll("，", ",")
+    .split(",")
+    .every((item) => {
+      const token = item.trim();
+      if (!/^[45]\d{2}(-[45]\d{2})?$/.test(token)) return false;
+      const [first, last = first] = token.split("-").map(Number);
+      return first <= last;
+    });
+}
+
 export function UpstreamProtectionSettings() {
   const { text } = useSettingsText();
   const identity = useSessionQueryIdentity();
@@ -259,7 +275,14 @@ export function UpstreamProtectionSettings() {
   const [notice, setNotice] = useState("");
   const data = query.data;
   const values: Policy | null =
-    draft?.values ?? (data ? (JSON.parse(data.value) as Policy) : null);
+    draft?.values ??
+    (data
+      ? ({
+          retry_status_codes: "",
+          no_retry_status_codes: "400",
+          ...JSON.parse(data.value),
+        } as Policy)
+      : null);
   const save = useMutation({
     mutationFn: (input: NonNullable<typeof draft>) =>
       apiPut<{ applied: boolean }>("/api/option/upstream", {
@@ -297,7 +320,7 @@ export function UpstreamProtectionSettings() {
     window.addEventListener("beforeunload", protect);
     return () => window.removeEventListener("beforeunload", protect);
   }, [draft]);
-  const edit = (key: string, value: number | boolean) => {
+  const edit = (key: string, value: number | boolean | string) => {
     if (!data || !values) return;
     setNotice("");
     save.reset();
@@ -317,7 +340,9 @@ export function UpstreamProtectionSettings() {
         Number(values[key]) >= min &&
         Number(values[key]) <= max,
     ) &&
-    Number(values.max_open_seconds) >= Number(values.open_seconds);
+    Number(values.max_open_seconds) >= Number(values.open_seconds) &&
+    validStatusCodes(values.retry_status_codes) &&
+    validStatusCodes(values.no_retry_status_codes);
   return (
     <section className="gateway-panel upstream-panel">
       <h2>
@@ -413,7 +438,62 @@ export function UpstreamProtectionSettings() {
                 </div>
               </div>
             ))}
+            {(
+              [
+                [
+                  "retry_status_codes",
+                  text(
+                    "需要重试的状态码",
+                    "Retry status codes",
+                    "رموز الحالة لإعادة المحاولة",
+                  ),
+                  "401,429,500-599",
+                ],
+                [
+                  "no_retry_status_codes",
+                  text(
+                    "不重试的状态码",
+                    "Do not retry status codes",
+                    "رموز الحالة دون إعادة المحاولة",
+                  ),
+                  "400",
+                ],
+              ] as const
+            ).map(([key, label, placeholder]) => (
+              <div className="gateway-field" key={key}>
+                <label htmlFor={`upstream-${key}`}>{label}</label>
+                <div className="gateway-number">
+                  <input
+                    id={`upstream-${key}`}
+                    type="text"
+                    dir="ltr"
+                    maxLength={2048}
+                    value={values[key]}
+                    placeholder={placeholder}
+                    aria-invalid={!validStatusCodes(values[key])}
+                    aria-describedby="upstream-status-help"
+                    onChange={(event) => edit(key, event.target.value)}
+                  />
+                </div>
+                {!validStatusCodes(values[key]) && (
+                  <small role="alert">
+                    {text(
+                      "请输入 400–599 的状态码或升序范围，以逗号分隔。",
+                      "Enter codes or ascending ranges from 400 to 599, separated by commas.",
+                      "أدخل رموزًا أو نطاقات تصاعدية من 400 إلى 599 مفصولة بفواصل.",
+                    )}
+                  </small>
+                )}
+              </div>
+            ))}
           </fieldset>
+          <p id="upstream-status-help" className="gateway-rule">
+            {text(
+              "仅针对上游 HTTP 错误，支持 401,429,500-599；不重试优先。未列出的状态码沿用内置分类，需要重试留空表示不额外覆盖；默认 400 不重试。配置不改变熔断判定，重试仍受开关、预算及安全重放条件限制。",
+              "Applies to upstream HTTP errors. Use 401,429,500-599; do-not-retry takes precedence. Unlisted codes retain built-in classification; an empty retry list adds no overrides. By default, 400 is not retried. Protection classification is unchanged; retry switches, budgets and safe replay constraints still apply.",
+              "لأخطاء HTTP من المنبع فقط. استخدم 401,429,500-599؛ الأولوية لعدم إعادة المحاولة. الرموز غير المدرجة تتبع التصنيف المدمج والقائمة الفارغة لا تضيف تجاوزات. افتراضيًا لا تعاد محاولة 400. يبقى تصنيف الحماية وحدود المحاولات وشروط الإعادة الآمنة سارية.",
+            )}
+          </p>
           <p className="gateway-rule">
             {text(
               "重试预算仅限制新尝试，不截断已开始的响应。优先遵循上游冷却时间；凭证与额度隔离单独复查。配置由共享数据库同步。",
