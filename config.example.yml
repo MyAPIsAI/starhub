@@ -32,6 +32,8 @@ initial_options:
   user_rate_limit: 120
   token_rate_limit: 60
   model_rate_limit: 200
+  upstream_protection: '{"ordinary_fallback":true,"fallback_interval_seconds":30}'
+  channel_traffic_allocation: '{"rules":[]}'
 
 # Deployment environment:
 # The server loads .env from its working directory; nonempty process variables win.

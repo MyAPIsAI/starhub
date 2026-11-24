@@ -90,11 +90,16 @@ func recordRealtimeBusiness(ctx context.Context, captured *upstream.Attempt, rou
 		log.Printf("realtime business result persistence failed: %v", err)
 	}
 	if verdict.Class == "success" {
+		if route != nil && !route.OrdinaryFallback {
+			if err := model.RecordRoutingOutcome(route, true, status, 0, time.Now()); err != nil {
+				log.Printf("realtime routing success persistence failed: %v", err)
+			}
+		}
 		if err := model.RecoverFallbackRouting(route, &attempt, requestID, time.Now()); err != nil {
 			log.Printf("realtime fallback recovery failed: %v", err)
 		}
 	} else if verdict.Scope != "" {
-		if err := model.RecordRoutingOutcome(route, false, status, 0, time.Now()); err != nil {
+		if err := model.RecordRoutingOutcome(route, false, status, 0, time.Now(), true); err != nil {
 			log.Printf("realtime routing failure persistence failed: %v", err)
 		}
 	}

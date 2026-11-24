@@ -507,9 +507,9 @@ export function ChannelTrafficSettings() {
               </div>
               <p className="gateway-description">
                 {text(
-                  "优先级越大越优先，同优先级按权重分流；权重 0 表示不参与。预估未计入实时熔断与凭证状态，新增渠道默认不加入已保存规则。",
-                  "Higher priorities are preferred; equal priorities share traffic by weight. Zero weight excludes a channel. Estimates exclude live protection and credential state; new channels are not added automatically.",
-                  "تُفضّل الأولوية الأعلى وتوزّع الحركة بالأوزان عند تساويها. الوزن صفر يستبعد القناة. لا تشمل التقديرات الحماية وحالة الاعتماد الآنية ولا تضاف القنوات الجديدة تلقائيًا.",
+                  "优先级越大越优先，同优先级按权重分流；权重 0 不参与常规分流。启用普通渠道兜底时可突破本规则。预估未计入实时熔断与凭证状态，新增渠道默认不加入已保存规则。",
+                  "Higher priorities are preferred; equal priorities share traffic by weight. Zero weight excludes normal traffic; enabled ordinary fallback may bypass this rule. Estimates exclude live protection and credential state; new channels are not added automatically.",
+                  "تُفضّل الأولوية الأعلى وتوزّع الحركة بالأوزان عند تساويها. الوزن صفر يستبعد الحركة العادية، ويمكن للقنوات الاحتياطية تجاوز القاعدة عند تمكينها. لا تشمل التقديرات الحماية وحالة الاعتماد الآنية ولا تضاف القنوات الجديدة تلقائيًا.",
                 )}
               </p>
               {!!removed && (

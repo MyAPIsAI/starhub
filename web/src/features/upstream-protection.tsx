@@ -62,6 +62,14 @@ type Event = {
 };
 const fields = [
   [
+    "fallback_interval_seconds",
+    "受保护资源兜底最小间隔（秒）",
+    "Protected fallback minimum interval (seconds)",
+    "الحد الأدنى بين محاولات الاحتياط المحمية بالثواني",
+    1,
+    3600,
+  ],
+  [
     "max_attempts",
     "最多尝试次数（含首次）",
     "Maximum attempts (including first)",
@@ -335,6 +343,8 @@ export function UpstreamProtectionSettings() {
       ? ({
           retry_status_codes: "",
           no_retry_status_codes: "400",
+          ordinary_fallback: true,
+          fallback_interval_seconds: 30,
           ...JSON.parse(data.value),
         } as Policy)
       : null);
@@ -441,6 +451,14 @@ export function UpstreamProtectionSettings() {
             {(
               [
                 [
+                  "ordinary_fallback",
+                  text(
+                    "启用普通渠道兜底（允许突破流量规则）",
+                    "Enable ordinary fallback (bypass traffic rules)",
+                    "تمكين القنوات الاحتياطية مع تجاوز قواعد توزيع الحركة",
+                  ),
+                ],
+                [
                   "retry",
                   text(
                     "启用跨渠道重试",
@@ -542,6 +560,13 @@ export function UpstreamProtectionSettings() {
               </div>
             ))}
           </fieldset>
+          <p className="gateway-rule">
+            {text(
+              "普通兜底仅在正常及平台后备渠道耗尽后启用，使用渠道默认优先级和权重，允许选中流量规则中权重为 0 或未加入规则的渠道。关闭后不进入普通兜底。人工禁用和授权限制始终有效；商业模式等待首份路由快照。受保护资源按同一渠道凭证共享兜底间隔，429 冷却期间不调用。",
+              "Ordinary fallback runs after normal and platform candidates are exhausted. It uses channel defaults and may select zero-weight or unlisted channels. Disabling it removes this final stage. Manual denials and authorization remain enforced; commercial mode waits for its first routing snapshot. Protected fallback attempts share an interval per channel credential across replicas; 429 cooldowns are honored.",
+              "تعمل القنوات الاحتياطية بعد نفاد القنوات العادية واحتياط المنصة، باستخدام أوزان القنوات الافتراضية، وقد تختار قنوات بوزن صفر أو غير مدرجة. إيقافها يلغي هذه المرحلة. تبقى قيود التفويض والتعطيل اليدوي سارية وينتظر الوضع التجاري أول لقطة توجيه. تتشارك المحاولات المحمية فترة انتظار لكل اعتماد قناة عبر النسخ مع احترام تبريد 429.",
+            )}
+          </p>
           <p id="upstream-status-help" className="gateway-rule">
             {text(
               "仅针对上游 HTTP 错误，支持 401,429,500-599；不重试优先。未列出的状态码沿用内置分类，需要重试留空表示不额外覆盖；默认 400 不重试。配置不改变熔断判定，重试仍受开关、预算及安全重放条件限制。",

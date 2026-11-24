@@ -12,6 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"starhub/internal/traffic"
+	"starhub/internal/upstream"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -60,13 +63,15 @@ type fileConfig struct {
 		ForceSecureCookie *bool `yaml:"force_secure_cookie"`
 	} `yaml:"security"`
 	InitialOptions struct {
-		ChannelTestInterval *int64 `yaml:"channel_test_interval"`
-		TaskPollInterval    *int64 `yaml:"task_poll_interval"`
-		CookieSecure        *bool  `yaml:"cookie_secure"`
-		IPRateLimit         *int64 `yaml:"ip_rate_limit"`
-		UserRateLimit       *int64 `yaml:"user_rate_limit"`
-		TokenRateLimit      *int64 `yaml:"token_rate_limit"`
-		ModelRateLimit      *int64 `yaml:"model_rate_limit"`
+		UpstreamProtection       *string `yaml:"upstream_protection"`
+		ChannelTrafficAllocation *string `yaml:"channel_traffic_allocation"`
+		ChannelTestInterval      *int64  `yaml:"channel_test_interval"`
+		TaskPollInterval         *int64  `yaml:"task_poll_interval"`
+		CookieSecure             *bool   `yaml:"cookie_secure"`
+		IPRateLimit              *int64  `yaml:"ip_rate_limit"`
+		UserRateLimit            *int64  `yaml:"user_rate_limit"`
+		TokenRateLimit           *int64  `yaml:"token_rate_limit"`
+		ModelRateLimit           *int64  `yaml:"model_rate_limit"`
 	} `yaml:"initial_options"`
 }
 
@@ -171,6 +176,12 @@ func LoadStartup(args []string, getenv func(string) string) (Startup, error) {
 		addInt(OptionUserRateLimit, cfg.InitialOptions.UserRateLimit)
 		addInt(OptionTokenRateLimit, cfg.InitialOptions.TokenRateLimit)
 		addInt(OptionModelRateLimit, cfg.InitialOptions.ModelRateLimit)
+		if cfg.InitialOptions.UpstreamProtection != nil {
+			result.InitialOptions[upstream.OptionKey] = *cfg.InitialOptions.UpstreamProtection
+		}
+		if cfg.InitialOptions.ChannelTrafficAllocation != nil {
+			result.InitialOptions[traffic.OptionKey] = *cfg.InitialOptions.ChannelTrafficAllocation
+		}
 		if cfg.InitialOptions.CookieSecure != nil {
 			result.InitialOptions[OptionCookieSecure] = strconv.FormatBool(*cfg.InitialOptions.CookieSecure)
 		}

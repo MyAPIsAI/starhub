@@ -6,11 +6,43 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+// FallbackSlot limits protected production attempts across replicas sharing a database.
+type FallbackSlot struct {
+	ID          string `gorm:"primaryKey;size:64"`
+	NextAttempt int64
+}
+
+func (FallbackSlot) TableName() string { return "upstream_fallback_slots" }
+
+func claimFallback(tx *gorm.DB, identity Identity, p Policy) error {
+	id := identity.key("credential")
+	var slot FallbackSlot
+	err := tx.First(&slot, "id = ?", id).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	now := time.Now().Unix()
+	if slot.NextAttempt > now {
+		return ErrBlocked
+	}
+	return tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&FallbackSlot{ID: id, NextAttempt: now + int64(max(1, p.FallbackInterval))}).Error
+}
 
 // Only completed business responses enter this transaction, never handshakes.
 func recoverFallback(tx *gorm.DB, a *Attempt, requestID string, status int) error {
 	a.Recovered = map[string]uint64{}
+	// A successful fallback also breaks a run of failures below the open threshold.
+	for _, scope := range []string{"model", "interface"} {
+		id := a.Identity.key(scope)
+		if a.Failures[id] > 0 {
+			if err := tx.Model(&State{}).Where("id = ? AND version = ? AND open_until = 0", id, a.Versions[id]).Updates(map[string]any{"failures": 0, "reason": "recovered", "updated": time.Now().Unix()}).Error; err != nil {
+				return err
+			}
+		}
+	}
 	for id, version := range a.Protected {
 		eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(a.ID+":"+id+":recovery")).String()
 		var count int64

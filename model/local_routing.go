@@ -138,7 +138,7 @@ func ReadLocalRoutingState(item RouteItem) (LocalRoutingState, error) {
 
 // RecordRoutingOutcome fences successes by the failure generation captured at
 // selection. A late success cannot close a circuit opened by a newer failure.
-func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttft time.Duration, now time.Time) error {
+func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttft time.Duration, now time.Time, continueSession ...bool) error {
 	if attempt == nil {
 		return nil
 	}
@@ -146,7 +146,8 @@ func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttf
 		return nil
 	}
 	policy, threshold := localExecution(attempt.Item)
-	return withLocalRoutingWrite(&attempt.Item, func(tx *gorm.DB) error {
+	var recordedGeneration uint64
+	err := withLocalRoutingWrite(&attempt.Item, func(tx *gorm.DB) error {
 		state, err := readLocalRoutingState(tx, attempt.Item)
 		if err != nil {
 			return err
@@ -187,8 +188,17 @@ func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttf
 		if state == before {
 			return nil
 		}
-		return tx.Save(&state).Error
+		if err := tx.Save(&state).Error; err != nil {
+			return err
+		}
+		recordedGeneration = state.FailureGeneration
+		return nil
 	})
+	// A session may clear its own preceding failure, but never a later external failure.
+	if err == nil && !success && len(continueSession) > 0 && continueSession[0] && recordedGeneration > 0 {
+		attempt.FailureGeneration = recordedGeneration
+	}
+	return err
 }
 
 func updateRoutingLatency(state *LocalRoutingState, item RouteItem, policy routingExecution, threshold float64, ttft time.Duration, now time.Time) {

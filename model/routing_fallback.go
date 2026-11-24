@@ -12,6 +12,7 @@ import (
 
 	"starhub/common"
 	"starhub/internal/upstream"
+	"starhub/setting"
 )
 
 type RoutingStage uint8
@@ -48,7 +49,7 @@ func ordinaryPlatformAdmission(ch *Channel, name string) (bool, string) {
 	routingSnapshotState.RLock()
 	defer routingSnapshotState.RUnlock()
 	if routingSnapshotState.snapshot == nil {
-		return true, "snapshot_unavailable"
+		return !setting.IsCommercialMode(), "snapshot_unavailable"
 	}
 	overrides := []string{"platform_admission"}
 	for _, item := range routingSnapshotState.items {
@@ -97,6 +98,9 @@ func CaptureChannelAttempt(ctx context.Context, ch *Channel, group, name, key st
 	if ch.RuntimeStage != RoutingOrdinaryFallback {
 		attempt, err = upstream.Capture(DB.WithContext(ctx), identity, policy)
 	} else {
+		if !policy.OrdinaryFallback {
+			return nil, upstream.ErrBlocked
+		}
 		permit := ch.runtimeFallback
 		if permit == nil || permit.group != group || permit.model != name || permit.generation != ChannelEndpointGeneration(ch) {
 			return nil, upstream.ErrBlocked
@@ -141,6 +145,7 @@ func CaptureChannelAttempt(ctx context.Context, ch *Channel, group, name, key st
 		items := append([]RouteItem(nil), routingSnapshotState.items...)
 		routingSnapshotState.RUnlock()
 		var route *RoutingAttempt
+		platformProtected := false
 		for _, item := range items {
 			if item.ChannelID != strconv.FormatInt(ch.ID, 10) || item.ModelName != name || item.Protection == nil || item.Protection.EndpointGeneration != ChannelEndpointGeneration(&current) {
 				continue
@@ -152,10 +157,11 @@ func CaptureChannelAttempt(ctx context.Context, ch *Channel, group, name, key st
 			if state.OpenUntil > 0 {
 				overrides += fmt.Sprintf("; local:%s:v%d:%s", state.ResourceKey, state.FailureGeneration, state.LastCause)
 			}
+			platformProtected = state.OpenUntil > 0 || item.Protection.Mode != "allowed" && item.Protection.Mode != "review"
 			route = &RoutingAttempt{Item: item, FailureGeneration: state.FailureGeneration, OrdinaryFallback: true}
 			break
 		}
-		attempt, err = upstream.CaptureFallback(DB.WithContext(ctx), identity, policy)
+		attempt, err = upstream.CaptureFallback(DB.WithContext(ctx), identity, policy, platformProtected)
 		if err == nil {
 			ch.RuntimeRoute = route
 			BeginRoutingAttempt(route)

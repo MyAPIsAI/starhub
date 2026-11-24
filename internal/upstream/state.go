@@ -127,8 +127,23 @@ func Capture(db *gorm.DB, identity Identity, p Policy) (*Attempt, error) {
 
 // CaptureFallback preserves state versions and records overrides without
 // clearing circuits or changing the global policy.
-func CaptureFallback(db *gorm.DB, identity Identity, p Policy) (*Attempt, error) {
-	return capture(db, identity, p, true)
+func CaptureFallback(db *gorm.DB, identity Identity, p Policy, platformProtected ...bool) (*Attempt, error) {
+	if !p.OrdinaryFallback {
+		return nil, ErrBlocked
+	}
+	var attempt *Attempt
+	err := write(db, func(tx *gorm.DB) error {
+		var err error
+		attempt, err = capture(tx, identity, p, true)
+		if err != nil {
+			return err
+		}
+		if len(attempt.Protected) > 0 || len(platformProtected) > 0 && platformProtected[0] {
+			return claimFallback(tx, identity, p)
+		}
+		return nil
+	})
+	return attempt, err
 }
 
 func capture(db *gorm.DB, identity Identity, p Policy, fallback bool) (*Attempt, error) {
@@ -143,6 +158,9 @@ func capture(db *gorm.DB, identity Identity, p Policy, fallback bool) (*Attempt,
 	}
 	for _, state := range states {
 		if state.OpenUntil != 0 {
+			if fallback && state.Reason == "rate_limited" && state.OpenUntil > time.Now().Unix() {
+				return nil, ErrBlocked
+			}
 			if !fallback {
 				return nil, ErrBlocked
 			}

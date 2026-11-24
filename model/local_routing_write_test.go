@@ -6,6 +6,38 @@ import (
 	"time"
 )
 
+func TestRealtimeConsecutiveFailuresAndConcurrentFence(t *testing.T) {
+	scoredFixture(t, 1)
+	ch, err := GetSatisfiedChannel("default", "test-model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	route := ch.RuntimeRoute
+	for range 6 {
+		if err := RecordRoutingOutcome(route, false, 503, 0, time.Now(), true); err != nil {
+			t.Fatal(err)
+		}
+		if err := RecordRoutingOutcome(route, true, 200, 0, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := ReadLocalRoutingState(route.Item)
+	if err != nil || state.ConsecutiveFailures != 0 || state.OpenUntil != 0 {
+		t.Fatalf("intermittent errors opened protection: %+v %v", state, err)
+	}
+	other := *route
+	if err := RecordRoutingOutcome(&other, false, 503, 0, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := RecordRoutingOutcome(route, true, 200, 0, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	state, err = ReadLocalRoutingState(route.Item)
+	if err != nil || state.ConsecutiveFailures != 1 {
+		t.Fatalf("late success erased newer failure: %+v %v", state, err)
+	}
+}
+
 func TestLocalRoutingConcurrentFailuresSnapshotRefreshAndRestart(t *testing.T) {
 	_, snapshot := scoredFixture(t, 1)
 	ch, err := GetSatisfiedChannel("default", "test-model")

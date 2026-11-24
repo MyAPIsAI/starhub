@@ -15,6 +15,8 @@ import (
 const OptionKey = "upstream_protection"
 
 type Policy struct {
+	OrdinaryFallback   bool   `json:"ordinary_fallback"`
+	FallbackInterval   int    `json:"fallback_interval_seconds"`
 	Enabled            bool   `json:"enabled"`
 	Retry              bool   `json:"retry"`
 	MaxAttempts        int    `json:"max_attempts"`
@@ -31,7 +33,7 @@ type Policy struct {
 }
 
 func DefaultPolicy() Policy {
-	return Policy{Enabled: true, Retry: true, MaxAttempts: 4, RetryWindow: 60,
+	return Policy{OrdinaryFallback: true, FallbackInterval: 30, Enabled: true, Retry: true, MaxAttempts: 4, RetryWindow: 60,
 		Failures: 5, OpenSeconds: 30, MaxOpenSeconds: 300, RateSeconds: 30,
 		IsolationSeconds: 900, ProbeConcurrency: 4, ProbeTimeout: 30,
 		NoRetryStatusCodes: "400"}
@@ -66,6 +68,9 @@ func NormalizePolicy(value string) (string, error) {
 			parts[i] = strings.TrimSpace(parts[i])
 		}
 		*value = strings.Join(parts, ",")
+	}
+	if p.FallbackInterval < 1 || p.FallbackInterval > 3600 {
+		return "", errors.New("fallback interval must be between 1 and 3600 seconds")
 	}
 	b, err := json.Marshal(p)
 	return string(b), err

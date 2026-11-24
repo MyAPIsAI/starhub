@@ -124,6 +124,9 @@ func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int
 // GetScoredChannelStage lets callers exhaust every authorized group per stage.
 func GetScoredChannelStage(stage RoutingStage, group, name string, excluded map[int64]bool, preferred int64, hashKey string, text bool, compatible func(*Channel, string) (bool, error), profiles ...upstream.Profile) (*Channel, error) {
 	if stage == RoutingOrdinaryFallback {
+		if !upstream.CurrentPolicy().OrdinaryFallback {
+			return nil, ErrNoChannel
+		}
 		return getSatisfiedChannelTraffic(group, name, excluded, 0, "", nil, true, compatible, profiles...)
 	}
 	routingSnapshotState.RLock()
