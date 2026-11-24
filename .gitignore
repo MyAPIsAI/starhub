@@ -8,6 +8,7 @@ config.yml
 /.env-init-*
 /.env.docker*
 !/.env.docker.example
+!/.env.docker.resource.example
 web/node_modules/
 web/dist/
 web/test-results/

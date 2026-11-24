@@ -46,8 +46,10 @@ function Invoke-Docker([string[]]$DockerArguments) {
 }
 
 $composeArguments = @("compose", "--project-directory", $PSScriptRoot, "--env-file", $EnvFile, "-p", $ProjectName, "-f", (Join-Path $PSScriptRoot "docker-compose.yml"))
+$deploymentServices = @("starhub")
 if ($WithResource) {
     $composeArguments += @("-f", (Join-Path $PSScriptRoot "docker-compose.resource.yml"))
+    $deploymentServices += "resource"
 }
 $previousPlatform = $env:STARHUB_PLATFORM
 try {
@@ -70,9 +72,9 @@ try {
         return
     }
 
-    Write-Host "Updating StarHub and waiting for its database health check..." -ForegroundColor Cyan
-    Invoke-Docker ($composeArguments + @("up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "$WaitTimeout", "starhub"))
-    Invoke-Docker ($composeArguments + @("ps", "starhub"))
+    Write-Host "Updating $($deploymentServices -join ', ') and waiting for health checks..." -ForegroundColor Cyan
+    Invoke-Docker ($composeArguments + @("up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "$WaitTimeout") + $deploymentServices)
+    Invoke-Docker ($composeArguments + @("ps") + $deploymentServices)
     Write-Host "StarHub is healthy. The default URL is http://127.0.0.1:3008 (see your environment file for overrides)." -ForegroundColor Green
 } finally {
     if ($null -eq $previousPlatform) {

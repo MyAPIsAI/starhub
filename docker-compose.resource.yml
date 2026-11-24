@@ -1,19 +1,62 @@
-# Optional local resource integration. Start the resource Compose project first.
-# Production transport requirements are documented in RESOURCE_PLATFORM.md.
+# Merge with docker-compose.yml to deploy StarHub and its dedicated resource.
+# Use the same private environment file for both services.
 services:
   starhub:
     environment:
-      RESOURCE_CATALOG_NOTIFY_URL: ${RESOURCE_CATALOG_NOTIFY_URL:-http://resource-backend:3001}
+      RESOURCE_CATALOG_NOTIFY_URL: ${RESOURCE_CATALOG_NOTIFY_URL:-http://starhub-resource:3001}
       RESOURCE_CATALOG_NOTIFY_ENABLED: ${RESOURCE_CATALOG_NOTIFY_ENABLED:-1}
       METRIC_AUTHORIZATION: ${METRIC_AUTHORIZATION:-77b447834930dcc552eaa0d75d8673ea38ebf9c7ff78d922d2af790a6f4bce3e}
       ROUTING_PROTECTION_SOURCE: ${ROUTING_PROTECTION_SOURCE:-talen}
       ROUTING_OBSERVATION_V2_ENABLED: ${ROUTING_OBSERVATION_V2_ENABLED:-1}
+  resource:
+    image: ${RESOURCE_IMAGE:-resource:latest}
+    depends_on:
+      starhub:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "${RESOURCE_HOST_IP:-0.0.0.0}:${RESOURCE_HOST_PORT:-3009}:3001"
+    volumes:
+      - resource_data:/data
+      - type: bind
+        source: ${RESOURCE_COST_FILE:-./deploy/resource/cost_resources.json}
+        target: /etc/resource/cost_resources.json
+        read_only: true
+        bind:
+          create_host_path: false
+    environment:
+      PORT: "3001"
+      LISTEN_ADDRESS: 0.0.0.0
+      DEBUG: "false"
+      TZ: ${TZ:-Asia/Shanghai}
+      DATABASE_DRIVER: sqlite
+      DATABASE_PATH: /data/resource.db
+      DATABASE_SEED_ENABLED: "false"
+      DATABASE_MAX_OPEN_CONNS: "1"
+      DATABASE_MAX_IDLE_CONNS: "1"
+      DATABASE_CONN_MAX_LIFETIME: 0s
+      COST_DATA_PATH: /etc/resource/cost_resources.json
+      NEW_API_BASE_URL: ${NEW_API_BASE_URL:-http://starhub:3000}
+      # Resource expects a complete Authorization header; StarHub expects the raw token.
+      METRIC_AUTHORIZATION: "Bearer ${METRIC_AUTHORIZATION:?Set a dedicated token shared only by StarHub and its resource service}"
+      METRIC_SYNC_ENABLED: "true"
+      METRIC_TEST_ENABLED: "false"
+      ROUTING_OBSERVATION_V2_ENABLED: ${ROUTING_OBSERVATION_V2_ENABLED:-1}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3001/api/health | grep -q '\"status\":\"ok\"'"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
     networks:
       default:
-      resource-control:
-        aliases: [starhub-backend]
+        aliases: [starhub-resource, resource-backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-networks:
-  resource-control:
-    external: true
-    name: ${RESOURCE_NETWORK_NAME:-talen-resource-dev}
+volumes:
+  resource_data:

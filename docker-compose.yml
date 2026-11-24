@@ -28,8 +28,16 @@ services:
       STARHUB_TRUSTED_PROXIES: ${STARHUB_TRUSTED_PROXIES:-}
       STARHUB_ADMIN_IP_WHITELIST: ${STARHUB_ADMIN_IP_WHITELIST:-}
       STARHUB_REGION_PROFILE: ${STARHUB_REGION_PROFILE:-}
+      RESOURCE_CATALOG_NOTIFY_URL: ${RESOURCE_CATALOG_NOTIFY_URL:-http://starhub-resource:3001}
+      RESOURCE_CATALOG_NOTIFY_ENABLED: ${RESOURCE_CATALOG_NOTIFY_ENABLED:-1}
+      METRIC_AUTHORIZATION: ${METRIC_AUTHORIZATION:-77b447834930dcc552eaa0d75d8673ea38ebf9c7ff78d922d2af790a6f4bce3e}
+      ROUTING_PROTECTION_SOURCE: ${ROUTING_PROTECTION_SOURCE:-talen}
+      ROUTING_OBSERVATION_V2_ENABLED: ${ROUTING_OBSERVATION_V2_ENABLED:-1}
       NODE_NAME: ${NODE_NAME:-starhub-node-1}
       TZ: ${TZ:-Asia/Shanghai}
+    networks:
+      default:
+        aliases: [starhub-backend]
     healthcheck:
       # Check the database without waiting for a commercial routing snapshot.
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:3000/api/health"]
