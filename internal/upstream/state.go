@@ -68,20 +68,27 @@ type State struct {
 func (State) TableName() string { return "upstream_states" }
 
 type Event struct {
-	ID         string `gorm:"primaryKey;size:36" json:"id"`
-	RequestID  string `gorm:"index;size:128" json:"request_id"`
-	ChannelID  int64  `gorm:"index" json:"channel_id"`
-	Model      string `gorm:"size:256" json:"model"`
-	ResourceID string `gorm:"index;size:64" json:"resource_id"`
-	Kind       string `gorm:"size:16" json:"kind"`
-	Class      string `gorm:"size:64" json:"class"`
-	Status     int    `json:"status"`
-	Sent       bool   `json:"sent"`
-	Retry      bool   `json:"retry"`
-	Decision   string `gorm:"size:64" json:"decision"`
-	OpenUntil  int64  `json:"open_until"`
-	Created    int64  `gorm:"index" json:"created_at"`
-	Started    int64  `json:"started_at_ms"`
+	ID           string `gorm:"primaryKey;size:36" json:"id"`
+	RequestID    string `gorm:"index;size:128" json:"request_id"`
+	ChannelID    int64  `gorm:"index" json:"channel_id"`
+	Model        string `gorm:"size:256" json:"model"`
+	ResourceID   string `gorm:"index;size:64" json:"resource_id"`
+	Kind         string `gorm:"size:16" json:"kind"`
+	Class        string `gorm:"size:64" json:"class"`
+	Status       int    `json:"status"`
+	Sent         bool   `json:"sent"`
+	Retry        bool   `json:"retry"`
+	Decision     string `gorm:"size:64" json:"decision"`
+	OpenUntil    int64  `json:"open_until"`
+	Created      int64  `gorm:"index" json:"created_at"`
+	Started      int64  `json:"started_at_ms"`
+	RoutingTrace `gorm:"embedded"`
+}
+
+type RoutingTrace struct {
+	RoutingStage        string `gorm:"size:32" json:"routing_stage"`
+	FallbackReason      string `gorm:"size:128" json:"fallback_reason"`
+	ProtectionOverrides string `gorm:"type:text" json:"protection_overrides"`
 }
 
 func (Event) TableName() string { return "upstream_events" }
@@ -106,13 +113,26 @@ type Attempt struct {
 	ID      string
 	Started int64
 	Identity
-	Versions map[string]uint64
-	Failures map[string]int
+	Versions  map[string]uint64
+	Failures  map[string]int
+	Protected map[string]uint64
+	Recovered map[string]uint64
+	RoutingTrace
 }
 
 // Capture rechecks admission immediately before the upstream send.
 func Capture(db *gorm.DB, identity Identity, p Policy) (*Attempt, error) {
-	a := &Attempt{ID: uuid.NewString(), Started: time.Now().UnixMilli(), Identity: identity, Versions: map[string]uint64{}, Failures: map[string]int{}}
+	return capture(db, identity, p, false)
+}
+
+// CaptureFallback preserves state versions and records overrides without
+// clearing circuits or changing the global policy.
+func CaptureFallback(db *gorm.DB, identity Identity, p Policy) (*Attempt, error) {
+	return capture(db, identity, p, true)
+}
+
+func capture(db *gorm.DB, identity Identity, p Policy, fallback bool) (*Attempt, error) {
+	a := &Attempt{ID: uuid.NewString(), Started: time.Now().UnixMilli(), Identity: identity, Versions: map[string]uint64{}, Failures: map[string]int{}, Protected: map[string]uint64{}}
 	if !p.Enabled {
 		return a, nil
 	}
@@ -123,7 +143,14 @@ func Capture(db *gorm.DB, identity Identity, p Policy) (*Attempt, error) {
 	}
 	for _, state := range states {
 		if state.OpenUntil != 0 {
-			return nil, ErrBlocked
+			if !fallback {
+				return nil, ErrBlocked
+			}
+			a.Protected[state.ID] = state.Version
+			if a.ProtectionOverrides != "" {
+				a.ProtectionOverrides += "; "
+			}
+			a.ProtectionOverrides += fmt.Sprintf("%s:%s:v%d:%s", state.Scope, state.ID, state.Version, state.Reason)
 		}
 		a.Versions[state.ID] = state.Version
 		a.Failures[state.ID] = state.Failures
@@ -204,9 +231,19 @@ func Record(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) (err erro
 	}
 	event.ID, event.ChannelID, event.Model = a.ID, a.ChannelID, a.Model
 	event.Started = a.Started
+	event.RoutingTrace = a.RoutingTrace
 	event.Kind, event.Class, event.Created = "attempt", v.Class, time.Now().Unix()
 	if v.Class == "success" {
 		event.ResourceID = a.Identity.key("interface")
+	}
+	if v.Class == "success" && event.Sent && p.Enabled && a.RoutingStage == "ordinary_fallback" {
+		return write(db, func(tx *gorm.DB) error {
+			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&event)
+			if result.Error != nil || result.RowsAffected == 0 {
+				return result.Error
+			}
+			return recoverFallback(tx, a, event.RequestID, event.Status)
+		})
 	}
 	// Healthy calls never create or rewrite state rows. CAS preserves failures
 	// recorded after this attempt started, without taking the global writer.

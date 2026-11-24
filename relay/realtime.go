@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"starhub/common"
+	"starhub/internal/traffic"
 	"starhub/internal/upstream"
 	"starhub/metric"
 	"starhub/model"
@@ -84,6 +85,9 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	// affinity preference lets a reconnect land on the same upstream so an
 	// established session's cache keeps helping.
 	tried := map[int64]bool{}
+	stageSkipped := map[int64]bool{}
+	routingStage := model.RoutingNormal
+	trafficRule := traffic.Snapshot().Lookup(group, modelName)
 	affinityKey := model.AffinityKey{TokenID: tokenID, Model: modelName, Group: group}
 	affinityOn := tokenID > 0 && setting.RoutingAffinityEnabled() &&
 		setting.RoutingAffinityMode() != setting.AffinityModeHash
@@ -99,10 +103,8 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	status := 502
 	defer func() { span.EndRequest(status) }()
 	var servingAttempt *metric.AttemptSpan
+	var servingProtection *upstream.Attempt
 	policy := upstream.CurrentPolicy()
-	if setting.IsCommercialMode() {
-		policy.MaxAttempts = min(policy.MaxAttempts, 3)
-	}
 	started := time.Now()
 	sent := 0
 	canRetry := true
@@ -110,8 +112,29 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		if ctx.Err() != nil || !canRetry || sent >= policy.MaxAttempts || sent > 0 && time.Since(started) >= time.Duration(policy.RetryWindow)*time.Second {
 			break
 		}
-		ch, err := model.GetSatisfiedChannelPreferred(group, modelName, tried, preferred, upstream.Profile{Capability: "realtime"})
+		excluded := make(map[int64]bool, len(tried)+len(stageSkipped))
+		for id := range tried {
+			excluded[id] = true
+		}
+		for id := range stageSkipped {
+			excluded[id] = true
+		}
+		var ch *model.Channel
+		var err error
+		if setting.IsCommercialMode() || routingStage == model.RoutingOrdinaryFallback {
+			ch, err = model.GetScoredChannelStage(routingStage, group, modelName, excluded, preferred, "", false, nil, upstream.Profile{Capability: "realtime"})
+		} else {
+			ch, err = model.GetSatisfiedChannelTraffic(group, modelName, excluded, preferred, "", trafficRule, upstream.Profile{Capability: "realtime"})
+		}
 		if err != nil {
+			if errors.Is(err, model.ErrNoChannel) && routingStage < model.RoutingOrdinaryFallback {
+				routingStage++
+				if !setting.IsCommercialMode() {
+					routingStage = model.RoutingOrdinaryFallback
+				}
+				stageSkipped = map[int64]bool{}
+				continue
+			}
 			break
 		}
 		tried[ch.ID] = true
@@ -143,14 +166,23 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		key, keyIdx = ch.ProtectedKey(key, keyIdx)
-		identity := model.UpstreamIdentity(ch, modelName, key)
-		identity.Capability = "realtime"
-		protected, err := upstream.Capture(model.DB.WithContext(ctx), identity, policy)
+		protected, err := model.CaptureChannelAttempt(ctx, ch, group, modelName, key, upstream.Profile{Capability: "realtime"}, policy, func(current *model.Channel, group string) (bool, error) {
+			resource, managed, err := model.ReadResourceGatewayPolicy(ctx, current.ID, group, modelName)
+			return !managed || resource.Allows("/v1/realtime", nil, 0, 0), err
+		})
 		if errors.Is(err, upstream.ErrBlocked) {
+			delete(tried, ch.ID)
+			stageSkipped[ch.ID] = true
 			continue
 		}
 		if err != nil {
 			break
+		}
+		if ch.RuntimeRoute != nil {
+			if ch.RuntimeRoute.AttemptID == "" {
+				model.BeginRoutingAttempt(ch.RuntimeRoute)
+			}
+			ch.RuntimeRoute.Sent = true
 		}
 		header := http.Header{}
 		header.Set("Authorization", "Bearer "+key)
@@ -167,7 +199,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		a.MarkSent()
 		conn, err := WSDialContext(ctx, wsURL, header)
 		sent++
-		verdict := upstream.Verdict{Class: "success"}
+		verdict := upstream.Verdict{Class: "handshake_success"}
 		httpStatus := http.StatusSwitchingProtocols
 		if err != nil {
 			httpStatus = 0
@@ -194,6 +226,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			log.Printf("realtime protection persistence failed: %v", recordErr)
 		}
 		if err != nil {
+			finishRealtimeRouting(ch.RuntimeRoute, requestID, verdict, httpStatus)
 			span.EndAttempt(a, metric.AttemptUpstreamError, 0)
 			log.Printf("realtime dial channel %d failed: %v", ch.ID, err)
 			if affinityOn && ch.ID == preferred {
@@ -202,12 +235,13 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			}
 			continue
 		}
-		if affinityOn {
+		if affinityOn && ch.RuntimeStage != model.RoutingOrdinaryFallback {
 			model.RememberAffinity(affinityKey, ch.ID, keyIdx, setting.RoutingAffinityTTL())
 		}
 		upstreamConn = conn
 		upstreamChannel = ch
 		servingAttempt = a
+		servingProtection = protected
 		break
 	}
 	if upstreamConn == nil {
@@ -216,6 +250,13 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer upstreamConn.Close()
+	requestID, _ := ctx.Value(common.CtxRequestID).(string)
+	finalVerdict, finalStatus := upstream.Verdict{Class: "unknown"}, 0
+	defer func() {
+		if err := model.EndRoutingAttempt(upstreamChannel.RuntimeRoute, requestID, routingResultClass(finalVerdict), finalStatus, time.Now()); err != nil {
+			log.Printf("realtime routing event failed: %v", err)
+		}
+	}()
 
 	// Upgrade the client.
 	client, err := WSAccept(w, r)
@@ -228,7 +269,14 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Close()
 
-	usage, outputText := pipeRealtime(client, upstreamConn)
+	usage, outputText := pipeRealtime(client, upstreamConn, func(data []byte) {
+		verdict, status, terminal := realtimeBusinessResult(data, policy)
+		if !terminal {
+			return
+		}
+		finalVerdict, finalStatus = verdict, status
+		recordRealtimeBusiness(ctx, servingProtection, upstreamChannel.RuntimeRoute, requestID, verdict, status, policy)
+	})
 	if usage != nil {
 		servingAttempt.RecordUsage(usage.PromptTokens, usage.CompletionTokens)
 	}
@@ -246,6 +294,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	actualUsage.RequestProtocol = "OpenAI"
+	actualUsage.RoutingFallback = sent > 1 || upstreamChannel.RuntimeStage != model.RoutingNormal
 	if err := PostConsumeQuotaWithPrice(pd, userID, tokenID, tokenName, tokenUnlimited,
 		upstreamChannel.ID, modelName, actualUsage, pre,
 		fmt.Sprintf("%d", upstreamChannel.ID), 0, ""); err != nil {
@@ -278,7 +327,7 @@ type realtimeUsage struct {
 // pipeRealtime relays frames both directions until either side closes or
 // errors. Pings are answered locally; close frames propagate. Text frames
 // from the upstream feed the usage observer.
-func pipeRealtime(client, upstream *WSConn) (usage *Usage, outputText string) {
+func pipeRealtime(client, upstream *WSConn, observers ...func([]byte)) (usage *Usage, outputText string) {
 	done := make(chan struct{})
 	var once sync.Once
 	shutdown := func() {
@@ -330,6 +379,9 @@ func pipeRealtime(client, upstream *WSConn) (usage *Usage, outputText string) {
 				return
 			default:
 				if frame.Opcode == wsOpText {
+					for _, observe := range observers {
+						observe(frame.Data)
+					}
 					if ev, textDelta := observeRealtimeFrame(frame.Data); ev != nil {
 						sessionUsage = ev
 					} else if textDelta != "" {

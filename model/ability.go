@@ -137,12 +137,20 @@ func getSatisfiedChannel(group, model string, exclude map[int64]bool, preferred 
 	if setting.IsCommercialMode() {
 		return GetScoredChannel(group, model, exclude, preferred, hashKey, modelIsText(model), nil, profiles...)
 	}
-	return GetSatisfiedChannelTraffic(group, model, exclude, preferred, hashKey, traffic.Snapshot().Lookup(group, model), profiles...)
+	ch, err := GetSatisfiedChannelTraffic(group, model, exclude, preferred, hashKey, traffic.Snapshot().Lookup(group, model), profiles...)
+	if errors.Is(err, ErrNoChannel) {
+		return GetScoredChannelStage(RoutingOrdinaryFallback, group, model, exclude, 0, "", modelIsText(model), nil, profiles...)
+	}
+	return ch, err
 }
 
 // GetSatisfiedChannelTraffic uses the request's policy snapshot throughout retries.
 // An explicit allocation never changes persisted channel or ability weights.
 func GetSatisfiedChannelTraffic(group, model string, exclude map[int64]bool, preferred int64, hashKey string, allocation *traffic.Rule, profiles ...upstream.Profile) (*Channel, error) {
+	return getSatisfiedChannelTraffic(group, model, exclude, preferred, hashKey, allocation, false, nil, profiles...)
+}
+
+func getSatisfiedChannelTraffic(group, model string, exclude map[int64]bool, preferred int64, hashKey string, allocation *traffic.Rule, fallback bool, compatible func(*Channel, string) (bool, error), profiles ...upstream.Profile) (*Channel, error) {
 	if allocation != nil {
 		preferred, hashKey = 0, ""
 	}
@@ -196,12 +204,29 @@ func GetSatisfiedChannelTraffic(group, model string, exclude map[int64]bool, pre
 	for i := range channels {
 		pointers = append(pointers, &channels[i])
 	}
-	if err := PrepareUpstreamAdmissions(pointers, group, model, profiles...); err != nil {
+	if err := prepareUpstreamAdmissions(pointers, group, model, fallback, profiles...); err != nil {
 		return nil, err
 	}
 	skipped := []int64{}
 	for i := range channels {
 		if exclude == nil || !exclude[channels[i].ID] {
+			ch := &channels[i]
+			if fallback {
+				if allowed, _ := ordinaryPlatformAdmission(ch, model); !allowed {
+					continue
+				}
+				ch.RuntimeStage = RoutingOrdinaryFallback
+				ch.runtimeFallback = &fallbackPermit{group: group, model: model, generation: ChannelEndpointGeneration(ch)}
+			}
+			if compatible != nil {
+				ok, err := compatible(ch, group)
+				if err != nil {
+					return nil, err
+				}
+				if !ok {
+					continue
+				}
+			}
 			if len(channels[i].RuntimeKeys) == 0 {
 				skipped = append(skipped, channels[i].ID)
 				continue

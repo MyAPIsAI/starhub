@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"starhub/common"
+	"starhub/model"
 	"starhub/relay"
 )
 
@@ -41,6 +42,7 @@ func (f *relayFlow) nextSmartModel() bool {
 		f.req.modelName, f.req.body, f.req.channelCheck, f.req.pricing = candidate.Model, candidate.Body, candidate.Check, prices
 		f.currentGroup, f.groupIdx = group, 0
 		f.tried = map[int64]bool{}
+		f.routingStage, f.stageSkipped = model.RoutingNormal, nil
 		f.modelFallback = true
 		f.span.SetModel(candidate.Model)
 		return true

@@ -80,7 +80,7 @@ func routeItemAllowed(item RouteItem, group RoutingGroupPolicy, text bool) bool 
 	if item.State == "bad" || item.State == "disabled" {
 		return false
 	}
-	if text && qualityRank(item.QualityLevel) < qualityRank(group.MinimumQuality) {
+	if text && qualityRank(item.QualityLevel) < qualityRank(group.MinimumQuality) && !(item.QualityLevel == "UN" && routeFallbackOnly(item)) {
 		return false
 	}
 	if p := item.Protection; p != nil && (p.CatalogExcluded || (p.Mode != "allowed" && p.Mode != "review")) {
@@ -112,6 +112,20 @@ func routeItemAllowed(item RouteItem, group RoutingGroupPolicy, text bool) bool 
 // GetScoredChannel keeps authorization and capability filtering ahead of ranking.
 // Retries walk the original score order; fourth place never receives fresh traffic.
 func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int64, hashKey string, text bool, compatible func(*Channel, string) (bool, error), profiles ...upstream.Profile) (*Channel, error) {
+	for stage := RoutingNormal; stage <= RoutingOrdinaryFallback; stage++ {
+		ch, err := GetScoredChannelStage(stage, group, name, excluded, preferred, hashKey, text, compatible, profiles...)
+		if !errors.Is(err, ErrNoChannel) {
+			return ch, err
+		}
+	}
+	return nil, ErrNoChannel
+}
+
+// GetScoredChannelStage lets callers exhaust every authorized group per stage.
+func GetScoredChannelStage(stage RoutingStage, group, name string, excluded map[int64]bool, preferred int64, hashKey string, text bool, compatible func(*Channel, string) (bool, error), profiles ...upstream.Profile) (*Channel, error) {
+	if stage == RoutingOrdinaryFallback {
+		return getSatisfiedChannelTraffic(group, name, excluded, 0, "", nil, true, compatible, profiles...)
+	}
 	routingSnapshotState.RLock()
 	if routingSnapshotState.snapshot == nil {
 		routingSnapshotState.RUnlock()
@@ -155,7 +169,7 @@ func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int
 	candidates := []routeCandidate{}
 	skipped := []int64{}
 	for _, item := range items {
-		if item.ModelName != name || !routeItemAllowed(item, policy, text) {
+		if item.ModelName != name || item.Score == nil || !routeItemAllowed(item, policy, text) {
 			continue
 		}
 		id, _ := strconv.ParseInt(item.ChannelID, 10, 64)
@@ -190,9 +204,13 @@ func GetScoredChannel(group, name string, excluded map[int64]bool, preferred int
 		}
 		ch.RuntimeRoute = &RoutingAttempt{Item: item, FailureGeneration: state.FailureGeneration, StartedAt: time.Now()}
 		fallback := state.Degraded || item.State == "degraded"
-		if item.ScoreEvidence != nil && item.ScoreEvidence.Lifecycle != nil && item.ScoreEvidence.Lifecycle.Admission == "fallback_only" {
+		if routeFallbackOnly(item) {
 			fallback = true
 		}
+		if fallback != (stage == RoutingPlatformFallback) {
+			continue
+		}
+		ch.RuntimeStage = stage
 		candidates = append(candidates, routeCandidate{ch, item, fallback, *item.Score})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {

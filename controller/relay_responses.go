@@ -196,6 +196,7 @@ func responsesFallbackUsage(req *dto.ResponsesRequest, output json.RawMessage, t
 
 func settleNativeUsage(flow *relayFlow, ch *model.Channel, usage *relay.Usage, status int) {
 	usage.RequestProtocol = flow.req.protocol
+	usage.RoutingFallback = flow.modelFallback || len(flow.trail) > 1 || ch.RuntimeStage != model.RoutingNormal
 	usage.RequestStatus = status
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName, flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage, flow.preQuota, flow.trailString(), time.Since(flow.startTime).Milliseconds(), middleware.CtxRequestIDValue(flow.ctx), flow.req.requestedModel); err != nil {
 		log.Printf("%s quota settlement failed: %v", flow.mode, err)

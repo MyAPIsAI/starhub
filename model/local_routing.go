@@ -12,6 +12,7 @@ import (
 )
 
 type RoutingAttempt struct {
+	OrdinaryFallback  bool
 	AttemptID         string
 	Sent              bool
 	Item              RouteItem
@@ -118,7 +119,14 @@ func readLocalRoutingState(db *gorm.DB, item RouteItem) (LocalRoutingState, erro
 	}
 	if p := item.Protection; p != nil {
 		if state.EndpointGeneration != p.EndpointGeneration || state.RecoveryEpoch != p.RecoveryEpoch {
+			previous := state
 			state = LocalRoutingState{ResourceKey: RoutingResourceKey(item), EndpointGeneration: p.EndpointGeneration, RecoveryEpoch: p.RecoveryEpoch}
+			// Fault recovery does not erase latency evidence for the same endpoint.
+			if previous.EndpointGeneration == p.EndpointGeneration && p.Reason == "fallback_recovered" {
+				state.EWMA, state.Samples, state.Degraded = previous.EWMA, previous.Samples, previous.Degraded
+				state.HealthySince, state.HealthyStreak = previous.HealthySince, previous.HealthyStreak
+				state.LatencyThreshold, state.LatencyVersion, state.PublishedLatencyVersion = previous.LatencyThreshold, previous.LatencyVersion, previous.PublishedLatencyVersion
+			}
 		}
 	}
 	return state, nil
@@ -361,6 +369,10 @@ func enqueueProtectionEvent(tx *gorm.DB, item RouteItem, state LocalRoutingState
 	}
 	id := uuid.NewString()
 	payload := map[string]any{"schema": 1, "event_id": id, "source": source, "instance_id": os.Getenv("NODE_NAME"), "instance_boot_id": routingBootID, "resource_key": state.ResourceKey, "endpoint_generation": state.EndpointGeneration, "recovery_epoch": state.RecoveryEpoch, "failure_generation": state.FailureGeneration, "probe_id": probeID, "policy_fingerprint": item.PolicyFingerprint, "cause": cause, "half_open_failures": min(state.HalfOpenFailures, 1000), "observed_at": now.Unix()}
+	if cause == "fallback_success" {
+		payload["state_version"] = item.Protection.StateVersion
+		payload["half_open_failures"] = 0
+	}
 	if cause == "ewma_latency" || cause == "ewma_recovered" {
 		payload["half_open_failures"] = 0
 		payload["latency"] = map[string]any{"schema": 1, "version": state.LatencyVersion, "ewma_ms": state.EWMA, "threshold_ms": state.LatencyThreshold, "samples": state.Samples, "degraded": state.Degraded}

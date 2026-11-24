@@ -271,11 +271,13 @@ type relayFlow struct {
 	trail          []string
 	lastErr        error
 	unsupported    int
-	sent           int       // actual upstream send attempts (unsupported skips excluded)
-	uncertain      bool      // a side-effecting attempt may have executed upstream
-	budgetStop     bool      // stopped because the total attempt budget was exhausted
-	currentGroup   string    // group of the current attempt (for auto-group walk)
-	groupIdx       int       // cursor into req.autoGroups (auto-group mode)
+	sent           int    // actual upstream send attempts (unsupported skips excluded)
+	uncertain      bool   // a side-effecting attempt may have executed upstream
+	budgetStop     bool   // stopped because the total attempt budget was exhausted
+	currentGroup   string // group of the current attempt (for auto-group walk)
+	groupIdx       int    // cursor into req.autoGroups (auto-group mode)
+	routingStage   model.RoutingStage
+	stageSkipped   map[relaySkipKey]bool
 	startTime      time.Time // request start for duration_ms logging
 
 	lastChannelID int64 // last selected channel for the terminal failure log
@@ -382,6 +384,19 @@ func (f *relayFlow) errorOut(status int, errType, code, message string) {
 // group in the token's auto-group sequence (cheapest-first, degrade to
 // pricier on failure). It also populates affinityPreferred for metrics and
 // noteAffinity.
+type relaySkipKey struct {
+	model, group string
+	stage        model.RoutingStage
+	channel      int64
+}
+
+func (f *relayFlow) skipUnsent(id int64) {
+	if f.stageSkipped == nil {
+		f.stageSkipped = map[relaySkipKey]bool{}
+	}
+	f.stageSkipped[relaySkipKey{f.req.modelName, f.currentGroup, f.routingStage, id}] = true
+}
+
 func (f *relayFlow) pick() (*model.Channel, error) {
 	for {
 		f.trafficRule = nil
@@ -419,10 +434,19 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 			ch  *model.Channel
 			err error
 		)
-		if setting.IsCommercialMode() {
-			ch, err = model.GetScoredChannel(f.currentGroup, f.req.modelName, f.tried, preferred, hashKey, model.RoutingTextMode(f.mode), f.req.channelCheck, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
+		excluded := make(map[int64]bool, len(f.tried)+len(f.stageSkipped))
+		for id, tried := range f.tried {
+			excluded[id] = tried
+		}
+		for key := range f.stageSkipped {
+			if key.model == f.req.modelName && key.group == f.currentGroup && key.stage == f.routingStage {
+				excluded[key.channel] = true
+			}
+		}
+		if setting.IsCommercialMode() || f.routingStage == model.RoutingOrdinaryFallback {
+			ch, err = model.GetScoredChannelStage(f.routingStage, f.currentGroup, f.req.modelName, excluded, preferred, hashKey, model.RoutingTextMode(f.mode), f.req.channelCheck, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
 		} else {
-			ch, err = model.GetSatisfiedChannelTraffic(f.currentGroup, f.req.modelName, f.tried, preferred, hashKey, f.trafficRule, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
+			ch, err = model.GetSatisfiedChannelTraffic(f.currentGroup, f.req.modelName, excluded, preferred, hashKey, f.trafficRule, upstream.Profile{Capability: f.mode, Stream: f.req.stream})
 		}
 		if ch != nil {
 			f.recordProtectedSkips(ch.RuntimeSkipped)
@@ -438,7 +462,7 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 					return nil, checkErr
 				}
 				if !allowed {
-					f.tried[ch.ID] = true
+					f.skipUnsent(ch.ID)
 					continue
 				}
 			}
@@ -472,10 +496,28 @@ func (f *relayFlow) pick() (*model.Channel, error) {
 		// the bound channel is required and its absence is a hard failure.
 		if f.affinityEligible() && f.affinityRuleUsed && f.affinityMeta.SessionMode == setting.AffinitySessionStrict &&
 			f.affinityMeta.ChannelID > 0 {
+			// The same bound channel may be a platform fallback, but strict
+			// sessions must not override protection via ordinary fallback.
+			if setting.IsCommercialMode() && f.routingStage == model.RoutingNormal {
+				f.routingStage, f.stageSkipped = model.RoutingPlatformFallback, nil
+				continue
+			}
 			return nil, f.strictUnavailable()
 		}
 		// Current group exhausted: advance to the next auto group, if any.
 		if f.req.group != common.AutoGroup || f.groupIdx >= len(f.req.autoGroups)-1 {
+			if f.routingStage < model.RoutingOrdinaryFallback {
+				f.routingStage++
+				if !setting.IsCommercialMode() {
+					f.routingStage = model.RoutingOrdinaryFallback
+				}
+				f.stageSkipped = nil
+				f.groupIdx, f.currentGroup = 0, f.req.group
+				if f.req.group == common.AutoGroup && len(f.req.autoGroups) > 0 {
+					f.currentGroup = f.req.autoGroups[0]
+				}
+				continue
+			}
 			if f.nextSmartModel() {
 				continue
 			}
@@ -590,6 +632,7 @@ func (f *relayFlow) begin(ch *model.Channel) {
 	f.protection = relayProtection{}
 	if observation := middleware.RequestObservation(f.ctx); observation != nil {
 		observation.Entry.ChannelID = ch.ID
+		observation.Entry.RoutingFallback = f.modelFallback || len(f.trail) > 0 || ch.RuntimeStage != model.RoutingNormal
 		observation.Outcome = 0
 		observation.Entry.FailureStage, observation.Entry.ErrorCode, observation.Entry.ErrorMessage = "", "", ""
 	}
@@ -602,9 +645,9 @@ func (f *relayFlow) begin(ch *model.Channel) {
 	for _, prefix := range []string{"X-MyAPIs-", "X-Veyra-"} {
 		f.w.Header().Set(prefix+"Actual-Model", f.req.modelName)
 		f.w.Header().Set(prefix+"Provider", f.vendor)
-		f.w.Header().Set(prefix+"Fallback", strconv.FormatBool(f.modelFallback || len(f.trail) > 0))
+		f.w.Header().Set(prefix+"Fallback", strconv.FormatBool(f.modelFallback || len(f.trail) > 0 || ch.RuntimeStage != model.RoutingNormal))
 	}
-	f.tried[ch.ID] = true
+	f.skipUnsent(ch.ID)
 	f.trail = append(f.trail, strconv.FormatInt(ch.ID, 10))
 	f.lastChannelID = ch.ID
 }
@@ -654,6 +697,9 @@ func (f *relayFlow) selectRawKey(ch *model.Channel) (string, int) {
 // ClearRuleAffinity) instead of the legacy TokenID-keyed store. The cooldown
 // is shared so a failed channel is suppressed for both paths.
 func (f *relayFlow) noteAffinity(ch *model.Channel, outcome attemptOutcome) {
+	if ch.RuntimeStage == model.RoutingOrdinaryFallback && outcome == attemptSuccess {
+		return
+	}
 	if !f.affinityEligible() {
 		return
 	}
@@ -892,12 +938,11 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 			cause: fmt.Errorf("channel %d: prepare request: %v", ch.ID, err)}
 	}
 
-	identity := model.UpstreamIdentity(ch, f.req.modelName, call.key)
-	identity.Capability = f.mode
-	identity.Stream = f.req.stream
-	protected, admissionErr := upstream.Capture(model.DB.WithContext(ctx), identity, upstream.CurrentPolicy())
+	protected, admissionErr := model.CaptureChannelAttempt(ctx, ch, f.currentGroup, f.req.modelName, call.key, upstream.Profile{Capability: f.mode, Stream: f.req.stream}, upstream.CurrentPolicy(), f.req.channelCheck)
 	if admissionErr != nil {
 		if errors.Is(admissionErr, upstream.ErrBlocked) {
+			// An unsent protection rejection only excludes this routing stage.
+			f.skipUnsent(ch.ID)
 			f.recordProtectedSkips([]int64{ch.ID})
 			if f.lastErr == nil {
 				f.lastErr = admissionErr
@@ -908,6 +953,8 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 		return nil, &attemptResult{outcome: attemptClientError, cause: admissionErr}
 	}
 	f.protection.attempt, f.protection.sent, f.protection.unsafe = protected, true, call.sideEffect
+	f.tried[ch.ID] = true
+	f.sent++
 	if ch.RuntimeRoute != nil {
 		ch.RuntimeRoute.Sent = true
 	}
@@ -1067,7 +1114,16 @@ loop:
 				log.Printf("routing event persistence failed: %v", err)
 			}
 		}
-		if setting.IsCommercialMode() && f.protection.verdict.Class == "success" {
+		if ch.RuntimeRoute != nil && f.protection.sent && f.protection.verdict.Scope != "" {
+			if err := model.RecordRoutingOutcome(ch.RuntimeRoute, false, f.protection.status, 0, time.Now()); err != nil {
+				log.Printf("routing failure persistence failed: %v", err)
+			}
+		}
+		if ch.RuntimeStage == model.RoutingOrdinaryFallback && f.protection.sent && f.protection.verdict.Class == "success" {
+			if err := model.RecoverFallbackRouting(ch.RuntimeRoute, f.protection.attempt, middleware.CtxRequestIDValue(f.ctx), time.Now()); err != nil {
+				log.Printf("fallback routing recovery failed: %v", err)
+			}
+		} else if setting.IsCommercialMode() && f.protection.verdict.Class == "success" {
 			if err := model.RecordRoutingOutcome(ch.RuntimeRoute, true, f.protection.status, f.attempt.FirstContentLatency(f.req.stream), time.Now()); err != nil {
 				log.Printf("routing latency persistence failed: %v", err)
 			}
@@ -1089,7 +1145,6 @@ loop:
 			}
 			return
 		case attemptUpstreamError:
-			f.sent++
 			if f.affinityEligible() && f.affinityRuleUsed && f.affinityPreferred == ch.ID && f.affinityMeta.SessionMode == setting.AffinitySessionStrict {
 				f.strictUnavailable()
 				return
@@ -1106,9 +1161,6 @@ loop:
 				return
 			}
 			limit := upstream.CurrentPolicy().MaxAttempts
-			if setting.IsCommercialMode() {
-				limit = min(limit, 3)
-			}
 			if f.sent >= limit {
 				f.budgetStop = true
 				if f.lastErr == nil {
@@ -1461,7 +1513,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 	}
 	usage.RequestStatus = status
 	usage.RequestProtocol = flow.req.protocol
-	usage.RoutingFallback = flow.modelFallback || len(flow.trail) > 1
+	usage.RoutingFallback = flow.modelFallback || len(flow.trail) > 1 || ch.RuntimeStage != model.RoutingNormal
 	usage.ActualVendor = flow.vendor
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,
 		flow.req.tokenUnlimited, ch.ID, flow.req.modelName, usage,

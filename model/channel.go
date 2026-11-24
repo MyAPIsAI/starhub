@@ -28,11 +28,13 @@ const (
 )
 
 type Channel struct {
-	RuntimeKeys            map[string]bool   `gorm:"-" json:"-"`
-	RuntimeSkipped         []int64           `gorm:"-" json:"-"`
-	UsedQuotaRemainderNano int64             `gorm:"not null;default:0" json:"-"`
-	RuntimeRoute           *RoutingAttempt   `gorm:"-" json:"-"`
-	RuntimeModel           string            `gorm:"-" json:"-"`
+	RuntimeKeys            map[string]bool `gorm:"-" json:"-"`
+	RuntimeSkipped         []int64         `gorm:"-" json:"-"`
+	UsedQuotaRemainderNano int64           `gorm:"not null;default:0" json:"-"`
+	RuntimeRoute           *RoutingAttempt `gorm:"-" json:"-"`
+	RuntimeModel           string          `gorm:"-" json:"-"`
+	RuntimeStage           RoutingStage    `gorm:"-" json:"-"`
+	runtimeFallback        *fallbackPermit
 	ID                     int64             `gorm:"primaryKey;autoIncrement" json:"id"`
 	TaskPluginID           int64             `gorm:"not null;default:0;index" json:"task_plugin_id"`
 	Name                   string            `gorm:"size:128;not null;default:''" json:"name"`

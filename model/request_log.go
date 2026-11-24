@@ -102,6 +102,7 @@ func FinalizeRequestLog(entry *Log) error {
 		entry.FailureStage, entry.ErrorCode, entry.ErrorMessage = "response", "request_failed", "Request did not complete."
 	}
 	return DB.Model(&Log{}).Where("id = ?", existing.ID).Updates(map[string]any{
+		"routing_fallback": existing.RoutingFallback || entry.RoutingFallback,
 		"request_observed": true, "admission_rejected": entry.AdmissionRejected,
 		"upstream_attempts": entry.UpstreamAttempts, "http_status": entry.HTTPStatus,
 		"failure_stage": entry.FailureStage, "error_code": entry.ErrorCode,

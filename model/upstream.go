@@ -86,6 +86,10 @@ func PrepareUpstreamAdmission(ch *Channel, group, name string, profiles ...upstr
 }
 
 func PrepareUpstreamAdmissions(channels []*Channel, group, name string, profiles ...upstream.Profile) error {
+	return prepareUpstreamAdmissions(channels, group, name, false, profiles...)
+}
+
+func prepareUpstreamAdmissions(channels []*Channel, group, name string, fallback bool, profiles ...upstream.Profile) error {
 	profile := upstream.Profile{Capability: "chat"}
 	if len(profiles) > 0 {
 		profile = profiles[0]
@@ -151,7 +155,7 @@ func PrepareUpstreamAdmissions(channels []*Channel, group, name string, profiles
 	}
 	for _, ch := range channels {
 		for _, identity := range byChannel[ch.ID] {
-			if !upstream.IsBlocked(identity, blocked) {
+			if fallback || !upstream.IsBlocked(identity, blocked) {
 				ch.RuntimeKeys[identity.Credential] = true
 			}
 		}

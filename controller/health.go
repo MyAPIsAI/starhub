@@ -8,7 +8,6 @@ import (
 
 	"starhub/common"
 	"starhub/model"
-	"starhub/setting"
 )
 
 var draining atomic.Bool
@@ -19,17 +18,11 @@ func LivenessCheck(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, map[string]any{"status": "alive"})
 }
 
-// ReadinessCheck includes the same initial snapshot gate as the relay.
+// Readiness permits ordinary-channel fallback before the first snapshot.
 func ReadinessCheck(w http.ResponseWriter, r *http.Request) {
 	if draining.Load() {
 		common.ApiError(w, http.StatusServiceUnavailable, "server is draining")
 		return
-	}
-	if setting.IsCommercialMode() {
-		if _, _, ready := model.RoutingSnapshotStatus(); !ready {
-			common.ApiError(w, http.StatusServiceUnavailable, "waiting for resource routing snapshot")
-			return
-		}
 	}
 	HealthCheck(w, r)
 }

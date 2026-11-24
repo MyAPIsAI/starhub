@@ -91,6 +91,7 @@ func RelayTaskSubmitVideo(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Submit with the normal failover behavior.
 	flow.tried = map[int64]bool{}
+	flow.stageSkipped = nil
 	flow.trail = nil
 	flow.unsupported = 0
 	flow.lastErr = nil

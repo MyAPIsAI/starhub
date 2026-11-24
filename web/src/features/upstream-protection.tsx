@@ -54,6 +54,9 @@ type Event = {
   sent: boolean;
   retry: boolean;
   decision: string;
+  routing_stage?: string;
+  fallback_reason?: string;
+  protection_overrides?: string;
   open_until: number;
   created_at: number;
 };
@@ -135,6 +138,23 @@ const fields = [
 function useProtectionLabels() {
   const { text } = useSettingsText();
   const labels: Record<string, string> = {
+    normal: text("正常选路", "Normal routing", "التوجيه العادي"),
+    platform_fallback: text("平台后备", "Platform fallback", "احتياطي المنصة"),
+    ordinary_fallback: text(
+      "普通渠道兜底",
+      "Ordinary channel fallback",
+      "القناة الاحتياطية",
+    ),
+    normal_candidates_exhausted: text(
+      "正常资源已耗尽",
+      "Normal candidates exhausted",
+      "نفدت الموارد العادية",
+    ),
+    normal_and_platform_candidates_exhausted: text(
+      "正常及平台后备资源已耗尽",
+      "Normal and platform candidates exhausted",
+      "نفدت الموارد العادية واحتياطي المنصة",
+    ),
     manual_reset: text("人工解除", "Manually reset", "إلغاء يدوي"),
     resource_protected: text("资源保护中", "Resource protected", "المورد محمي"),
     not_sent: text(
@@ -143,6 +163,41 @@ function useProtectionLabels() {
       "تم التخطي دون إرسال",
     ),
     success: text("成功", "Success", "نجاح"),
+    local_protection_cleared: text(
+      "已解除本地资源保护",
+      "Local resource protection cleared",
+      "أُزيلت حماية المورد المحلية",
+    ),
+    handshake_success: text(
+      "握手成功，尚未确认业务完成",
+      "Handshake succeeded; business completion pending",
+      "نجاح الاتصال؛ بانتظار اكتمال الطلب",
+    ),
+    business_incomplete: text(
+      "业务未正常完成",
+      "Business response incomplete",
+      "لم تكتمل الاستجابة",
+    ),
+    fallback_recovered: text(
+      "兜底成功，已恢复",
+      "Recovered by fallback",
+      "تم التعافي عبر الاحتياطي",
+    ),
+    fallback_recovery_skipped: text(
+      "保护已变化，跳过恢复",
+      "Protection changed; recovery skipped",
+      "تغيرت الحماية؛ تم تخطي التعافي",
+    ),
+    protection_changed: text(
+      "保护版本已变化",
+      "Protection version changed",
+      "تغير إصدار الحماية",
+    ),
+    protection_cleared: text(
+      "已解除对应保护",
+      "Matching protection cleared",
+      "أُزيلت الحماية المطابقة",
+    ),
     failure: text("失败", "Failure", "فشل"),
     unknown: text("结果不确定", "Unknown", "غير معروف"),
     recovered: text("已恢复", "Recovered", "تم التعافي"),
@@ -652,15 +707,25 @@ export function UpstreamEvents({
                   <td>
                     {new Date(event.created_at * 1000).toLocaleString()}
                     <small>
-                      {event.kind === "probe"
-                        ? text("恢复探测", "Recovery probe", "فحص التعافي")
-                        : event.sent
-                          ? text("已调用上游", "Sent upstream", "أُرسل للمنبع")
-                          : text(
-                              "未调用上游",
-                              "Not sent upstream",
-                              "لم يُرسل للمنبع",
-                            )}
+                      {event.kind === "recovery"
+                        ? text(
+                            "兜底恢复",
+                            "Fallback recovery",
+                            "التعافي عبر الاحتياطي",
+                          )
+                        : event.kind === "probe"
+                          ? text("恢复探测", "Recovery probe", "فحص التعافي")
+                          : event.sent
+                            ? text(
+                                "已调用上游",
+                                "Sent upstream",
+                                "أُرسل للمنبع",
+                              )
+                            : text(
+                                "未调用上游",
+                                "Not sent upstream",
+                                "لم يُرسل للمنبع",
+                              )}
                     </small>
                   </td>
                   <td>
@@ -669,7 +734,34 @@ export function UpstreamEvents({
                   <td>
                     {event.status || "—"} · {label(event.class)}
                   </td>
-                  <td>{label(event.decision)}</td>
+                  <td>
+                    {label(event.decision)}
+                    {event.routing_stage && (
+                      <small>{label(event.routing_stage)}</small>
+                    )}
+                    {event.fallback_reason && (
+                      <small>{label(event.fallback_reason)}</small>
+                    )}
+                    {event.protection_overrides && (
+                      <details>
+                        <summary>
+                          {text(
+                            "兜底覆盖记录",
+                            "Fallback overrides",
+                            "تجاوزات الاحتياطي",
+                          )}
+                        </summary>
+                        <small
+                          style={{
+                            overflowWrap: "anywhere",
+                            whiteSpace: "normal",
+                          }}
+                        >
+                          {event.protection_overrides}
+                        </small>
+                      </details>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

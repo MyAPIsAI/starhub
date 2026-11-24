@@ -38,6 +38,7 @@ type RouteProtection struct {
 	RecoveryEpoch      int64  `json:"recovery_epoch"`
 	StateVersion       int64  `json:"state_version"`
 	Mode               string `json:"mode"`
+	Reason             string `json:"reason"`
 }
 
 type RouteGroupPrice struct {

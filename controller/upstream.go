@@ -16,7 +16,6 @@ import (
 	"starhub/middleware"
 	"starhub/model"
 	"starhub/service"
-	"starhub/setting"
 )
 
 type relayProtection struct {
@@ -52,9 +51,6 @@ func (f *relayFlow) recordProtectedSkips(ids []int64) {
 
 func (f *relayFlow) observeUpstream(res attemptResult) (bool, string) {
 	p := upstream.CurrentPolicy()
-	if setting.IsCommercialMode() {
-		p.MaxAttempts = min(p.MaxAttempts, 3)
-	}
 	v := f.protection.verdict
 	if v.Class == "" {
 		switch {
@@ -83,7 +79,7 @@ func (f *relayFlow) observeUpstream(res attemptResult) (bool, string) {
 		Strict:   f.affinityRuleUsed && f.affinityMeta.SessionMode == "strict",
 		Skip:     f.affinityRuleUsed && f.affinityMeta.SkipRetry && f.affinityPreferred > 0,
 		Unsafe:   f.protection.unsafe || res.outcome == attemptUncertain,
-		Attempts: f.sent + 1, Elapsed: time.Since(f.startTime),
+		Attempts: f.sent, Elapsed: time.Since(f.startTime),
 	})
 	if v.Class == "success" {
 		retry, reason = false, "completed"
