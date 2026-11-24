@@ -1,11 +1,59 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 	"starhub/internal/upstream"
 )
+
+// migrateRateLimitedUntil backfills the independent rate-limit deadline added
+// after Reason was found insufficient. Rows that still expose rate_limited can
+// reuse OpenUntil. Rows whose Reason was overwritten are reconstructed from
+// recent rate_limited events within the current default cooldown window; older
+// history is intentionally not guessed, so those rows lose the extra deadline
+// until the next 429.
+func migrateRateLimitedUntil() error {
+	now := time.Now().Unix()
+	if err := DB.Model(&upstream.State{}).
+		Where("rate_limited_until = 0 AND reason = ? AND open_until > ?", "rate_limited", now).
+		Update("rate_limited_until", gorm.Expr("open_until")).Error; err != nil {
+		return err
+	}
+	rateSeconds := upstream.CurrentPolicy().RateSeconds
+	var stored Option
+	if err := DB.Where("key = ?", upstream.OptionKey).Limit(1).Find(&stored).Error; err == nil && stored.Value != "" {
+		var policy struct {
+			RateSeconds int `json:"rate_limit_seconds"`
+		}
+		if json.Unmarshal([]byte(stored.Value), &policy) == nil && policy.RateSeconds > 0 {
+			rateSeconds = policy.RateSeconds
+		}
+	}
+	window := int64(max(1, rateSeconds))
+	var events []upstream.Event
+	if err := DB.Where("class = ? AND created > ?", "rate_limited", now-window).Order("created").Find(&events).Error; err != nil {
+		return err
+	}
+	deadlines := map[string]int64{}
+	for _, event := range events {
+		if event.ResourceID == "" {
+			continue
+		}
+		if due := event.Created + window; due > now && due > deadlines[event.ResourceID] {
+			deadlines[event.ResourceID] = due
+		}
+	}
+	for id, due := range deadlines {
+		if err := DB.Model(&upstream.State{}).Where("id = ? AND rate_limited_until < ?", id, due).
+			Update("rate_limited_until", due).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // Upgrade the prior protection identity without dropping active cooldowns.
 // This runs before traffic or probe workers start. Mixed-version writers must

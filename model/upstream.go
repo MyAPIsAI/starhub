@@ -259,9 +259,9 @@ func CurrentUpstreamStates(ctx context.Context, due bool, limit int) ([]upstream
 	q := DB.WithContext(ctx).Model(&upstream.State{})
 	now := time.Now().Unix()
 	if due {
-		q = q.Where("open_until > 0 AND open_until <= ? AND lease_until <= ?", now, now).Order("updated ASC, id ASC")
+		q = q.Where("open_until > 0 AND open_until <= ? AND lease_until <= ? AND (rate_limited_until = 0 OR rate_limited_until <= ?)", now, now, now).Order("updated ASC, id ASC")
 	} else {
-		q = q.Where("open_until <> 0 OR updated > ?", now-86400).Order("open_until DESC, updated DESC, id ASC")
+		q = q.Where("open_until <> 0 OR rate_limited_until > ? OR updated > ?", now, now-86400).Order("open_until DESC, updated DESC, id ASC")
 	}
 	for offset := 0; ; offset += 200 {
 		var rows []upstream.State
@@ -319,7 +319,7 @@ func CleanupUpstreamStates(ctx context.Context) error {
 			if s.LeaseUntil > time.Now().Unix() {
 				continue
 			}
-			if ch == nil || !UpstreamStateCurrent(ch, s) || s.OpenUntil == 0 && s.Updated < time.Now().Add(-7*24*time.Hour).Unix() {
+			if ch == nil || !UpstreamStateCurrent(ch, s) || s.OpenUntil == 0 && s.RateLimitedUntil <= time.Now().Unix() && s.Updated < time.Now().Add(-7*24*time.Hour).Unix() {
 				if err := DB.WithContext(ctx).Where("id = ? AND version = ? AND lease_until <= ?", s.ID, s.Version, time.Now().Unix()).Delete(&upstream.State{}).Error; err != nil {
 					return err
 				}

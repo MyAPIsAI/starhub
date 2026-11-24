@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -94,7 +95,8 @@ func TestProtectedFallbackAdmissionBudget(t *testing.T) {
 	if _, err := CaptureFallback(db, other, p, true); !errors.Is(err, ErrBlocked) {
 		t.Fatalf("shared credential bypass: %v", err)
 	}
-	if err := db.Model(&FallbackSlot{}).Where("id = ?", id.key("credential")).Update("next_attempt", time.Now().Unix()-1).Error; err != nil {
+	past := time.Now().Unix() - int64(p.FallbackInterval) - 1
+	if err := db.Model(&FallbackSlot{}).Where("id = ?", id.key("credential")).Updates(map[string]any{"next_attempt": past, "last_attempt": past}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := CaptureFallback(db, id, p, true); err != nil {
@@ -106,7 +108,8 @@ func TestFallbackHonorsRateCooldownAndSwitch(t *testing.T) {
 	db := fallbackDB(t)
 	p := DefaultPolicy()
 	id := Identity{ChannelID: 1, Model: "model", Credential: "key"}
-	s := State{ID: id.key("credential_model"), Identity: id, Scope: "credential_model", Version: 1, OpenUntil: time.Now().Unix() + 60, Reason: "rate_limited"}
+	now := time.Now().Unix()
+	s := State{ID: id.key("credential_model"), Identity: id, Scope: "credential_model", Version: 1, OpenUntil: now + 60, RateLimitedUntil: now + 60, Reason: "rate_limited"}
 	if err := db.Create(&s).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -119,5 +122,271 @@ func TestFallbackHonorsRateCooldownAndSwitch(t *testing.T) {
 	}
 	if _, err := NormalizePolicy(`{"fallback_interval_seconds":0}`); err == nil {
 		t.Fatal("accepted zero interval")
+	}
+}
+
+func TestRateLimitedSurvivesLaterFailure(t *testing.T) {
+	db := fallbackDB(t)
+	p := DefaultPolicy()
+	id := Identity{ChannelID: 1, Model: "model", Credential: "key", Generation: "endpoint", Capability: "chat"}
+	first, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Record(db, first, HTTP(429, nil, "600", p), Event{Sent: true, Status: 429}, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CaptureFallback(db, id, p); !errors.Is(err, ErrBlocked) {
+		t.Fatalf("initial cooldown admit: %v", err)
+	}
+	// A later, shorter generic failure overwrites Reason/OpenUntil and must not
+	// shorten the independent rate-limit deadline.
+	if err := Record(db, second, HTTP(404, []byte(`{"error":{"code":"model_not_found"}}`), "", p), Event{Sent: true, Status: 404}, p); err != nil {
+		t.Fatal(err)
+	}
+	var state State
+	if err := db.First(&state, "id = ?", id.key("credential_model")).Error; err != nil {
+		t.Fatal(err)
+	}
+	if state.RateLimitedUntil <= time.Now().Unix() {
+		t.Fatalf("rate deadline was shortened: %+v", state)
+	}
+	if _, err := CaptureFallback(db, id, p); !errors.Is(err, ErrBlocked) {
+		t.Fatalf("overwritten reason bypassed cooldown: %v", err)
+	}
+}
+
+func TestFallbackFastPathSkipsWriterForHealthyTraffic(t *testing.T) {
+	db := fallbackDB(t)
+	p := DefaultPolicy()
+	id := Identity{ChannelID: 1, Model: "model", Credential: "key", Generation: "endpoint"}
+	attempt, err := CaptureFallback(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(attempt.Protected) != 0 {
+		t.Fatalf("healthy fallback reported protection: %+v", attempt.Protected)
+	}
+	var count int64
+	if err := db.Model(&FallbackSlot{}).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("healthy fallback still claimed a slot row: %d", count)
+	}
+}
+
+func TestFallbackIntervalIncreaseExtendsExistingDeadline(t *testing.T) {
+	db := fallbackDB(t)
+	p := DefaultPolicy()
+	id := Identity{ChannelID: 1, Model: "model", Credential: "key"}
+	now := time.Now().Unix()
+	slot := FallbackSlot{ID: id.key("credential"), NextAttempt: now + 5, LastAttempt: now}
+	if err := db.Create(&slot).Error; err != nil {
+		t.Fatal(err)
+	}
+	p.FallbackInterval = 120
+	if _, err := CaptureFallback(db, id, p, true); !errors.Is(err, ErrBlocked) {
+		t.Fatalf("raised interval did not extend deadline: %v", err)
+	}
+	p.FallbackInterval = 30
+	if err := db.Model(&FallbackSlot{}).Where("id = ?", slot.ID).Updates(map[string]any{"next_attempt": now - 1000, "last_attempt": now - 1000}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CaptureFallback(db, id, p, true); err != nil {
+		t.Fatalf("expired slot rejected: %v", err)
+	}
+}
+
+// applyReviewCommit mirrors the relay session update: only committed versions
+// are followed, and a stale scope stops following for the session lifetime.
+func applyReviewCommit(session *Attempt, invalid map[string]bool, committed Committed) {
+	for id := range committed.Stale {
+		invalid[id] = true
+		delete(session.Versions, id)
+		delete(session.Failures, id)
+	}
+	for id, version := range committed.Versions {
+		if !invalid[id] {
+			session.Versions[id] = version
+		}
+	}
+	for id, failures := range committed.Failures {
+		if !invalid[id] {
+			session.Failures[id] = failures
+		}
+	}
+}
+
+func TestRealtimeStyleSessionClearsIntermittentFailures(t *testing.T) {
+	db := fallbackDB(t)
+	p := DefaultPolicy()
+	id := Identity{ChannelID: 1, Model: "model", Credential: "key", Generation: "endpoint", Capability: "realtime"}
+	captured, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := *captured
+	session.Versions = cloneMapUint64(captured.Versions)
+	session.Failures = cloneMapInt(captured.Failures)
+	invalid := map[string]bool{}
+	failure := Verdict{Class: "upstream_failure", Scope: "interface"}
+	for i := 0; i < p.Failures+1; i++ {
+		for _, verdict := range []Verdict{failure, {Class: "success"}} {
+			attempt := session
+			attempt.Versions = cloneMapUint64(session.Versions)
+			attempt.Failures = cloneMapInt(session.Failures)
+			attempt.ID = uuid.NewString()
+			committed, err := RecordCommitted(db, &attempt, verdict, Event{Sent: true, Status: 200}, p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			applyReviewCommit(&session, invalid, committed)
+		}
+	}
+	var state State
+	if err := db.First(&state, "id = ?", id.key("interface")).Error; err != nil {
+		t.Fatal(err)
+	}
+	if state.Failures != 0 || state.OpenUntil != 0 {
+		t.Fatalf("intermittent failures accumulated: %+v", state)
+	}
+}
+
+func TestRealtimeStyleSessionKeepsExternalFailure(t *testing.T) {
+	db := fallbackDB(t)
+	p := DefaultPolicy()
+	id := Identity{ChannelID: 1, Model: "model", Credential: "key", Generation: "endpoint", Capability: "realtime"}
+	captured, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := *captured
+	session.Versions = cloneMapUint64(captured.Versions)
+	session.Failures = cloneMapInt(captured.Failures)
+	invalid := map[string]bool{}
+	failure := Verdict{Class: "upstream_failure", Scope: "interface"}
+	// The session records one failure.
+	first := session
+	first.Versions = cloneMapUint64(session.Versions)
+	first.Failures = cloneMapInt(session.Failures)
+	first.ID = uuid.NewString()
+	committed, err := RecordCommitted(db, &first, failure, Event{Sent: true, Status: 500}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyReviewCommit(&session, invalid, committed)
+	// An external request records another failure on the same scope.
+	external, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	external.ID = uuid.NewString()
+	if _, err := RecordCommitted(db, external, failure, Event{Sent: true, Status: 500}, p); err != nil {
+		t.Fatal(err)
+	}
+	// The session's later success must not clear the external failure.
+	success := session
+	success.Versions = cloneMapUint64(session.Versions)
+	success.Failures = cloneMapInt(session.Failures)
+	success.ID = uuid.NewString()
+	committed, err = RecordCommitted(db, &success, Verdict{Class: "success"}, Event{Sent: true, Status: 200}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state State
+	if err := db.First(&state, "id = ?", id.key("interface")).Error; err != nil {
+		t.Fatal(err)
+	}
+	if state.Failures != 2 {
+		t.Fatalf("external failure was cleared: %+v committed=%+v", state, committed)
+	}
+}
+
+func cloneMapUint64(source map[string]uint64) map[string]uint64 {
+	target := make(map[string]uint64, len(source))
+	for key, value := range source {
+		target[key] = value
+	}
+	return target
+}
+
+func cloneMapInt(source map[string]int) map[string]int {
+	target := make(map[string]int, len(source))
+	for key, value := range source {
+		target[key] = value
+	}
+	return target
+}
+
+func TestRecordCommittedDuplicateEventDoesNotAdvance(t *testing.T) {
+	db := fallbackDB(t)
+	p := DefaultPolicy()
+	id := Identity{ChannelID: 1, Model: "model", Credential: "key", Generation: "endpoint", Capability: "chat"}
+	captured, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failure := Verdict{Class: "upstream_failure", Scope: "interface"}
+	first := *captured
+	first.ID = "same"
+	committed, err := RecordCommitted(db, &first, failure, Event{Sent: true, Status: 500}, p)
+	if err != nil || committed.Versions[id.key("interface")] == 0 {
+		t.Fatalf("first record: %+v %v", committed, err)
+	}
+	second := *captured
+	second.ID = "same"
+	committed, err = RecordCommitted(db, &second, failure, Event{Sent: true, Status: 500}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(committed.Versions) != 0 || len(committed.Failures) != 0 || len(committed.Stale) != 0 {
+		t.Fatalf("duplicate event advanced the snapshot: %+v", committed)
+	}
+}
+
+func TestRecordCommittedFollowsOnlyOwnVersion(t *testing.T) {
+	db := fallbackDB(t)
+	p := DefaultPolicy()
+	id := Identity{ChannelID: 1, Model: "model", Credential: "key", Generation: "endpoint", Capability: "chat"}
+	captured, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failure := Verdict{Class: "upstream_failure", Scope: "interface"}
+	first := *captured
+	first.ID = "first"
+	committed, err := RecordCommitted(db, &first, failure, Event{Sent: true, Status: 500}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if committed.Stale[id.key("interface")] || committed.Versions[id.key("interface")] == 0 {
+		t.Fatalf("own first failure should be followed: %+v", committed)
+	}
+	// An external failure bumps the version behind the session snapshot.
+	external := *captured
+	external.ID = "external"
+	if _, err := RecordCommitted(db, &external, failure, Event{Sent: true, Status: 500}, p); err != nil {
+		t.Fatal(err)
+	}
+	session, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Move the session snapshot backwards to simulate the pre-external capture.
+	session.Versions[id.key("interface")] = committed.Versions[id.key("interface")]
+	session.Failures[id.key("interface")] = 1
+	next := *session
+	next.ID = "next"
+	committed, err = RecordCommitted(db, &next, failure, Event{Sent: true, Status: 500}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !committed.Stale[id.key("interface")] {
+		t.Fatalf("external change was absorbed into session: %+v", committed)
 	}
 }

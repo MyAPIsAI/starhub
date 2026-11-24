@@ -24,8 +24,9 @@ func claimSlot(tx *gorm.DB, identity Identity, except string, p Policy) (string,
 	}
 	for _, s := range states {
 		// Wider due protections recover first. This prevents circular waits
-		// while never bypassing another scope's provider cooldown.
-		if except == "" || s.OpenUntil > now || s.Scope == "credential" || s.Scope == "credential_model" && except != identity.key("credential") || s.Scope == "model" && except == identity.key("interface") {
+		// while never bypassing another scope's provider cooldown, including a
+		// rate-limit deadline that outlives its OpenUntil.
+		if except == "" || s.OpenUntil > now || s.RateLimitedUntil > now || s.Scope == "credential" || s.Scope == "credential_model" && except != identity.key("credential") || s.Scope == "model" && except == identity.key("interface") {
 			return "", nil
 		}
 	}
@@ -58,9 +59,10 @@ func ReleaseCheck(db *gorm.DB, id string) error { return db.Delete(&ProbeSlot{},
 // ProbeAdmitted rechecks the lease and other cooldowns immediately before send.
 func ProbeAdmitted(db *gorm.DB, s State) (bool, error) {
 	var count int64
-	if err := db.Model(&State{}).Where("id = ? AND probe_id = ? AND version = ? AND lease_until > ?", s.ID, s.ProbeID, s.Version, time.Now().Unix()).Count(&count).Error; err != nil || count == 0 {
+	now := time.Now().Unix()
+	if err := db.Model(&State{}).Where("id = ? AND probe_id = ? AND version = ? AND lease_until > ? AND (rate_limited_until = 0 OR rate_limited_until <= ?)", s.ID, s.ProbeID, s.Version, now, now).Count(&count).Error; err != nil || count == 0 {
 		return false, err
 	}
-	err := db.Model(&State{}).Where("id IN ? AND id <> ? AND open_until > ?", s.Identity.keys(), s.ID, time.Now().Unix()).Count(&count).Error
+	err := db.Model(&State{}).Where("id IN ? AND id <> ? AND (open_until > ? OR rate_limited_until > ?)", s.Identity.keys(), s.ID, now, now).Count(&count).Error
 	return count == 0, err
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,14 +81,93 @@ func routingResultClass(v upstream.Verdict) string {
 	}
 }
 
-func recordRealtimeBusiness(ctx context.Context, captured *upstream.Attempt, route *model.RoutingAttempt, requestID string, verdict upstream.Verdict, status int, policy upstream.Policy) {
-	// Keep the original captured versions: a later result must not erase newer failures.
-	attempt := *captured
+// realtimeProtectionSession tracks the admission snapshot for one live session.
+// Each business result reports the transitions it actually committed; only
+// those owned changes advance the snapshot. A scope whose row changed behind
+// the session is invalidated so a later success cannot absorb it.
+type realtimeProtectionSession struct {
+	mu      sync.Mutex
+	attempt upstream.Attempt
+	invalid map[string]bool
+}
+
+func newRealtimeProtectionSession(captured *upstream.Attempt) *realtimeProtectionSession {
+	session := &realtimeProtectionSession{invalid: map[string]bool{}}
+	if captured == nil {
+		return session
+	}
+	session.attempt = *captured
+	session.attempt.Versions = cloneVersions(captured.Versions)
+	session.attempt.Failures = cloneFailures(captured.Failures)
+	session.attempt.Protected = cloneVersions(captured.Protected)
+	session.attempt.Recovered = cloneVersions(captured.Recovered)
+	return session
+}
+
+func cloneVersions(source map[string]uint64) map[string]uint64 {
+	target := make(map[string]uint64, len(source))
+	for key, value := range source {
+		target[key] = value
+	}
+	return target
+}
+
+func cloneFailures(source map[string]int) map[string]int {
+	target := make(map[string]int, len(source))
+	for key, value := range source {
+		target[key] = value
+	}
+	return target
+}
+
+// snapshot returns an isolated attempt so Record cannot mutate live state.
+func (s *realtimeProtectionSession) snapshot() upstream.Attempt {
+	attempt := s.attempt
+	attempt.Versions = cloneVersions(s.attempt.Versions)
+	attempt.Failures = cloneFailures(s.attempt.Failures)
+	attempt.Protected = cloneVersions(s.attempt.Protected)
+	attempt.Recovered = cloneVersions(s.attempt.Recovered)
+	return attempt
+}
+
+// apply follows only transitions this session committed.
+func (s *realtimeProtectionSession) apply(committed upstream.Committed) {
+	for id := range committed.Stale {
+		s.invalid[id] = true
+		delete(s.attempt.Versions, id)
+		delete(s.attempt.Failures, id)
+	}
+	for id, version := range committed.Versions {
+		if s.invalid[id] {
+			continue
+		}
+		s.attempt.Versions[id] = version
+	}
+	for id, failures := range committed.Failures {
+		if s.invalid[id] {
+			continue
+		}
+		s.attempt.Failures[id] = failures
+	}
+}
+
+func recordRealtimeBusiness(ctx context.Context, session *realtimeProtectionSession, route *model.RoutingAttempt, requestID string, verdict upstream.Verdict, status int, policy upstream.Policy) {
+	if session == nil {
+		return
+	}
+	session.mu.Lock()
+	attempt := session.snapshot()
+	session.mu.Unlock()
 	attempt.ID = uuid.NewString()
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer cancel()
-	if err := upstream.Record(model.DB.WithContext(saveCtx), &attempt, verdict, upstream.Event{RequestID: requestID, Sent: true, Status: status, Decision: "response_started"}, policy); err != nil {
+	committed, err := upstream.RecordCommitted(model.DB.WithContext(saveCtx), &attempt, verdict, upstream.Event{RequestID: requestID, Sent: true, Status: status, Decision: "response_started"}, policy)
+	if err != nil {
 		log.Printf("realtime business result persistence failed: %v", err)
+	} else {
+		session.mu.Lock()
+		session.apply(committed)
+		session.mu.Unlock()
 	}
 	if verdict.Class == "success" {
 		if route != nil && !route.OrdinaryFallback {

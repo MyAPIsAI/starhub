@@ -103,7 +103,8 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 	status := 502
 	defer func() { span.EndRequest(status) }()
 	var servingAttempt *metric.AttemptSpan
-	var servingProtection *upstream.Attempt
+	var servingSession *realtimeProtectionSession
+	var servingPolicy upstream.Policy
 	policy := upstream.CurrentPolicy()
 	started := time.Now()
 	sent := 0
@@ -166,7 +167,9 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		key, keyIdx = ch.ProtectedKey(key, keyIdx)
-		protected, err := model.CaptureChannelAttempt(ctx, ch, group, modelName, key, upstream.Profile{Capability: "realtime"}, policy, func(current *model.Channel, group string) (bool, error) {
+		// Fallback switch and interval take effect per dial, like the HTTP path.
+		sendPolicy := upstream.CurrentPolicy()
+		protected, err := model.CaptureChannelAttempt(ctx, ch, group, modelName, key, upstream.Profile{Capability: "realtime"}, sendPolicy, func(current *model.Channel, group string) (bool, error) {
 			resource, managed, err := model.ReadResourceGatewayPolicy(ctx, current.ID, group, modelName)
 			return !managed || resource.Allows("/v1/realtime", nil, 0, 0), err
 		})
@@ -241,7 +244,8 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 		upstreamConn = conn
 		upstreamChannel = ch
 		servingAttempt = a
-		servingProtection = protected
+		servingSession = newRealtimeProtectionSession(protected)
+		servingPolicy = sendPolicy
 		break
 	}
 	if upstreamConn == nil {
@@ -275,7 +279,7 @@ func RelayRealtime(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		finalVerdict, finalStatus = verdict, status
-		recordRealtimeBusiness(ctx, servingProtection, upstreamChannel.RuntimeRoute, requestID, verdict, status, policy)
+		recordRealtimeBusiness(ctx, servingSession, upstreamChannel.RuntimeRoute, requestID, verdict, status, servingPolicy)
 	})
 	if usage != nil {
 		servingAttempt.RecordUsage(usage.PromptTokens, usage.CompletionTokens)

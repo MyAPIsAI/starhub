@@ -51,18 +51,22 @@ func (i Identity) keys() []string {
 }
 
 type State struct {
-	ID          string `gorm:"primaryKey;size:64" json:"id"`
-	Identity    `gorm:"embedded"`
-	Scope       string `gorm:"size:24" json:"scope"`
-	Failures    int    `json:"failures"`
-	Version     uint64 `json:"version"`
-	OpenUntil   int64  `gorm:"index" json:"open_until"`
-	Backoff     int    `json:"backoff_seconds"`
-	Reason      string `gorm:"size:64" json:"reason"`
-	ProbeID     string `gorm:"size:36" json:"-"`
-	LeaseUntil  int64  `json:"lease_until"`
-	ProbeResult string `gorm:"size:32" json:"probe_result"`
-	Updated     int64  `gorm:"index" json:"updated_at"`
+	ID        string `gorm:"primaryKey;size:64" json:"id"`
+	Identity  `gorm:"embedded"`
+	Scope     string `gorm:"size:24" json:"scope"`
+	Failures  int    `json:"failures"`
+	Version   uint64 `json:"version"`
+	OpenUntil int64  `gorm:"index" json:"open_until"`
+	// RateLimitedUntil is an independent non-bypassable provider cooldown. It is
+	// separate from OpenUntil because later failures overwrite Reason and can
+	// extend the generic protection without representing the rate limit.
+	RateLimitedUntil int64  `gorm:"index" json:"rate_limited_until"`
+	Backoff          int    `json:"backoff_seconds"`
+	Reason           string `gorm:"size:64" json:"reason"`
+	ProbeID          string `gorm:"size:36" json:"-"`
+	LeaseUntil       int64  `json:"lease_until"`
+	ProbeResult      string `gorm:"size:32" json:"probe_result"`
+	Updated          int64  `gorm:"index" json:"updated_at"`
 }
 
 func (State) TableName() string { return "upstream_states" }
@@ -126,22 +130,33 @@ func Capture(db *gorm.DB, identity Identity, p Policy) (*Attempt, error) {
 }
 
 // CaptureFallback preserves state versions and records overrides without
-// clearing circuits or changing the global policy.
+// clearing circuits or changing the global policy. Healthy fallback traffic
+// keeps a read-only admission path; only a fallback that must cross stored
+// protection takes the global writer to claim a durable interval slot.
 func CaptureFallback(db *gorm.DB, identity Identity, p Policy, platformProtected ...bool) (*Attempt, error) {
 	if !p.OrdinaryFallback {
 		return nil, ErrBlocked
 	}
-	var attempt *Attempt
-	err := write(db, func(tx *gorm.DB) error {
+	platformCrossing := len(platformProtected) > 0 && platformProtected[0]
+	attempt, err := capture(db, identity, p, true)
+	if err != nil {
+		return nil, err
+	}
+	if len(attempt.Protected) == 0 && !platformCrossing {
+		return attempt, nil
+	}
+	// Crossed protection must be re-judged under the writer: another replica may
+	// have recorded a failure after the read-only lookup.
+	err = write(db, func(tx *gorm.DB) error {
 		var err error
 		attempt, err = capture(tx, identity, p, true)
 		if err != nil {
 			return err
 		}
-		if len(attempt.Protected) > 0 || len(platformProtected) > 0 && platformProtected[0] {
-			return claimFallback(tx, identity, p)
+		if len(attempt.Protected) == 0 && !platformCrossing {
+			return nil
 		}
-		return nil
+		return claimFallback(tx, identity, p)
 	})
 	return attempt, err
 }
@@ -156,11 +171,14 @@ func capture(db *gorm.DB, identity Identity, p Policy, fallback bool) (*Attempt,
 	if err := db.Where("id IN ?", keys).Find(&states).Error; err != nil {
 		return nil, err
 	}
+	now := time.Now().Unix()
 	for _, state := range states {
+		// Rate-limit cooldowns are not bypassable by ordinary fallback and do
+		// not depend on Reason or OpenUntil, which later failures may overwrite.
+		if fallback && state.RateLimitedUntil > now {
+			return nil, ErrBlocked
+		}
 		if state.OpenUntil != 0 {
-			if fallback && state.Reason == "rate_limited" && state.OpenUntil > time.Now().Unix() {
-				return nil, ErrBlocked
-			}
 			if !fallback {
 				return nil, ErrBlocked
 			}
@@ -216,9 +234,10 @@ func Blocked(db *gorm.DB, identities []Identity, p Policy) (map[string]bool, err
 			}
 		}
 	}
+	now := time.Now().Unix()
 	for start := 0; start < len(keys); start += 400 {
 		var states []State
-		if err := db.Select("id").Where("id IN ? AND open_until <> 0", keys[start:min(start+400, len(keys))]).Find(&states).Error; err != nil {
+		if err := db.Select("id").Where("id IN ? AND (open_until <> 0 OR rate_limited_until > ?)", keys[start:min(start+400, len(keys))], now).Find(&states).Error; err != nil {
 			return nil, err
 		}
 		for _, state := range states {
@@ -237,15 +256,38 @@ func readState(tx *gorm.DB, identity Identity, scope string) (State, error) {
 	return s, err
 }
 
+// Committed reports the state transitions a single Record call actually wrote.
+// Callers that track a long-lived admission snapshot (for example a realtime
+// session) must follow these versions instead of re-reading the latest row,
+// otherwise a success would erase failures written by other requests.
+type Committed struct {
+	Versions map[string]uint64
+	Failures map[string]int
+	// Stale marks scopes whose row changed between the caller snapshot and this
+	// transaction. The caller must stop following that scope for its lifetime.
+	Stale map[string]bool
+}
+
+func newCommitted() Committed {
+	return Committed{Versions: map[string]uint64{}, Failures: map[string]int{}, Stale: map[string]bool{}}
+}
+
 // Record atomically persists one attempt and its health transition.
-func Record(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) (err error) {
+func Record(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) error {
+	_, err := RecordCommitted(db, a, v, event, p)
+	return err
+}
+
+// RecordCommitted persists one attempt and reports the transitions it wrote.
+func RecordCommitted(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) (committed Committed, err error) {
+	committed = newCommitted()
 	defer func() {
 		if err != nil {
 			PersistenceFailed()
 		}
 	}()
 	if a == nil {
-		return nil
+		return committed, nil
 	}
 	event.ID, event.ChannelID, event.Model = a.ID, a.ChannelID, a.Model
 	event.Started = a.Started
@@ -255,18 +297,19 @@ func Record(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) (err erro
 		event.ResourceID = a.Identity.key("interface")
 	}
 	if v.Class == "success" && event.Sent && p.Enabled && a.RoutingStage == "ordinary_fallback" {
-		return write(db, func(tx *gorm.DB) error {
+		err = write(db, func(tx *gorm.DB) error {
 			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&event)
 			if result.Error != nil || result.RowsAffected == 0 {
 				return result.Error
 			}
-			return recoverFallback(tx, a, event.RequestID, event.Status)
+			return recoverFallback(tx, a, event.RequestID, event.Status, &committed)
 		})
+		return committed, err
 	}
 	// Healthy calls never create or rewrite state rows. CAS preserves failures
 	// recorded after this attempt started, without taking the global writer.
 	if v.Class == "success" || v.Scope == "" || !p.Enabled || !event.Sent {
-		return db.Transaction(func(tx *gorm.DB) error {
+		err = db.Transaction(func(tx *gorm.DB) error {
 			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&event)
 			if result.Error != nil || result.RowsAffected == 0 {
 				return result.Error
@@ -277,15 +320,24 @@ func Record(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) (err erro
 					if a.Failures[id] == 0 {
 						continue
 					}
-					if err := tx.Model(&State{}).Where("id = ? AND version = ? AND open_until = 0", id, a.Versions[id]).Updates(map[string]any{"failures": 0, "reason": "recovered", "updated": event.Created}).Error; err != nil {
-						return err
+					update := tx.Model(&State{}).Where("id = ? AND version = ? AND open_until = 0", id, a.Versions[id]).Updates(map[string]any{"failures": 0, "reason": "recovered", "updated": event.Created})
+					if update.Error != nil {
+						return update.Error
+					}
+					if update.RowsAffected > 0 {
+						committed.Failures[id] = 0
+					} else {
+						// The row changed or opened since capture: this session
+						// can no longer prove it owns the run it would clear.
+						committed.Stale[id] = true
 					}
 				}
 			}
 			return nil
 		})
+		return committed, err
 	}
-	return write(db, func(tx *gorm.DB) error {
+	err = write(db, func(tx *gorm.DB) error {
 		var count int64
 		if err := tx.Model(&Event{}).Where("id = ?", a.ID).Count(&count).Error; err != nil || count > 0 {
 			return err
@@ -294,12 +346,18 @@ func Record(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) (err erro
 		if err != nil {
 			return err
 		}
+		prior := s.Version
 		event.ResourceID = s.ID
 		s.Identity = a.Identity
 		s.Version++
 		s.Failures = min(s.Failures+1, 1000000)
 		s.Reason = v.Class
 		s.ProbeID = ""
+		if v.Class == "rate_limited" && v.Immediate {
+			// An explicit provider cooldown is independent protection: a later
+			// failure may overwrite Reason but must not shorten this deadline.
+			s.RateLimitedUntil = max(s.RateLimitedUntil, event.Created+int64(v.Delay))
+		}
 		// Explicit provider deadlines may extend protection; ordinary late
 		// failures must not continually postpone recovery.
 		if v.Immediate && s.OpenUntil != 0 {
@@ -318,8 +376,16 @@ func Record(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) (err erro
 		if err := tx.Save(&s).Error; err != nil {
 			return err
 		}
+		expected, known := a.Versions[s.ID]
+		if known && expected != prior {
+			committed.Stale[s.ID] = true
+		} else {
+			committed.Versions[s.ID] = s.Version
+			committed.Failures[s.ID] = s.Failures
+		}
 		return tx.Create(&event).Error
 	})
+	return committed, err
 }
 
 // Claim returns a single durable lease; elapsed cooldown never admits production.
@@ -331,7 +397,7 @@ func Claim(db *gorm.DB, id string, p Policy) (*State, error) {
 			return err
 		}
 		now := time.Now().Unix()
-		if s.OpenUntil == 0 || s.OpenUntil > now || s.LeaseUntil > now {
+		if s.OpenUntil == 0 || s.OpenUntil > now || s.LeaseUntil > now || s.RateLimitedUntil > now {
 			return nil
 		}
 		id, err := claimSlot(tx, s.Identity, s.ID, p)
@@ -370,7 +436,7 @@ func CompleteProbe(db *gorm.DB, lease State, outcome string, verdict Verdict, st
 		s.Version++
 		switch outcome {
 		case "success":
-			s.OpenUntil, s.Backoff, s.Failures = 0, 0, 0
+			s.OpenUntil, s.Backoff, s.Failures, s.RateLimitedUntil = 0, 0, 0, 0
 			s.Reason = "recovered"
 		case "failure":
 			s.Backoff = min(p.MaxOpenSeconds, max(p.OpenSeconds, s.Backoff*2))
@@ -384,6 +450,11 @@ func CompleteProbe(db *gorm.DB, lease State, outcome string, verdict Verdict, st
 				s.Backoff = max(s.Backoff, verdict.Delay)
 			}
 			s.OpenUntil = now + int64(s.Backoff)
+			// Rate-limit cooldowns survive until their own deadline even when a
+			// probe records a different failure class on this scope.
+			if verdict.Class == "rate_limited" && verdict.Immediate {
+				s.RateLimitedUntil = max(s.RateLimitedUntil, now+int64(verdict.Delay))
+			}
 			// A probe can discover a wider credential failure. Preserve that
 			// protection independently of the state whose recovery was tested.
 			if verdict.Immediate && verdict.Scope != "" && verdict.Scope != s.Scope {
@@ -396,6 +467,9 @@ func CompleteProbe(db *gorm.DB, lease State, outcome string, verdict Verdict, st
 				other.Failures++
 				other.ProbeID = ""
 				other.OpenUntil = max(other.OpenUntil, now+int64(verdict.Delay))
+				if verdict.Class == "rate_limited" {
+					other.RateLimitedUntil = max(other.RateLimitedUntil, now+int64(verdict.Delay))
+				}
 				other.Backoff, other.Updated = max(other.Backoff, verdict.Delay), now
 				if err := tx.Save(&other).Error; err != nil {
 					return err
@@ -432,7 +506,7 @@ func Reset(db *gorm.DB, id string, version uint64, actor int64) error {
 			return errors.New("resource protection changed")
 		}
 		s.Version++
-		s.OpenUntil, s.Failures, s.Backoff = 0, 0, 0
+		s.OpenUntil, s.Failures, s.Backoff, s.RateLimitedUntil = 0, 0, 0, 0
 		s.ProbeID, s.Reason, s.ProbeResult = "", "manual_reset", "manual_reset"
 		s.Updated = time.Now().Unix()
 		if err := tx.Save(&s).Error; err != nil {

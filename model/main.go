@@ -203,6 +203,9 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := migrateUpstreamIdentities(); err != nil {
 		return fmt.Errorf("migrate upstream identities: %w", err)
 	}
+	if err := migrateRateLimitedUntil(); err != nil {
+		return fmt.Errorf("migrate upstream rate-limit deadlines: %w", err)
+	}
 	if _, err := MigrateCredentialStorage(false, "system", "Upgrade legacy credential storage"); err != nil {
 		return fmt.Errorf("migrate credential storage: %w", err)
 	}
