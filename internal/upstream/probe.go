@@ -19,7 +19,7 @@ func (ProbeSlot) TableName() string { return "upstream_probe_slots" }
 func claimSlot(tx *gorm.DB, identity Identity, except string, p Policy) (string, error) {
 	now := time.Now().Unix()
 	var states []State
-	if err := tx.Where("id IN ? AND open_until <> 0 AND id <> ?", identity.keys(), except).Find(&states).Error; err != nil {
+	if err := tx.Where("id IN ? AND (open_until <> 0 OR rate_limited_until > ?) AND id <> ?", identity.keys(), now, except).Find(&states).Error; err != nil {
 		return "", err
 	}
 	for _, s := range states {

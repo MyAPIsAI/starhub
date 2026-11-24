@@ -307,6 +307,58 @@ func TestRealtimeStyleSessionKeepsExternalFailure(t *testing.T) {
 	}
 }
 
+func TestRealtimeInitialAbsentRejectsExternalVersion(t *testing.T) {
+	db := fallbackDB(t)
+	p := DefaultPolicy()
+	id := Identity{ChannelID: 1, Model: "model", Credential: "key", Generation: "endpoint", Capability: "realtime"}
+	failure := Verdict{Class: "upstream_failure", Scope: "interface"}
+	// The session connects while no state row exists: every scope is an explicit
+	// version-0 snapshot.
+	sessionCapture, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := sessionCapture.Versions[id.key("interface")]; !ok {
+		t.Fatal("absent scope was not captured explicitly")
+	}
+	// An external request creates version 1 before the session records anything.
+	external, err := Capture(db, id, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	external.ID = "external"
+	if _, err := RecordCommitted(db, external, failure, Event{Sent: true, Status: 500}, p); err != nil {
+		t.Fatal(err)
+	}
+	// The session's own failure must not adopt the external version.
+	own := *sessionCapture
+	own.Versions = cloneMapUint64(sessionCapture.Versions)
+	own.Failures = cloneMapInt(sessionCapture.Failures)
+	own.ID = "own"
+	committed, err := RecordCommitted(db, &own, failure, Event{Sent: true, Status: 500}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !committed.Stale[id.key("interface")] {
+		t.Fatalf("initial-absent session followed an external version: %+v", committed)
+	}
+	// A later session success cannot clear the external failure.
+	success := *sessionCapture
+	success.Versions = cloneMapUint64(sessionCapture.Versions)
+	success.Failures = cloneMapInt(sessionCapture.Failures)
+	success.ID = "ok"
+	if _, err := RecordCommitted(db, &success, Verdict{Class: "success"}, Event{Sent: true, Status: 200}, p); err != nil {
+		t.Fatal(err)
+	}
+	var state State
+	if err := db.First(&state, "id = ?", id.key("interface")).Error; err != nil {
+		t.Fatal(err)
+	}
+	if state.Failures != 2 {
+		t.Fatalf("external failure was cleared: %+v", state)
+	}
+}
+
 func cloneMapUint64(source map[string]uint64) map[string]uint64 {
 	target := make(map[string]uint64, len(source))
 	for key, value := range source {

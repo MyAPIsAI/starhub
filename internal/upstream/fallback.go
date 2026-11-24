@@ -14,8 +14,8 @@ import (
 // legacy rows that predate the column keep their original NextAttempt.
 type FallbackSlot struct {
 	ID          string `gorm:"primaryKey;size:64"`
-	NextAttempt int64
-	LastAttempt int64
+	NextAttempt int64  `gorm:"not null;default:0"`
+	LastAttempt int64  `gorm:"not null;default:0"`
 }
 
 func (FallbackSlot) TableName() string { return "upstream_fallback_slots" }

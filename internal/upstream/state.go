@@ -60,7 +60,7 @@ type State struct {
 	// RateLimitedUntil is an independent non-bypassable provider cooldown. It is
 	// separate from OpenUntil because later failures overwrite Reason and can
 	// extend the generic protection without representing the rate limit.
-	RateLimitedUntil int64  `gorm:"index" json:"rate_limited_until"`
+	RateLimitedUntil int64  `gorm:"index;not null;default:0" json:"rate_limited_until"`
 	Backoff          int    `json:"backoff_seconds"`
 	Reason           string `gorm:"size:64" json:"reason"`
 	ProbeID          string `gorm:"size:36" json:"-"`
@@ -163,19 +163,27 @@ func CaptureFallback(db *gorm.DB, identity Identity, p Policy, platformProtected
 
 func capture(db *gorm.DB, identity Identity, p Policy, fallback bool) (*Attempt, error) {
 	a := &Attempt{ID: uuid.NewString(), Started: time.Now().UnixMilli(), Identity: identity, Versions: map[string]uint64{}, Failures: map[string]int{}, Protected: map[string]uint64{}}
+	keys := identity.keys()
+	// Persistent versions start at 1, so 0 is an explicit "absent" snapshot.
+	// Filling every scope keeps "initially absent" distinguishable from a lost
+	// snapshot, which is represented by a missing entry.
+	for _, key := range keys {
+		a.Versions[key] = 0
+		a.Failures[key] = 0
+	}
 	if !p.Enabled {
 		return a, nil
 	}
-	keys := identity.keys()
 	var states []State
 	if err := db.Where("id IN ?", keys).Find(&states).Error; err != nil {
 		return nil, err
 	}
 	now := time.Now().Unix()
 	for _, state := range states {
-		// Rate-limit cooldowns are not bypassable by ordinary fallback and do
-		// not depend on Reason or OpenUntil, which later failures may overwrite.
-		if fallback && state.RateLimitedUntil > now {
+		// Rate-limit cooldowns are not bypassable and do not depend on Reason or
+		// OpenUntil, which later failures may overwrite. Both normal and fallback
+		// admission enforce the same independent deadline.
+		if state.RateLimitedUntil > now {
 			return nil, ErrBlocked
 		}
 		if state.OpenUntil != 0 {
@@ -377,7 +385,10 @@ func RecordCommitted(db *gorm.DB, a *Attempt, v Verdict, event Event, p Policy) 
 			return err
 		}
 		expected, known := a.Versions[s.ID]
-		if known && expected != prior {
+		// Only follow when this attempt's snapshot still matches the row it
+		// updated. A missing entry means the snapshot was invalidated, not that
+		// the caller may adopt whatever version it finds.
+		if !known || expected != prior {
 			committed.Stale[s.ID] = true
 		} else {
 			committed.Versions[s.ID] = s.Version

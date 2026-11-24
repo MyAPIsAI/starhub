@@ -336,3 +336,289 @@ Realtime 在请求开始时保存 `policy`，候选选择读取实时配置，�
 - 实施记录已补入 `tmp/upstream-fallback-commit-review-2026-11-24.md` 第七节。
 
 需要我提交到本地吗？
+
+---
+
+## 九、最新提交复核分析（原文追加）
+
+对比文档第六至八节与最新提交 **`b9bb7a2`（Harden rate-limit cooldown and realtime protection recovery）**，结论是：**主要修复已落地，但还不能认定全部修好；本轮复现了 4 个遗漏问题。**
+
+| 文档要求 | 当前情况 |
+|---|---|
+| 429 冷却独立保存 | 新产生的失败已修复；历史状态迁移仍有问题 |
+| Realtime 交替失败、成功不累积 | 常规场景已修复；特定并发顺序仍会误清外部失败 |
+| 健康兜底避免全局写锁 | 已实现只读快路径，受保护路径保留事务复查 |
+| 发送前读取当前配置 | 已实现；新槽位支持按当前间隔计算期限，旧槽位保留原期限 |
+
+以下按影响说明。
+
+1. **[高] 旧数据库升级后，新字段为 `NULL`，冷却回填可能完全失效**
+
+   位置：[字段定义](/D:/Workspace/StarHub/internal/upstream/state.go:63)、[迁移条件](/D:/Workspace/StarHub/model/upstream_migration.go:21)、[事件回填条件](/D:/Workspace/StarHub/model/upstream_migration.go:50)。
+
+   `RateLimitedUntil` 没有默认值或非空约束。SQLite 给旧表增加该列后，历史行的值为 `NULL`。
+
+   迁移却分别使用：
+
+   ```sql
+   rate_limited_until = 0
+   rate_limited_until < ?
+   ```
+
+   两个条件都不会匹配 `NULL`。读取到 Go 结构体后又表现为 `0`，因此普通兜底认为没有限流冷却。
+
+   **隔离复现结果：**从旧表结构升级，原状态仍为 `rate_limited`，保护剩余 600 秒；迁移后新字段仍为 `NULL`，`CaptureFallback` 返回成功。
+
+   **修复方向：**明确处理存量 `NULL`，再执行期限回填；字段增加合理的默认值和非空约束，不能只修改查询条件。
+
+2. **[中] Realtime 初始没有状态行时，仍可能吸收并清除外部失败**
+
+   位置：[RecordCommitted 版本判断](/D:/Workspace/StarHub/internal/upstream/state.go:379)。
+
+   当前判断是：
+
+   ```go
+   expected, known := a.Versions[s.ID]
+   if known && expected != prior {
+       committed.Stale[s.ID] = true
+   }
+   ```
+
+   如果连接建立时没有对应状态行，`known` 就是 `false`。即使状态后来已由外部请求创建，也不会标记 `Stale`，反而会跟随包含外部失败的新版本。
+
+   复现顺序：
+
+   - Realtime 会话建立，对应状态不存在。
+   - 外部请求失败，创建版本 1。
+   - 会话自身失败，将状态写成版本 2，并跟随该版本。
+   - 会话随后成功，将两次失败全部清零。
+
+   **已通过实际 `recordRealtimeBusiness` 调用复现：**`invalid=false`，最终 `failures=0`，外部失败被清除。
+
+   **修复方向：**“初始不存在”也必须是明确的快照状态。只有数据库更新前的状态仍然不存在，才能视为自身首次创建；不能把“快照没有版本”理解为允许跟随任意版本。
+
+3. **[高] 历史长 `Retry-After` 会在迁移中丢失**
+
+   位置：[迁移窗口与期限计算](/D:/Workspace/StarHub/model/upstream_migration.go:35)。
+
+   当前只扫描最近 `rate_limit_seconds` 秒的事件，并使用：
+
+   ```text
+   事件时间 + 当前 rate_limit_seconds
+   ```
+
+   重建期限。它没有使用历史 429 事件已经保存的 `OpenUntil`，也没有保留原来的显式延迟。
+
+   例如默认限流配置为 30 秒，但上游返回 `Retry-After: 600`。一分钟后错误原因被覆盖，此时升级：
+
+   - 429 事件已经超出 30 秒扫描窗口。
+   - 实际冷却仍剩 540 秒。
+   - 迁移没有重建冷却，兜底直接放行。
+
+   **上述场景已复现。** 即使先修复第 1 项的 `NULL`，这一问题仍然存在。
+
+   **修复方向：**结合历史事件保存的保护期限保守恢复，扫描范围应覆盖仍可能有效的显式冷却；同时检查其后是否发生有效重置或恢复，不能只套用当前默认配置。
+
+4. **[中] 每次启动执行迁移，会重新施加已人工清除的冷却**
+
+   位置：[启动调用](/D:/Workspace/StarHub/model/main.go:206)、[事件回填](/D:/Workspace/StarHub/model/upstream_migration.go:50)。
+
+   该迁移每次初始化数据库都会执行，事件回填没有检查后续的人工重置或恢复记录，也没有限制仅处理尚未迁移的历史状态。
+
+   **已复现：**
+
+   - 产生一次 429。
+   - 调用 `Reset`，成功清除保护。
+   - 在事件仍处于扫描窗口内模拟下一次启动。
+   - 迁移重新写入剩余约 29 秒的限流期限。
+
+   此时状态变成：
+
+   ```text
+   reason=manual_reset
+   open_until=0
+   rate_limited_until>now
+   ```
+
+   还会产生准入不一致：直接调用普通 `Capture` 可以通过，而 `CaptureFallback` 被拒绝。
+
+   **修复方向：**让历史回填成为有明确执行标记的迁移，并尊重之后发生的重置、恢复。正常启动不应反复重放旧失败。
+
+还有两项边界需要保留：
+
+- **交错业务响应仍未按响应标识隔离。** 当前仍按终态帧到达顺序推进会话快照，没有实现文档提到的“按响应标识关联开始时快照”。若允许同一连接多个响应交错，这项保证仍未完成；本轮未将其列为已复现问题。
+- **间隔增大的测试证明力不足。** 现有测试里的旧 `NextAttempt` 本来就没有到期，即使去掉新计算逻辑也会被拒绝。应补充“旧期限已过、按新间隔计算仍未到期”的场景。当前实现本身包含这一计算。
+
+本轮验证结果：
+
+| 检查 | 结果 |
+|---|---|
+| `go build ./...` | 通过 |
+| `go vet ./...` | 通过 |
+| `go test ./internal/upstream ./relay ./config` | 通过 |
+| 上述 4 类问题的 Go overlay 隔离复现 | 均复现 |
+| 全量 `go test ./...` | 本轮未运行 |
+
+建议先修复 **迁移的 `NULL` 处理和 Realtime 初始缺失版本判断**，再补齐历史冷却重建及迁移执行边界。现有测试通过，尚不足以支持文档中“外部失败不会被清理”和“历史冷却已保守重建”的完整结论。
+
+本轮未修改仓库文件；复现用例仅放在系统临时目录，通过 Go overlay 执行。
+
+---
+
+## 十、复核问题修复方案分析（原文追加）
+
+已将上一条分析原样追加为[文档第九节“最新提交复核分析”](/D:/Workspace/StarHub/tmp/upstream-fallback-commit-review-2026-11-24.md:342)，`git diff --check` 通过。代码未修改。
+
+建议将修复分为两组：**重做冷却迁移，统一解决三个迁移问题；补齐 Realtime 的初始状态判断，解决误清外部失败。**
+
+1. **先修正字段及迁移顺序，兼容已经升级过的数据库**
+
+   涉及 [State 定义](/D:/Workspace/StarHub/internal/upstream/state.go:63) 和 [数据库初始化](/D:/Workspace/StarHub/model/main.go:193)。
+
+   `RateLimitedUntil` 应使用非空、默认零的字段约束，但不能只加标签。已有数据库可能已经存在该列，且包含 `NULL`；直接收紧约束可能导致迁移失败。
+
+   推荐顺序：
+
+   - 检查表和字段是否已存在；存在时先把存量 `NULL` 归零。
+   - 执行带 `not null;default:0` 的结构迁移。
+   - 再执行历史期限重建。
+   - 任一步失败，都应阻止该实例进入服务状态。
+
+   `FallbackSlot.LastAttempt` 也可统一为非空默认零，旧槽位继续保留原 `NextAttempt`，不猜测历史发送时间。
+
+   需要覆盖三条升级路径：旧版本没有该列、`b9bb7a2` 已产生空值、全新数据库。
+
+2. **重写历史期限重建，不能继续使用“事件时间加当前默认间隔”**
+
+   涉及 [migrateRateLimitedUntil](/D:/Workspace/StarHub/model/upstream_migration.go:18)。
+
+   推荐以事件保存的期限为依据：
+
+   - 对仍显示 `rate_limited`、仍处于保护中的旧状态，可以使用 `OpenUntil` 保守回填。
+   - 对原因已被覆盖的状态，查找对应资源仍可能有效的限流事件，使用事件的 `OpenUntil`。
+   - 不再按当前 `rate_limit_seconds` 截断扫描窗口，也不重新套用当前配置计算历史期限。
+   - 探测事件还需要识别 `Kind == "probe"`、`Decision == "rate_limited"`；不能只检查 `Class == "rate_limited"`。
+
+   **旧事件的 `OpenUntil` 可能混有其他保护，因此只能作为保守期限，无法保证精确还原原始 `Retry-After`。** 这与正常请求不同：正常请求仍应继续使用本次 429 的实际延迟。
+
+   后续事件可以增加精确的限流期限和状态版本，跨作用域探测也应记录实际目标资源，避免以后再次依赖猜测。
+
+3. **将历史重建改为有版本标记的一次性迁移，并尊重恢复记录**
+
+   这是防止重启后复活冷却的关键，不能仅靠“只更新零值”解决。
+
+   建议增加专用迁移记录，例如固定版本标识 `upstream_rate_limit_deadline_v2`。采用新版本标识，是为了让已经运行过错误迁移的数据库也能得到修复。
+
+   执行时：
+
+   - 在事务内取得上游保护写锁。
+   - 检查该迁移是否已完成。
+   - 重建需要修复的历史状态。
+   - 数据更新和完成标记一起提交；失败则一起回滚。
+
+   历史事件重放还应遵循：
+
+   - 当前已经关闭的保护，不因旧失败重新打开。
+   - 明确的人工重置、成功探测、成功兜底恢复，应使更早的限流证据失效。
+   - `fallback_recovery_skipped` 不能当作成功恢复。
+   - 已有可靠的独立期限，不应被历史推算随意改写。
+
+   当前事件时间只有秒级，无法严格判断同秒事件的先后。不能拿 UUID 或请求开始时间当结果提交顺序。对于这种旧数据歧义，应明确采用保守策略：已关闭状态不复活；仍打开且证据不足的状态，才考虑沿用现有保护期限作为上界。
+
+   如果迁移会与其他副本并发，应同步维护状态版本、探测租约，确保旧探测结果不能覆盖迁移后的保护。
+
+4. **Realtime 显式记录“初始不存在”，取消未知版本的通配行为**
+
+   涉及 [Capture](/D:/Workspace/StarHub/internal/upstream/state.go:164)、[RecordCommitted](/D:/Workspace/StarHub/internal/upstream/state.go:379)。
+
+   当前只为已经存在的状态填写 `Versions`，导致“最初不存在”和“快照无效”都表现为缺少 map 项。
+
+   推荐在捕获时，为四个作用域都建立明确快照：
+
+   - 已存在：记录实际版本。
+   - 不存在：明确记录不存在。若保证持久化版本从 1 开始，可以用版本 0 表示；否则增加 `Exists`。
+   - 已失效：保持独立失效标记，不能重新解释为不存在。
+
+   记录失败时，只有更新前的数据库状态与快照一致，才能跟随提交结果。版本判断应表达为：
+
+   ```go
+   canFollow := known && expected == prior
+   ```
+
+   不匹配时，**仍然记录本次真实失败**，但把该作用域标为 `Stale`，不允许后续成功清理它。不能因为失去跟随资格而丢掉失败记录。
+
+   这样，“初始无状态 → 外部创建版本 1 → 会话自身失败”的场景就会失效，而“初始无状态 → 会话自身首次创建”仍可正常跟随。
+
+5. **补齐准入一致性，防止独立期限再次依赖 `OpenUntil`**
+
+   [capture](/D:/Workspace/StarHub/internal/upstream/state.go:178) 当前只在兜底模式检查独立冷却。建议在保护启用时，普通和兜底准入都先检查：
+
+   ```go
+   if state.RateLimitedUntil > now {
+       return nil, ErrBlocked
+   }
+   ```
+
+   随后再分别处理普通保护和可跨越的保护。
+
+   [claimSlot](/D:/Workspace/StarHub/internal/upstream/probe.go:22) 的查询也应覆盖“`OpenUntil == 0`，但独立冷却仍有效”的状态。否则即使后续循环检查了 `RateLimitedUntil`，这些行也根本没有被读取。
+
+   这属于必要的防御性收口，可以避免异常存量数据造成不同准入路径判断不一致。
+
+6. **交错响应单独补齐，测试应验证实际调用链**
+
+   如果支持同一 Realtime 连接多个响应交错，应在 `response.created` 时按响应标识保存快照，终态结果使用该响应开始时的快照。仅在收到成功终态时复制会话最新状态，仍可能清理另一个响应较晚产生的失败。
+
+   无法关联到业务开始快照的成功，可以记录事件，但不应凭最新状态执行恢复。
+
+   验收重点建议如下：
+
+   | 场景 | 必须满足 |
+   |---|---|
+   | 旧表新增字段、已有字段包含 `NULL` | 升级后有效冷却仍阻止发送 |
+   | 默认 30 秒，上游要求 600 秒，60 秒后升级 | 剩余冷却保留 |
+   | 人工重置或成功恢复后重启 | 旧冷却不复活 |
+   | 迁移重复执行、中途失败重试 | 不重复施加保护，不提前写完成标记 |
+   | Realtime 初始无状态，外部先失败 | 会话成功不清除外部失败 |
+   | Realtime 自身交替失败、成功 | 未熔断计数正常归零 |
+   | 较早响应成功晚于另一个响应失败 | 后者失败保留 |
+   | 旧槽位期限已过，新间隔期限未过 | 仍拒绝发送 |
+
+建议三个迁移问题作为同一个修复整体交付，Realtime 版本判断单独交付；交错响应随后处理。修复完成后，应将已复现用例转为正式回归测试，再运行项目要求的 build、vet 和全量测试。本轮仅追加文档并分析方案，没有实施这些代码修复。
+
+---
+
+## 十一、复核问题修复交付报告（原样记录）
+
+已按文档第九、十节建议实现第 1–5 项，第 6 项（交错响应）按文档“随后处理”暂缓。改动未提交。
+
+**1. 字段约束与 NULL 兼容**
+- `State.RateLimitedUntil`、`FallbackSlot.NextAttempt/LastAttempt` 增加 `not null;default:0`。
+- 新增 `normalizeUpstreamNulls(db)`，在 AutoMigrate 之前把存量 `NULL` 归零。
+- 覆盖三条升级路径：旧库无列、`b9bb7a2` 已产生 NULL、全新库。
+
+**2. 历史期限按事件 `OpenUntil` 重建**
+- `rebuildRateLimitDeadlines` 不再用“事件时间 + 当前限流秒数”。
+- 识别 attempt 的 `class=rate_limited` 与 probe 的 `kind=probe & decision=rate_limited`。
+- 扫描条件改为 `open_until > now`，不再被默认窗口截断；仍在 `rate_limited` 的状态用自身 `OpenUntil` 兜底。
+
+**3. 版本化一次性迁移**
+- 新增 `upstream_migrations` 表与标识 `upstream_rate_limit_deadline_v2`。
+- 在事务内取得上游写锁，数据修复与完成标记一起提交。
+- 尊重 `manual_reset`、`probe success`、`fallback_recovered`；`fallback_recovery_skipped` 不算恢复。
+- 仅填充缺失期限，不改写已有值；写入时推进版本并清理旧探测租约。
+
+**4. Realtime 初始缺失状态**
+- `capture` 为四个作用域显式写入版本 0（表示“最初不存在”）。
+- 失败仅在 `known && expected == prior` 时跟随；否则标记 `Stale`，但仍记录真实失败。
+
+**5. 准入一致性**
+- 普通与兜底 `capture` 都先检查 `RateLimitedUntil > now`。
+- `claimSlot` 查询纳入 `open_until = 0` 但限流仍有效的状态。
+
+**验证**
+- 新增回归测试：NULL 归零、长 `Retry-After` 恢复、重置不被复活、迁移只执行一次、Realtime 初始无状态拒绝外部版本。
+- `go build ./...`、`go vet ./...` 通过；`internal/upstream`、`relay`、`config` 全量通过。
+- `model`、`service`、`controller` 定向通过；仅剩既有基线失败（`price cap ignored`、`open circuit admitted customer traffic`、重试数断言、`usage logs: 7`），无新增偏差。
+
+需要我提交到本地吗？

@@ -190,7 +190,10 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := migrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}); err != nil {
 		return fmt.Errorf("migrate production telemetry: %w", err)
 	}
-	if err := migrate(&upstream.State{}, &upstream.Event{}, &upstream.Guard{}, &upstream.ProbeSlot{}, &upstream.FallbackSlot{}); err != nil {
+	if err := normalizeUpstreamNulls(db); err != nil {
+		return fmt.Errorf("normalize upstream protection columns: %w", err)
+	}
+	if err := migrate(&upstream.State{}, &upstream.Event{}, &upstream.Guard{}, &upstream.ProbeSlot{}, &upstream.FallbackSlot{}, &upstreamMigration{}); err != nil {
 		return err
 	}
 	if err := upstream.InitGuard(db); err != nil {
