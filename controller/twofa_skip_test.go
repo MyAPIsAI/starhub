@@ -12,7 +12,7 @@ import (
 )
 
 func TestSkipTwoFASetupUpdatesOnlyTheCurrentSession(t *testing.T) {
-	t.Setenv("STARHUB_ENV", "development")
+	t.Setenv("STARHUB_ENV", "production")
 	newTestDB(t)
 	user := newUser(t, "skip-staff", common.RoleAdmin, 0)
 	session := middleware.Sessions.CreateConfirmed(user, time.Hour, "", "")
@@ -45,16 +45,16 @@ func TestSkipTwoFASetupUpdatesOnlyTheCurrentSession(t *testing.T) {
 	if err != nil || factor.IsEnabled {
 		t.Fatal("skip enabled the authenticator")
 	}
-	t.Setenv("STARHUB_ENV", "production")
-	expectStatus(t, call(Skip2FASetup, request), http.StatusForbidden)
+	t.Setenv("STARHUB_ENV", "development")
+	expectStatus(t, call(Skip2FASetup, request), http.StatusOK)
 	status = expectStatus(t, call(Get2FAStatus, request), http.StatusOK)
-	if json.Unmarshal(status.Data, &factorStatus) != nil || factorStatus.CanSkip {
-		t.Fatal("production advertised skip capability")
+	if json.Unmarshal(status.Data, &factorStatus) != nil || !factorStatus.CanSkip {
+		t.Fatal("development did not advertise skip capability")
 	}
 }
 
 func TestSelfServicePasswordChangeRefreshesOnlyItsSessionForSkipping(t *testing.T) {
-	t.Setenv("STARHUB_ENV", "development")
+	t.Setenv("STARHUB_ENV", "production")
 	for _, profileUpdate := range []bool{false, true} {
 		name := "self"
 		if profileUpdate {

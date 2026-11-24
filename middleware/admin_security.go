@@ -32,18 +32,18 @@ func staffSecurityReady(w http.ResponseWriter, r *http.Request, user *model.User
 	return true
 }
 
-// CanSkipStaffTwoFA permits deferring enrollment in development only. Existing
+// CanSkipStaffTwoFA permits deferring enrollment in development and production. Existing
 // factors and initial password changes must still follow their normal checks.
 func CanSkipStaffTwoFA(user *model.User) bool {
 	mode := strings.TrimSpace(os.Getenv("STARHUB_ENV"))
-	if (mode != "" && mode != "development") || !common.IsStaffRole(user.Role) || user.Status != common.StatusEnabled || user.AdminPasswordChangedAt == 0 {
+	if (mode != "" && mode != "development" && mode != "production") || !common.IsStaffRole(user.Role) || user.Status != common.StatusEnabled || user.AdminPasswordChangedAt == 0 {
 		return false
 	}
 	factor, err := model.GetTwoFA(user.ID)
 	return err == model.Err2FANotEnabled || (err == nil && !factor.IsEnabled)
 }
 
-// SkipStaffTwoFA binds the development exception to one active session and the
+// SkipStaffTwoFA binds the enrollment exception to one active session and the
 // current account security state. It never creates second-factor evidence.
 func (s *SessionStore) SkipStaffTwoFA(token string, user *model.User) bool {
 	s.mu.Lock()

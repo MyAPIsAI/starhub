@@ -23,10 +23,11 @@ function New-RandomHex([int]$ByteCount) {
 }
 
 $template = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot ".env.docker.example"))
+# Replace the whole assignment so the template may carry development defaults.
 # A fixed prefix guarantees that the random bootstrap password has letters and digits.
-$template = $template.Replace("STARHUB_ROOT_PASSWORD=", "STARHUB_ROOT_PASSWORD=Sh1-$(New-RandomHex 16)")
-$template = $template.Replace("STARHUB_CRYPTO_SECRET=", "STARHUB_CRYPTO_SECRET=$(New-RandomHex 32)")
-$template = $template.Replace("METRIC_AUTHORIZATION=", "METRIC_AUTHORIZATION=$(New-RandomHex 32)")
+$template = $template -replace '(?m)^STARHUB_ROOT_PASSWORD=[^\r\n]*', "STARHUB_ROOT_PASSWORD=Sh1-$(New-RandomHex 16)"
+$template = $template -replace '(?m)^STARHUB_CRYPTO_SECRET=[^\r\n]*', "STARHUB_CRYPTO_SECRET=$(New-RandomHex 32)"
+$template = $template -replace '(?m)^METRIC_AUTHORIZATION=[^\r\n]*', "METRIC_AUTHORIZATION=$(New-RandomHex 32)"
 
 # CreateNew prevents concurrent invocations from replacing an existing key file.
 $stream = [System.IO.File]::Open($EnvFile, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)

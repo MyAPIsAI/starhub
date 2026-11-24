@@ -15,7 +15,7 @@ const repo = path.resolve(root, "..");
 const temp = await mkdtemp(path.join(os.tmpdir(), "starhub-staff-security-"));
 const engine = process.env.STARHUB_TEST_BROWSER || "chromium";
 const cryptoEnv = {
-  STARHUB_CRYPTO_SECRET: "browser-staff-only-secret",
+  STARHUB_CRYPTO_SECRET: "browser-staff-only-secret-for-production",
   STARHUB_CREDENTIAL_KEYS: JSON.stringify({
     old: "11".repeat(32),
     new: "22".repeat(32),
@@ -57,7 +57,7 @@ try {
       STARHUB_PORT: String(port),
       STARHUB_BIND_ADDRESS: "127.0.0.1",
       STARHUB_ROOT_PASSWORD: "BrowserInitial92",
-      STARHUB_ENV: "development",
+      STARHUB_ENV: "production",
       ...cryptoEnv,
       RESOURCE_CATALOG_NOTIFY_URL: "",
       STARHUB_REGION_PROFILE: "",

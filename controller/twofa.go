@@ -106,7 +106,7 @@ func Get2FAStatus(w http.ResponseWriter, r *http.Request) {
 	common.ApiSuccess(w, map[string]any{"enabled": err == nil && twofa.IsEnabled, "can_skip": middleware.CanSkipStaffTwoFA(user)})
 }
 
-// Skip2FASetup defers development enrollment for the current session only.
+// Skip2FASetup defers enrollment for the current session only.
 func Skip2FASetup(w http.ResponseWriter, r *http.Request) {
 	user, err := model.GetUserByID(requestUserID(r))
 	if err != nil || !middleware.CanSkipStaffTwoFA(user) {
