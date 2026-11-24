@@ -12,12 +12,13 @@ import (
 )
 
 type RoutingAttempt struct {
-	OrdinaryFallback  bool
-	AttemptID         string
-	Sent              bool
-	Item              RouteItem
-	FailureGeneration uint64
-	StartedAt         time.Time
+	OrdinaryFallback       bool
+	AttemptID              string
+	Sent                   bool
+	Item                   RouteItem
+	FailureGeneration      uint64
+	StartedAt              time.Time
+	failureSnapshotInvalid bool
 }
 
 type LocalRoutingState struct {
@@ -147,14 +148,19 @@ func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttf
 	}
 	policy, threshold := localExecution(attempt.Item)
 	var recordedGeneration uint64
+	snapshotStale := attempt.failureSnapshotInvalid
 	err := withLocalRoutingWrite(&attempt.Item, func(tx *gorm.DB) error {
 		state, err := readLocalRoutingState(tx, attempt.Item)
 		if err != nil {
 			return err
 		}
 		before := state
+		if state.FailureGeneration != attempt.FailureGeneration {
+			snapshotStale = true
+		}
 		if success {
-			if state.FailureGeneration != attempt.FailureGeneration || state.OpenUntil > 0 {
+			if snapshotStale || state.OpenUntil > 0 {
+				snapshotStale = true
 				return nil
 			}
 			state.ConsecutiveFailures = 0
@@ -194,9 +200,15 @@ func RecordRoutingOutcome(attempt *RoutingAttempt, success bool, status int, ttf
 		recordedGeneration = state.FailureGeneration
 		return nil
 	})
-	// A session may clear its own preceding failure, but never a later external failure.
-	if err == nil && !success && len(continueSession) > 0 && continueSession[0] && recordedGeneration > 0 {
-		attempt.FailureGeneration = recordedGeneration
+	// Follow only committed changes whose prior generation matched the session.
+	// Once stale, a session must never adopt later generations and clear an
+	// external failure, even if another writer subsequently recovers the state.
+	if err == nil {
+		if snapshotStale {
+			attempt.failureSnapshotInvalid = true
+		} else if !success && len(continueSession) > 0 && continueSession[0] && recordedGeneration > 0 {
+			attempt.FailureGeneration = recordedGeneration
+		}
 	}
 	return err
 }

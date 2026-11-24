@@ -181,10 +181,11 @@ func CaptureChannelAttempt(ctx context.Context, ch *Channel, group, name, key st
 // RecoverFallbackRouting closes only the captured local generation. The outbox
 // and local recovery commit together; delivery is retried by the existing worker.
 func RecoverFallbackRouting(attempt *RoutingAttempt, protection *upstream.Attempt, requestID string, now time.Time) error {
-	if attempt == nil || !attempt.OrdinaryFallback || !attempt.Sent {
+	if attempt == nil || !attempt.OrdinaryFallback || !attempt.Sent || attempt.failureSnapshotInvalid {
 		return nil
 	}
-	return withLocalRoutingWrite(&attempt.Item, func(tx *gorm.DB) error {
+	var recoveredGeneration uint64
+	err := withLocalRoutingWrite(&attempt.Item, func(tx *gorm.DB) error {
 		current, err := upstream.FallbackRecoveryCurrent(tx, protection)
 		if err != nil || !current {
 			return err
@@ -212,10 +213,18 @@ func RecoverFallbackRouting(attempt *RoutingAttempt, protection *upstream.Attemp
 		if err := tx.Save(&state).Error; err != nil {
 			return err
 		}
-		event := upstream.Event{ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte(attempt.AttemptID+":local_recovery")).String(), RequestID: requestID, ChannelID: protection.ChannelID, Model: protection.Model, ResourceID: protection.Identity.StateID("interface"), Kind: "recovery", Class: "fallback_recovered", Decision: "local_protection_cleared", Created: now.Unix(), Started: protection.Started, RoutingTrace: protection.RoutingTrace}
+		event := upstream.Event{ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte(protection.ID+":local_recovery")).String(), RequestID: requestID, ChannelID: protection.ChannelID, Model: protection.Model, ResourceID: protection.Identity.StateID("interface"), Kind: "recovery", Class: "fallback_recovered", Decision: "local_protection_cleared", Created: now.Unix(), Started: protection.Started, RoutingTrace: protection.RoutingTrace}
 		if err := tx.Create(&event).Error; err != nil {
 			return err
 		}
-		return enqueueProtectionEvent(tx, attempt.Item, state, "fallback_success", attempt.AttemptID, now)
+		if err := enqueueProtectionEvent(tx, attempt.Item, state, "fallback_success", attempt.AttemptID, now); err != nil {
+			return err
+		}
+		recoveredGeneration = state.FailureGeneration
+		return nil
 	})
+	if err == nil && recoveredGeneration > 0 {
+		attempt.FailureGeneration = recoveredGeneration
+	}
+	return err
 }

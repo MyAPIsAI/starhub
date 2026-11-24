@@ -9,8 +9,8 @@ import (
 )
 
 // upstreamMigration records one-time data repairs that must not replay on every
-// start. The v2 identifier intentionally differs from the earlier unversioned
-// rebuild so databases that already ran it are repaired again.
+// start. Each repair uses a new identifier so earlier completed migrations do
+// not prevent correcting their historical results.
 type upstreamMigration struct {
 	ID      string `gorm:"primaryKey;size:64"`
 	Applied int64  `gorm:"not null;default:0"`
@@ -18,7 +18,7 @@ type upstreamMigration struct {
 
 func (upstreamMigration) TableName() string { return "upstream_migrations" }
 
-const upstreamRateLimitMigration = "upstream_rate_limit_deadline_v2"
+const upstreamRateLimitMigration = "upstream_rate_limit_deadline_v3"
 
 // normalizeUpstreamNulls runs before AutoMigrate adds NOT NULL defaults.
 // Columns added to existing SQLite tables can hold NULL even when the Go field
@@ -63,61 +63,88 @@ func migrateRateLimitedUntil() error {
 
 func rebuildRateLimitDeadlines(tx *gorm.DB, now int64) error {
 	var states []upstream.State
-	if err := tx.Where("(rate_limited_until IS NULL OR rate_limited_until = 0) AND (open_until > ? OR reason = ?)", now, "rate_limited").
+	if err := tx.Where("open_until <> 0 OR rate_limited_until <> 0 OR reason = ?", "rate_limited").
 		Order("id").Find(&states).Error; err != nil {
 		return err
 	}
 	for _, state := range states {
-		deadline := int64(0)
-		evidenceAt := state.Updated
-		if state.Reason == "rate_limited" && state.OpenUntil > now {
-			deadline = state.OpenUntil
-		}
-		// Attempt events store the rate class; probe events keep it in Decision.
-		// Both persist the protection deadline in OpenUntil, which is a
-		// conservative upper bound when the reason was later overwritten.
-		var event upstream.Event
-		if err := tx.Where("resource_id = ? AND open_until > ? AND (class = ? OR (kind = ? AND decision = ?))",
-			state.ID, now, "rate_limited", "probe", "rate_limited").
-			Order("open_until DESC").Limit(1).Find(&event).Error; err != nil {
-			return err
-		}
-		if event.ID != "" {
-			if event.OpenUntil > deadline {
-				deadline = event.OpenUntil
-			}
-			evidenceAt = event.Created
-		}
-		if deadline <= now {
-			continue
-		}
-		// A reset, successful probe, or successful fallback recovery after the
-		// rate evidence already cleared it. fallback_recovery_skipped does not
-		// count as recovery.
-		var later int64
-		if err := tx.Model(&upstream.Event{}).Where(
-			"resource_id = ? AND created >= ? AND ((kind = ? AND class = ?) OR (kind = ? AND class = ?) OR (kind = ? AND class = ?))",
-			state.ID, evidenceAt,
+		// Find the recovery boundary before choosing any rate evidence. An old
+		// long deadline must not hide a shorter rate limit after a reset.
+		var recovery upstream.Event
+		if err := tx.Where(
+			"resource_id = ? AND ((kind = ? AND class = ?) OR (kind = ? AND class = ?) OR (kind = ? AND class = ?))",
+			state.ID,
 			"reset", "manual_reset",
 			"probe", "success",
 			"recovery", "fallback_recovered",
-		).Count(&later).Error; err != nil {
+		).Order("created DESC").Limit(1).Find(&recovery).Error; err != nil {
 			return err
 		}
-		if later > 0 {
+		deadline := state.RateLimitedUntil
+		if recovery.ID != "" && recovery.Created > state.Updated {
+			deadline = 0
+		}
+		if state.OpenUntil == 0 {
+			// Never reopen a closed state from legacy events. Explicit clear
+			// reasons also repair cooldowns resurrected by the unversioned rebuild.
+			if state.Reason == "manual_reset" || state.Reason == "recovered" || state.Reason == "fallback_recovered" ||
+				recovery.ID != "" && recovery.Created >= state.Updated {
+				deadline = 0
+			}
+		} else {
+			// Legacy timestamps have only second precision. For an open state,
+			// keep same-second evidence conservatively; a closed state above is
+			// authoritative when the reset actually happened last.
+			query := tx.Where("resource_id = ? AND open_until > ? AND (class = ? OR (kind = ? AND decision = ?))",
+				state.ID, now, "rate_limited", "probe", "rate_limited")
+			if recovery.ID != "" {
+				query = query.Where("created >= ?", recovery.Created)
+			}
+			var event upstream.Event
+			if err := query.Order("open_until DESC").Limit(1).Find(&event).Error; err != nil {
+				return err
+			}
+			if event.ID != "" {
+				if recovery.ID != "" {
+					// Rebuild after a clear instead of carrying a possibly longer
+					// nonzero deadline resurrected from before that boundary.
+					deadline = event.OpenUntil
+				} else {
+					deadline = max(deadline, event.OpenUntil)
+				}
+			}
+			if state.Reason == "rate_limited" && state.OpenUntil > now &&
+				(recovery.ID == "" || state.Updated >= recovery.Created) {
+				if recovery.ID != "" && event.ID == "" {
+					deadline = state.OpenUntil
+				} else {
+					deadline = max(deadline, state.OpenUntil)
+				}
+			}
+		}
+		if deadline == state.RateLimitedUntil {
 			continue
 		}
 		// Bump the version and release any stale probe lease so an older probe
 		// result cannot overwrite the restored protection.
-		if err := tx.Model(&upstream.State{}).
-			Where("id = ? AND (rate_limited_until IS NULL OR rate_limited_until = 0)", state.ID).
+		if state.ProbeID != "" {
+			if err := tx.Delete(&upstream.ProbeSlot{}, "id = ?", state.ProbeID).Error; err != nil {
+				return err
+			}
+		}
+		result := tx.Model(&upstream.State{}).
+			Where("id = ? AND version = ?", state.ID, state.Version).
 			Updates(map[string]any{
 				"rate_limited_until": deadline,
 				"version":            gorm.Expr("version + 1"),
 				"probe_id":           "",
 				"lease_until":        0,
-			}).Error; err != nil {
-			return err
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("upstream protection changed during rate-limit migration")
 		}
 	}
 	return nil
