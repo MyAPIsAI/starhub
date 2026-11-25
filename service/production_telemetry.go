@@ -256,7 +256,7 @@ func buildProductionBucket(at int64, b metric.ProductionMinute, exists bool, now
 			row.ChannelID = entry.ChannelID
 			row.ModelName = entry.ModelName
 			row.Minute = at
-			row.TTFTSchema = 2
+			row.TTFTSchema = 3
 			row.InputTokens += entry.InputTokens
 			row.OutputTokens += entry.OutputTokens
 			row.DurationSumMS += entry.DurationSumMS
