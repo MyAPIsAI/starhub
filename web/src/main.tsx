@@ -129,7 +129,7 @@ function FinanceOnly({ children }: { children: React.ReactNode }) {
 /**
  * RequireAuth gates console routes on login state. During the
  * initial session-restore it shows a loader; once ready,
- * unauthenticated users are redirected to the landing page. (GAP-2)
+ * unauthenticated users are redirected to the login dialog.
  */
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status, retry } = useSessionRestore();
@@ -159,7 +159,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (!isLoggedIn) return <Navigate to="/" replace />;
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
   if (securitySetupRequired) return <StaffSecuritySetup />;
   return <>{children}</>;
 }

@@ -204,10 +204,11 @@ try {
   const expired = await newPage('zh', 'light', 'member');
   await expired.context().clearCookies();
   await expired.goto(`${base}/console`);
-  await expired.waitForURL(`${base}/`);
+  await expired.waitForURL(`${base}/login`);
+  await expired.locator('.auth-dialog').waitFor();
   await expired.locator('.veyra-public-actions a[href="/login"]').waitFor();
   assert.equal(await expired.locator('.veyra-public-actions a[href="/login"]').count(), 1);
-  report.checks.push('An expired session cannot open the console');
+  report.checks.push('An expired session opens the login dialog before entering the console');
 
   for (const staleStatus of [200, 401]) {
     const racePage = await newPage();
