@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"starhub/setting"
 )
@@ -58,5 +59,19 @@ func TestPlatformEffectivePricing(t *testing.T) {
 	}
 	if _, err := json.Marshal(r); err != nil {
 		t.Fatal(err)
+	}
+	p.PriceExpr, p.ModelPriceUSD = "", 0
+	p.ModelRatio = 1e-16
+	_, q = quote(p)
+	if q["cost"] == "0.000000000000" {
+		t.Fatal("small positive tariff became free")
+	}
+	p.PricingAt = time.Now()
+	p.ValidUntil = p.PricingAt.Add(time.Hour).Unix()
+	_, q = quote(p)
+	p.PricingAt = p.PricingAt.Add(time.Minute)
+	_, repeated = quote(p)
+	if q["quoted_at"] != repeated["quoted_at"] || q["version"] != repeated["version"] || q["quoted_at"].(int64) <= 0 {
+		t.Fatal("expiring quote is stale or unstable")
 	}
 }

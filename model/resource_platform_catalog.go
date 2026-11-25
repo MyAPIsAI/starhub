@@ -68,6 +68,10 @@ type PlatformCatalogChange struct {
 }
 
 var platformCatalogMu sync.Mutex
+var catalogQuoteTimes = struct {
+	sync.Mutex
+	values map[string]int64
+}{values: map[string]int64{}}
 var ErrCatalogRevisionExpired = errors.New("REVISION_TOO_OLD: full catalog synchronization required")
 
 // ReadPlatformCatalog checkpoints coherent catalog projections. Delta retention
@@ -195,10 +199,13 @@ func platformCatalogPricingInputs(name string, p setting.PricingInputs) map[stri
 		cost = decimal(p.ModelPriceUSD)
 	case p.TokenRates.Valid():
 		source = "time_token_prices"
+		components = map[string]string{"input": "configured_window", "output": "configured_window", "cache_read": "configured_window", "cache_write": "configured_window", "audio_input": "configured_window", "audio_output": "configured_window"}
 		nano := p.TokenRates.NanoPrices()
 		for i, field := range []string{"input", "output", "cache_read", "cache_write", "audio_input", "audio_output"} {
 			rates[field] = new(big.Rat).SetFrac(big.NewInt(nano[i]), big.NewInt(1_000_000_000))
 		}
+	case p.TokenAdjustment.WindowID != "":
+		issue, source = "invalid_pricing", "time_token_prices"
 	default:
 		input := decimal(p.ModelRatio)
 		rates["input"] = input
@@ -211,19 +218,58 @@ func platformCatalogPricingInputs(name string, p setting.PricingInputs) map[stri
 	if p.TimeAdjustment.Multiplier == 0 {
 		multiplier.SetInt64(1)
 	}
-	if mode == "token" {
+	if mode == "token" && issue == "" {
 		cost.Add(rates["input"].(*big.Rat), rates["output"].(*big.Rat)).Quo(cost, big.NewRat(2, 1))
 		for field, rate := range rates {
-			rates[field] = new(big.Rat).Mul(rate.(*big.Rat), multiplier).FloatString(12)
+			rates[field] = catalogDecimal(new(big.Rat).Mul(rate.(*big.Rat), multiplier))
 		}
 		rates["unit"] = "USD/Mtokens"
+	}
+	if issue != "" {
+		rates = map[string]any{}
+	}
+	if mode != "token" {
+		components = nil
 	}
 	cost.Mul(cost, multiplier)
 	result := map[string]any{"pricing_schema": "effective-pricing-v1", "billing_mode": mode, "price_source": source, "component_sources": components, "unit_prices": rates, "time_window": p.TimeAdjustment, "token_window": p.TokenAdjustment, "valid_until": p.ValidUntil}
 	fingerprint, _ := json.Marshal([]any{name, profile, unit, result, cost.RatString(), p.PriceExpr, issue})
 	version := fmt.Sprintf("%x", sha256.Sum256(fingerprint))
-	result["cost_quotes"] = []any{map[string]any{"profile": profile, "unit": unit, "cost": cost.FloatString(12), "version": version, "billing_version": strconv.FormatInt(p.Version, 10), "valid_until": p.ValidUntil, "error": issue}}
+	quotedAt := int64(0)
+	if p.ValidUntil > 0 {
+		catalogQuoteTimes.Lock()
+		quotedAt = catalogQuoteTimes.values[version]
+		if quotedAt == 0 {
+			if len(catalogQuoteTimes.values) >= 4096 {
+				catalogQuoteTimes.values = map[string]int64{}
+			}
+			quotedAt = p.PricingAt.Unix()
+			if quotedAt <= 0 {
+				quotedAt = time.Now().Unix()
+			}
+			catalogQuoteTimes.values[version] = quotedAt
+		}
+		catalogQuoteTimes.Unlock()
+	}
+	result["cost_quotes"] = []any{map[string]any{"profile": profile, "unit": unit, "cost": catalogDecimal(cost), "version": version, "billing_version": strconv.FormatInt(p.Version, 10), "quoted_at": quotedAt, "valid_until": p.ValidUntil, "error": issue}}
 	return result
+}
+
+// All tariff inputs are terminating decimals. Keep their exact scale so a
+// small positive tariff can never become a free quote through formatting.
+func catalogDecimal(r *big.Rat) string {
+	d := new(big.Int).Set(r.Denom())
+	digits := 0
+	for _, base := range []int64{2, 5} {
+		n := 0
+		b := big.NewInt(base)
+		for new(big.Int).Mod(d, b).Sign() == 0 {
+			d.Quo(d, b)
+			n++
+		}
+		digits = max(digits, n)
+	}
+	return r.FloatString(max(12, digits))
 }
 
 func PlatformCatalogChanges(since int64) (PlatformCatalog, []PlatformCatalogChange, error) {
