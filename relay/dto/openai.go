@@ -27,6 +27,7 @@ func (u *openAIUsage) normalized() *Usage {
 		return nil
 	}
 	result := u.Usage
+	result.UsageSource = "upstream"
 	if result.PromptTokensDetails == nil && u.PromptCacheHitTokens != nil {
 		result.PromptTokensDetails = &PromptTokensDetails{
 			CachedTokens: clampNonNegative(*u.PromptCacheHitTokens, result.PromptTokens),

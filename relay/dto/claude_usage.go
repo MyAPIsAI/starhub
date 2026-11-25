@@ -35,7 +35,7 @@ func (fields *ClaudeUsageFields) normalized() (*Usage, error) {
 	if output > math.MaxInt64-prompt {
 		return nil, fmt.Errorf("invalid Claude total token count")
 	}
-	usage := &Usage{PromptTokens: prompt, CompletionTokens: output}
+	usage := &Usage{UsageSource: "upstream_adapted", PromptTokens: prompt, CompletionTokens: output}
 	if fields.CacheReadInputTokens != nil || fields.CacheCreationInputTokens != nil {
 		usage.PromptTokensDetails = &PromptTokensDetails{CachedTokens: read, CacheWriteTokens: write}
 	}

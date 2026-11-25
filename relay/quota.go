@@ -207,6 +207,9 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 	if usage == nil {
 		usage = &Usage{}
 	}
+	if usage.UsageSource == "" {
+		usage.UsageSource = "unknown"
+	}
 	status := usage.RequestStatus
 	if status == 0 {
 		status = 1
@@ -221,24 +224,26 @@ func PostConsumeQuotaWithPrice(pd *PriceData, userID, tokenID int64, tokenName s
 		originalModel = requestedModel[0]
 	}
 	entry := &model.Log{
-		UserID:           userID,
-		TokenID:          tokenID,
-		TokenName:        tokenName,
-		ChannelID:        channelID,
-		Model:            modelName,
-		RequestedModel:   originalModel,
-		RoutingFallback:  usage.RoutingFallback,
-		ActualVendor:     usage.ActualVendor,
-		Protocol:         usage.RequestProtocol,
-		PromptTokens:     usage.PromptTokens,
-		CompletionTokens: usage.CompletionTokens,
-		Quota:            actual,
-		UsedChannels:     usedChannels,
-		DurationMs:       durationMs,
-		Status:           status,
-		ExactFeeMicroUSD: ExactFeeMicroUSD(pd, usage),
-		ExactFeeNanoUSD:  strconv.FormatInt(ComputeUsageNano(pd, usage), 10),
-		RequestID:        requestID,
+		UsageSource:       usage.UsageSource,
+		UpstreamRequestID: usage.UpstreamRequestID,
+		UserID:            userID,
+		TokenID:           tokenID,
+		TokenName:         tokenName,
+		ChannelID:         channelID,
+		Model:             modelName,
+		RequestedModel:    originalModel,
+		RoutingFallback:   usage.RoutingFallback,
+		ActualVendor:      usage.ActualVendor,
+		Protocol:          usage.RequestProtocol,
+		PromptTokens:      usage.PromptTokens,
+		CompletionTokens:  usage.CompletionTokens,
+		Quota:             actual,
+		UsedChannels:      usedChannels,
+		DurationMs:        durationMs,
+		Status:            status,
+		ExactFeeMicroUSD:  ExactFeeMicroUSD(pd, usage),
+		ExactFeeNanoUSD:   strconv.FormatInt(ComputeUsageNano(pd, usage), 10),
+		RequestID:         requestID,
 	}
 	if pd != nil {
 		entry.QuotaReservationID = pd.QuotaReservationID

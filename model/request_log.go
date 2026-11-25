@@ -89,6 +89,9 @@ func FinalizeRequestLog(entry *Log) error {
 	var existing Log
 	err := DB.Where("request_id = ?", entry.RequestID).First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		if entry.UsageSource == "" {
+			entry.UsageSource = "unknown"
+		}
 		return InsertLog(entry)
 	}
 	if err != nil {
@@ -101,11 +104,16 @@ func FinalizeRequestLog(entry *Log) error {
 	if status != 1 && entry.ErrorCode == "" {
 		entry.FailureStage, entry.ErrorCode, entry.ErrorMessage = "response", "request_failed", "Request did not complete."
 	}
-	return DB.Model(&Log{}).Where("id = ?", existing.ID).Updates(map[string]any{
-		"routing_fallback": existing.RoutingFallback || entry.RoutingFallback,
-		"request_observed": true, "admission_rejected": entry.AdmissionRejected,
+	updates := map[string]any{
+		"upstream_request_id": entry.UpstreamRequestID,
+		"routing_fallback":    existing.RoutingFallback || entry.RoutingFallback,
+		"request_observed":    true, "admission_rejected": entry.AdmissionRejected,
 		"upstream_attempts": entry.UpstreamAttempts, "http_status": entry.HTTPStatus,
 		"failure_stage": entry.FailureStage, "error_code": entry.ErrorCode,
 		"error_message": entry.ErrorMessage, "request_path": entry.RequestPath, "status": status,
-	}).Error
+	}
+	if entry.UsageSource != "" {
+		updates["usage_source"] = entry.UsageSource
+	}
+	return DB.Model(&Log{}).Where("id = ?", existing.ID).Updates(updates).Error
 }

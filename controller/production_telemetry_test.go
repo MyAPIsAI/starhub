@@ -26,6 +26,7 @@ func TestProductionTelemetryCapturesRealRelayMetadataWithoutContent(t *testing.T
 	u := newUser(t, "telemetry-relay", common.RoleUser, 10000000)
 	token := mustToken(t, u.ID, 1000000)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-Id", "actual-provider-id")
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"choices":[{"message":{"content":"private response content"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}`)
 	}))
@@ -38,9 +39,13 @@ func TestProductionTelemetryCapturesRealRelayMetadataWithoutContent(t *testing.T
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Authorization", "Bearer "+token.PlaintextKey())
 	w := httptest.NewRecorder()
-	middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayChat))).ServeHTTP(w, r)
+	middleware.RequestLog(middleware.TokenAuth(middleware.Distribute(dto.InboundOpenAI)(http.HandlerFunc(RelayChat)))).ServeHTTP(w, r)
 	if w.Code != 200 {
 		t.Fatalf("relay status %d", w.Code)
+	}
+	logs, count, err := model.ListLogs(u.ID, 1, 10, "")
+	if err != nil || count != 1 || logs[0].UpstreamRequestID != "actual-provider-id" || logs[0].UsageSource != "upstream" {
+		t.Fatalf("missing provenance: %+v %v", logs, err)
 	}
 	if err := service.FlushProductionTelemetry(now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
@@ -49,6 +54,9 @@ func TestProductionTelemetryCapturesRealRelayMetadataWithoutContent(t *testing.T
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("attempts=%d error=%v", len(rows), err)
 	}
+	if rows[0].RequestID != logs[0].RequestID || !rows[0].Sent {
+		t.Fatal("internal request-attempt correlation was not persisted")
+	}
 	var a metric.ProductionAttempt
 	if err := json.Unmarshal([]byte(rows[0].Payload), &a); err != nil {
 		t.Fatal(err)
@@ -56,7 +64,7 @@ func TestProductionTelemetryCapturesRealRelayMetadataWithoutContent(t *testing.T
 	if a.Generation != model.ChannelEndpointGeneration(ch) || a.Capability != "chat" || a.Outcome != "success" || a.InputTokens != 10 || len(a.RequestedCapabilities) == 0 {
 		t.Fatalf("incomplete routing evidence: %+v", a)
 	}
-	for _, private := range []string{"private request content", "private response content", "private-provider-key", token.PlaintextKey()} {
+	for _, private := range []string{"private request content", "private response content", "private-provider-key", token.PlaintextKey(), logs[0].RequestID, "actual-provider-id"} {
 		if strings.Contains(rows[0].Payload, private) {
 			t.Fatal("private content entered telemetry")
 		}

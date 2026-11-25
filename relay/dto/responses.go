@@ -52,7 +52,7 @@ func ParseResponsesUsage(body []byte) (*Usage, error) {
 	if input < 0 || output < 0 || output > math.MaxInt64-input {
 		return nil, errors.New("invalid Responses token totals")
 	}
-	result := &Usage{PromptTokens: input, CompletionTokens: output}
+	result := &Usage{UsageSource: "upstream_adapted", PromptTokens: input, CompletionTokens: output}
 	if usage.InputDetails != nil {
 		result.PromptTokensDetails = &PromptTokensDetails{CachedTokens: clampNonNegative(usage.InputDetails.CachedTokens, input)}
 	}

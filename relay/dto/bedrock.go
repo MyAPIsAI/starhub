@@ -127,6 +127,7 @@ func ParseBedrockChatResponse(body []byte) (*ChatResponse, error) {
 	ir := &ChatResponse{}
 	if resp.Usage != nil {
 		ir.Usage = &Usage{
+			UsageSource:      "upstream_adapted",
 			PromptTokens:     resp.Usage.InputTokens,
 			CompletionTokens: resp.Usage.OutputTokens,
 		}
@@ -195,6 +196,7 @@ func ParseBedrockStreamEvent(payload []byte) (*ChatStreamEvent, error) {
 	}
 	if ev.Usage != nil && (ev.Usage.InputTokens > 0 || ev.Usage.OutputTokens > 0) {
 		out.Usage = &Usage{
+			UsageSource:      "upstream_adapted",
 			PromptTokens:     ev.Usage.InputTokens,
 			CompletionTokens: ev.Usage.OutputTokens,
 		}

@@ -105,6 +105,13 @@ type AttemptSpan struct {
 	outputTokens  int64
 }
 
+func (a *AttemptSpan) ProviderRequestID() string {
+	if a == nil {
+		return ""
+	}
+	return a.upstreamReqID
+}
+
 // RecordUsage accepts provider-reported usage only, before billing estimates.
 func (a *AttemptSpan) RecordUsage(input, output int64) {
 	if a != nil {

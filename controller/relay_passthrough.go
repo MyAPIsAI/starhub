@@ -40,9 +40,11 @@ func RelayEmbeddings(w http.ResponseWriter, r *http.Request) {
 			writePassthroughBody(flow.w, resp, body)
 			usage := &relay.Usage{}
 			if parsed, err := dto.ParseEmbeddingUsage(body); err == nil && parsed != nil {
+				usage.UsageSource = "upstream"
 				usage.PromptTokens = parsed.PromptTokens
 			}
 			if usage.PromptTokens == 0 {
+				usage.UsageSource = "estimated"
 				usage.PromptTokens = promptEstimate
 			}
 			return settleModeAttempt(flow, ch, usage)
@@ -65,9 +67,10 @@ func RelayRerank(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxModeResponseBytes))
 			resp.Body.Close()
 			writePassthroughBody(flow.w, resp, body)
-			usage := &relay.Usage{PromptTokens: promptEstimate}
+			usage := &relay.Usage{UsageSource: "estimated", PromptTokens: promptEstimate}
 			if parsed, err := dto.ParseRerankUsage(body); err == nil && parsed != nil {
 				if parsed.PromptTokens > 0 {
+					usage.UsageSource = "upstream_adapted"
 					usage.PromptTokens = parsed.PromptTokens
 				}
 				usage.CompletionTokens = parsed.CompletionTokens
@@ -89,6 +92,7 @@ func RelayTTS(w http.ResponseWriter, r *http.Request) {
 	// Pre-charge: per-call price or the input-token estimate.
 	pd := req.priceFor(req.billingGroup())
 	usage := &relay.Usage{}
+	usage.UsageSource = "estimated"
 	if !pd.IsPerCall() && !pd.IsExpression() {
 		if ttsReq, err := dto.ParseTTSRequest(req.body); err == nil {
 			usage.PromptTokens = relay.EstimateTokens(ttsReq.Input)
@@ -148,6 +152,7 @@ func relayAudioTranscription(w http.ResponseWriter, r *http.Request, mode channe
 	// duration at settle time).
 	pd := req.priceFor(req.billingGroup())
 	usage := &relay.Usage{}
+	usage.UsageSource = "estimated"
 	if !pd.IsPerCall() && !pd.IsExpression() {
 		usage.PromptTokens = estimateAudioTokens(form.FileBytes())
 	}
@@ -168,6 +173,7 @@ func relayAudioTranscription(w http.ResponseWriter, r *http.Request, mode channe
 						if parsed.Duration > 0 {
 							// 1 audio token ~ 0.04s (25 tokens per second).
 							usage.PromptTokens = int64(parsed.Duration*25 + 0.5)
+							usage.UsageSource = "upstream_adapted"
 						}
 					}
 				}
@@ -326,6 +332,7 @@ func settleModeAttempt(flow *relayFlow, ch *model.Channel, usage *relay.Usage) a
 	if usage == nil {
 		usage = &relay.Usage{}
 	}
+	flow.annotateUsage(usage)
 	usage.RequestProtocol = flow.req.protocol
 	usage.RoutingFallback = flow.modelFallback || len(flow.trail) > 1 || ch.RuntimeStage != model.RoutingNormal
 	if err := relay.PostConsumeQuotaWithPrice(flow.req.priceFor(flow.settleGroup()), flow.req.userID, flow.req.tokenID, flow.req.tokenName,

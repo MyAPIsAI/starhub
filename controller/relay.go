@@ -106,7 +106,7 @@ func (w *statusWriter) FlushError() error {
 // own logs. Different providers use different header names.
 func upstreamRequestID(resp *http.Response) string {
 	for _, h := range []string{"X-Request-Id", "Request-Id", "X-Amzn-Requestid", "CF-RAY"} {
-		if v := resp.Header.Get(h); v != "" {
+		if v := strings.TrimSpace(resp.Header.Get(h)); v != "" && len(v) <= 64 && !strings.ContainsFunc(v, func(r rune) bool { return r < 33 || r > 126 }) {
 			return v
 		}
 	}
@@ -988,6 +988,9 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 	// upstream request-id so a slow channel is identifiable end-to-end.
 	if f.attempt != nil {
 		f.attempt.RecordHeaders(upstreamRequestID(resp))
+		if observation := middleware.RequestObservation(f.ctx); observation != nil {
+			observation.Entry.UpstreamRequestID = f.attempt.ProviderRequestID()
+		}
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		middleware.SetRequestFailure(f.ctx, "upstream", fmt.Sprintf("upstream_http_%d", resp.StatusCode), "The upstream returned an HTTP error.")
@@ -1016,6 +1019,9 @@ func (f *relayFlow) callUpstream(ch *model.Channel, adaptor interface {
 // and a response-committed safety boundary. Unsupported skips do not
 // consume the attempt budget.
 func (f *relayFlow) beginMetricAttempt(ch *model.Channel) {
+	if observation := middleware.RequestObservation(f.ctx); observation != nil {
+		observation.Entry.UpstreamRequestID = ""
+	}
 	f.attempt = f.span.BeginAttempt(ch.ID)
 	f.w.Header().Set("X-StarHub-Affinity-Instance", service.AffinityInstance())
 	affinity := "disabled"
@@ -1520,6 +1526,7 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 		usage = relay.EstimateIRUsage(ir, content)
 	}
 	usage.RequestStatus = status
+	flow.annotateUsage(usage)
 	usage.RequestProtocol = flow.req.protocol
 	usage.RoutingFallback = flow.modelFallback || len(flow.trail) > 1 || ch.RuntimeStage != model.RoutingNormal
 	usage.ActualVendor = flow.vendor
@@ -1539,6 +1546,19 @@ func settleChatAttempt(flow *relayFlow, ch *model.Channel, ir *dto.ChatRequest, 
 		return attemptResult{outcome: attemptUpstreamError, statusCode: http.StatusOK, cause: responseErr, usage: usage, content: content}
 	}
 	return attemptResult{outcome: attemptSuccess, statusCode: http.StatusOK, usage: usage, content: content}
+}
+
+func (f *relayFlow) annotateUsage(usage *relay.Usage) {
+	switch usage.UsageSource {
+	case "upstream", "upstream_adapted", "estimated":
+	default:
+		usage.UsageSource = "unknown"
+	}
+	usage.UpstreamRequestID = f.attempt.ProviderRequestID()
+	if observation := middleware.RequestObservation(f.ctx); observation != nil {
+		observation.Entry.UpstreamRequestID = usage.UpstreamRequestID
+		observation.Entry.UsageSource = usage.UsageSource
+	}
 }
 
 // disableBrokenKey isolates a failing upstream credential. Single-key

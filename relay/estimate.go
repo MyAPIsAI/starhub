@@ -16,6 +16,7 @@ func EstimateTokens(text string) int64 {
 
 func EstimateUsage(requestBody []byte, streamedContent string) *Usage {
 	return &Usage{
+		UsageSource:      "estimated",
 		PromptTokens:     EstimateTokens(ExtractPromptText(requestBody)),
 		CompletionTokens: EstimateTokens(streamedContent),
 	}
@@ -25,6 +26,7 @@ func EstimateUsage(requestBody []byte, streamedContent string) *Usage {
 // when the upstream report is missing (IR-based, protocol independent).
 func EstimateIRUsage(ir *dto.ChatRequest, streamedContent string) *Usage {
 	return &Usage{
+		UsageSource:      "estimated",
 		PromptTokens:     EstimateTokens(ir.PromptText()),
 		CompletionTokens: EstimateTokens(streamedContent),
 	}

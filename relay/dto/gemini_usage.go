@@ -56,7 +56,7 @@ func ParseGeminiUsage(body []byte) (*Usage, error) {
 	}
 	// totalTokenCount is a consistency summary, never an extra charge or
 	// a substitute from which unknown categories are guessed.
-	result := &Usage{PromptTokens: input, CompletionTokens: output}
+	result := &Usage{UsageSource: "upstream_adapted", PromptTokens: input, CompletionTokens: output}
 	if u.Cached != nil {
 		result.PromptTokensDetails = &PromptTokensDetails{CachedTokens: clampNonNegative(*u.Cached, value(u.Prompt))}
 	}

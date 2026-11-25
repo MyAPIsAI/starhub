@@ -191,10 +191,11 @@ func responsesFallbackUsage(req *dto.ResponsesRequest, output json.RawMessage, t
 			tokens = max(tokens, parsed.InputTokens)
 		}
 	}
-	return &relay.Usage{PromptTokens: req.InputTokens, CompletionTokens: tokens}
+	return &relay.Usage{UsageSource: "estimated", PromptTokens: req.InputTokens, CompletionTokens: tokens}
 }
 
 func settleNativeUsage(flow *relayFlow, ch *model.Channel, usage *relay.Usage, status int) {
+	flow.annotateUsage(usage)
 	usage.RequestProtocol = flow.req.protocol
 	usage.RoutingFallback = flow.modelFallback || len(flow.trail) > 1 || ch.RuntimeStage != model.RoutingNormal
 	usage.RequestStatus = status
