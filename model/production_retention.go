@@ -87,7 +87,7 @@ func pruneProductionChunkDB(db *gorm.DB, now time.Time) (int, error) {
 			return err
 		}
 		expired := earliest.Minute < cutoff
-		columns := "id,minute,batch_id,delivered_at," + productionPayloadLength(tx, "payload") + " AS payload_bytes"
+		columns := "id,minute,batch_id,delivered_at,request_id,sent," + productionPayloadLength(tx, "payload") + " AS payload_bytes"
 		query := tx.Select(columns).Order("minute,id").Limit(512)
 		if expired {
 			query = query.Where("minute < ?", cutoff)
@@ -104,6 +104,7 @@ func pruneProductionChunkDB(db *gorm.DB, now time.Time) (int, error) {
 			}
 		}
 		ids := []string{}
+		var auditRequests []string
 		bytes, pending := int64(0), int64(0)
 		unpublished := map[string]ProductionRetentionGap{}
 		for _, row := range rows {
@@ -111,6 +112,9 @@ func pruneProductionChunkDB(db *gorm.DB, now time.Time) (int, error) {
 				break
 			}
 			ids = append(ids, row.ID)
+			if row.Sent && row.RequestID != "" {
+				auditRequests = append(auditRequests, row.RequestID)
+			}
 			bytes += row.PayloadBytes
 			if row.DeliveredAt == 0 {
 				pending++
@@ -137,6 +141,11 @@ func pruneProductionChunkDB(db *gorm.DB, now time.Time) (int, error) {
 				continue
 			}
 			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "batch_id"}}, DoUpdates: clause.Assignments(map[string]any{"count": gorm.Expr("production_retention_gaps.count + ?", gap.Count), "bytes": gorm.Expr("production_retention_gaps.bytes + ?", gap.Bytes)})}).Create(&gap).Error; err != nil {
+				return err
+			}
+		}
+		if len(auditRequests) > 0 {
+			if err := tx.Model(&EventAuditRequest{}).Where("request_id IN ?", auditRequests).UpdateColumn("pruned_attempts", gorm.Expr("pruned_attempts + (SELECT COUNT(*) FROM production_attempt_records p WHERE p.request_id = event_audit_requests.request_id AND p.sent = TRUE AND p.id IN ?)", ids)).Error; err != nil {
 				return err
 			}
 		}

@@ -17,6 +17,7 @@ type EventAuditRequest struct {
 	CompletedAt       int64  `gorm:"index"`
 	ExpectedDecisions int64
 	ExpectedAttempts  int64
+	PrunedAttempts    int64
 }
 
 type EventAuditDecision struct {
@@ -41,6 +42,8 @@ type EventCompletenessData struct {
 	AttemptCompleteness       *float64             `json:"attempt_completeness"`
 	UnknownHistoricalRequests int64                `json:"unknown_historical_requests"`
 	UnresolvedRequests        int64                `json:"unresolved_requests"`
+	RetentionGaps             int64                `json:"retention_gaps"`
+	UnexpectedEvents          int64                `json:"unexpected_events"`
 }
 
 func BeginEventAudit(id string, at time.Time) error {
@@ -103,6 +106,7 @@ func ReadEventCompleteness(ctx context.Context, start, end int64) (EventComplete
 		}
 		var requestOK, decisionOK, attemptOK int64
 		for _, a := range audits {
+			d.RetentionGaps += a.PrunedAttempts
 			d.RequestEventsTotal++
 			d.DecisionEventsTotal += a.ExpectedDecisions
 			d.AttemptEventsTotal += a.ExpectedAttempts
@@ -111,8 +115,9 @@ func ReadEventCompleteness(ctx context.Context, start, end int64) (EventComplete
 			}
 			decisionOK += min(decisions[a.RequestID], a.ExpectedDecisions)
 			attemptOK += min(attempts[a.RequestID], a.ExpectedAttempts)
+			d.UnexpectedEvents += max(int64(0), logs[a.RequestID]-1) + max(int64(0), decisions[a.RequestID]-a.ExpectedDecisions) + max(int64(0), attempts[a.RequestID]-a.ExpectedAttempts)
 		}
-		if unknown == 0 && d.UnresolvedRequests == 0 {
+		if unknown == 0 && d.UnresolvedRequests == 0 && d.RetentionGaps == 0 && d.UnexpectedEvents == 0 {
 			d.RequestCompleteness = eventPercent(requestOK, d.RequestEventsTotal)
 			d.DecisionCompleteness = eventPercent(decisionOK, d.DecisionEventsTotal)
 			d.AttemptCompleteness = eventPercent(attemptOK, d.AttemptEventsTotal)
