@@ -22,9 +22,33 @@ type PricingInputs struct {
 	TokenAdjustment pricingtime.TokenAdjustment
 	TokenRates      pricingtime.TokenRates
 	PricingAt       time.Time
+	ValidUntil      int64
 }
 
 var pricingVersion int64
+
+// ResolveCatalogPricing captures tariffs and group membership at one instant.
+func ResolveCatalogPricing(models, groups []string) (map[string]PricingInputs, map[string]float64) {
+	optionMu.RLock()
+	defer optionMu.RUnlock()
+	at := time.Now()
+	prices := make(map[string]PricingInputs, len(models))
+	for _, name := range models {
+		if _, exists := prices[name]; exists {
+			continue
+		}
+		p := resolvePricing(name, "", "", at)
+		p.ValidUntil = pricingtime.EarliestChange(timePricing.Load().NextChange(name, at), tokenTimePricing.Load().NextChange(name, at))
+		prices[name] = p
+	}
+	ratios := make(map[string]float64, len(groups))
+	for _, group := range groups {
+		if ratio, exists := GroupRatioValue(group); exists {
+			ratios[group] = ratio
+		}
+	}
+	return prices, ratios
+}
 
 // ResolvePricing reads every billing option under one update barrier.
 func ResolvePricing(model, group, userGroup string) PricingInputs {

@@ -93,6 +93,12 @@ func ReadPlatformCatalog() (PlatformCatalog, error) {
 		for i := range metas {
 			metadata[metas[i].Model] = &metas[i]
 		}
+		var pricingModels, pricingGroups []string
+		for _, ability := range abilities {
+			pricingModels = append(pricingModels, ability.Model)
+			pricingGroups = append(pricingGroups, ability.Group)
+		}
+		prices, ratios := setting.ResolveCatalogPricing(pricingModels, pricingGroups)
 		for _, ch := range channels {
 			generation := ChannelEndpointGeneration(&ch)
 			entry := PlatformChannel{ID: ch.ID, Name: ch.Name, Type: ch.Type, Status: ch.Status, BaseURL: ch.BaseURL, EndpointGeneration: generation, Groups: ChannelGroups(&ch), Priority: ch.Priority, Weight: ch.Weight, CreatedTime: ch.CreatedAt, ModelMappingValid: true, Models: []PlatformModel{}}
@@ -110,12 +116,12 @@ func ReadPlatformCatalog() (PlatformCatalog, error) {
 			for _, name := range names {
 				m := PlatformModel{Name: name, UpstreamModelName: name, Metadata: metadata[name], Groups: []PlatformGroup{}}
 				for _, a := range byModel[name] {
-					ratio, exists := setting.GroupRatioValue(a.Group)
+					ratio, exists := ratios[a.Group]
 					enabled := a.Enabled && ch.Status == common.ChannelStatusEnabled && exists
 					m.Enabled = m.Enabled || enabled
 					m.Groups = append(m.Groups, PlatformGroup{Name: a.Group, Enabled: enabled, Ratio: ratio})
 				}
-				m.Pricing = platformCatalogPricing(name)
+				m.Pricing = platformCatalogPricingInputs(name, prices[name])
 				entry.Models = append(entry.Models, m)
 			}
 			entry.ModelCount = len(entry.Models)
@@ -153,32 +159,71 @@ func ChannelEndpointGeneration(ch *Channel) string {
 // Pricing evidence explicitly marks context-dependent expressions unavailable;
 // it must never turn an unknown quote into a zero-cost resource.
 func platformCatalogPricing(name string) map[string]any {
-	p := setting.ResolvePricing(name, "", "")
+	return platformCatalogPricingInputs(name, setting.ResolvePricing(name, "", ""))
+}
+
+func platformCatalogPricingInputs(name string, p setting.PricingInputs) map[string]any {
 	profile, unit, issue := "text-500-500-v1", "USD/Mtokens", ""
+	mode, source := "token", "configured"
+	components := map[string]string{"input": "configured", "output": "configured", "cache_read": "global_option"}
+	if !p.HasModelRatio {
+		components["input"] = "default_fallback"
+	}
+	if !p.HasCompletion {
+		components["output"] = "default_fallback"
+	}
+	if !p.HasModelRatio || !p.HasCompletion {
+		source = "default_fallback"
+	}
 	cost := new(big.Rat)
 	decimal := func(v float64) *big.Rat {
 		r, _ := new(big.Rat).SetString(strconv.FormatFloat(v, 'f', -1, 64))
+		if r == nil || r.Sign() < 0 {
+			issue = "invalid_pricing"
+			return new(big.Rat)
+		}
 		return r
 	}
+	rates := map[string]any{}
 	switch {
 	case p.PriceExpr != "":
+		mode, source = "tiered_expr", "configured"
 		issue = "context_required"
-	case p.HasModelPrice:
+	case p.ModelPriceUSD > 0:
+		mode, source = "per_call", "configured"
 		profile, unit = "per-call-v1", "USD/call"
 		cost = decimal(p.ModelPriceUSD)
 	case p.TokenRates.Valid():
-		rates := p.TokenRates.NanoPrices()
-		cost.SetFrac(big.NewInt(rates[0]+rates[1]), big.NewInt(2_000_000_000))
-	case p.HasModelRatio:
-		cost.Mul(decimal(p.ModelRatio), decimal((1+p.CompletionRatio)/2))
+		source = "time_token_prices"
+		nano := p.TokenRates.NanoPrices()
+		for i, field := range []string{"input", "output", "cache_read", "cache_write", "audio_input", "audio_output"} {
+			rates[field] = new(big.Rat).SetFrac(big.NewInt(nano[i]), big.NewInt(1_000_000_000))
+		}
 	default:
-		issue = "missing_pricing"
+		input := decimal(p.ModelRatio)
+		rates["input"] = input
+		rates["output"] = new(big.Rat).Mul(input, decimal(p.CompletionRatio))
+		rates["cache_read"] = new(big.Rat).Mul(input, decimal(p.CacheRatio))
+		rates["audio_input"] = new(big.Rat).Mul(input, decimal(p.AudioRatio))
+		rates["audio_output"] = new(big.Rat).Mul(input, decimal(p.AudioRatio))
 	}
-	if p.TimeAdjustment.Multiplier > 0 {
-		cost.Mul(cost, decimal(p.TimeAdjustment.Multiplier))
+	multiplier := decimal(p.TimeAdjustment.Multiplier)
+	if p.TimeAdjustment.Multiplier == 0 {
+		multiplier.SetInt64(1)
 	}
-	version := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s", name, profile, cost.RatString(), p.PriceExpr))))
-	return map[string]any{"cost_quotes": []any{map[string]any{"profile": profile, "unit": unit, "cost": cost.FloatString(12), "version": version, "error": issue}}}
+	if mode == "token" {
+		cost.Add(rates["input"].(*big.Rat), rates["output"].(*big.Rat)).Quo(cost, big.NewRat(2, 1))
+		for field, rate := range rates {
+			rates[field] = new(big.Rat).Mul(rate.(*big.Rat), multiplier).FloatString(12)
+		}
+		rates["unit"] = "USD/Mtokens"
+	}
+	cost.Mul(cost, multiplier)
+	result := map[string]any{"pricing_schema": "effective-pricing-v1", "billing_mode": mode, "price_source": source, "component_sources": components, "unit_prices": rates, "time_window": p.TimeAdjustment, "token_window": p.TokenAdjustment, "valid_until": p.ValidUntil}
+	fingerprint, _ := json.Marshal([]any{name, profile, unit, result, cost.RatString(), p.PriceExpr, issue})
+	version := fmt.Sprintf("%x", sha256.Sum256(fingerprint))
+	result["cost_quotes"] = []any{map[string]any{"profile": profile, "unit": unit, "cost": cost.FloatString(12), "version": version, "billing_version": strconv.FormatInt(p.Version, 10), "valid_until": p.ValidUntil, "error": issue}}
+	return result
 }
 
 func PlatformCatalogChanges(since int64) (PlatformCatalog, []PlatformCatalogChange, error) {
