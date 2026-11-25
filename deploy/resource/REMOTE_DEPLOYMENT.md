@@ -116,6 +116,10 @@ docker exec starhub-resource-1 wget -q -O - http://starhub:3000/api/health
 
 健康检查验证进程、数据库及网络连通。还需确认目录同步和路由状态无鉴权、协议或快照错误，再按业务需要启用商业路由模式；Compose 不会自动切换该模式。
 
+鉴权修复后的验收顺序是：目录同步成功、`metric_sync` 无错误、`publication` 和 `delivery` 成功、StarHub 收到快照。两侧环境变量字符串不要求完全相等：resource 为 `Bearer <token>`，StarHub 为 `<token>`。不要在终端打印令牌来排查。
+
+若 StarHub 没有渠道，resource 可以发布资源数为 0 的空快照；这不代表采集失败。要形成可用资源列表，须先在 StarHub 配置真实渠道和模型。`/api/metric/events/completeness` 在当前 StarHub 尚未实现，resource 的 `refresh_runtime` 可能记录该接口 404；它属于快照发布后的事件完整率摘要，不会回滚已发布和接收的快照，不能用虚构完整率消除该错误。
+
 日常更新使用 `up -d`。需要停止整套服务时，使用相同环境文件及两个 `-f` 参数执行 `stop`；拆除容器和项目网络时执行 `down`，保留数据卷，不加 `-v`。旧 resource 属于另一项目，不在这些命令范围内。
 
 测试部署将项目名改为 `-p starhub-test`，自动使用 `starhub-test_default` 及独立数据卷，同时为两项服务配置不同的宿主机端口、独立凭据和节点名，无需 `RESOURCE_NETWORK_NAME`。

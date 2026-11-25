@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -15,6 +17,57 @@ import (
 	"starhub/metric"
 	"starhub/model"
 )
+
+func TestResourcePlatformConnectivityHealthProbe(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+		ready  bool
+	}{
+		{"healthy", http.StatusOK, `{"status":"ok"}`, true},
+		{"unhealthy", http.StatusServiceUnavailable, `{"status":"error"}`, false},
+		{"missing_route", http.StatusNotFound, `{"message":"not found"}`, false},
+		{"frontend_fallback", http.StatusOK, `<html>Console</html>`, false},
+		{"wrong_status", http.StatusOK, `{"status":"error"}`, false},
+		{"redirect", http.StatusFound, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				if r.Method != http.MethodGet || r.URL.Path != "/api/health" {
+					t.Errorf("unexpected probe: %s %s", r.Method, r.URL.Path)
+				}
+				if r.Header.Get("Authorization") != "" {
+					t.Error("public health probe must not send the service credential")
+				}
+				if tc.status == http.StatusFound {
+					w.Header().Set("Location", "/redirected")
+				}
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+			t.Setenv("RESOURCE_CATALOG_NOTIFY_URL", server.URL+"/")
+			t.Setenv("METRIC_AUTHORIZATION", "probe-secret-must-not-be-sent")
+			var output bytes.Buffer
+			previous := log.Writer()
+			log.SetOutput(&output)
+			t.Cleanup(func() { log.SetOutput(previous) })
+			probeResourcePlatformConnectivity()
+			if calls.Load() != 1 {
+				t.Fatalf("expected one request without redirect: got %d", calls.Load())
+			}
+			if strings.Contains(output.String(), "connectivity probe succeeded") != tc.ready {
+				t.Fatalf("unexpected probe result: %s", output.String())
+			}
+			if strings.Contains(output.String(), "probe-secret-must-not-be-sent") || strings.Contains(output.String(), "verify METRIC_AUTHORIZATION") {
+				t.Fatal("health probe exposed or incorrectly diagnosed a credential")
+			}
+		})
+	}
+}
 
 func resourceTestDB(t *testing.T) {
 	t.Helper()

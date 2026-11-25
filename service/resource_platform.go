@@ -83,8 +83,9 @@ func NotifyResourceCatalogOnce(ctx context.Context) error {
 
 // probeResourcePlatformConnectivity performs a one-time startup connectivity
 // check against the configured resource platform. It helps deployers discover
-// network, TLS or configuration issues before traffic flows. The probe is
-// best-effort: failures are logged as warnings and do not block startup.
+// network, TLS or configuration issues before traffic flows. The public health
+// endpoint does not validate service credentials or snapshot readiness.
+// Failures are logged as warnings and do not block startup.
 func probeResourcePlatformConnectivity() {
 	base := strings.TrimRight(os.Getenv("RESOURCE_CATALOG_NOTIFY_URL"), "/")
 	if base == "" {
@@ -95,14 +96,12 @@ func probeResourcePlatformConnectivity() {
 		log.Printf("WARNING: resource platform URL is invalid; integration will fail: %s", base)
 		return
 	}
-	probeURL := base + "/api/channel/catalog/version"
+	probeURL := base + "/api/health"
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, probeURL, nil)
 	if err != nil {
 		log.Printf("WARNING: resource platform probe request could not be built: %v", err)
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("METRIC_AUTHORIZATION"))
-	req.Header.Set("X-Protection-Node", os.Getenv("NODE_NAME"))
 	probeClient := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := probeClient.Do(req)
 	if err != nil {
@@ -110,9 +109,15 @@ func probeResourcePlatformConnectivity() {
 		return
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("WARNING: resource platform probe returned HTTP %d; verify METRIC_AUTHORIZATION and service credentials", resp.StatusCode)
+		log.Printf("WARNING: resource platform health probe returned HTTP %d; verify the resource URL and service health", resp.StatusCode)
+		return
+	}
+	var health struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&health); err != nil || health.Status != "ok" {
+		log.Print("WARNING: resource platform health probe returned an invalid health response; verify the resource URL")
 		return
 	}
 	log.Printf("resource platform: connectivity probe succeeded (%s)", base)
