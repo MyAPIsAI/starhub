@@ -2,6 +2,7 @@ package service
 
 import (
 	"container/list"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 )
 
 type productionCacheKey struct {
+	InputCap int
 	Minute   int64
 	Batch    string
 	Digest   [32]byte
@@ -32,7 +34,11 @@ var productionCache = struct {
 var productionCacheHits, productionCacheMisses atomic.Int64
 
 func cachedProductionBucket(at int64, row model.ProductionTelemetryMinute, exists bool, now time.Time) (map[string]any, error) {
-	key := productionCacheKey{at, row.BatchID, sha256.Sum256([]byte(row.Payload)), row.Complete}
+	return cachedProductionBucketScope(context.Background(), at, row, exists, now, 2000)
+}
+
+func cachedProductionBucketScope(ctx context.Context, at int64, row model.ProductionTelemetryMinute, exists bool, now time.Time, inputCap int) (map[string]any, error) {
+	key := productionCacheKey{inputCap, at, row.BatchID, sha256.Sum256([]byte(row.Payload)), row.Complete}
 	cacheable := exists && at < now.Unix()/60*60
 	var raw []byte
 	if cacheable {
@@ -48,6 +54,11 @@ func cachedProductionBucket(at int64, row model.ProductionTelemetryMinute, exist
 		var b metric.ProductionMinute
 		if exists && (json.Unmarshal([]byte(row.Payload), &b) != nil || b.Minute != row.Minute || b.BatchID != row.BatchID || b.Complete != row.Complete) {
 			return nil, errors.New("corrupt production minute")
+		}
+		if exists && b.Complete {
+			if err := hydrateProductionSpeed(ctx, &b, row, inputCap); err != nil {
+				return nil, err
+			}
 		}
 		output, err := buildProductionBucket(at, b, exists, now)
 		if err != nil {

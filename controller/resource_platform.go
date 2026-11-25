@@ -175,7 +175,16 @@ func ResourcePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if byModel && !quarter {
-		buckets, err := service.ProductionMetricBucketsContext(r.Context(), start, end, time.Now())
+		inputCap := 2000
+		if raw := r.URL.Query().Get("ttft_input_cap_tokens"); raw != "" {
+			value, err := strconv.Atoi(raw)
+			if err != nil || value < 1 || value > 1048576 {
+				common.ApiError(w, 400, "invalid TTFT input scope")
+				return
+			}
+			inputCap = value
+		}
+		buckets, err := service.ProductionMetricBucketsScopeContext(r.Context(), start, end, time.Now(), inputCap)
 		if err != nil {
 			common.ApiError(w, 500, "production metrics unavailable")
 			return

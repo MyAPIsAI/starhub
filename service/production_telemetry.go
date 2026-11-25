@@ -191,6 +191,13 @@ func ProductionMetricBuckets(start, end int64, now time.Time) ([]map[string]any,
 }
 
 func ProductionMetricBucketsContext(ctx context.Context, start, end int64, now time.Time) ([]map[string]any, error) {
+	return ProductionMetricBucketsScopeContext(ctx, start, end, now, 2000)
+}
+
+func ProductionMetricBucketsScopeContext(ctx context.Context, start, end int64, now time.Time, inputCap int) ([]map[string]any, error) {
+	if inputCap < 1 || inputCap > 1048576 {
+		return nil, errors.New("invalid TTFT input scope")
+	}
 	start = max(start/60*60, now.Add(-24*time.Hour).Unix()/60*60)
 	end = min(end/60*60, now.Unix()/60*60)
 	stored, err := model.ReadProductionTelemetryContext(ctx, start, end)
@@ -204,7 +211,7 @@ func ProductionMetricBucketsContext(ctx context.Context, start, end int64, now t
 	result := []map[string]any{}
 	for at := start; at <= end; at += 60 {
 		row, exists := byMinute[at]
-		output, err := cachedProductionBucket(at, row, exists, now)
+		output, err := cachedProductionBucketScope(ctx, at, row, exists, now, inputCap)
 		if err != nil {
 			return nil, err
 		}
@@ -239,6 +246,9 @@ func buildProductionBucket(at int64, b metric.ProductionMinute, exists bool, now
 			p := productionPart(at, entry.Generation)
 			p["production"], p["health"], p["complete"] = entry.Counts, entry.Health, true
 			partsByModel[key] = append(partsByModel[key], p)
+			if b.Attempts != nil {
+				partsByModel[key] = append(partsByModel[key], singleSpeedPart(at, entry, b.Attempts))
+			}
 			row := stats[key]
 			row.ChannelID = entry.ChannelID
 			row.ModelName = entry.ModelName
@@ -311,7 +321,12 @@ func buildProductionBucket(at int64, b metric.ProductionMinute, exists bool, now
 			var output map[string]any
 			_ = json.Unmarshal(statRaw, &output)
 			output["speed_evidence_json"] = encoded
-			output["ttft_input_cap_tokens"] = 2000
+			for _, entry := range b.Entries {
+				if entry.ChannelID == stats[key].ChannelID && entry.ModelName == stats[key].ModelName && entry.Health != nil {
+					output["ttft_input_cap_tokens"] = entry.Health.InputCap
+					break
+				}
+			}
 			models = append(models, output)
 		}
 		marker["production"], marker["complete"], marker["production_manifest"] = metric.ProductionCounts{}, true, map[string]any{"batch_id": b.BatchID, "entries": b.Entries}
