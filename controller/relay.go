@@ -336,12 +336,13 @@ func newRelayFlow(ctx context.Context, w http.ResponseWriter, req relayRequest, 
 		tried:          map[int64]bool{},
 		affinityKeyIdx: -1,
 		span: metric.BeginRequest(metric.RequestMeta{
-			UserID:  req.userID,
-			TokenID: req.tokenID,
-			Model:   req.modelName,
-			Group:   req.group,
-			Stream:  req.stream,
-			Mode:    mode,
+			RequestID: middleware.CtxRequestIDValue(ctx),
+			UserID:    req.userID,
+			TokenID:   req.tokenID,
+			Model:     req.modelName,
+			Group:     req.group,
+			Stream:    req.stream,
+			Mode:      mode,
 		}),
 	}
 	// Auto-group mode starts at the first configured group. Admission may
@@ -398,6 +399,13 @@ func (f *relayFlow) skipUnsent(id int64) {
 }
 
 func (f *relayFlow) pick() (*model.Channel, error) {
+	finishDecision := middleware.BeginRoutingDecision(f.ctx)
+	ch, err := f.pickChannel()
+	finishDecision()
+	return ch, err
+}
+
+func (f *relayFlow) pickChannel() (*model.Channel, error) {
 	for {
 		f.trafficRule = nil
 		if !setting.IsCommercialMode() && f.trafficPolicy != nil {

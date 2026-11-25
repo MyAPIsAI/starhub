@@ -187,7 +187,7 @@ func InitDBWithConfig(cfg DatabaseConfig) (initErr error) {
 	if err := initRoutingWriter(db); err != nil {
 		return fmt.Errorf("initialize routing writer: %w", err)
 	}
-	if err := migrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}); err != nil {
+	if err := migrate(&ProductionTelemetryMinute{}, &ProductionAttemptRecord{}, &EventAuditRequest{}, &EventAuditDecision{}); err != nil {
 		return fmt.Errorf("migrate production telemetry: %w", err)
 	}
 	if err := normalizeUpstreamNulls(db); err != nil {

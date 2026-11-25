@@ -31,6 +31,7 @@ func New() http.Handler {
 	mux.HandleFunc("GET /api/public/region", controller.ActiveRegionPublicHandler)
 	mux.Handle("POST /api/metric/runtime/summary", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ReceiveRoutingSnapshot)))
 	mux.Handle("GET /api/metric/routing/policy-status", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.ResourceRoutingStatus)))
+	mux.Handle("GET /api/metric/events/completeness", middleware.ResourcePlatformAuth(http.HandlerFunc(controller.EventCompleteness)))
 	mux.Handle("GET /api/resource/routing-status", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingStatus)))
 	mux.Handle("GET /api/service-group/{group}/routing", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingPolicy)))
 	mux.Handle("PUT /api/service-group/{group}/routing", middleware.AdminAuth(http.HandlerFunc(controller.ResourceRoutingPolicy)))

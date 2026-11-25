@@ -39,7 +39,7 @@ func stageProductionAttempts(db *gorm.DB, attempts []ProductionAttemptRecord) er
 			row.PayloadBytes = int64(len(row.Payload))
 			row.NextAttemptAt = row.Minute + 60
 			ids = append(ids, row.ID)
-			if previous, ok := expected[row.ID]; ok && (previous.Minute != row.Minute || previous.BatchID != row.BatchID || previous.Payload != row.Payload) {
+			if previous, ok := expected[row.ID]; ok && (previous.Minute != row.Minute || previous.BatchID != row.BatchID || previous.Payload != row.Payload || previous.RequestID != row.RequestID || previous.Sent != row.Sent) {
 				return errors.Join(ErrProductionEvidence, errors.New("conflicting evidence within stage"))
 			}
 			expected[row.ID] = *row
@@ -57,7 +57,7 @@ func stageProductionAttempts(db *gorm.DB, attempts []ProductionAttemptRecord) er
 			}
 			for _, row := range stored {
 				want := expected[row.ID]
-				if row.Minute != want.Minute || row.BatchID != want.BatchID || row.Payload != want.Payload {
+				if row.Minute != want.Minute || row.BatchID != want.BatchID || row.Payload != want.Payload || row.RequestID != want.RequestID || row.Sent != want.Sent {
 					return errors.Join(ErrProductionEvidence, errors.New("attempt identity reused with different evidence"))
 				}
 			}

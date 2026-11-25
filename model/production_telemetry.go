@@ -23,6 +23,8 @@ type ProductionTelemetryMinute struct {
 }
 
 type ProductionAttemptRecord struct {
+	Sent          bool   `gorm:"not null;default:false" json:"-"`
+	RequestID     string `gorm:"size:64;index;not null;default:''" json:"-"`
 	BatchID       string `gorm:"size:64;not null;default:''" json:"-"`
 	PayloadBytes  int64  `gorm:"not null;default:0" json:"-"`
 	Attempts      int    `json:"delivery_attempts"`

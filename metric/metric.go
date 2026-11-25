@@ -65,12 +65,13 @@ const (
 
 // RequestMeta describes the request being measured.
 type RequestMeta struct {
-	UserID  int64
-	TokenID int64
-	Model   string
-	Group   string
-	Stream  bool
-	Mode    string // chat, embeddings, rerank, tts, stt, image, task
+	RequestID string
+	UserID    int64
+	TokenID   int64
+	Model     string
+	Group     string
+	Stream    bool
+	Mode      string // chat, embeddings, rerank, tts, stt, image, task
 }
 
 // RequestSpan tracks one relay request. It is owned by the relayFlow and

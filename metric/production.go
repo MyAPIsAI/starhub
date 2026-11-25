@@ -23,7 +23,8 @@ type AttemptMetadata struct {
 // ProductionAttempt contains routing and metering metadata only, never input,
 // response content, credential material, customer identity or prompt hashes.
 type ProductionAttempt struct {
-	memoryBytes int64
+	InternalRequestID string `json:"-"`
+	memoryBytes       int64
 	AttemptMetadata
 	ID             string `json:"attempt_id"`
 	ChannelID      int64  `json:"channel_id"`
@@ -233,6 +234,7 @@ func recordProductionAttempt(meta RequestMeta, a *AttemptSpan, retry bool) {
 	}
 	event := ProductionAttempt{AttemptMetadata: a.route, ID: uuid.NewString(), ChannelID: a.channelID, Model: meta.Model, StartedAt: a.start.UnixMilli(), EndedAt: now.UnixMilli(), Outcome: outcome, Status: a.statusCode, InputTokens: a.inputTokens, OutputTokens: a.outputTokens, DurationMS: max(0, a.endedAt.Sub(a.start).Milliseconds()), Stream: meta.Stream, Retry: retry}
 	event.memoryBytes = estimate
+	event.InternalRequestID = meta.RequestID
 	if a.hasFirstToken {
 		event.FirstContentMS = max(1, a.ttft.Milliseconds())
 	}

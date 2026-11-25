@@ -46,7 +46,7 @@ func FlushProductionTelemetryContext(ctx context.Context, now time.Time) (err er
 			if err != nil {
 				return err
 			}
-			attempts = append(attempts, model.ProductionAttemptRecord{ID: a.ID, Minute: b.Minute, Payload: string(raw)})
+			attempts = append(attempts, model.ProductionAttemptRecord{ID: a.ID, Sent: a.Outcome != "unsent", RequestID: a.InternalRequestID, Minute: b.Minute, Payload: string(raw)})
 		}
 		count := b.TotalAttempts
 		b.Attempts = nil
@@ -137,7 +137,7 @@ func StageProductionTelemetryContext(ctx context.Context) (err error) {
 			if err != nil {
 				return err
 			}
-			rows = append(rows, model.ProductionAttemptRecord{ID: a.ID, Minute: stage.Minute, BatchID: stage.BatchID, Payload: string(raw)})
+			rows = append(rows, model.ProductionAttemptRecord{ID: a.ID, Sent: a.Outcome != "unsent", RequestID: a.InternalRequestID, Minute: stage.Minute, BatchID: stage.BatchID, Payload: string(raw)})
 		}
 		if err := model.StageProductionAttemptsContext(ctx, rows); err != nil {
 			return err

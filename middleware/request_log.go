@@ -21,6 +21,7 @@ type requestLogKey struct{}
 // RequestLogObservation is shared by the synchronous middleware and relay chain.
 // It never retains credentials, prompts, response content, or provider errors.
 type RequestLogObservation struct {
+	DecisionCount      int64
 	Entry              model.Log
 	Stage              string
 	Outcome            int
@@ -70,6 +71,11 @@ func RequestLog(next http.Handler) http.Handler {
 		started := time.Now()
 		// An untrusted caller-supplied ID must never identify another billing row.
 		id := GenerateRequestID()
+		if model.DB != nil {
+			if err := model.BeginEventAudit(id, started); err != nil {
+				log.Printf("event audit receipt persistence failed: %v", err)
+			}
+		}
 		w.Header().Set("X-StarHub-Request-Id", id)
 		observation := &RequestLogObservation{Stage: "admission", Entry: model.Log{
 			RequestID: id, RequestPath: boundedLogText(r.URL.Path, 256), RequestObserved: true,
@@ -137,6 +143,9 @@ func RequestLog(next http.Handler) http.Handler {
 			if model.DB != nil {
 				if err := model.FinalizeRequestLog(entry); err != nil {
 					log.Printf("request log persistence failed: request=%s: %v", id, err)
+				}
+				if err := model.CompleteEventAudit(id, observation.DecisionCount, entry.UpstreamAttempts, time.Now()); err != nil {
+					log.Printf("event audit completion persistence failed: %v", err)
 				}
 			}
 		}()
