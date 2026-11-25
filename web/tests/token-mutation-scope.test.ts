@@ -149,6 +149,25 @@ describe.each(changes)(
   "$name originating key scope",
   ({ hook, input, method, path, result, name }) => {
     const action = () => hook() as any;
+    it("supports HTTP contexts without randomUUID and sends distinct canonical operation IDs", async () => {
+      const getRandomValues = crypto.getRandomValues.bind(crypto);
+      vi.stubGlobal("crypto", { getRandomValues });
+      fetchMock.mockImplementation(async () =>
+        Response.json({ success: true, data: wrap(result, name) }),
+      );
+
+      const current = action();
+      await expect(current.mutationFn(input)).resolves.toEqual(result ?? null);
+      await expect(current.mutationFn(input)).resolves.toEqual(result ?? null);
+
+      const operations = fetchMock.mock.calls.map(
+        ([, init]) => JSON.parse(init.body).operation_id,
+      );
+      expect(operations).toHaveLength(2);
+      for (const operation of operations)
+        expect(operation).toMatch(/^[a-f0-9]{32}$/);
+      expect(operations[0]).not.toBe(operations[1]);
+    });
     it("uses the actual HTTP client without automatic retry and invalidates only its exact list", async () => {
       const current = action(),
         identity = sessionQueryIdentity(useSystemAccess.getState());

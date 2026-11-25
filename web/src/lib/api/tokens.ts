@@ -316,7 +316,11 @@ function useOwnedTokenMutation<Input extends object, Output>(
             "Key changed; close and reload the confirmation",
           );
       }
-      const operation = crypto.randomUUID().replaceAll("-", "");
+      // getRandomValues also works on HTTP origins where randomUUID is unavailable.
+      const operation = Array.from(
+        crypto.getRandomValues(new Uint8Array(16)),
+        (byte) => byte.toString(16).padStart(2, "0"),
+      ).join("");
       const {
         choices_revision: _choices,
         expected_revision: _revision,
