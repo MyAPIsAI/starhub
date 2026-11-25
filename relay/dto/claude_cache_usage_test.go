@@ -67,7 +67,7 @@ func TestClaudeUsageMergesCumulativePresentFieldsAndPreservesSnapshots(t *testin
 }
 
 func TestClaudeCacheUsageRoundTripsAndClampsDisjointIRDetails(t *testing.T) {
-	usage := &Usage{PromptTokens: 160, CompletionTokens: 20, PromptTokensDetails: &PromptTokensDetails{CachedTokens: 100, CacheWriteTokens: 50}}
+	usage := &Usage{UsageSource: "upstream_adapted", PromptTokens: 160, CompletionTokens: 20, PromptTokensDetails: &PromptTokensDetails{CachedTokens: 100, CacheWriteTokens: 50}}
 	body, err := BuildClaudeChatResponse(&ChatResponse{ID: "cached", Model: "m", Text: "local", FinishReason: "stop", Usage: usage})
 	if err != nil {
 		t.Fatal(err)
