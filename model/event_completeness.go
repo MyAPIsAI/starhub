@@ -20,6 +20,7 @@ type EventAuditRequest struct {
 }
 
 type EventAuditDecision struct {
+	Smart       bool
 	ID          string `gorm:"primaryKey;size:64"`
 	RequestID   string `gorm:"index;size:64"`
 	CompletedAt int64  `gorm:"index"`
@@ -27,18 +28,19 @@ type EventAuditDecision struct {
 }
 
 type EventCompletenessData struct {
-	Schema                    string   `json:"schema"`
-	Start                     int64    `json:"window_start"`
-	End                       int64    `json:"window_end"`
-	Scope                     string   `json:"scope"`
-	RequestEventsTotal        int64    `json:"request_events_total"`
-	RequestCompleteness       *float64 `json:"request_completeness"`
-	DecisionEventsTotal       int64    `json:"decision_events_total"`
-	DecisionCompleteness      *float64 `json:"decision_completeness"`
-	AttemptEventsTotal        int64    `json:"attempt_events_total"`
-	AttemptCompleteness       *float64 `json:"attempt_completeness"`
-	UnknownHistoricalRequests int64    `json:"unknown_historical_requests"`
-	UnresolvedRequests        int64    `json:"unresolved_requests"`
+	Runtime                   *RuntimeAuditSummary `json:"runtime,omitempty"`
+	Schema                    string               `json:"schema"`
+	Start                     int64                `json:"window_start"`
+	End                       int64                `json:"window_end"`
+	Scope                     string               `json:"scope"`
+	RequestEventsTotal        int64                `json:"request_events_total"`
+	RequestCompleteness       *float64             `json:"request_completeness"`
+	DecisionEventsTotal       int64                `json:"decision_events_total"`
+	DecisionCompleteness      *float64             `json:"decision_completeness"`
+	AttemptEventsTotal        int64                `json:"attempt_events_total"`
+	AttemptCompleteness       *float64             `json:"attempt_completeness"`
+	UnknownHistoricalRequests int64                `json:"unknown_historical_requests"`
+	UnresolvedRequests        int64                `json:"unresolved_requests"`
 }
 
 func BeginEventAudit(id string, at time.Time) error {
@@ -118,6 +120,29 @@ func ReadEventCompleteness(ctx context.Context, start, end int64) (EventComplete
 		return nil
 	})
 	return d, err
+}
+
+func PruneEventAudit(ctx context.Context, now time.Time) error {
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		cutoff := now.Add(-25 * time.Hour).Unix()
+		var ids []string
+		if err := tx.Model(&EventAuditDecision{}).Where("completed_at < ?", cutoff).Order("completed_at").Limit(512).Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		if len(ids) > 0 {
+			if err := tx.Where("id IN ?", ids).Delete(&EventAuditDecision{}).Error; err != nil {
+				return err
+			}
+		}
+		ids = nil
+		if err := tx.Model(&EventAuditRequest{}).Where("started_at < ? AND (completed_at = 0 OR completed_at < ?)", cutoff, cutoff).Order("started_at").Limit(512).Pluck("request_id", &ids).Error; err != nil {
+			return err
+		}
+		if len(ids) > 0 {
+			return tx.Where("request_id IN ?", ids).Delete(&EventAuditRequest{}).Error
+		}
+		return nil
+	})
 }
 
 func eventPercent(n, total int64) *float64 {

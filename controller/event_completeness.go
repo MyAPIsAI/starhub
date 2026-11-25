@@ -32,5 +32,10 @@ func EventCompleteness(w http.ResponseWriter, r *http.Request) {
 		common.ApiError(w, 503, "event completeness unavailable")
 		return
 	}
+	data.Runtime, err = model.ReadRuntimeAuditSummary(r.Context(), end-1800, end)
+	if err != nil {
+		common.ApiError(w, 503, "runtime audit unavailable")
+		return
+	}
 	common.ApiSuccess(w, data)
 }

@@ -401,7 +401,7 @@ func (f *relayFlow) skipUnsent(id int64) {
 func (f *relayFlow) pick() (*model.Channel, error) {
 	finishDecision := middleware.BeginRoutingDecision(f.ctx)
 	ch, err := f.pickChannel()
-	finishDecision()
+	finishDecision(ch != nil && ch.RuntimeRoute != nil)
 	return ch, err
 }
 

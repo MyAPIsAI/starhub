@@ -82,6 +82,9 @@ func RunProductionTelemetry(ctx context.Context) {
 		if !time.Now().Before(cleanupAt) {
 			started := time.Now()
 			_, err := model.PruneProductionTelemetryContext(ctx, started)
+			if err == nil {
+				err = model.PruneEventAudit(ctx, started)
+			}
 			productionCleanupHealth.finish(started, err)
 			if err != nil {
 				log.Printf("production retention failed: %v", err)
