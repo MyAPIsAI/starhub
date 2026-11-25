@@ -191,7 +191,11 @@ collection loss, and unavailable intervals never claim complete zero traffic.
 Generation changes remain separate partitions. Production counts and optional
 health counters follow `confirmed-production-attempts-v2` and
 `confirmed-production-health-v1`; TTFT requires successful first content and
-provider-reported input counts from 1 to 2,000. Legacy aggregate and 15-minute
+provider-reported input counts within the requested input scope (2,000 by default).
+`GET /api/metric/model/redis?ttft_input_cap_tokens=20000` requests a derived
+20,000-token projection from the retained raw attempt journal. The supported
+range is 1 through 1,048,576; resource sends its current policy's scope. Existing
+sealed aggregates are never relabeled or rewritten. Legacy aggregate and 15-minute
 projections remain process-local.
 
 Metadata-only attempts are sent asynchronously to
@@ -204,13 +208,89 @@ the separate sealed minute aggregates retain 24 hours. The gateway also exposes
 the sealed journal at `GET /api/metric/attempts`, protected by the dedicated
 service credential. Bounded retention is not a permanent audit archive.
 
-Relay handling never waits for telemetry HTTP delivery or SQLite writes. Failed
+Attempt telemetry collection never waits for telemetry HTTP delivery or its
+SQLite batch writer. Request logs and the independent request/decision audit
+receipts are synchronous database writes. Failed
 local persistence retries the same sealed batch; overflow marks its minute
 incomplete. Unsupported calls, unsent attempts, uncertain outcomes and ordinary
 customer validation errors do not become confirmed provider failures. Actual
 transported attempts include protocol, endpoint capability, parsed requested
 capabilities, resource generation, serving group, affinity outcome, usage and
 timings. Client content and credentials must remain absent from these records.
+
+The model-minute output retains schema 5 confirmed counts and health, and adds
+schema 6 `single-input-ewma5-v1` speed evidence. Each scope is rebuilt only when
+the complete sealed attempt journal is available. Events use the original
+attempt ID, generation, completion timestamp converted from milliseconds to
+microseconds, and raw first-content latency. Only successful streaming attempts
+with positive provider-reported input counts within the selected scope qualify.
+Missing journals, open minutes and generation/scope mismatches cannot certify
+complete speed coverage.
+
+## Effective catalog pricing
+
+Catalog prices use `effective-pricing-v1`. Ordinary token models publish the
+same effective defaults used by billing, including models without explicit
+model/completion ratios. `unit_prices` contains decimal USD per million tokens;
+`price_source` and `component_sources` distinguish default fallbacks from
+configured prices. Resource reads these explicit units before considering any
+legacy new-api ratio conversion.
+
+The default input/output/cache-read prices are 1/4/0.5 USD per million tokens.
+The ungrouped `text-500-500-v1` quote is 2.5 USD/Mtokens. A group ratio of 0.5
+produces 1.25, applying that ratio once. Expressions remain context dependent;
+positive per-call prices and independent token schedules retain their modes.
+A zero flat-price option follows the existing runtime token-mode semantics.
+Explicit free tariffs remain free; relative cost scoring with a zero reference
+remains unavailable rather than inventing a division result.
+
+Quote versions cover effective rates, units, modes, provenance and schedule
+boundaries. Expiring quotes include a stable generation timestamp and expiry;
+small positive decimals retain their exact scale. Historical settlements and
+their frozen prices are not rewritten. Catalog invalidations update both the
+resource catalog tariffs and model reference tariffs through normal sync.
+
+## Event completeness and runtime populations
+
+`GET /api/metric/events/completeness` uses the dedicated resource service
+credential. Optional Unix-second `start_timestamp` and `end_timestamp` select
+at most the retained 24-hour window; the open minute is excluded. The
+`starhub-events-v1` response reports request, decision and attempt totals and
+nullable percentages for finalized HTTP relay requests. Request starts have
+independent receipts; selection calls have independent completion records;
+sent attempts correlate internally with their request receipt. Customer
+request IDs are not added to exported attempt metadata.
+
+Pre-dispatch rejections require no upstream attempts. Empty populations,
+historical requests without receipts, unresolved old requests, retention gaps
+and unexpected duplicate events remain unknown. Audit receipts retain 25 hours
+with bounded cleanup; they are not a permanent external reconciliation archive.
+
+The response also contains an independent closed 30-minute runtime summary:
+customer request success (including admission rejection), sent-request success,
+smart-routing request success, request fallback rate, and actual channel
+selection latency P95/P99 using nearest-rank percentiles. Each request counts
+once even when it has multiple provider attempts. Resource retains its legacy
+TTFT bucket statistic under `model_ttft_bucket_p95_max`, explicitly a maximum
+of bucket P95s; it is never reported as routing decision time or global P95.
+Failed remote reads preserve other summaries and their genuine observation
+times. Unknown completeness does not become a fabricated 100 percent.
+
+The default resource cost comparison and deployment cost metrics use enabled
+resources bound to the current catalog version. `scope=file_reference` selects
+the separately labeled full-file comparison. Billing benchmarks with channel
+discounts are estimates; absent supplier settlement costs remain unknown.
+
+Chat and native usage logs record provider-returned request IDs when available
+and distinguish `upstream`, `upstream_adapted`, `estimated`, and `unknown` usage.
+These fields are gateway owned and cannot be supplied through provider JSON.
+Internal ledger consistency is not proof of an external supplier bill.
+
+Run `powershell -File scripts/test-resource-contracts.ps1` with the sibling
+resource checkout to generate isolated SQLite fixtures and replay the actual
+catalog and speed contracts through the consumer, its price tables, and routing
+snapshot pricing. The runner creates files below `tmp` and does not contact a
+paid provider or modify a deployed service.
 
 ## Credential rotation
 
